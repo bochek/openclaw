@@ -2,6 +2,7 @@ import type { WebClient as SlackWebClient } from "@slack/web-api";
 import { normalizeHostname } from "../../infra/net/hostname.js";
 import type { FetchLike } from "../../media/fetch.js";
 import { fetchRemoteMedia } from "../../media/fetch.js";
+import { logWarn } from "../../logger.js";
 import { saveMediaBuffer } from "../../media/store.js";
 import type { SlackAttachment, SlackFile } from "../types.js";
 
@@ -67,6 +68,11 @@ function createSlackMediaFetch(token: string): FetchLike {
     headers.delete("Authorization");
     return fetch(url, { ...rest, headers, redirect: "manual" });
   };
+}
+
+function looksLikeHtmlBuffer(buffer: Buffer): boolean {
+  const head = buffer.subarray(0, 512).toString("utf-8").replace(/^\s+/, "").toLowerCase();
+  return head.startsWith("<!doctype html") || head.startsWith("<html");
 }
 
 /**
@@ -217,6 +223,24 @@ export async function resolveSlackMedia(params: {
         if (fetched.buffer.byteLength > params.maxBytes) {
           return null;
         }
+
+        // Guard against auth/login HTML pages returned instead of binary media.
+        // Allow user-provided HTML files through.
+        const fileMime = file.mimetype?.toLowerCase();
+        const fileName = file.name?.toLowerCase() ?? "";
+        const isExpectedHtml =
+          fileMime === "text/html" || fileName.endsWith(".html") || fileName.endsWith(".htm");
+        if (!isExpectedHtml) {
+          const detectedMime = fetched.contentType?.split(";")[0]?.trim().toLowerCase();
+          if (detectedMime === "text/html" || looksLikeHtmlBuffer(fetched.buffer)) {
+            const fileId = file.name ?? file.id ?? "unknown";
+            logWarn(
+              `slack: received HTML instead of media for file ${fileId}; possible auth failure or expired URL`,
+            );
+            return null;
+          }
+        }
+
         const effectiveMime = resolveSlackMediaMimetype(file, fetched.contentType);
         const saved = await saveMediaBuffer(
           fetched.buffer,
@@ -273,8 +297,10 @@ export async function resolveSlackAttachmentContent(params: {
     const imageUrl = resolveForwardedAttachmentImageUrl(att);
     if (imageUrl) {
       try {
+        const fetchImpl = createSlackMediaFetch(params.token);
         const fetched = await fetchRemoteMedia({
           url: imageUrl,
+          fetchImpl,
           maxBytes: params.maxBytes,
         });
         if (fetched.buffer.byteLength <= params.maxBytes) {
