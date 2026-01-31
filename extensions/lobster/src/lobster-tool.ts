@@ -40,21 +40,30 @@ function resolveExecutablePath(lobsterPathRaw: string | undefined) {
     if (!allowed.includes(base)) {
       throw new Error("lobsterPath must point to the lobster executable");
     }
+    let stat: fs.Stats;
     try {
-      const stat = fs.statSync(lobsterPath);
-      if (!stat.isFile()) {
-        throw new Error("lobsterPath must point to a file");
-      }
-      if (process.platform !== "win32") {
+      stat = fs.statSync(lobsterPath);
+    } catch {
+      throw new Error("lobsterPath must exist");
+    }
+    if (!stat.isFile()) {
+      throw new Error("lobsterPath must point to a file");
+    }
+    if (process.platform !== "win32") {
+      try {
         fs.accessSync(lobsterPath, fs.constants.X_OK);
+      } catch {
+        throw new Error("lobsterPath must be executable");
       }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(`lobsterPath is not executable: ${msg}`);
     }
   }
 
   return lobsterPath;
+}
+
+function normalizeForCwdSandbox(p: string): string {
+  const normalized = path.normalize(p);
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized;
 }
 
 function resolveCwd(cwdRaw: unknown): string {
@@ -67,7 +76,11 @@ function resolveCwd(cwdRaw: unknown): string {
   }
   const base = process.cwd();
   const resolved = path.resolve(base, cwd);
-  const rel = path.relative(base, resolved);
+
+  const rel = path.relative(normalizeForCwdSandbox(base), normalizeForCwdSandbox(resolved));
+  if (rel === "" || rel === ".") {
+    return resolved;
+  }
   if (rel.startsWith("..") || path.isAbsolute(rel)) {
     throw new Error("cwd must stay within the gateway working directory");
   }
