@@ -34,9 +34,7 @@ function resolveExecutablePath(lobsterPathRaw: string | undefined) {
     }
     const base = path.basename(lobsterPath).toLowerCase();
     const allowed =
-      process.platform === "win32"
-        ? ["lobster.exe", "lobster.cmd", "lobster.bat"]
-        : ["lobster"];
+      process.platform === "win32" ? ["lobster.exe", "lobster.cmd", "lobster.bat"] : ["lobster"];
     if (!allowed.includes(base)) {
       throw new Error("lobsterPath must point to the lobster executable");
     }
@@ -87,12 +85,16 @@ function resolveCwd(cwdRaw: unknown): string {
   return resolved;
 }
 
-function isWindowsSpawnEINVAL(err: unknown) {
+function isWindowsSpawnErrorThatCanUseShell(err: unknown) {
   if (!err || typeof err !== "object") {
     return false;
   }
   const code = (err as { code?: unknown }).code;
-  return code === "EINVAL";
+
+  // On Windows, spawning scripts discovered on PATH (e.g. lobster.cmd) can fail
+  // with EINVAL, and PATH discovery itself can fail with ENOENT when the binary
+  // is only available via PATHEXT/script wrappers.
+  return code === "EINVAL" || code === "ENOENT";
 }
 
 async function runLobsterSubprocessOnce(
@@ -183,7 +185,7 @@ async function runLobsterSubprocess(params: {
   try {
     return await runLobsterSubprocessOnce(params, false);
   } catch (err) {
-    if (process.platform === "win32" && isWindowsSpawnEINVAL(err)) {
+    if (process.platform === "win32" && isWindowsSpawnErrorThatCanUseShell(err)) {
       return await runLobsterSubprocessOnce(params, true);
     }
     throw err;
@@ -242,7 +244,9 @@ export function createLobsterTool(api: OpenClawPluginApi) {
       approve: Type.Optional(Type.Boolean()),
       // SECURITY: Do not allow the agent to choose an executable path.
       // Host can configure the lobster binary via plugin config.
-      lobsterPath: Type.Optional(Type.String({ description: "(deprecated) Use plugin config instead." })),
+      lobsterPath: Type.Optional(
+        Type.String({ description: "(deprecated) Use plugin config instead." }),
+      ),
       cwd: Type.Optional(
         Type.String({
           description:
@@ -266,7 +270,9 @@ export function createLobsterTool(api: OpenClawPluginApi) {
       }
 
       const execPath = resolveExecutablePath(
-        typeof api.pluginConfig?.lobsterPath === "string" ? api.pluginConfig.lobsterPath : undefined,
+        typeof api.pluginConfig?.lobsterPath === "string"
+          ? api.pluginConfig.lobsterPath
+          : undefined,
       );
       const cwd = resolveCwd(params.cwd);
       const timeoutMs = typeof params.timeoutMs === "number" ? params.timeoutMs : 20_000;
