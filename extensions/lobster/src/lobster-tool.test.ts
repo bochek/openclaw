@@ -72,57 +72,91 @@ describe("lobster plugin tool", () => {
       payload: { ok: true, status: "ok", output: [{ hello: "world" }], requiresApproval: null },
     });
 
-    const tool = createLobsterTool(fakeApi());
-    const res = await tool.execute("call1", {
-      action: "run",
-      pipeline: "noop",
-      lobsterPath: fake.binPath,
-      timeoutMs: 1000,
-    });
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.dir}${path.delimiter}${originalPath ?? ""}`;
 
-    expect(res.details).toMatchObject({ ok: true, status: "ok" });
+    try {
+      const tool = createLobsterTool(fakeApi());
+      const res = await tool.execute("call1", {
+        action: "run",
+        pipeline: "noop",
+        timeoutMs: 1000,
+      });
+
+      expect(res.details).toMatchObject({ ok: true, status: "ok" });
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 
   it("tolerates noisy stdout before the JSON envelope", async () => {
     const payload = { ok: true, status: "ok", output: [], requiresApproval: null };
-    const { binPath } = await writeFakeLobsterScript(
+    const { dir } = await writeFakeLobsterScript(
       `const payload = ${JSON.stringify(payload)};\n` +
         `console.log("noise before json");\n` +
         `process.stdout.write(JSON.stringify(payload));\n`,
       "openclaw-lobster-plugin-noisy-",
     );
 
-    const tool = createLobsterTool(fakeApi());
-    const res = await tool.execute("call-noisy", {
-      action: "run",
-      pipeline: "noop",
-      lobsterPath: binPath,
-      timeoutMs: 1000,
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${dir}${path.delimiter}${originalPath ?? ""}`;
+
+    try {
+      const tool = createLobsterTool(fakeApi());
+      const res = await tool.execute("call-noisy", {
+        action: "run",
+        pipeline: "noop",
+        timeoutMs: 1000,
+      });
+
+      expect(res.details).toMatchObject({ ok: true, status: "ok" });
+    } finally {
+      process.env.PATH = originalPath;
+    }
+  });
+
+  it("requires absolute lobsterPath when provided (even though it is ignored)", async () => {
+    const fake = await writeFakeLobster({
+      payload: { ok: true, status: "ok", output: [{ hello: "world" }], requiresApproval: null },
     });
 
-    expect(res.details).toMatchObject({ ok: true, status: "ok" });
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.dir}${path.delimiter}${originalPath ?? ""}`;
+
+    try {
+      const tool = createLobsterTool(fakeApi());
+      await expect(
+        tool.execute("call2", {
+          action: "run",
+          pipeline: "noop",
+          lobsterPath: "./lobster",
+        }),
+      ).rejects.toThrow(/absolute path/);
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 
-  it("requires absolute lobsterPath when provided", async () => {
-    const tool = createLobsterTool(fakeApi());
-    await expect(
-      tool.execute("call2", {
-        action: "run",
-        pipeline: "noop",
-        lobsterPath: "./lobster",
-      }),
-    ).rejects.toThrow(/absolute path/);
-  });
+  it("rejects lobsterPath (deprecated) when invalid", async () => {
+    const fake = await writeFakeLobster({
+      payload: { ok: true, status: "ok", output: [{ hello: "world" }], requiresApproval: null },
+    });
 
-  it("rejects lobsterPath that is not the lobster executable", async () => {
-    const tool = createLobsterTool(fakeApi());
-    await expect(
-      tool.execute("call2b", {
-        action: "run",
-        pipeline: "noop",
-        lobsterPath: "/bin/bash",
-      }),
-    ).rejects.toThrow(/lobster executable/);
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${fake.dir}${path.delimiter}${originalPath ?? ""}`;
+
+    try {
+      const tool = createLobsterTool(fakeApi());
+      await expect(
+        tool.execute("call2b", {
+          action: "run",
+          pipeline: "noop",
+          lobsterPath: "/bin/bash",
+        }),
+      ).rejects.toThrow(/lobster executable/);
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 
   it("rejects absolute cwd", async () => {
@@ -137,19 +171,25 @@ describe("lobster plugin tool", () => {
   });
 
   it("rejects invalid JSON from lobster", async () => {
-    const { binPath } = await writeFakeLobsterScript(
+    const { dir } = await writeFakeLobsterScript(
       `process.stdout.write("nope");\n`,
       "openclaw-lobster-plugin-bad-",
     );
 
-    const tool = createLobsterTool(fakeApi());
-    await expect(
-      tool.execute("call3", {
-        action: "run",
-        pipeline: "noop",
-        lobsterPath: binPath,
-      }),
-    ).rejects.toThrow(/invalid JSON/);
+    const originalPath = process.env.PATH;
+    process.env.PATH = `${dir}${path.delimiter}${originalPath ?? ""}`;
+
+    try {
+      const tool = createLobsterTool(fakeApi());
+      await expect(
+        tool.execute("call3", {
+          action: "run",
+          pipeline: "noop",
+        }),
+      ).rejects.toThrow(/invalid JSON/);
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 
   it("can be gated off in sandboxed contexts", async () => {

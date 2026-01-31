@@ -240,7 +240,9 @@ export function createLobsterTool(api: OpenClawPluginApi) {
       argsJson: Type.Optional(Type.String()),
       token: Type.Optional(Type.String()),
       approve: Type.Optional(Type.Boolean()),
-      lobsterPath: Type.Optional(Type.String({ description: "Absolute path to the lobster executable (optional)." })),
+      // SECURITY: Do not allow the agent to choose an executable path.
+      // Host can configure the lobster binary via plugin config.
+      lobsterPath: Type.Optional(Type.String({ description: "(deprecated) Use plugin config instead." })),
       cwd: Type.Optional(
         Type.String({
           description:
@@ -256,8 +258,15 @@ export function createLobsterTool(api: OpenClawPluginApi) {
         throw new Error("action required");
       }
 
+      // SECURITY: never allow tool callers (agent/user) to select executables.
+      // If a host needs to override the binary, it must do so via plugin config.
+      // We still validate the parameter shape to prevent reintroducing an RCE footgun.
+      if (typeof params.lobsterPath === "string" && params.lobsterPath.trim()) {
+        resolveExecutablePath(params.lobsterPath);
+      }
+
       const execPath = resolveExecutablePath(
-        typeof params.lobsterPath === "string" ? params.lobsterPath : undefined,
+        typeof api.config?.lobsterPath === "string" ? api.config.lobsterPath : undefined,
       );
       const cwd = resolveCwd(params.cwd);
       const timeoutMs = typeof params.timeoutMs === "number" ? params.timeoutMs : 20_000;
