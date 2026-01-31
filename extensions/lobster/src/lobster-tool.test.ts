@@ -33,12 +33,13 @@ async function writeFakeLobster(params: { payload: unknown }) {
   return await writeFakeLobsterScript(scriptBody);
 }
 
-function fakeApi(): OpenClawPluginApi {
+function fakeApi(overrides: Partial<OpenClawPluginApi> = {}): OpenClawPluginApi {
   return {
     id: "lobster",
     name: "lobster",
     source: "test",
     config: {} as any,
+    pluginConfig: {},
     runtime: { version: "test" } as any,
     logger: { info() {}, warn() {}, error() {}, debug() {} },
     registerTool() {},
@@ -48,7 +49,12 @@ function fakeApi(): OpenClawPluginApi {
     registerCli() {},
     registerService() {},
     registerProvider() {},
+    registerHook() {},
+    registerHttpRoute() {},
+    registerCommand() {},
+    on() {},
     resolvePath: (p) => p,
+    ...overrides,
   };
 }
 
@@ -168,6 +174,41 @@ describe("lobster plugin tool", () => {
         cwd: "/tmp",
       }),
     ).rejects.toThrow(/cwd must be a relative path/);
+  });
+
+  it("rejects cwd that escapes the gateway working directory", async () => {
+    const tool = createLobsterTool(fakeApi());
+    await expect(
+      tool.execute("call2d", {
+        action: "run",
+        pipeline: "noop",
+        cwd: "../../etc",
+      }),
+    ).rejects.toThrow(/must stay within/);
+  });
+
+  it("uses pluginConfig.lobsterPath when provided", async () => {
+    const fake = await writeFakeLobster({
+      payload: { ok: true, status: "ok", output: [{ hello: "world" }], requiresApproval: null },
+    });
+
+    // Ensure `lobster` is NOT discoverable via PATH, while still allowing our
+    // fake lobster (a Node script with `#!/usr/bin/env node`) to run.
+    const originalPath = process.env.PATH;
+    process.env.PATH = path.dirname(process.execPath);
+
+    try {
+      const tool = createLobsterTool(fakeApi({ pluginConfig: { lobsterPath: fake.binPath } }));
+      const res = await tool.execute("call-plugin-config", {
+        action: "run",
+        pipeline: "noop",
+        timeoutMs: 1000,
+      });
+
+      expect(res.details).toMatchObject({ ok: true, status: "ok" });
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 
   it("rejects invalid JSON from lobster", async () => {

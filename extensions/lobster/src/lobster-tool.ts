@@ -266,7 +266,7 @@ export function createLobsterTool(api: OpenClawPluginApi) {
       }
 
       const execPath = resolveExecutablePath(
-        typeof api.config?.lobsterPath === "string" ? api.config.lobsterPath : undefined,
+        typeof api.pluginConfig?.lobsterPath === "string" ? api.pluginConfig.lobsterPath : undefined,
       );
       const cwd = resolveCwd(params.cwd);
       const timeoutMs = typeof params.timeoutMs === "number" ? params.timeoutMs : 20_000;
