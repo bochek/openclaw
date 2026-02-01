@@ -35,9 +35,14 @@ describe("before_tool_call hook integration", () => {
         runId: "test-run-123",
         session: { key: "test-session" },
         onBlockReplyFlush: vi.fn(),
+        onAgentEvent: vi.fn(),
       },
       state: {
-        toolMetaById: new Map(),
+        toolMetaById: {
+          set: vi.fn(),
+          get: vi.fn(),
+          has: vi.fn(),
+        },
       },
       log: {
         debug: vi.fn(),
@@ -132,9 +137,47 @@ describe("before_tool_call hook integration", () => {
         },
       );
 
-      // Note: We can't directly test parameter modification without more complex mocking,
-      // but we can verify the hook was called and returned the modification
+      // Hook should be called and parameter modification should work
       expect(mockHookRunner.runBeforeToolCall).toHaveBeenCalled();
+    });
+
+    it("should handle parameter modification with non-object args safely", async () => {
+      const modifiedParams = { newParam: "replaced" };
+      mockHookRunner.runBeforeToolCall.mockResolvedValue({
+        params: modifiedParams,
+      });
+
+      const testCases = [
+        { args: null, description: "null args" },
+        { args: "string", description: "string args" },
+        { args: 123, description: "number args" },
+        { args: [1, 2, 3], description: "array args" },
+      ];
+
+      for (const { args, description } of testCases) {
+        mockHookRunner.runBeforeToolCall.mockClear();
+
+        const event: AgentEvent & { toolName: string; toolCallId: string; args: unknown } = {
+          type: "tool_start",
+          toolName: "TestTool",
+          toolCallId: `call-${description}`,
+          args,
+        };
+
+        // Should not crash even with non-object args
+        await expect(handleToolExecutionStart(mockContext, event)).resolves.toBeUndefined();
+
+        // Hook should be called with normalized empty params
+        expect(mockHookRunner.runBeforeToolCall).toHaveBeenCalledWith(
+          {
+            toolName: "testtool",
+            params: {}, // Non-objects normalized to empty object
+          },
+          {
+            toolName: "testtool",
+          },
+        );
+      }
     });
 
     it("should block tool call when hook returns block=true", async () => {
@@ -161,6 +204,13 @@ describe("before_tool_call hook integration", () => {
         expect.stringContaining("Tool call blocked by plugin hook"),
       );
       expect(mockContext.log.debug).toHaveBeenCalledWith(expect.stringContaining(blockReason));
+
+      // Should update internal state like normal tool flow
+      expect(mockContext.state.toolMetaById.set).toHaveBeenCalled();
+      expect(mockContext.params.onAgentEvent).toHaveBeenCalledWith({
+        stream: "tool",
+        data: { phase: "start", name: "blockedtool", toolCallId: "tool-call-456" },
+      });
     });
 
     it("should block tool call with default reason when no blockReason provided", async () => {
@@ -264,15 +314,17 @@ describe("before_tool_call hook integration", () => {
 
     it("should handle different argument types", async () => {
       const testCases = [
-        { args: null, expected: null },
-        { args: undefined, expected: undefined },
-        { args: "string", expected: "string" },
-        { args: 123, expected: 123 },
-        { args: { key: "value" }, expected: { key: "value" } },
-        { args: [1, 2, 3], expected: [1, 2, 3] },
+        // Non-objects get normalized to {} for hook params (to maintain hook contract)
+        { args: null, expectedParams: {} },
+        { args: undefined, expectedParams: {} },
+        { args: "string", expectedParams: {} },
+        { args: 123, expectedParams: {} },
+        { args: [1, 2, 3], expectedParams: {} }, // arrays are not plain objects
+        // Only plain objects are passed through
+        { args: { key: "value" }, expectedParams: { key: "value" } },
       ];
 
-      for (const { args, expected } of testCases) {
+      for (const { args, expectedParams } of testCases) {
         mockHookRunner.runBeforeToolCall.mockClear();
 
         const event: AgentEvent & { toolName: string; toolCallId: string; args: unknown } = {
@@ -287,7 +339,7 @@ describe("before_tool_call hook integration", () => {
         expect(mockHookRunner.runBeforeToolCall).toHaveBeenCalledWith(
           {
             toolName: "testtool",
-            params: expected as Record<string, unknown>,
+            params: expectedParams,
           },
           {
             toolName: "testtool",

@@ -3,6 +3,14 @@ import type { EmbeddedPiSubscribeContext } from "./pi-embedded-subscribe.handler
 import { emitAgentEvent } from "../infra/agent-events.js";
 import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
 import { normalizeTextForComparison } from "./pi-embedded-helpers.js";
+
+// Dedicated error class for hook blocking to avoid magic property issues
+class ToolBlockedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ToolBlockedError";
+  }
+}
 import { isMessagingTool, isMessagingToolSendAction } from "./pi-embedded-messaging.js";
 import {
   extractToolErrorMessage,
@@ -56,10 +64,16 @@ export async function handleToolExecutionStart(
   const hookRunner = getGlobalHookRunner();
   if (hookRunner?.hasHooks("before_tool_call")) {
     try {
+      // Normalize args to object for hook contract - plugins expect params to be an object
+      const normalizedParams =
+        args && typeof args === "object" && !Array.isArray(args)
+          ? (args as Record<string, unknown>)
+          : {};
+
       const hookResult = await hookRunner.runBeforeToolCall(
         {
           toolName,
-          params: args as Record<string, unknown>,
+          params: normalizedParams,
         },
         {
           toolName,
@@ -69,6 +83,11 @@ export async function handleToolExecutionStart(
       // Check if hook blocked the tool call
       if (hookResult?.block) {
         const blockReason = hookResult.blockReason || "Tool call blocked by plugin hook";
+
+        // Update internal state to match normal tool execution flow
+        const meta = extendExecMeta(toolName, args, inferToolMetaFromArgs(toolName, args));
+        ctx.state.toolMetaById.set(toolCallId, meta);
+
         ctx.log.debug(
           `Tool call blocked by plugin hook: runId=${ctx.params.runId} tool=${toolName} toolCallId=${toolCallId} reason=${blockReason}`,
         );
@@ -85,6 +104,12 @@ export async function handleToolExecutionStart(
           },
         });
 
+        // Call onAgentEvent callback to match normal flow
+        void ctx.params.onAgentEvent?.({
+          stream: "tool",
+          data: { phase: "start", name: toolName, toolCallId },
+        });
+
         emitAgentEvent({
           runId: ctx.params.runId,
           stream: "tool",
@@ -96,19 +121,23 @@ export async function handleToolExecutionStart(
           },
         });
 
-        // Throw error to make the tool call fail with the block reason
-        const error = new Error(blockReason);
-        (error as any).__isHookBlocking = true;
-        throw error;
+        // Throw dedicated error class instead of using magic properties
+        throw new ToolBlockedError(blockReason);
       }
 
-      // If hook modified params, update args
+      // If hook modified params, update args safely
       if (hookResult?.params) {
-        args = { ...(args as Record<string, unknown>), ...hookResult.params };
+        if (args && typeof args === "object" && !Array.isArray(args)) {
+          // Safe to merge with existing object args
+          args = { ...(args as Record<string, unknown>), ...hookResult.params };
+        } else {
+          // For non-object args, replace entirely with hook params
+          args = hookResult.params;
+        }
       }
     } catch (err) {
-      // If it's a blocking error that we intentionally threw, re-throw it
-      if (err instanceof Error && (err as any).__isHookBlocking) {
+      // If it's our blocking error, re-throw it
+      if (err instanceof ToolBlockedError) {
         throw err;
       }
       // For other hook errors, log but don't block the tool call
