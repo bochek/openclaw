@@ -179,10 +179,10 @@ export class UrbitSSEClient {
         Cookie: this.cookie,
       },
       signal: controller.signal,
+    }).finally(() => {
+      // Clear timeout once connection established (headers received) or on failure.
+      clearTimeout(timeoutId);
     });
-
-    // Clear timeout once connection established (headers received)
-    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`Stream connection failed: ${response.status}`);

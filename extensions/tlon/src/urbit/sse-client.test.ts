@@ -37,4 +37,23 @@ describe("UrbitSSEClient", () => {
       path: "/dm/~zod",
     });
   });
+
+  it("clears the connection timeout when fetch fails", async () => {
+    const timeoutId = 123 as unknown as NodeJS.Timeout;
+    const setTimeoutSpy = vi.spyOn(global, "setTimeout").mockReturnValue(timeoutId);
+    const clearTimeoutSpy = vi.spyOn(global, "clearTimeout");
+
+    mockFetch.mockRejectedValue(new Error("network down"));
+
+    const client = new UrbitSSEClient("https://example.com", "urbauth-~zod=123");
+
+    try {
+      await expect(client.openStream()).rejects.toThrow("network down");
+      expect(setTimeoutSpy).toHaveBeenCalled();
+      expect(clearTimeoutSpy).toHaveBeenCalledWith(timeoutId);
+    } finally {
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+    }
+  });
 });
