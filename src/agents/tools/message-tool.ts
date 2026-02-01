@@ -1,4 +1,5 @@
 import { Type } from "@sinclair/typebox";
+import { fileURLToPath } from "node:url";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { AnyAgentTool } from "./common.js";
 import { BLUEBUBBLES_GROUP_ACTIONS } from "../../channels/plugins/bluebubbles-actions.js";
@@ -24,6 +25,35 @@ import { channelTargetSchema, channelTargetsSchema, stringEnum } from "../schema
 import { jsonResult, readNumberParam, readStringParam } from "./common.js";
 
 const AllMessageActions = CHANNEL_MESSAGE_ACTION_NAMES;
+const REMOTE_SCHEME_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
+
+function normalizeSandboxPathInput(raw: string): string {
+  if (!raw.startsWith("file://")) {
+    return raw;
+  }
+  try {
+    return fileURLToPath(raw);
+  } catch {
+    throw new Error(`Invalid file:// URL: ${raw}`);
+  }
+}
+
+function shouldValidateMediaPath(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (trimmed.startsWith("data:") || trimmed.startsWith("blob:")) {
+    return false;
+  }
+  if (trimmed.startsWith("file://")) {
+    return true;
+  }
+  if (REMOTE_SCHEME_PATTERN.test(trimmed)) {
+    return false;
+  }
+  return true;
+}
 function buildRoutingSchema() {
   return {
     channel: Type.Optional(Type.String()),
@@ -365,13 +395,21 @@ export function createMessageTool(options?: MessageToolOptions): AnyAgentTool {
       }) as ChannelMessageActionName;
 
       // Validate file paths against sandbox root to prevent host file access.
-      const sandboxRoot = options?.sandboxRoot;
+      const sandboxRoot = options?.sandboxRoot?.trim();
       if (sandboxRoot) {
+        const validatePath = async (raw: string) => {
+          const normalized = normalizeSandboxPathInput(raw);
+          await assertSandboxPath({ filePath: normalized, cwd: sandboxRoot, root: sandboxRoot });
+        };
         for (const key of ["filePath", "path"] as const) {
           const raw = readStringParam(params, key, { trim: false });
           if (raw) {
-            await assertSandboxPath({ filePath: raw, cwd: sandboxRoot, root: sandboxRoot });
+            await validatePath(raw);
           }
+        }
+        const mediaRaw = readStringParam(params, "media", { trim: false });
+        if (mediaRaw && shouldValidateMediaPath(mediaRaw)) {
+          await validatePath(mediaRaw);
         }
       }
 

@@ -187,6 +187,27 @@ describe("message tool sandbox path validation", () => {
     }
   });
 
+  it("rejects filePath file URL that escapes sandbox root", async () => {
+    const sandboxDir = await fs.mkdtemp(path.join(os.tmpdir(), "msg-sandbox-"));
+    try {
+      const tool = createMessageTool({
+        config: {} as never,
+        sandboxRoot: sandboxDir,
+      });
+
+      await expect(
+        tool.execute("1", {
+          action: "send",
+          target: "telegram:123",
+          filePath: "file:///etc/passwd",
+          message: "",
+        }),
+      ).rejects.toThrow(/sandbox/i);
+    } finally {
+      await fs.rm(sandboxDir, { recursive: true, force: true });
+    }
+  });
+
   it("rejects path param with traversal sequence", async () => {
     const sandboxDir = await fs.mkdtemp(path.join(os.tmpdir(), "msg-sandbox-"));
     try {
@@ -203,6 +224,59 @@ describe("message tool sandbox path validation", () => {
           message: "",
         }),
       ).rejects.toThrow(/sandbox/i);
+    } finally {
+      await fs.rm(sandboxDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects media path that escapes sandbox root", async () => {
+    const sandboxDir = await fs.mkdtemp(path.join(os.tmpdir(), "msg-sandbox-"));
+    try {
+      const tool = createMessageTool({
+        config: {} as never,
+        sandboxRoot: sandboxDir,
+      });
+
+      await expect(
+        tool.execute("1", {
+          action: "send",
+          target: "telegram:123",
+          media: "/etc/passwd",
+          message: "",
+        }),
+      ).rejects.toThrow(/sandbox/i);
+    } finally {
+      await fs.rm(sandboxDir, { recursive: true, force: true });
+    }
+  });
+
+  it("allows remote media URLs inside sandbox", async () => {
+    mocks.runMessageAction.mockClear();
+    mocks.runMessageAction.mockResolvedValue({
+      kind: "send",
+      action: "send",
+      channel: "telegram",
+      to: "telegram:123",
+      handledBy: "plugin",
+      payload: {},
+      dryRun: true,
+    } satisfies MessageActionRunResult);
+
+    const sandboxDir = await fs.mkdtemp(path.join(os.tmpdir(), "msg-sandbox-"));
+    try {
+      const tool = createMessageTool({
+        config: {} as never,
+        sandboxRoot: sandboxDir,
+      });
+
+      await tool.execute("1", {
+        action: "send",
+        target: "telegram:123",
+        media: "https://example.com/file.png",
+        message: "",
+      });
+
+      expect(mocks.runMessageAction).toHaveBeenCalledTimes(1);
     } finally {
       await fs.rm(sandboxDir, { recursive: true, force: true });
     }
