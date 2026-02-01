@@ -1,6 +1,7 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import type { EmbeddedPiSubscribeContext } from "./pi-embedded-subscribe.handlers.types.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
+import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
 import { normalizeTextForComparison } from "./pi-embedded-helpers.js";
 import { isMessagingTool, isMessagingToolSendAction } from "./pi-embedded-messaging.js";
 import {
@@ -49,7 +50,73 @@ export async function handleToolExecutionStart(
   const rawToolName = String(evt.toolName);
   const toolName = normalizeToolName(rawToolName);
   const toolCallId = String(evt.toolCallId);
-  const args = evt.args;
+  let args = evt.args;
+
+  // Run before_tool_call hook - allows plugins to modify or block tool calls
+  const hookRunner = getGlobalHookRunner();
+  if (hookRunner?.hasHooks("before_tool_call")) {
+    try {
+      const hookResult = await hookRunner.runBeforeToolCall(
+        {
+          toolName,
+          params: args as Record<string, unknown>,
+        },
+        {
+          toolName,
+        },
+      );
+
+      // Check if hook blocked the tool call
+      if (hookResult?.block) {
+        const blockReason = hookResult.blockReason || "Tool call blocked by plugin hook";
+        ctx.log.debug(
+          `Tool call blocked by plugin hook: runId=${ctx.params.runId} tool=${toolName} toolCallId=${toolCallId} reason=${blockReason}`,
+        );
+
+        // Emit tool start/end events with error to maintain event consistency
+        emitAgentEvent({
+          runId: ctx.params.runId,
+          stream: "tool",
+          data: {
+            phase: "start",
+            name: toolName,
+            toolCallId,
+            args: args as Record<string, unknown>,
+          },
+        });
+
+        emitAgentEvent({
+          runId: ctx.params.runId,
+          stream: "tool",
+          data: {
+            phase: "end",
+            name: toolName,
+            toolCallId,
+            error: blockReason,
+          },
+        });
+
+        // Throw error to make the tool call fail with the block reason
+        const error = new Error(blockReason);
+        (error as any).__isHookBlocking = true;
+        throw error;
+      }
+
+      // If hook modified params, update args
+      if (hookResult?.params) {
+        args = { ...(args as Record<string, unknown>), ...hookResult.params };
+      }
+    } catch (err) {
+      // If it's a blocking error that we intentionally threw, re-throw it
+      if (err instanceof Error && (err as any).__isHookBlocking) {
+        throw err;
+      }
+      // For other hook errors, log but don't block the tool call
+      ctx.log.warn(
+        `before_tool_call hook failed: runId=${ctx.params.runId} tool=${toolName} toolCallId=${toolCallId} error=${String(err)}`,
+      );
+    }
+  }
 
   if (toolName === "read") {
     const record = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
