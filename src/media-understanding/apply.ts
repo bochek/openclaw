@@ -337,7 +337,7 @@ async function extractFileBlocks(params: {
     }
     const forcedTextMime = resolveTextMimeFromName(attachment.path ?? attachment.url ?? "");
     const kind = forcedTextMime ? "document" : resolveAttachmentKind(attachment);
-    if (!forcedTextMime && (kind === "image" || kind === "video")) {
+    if (!forcedTextMime && (kind === "image" || kind === "video" || kind === "audio")) {
       continue;
     }
     if (!limits.allowUrl && attachment.url && !attachment.path) {
@@ -364,9 +364,6 @@ async function extractFileBlocks(params: {
     const utf16Charset = resolveUtf16Charset(bufferResult?.buffer);
     const textSample = decodeTextSample(bufferResult?.buffer);
     const textLike = Boolean(utf16Charset) || looksLikeUtf8Text(bufferResult?.buffer);
-    if (!forcedTextMimeResolved && kind === "audio" && !textLike) {
-      continue;
-    }
     const guessedDelimited = textLike ? guessDelimitedMime(textSample) : undefined;
     const textHint =
       forcedTextMimeResolved ?? guessedDelimited ?? (textLike ? "text/plain" : undefined);
