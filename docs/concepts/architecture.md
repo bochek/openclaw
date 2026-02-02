@@ -89,6 +89,7 @@ sequenceDiagram
     Gateway-->>Client: event:agent<br>(streaming)
     Gateway-->>Client: res:agent<br>final {runId, status, summary}
 ```
+
 </p>
 
 ## Wire protocol (summary)
