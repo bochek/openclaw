@@ -10,7 +10,6 @@ OpenClaw.app uses SSH tunneling to connect to a remote gateway. This guide shows
 
 ## Overview
 
-<p align="center">
 ```mermaid
 %%{init: {
   'theme': 'base',
@@ -47,7 +46,6 @@ flowchart TB
     end
     T --> C
 ```
-</p>
 
 ## Quick Setup
 

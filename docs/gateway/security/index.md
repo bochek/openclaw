@@ -797,7 +797,6 @@ Commit the updated `.secrets.baseline` once it reflects the intended state.
 
 ## The Trust Hierarchy
 
-<p align="center">
 ```mermaid
 %%{init: {
   'theme': 'base',
@@ -821,11 +820,11 @@ flowchart TB
     C -- Limited trust --> D["Strangers"]
     D -- No trust --> E["Mario asking for find ~"]
     E -- Definitely no trust 😏 --> F[" "]
-
+    
+     %% The transparent box is needed to show the bottom-most label correctly
      F:::Class_transparent_box
     classDef Class_transparent_box fill:transparent, stroke:transparent
 ```
-</p>
 
 ## Reporting Security Issues
 

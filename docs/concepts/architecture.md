@@ -55,7 +55,6 @@ Protocol details:
 
 ## Connection lifecycle (single client)
 
-<p align="center">
 ```mermaid
 %%{init: {
   'theme': 'base',

@@ -1,5 +1,10 @@
 ---
-summary: "End-to-end guide for running OpenClaw as a personal assistant with safety cautions"
+summary: "End-to-end guide for running OpenClaw as a personal assist    B -- linked via QR --> C["<b>Your Mac (openclaw)<br></b><br>Pi agent"]
+```
+
+If you link your personal WhatsApp to OpenClaw, every message to you becomes "agent input". That's rarely what you want.
+
+## 5-minute quick starth safety cautions"
 read_when:
   - Onboarding a new assistant instance
   - Reviewing safety/permission implications

@@ -172,7 +172,6 @@ If the Gateway runs on a Linux host/VM but iMessage must run on a Mac, Tailscale
 
 Architecture:
 
-<p align="center">
 ```mermaid
 %%{init: {
   'theme': 'base',
@@ -200,10 +199,9 @@ flowchart TB
     Gateway -- SSH (imsg rpc) --> Mac
     Mac -- SCP (attachments) --> Gateway
     direction BT
-    User["user@gateway-host"] -- "<span style=color:>Tailscale tailnet (hostname or 100.x.y.z)</span>" --> Gateway
+    User["user@gateway-host"] -- "Tailscale tailnet (hostname or 100.x.y.z)" --> Gateway
 end
 ```
-</p>
 
 Concrete config example (Tailscale hostname):
 
