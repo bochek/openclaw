@@ -42,6 +42,8 @@ type TelegramSendOpts = {
   plainText?: string;
   /** Send audio as voice message (voice bubble) instead of audio file. Defaults to false. */
   asVoice?: boolean;
+  /** Send video as video note (voice bubble) instead of regular video. Defaults to false. */
+  asVideoNote?: boolean;
   /** Send message silently (no notification). Defaults to false. */
   silent?: boolean;
   /** Message ID to reply to (for threading) */
@@ -75,7 +77,7 @@ const diagLogger = createSubsystemLogger("telegram/diagnostic");
 function createTelegramHttpLogger(cfg: ReturnType<typeof loadConfig>) {
   const enabled = isDiagnosticFlagEnabled("telegram.http", cfg);
   if (!enabled) {
-    return () => {};
+    return () => { };
   }
   return (label: string, err: unknown) => {
     if (!(err instanceof HttpError)) {
@@ -96,14 +98,14 @@ function resolveTelegramClientOptions(
   });
   const timeoutSeconds =
     typeof account.config.timeoutSeconds === "number" &&
-    Number.isFinite(account.config.timeoutSeconds)
+      Number.isFinite(account.config.timeoutSeconds)
       ? Math.max(1, Math.floor(account.config.timeoutSeconds))
       : undefined;
   return fetchImpl || timeoutSeconds
     ? {
-        ...(fetchImpl ? { fetch: fetchImpl as unknown as ApiClientOptions["fetch"] } : {}),
-        ...(timeoutSeconds ? { timeoutSeconds } : {}),
-      }
+      ...(fetchImpl ? { fetch: fetchImpl as unknown as ApiClientOptions["fetch"] } : {}),
+      ...(timeoutSeconds ? { timeoutSeconds } : {}),
+    }
     : undefined;
 }
 
@@ -387,9 +389,20 @@ export async function sendMessageTelegram(
       contentType: media.contentType,
       fileName: media.fileName,
     });
+    const isVideoNote = kind === "video" && opts.asVideoNote === true;
     const fileName = media.fileName ?? (isGif ? "animation.gif" : inferFilename(kind)) ?? "file";
     const file = new InputFile(media.buffer, fileName);
-    const { caption, followUpText } = splitTelegramCaption(text);
+    let caption: string | undefined;
+    let followUpText: string | undefined;
+
+    if (isVideoNote) {
+      caption = undefined;
+      followUpText = text;
+    } else {
+      const split = splitTelegramCaption(text);
+      caption = split.caption;
+      followUpText = split.followUpText;
+    }
     const htmlCaption = caption ? renderHtmlText(caption) : undefined;
     // If text exceeds Telegram's caption limit, send media without caption
     // then send text as a separate follow-up message.
@@ -409,6 +422,7 @@ export async function sendMessageTelegram(
     let result:
       | Awaited<ReturnType<typeof api.sendPhoto>>
       | Awaited<ReturnType<typeof api.sendVideo>>
+      | Awaited<ReturnType<typeof api.sendVideoNote>>
       | Awaited<ReturnType<typeof api.sendAudio>>
       | Awaited<ReturnType<typeof api.sendVoice>>
       | Awaited<ReturnType<typeof api.sendAnimation>>
@@ -440,14 +454,37 @@ export async function sendMessageTelegram(
         }),
       );
     } else if (kind === "video") {
-      result = await sendWithThreadFallback(mediaParams, "video", async (effectiveParams, label) =>
-        requestWithDiag(
-          () => api.sendVideo(chatId, file, effectiveParams as Parameters<typeof api.sendVideo>[2]),
-          label,
-        ).catch((err) => {
-          throw wrapChatNotFound(err);
-        }),
-      );
+      if (isVideoNote) {
+        result = await sendWithThreadFallback(
+          mediaParams,
+          "video_note",
+          async (effectiveParams, label) =>
+            requestWithDiag(
+              () =>
+                api.sendVideoNote(
+                  chatId,
+                  file,
+                  effectiveParams as Parameters<typeof api.sendVideoNote>[2],
+                ),
+              label,
+            ).catch((err) => {
+              throw wrapChatNotFound(err);
+            }),
+        );
+      } else {
+        result = await sendWithThreadFallback(
+          mediaParams,
+          "video",
+          async (effectiveParams, label) =>
+            requestWithDiag(
+              () =>
+                api.sendVideo(chatId, file, effectiveParams as Parameters<typeof api.sendVideo>[2]),
+              label,
+            ).catch((err) => {
+              throw wrapChatNotFound(err);
+            }),
+        );
+      }
     } else if (kind === "audio") {
       const { useVoice } = resolveTelegramVoiceSend({
         wantsVoice: opts.asVoice === true, // default false (backward compatible)
@@ -517,9 +554,9 @@ export async function sendMessageTelegram(
       const textParams =
         hasThreadParams || replyMarkup
           ? {
-              ...threadParams,
-              ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-            }
+            ...threadParams,
+            ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+          }
           : undefined;
       const textRes = await sendTelegramText(followUpText, textParams);
       // Return the text message ID as the "main" message (it's the actual content).
@@ -538,9 +575,9 @@ export async function sendMessageTelegram(
   const textParams =
     hasThreadParams || replyMarkup
       ? {
-          ...threadParams,
-          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-        }
+        ...threadParams,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+      }
       : undefined;
   const res = await sendTelegramText(text, textParams, opts.plainText);
   const messageId = String(res?.message_id ?? "unknown");
