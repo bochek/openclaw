@@ -687,7 +687,12 @@ function printResult(result: UpdateRunResult, opts: PrintResultOptions) {
 }
 
 export async function updateCommand(opts: UpdateCommandOptions): Promise<void> {
-  Object.defineProperty(process, 'noDeprecation', { value: true, writable: true, enumerable: true, configurable: true });
+  Object.defineProperty(process, "noDeprecation", {
+    value: true,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
   process.env.NODE_NO_WARNINGS = "1";
   const timeoutMs = opts.timeout ? Number.parseInt(opts.timeout, 10) * 1000 : undefined;
   const shouldRestart = opts.restart !== false;
