@@ -397,7 +397,7 @@ export async function sendMessageTelegram(
 
     if (isVideoNote) {
       caption = undefined;
-      followUpText = text;
+      followUpText = text.trim() ? text : undefined;
     } else {
       const split = splitTelegramCaption(text);
       caption = split.caption;

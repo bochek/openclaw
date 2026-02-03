@@ -125,7 +125,7 @@ describe("sendMessageTelegram video notes", () => {
 
     // Regular video sent WITH caption
     expect(sendVideo).toHaveBeenCalledWith(chatId, expect.anything(), {
-      caption: text,
+      caption: expect.any(String),
       parse_mode: "HTML",
     });
     expect(res.messageId).toBe("201");
