@@ -77,7 +77,7 @@ const diagLogger = createSubsystemLogger("telegram/diagnostic");
 function createTelegramHttpLogger(cfg: ReturnType<typeof loadConfig>) {
   const enabled = isDiagnosticFlagEnabled("telegram.http", cfg);
   if (!enabled) {
-    return () => { };
+    return () => {};
   }
   return (label: string, err: unknown) => {
     if (!(err instanceof HttpError)) {
@@ -98,14 +98,14 @@ function resolveTelegramClientOptions(
   });
   const timeoutSeconds =
     typeof account.config.timeoutSeconds === "number" &&
-      Number.isFinite(account.config.timeoutSeconds)
+    Number.isFinite(account.config.timeoutSeconds)
       ? Math.max(1, Math.floor(account.config.timeoutSeconds))
       : undefined;
   return fetchImpl || timeoutSeconds
     ? {
-      ...(fetchImpl ? { fetch: fetchImpl as unknown as ApiClientOptions["fetch"] } : {}),
-      ...(timeoutSeconds ? { timeoutSeconds } : {}),
-    }
+        ...(fetchImpl ? { fetch: fetchImpl as unknown as ApiClientOptions["fetch"] } : {}),
+        ...(timeoutSeconds ? { timeoutSeconds } : {}),
+      }
     : undefined;
 }
 
@@ -554,9 +554,9 @@ export async function sendMessageTelegram(
       const textParams =
         hasThreadParams || replyMarkup
           ? {
-            ...threadParams,
-            ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-          }
+              ...threadParams,
+              ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+            }
           : undefined;
       const textRes = await sendTelegramText(followUpText, textParams);
       // Return the text message ID as the "main" message (it's the actual content).
@@ -575,9 +575,9 @@ export async function sendMessageTelegram(
   const textParams =
     hasThreadParams || replyMarkup
       ? {
-        ...threadParams,
-        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
-      }
+          ...threadParams,
+          ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
+        }
       : undefined;
   const res = await sendTelegramText(text, textParams, opts.plainText);
   const messageId = String(res?.message_id ?? "unknown");
