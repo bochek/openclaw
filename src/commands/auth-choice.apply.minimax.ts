@@ -1,10 +1,11 @@
+import type { ApplyAuthChoiceParams, ApplyAuthChoiceResult } from "./auth-choice.apply.js";
 import { resolveEnvApiKey } from "../agents/model-auth.js";
 import {
   formatApiKeyPreview,
   normalizeApiKeyInput,
   validateApiKeyInput,
 } from "./auth-choice.api-key.js";
-import type { ApplyAuthChoiceParams, ApplyAuthChoiceResult } from "./auth-choice.apply.js";
+import { applyAuthChoicePluginProvider } from "./auth-choice.apply.plugin-provider.js";
 import { applyDefaultModelChoice } from "./auth-choice.default-model.js";
 import {
   applyAuthProfileConfig,
@@ -29,6 +30,24 @@ export async function applyAuthChoiceMiniMax(
       "Model configured",
     );
   };
+  if (params.authChoice === "minimax-portal") {
+    // Let user choose between Global/CN endpoints
+    const endpoint = await params.prompter.select({
+      message: "Select MiniMax endpoint",
+      options: [
+        { value: "oauth", label: "Global", hint: "OAuth for international users" },
+        { value: "oauth-cn", label: "CN", hint: "OAuth for users in China" },
+      ],
+    });
+
+    return await applyAuthChoicePluginProvider(params, {
+      authChoice: "minimax-portal",
+      pluginId: "minimax-portal-auth",
+      providerId: "minimax-portal",
+      methodId: endpoint,
+      label: "MiniMax",
+    });
+  }
 
   if (
     params.authChoice === "minimax-cloud" ||

@@ -1,14 +1,14 @@
 import type { OpenClawConfig } from "./config.js";
+import { normalizeProviderId } from "../agents/model-selection.js";
+import {
+  getChannelPluginCatalogEntry,
+  listChannelPluginCatalogEntries,
+} from "../channels/plugins/catalog.js";
 import {
   getChatChannelMeta,
   listChatChannels,
   normalizeChatChannelId,
 } from "../channels/registry.js";
-import {
-  getChannelPluginCatalogEntry,
-  listChannelPluginCatalogEntries,
-} from "../channels/plugins/catalog.js";
-import { normalizeProviderId } from "../agents/model-selection.js";
 import { hasAnyWhatsAppAuth } from "../web/accounts.js";
 
 type PluginEnableChange = {
@@ -33,6 +33,7 @@ const PROVIDER_PLUGIN_IDS: Array<{ pluginId: string; providerId: string }> = [
   { pluginId: "google-gemini-cli-auth", providerId: "google-gemini-cli" },
   { pluginId: "qwen-portal-auth", providerId: "qwen-portal" },
   { pluginId: "copilot-proxy", providerId: "copilot-proxy" },
+  { pluginId: "minimax-portal-auth", providerId: "minimax-portal" },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {

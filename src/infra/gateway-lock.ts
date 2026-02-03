@@ -1,8 +1,7 @@
 import { createHash } from "node:crypto";
-import fs from "node:fs/promises";
 import fsSync from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
-
 import { resolveConfigPath, resolveGatewayLockDir, resolveStateDir } from "../config/paths.js";
 
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -73,8 +72,8 @@ function isGatewayArgv(args: string[]): boolean {
   }
 
   const entryCandidates = [
-    "dist/index.mjs",
-    "dist/entry.mjs",
+    "dist/index.js",
+    "dist/entry.js",
     "openclaw.mjs",
     "scripts/run-node.mjs",
     "src/index.ts",

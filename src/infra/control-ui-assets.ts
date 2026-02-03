@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-
 import { runCommandWithTimeout } from "../process/exec.js";
 import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { resolveOpenClawPackageRoot } from "./openclaw-root.js";
@@ -47,7 +46,7 @@ export async function resolveControlUiDistIndexPath(
   }
   const normalized = path.resolve(argv1);
 
-  // Case 1: entrypoint is directly inside dist/ (e.g., dist/entry.mjs)
+  // Case 1: entrypoint is directly inside dist/ (e.g., dist/entry.js)
   const distDir = path.dirname(normalized);
   if (path.basename(distDir) === "dist") {
     return path.join(distDir, "control-ui", "index.html");

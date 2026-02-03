@@ -5,8 +5,9 @@ import process from "node:process";
 const args = process.argv.slice(2);
 const env = { ...process.env };
 const cwd = process.cwd();
+const compiler = "tsdown";
 
-const initialBuild = spawnSync("pnpm", ["build"], {
+const initialBuild = spawnSync("pnpm", ["exec", compiler], {
   cwd,
   env,
   stdio: "inherit",
@@ -16,7 +17,7 @@ if (initialBuild.status !== 0) {
   process.exit(initialBuild.status ?? 1);
 }
 
-const compilerProcess = spawn("pnpm", ["tsdown", '--watch', 'src/'], {
+const compilerProcess = spawn("pnpm", ["exec", compiler, "--watch"], {
   cwd,
   env,
   stdio: "inherit",
