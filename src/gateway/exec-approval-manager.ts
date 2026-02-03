@@ -56,6 +56,10 @@ export class ExecApprovalManager {
    * confirm registration before the decision is made.
    */
   register(record: ExecApprovalRecord, timeoutMs: number): Promise<ExecApprovalDecision | null> {
+    const existing = this.pending.get(record.id);
+    if (existing) {
+      return existing.promise;
+    }
     let resolvePromise: (decision: ExecApprovalDecision | null) => void;
     let rejectPromise: (err: Error) => void;
     const promise = new Promise<ExecApprovalDecision | null>((resolve, reject) => {
