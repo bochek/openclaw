@@ -166,6 +166,12 @@ describe("sendMessageTelegram video notes", () => {
     expect(sendVideoNote).toHaveBeenCalledWith(chatId, expect.anything(), {});
 
     // Text message gets reply markup
+    expect(sendMessage).toHaveBeenCalledWith(chatId, text, {
+      parse_mode: "HTML",
+      reply_markup: {
+        inline_keyboard: [[{ text: "Btn", callback_data: "dat" }]],
+      },
+    });
   });
 
   it("threads video note and text message correctly", async () => {
