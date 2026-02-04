@@ -58,8 +58,14 @@ export class ExecApprovalManager {
    * confirm registration before the decision is made.
    */
   register(record: ExecApprovalRecord, timeoutMs: number): Promise<ExecApprovalDecision | null> {
-    if (this.pending.has(record.id)) {
-      throw new Error(`approval id '${record.id}' already registered`);
+    const existing = this.pending.get(record.id);
+    if (existing) {
+      // Idempotent: return existing promise if still pending
+      if (existing.record.resolvedAtMs === undefined) {
+        return existing.promise;
+      }
+      // Already resolved - don't allow re-registration
+      throw new Error(`approval id '${record.id}' already resolved`);
     }
     let resolvePromise: (decision: ExecApprovalDecision | null) => void;
     let rejectPromise: (err: Error) => void;

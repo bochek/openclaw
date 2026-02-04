@@ -144,8 +144,9 @@ export function createExecApprovalHandlers(
         );
         return;
       }
-      const decision = await decisionPromise;
+      // Capture snapshot before await (entry may be deleted after grace period)
       const snapshot = manager.getSnapshot(id);
+      const decision = await decisionPromise;
       // Return decision (can be null on timeout) - let clients handle via askFallback
       respond(
         true,
