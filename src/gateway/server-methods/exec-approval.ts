@@ -115,7 +115,7 @@ export function createExecApprovalHandlers(
       );
     },
     "exec.approval.waitDecision": async ({ params, respond }) => {
-      const p = params as { id?: string; timeoutMs?: number };
+      const p = params as { id?: string };
       const id = typeof p.id === "string" ? p.id.trim() : "";
       if (!id) {
         respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "id is required"));
