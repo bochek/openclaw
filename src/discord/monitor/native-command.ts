@@ -19,7 +19,7 @@ import type {
 } from "../../auto-reply/commands-registry.js";
 import type { ReplyPayload } from "../../auto-reply/types.js";
 import type { OpenClawConfig, loadConfig } from "../../config/config.js";
-import { resolveEffectiveMessagesConfig, resolveHumanDelayConfig } from "../../agents/identity.js";
+import { resolveHumanDelayConfig } from "../../agents/identity.js";
 import { resolveChunkMode, resolveTextChunkLimit } from "../../auto-reply/chunk.js";
 import {
   buildCommandTextFromArgs,
@@ -33,6 +33,7 @@ import {
 import { finalizeInboundContext } from "../../auto-reply/reply/inbound-context.js";
 import { dispatchReplyWithDispatcher } from "../../auto-reply/reply/provider-dispatcher.js";
 import { resolveCommandAuthorizedFromAuthorizers } from "../../channels/command-gating.js";
+import { createReplyPrefixContext } from "../../channels/reply-prefix.js";
 import { buildPairingReply } from "../../pairing/pairing-messages.js";
 import {
   readChannelAllowFromStore,
@@ -790,15 +791,20 @@ async function dispatchDiscordCommandInteraction(params: {
     CommandSource: "native" as const,
   });
 
+  const prefixContext = createReplyPrefixContext({
+    cfg,
+    agentId: route.agentId,
+    channel: "discord",
+    accountId: route.accountId,
+  });
+
   let didReply = false;
   await dispatchReplyWithDispatcher({
     ctx: ctxPayload,
     cfg,
     dispatcherOptions: {
-      responsePrefix: resolveEffectiveMessagesConfig(cfg, route.agentId, {
-        channel: "discord",
-        accountId: route.accountId,
-      }).responsePrefix,
+      responsePrefix: prefixContext.responsePrefix,
+      responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
       humanDelay: resolveHumanDelayConfig(cfg, route.agentId),
       deliver: async (payload) => {
         try {
@@ -831,6 +837,7 @@ async function dispatchDiscordCommandInteraction(params: {
         typeof discordConfig?.blockStreaming === "boolean"
           ? !discordConfig.blockStreaming
           : undefined,
+      onModelSelected: prefixContext.onModelSelected,
     },
   });
 }

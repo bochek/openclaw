@@ -26,6 +26,7 @@ import { getMSTeamsRuntime } from "./runtime.js";
 export function createMSTeamsReplyDispatcher(params: {
   cfg: OpenClawConfig;
   agentId: string;
+  accountId?: string;
   runtime: RuntimeEnv;
   log: MSTeamsMonitorLogger;
   adapter: MSTeamsAdapter;
@@ -58,6 +59,8 @@ export function createMSTeamsReplyDispatcher(params: {
   const prefixContext = createReplyPrefixContext({
     cfg: params.cfg,
     agentId: params.agentId,
+    channel: "msteams",
+    accountId: params.accountId,
   });
   const chunkMode = core.channel.text.resolveChunkMode(params.cfg, "msteams");
 

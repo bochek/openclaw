@@ -1,6 +1,8 @@
 import type { Client } from "@larksuiteoapi/node-sdk";
 import type { OpenClawConfig } from "../config/config.js";
 import { dispatchReplyWithBufferedBlockDispatcher } from "../auto-reply/reply/provider-dispatcher.js";
+import { resolveSessionAgentId } from "../agents/agent-scope.js";
+import { createReplyPrefixContext } from "../channels/reply-prefix.js";
 import { loadConfig } from "../config/config.js";
 import { logVerbose } from "../globals.js";
 import { formatErrorMessage } from "../infra/errors.js";
@@ -302,10 +304,20 @@ export async function processFeishuMessage(
     WasMentioned: isGroup ? wasMentioned : undefined,
   };
 
+  const agentId = resolveSessionAgentId({ sessionKey: ctx.SessionKey, config: cfg });
+  const prefixContext = createReplyPrefixContext({
+    cfg,
+    agentId,
+    channel: "feishu",
+    accountId,
+  });
+
   await dispatchReplyWithBufferedBlockDispatcher({
     ctx,
     cfg,
     dispatcherOptions: {
+      responsePrefix: prefixContext.responsePrefix,
+      responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
       deliver: async (payload, info) => {
         const hasMedia = payload.mediaUrl || (payload.mediaUrls && payload.mediaUrls.length > 0);
         if (!payload.text && !hasMedia) {
@@ -391,6 +403,7 @@ export async function processFeishuMessage(
     },
     replyOptions: {
       disableBlockStreaming: !feishuCfg.blockStreaming,
+      onModelSelected: prefixContext.onModelSelected,
       onPartialReply: streamingSession
         ? async (payload) => {
             if (!streamingSession.isActive() || !payload.text) {

@@ -579,7 +579,12 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         channel: "matrix",
         accountId: route.accountId,
       });
-      const prefixContext = createReplyPrefixContext({ cfg, agentId: route.agentId });
+      const prefixContext = createReplyPrefixContext({
+        cfg,
+        agentId: route.agentId,
+        channel: "matrix",
+        accountId: route.accountId,
+      });
       const typingCallbacks = createTypingCallbacks({
         start: () => sendTypingMatrix(roomId, true, undefined, client),
         stop: () => sendTypingMatrix(roomId, false, undefined, client),

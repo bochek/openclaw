@@ -258,6 +258,8 @@ export async function processMessage(params: {
   const prefixContext = createReplyPrefixContext({
     cfg: params.cfg,
     agentId: params.route.agentId,
+    channel: "whatsapp",
+    accountId: params.route.accountId,
   });
   const isSelfChat =
     params.msg.chatType !== "group" &&

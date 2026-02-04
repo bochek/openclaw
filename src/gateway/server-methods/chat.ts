@@ -482,7 +482,9 @@ export const chatHandlers: GatewayRequestHandlers = {
       };
       const finalReplyParts: string[] = [];
       const dispatcher = createReplyDispatcher({
-        responsePrefix: resolveEffectiveMessagesConfig(cfg, agentId).responsePrefix,
+        responsePrefix: resolveEffectiveMessagesConfig(cfg, agentId, {
+          channel: INTERNAL_MESSAGE_CHANNEL,
+        }).responsePrefix,
         responsePrefixContextProvider: () => prefixContext,
         onError: (err) => {
           context.logGateway.warn(`webchat dispatch failed: ${formatForLog(err)}`);

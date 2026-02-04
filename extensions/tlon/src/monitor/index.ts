@@ -1,4 +1,5 @@
 import type { RuntimeEnv, ReplyPayload, OpenClawConfig } from "openclaw/plugin-sdk";
+import { createReplyPrefixContext } from "openclaw/plugin-sdk";
 import { format } from "node:util";
 import { getTlonRuntime } from "../runtime.js";
 import { normalizeShip, parseChannelNest } from "../targets.js";
@@ -355,17 +356,20 @@ export async function monitorTlonProvider(opts: MonitorTlonOpts = {}): Promise<v
 
     const dispatchStartTime = Date.now();
 
-    const responsePrefix = core.channel.reply.resolveEffectiveMessagesConfig(
+    const prefixContext = createReplyPrefixContext({
       cfg,
-      route.agentId,
-    ).responsePrefix;
+      agentId: route.agentId,
+      channel: "tlon",
+      accountId: route.accountId,
+    });
     const humanDelay = core.channel.reply.resolveHumanDelayConfig(cfg, route.agentId);
 
     await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
       ctx: ctxPayload,
       cfg,
       dispatcherOptions: {
-        responsePrefix,
+        responsePrefix: prefixContext.responsePrefix,
+        responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
         humanDelay,
         deliver: async (payload: ReplyPayload) => {
           let replyText = payload.text;
@@ -407,6 +411,9 @@ export async function monitorTlonProvider(opts: MonitorTlonOpts = {}): Promise<v
             `[tlon] ${info.kind} reply failed after ${dispatchDuration}ms: ${String(err)}`,
           );
         },
+      },
+      replyOptions: {
+        onModelSelected: prefixContext.onModelSelected,
       },
     });
   };

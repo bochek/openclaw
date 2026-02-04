@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { OpenClawConfig } from "openclaw/plugin-sdk";
 import {
+  createReplyPrefixContext,
   logAckFailure,
   logInboundDrop,
   logTypingFailure,
@@ -2173,10 +2174,18 @@ async function processMessage(
     }, typingRestartDelayMs);
   };
   try {
+    const prefixContext = createReplyPrefixContext({
+      cfg: config,
+      agentId: route.agentId,
+      channel: "bluebubbles",
+      accountId: account.accountId,
+    });
     await core.channel.reply.dispatchReplyWithBufferedBlockDispatcher({
       ctx: ctxPayload,
       cfg: config,
       dispatcherOptions: {
+        responsePrefix: prefixContext.responsePrefix,
+        responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
         deliver: async (payload, info) => {
           const rawReplyToId =
             typeof payload.replyToId === "string" ? payload.replyToId.trim() : "";
@@ -2288,6 +2297,7 @@ async function processMessage(
         },
       },
       replyOptions: {
+        onModelSelected: prefixContext.onModelSelected,
         disableBlockStreaming:
           typeof account.config.blockStreaming === "boolean"
             ? !account.config.blockStreaming

@@ -2,7 +2,6 @@ import type { SlackActionMiddlewareArgs, SlackCommandMiddlewareArgs } from "@sla
 import type { ChatCommandDefinition, CommandArgs } from "../../auto-reply/commands-registry.js";
 import type { ResolvedSlackAccount } from "../accounts.js";
 import type { SlackMonitorContext } from "./context.js";
-import { resolveEffectiveMessagesConfig } from "../../agents/identity.js";
 import { resolveChunkMode } from "../../auto-reply/chunk.js";
 import {
   buildCommandTextFromArgs,
@@ -17,6 +16,7 @@ import { listSkillCommandsForAgents } from "../../auto-reply/skill-commands.js";
 import { formatAllowlistMatchMeta } from "../../channels/allowlist-match.js";
 import { resolveCommandAuthorizedFromAuthorizers } from "../../channels/command-gating.js";
 import { resolveConversationLabel } from "../../channels/conversation-label.js";
+import { createReplyPrefixContext } from "../../channels/reply-prefix.js";
 import { resolveNativeCommandsEnabled, resolveNativeSkillsEnabled } from "../../config/commands.js";
 import { resolveMarkdownTableMode } from "../../config/markdown-tables.js";
 import { danger, logVerbose } from "../../globals.js";
@@ -434,14 +434,19 @@ export function registerSlackMonitorSlashCommands(params: {
         OriginatingTo: `user:${command.user_id}`,
       });
 
+      const prefixContext = createReplyPrefixContext({
+        cfg,
+        agentId: route.agentId,
+        channel: "slack",
+        accountId: route.accountId,
+      });
+
       const { counts } = await dispatchReplyWithDispatcher({
         ctx: ctxPayload,
         cfg,
         dispatcherOptions: {
-          responsePrefix: resolveEffectiveMessagesConfig(cfg, route.agentId, {
-            channel: "slack",
-            accountId: route.accountId,
-          }).responsePrefix,
+          responsePrefix: prefixContext.responsePrefix,
+          responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
           deliver: async (payload) => {
             await deliverSlackSlashReplies({
               replies: [payload],
@@ -460,7 +465,10 @@ export function registerSlackMonitorSlashCommands(params: {
             runtime.error?.(danger(`slack slash ${info.kind} reply failed: ${String(err)}`));
           },
         },
-        replyOptions: { skillFilter: channelConfig?.skills },
+        replyOptions: {
+          skillFilter: channelConfig?.skills,
+          onModelSelected: prefixContext.onModelSelected,
+        },
       });
       if (counts.final + counts.tool + counts.block === 0) {
         await deliverSlackSlashReplies({
