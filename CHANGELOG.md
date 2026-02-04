@@ -6,7 +6,7 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
-- TBD.
+- Discord: add set-presence action for bot activity/status. (#8340) Thanks @BinaryMuse.
 
 ### Fixes
 
