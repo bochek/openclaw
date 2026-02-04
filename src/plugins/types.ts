@@ -300,6 +300,7 @@ export type PluginHookName =
   | "llm_input"
   | "llm_output"
   | "agent_end"
+  | "agent_bootstrap"
   | "before_compaction"
   | "after_compaction"
   | "before_reset"
@@ -321,6 +322,21 @@ export type PluginHookAgentContext = {
   sessionId?: string;
   workspaceDir?: string;
   messageProvider?: string;
+};
+
+// agent_bootstrap hook
+export type PluginHookBootstrapContext = {
+  agentId?: string;
+  sessionKey?: string;
+  workspaceDir?: string;
+};
+
+export type PluginHookBootstrapEvent = {
+  files: Array<{ name: string; path: string; content?: string; missing: boolean }>;
+};
+
+export type PluginHookBootstrapResult = {
+  files?: Array<{ name: string; path: string; content?: string; missing: boolean }>;
 };
 
 // before_agent_start hook
@@ -535,6 +551,10 @@ export type PluginHookHandlerMap = {
     ctx: PluginHookAgentContext,
   ) => Promise<void> | void;
   agent_end: (event: PluginHookAgentEndEvent, ctx: PluginHookAgentContext) => Promise<void> | void;
+  agent_bootstrap: (
+    event: PluginHookBootstrapEvent,
+    ctx: PluginHookBootstrapContext,
+  ) => Promise<PluginHookBootstrapResult | void> | PluginHookBootstrapResult | void;
   before_compaction: (
     event: PluginHookBeforeCompactionEvent,
     ctx: PluginHookAgentContext,
