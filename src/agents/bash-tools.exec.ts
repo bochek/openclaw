@@ -1145,6 +1145,7 @@ export function createExecTool(
                 resolvedPath: undefined,
                 sessionKey: defaults?.sessionKey,
                 timeoutMs: DEFAULT_APPROVAL_TIMEOUT_MS,
+                twoPhase: true,
               },
               { expectFinal: false },
             );
@@ -1350,6 +1351,7 @@ export function createExecTool(
                 resolvedPath,
                 sessionKey: defaults?.sessionKey,
                 timeoutMs: DEFAULT_APPROVAL_TIMEOUT_MS,
+                twoPhase: true,
               },
               { expectFinal: false },
             );

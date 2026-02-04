@@ -73,6 +73,10 @@ export class ExecApprovalManager {
       promise,
     };
     entry.timer = setTimeout(() => {
+      // Update snapshot fields before resolving (mirror resolve()'s bookkeeping)
+      record.resolvedAtMs = Date.now();
+      record.decision = undefined;
+      record.resolvedBy = null;
       resolvePromise(null);
       // Keep entry briefly for in-flight awaitDecision calls
       setTimeout(() => {

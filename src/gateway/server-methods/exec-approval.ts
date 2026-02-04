@@ -40,7 +40,9 @@ export function createExecApprovalHandlers(
         resolvedPath?: string;
         sessionKey?: string;
         timeoutMs?: number;
+        twoPhase?: boolean;
       };
+      const twoPhase = p.twoPhase === true;
       const timeoutMs = typeof p.timeoutMs === "number" ? p.timeoutMs : 120_000;
       const explicitId = typeof p.id === "string" && p.id.trim().length > 0 ? p.id.trim() : null;
       if (explicitId && manager.getSnapshot(explicitId)) {
@@ -98,20 +100,20 @@ export function createExecApprovalHandlers(
           context.logGateway?.error?.(`exec approvals: forward request failed: ${String(err)}`);
         });
 
-      // Send immediate "accepted" response so callers know the approval ID is registered.
-      // Callers using expectFinal:false will receive this and can return immediately.
-      // Callers using expectFinal:true will continue waiting for the decision.
-      // Note: "accepted" status is recognized by the gateway client for dual-response pattern.
-      respond(
-        true,
-        {
-          status: "accepted",
-          id: record.id,
-          createdAtMs: record.createdAtMs,
-          expiresAtMs: record.expiresAtMs,
-        },
-        undefined,
-      );
+      // Only send immediate "accepted" response when twoPhase is requested.
+      // This preserves single-response semantics for existing callers.
+      if (twoPhase) {
+        respond(
+          true,
+          {
+            status: "accepted",
+            id: record.id,
+            createdAtMs: record.createdAtMs,
+            expiresAtMs: record.expiresAtMs,
+          },
+          undefined,
+        );
+      }
 
       const decision = await decisionPromise;
       // Send final response with decision for callers using expectFinal:true.
