@@ -1,5 +1,5 @@
 import {
-  createReplyPrefixContext,
+  createReplyPrefixOptions,
   logInboundDrop,
   resolveControlCommandGate,
   type OpenClawConfig,
@@ -286,7 +286,7 @@ export async function handleNextcloudTalkInbound(params: {
     },
   });
 
-  const prefixContext = createReplyPrefixContext({
+  const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
     cfg: config as OpenClawConfig,
     agentId: route.agentId,
     channel: CHANNEL_ID,
@@ -297,8 +297,7 @@ export async function handleNextcloudTalkInbound(params: {
     ctx: ctxPayload,
     cfg: config as OpenClawConfig,
     dispatcherOptions: {
-      responsePrefix: prefixContext.responsePrefix,
-      responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+      ...prefixOptions,
       deliver: async (payload) => {
         await deliverNextcloudTalkReply({
           payload: payload as {
@@ -318,7 +317,7 @@ export async function handleNextcloudTalkInbound(params: {
     },
     replyOptions: {
       skillFilter: roomConfig?.skills,
-      onModelSelected: prefixContext.onModelSelected,
+      onModelSelected,
       disableBlockStreaming:
         typeof account.config.blockStreaming === "boolean"
           ? !account.config.blockStreaming

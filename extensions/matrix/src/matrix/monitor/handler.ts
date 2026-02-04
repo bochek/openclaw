@@ -1,6 +1,6 @@
 import type { LocationMessageEventContent, MatrixClient } from "@vector-im/matrix-bot-sdk";
 import {
-  createReplyPrefixContext,
+  createReplyPrefixOptions,
   createTypingCallbacks,
   formatAllowlistMatchMeta,
   logInboundDrop,
@@ -579,7 +579,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         channel: "matrix",
         accountId: route.accountId,
       });
-      const prefixContext = createReplyPrefixContext({
+      const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
         cfg,
         agentId: route.agentId,
         channel: "matrix",
@@ -609,8 +609,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       });
       const { dispatcher, replyOptions, markDispatchIdle } =
         core.channel.reply.createReplyDispatcherWithTyping({
-          responsePrefix: prefixContext.responsePrefix,
-          responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+          ...prefixOptions,
           humanDelay: core.channel.reply.resolveHumanDelayConfig(cfg, route.agentId),
           deliver: async (payload) => {
             await deliverMatrixReplies({
@@ -640,7 +639,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         replyOptions: {
           ...replyOptions,
           skillFilter: roomConfig?.skills,
-          onModelSelected: prefixContext.onModelSelected,
+          onModelSelected,
         },
       });
       markDispatchIdle();

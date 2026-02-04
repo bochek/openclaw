@@ -16,7 +16,7 @@ import { listSkillCommandsForAgents } from "../../auto-reply/skill-commands.js";
 import { formatAllowlistMatchMeta } from "../../channels/allowlist-match.js";
 import { resolveCommandAuthorizedFromAuthorizers } from "../../channels/command-gating.js";
 import { resolveConversationLabel } from "../../channels/conversation-label.js";
-import { createReplyPrefixContext } from "../../channels/reply-prefix.js";
+import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
 import { resolveNativeCommandsEnabled, resolveNativeSkillsEnabled } from "../../config/commands.js";
 import { resolveMarkdownTableMode } from "../../config/markdown-tables.js";
 import { danger, logVerbose } from "../../globals.js";
@@ -434,7 +434,7 @@ export function registerSlackMonitorSlashCommands(params: {
         OriginatingTo: `user:${command.user_id}`,
       });
 
-      const prefixContext = createReplyPrefixContext({
+      const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
         cfg,
         agentId: route.agentId,
         channel: "slack",
@@ -445,8 +445,7 @@ export function registerSlackMonitorSlashCommands(params: {
         ctx: ctxPayload,
         cfg,
         dispatcherOptions: {
-          responsePrefix: prefixContext.responsePrefix,
-          responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+          ...prefixOptions,
           deliver: async (payload) => {
             await deliverSlackSlashReplies({
               replies: [payload],
@@ -467,7 +466,7 @@ export function registerSlackMonitorSlashCommands(params: {
         },
         replyOptions: {
           skillFilter: channelConfig?.skills,
-          onModelSelected: prefixContext.onModelSelected,
+          onModelSelected,
         },
       });
       if (counts.final + counts.tool + counts.block === 0) {

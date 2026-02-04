@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { OpenClawConfig } from "openclaw/plugin-sdk";
-import { createReplyPrefixContext, resolveMentionGatingWithBypass } from "openclaw/plugin-sdk";
+import { createReplyPrefixOptions, resolveMentionGatingWithBypass } from "openclaw/plugin-sdk";
 import type {
   GoogleChatAnnotation,
   GoogleChatAttachment,
@@ -725,7 +725,7 @@ async function processMessageWithPipeline(params: {
     }
   }
 
-  const prefixContext = createReplyPrefixContext({
+  const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
     cfg: config,
     agentId: route.agentId,
     channel: "googlechat",
@@ -736,8 +736,7 @@ async function processMessageWithPipeline(params: {
     ctx: ctxPayload,
     cfg: config,
     dispatcherOptions: {
-      responsePrefix: prefixContext.responsePrefix,
-      responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+      ...prefixOptions,
       deliver: async (payload) => {
         await deliverGoogleChatReply({
           payload,
@@ -759,7 +758,7 @@ async function processMessageWithPipeline(params: {
       },
     },
     replyOptions: {
-      onModelSelected: prefixContext.onModelSelected,
+      onModelSelected,
     },
   });
 }

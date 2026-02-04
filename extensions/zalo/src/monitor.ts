@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { OpenClawConfig, MarkdownTableMode } from "openclaw/plugin-sdk";
-import { createReplyPrefixContext } from "openclaw/plugin-sdk";
+import { createReplyPrefixOptions } from "openclaw/plugin-sdk";
 import type { ResolvedZaloAccount } from "./accounts.js";
 import {
   ZaloApiError,
@@ -584,7 +584,7 @@ async function processMessageWithPipeline(params: {
     channel: "zalo",
     accountId: account.accountId,
   });
-  const prefixContext = createReplyPrefixContext({
+  const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
     cfg: config,
     agentId: route.agentId,
     channel: "zalo",
@@ -595,8 +595,7 @@ async function processMessageWithPipeline(params: {
     ctx: ctxPayload,
     cfg: config,
     dispatcherOptions: {
-      responsePrefix: prefixContext.responsePrefix,
-      responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+      ...prefixOptions,
       deliver: async (payload) => {
         await deliverZaloReply({
           payload,
@@ -616,7 +615,7 @@ async function processMessageWithPipeline(params: {
       },
     },
     replyOptions: {
-      onModelSelected: prefixContext.onModelSelected,
+      onModelSelected,
     },
   });
 }

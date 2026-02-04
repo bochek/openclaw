@@ -33,7 +33,7 @@ import {
 import { finalizeInboundContext } from "../../auto-reply/reply/inbound-context.js";
 import { dispatchReplyWithDispatcher } from "../../auto-reply/reply/provider-dispatcher.js";
 import { resolveCommandAuthorizedFromAuthorizers } from "../../channels/command-gating.js";
-import { createReplyPrefixContext } from "../../channels/reply-prefix.js";
+import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
 import { buildPairingReply } from "../../pairing/pairing-messages.js";
 import {
   readChannelAllowFromStore,
@@ -791,7 +791,7 @@ async function dispatchDiscordCommandInteraction(params: {
     CommandSource: "native" as const,
   });
 
-  const prefixContext = createReplyPrefixContext({
+  const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
     cfg,
     agentId: route.agentId,
     channel: "discord",
@@ -803,8 +803,7 @@ async function dispatchDiscordCommandInteraction(params: {
     ctx: ctxPayload,
     cfg,
     dispatcherOptions: {
-      responsePrefix: prefixContext.responsePrefix,
-      responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+      ...prefixOptions,
       humanDelay: resolveHumanDelayConfig(cfg, route.agentId),
       deliver: async (payload) => {
         try {
@@ -837,7 +836,7 @@ async function dispatchDiscordCommandInteraction(params: {
         typeof discordConfig?.blockStreaming === "boolean"
           ? !discordConfig.blockStreaming
           : undefined,
-      onModelSelected: prefixContext.onModelSelected,
+      onModelSelected,
     },
   });
 }

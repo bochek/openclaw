@@ -1,6 +1,6 @@
 import type { ChildProcess } from "node:child_process";
 import type { OpenClawConfig, MarkdownTableMode, RuntimeEnv } from "openclaw/plugin-sdk";
-import { createReplyPrefixContext, mergeAllowlist, summarizeMapping } from "openclaw/plugin-sdk";
+import { createReplyPrefixOptions, mergeAllowlist, summarizeMapping } from "openclaw/plugin-sdk";
 import type { ResolvedZalouserAccount, ZcaFriend, ZcaGroup, ZcaMessage } from "./types.js";
 import { getZalouserRuntime } from "./runtime.js";
 import { sendMessageZalouser } from "./send.js";
@@ -334,7 +334,7 @@ async function processMessage(
     },
   });
 
-  const prefixContext = createReplyPrefixContext({
+  const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
     cfg: config,
     agentId: route.agentId,
     channel: "zalouser",
@@ -345,8 +345,7 @@ async function processMessage(
     ctx: ctxPayload,
     cfg: config,
     dispatcherOptions: {
-      responsePrefix: prefixContext.responsePrefix,
-      responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+      ...prefixOptions,
       deliver: async (payload) => {
         await deliverZalouserReply({
           payload: payload as { text?: string; mediaUrls?: string[]; mediaUrl?: string },
@@ -370,7 +369,7 @@ async function processMessage(
       },
     },
     replyOptions: {
-      onModelSelected: prefixContext.onModelSelected,
+      onModelSelected,
     },
   });
 }

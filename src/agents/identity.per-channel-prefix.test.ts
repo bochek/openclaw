@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import { resolveResponsePrefix, resolveEffectiveMessagesConfig } from "./identity.js";
 
+const makeConfig = <T extends OpenClawConfig>(cfg: T) => cfg;
+
 describe("resolveResponsePrefix with per-channel override", () => {
   // ─── Backward compatibility ─────────────────────────────────────────
 
@@ -36,66 +38,66 @@ describe("resolveResponsePrefix with per-channel override", () => {
 
   describe("channel-level prefix", () => {
     it("returns channel prefix when set, ignoring global", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         messages: { responsePrefix: "[Global] " },
         channels: {
-          whatsapp: { responsePrefix: "[WA] " } as any,
+          whatsapp: { responsePrefix: "[WA] " },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(resolveResponsePrefix(cfg, "main", { channel: "whatsapp" })).toBe("[WA] ");
     });
 
     it("falls through to global when channel prefix is undefined", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         messages: { responsePrefix: "[Global] " },
         channels: {
-          whatsapp: {} as any,
+          whatsapp: {},
         },
-      };
+      } satisfies OpenClawConfig);
       expect(resolveResponsePrefix(cfg, "main", { channel: "whatsapp" })).toBe("[Global] ");
     });
 
     it("channel empty string stops cascade (no global prefix applied)", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         messages: { responsePrefix: "[Global] " },
         channels: {
-          telegram: { responsePrefix: "" } as any,
+          telegram: { responsePrefix: "" },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(resolveResponsePrefix(cfg, "main", { channel: "telegram" })).toBe("");
     });
 
     it("resolves 'auto' at channel level to identity name", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         agents: {
           list: [{ id: "main", identity: { name: "MyBot" } }],
         },
         channels: {
-          whatsapp: { responsePrefix: "auto" } as any,
+          whatsapp: { responsePrefix: "auto" },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(resolveResponsePrefix(cfg, "main", { channel: "whatsapp" })).toBe("[MyBot]");
     });
 
     it("different channels get different prefixes", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         channels: {
-          whatsapp: { responsePrefix: "[WA Bot] " } as any,
-          telegram: { responsePrefix: "" } as any,
-          discord: { responsePrefix: "🤖 " } as any,
+          whatsapp: { responsePrefix: "[WA Bot] " },
+          telegram: { responsePrefix: "" },
+          discord: { responsePrefix: "🤖 " },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(resolveResponsePrefix(cfg, "main", { channel: "whatsapp" })).toBe("[WA Bot] ");
       expect(resolveResponsePrefix(cfg, "main", { channel: "telegram" })).toBe("");
       expect(resolveResponsePrefix(cfg, "main", { channel: "discord" })).toBe("🤖 ");
     });
 
     it("returns undefined when channel not in config", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         channels: {
-          whatsapp: { responsePrefix: "[WA] " } as any,
+          whatsapp: { responsePrefix: "[WA] " },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(resolveResponsePrefix(cfg, "main", { channel: "telegram" })).toBeUndefined();
     });
   });
@@ -104,7 +106,7 @@ describe("resolveResponsePrefix with per-channel override", () => {
 
   describe("account-level prefix", () => {
     it("returns account prefix when set, ignoring channel and global", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         messages: { responsePrefix: "[Global] " },
         channels: {
           whatsapp: {
@@ -112,48 +114,48 @@ describe("resolveResponsePrefix with per-channel override", () => {
             accounts: {
               business: { responsePrefix: "[Biz] " },
             },
-          } as any,
+          },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(
         resolveResponsePrefix(cfg, "main", { channel: "whatsapp", accountId: "business" }),
       ).toBe("[Biz] ");
     });
 
     it("falls through to channel prefix when account prefix is undefined", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         channels: {
           whatsapp: {
             responsePrefix: "[WA] ",
             accounts: {
               business: {},
             },
-          } as any,
+          },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(
         resolveResponsePrefix(cfg, "main", { channel: "whatsapp", accountId: "business" }),
       ).toBe("[WA] ");
     });
 
     it("falls through to global when both account and channel are undefined", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         messages: { responsePrefix: "[Global] " },
         channels: {
           whatsapp: {
             accounts: {
               business: {},
             },
-          } as any,
+          },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(
         resolveResponsePrefix(cfg, "main", { channel: "whatsapp", accountId: "business" }),
       ).toBe("[Global] ");
     });
 
     it("account empty string stops cascade", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         messages: { responsePrefix: "[Global] " },
         channels: {
           whatsapp: {
@@ -161,16 +163,16 @@ describe("resolveResponsePrefix with per-channel override", () => {
             accounts: {
               business: { responsePrefix: "" },
             },
-          } as any,
+          },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(
         resolveResponsePrefix(cfg, "main", { channel: "whatsapp", accountId: "business" }),
       ).toBe("");
     });
 
     it("resolves 'auto' at account level to identity name", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         agents: {
           list: [{ id: "main", identity: { name: "BizBot" } }],
         },
@@ -179,16 +181,16 @@ describe("resolveResponsePrefix with per-channel override", () => {
             accounts: {
               business: { responsePrefix: "auto" },
             },
-          } as any,
+          },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(
         resolveResponsePrefix(cfg, "main", { channel: "whatsapp", accountId: "business" }),
       ).toBe("[BizBot]");
     });
 
     it("different accounts on same channel get different prefixes", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         channels: {
           whatsapp: {
             responsePrefix: "[WA] ",
@@ -196,9 +198,9 @@ describe("resolveResponsePrefix with per-channel override", () => {
               business: { responsePrefix: "[Biz] " },
               personal: { responsePrefix: "[Personal] " },
             },
-          } as any,
+          },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(
         resolveResponsePrefix(cfg, "main", { channel: "whatsapp", accountId: "business" }),
       ).toBe("[Biz] ");
@@ -208,16 +210,16 @@ describe("resolveResponsePrefix with per-channel override", () => {
     });
 
     it("unknown accountId falls through to channel level", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         channels: {
           whatsapp: {
             responsePrefix: "[WA] ",
             accounts: {
               business: { responsePrefix: "[Biz] " },
             },
-          } as any,
+          },
         },
-      };
+      } satisfies OpenClawConfig);
       expect(
         resolveResponsePrefix(cfg, "main", { channel: "whatsapp", accountId: "unknown" }),
       ).toBe("[WA] ");
@@ -227,7 +229,7 @@ describe("resolveResponsePrefix with per-channel override", () => {
   // ─── Full cascade ─────────────────────────────────────────────────
 
   describe("full 4-level cascade", () => {
-    const fullCfg: OpenClawConfig = {
+    const fullCfg = makeConfig({
       agents: {
         list: [{ id: "main", identity: { name: "TestBot" } }],
       },
@@ -239,10 +241,10 @@ describe("resolveResponsePrefix with per-channel override", () => {
             business: { responsePrefix: "[L1-Account] " },
             default: {},
           },
-        } as any,
-        telegram: {} as any,
+        },
+        telegram: {},
       },
-    };
+    } satisfies OpenClawConfig);
 
     it("L1: account prefix wins when all levels set", () => {
       expect(
@@ -261,9 +263,9 @@ describe("resolveResponsePrefix with per-channel override", () => {
     });
 
     it("undefined: no prefix at any level", () => {
-      const cfg: OpenClawConfig = {
-        channels: { telegram: {} as any },
-      };
+      const cfg = makeConfig({
+        channels: { telegram: {} },
+      } satisfies OpenClawConfig);
       expect(resolveResponsePrefix(cfg, "main", { channel: "telegram" })).toBeUndefined();
     });
   });
@@ -272,12 +274,12 @@ describe("resolveResponsePrefix with per-channel override", () => {
 
   describe("resolveEffectiveMessagesConfig with channel context", () => {
     it("passes channel context through to responsePrefix resolution", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         messages: { responsePrefix: "[Global] " },
         channels: {
-          whatsapp: { responsePrefix: "[WA] " } as any,
+          whatsapp: { responsePrefix: "[WA] " },
         },
-      };
+      } satisfies OpenClawConfig);
       const result = resolveEffectiveMessagesConfig(cfg, "main", {
         channel: "whatsapp",
       });
@@ -285,12 +287,12 @@ describe("resolveResponsePrefix with per-channel override", () => {
     });
 
     it("uses global when no channel context provided", () => {
-      const cfg: OpenClawConfig = {
+      const cfg = makeConfig({
         messages: { responsePrefix: "[Global] " },
         channels: {
-          whatsapp: { responsePrefix: "[WA] " } as any,
+          whatsapp: { responsePrefix: "[WA] " },
         },
-      };
+      } satisfies OpenClawConfig);
       const result = resolveEffectiveMessagesConfig(cfg, "main");
       expect(result.responsePrefix).toBe("[Global] ");
     });

@@ -23,7 +23,7 @@ import { finalizeInboundContext } from "../auto-reply/reply/inbound-context.js";
 import { dispatchReplyWithBufferedBlockDispatcher } from "../auto-reply/reply/provider-dispatcher.js";
 import { listSkillCommandsForAgents } from "../auto-reply/skill-commands.js";
 import { resolveCommandAuthorizedFromAuthorizers } from "../channels/command-gating.js";
-import { createReplyPrefixContext } from "../channels/reply-prefix.js";
+import { createReplyPrefixOptions } from "../channels/reply-prefix.js";
 import { resolveMarkdownTableMode } from "../config/markdown-tables.js";
 import { resolveTelegramCustomCommands } from "../config/telegram-custom-commands.js";
 import {
@@ -547,7 +547,7 @@ export const registerTelegramNativeCommands = ({
             skippedNonSilent: 0,
           };
 
-          const prefixContext = createReplyPrefixContext({
+          const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
             cfg,
             agentId: route.agentId,
             channel: "telegram",
@@ -558,8 +558,7 @@ export const registerTelegramNativeCommands = ({
             ctx: ctxPayload,
             cfg,
             dispatcherOptions: {
-              responsePrefix: prefixContext.responsePrefix,
-              responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+              ...prefixOptions,
               deliver: async (payload, _info) => {
                 const result = await deliverReplies({
                   replies: [payload],
@@ -590,7 +589,7 @@ export const registerTelegramNativeCommands = ({
             replyOptions: {
               skillFilter,
               disableBlockStreaming,
-              onModelSelected: prefixContext.onModelSelected,
+              onModelSelected,
             },
           });
           if (!deliveryState.delivered && deliveryState.skippedNonSilent > 0) {

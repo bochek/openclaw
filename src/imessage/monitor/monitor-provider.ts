@@ -25,7 +25,7 @@ import { buildMentionRegexes, matchesMentionPatterns } from "../../auto-reply/re
 import { createReplyDispatcher } from "../../auto-reply/reply/reply-dispatcher.js";
 import { resolveControlCommandGate } from "../../channels/command-gating.js";
 import { logInboundDrop } from "../../channels/logging.js";
-import { createReplyPrefixContext } from "../../channels/reply-prefix.js";
+import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
 import { recordInboundSession } from "../../channels/session.js";
 import { loadConfig } from "../../config/config.js";
 import {
@@ -610,7 +610,7 @@ export async function monitorIMessageProvider(opts: MonitorIMessageOpts = {}): P
       );
     }
 
-    const prefixContext = createReplyPrefixContext({
+    const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
       cfg,
       agentId: route.agentId,
       channel: "imessage",
@@ -618,8 +618,7 @@ export async function monitorIMessageProvider(opts: MonitorIMessageOpts = {}): P
     });
 
     const dispatcher = createReplyDispatcher({
-      responsePrefix: prefixContext.responsePrefix,
-      responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+      ...prefixOptions,
       humanDelay: resolveHumanDelayConfig(cfg, route.agentId),
       deliver: async (payload) => {
         await deliverReplies({
@@ -647,7 +646,7 @@ export async function monitorIMessageProvider(opts: MonitorIMessageOpts = {}): P
           typeof accountInfo.config.blockStreaming === "boolean"
             ? !accountInfo.config.blockStreaming
             : undefined,
-        onModelSelected: prefixContext.onModelSelected,
+        onModelSelected,
       },
     });
     if (!queuedFinal) {

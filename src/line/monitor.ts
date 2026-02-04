@@ -5,7 +5,7 @@ import type { RuntimeEnv } from "../runtime.js";
 import type { LineChannelData, ResolvedLineAccount } from "./types.js";
 import { chunkMarkdownText } from "../auto-reply/chunk.js";
 import { dispatchReplyWithBufferedBlockDispatcher } from "../auto-reply/reply/provider-dispatcher.js";
-import { createReplyPrefixContext } from "../channels/reply-prefix.js";
+import { createReplyPrefixOptions } from "../channels/reply-prefix.js";
 import { danger, logVerbose } from "../globals.js";
 import { normalizePluginHttpPath } from "../plugins/http-path.js";
 import { registerPluginHttpRoute } from "../plugins/http-registry.js";
@@ -192,7 +192,7 @@ export async function monitorLineProvider(
       try {
         const textLimit = 5000; // LINE max message length
         let replyTokenUsed = false; // Track if we've used the one-time reply token
-        const prefixContext = createReplyPrefixContext({
+        const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
           cfg: config,
           agentId: route.agentId,
           channel: "line",
@@ -203,8 +203,7 @@ export async function monitorLineProvider(
           ctx: ctxPayload,
           cfg: config,
           dispatcherOptions: {
-            responsePrefix: prefixContext.responsePrefix,
-            responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+            ...prefixOptions,
             deliver: async (payload, _info) => {
               const lineData = (payload.channelData?.line as LineChannelData | undefined) ?? {};
 
@@ -257,7 +256,7 @@ export async function monitorLineProvider(
             },
           },
           replyOptions: {
-            onModelSelected: prefixContext.onModelSelected,
+            onModelSelected,
           },
         });
 

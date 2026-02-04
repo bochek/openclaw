@@ -5,7 +5,7 @@ import type {
   RuntimeEnv,
 } from "openclaw/plugin-sdk";
 import {
-  createReplyPrefixContext,
+  createReplyPrefixOptions,
   createTypingCallbacks,
   logInboundDrop,
   logTypingFailure,
@@ -760,7 +760,7 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
       accountId: account.accountId,
     });
 
-    const prefixContext = createReplyPrefixContext({
+    const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
       cfg,
       agentId: route.agentId,
       channel: "mattermost",
@@ -780,8 +780,7 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
     });
     const { dispatcher, replyOptions, markDispatchIdle } =
       core.channel.reply.createReplyDispatcherWithTyping({
-        responsePrefix: prefixContext.responsePrefix,
-        responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+        ...prefixOptions,
         humanDelay: core.channel.reply.resolveHumanDelayConfig(cfg, route.agentId),
         deliver: async (payload: ReplyPayload) => {
           const mediaUrls = payload.mediaUrls ?? (payload.mediaUrl ? [payload.mediaUrl] : []);
@@ -830,7 +829,7 @@ export async function monitorMattermostProvider(opts: MonitorMattermostOpts = {}
         ...replyOptions,
         disableBlockStreaming:
           typeof account.blockStreaming === "boolean" ? !account.blockStreaming : undefined,
-        onModelSelected: prefixContext.onModelSelected,
+        onModelSelected,
       },
     });
     markDispatchIdle();

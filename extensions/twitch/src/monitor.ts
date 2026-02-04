@@ -6,7 +6,7 @@
  */
 
 import type { ReplyPayload, OpenClawConfig } from "openclaw/plugin-sdk";
-import { createReplyPrefixContext } from "openclaw/plugin-sdk";
+import { createReplyPrefixOptions } from "openclaw/plugin-sdk";
 import type { TwitchAccountConfig, TwitchChatMessage } from "./types.js";
 import { checkTwitchAccessControl } from "./access-control.js";
 import { getOrCreateClientManager } from "./client-manager-registry.js";
@@ -104,7 +104,7 @@ async function processTwitchMessage(params: {
     channel: "twitch",
     accountId,
   });
-  const prefixContext = createReplyPrefixContext({
+  const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
     cfg,
     agentId: route.agentId,
     channel: "twitch",
@@ -115,8 +115,7 @@ async function processTwitchMessage(params: {
     ctx: ctxPayload,
     cfg,
     dispatcherOptions: {
-      responsePrefix: prefixContext.responsePrefix,
-      responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+      ...prefixOptions,
       deliver: async (payload) => {
         await deliverTwitchReply({
           payload,
@@ -131,7 +130,7 @@ async function processTwitchMessage(params: {
       },
     },
     replyOptions: {
-      onModelSelected: prefixContext.onModelSelected,
+      onModelSelected,
     },
   });
 }

@@ -5,7 +5,7 @@ import { clearHistoryEntriesIfEnabled } from "../../../auto-reply/reply/history.
 import { createReplyDispatcherWithTyping } from "../../../auto-reply/reply/reply-dispatcher.js";
 import { removeAckReactionAfterReply } from "../../../channels/ack-reactions.js";
 import { logAckFailure, logTypingFailure } from "../../../channels/logging.js";
-import { createReplyPrefixContext } from "../../../channels/reply-prefix.js";
+import { createReplyPrefixOptions } from "../../../channels/reply-prefix.js";
 import { createTypingCallbacks } from "../../../channels/typing.js";
 import { resolveStorePath, updateLastRoute } from "../../../config/sessions.js";
 import { danger, logVerbose, shouldLogVerbose } from "../../../globals.js";
@@ -95,7 +95,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
     },
   });
 
-  const prefixContext = createReplyPrefixContext({
+  const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
     cfg,
     agentId: route.agentId,
     channel: "slack",
@@ -103,8 +103,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
   });
 
   const { dispatcher, replyOptions, markDispatchIdle } = createReplyDispatcherWithTyping({
-    responsePrefix: prefixContext.responsePrefix,
-    responsePrefixContextProvider: prefixContext.responsePrefixContextProvider,
+    ...prefixOptions,
     humanDelay: resolveHumanDelayConfig(cfg, route.agentId),
     deliver: async (payload) => {
       const replyThreadTs = replyPlan.nextThreadTs();
@@ -139,9 +138,7 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
         typeof account.config.blockStreaming === "boolean"
           ? !account.config.blockStreaming
           : undefined,
-      onModelSelected: (ctx) => {
-        prefixContext.onModelSelected(ctx);
-      },
+      onModelSelected,
     },
   });
   markDispatchIdle();

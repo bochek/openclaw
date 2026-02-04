@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "openclaw/plugin-sdk";
-import { createReplyPrefixContext } from "openclaw/plugin-sdk";
+import { createReplyPrefixOptions } from "openclaw/plugin-sdk";
+import { describe, expect, it } from "vitest";
 import { mattermostPlugin } from "./channel.js";
 
 describe("mattermostPlugin", () => {
@@ -59,7 +59,7 @@ describe("mattermostPlugin", () => {
         },
       };
 
-      const prefixContext = createReplyPrefixContext({
+      const prefixContext = createReplyPrefixOptions({
         cfg,
         agentId: "main",
         channel: "mattermost",
