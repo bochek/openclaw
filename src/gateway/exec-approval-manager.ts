@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { ExecApprovalDecision } from "../infra/exec-approvals.js";
 
+// Grace period to keep resolved entries for late awaitDecision calls
+const RESOLVED_ENTRY_GRACE_MS = 15_000;
+
 export type ExecApprovalRequestPayload = {
   command: string;
   cwd?: string | null;
@@ -84,7 +87,7 @@ export class ExecApprovalManager {
         if (this.pending.get(record.id) === entry) {
           this.pending.delete(record.id);
         }
-      }, 5000);
+      }, RESOLVED_ENTRY_GRACE_MS);
     }, timeoutMs);
     this.pending.set(record.id, entry);
     return promise;

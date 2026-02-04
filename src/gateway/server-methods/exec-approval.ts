@@ -137,7 +137,11 @@ export function createExecApprovalHandlers(
       }
       const decisionPromise = manager.awaitDecision(id);
       if (!decisionPromise) {
-        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "unknown approval id"));
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, "approval expired or not found"),
+        );
         return;
       }
       const decision = await decisionPromise;
