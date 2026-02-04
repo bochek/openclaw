@@ -44,6 +44,7 @@ import {
 } from "./pi-tools.read.js";
 import { cleanToolSchemaForGemini, normalizeToolParameters } from "./pi-tools.schema.js";
 import {
+  applyOwnerOnlyToolPolicy,
   buildPluginToolGroups,
   collectExplicitAllowlist,
   expandPolicyWithPluginGroups,
@@ -361,23 +362,7 @@ export function createOpenClawCodingTools(options?: {
   ];
   // Security: treat unknown/undefined as unauthorized (opt-in, not opt-out)
   const senderIsOwner = options?.senderIsOwner === true;
-  const toolsWithOwnerGuard = tools.map((tool) => {
-    if (normalizeToolName(tool.name) !== "whatsapp_login") {
-      return tool;
-    }
-    if (senderIsOwner || !tool.execute) {
-      return tool;
-    }
-    return {
-      ...tool,
-      execute: async () => {
-        throw new Error("whatsapp_login is restricted to owner senders.");
-      },
-    };
-  });
-  const toolsByAuthorization = senderIsOwner
-    ? toolsWithOwnerGuard
-    : toolsWithOwnerGuard.filter((tool) => normalizeToolName(tool.name) !== "whatsapp_login");
+  const toolsByAuthorization = applyOwnerOnlyToolPolicy(tools, senderIsOwner);
   const coreToolNames = new Set(
     toolsByAuthorization
       .filter((tool) => !getPluginToolMeta(tool))
