@@ -127,6 +127,10 @@ export function createExecApprovalHandlers(
         return;
       }
       const decision = await decisionPromise;
+      if (decision === null) {
+        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "approval timed out"));
+        return;
+      }
       const snapshot = manager.getSnapshot(id);
       respond(
         true,

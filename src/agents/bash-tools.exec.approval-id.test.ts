@@ -113,9 +113,7 @@ describe("exec approvals", () => {
       if (method === "node.invoke") {
         return { payload: { success: true, stdout: "ok" } };
       }
-      if (method === "exec.approval.request") {
-        return { decision: "allow-once" };
-      }
+      // exec.approval.request should NOT be called when allowlist is satisfied
       return { ok: true };
     });
 
