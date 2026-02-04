@@ -64,7 +64,19 @@ export function createExecApprovalHandlers(
       const record = manager.create(request, timeoutMs, explicitId);
       // Use register() to synchronously add to pending map before sending any response.
       // This ensures the approval ID is valid immediately after the "accepted" response.
-      const decisionPromise = manager.register(record, timeoutMs);
+      let decisionPromise: Promise<
+        import("../../infra/exec-approvals.js").ExecApprovalDecision | null
+      >;
+      try {
+        decisionPromise = manager.register(record, timeoutMs);
+      } catch (err) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, `registration failed: ${String(err)}`),
+        );
+        return;
+      }
       context.broadcast(
         "exec.approval.requested",
         {
@@ -127,11 +139,8 @@ export function createExecApprovalHandlers(
         return;
       }
       const decision = await decisionPromise;
-      if (decision === null) {
-        respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "approval timed out"));
-        return;
-      }
       const snapshot = manager.getSnapshot(id);
+      // Return decision (can be null on timeout) - let clients handle via askFallback
       respond(
         true,
         {
