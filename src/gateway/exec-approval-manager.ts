@@ -55,9 +55,8 @@ export class ExecApprovalManager {
    * confirm registration before the decision is made.
    */
   register(record: ExecApprovalRecord, timeoutMs: number): Promise<ExecApprovalDecision | null> {
-    const existing = this.pending.get(record.id);
-    if (existing) {
-      return existing.promise;
+    if (this.pending.has(record.id)) {
+      throw new Error(`approval id '${record.id}' already registered`);
     }
     let resolvePromise: (decision: ExecApprovalDecision | null) => void;
     let rejectPromise: (err: Error) => void;
@@ -65,24 +64,25 @@ export class ExecApprovalManager {
       resolvePromise = resolve;
       rejectPromise = reject;
     });
-    const timer = setTimeout(() => {
-      const entry = this.pending.get(record.id);
+    // Create entry first so we can capture it in the closure (not re-fetch from map)
+    const entry: PendingEntry = {
+      record,
+      resolve: resolvePromise!,
+      reject: rejectPromise!,
+      timer: null as unknown as ReturnType<typeof setTimeout>,
+      promise,
+    };
+    entry.timer = setTimeout(() => {
       resolvePromise(null);
       // Keep entry briefly for in-flight awaitDecision calls
       setTimeout(() => {
+        // Compare against captured entry instance, not re-fetched from map
         if (this.pending.get(record.id) === entry) {
           this.pending.delete(record.id);
         }
       }, 5000);
     }, timeoutMs);
-    // Registration happens synchronously here
-    this.pending.set(record.id, {
-      record,
-      resolve: resolvePromise!,
-      reject: rejectPromise!,
-      timer,
-      promise,
-    });
+    this.pending.set(record.id, entry);
     return promise;
   }
 
