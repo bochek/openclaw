@@ -26,4 +26,10 @@ describe("whatsapp_login tool gating", () => {
     const toolNames = tools.map((tool) => tool.name);
     expect(toolNames).toContain("whatsapp_login");
   });
+
+  it("defaults to removing whatsapp_login when owner status is unknown", () => {
+    const tools = createOpenClawCodingTools();
+    const toolNames = tools.map((tool) => tool.name);
+    expect(toolNames).not.toContain("whatsapp_login");
+  });
 });
