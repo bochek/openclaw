@@ -132,9 +132,14 @@ export function markdownToTelegramHtml(
  * Runs AFTER markdown→HTML conversion to avoid modifying HTML attributes.
  * Skips content inside <code>, <pre>, and <a> tags to avoid nesting issues.
  */
+/** Escape regex metacharacters in a string */
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function wrapFileReferencesInHtml(html: string): string {
-  // Build regex pattern for all tracked extensions
-  const extensionsPattern = Array.from(FILE_EXTENSIONS_WITH_TLD).join("|");
+  // Build regex pattern for all tracked extensions (escape metacharacters for safety)
+  const extensionsPattern = Array.from(FILE_EXTENSIONS_WITH_TLD).map(escapeRegex).join("|");
 
   // Safety-net: de-linkify auto-generated anchors where href="http://<label>" (defense in depth for textMode: "html")
   const autoLinkedAnchor = /<a\s+href="https?:\/\/([^"]+)"[^>]*>\1<\/a>/gi;
@@ -142,7 +147,7 @@ export function wrapFileReferencesInHtml(html: string): string {
     if (!isAutoLinkedFileRef(`http://${label}`, label)) {
       return _match;
     }
-    return `<code>${label}</code>`;
+    return `<code>${escapeHtml(label)}</code>`;
   });
   const filePattern = new RegExp(
     `(^|>|[\\s])([a-zA-Z0-9_.\\-./]+\\.(?:${extensionsPattern}))(?=$|[\\s<])`,
@@ -179,7 +184,7 @@ export function wrapFileReferencesInHtml(html: string): string {
       if (/https?:\/\/$/i.test(prefix)) {
         return m;
       }
-      return `${prefix}<code>${filename}</code>`;
+      return `${prefix}<code>${escapeHtml(filename)}</code>`;
     });
 
     // Update tag depth
@@ -208,7 +213,7 @@ export function wrapFileReferencesInHtml(html: string): string {
     if (/https?:\/\/$/i.test(prefix)) {
       return m;
     }
-    return `${prefix}<code>${filename}</code>`;
+    return `${prefix}<code>${escapeHtml(filename)}</code>`;
   });
 
   return result;

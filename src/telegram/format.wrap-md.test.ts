@@ -277,4 +277,29 @@ describe("edge cases", () => {
     const input = '<a href="http://other.md">README.md</a>';
     expect(wrapFileReferencesInHtml(input)).toBe(input);
   });
+
+  it("does not match filenames with special characters", () => {
+    // The regex only matches [a-zA-Z0-9_.\\-./] so & breaks the pattern
+    const input = "R&D.md";
+    const result = wrapFileReferencesInHtml(input);
+    // Not wrapped because & is not in the allowed character class
+    expect(result).toBe(input);
+  });
+
+  it("does not match filenames containing angle brackets", () => {
+    // The regex character class [a-zA-Z0-9_.\\-./] doesn't include < >
+    // so these won't be matched and wrapped (which is correct/safe)
+    const input = "file<script>.md";
+    const result = wrapFileReferencesInHtml(input);
+    // Not wrapped because < breaks the filename pattern
+    expect(result).toBe(input);
+  });
+
+  it("wraps only the valid filename portion before HTML tags", () => {
+    // x.md is a valid filename, </code><b>bold</b> is not part of it
+    const input = "x.md</code><b>bold</b>";
+    const result = wrapFileReferencesInHtml(input);
+    // Only x.md gets wrapped, the rest passes through
+    expect(result).toBe("<code>x.md</code></code><b>bold</b>");
+  });
 });
