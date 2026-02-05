@@ -137,12 +137,9 @@ export function wrapFileReferencesInHtml(html: string): string {
   const extensionsPattern = Array.from(FILE_EXTENSIONS_WITH_TLD).join("|");
 
   // Safety-net: de-linkify auto-generated anchors where href="http://<label>" (defense in depth for textMode: "html")
-  const autoLinkedAnchor = new RegExp(`<a\\s+href="https?://([^"]+)"\\s*>([^<]+)</a>`, "gi");
-  html = html.replace(autoLinkedAnchor, (_match, href: string, label: string) => {
-    if (href !== label) {
-      return _match;
-    }
-    if (!isAutoLinkedFileRef(`http://${href}`, label)) {
+  const autoLinkedAnchor = /<a\s+href="https?:\/\/([^"]+)"[^>]*>\1<\/a>/gi;
+  html = html.replace(autoLinkedAnchor, (_match, label: string) => {
+    if (!isAutoLinkedFileRef(`http://${label}`, label)) {
       return _match;
     }
     return `<code>${label}</code>`;
@@ -152,10 +149,10 @@ export function wrapFileReferencesInHtml(html: string): string {
     "gi",
   );
 
-  // Track if we're inside tags that should not be modified
-  let inCode = false;
-  let inPre = false;
-  let inAnchor = false;
+  // Track nesting depth for tags that should not be modified
+  let codeDepth = 0;
+  let preDepth = 0;
+  let anchorDepth = 0;
   let result = "";
   let lastIndex = 0;
 
@@ -173,7 +170,7 @@ export function wrapFileReferencesInHtml(html: string): string {
     const textBefore = html.slice(lastIndex, tagStart);
     result += textBefore.replace(filePattern, (m, prefix, filename) => {
       // Skip if inside protected tags or if it's a URL
-      if (inCode || inPre || inAnchor) {
+      if (codeDepth > 0 || preDepth > 0 || anchorDepth > 0) {
         return m;
       }
       if (filename.startsWith("//")) {
@@ -185,13 +182,13 @@ export function wrapFileReferencesInHtml(html: string): string {
       return `${prefix}<code>${filename}</code>`;
     });
 
-    // Update tag state
+    // Update tag depth
     if (tagName === "code") {
-      inCode = !isClosing;
+      codeDepth += isClosing ? -1 : 1;
     } else if (tagName === "pre") {
-      inPre = !isClosing;
+      preDepth += isClosing ? -1 : 1;
     } else if (tagName === "a") {
-      inAnchor = !isClosing;
+      anchorDepth += isClosing ? -1 : 1;
     }
 
     // Add the tag itself
@@ -202,7 +199,7 @@ export function wrapFileReferencesInHtml(html: string): string {
   // Process remaining text
   const remainingText = html.slice(lastIndex);
   result += remainingText.replace(filePattern, (m, prefix, filename) => {
-    if (inCode || inPre || inAnchor) {
+    if (codeDepth > 0 || preDepth > 0 || anchorDepth > 0) {
       return m;
     }
     if (filename.startsWith("//")) {

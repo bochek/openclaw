@@ -250,4 +250,31 @@ describe("edge cases", () => {
     expect(result).toContain("<code>README.MD</code>");
     expect(result).toContain("<code>SCRIPT.PY</code>");
   });
+
+  it("handles nested code tags (depth tracking)", () => {
+    // Nested <code> inside <pre> - should not wrap inner content
+    const input = "<pre><code>README.md</code></pre> then script.py";
+    const result = wrapFileReferencesInHtml(input);
+    expect(result).toBe("<pre><code>README.md</code></pre> then <code>script.py</code>");
+  });
+
+  it("handles multiple anchor tags in sequence", () => {
+    const input =
+      '<a href="https://a.com">link1</a> README.md <a href="https://b.com">link2</a> script.py';
+    const result = wrapFileReferencesInHtml(input);
+    expect(result).toContain("</a> <code>README.md</code> <a");
+    expect(result).toContain("</a> <code>script.py</code>");
+  });
+
+  it("handles auto-linked anchor with backreference match", () => {
+    // The regex uses \1 backreference - href must equal label
+    const input = '<a href="http://README.md">README.md</a>';
+    expect(wrapFileReferencesInHtml(input)).toBe("<code>README.md</code>");
+  });
+
+  it("preserves anchor when href and label differ (no backreference match)", () => {
+    // Different href and label - should NOT de-linkify
+    const input = '<a href="http://other.md">README.md</a>';
+    expect(wrapFileReferencesInHtml(input)).toBe(input);
+  });
 });
