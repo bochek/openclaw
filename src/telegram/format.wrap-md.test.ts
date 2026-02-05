@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  markdownToTelegramChunks,
   markdownToTelegramHtml,
   renderTelegramHtmlText,
   wrapFileReferencesInHtml,
@@ -23,6 +24,10 @@ describe("wrapFileReferencesInHtml", () => {
 
   it("wraps .pl filenames", () => {
     expect(wrapFileReferencesInHtml("Check backup.pl")).toContain("Check <code>backup.pl</code>");
+  });
+
+  it("wraps .sh filenames", () => {
+    expect(wrapFileReferencesInHtml("Run backup.sh")).toContain("Run <code>backup.sh</code>");
   });
 
   it("wraps file paths", () => {
@@ -50,10 +55,10 @@ describe("wrapFileReferencesInHtml", () => {
     expect(result).toBe(input);
   });
 
-  it("does not wrap in URLs", () => {
-    const result = wrapFileReferencesInHtml("Visit https://example.com/README.md");
-    expect(result).toContain('href="https://example.com/README.md"');
-    expect(result).not.toContain("<code>README.md</code>");
+  it("does not wrap file refs inside real URL anchor tags", () => {
+    const input = 'Visit <a href="https://example.com/README.md">example.com/README.md</a>';
+    const result = wrapFileReferencesInHtml(input);
+    expect(result).toBe(input);
   });
 
   it("handles mixed content correctly", () => {
@@ -66,6 +71,27 @@ describe("wrapFileReferencesInHtml", () => {
     expect(wrapFileReferencesInHtml("No markdown files here")).not.toContain("<code>");
     expect(wrapFileReferencesInHtml("File.md at start")).toContain("<code>File.md</code>");
     expect(wrapFileReferencesInHtml("Ends with file.md")).toContain("<code>file.md</code>");
+  });
+
+  it("de-linkifies auto-linkified file ref anchors", () => {
+    const input = '<a href="http://README.md">README.md</a>';
+    expect(wrapFileReferencesInHtml(input)).toBe("<code>README.md</code>");
+  });
+
+  it("de-linkifies auto-linkified path anchors", () => {
+    const input = '<a href="http://squad/friday/HEARTBEAT.md">squad/friday/HEARTBEAT.md</a>';
+    expect(wrapFileReferencesInHtml(input)).toBe("<code>squad/friday/HEARTBEAT.md</code>");
+  });
+
+  it("preserves explicit links where label differs from href", () => {
+    const input = '<a href="http://README.md">click here</a>';
+    expect(wrapFileReferencesInHtml(input)).toBe(input);
+  });
+
+  it("wraps file ref after closing anchor tag", () => {
+    const input = '<a href="https://example.com">link</a> then README.md';
+    const result = wrapFileReferencesInHtml(input);
+    expect(result).toContain("</a> then <code>README.md</code>");
   });
 });
 
@@ -97,5 +123,36 @@ describe("markdownToTelegramHtml - file reference wrapping", () => {
   it("can skip wrapping when requested", () => {
     const result = markdownToTelegramHtml("Check README.md", { wrapFileRefs: false });
     expect(result).not.toContain("<code>README.md</code>");
+  });
+
+  it("wraps multiple file types in a single message", () => {
+    const result = markdownToTelegramHtml("Edit main.go and script.py");
+    expect(result).toContain("<code>main.go</code>");
+    expect(result).toContain("<code>script.py</code>");
+  });
+
+  it("preserves real URLs as anchor tags", () => {
+    const result = markdownToTelegramHtml("Visit https://example.com");
+    expect(result).toContain('<a href="https://example.com">');
+  });
+
+  it("preserves explicit markdown links even when href looks like a file ref", () => {
+    const result = markdownToTelegramHtml("[docs](http://README.md)");
+    expect(result).toContain('<a href="http://README.md">docs</a>');
+  });
+
+  it("wraps file ref after real URL in same message", () => {
+    const result = markdownToTelegramHtml("Visit https://example.com and README.md");
+    expect(result).toContain('<a href="https://example.com">');
+    expect(result).toContain("<code>README.md</code>");
+  });
+});
+
+describe("markdownToTelegramChunks - file reference wrapping", () => {
+  it("wraps file references in chunked output", () => {
+    const chunks = markdownToTelegramChunks("Check README.md and backup.sh", 4096);
+    expect(chunks.length).toBeGreaterThan(0);
+    expect(chunks[0].html).toContain("<code>README.md</code>");
+    expect(chunks[0].html).toContain("<code>backup.sh</code>");
   });
 });
