@@ -17,6 +17,8 @@ Ollama is a local LLM runtime that makes it easy to run open-source models on yo
 2. Pull a model:
 
 ```bash
+ollama pull gpt-oss:20b
+# or
 ollama pull llama3.3
 # or
 ollama pull qwen2.5-coder:32b
@@ -40,7 +42,7 @@ openclaw config set models.providers.ollama.apiKey "ollama-local"
 {
   agents: {
     defaults: {
-      model: { primary: "ollama/llama3.3" },
+      model: { primary: "ollama/gpt-oss:20b" },
     },
   },
 }
@@ -105,8 +107,8 @@ Use explicit config when:
         api: "openai-completions",
         models: [
           {
-            id: "llama3.3",
-            name: "Llama 3.3",
+            id: "gpt-oss:20b",
+            name: "GPT-OSS 20B",
             reasoning: false,
             input: ["text"],
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -148,8 +150,8 @@ Once configured, all your Ollama models are available:
   agents: {
     defaults: {
       model: {
-        primary: "ollama/llama3.3",
-        fallbacks: ["ollama/qwen2.5-coder:32b"],
+        primary: "ollama/gpt-oss:20b",
+        fallbacks: ["ollama/llama3.3", "ollama/qwen2.5-coder:32b"],
       },
     },
   },
@@ -185,7 +187,7 @@ If you want to re-enable streaming for Ollama (may cause issues with tool-capabl
   agents: {
     defaults: {
       models: {
-        "ollama/llama3.3": {
+        "ollama/gpt-oss:20b": {
           streaming: true,
         },
       },
@@ -243,7 +245,8 @@ To add models:
 
 ```bash
 ollama list  # See what's installed
-ollama pull llama3.3  # Pull a model
+ollama pull gpt-oss:20b  # Pull a tool-capable model
+ollama pull llama3.3     # Or another model
 ```
 
 ### Connection refused
