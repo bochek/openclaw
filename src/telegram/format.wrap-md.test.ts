@@ -156,3 +156,98 @@ describe("markdownToTelegramChunks - file reference wrapping", () => {
     expect(chunks[0].html).toContain("<code>backup.sh</code>");
   });
 });
+
+describe("edge cases", () => {
+  it("wraps file ref inside bold tags", () => {
+    const result = markdownToTelegramHtml("**README.md**");
+    expect(result).toBe("<b><code>README.md</code></b>");
+  });
+
+  it("wraps file ref inside italic tags", () => {
+    const result = markdownToTelegramHtml("*script.py*");
+    expect(result).toBe("<i><code>script.py</code></i>");
+  });
+
+  it("does not wrap inside fenced code blocks", () => {
+    const result = markdownToTelegramHtml("```\nREADME.md\n```");
+    expect(result).toBe("<pre><code>README.md\n</code></pre>");
+    expect(result).not.toContain("<code><code>");
+  });
+
+  it("preserves domain-like paths as anchor tags", () => {
+    const result = markdownToTelegramHtml("example.com/README.md");
+    expect(result).toContain('<a href="http://example.com/README.md">');
+    expect(result).not.toContain("<code>");
+  });
+
+  it("preserves github URLs with file paths", () => {
+    const result = markdownToTelegramHtml("https://github.com/foo/README.md");
+    expect(result).toContain('<a href="https://github.com/foo/README.md">');
+  });
+
+  it("handles wrapFileRefs: false (plain text output)", () => {
+    const result = markdownToTelegramHtml("README.md", { wrapFileRefs: false });
+    // buildTelegramLink returns null, so no <a> tag; wrapFileRefs: false skips <code>
+    expect(result).toBe("README.md");
+  });
+
+  it("wraps all TLD extensions (.ai, .io, .tv, .fm)", () => {
+    const result = markdownToTelegramHtml("logo.ai and app.io and video.tv and audio.fm");
+    expect(result).toContain("<code>logo.ai</code>");
+    expect(result).toContain("<code>app.io</code>");
+    expect(result).toContain("<code>video.tv</code>");
+    expect(result).toContain("<code>audio.fm</code>");
+  });
+
+  it("does not wrap non-TLD extensions", () => {
+    const result = markdownToTelegramHtml("image.png and style.css and script.js");
+    expect(result).not.toContain("<code>image.png</code>");
+    expect(result).not.toContain("<code>style.css</code>");
+    expect(result).not.toContain("<code>script.js</code>");
+  });
+
+  it("handles file ref at start of message", () => {
+    const result = markdownToTelegramHtml("README.md is important");
+    expect(result).toBe("<code>README.md</code> is important");
+  });
+
+  it("handles file ref at end of message", () => {
+    const result = markdownToTelegramHtml("Check the README.md");
+    expect(result).toBe("Check the <code>README.md</code>");
+  });
+
+  it("handles multiple file refs in sequence", () => {
+    const result = markdownToTelegramHtml("README.md CHANGELOG.md LICENSE.md");
+    expect(result).toContain("<code>README.md</code>");
+    expect(result).toContain("<code>CHANGELOG.md</code>");
+    expect(result).toContain("<code>LICENSE.md</code>");
+  });
+
+  it("handles nested path without domain-like segments", () => {
+    const result = markdownToTelegramHtml("src/utils/helpers/format.go");
+    expect(result).toContain("<code>src/utils/helpers/format.go</code>");
+  });
+
+  it("wraps path with version-like segment (not a domain)", () => {
+    // v1.0/README.md is not linkified by markdown-it (no TLD), so it's wrapped
+    const result = markdownToTelegramHtml("v1.0/README.md");
+    expect(result).toContain("<code>v1.0/README.md</code>");
+  });
+
+  it("preserves domain path with version segment", () => {
+    // example.com/v1.0/README.md IS linkified (has domain), preserved as link
+    const result = markdownToTelegramHtml("example.com/v1.0/README.md");
+    expect(result).toContain('<a href="http://example.com/v1.0/README.md">');
+  });
+
+  it("handles file ref with hyphen and underscore in name", () => {
+    const result = markdownToTelegramHtml("my-file_name.md");
+    expect(result).toContain("<code>my-file_name.md</code>");
+  });
+
+  it("handles uppercase extensions", () => {
+    const result = markdownToTelegramHtml("README.MD and SCRIPT.PY");
+    expect(result).toContain("<code>README.MD</code>");
+    expect(result).toContain("<code>SCRIPT.PY</code>");
+  });
+});
