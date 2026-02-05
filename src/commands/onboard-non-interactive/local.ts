@@ -26,19 +26,48 @@ import { resolveNonInteractiveWorkspaceDir } from "./local/workspace.js";
  * when the user passes e.g. `--anthropic-api-key` without `--auth-choice apiKey`.
  */
 function inferAuthChoiceFromFlags(opts: OnboardOptions): AuthChoice | undefined {
-  if (opts.anthropicApiKey) return "apiKey";
-  if (opts.geminiApiKey) return "gemini-api-key";
-  if (opts.openaiApiKey) return "openai-api-key";
-  if (opts.openrouterApiKey) return "openrouter-api-key";
-  if (opts.aiGatewayApiKey) return "ai-gateway-api-key";
-  if (opts.moonshotApiKey) return "moonshot-api-key";
-  if (opts.kimiCodeApiKey) return "kimi-code-api-key";
-  if (opts.syntheticApiKey) return "synthetic-api-key";
-  if (opts.veniceApiKey) return "venice-api-key";
-  if (opts.zaiApiKey) return "zai-api-key";
-  if (opts.xiaomiApiKey) return "xiaomi-api-key";
-  if (opts.minimaxApiKey) return "minimax-api";
-  if (opts.opencodeZenApiKey) return "opencode-zen";
+  if (opts.anthropicApiKey) {
+    return "apiKey";
+  }
+  if (opts.geminiApiKey) {
+    return "gemini-api-key";
+  }
+  if (opts.openaiApiKey) {
+    return "openai-api-key";
+  }
+  if (opts.openrouterApiKey) {
+    return "openrouter-api-key";
+  }
+  if (opts.aiGatewayApiKey) {
+    return "ai-gateway-api-key";
+  }
+  if (opts.cloudflareAiGatewayApiKey) {
+    return "cloudflare-ai-gateway-api-key";
+  }
+  if (opts.moonshotApiKey) {
+    return "moonshot-api-key";
+  }
+  if (opts.kimiCodeApiKey) {
+    return "kimi-code-api-key";
+  }
+  if (opts.syntheticApiKey) {
+    return "synthetic-api-key";
+  }
+  if (opts.veniceApiKey) {
+    return "venice-api-key";
+  }
+  if (opts.zaiApiKey) {
+    return "zai-api-key";
+  }
+  if (opts.xiaomiApiKey) {
+    return "xiaomi-api-key";
+  }
+  if (opts.minimaxApiKey) {
+    return "minimax-api";
+  }
+  if (opts.opencodeZenApiKey) {
+    return "opencode-zen";
+  }
   return undefined;
 }
 
