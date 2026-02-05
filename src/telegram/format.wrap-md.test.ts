@@ -319,12 +319,21 @@ describe("edge cases", () => {
     expect(result).toBe(input);
   });
 
-  it("wraps only the valid filename portion before HTML tags", () => {
-    // x.md is a valid filename, </code><b>bold</b> is not part of it
-    const input = "x.md</code><b>bold</b>";
+  it("wraps file ref before unrelated HTML tags", () => {
+    // x.md followed by unrelated closing tag and bold - wrap the file ref only
+    const input = "x.md <b>bold</b>";
     const result = wrapFileReferencesInHtml(input);
-    // Only x.md gets wrapped, the rest passes through
-    expect(result).toBe("<code>x.md</code></code><b>bold</b>");
+    expect(result).toBe("<code>x.md</code> <b>bold</b>");
+  });
+
+  it("does not wrap orphaned TLD inside existing code tags", () => {
+    // R&D.md is already inside <code>, orphaned pass should NOT wrap D.md again
+    const input = "<code>R&D.md</code>";
+    const result = wrapFileReferencesInHtml(input);
+    // Should remain unchanged - no nested code tags
+    expect(result).toBe(input);
+    expect(result).not.toContain("<code><code>");
+    expect(result).not.toContain("</code></code>");
   });
 
   it("does not wrap orphaned TLD inside href attributes", () => {

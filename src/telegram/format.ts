@@ -234,7 +234,16 @@ export function wrapFileReferencesInHtml(html: string): string {
     const lastOpen = snapshot.lastIndexOf("<", offset);
     const lastClose = snapshot.lastIndexOf(">", offset);
     if (lastOpen > lastClose) {
-      return m; // Inside a tag
+      return m; // Inside a tag attribute
+    }
+    // Skip if inside code/pre tags (count opens vs closes before offset)
+    const textBefore = snapshot.slice(0, offset);
+    const codeOpens = (textBefore.match(/<code/gi) || []).length;
+    const codeCloses = (textBefore.match(/<\/code/gi) || []).length;
+    const preOpens = (textBefore.match(/<pre/gi) || []).length;
+    const preCloses = (textBefore.match(/<\/pre/gi) || []).length;
+    if (codeOpens > codeCloses || preOpens > preCloses) {
+      return m; // Inside code/pre content
     }
     return `${prefix}<code>${escapeHtml(tld)}</code>`;
   });
