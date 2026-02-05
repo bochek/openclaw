@@ -278,12 +278,20 @@ describe("edge cases", () => {
     expect(wrapFileReferencesInHtml(input)).toBe(input);
   });
 
-  it("does not match filenames with special characters", () => {
-    // The regex only matches [a-zA-Z0-9_.\\-./] so & breaks the pattern
+  it("wraps orphaned TLD pattern after special character", () => {
+    // R&D.md - the & breaks the main pattern, but D.md could be auto-linked
+    // So we wrap the orphaned D.md part to prevent Telegram linking it
     const input = "R&D.md";
     const result = wrapFileReferencesInHtml(input);
-    // Not wrapped because & is not in the allowed character class
-    expect(result).toBe(input);
+    expect(result).toBe("R&<code>D.md</code>");
+  });
+
+  it("wraps orphaned single-letter TLD patterns", () => {
+    const result1 = wrapFileReferencesInHtml("X.ai is cool");
+    expect(result1).toContain("<code>X.ai</code>");
+
+    const result2 = wrapFileReferencesInHtml("Check R.io");
+    expect(result2).toContain("<code>R.io</code>");
   });
 
   it("does not match filenames containing angle brackets", () => {

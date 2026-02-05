@@ -216,6 +216,20 @@ export function wrapFileReferencesInHtml(html: string): string {
     return `${prefix}<code>${escapeHtml(filename)}</code>`;
   });
 
+  // Second pass: catch orphaned single-letter TLD patterns (e.g., 'D.md' in 'R&D.md')
+  // These can be auto-linked by Telegram as domains
+  const orphanedTldPattern = new RegExp(
+    `([^a-zA-Z0-9]|^)([A-Za-z]\\.(?:${extensionsPattern}))(?=[^a-zA-Z0-9/]|$)`,
+    "g",
+  );
+  result = result.replace(orphanedTldPattern, (m, prefix, tld) => {
+    // Skip if already wrapped in a tag (check for < before or > after in context)
+    if (prefix === ">") {
+      return m;
+    }
+    return `${prefix}<code>${escapeHtml(tld)}</code>`;
+  });
+
   return result;
 }
 
