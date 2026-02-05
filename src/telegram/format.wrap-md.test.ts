@@ -191,12 +191,25 @@ describe("edge cases", () => {
     expect(result).toBe("README.md");
   });
 
-  it("wraps all TLD extensions (.ai, .io, .tv, .fm)", () => {
-    const result = markdownToTelegramHtml("logo.ai and app.io and video.tv and audio.fm");
-    expect(result).toContain("<code>logo.ai</code>");
-    expect(result).toContain("<code>app.io</code>");
-    expect(result).toContain("<code>video.tv</code>");
-    expect(result).toContain("<code>audio.fm</code>");
+  it("wraps supported TLD extensions (.am, .at, .be, .cc, .co)", () => {
+    const result = markdownToTelegramHtml(
+      "Makefile.am and code.at and app.be and main.cc and config.co",
+    );
+    expect(result).toContain("<code>Makefile.am</code>");
+    expect(result).toContain("<code>code.at</code>");
+    expect(result).toContain("<code>app.be</code>");
+    expect(result).toContain("<code>main.cc</code>");
+    expect(result).toContain("<code>config.co</code>");
+  });
+
+  it("does not wrap popular domain TLDs (.ai, .io, .tv, .fm)", () => {
+    // These are commonly used as real domains (x.ai, vercel.io, github.io)
+    const result = markdownToTelegramHtml("Check x.ai and vercel.io and app.tv and radio.fm");
+    // Should be links, not code
+    expect(result).toContain('<a href="http://x.ai">');
+    expect(result).toContain('<a href="http://vercel.io">');
+    expect(result).toContain('<a href="http://app.tv">');
+    expect(result).toContain('<a href="http://radio.fm">');
   });
 
   it("does not wrap non-TLD extensions", () => {
@@ -287,11 +300,12 @@ describe("edge cases", () => {
   });
 
   it("wraps orphaned single-letter TLD patterns", () => {
-    const result1 = wrapFileReferencesInHtml("X.ai is cool");
-    expect(result1).toContain("<code>X.ai</code>");
+    // Use extensions still in the set (md, sh, py, go)
+    const result1 = wrapFileReferencesInHtml("X.md is cool");
+    expect(result1).toContain("<code>X.md</code>");
 
-    const result2 = wrapFileReferencesInHtml("Check R.io");
-    expect(result2).toContain("<code>R.io</code>");
+    const result2 = wrapFileReferencesInHtml("Check R.sh");
+    expect(result2).toContain("<code>R.sh</code>");
   });
 
   it("does not match filenames containing angle brackets", () => {

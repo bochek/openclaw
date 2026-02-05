@@ -24,24 +24,24 @@ function escapeHtmlAttr(text: string): string {
  * File extensions that share TLDs and commonly appear in code/documentation.
  * These are wrapped in <code> tags to prevent Telegram from generating
  * spurious domain registrar previews.
+ *
+ * Only includes extensions that are:
+ * 1. Commonly used as file extensions in code/docs
+ * 2. Rarely used as intentional domain references
+ *
+ * Excluded: .ai, .io, .tv, .fm (popular domain TLDs like x.ai, vercel.io, github.io)
  */
 const FILE_EXTENSIONS_WITH_TLD = new Set([
-  // High priority - commonly referenced in messages
-  "md", // Markdown (Moldova)
-  "go", // Go language
-  "py", // Python (Paraguay)
-  "pl", // Perl (Poland)
-  "ai", // Adobe Illustrator (Anguilla)
-  "sh", // Shell (Saint Helena)
-  // Medium priority - sometimes referenced
-  "io", // Tuvalu (often used for tech projects)
-  "tv", // Tuvalu (video files)
-  "fm", // Federated States of Micronesia (audio)
-  "am", // Armenia
-  "at", // Austria
-  "be", // Belgium
-  "cc", // Cocos Islands
-  "co", // Colombia
+  "md", // Markdown (Moldova) - very common in repos
+  "go", // Go language - common in Go projects
+  "py", // Python (Paraguay) - common in Python projects
+  "pl", // Perl (Poland) - common in Perl projects
+  "sh", // Shell (Saint Helena) - common for scripts
+  "am", // Automake files (Armenia)
+  "at", // Assembly (Austria)
+  "be", // Backend files (Belgium)
+  "cc", // C++ source (Cocos Islands)
+  "co", // Configuration (Colombia)
 ]);
 
 /** Detects when markdown-it linkify auto-generated a link from a bare filename (e.g. README.md → http://README.md) */
