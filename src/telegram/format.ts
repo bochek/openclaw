@@ -222,14 +222,17 @@ export function wrapFileReferencesInHtml(html: string): string {
     `([^a-zA-Z0-9]|^)([A-Za-z]\\.(?:${extensionsPattern}))(?=[^a-zA-Z0-9/]|$)`,
     "g",
   );
-  result = result.replace(orphanedTldPattern, (m, prefix, tld, offset) => {
+  // Snapshot for offset calculations (offset is relative to pre-replacement string)
+  // Note: replace() doesn't mutate, but snapshot makes intent explicit
+  const snapshot = result;
+  result = snapshot.replace(orphanedTldPattern, (m, prefix, tld, offset) => {
     // Skip if prefix is > (right after a tag close)
     if (prefix === ">") {
       return m;
     }
     // Skip if we're inside an HTML tag (between < and >)
-    const lastOpen = result.lastIndexOf("<", offset);
-    const lastClose = result.lastIndexOf(">", offset);
+    const lastOpen = snapshot.lastIndexOf("<", offset);
+    const lastClose = snapshot.lastIndexOf(">", offset);
     if (lastOpen > lastClose) {
       return m; // Inside a tag
     }

@@ -341,4 +341,22 @@ describe("edge cases", () => {
     const result = wrapFileReferencesInHtml(input);
     expect(result).toBe(input);
   });
+
+  it("handles multiple orphaned TLDs with HTML tags (offset stability)", () => {
+    // This tests the bug where offset is relative to pre-replacement string
+    // but we were checking against the mutating result string
+    const input = '<a href="http://A.md">link</a> B.md <span title="C.sh">text</span> D.py';
+    const result = wrapFileReferencesInHtml(input);
+    // A.md in href should NOT be wrapped (inside attribute)
+    // B.md outside tags SHOULD be wrapped
+    // C.sh in title attribute should NOT be wrapped
+    // D.py outside tags SHOULD be wrapped
+    expect(result).toContain("<code>B.md</code>");
+    expect(result).toContain("<code>D.py</code>");
+    expect(result).not.toContain("<code>A.md</code>");
+    expect(result).not.toContain("<code>C.sh</code>");
+    // Attributes should be unchanged
+    expect(result).toContain('href="http://A.md"');
+    expect(result).toContain('title="C.sh"');
+  });
 });
