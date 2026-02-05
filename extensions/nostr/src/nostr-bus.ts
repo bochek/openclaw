@@ -349,11 +349,15 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
   const gatewayStartedAt = Math.floor(Date.now() / 1000);
 
   // NIP-42 auth handler for relays that require authentication
-  // Note: Full integration requires handling "auth-required" errors from relays
-  // and sending AUTH events. SimplePool doesn't directly expose this, so auth
-  // is best-effort. Relays that strictly require auth may need manual setup.
+  // SimplePool accepts an onauth callback that signs AUTH events
   const authHandler = createAuthHandler(sk);
-  void authHandler; // Suppress unused warning until full integration
+  
+  // Auth signer function for SimplePool - signs AUTH events when challenged
+  const onauth = async (challenge: string, relay: string) => {
+    const response = authHandler.handleChallenge(challenge, relay);
+    authHandler.markAuthenticated(relay);
+    return response.event;
+  };
 
   // Initialize metrics
   const metrics = onMetric ? createMetrics(onMetric) : createNoopMetrics();
@@ -524,6 +528,7 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
           circuitBreakers,
           healthTracker,
           onError,
+          onauth,
         );
       };
 
@@ -565,6 +570,8 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
       }
       onError?.(new Error(`Subscription closed: ${reason.join(", ")}`), "subscription");
     },
+    // NIP-42: Handle AUTH challenges from relays
+    onauth,
   });
 
   // Public sendDm function
@@ -580,6 +587,7 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
       circuitBreakers,
       healthTracker,
       onError,
+      onauth,
     );
   };
 
@@ -665,6 +673,7 @@ async function sendEncryptedDm(
   circuitBreakers: Map<string, CircuitBreaker>,
   healthTracker: RelayHealthTracker,
   onError?: (error: Error, context: string) => void,
+  onauth?: (challenge: string, relay: string) => Promise<Event>,
 ): Promise<void> {
   // NIP-65: Discover recipient's preferred relays
   let relays: string[];
@@ -721,7 +730,7 @@ async function sendEncryptedDm(
     const startTime = Date.now();
     try {
       // oxlint-disable-next-line typescript/await-thenable typescript/no-floating-promises
-      await pool.publish([relay], dmEvent);
+      await pool.publish([relay], dmEvent, { onauth });
       const latency = Date.now() - startTime;
 
       // Record success

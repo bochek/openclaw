@@ -58,9 +58,13 @@ export function createGiftWrap(
 ): WrapResult {
   // Normalize recipient pubkey
   let targetPubkey = recipientPubkey;
-  if (recipientPubkey.startsWith("npub")) {
+  if (recipientPubkey.startsWith("npub1")) {
     const decoded = nip19.decode(recipientPubkey);
-    targetPubkey = decoded.data as string;
+    if (decoded.type !== "npub") {
+      throw new Error(`Expected npub, got ${decoded.type}`);
+    }
+    // decoded.data is a string for npub type
+    targetPubkey = decoded.data;
   }
 
   // Create kind 14 rumor (unsigned chat message)
