@@ -1,3 +1,4 @@
+import { nip19 } from "nostr-tools";
 import { describe, expect, it } from "vitest";
 import {
   validatePrivateKey,
@@ -155,6 +156,14 @@ describe("normalizePubkey", () => {
 
     it("rejects invalid hex", () => {
       expect(() => normalizePubkey("invalid")).toThrow("Pubkey must be 64 hex characters");
+    });
+  });
+
+  describe("npub format", () => {
+    it("decodes npub to lowercase hex", () => {
+      const hex = "c220169537593d7126e9842f31a8d4d5fa66e271ce396f12ddc2d455db855bf2";
+      const npub = nip19.npubEncode(hex);
+      expect(normalizePubkey(npub)).toBe(hex);
     });
   });
 });

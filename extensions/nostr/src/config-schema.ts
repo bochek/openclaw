@@ -76,7 +76,7 @@ export const NostrConfigSchema = z.object({
    * DM protocol version:
    * - "nip17" (default): Gift-wrapped messages with metadata privacy
    * - "nip04": Legacy encrypted DMs (metadata visible to relays)
-   * 
+   *
    * NIP-17 is recommended. Use NIP-04 only for backwards compatibility
    * with very old clients that don't support NIP-17.
    */

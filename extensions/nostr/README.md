@@ -10,11 +10,13 @@ This extension adds Nostr as a messaging channel to OpenClaw. It enables your bo
 - Send encrypted responses back
 - Work with NIP-17 compatible clients (0xchat, Amethyst, Damus, Primal, etc.)
 - Automatically discover recipient's preferred relays (NIP-65)
+- Authenticate with relays that require NIP-42 AUTH challenges
 
 ## What's New in v2
 
 - **NIP-17 by default** — Gift-wrapped messages hide sender/recipient from relays
 - **NIP-65 relay discovery** — Finds recipient's preferred relays before sending
+- **NIP-42 auth support** — Handles auth-required relays automatically
 - **Backwards compatible** — Set `dmProtocol: "nip04"` if you need legacy support
 
 ## Installation
@@ -68,6 +70,7 @@ openclaw plugins install @openclaw/nostr
 ### NIP-17 (Default, Recommended)
 
 Gift-wrapped messages provide metadata privacy:
+
 - Sender and recipient pubkeys hidden from relays
 - Forward secrecy with ephemeral keys
 - Supported by modern clients (0xchat, Amethyst, Damus, Primal)
@@ -75,13 +78,14 @@ Gift-wrapped messages provide metadata privacy:
 ### NIP-04 (Legacy)
 
 Use only for backwards compatibility:
+
 - Sender/recipient visible to relays
 - Older clients may only support this
 
 ```yaml
 channels:
   nostr:
-    dmProtocol: "nip04"  # Use legacy protocol
+    dmProtocol: "nip04" # Use legacy protocol
 ```
 
 ## NIP-65 Relay Discovery
@@ -122,16 +126,17 @@ If you're upgrading from the NIP-04-only version:
 1. **Default behavior changed** — DMs now use NIP-17
 2. **Most users**: No action needed (NIP-17 is better)
 3. **Legacy clients**: Add `dmProtocol: "nip04"` to keep old behavior
+4. **Inbound compatibility**: The plugin still reads both NIP-04 and NIP-17 inbound DMs
 
 ## Protocol Support
 
-| NIP    | Status    | Notes                           |
-| ------ | --------- | ------------------------------- |
-| NIP-01 | Supported | Basic event structure           |
-| NIP-04 | Supported | Legacy encrypted DMs (opt-in)   |
-| NIP-17 | Supported | Gift-wrapped DMs (default)      |
-| NIP-42 | Planned   | Relay authentication            |
-| NIP-65 | Supported | Relay list discovery            |
+| NIP    | Status    | Notes                         |
+| ------ | --------- | ----------------------------- |
+| NIP-01 | Supported | Basic event structure         |
+| NIP-04 | Supported | Legacy encrypted DMs (opt-in) |
+| NIP-17 | Supported | Gift-wrapped DMs (default)    |
+| NIP-42 | Supported | Relay AUTH challenge handling |
+| NIP-65 | Supported | Relay list discovery          |
 
 ## Security Notes
 
@@ -155,12 +160,13 @@ If you're upgrading from the NIP-04-only version:
 
 1. Check relay URLs are correct (must use `wss://`)
 2. Verify relays are online and accepting connections
-3. NIP-65 will try to find recipient's preferred relays
+3. NIP-65 will try to find recipient's preferred relays (public `wss://` only)
 4. Check for rate limiting (reduce message frequency)
 
 ### Legacy client compatibility
 
 If the recipient uses an old client:
+
 ```yaml
 channels:
   nostr:

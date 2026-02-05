@@ -1,15 +1,15 @@
 /**
  * NIP-17 Gift Wrap Implementation
- * 
+ *
  * Message structure:
  * - Kind 14 (rumor): Unsigned chat message
  * - Kind 13 (seal): Rumor encrypted to recipient, signed by sender
  * - Kind 1059 (gift wrap): Seal encrypted with ephemeral key
- * 
+ *
  * Benefits over NIP-04:
  * - Metadata privacy: sender/recipient hidden from relays
  * - Forward secrecy: ephemeral keys for each message
- * 
+ *
  * @see https://github.com/nostr-protocol/nips/blob/master/17.md
  */
 
@@ -45,7 +45,7 @@ export interface WrapResult {
 
 /**
  * Create a NIP-17 gift-wrapped message
- * 
+ *
  * @param recipientPubkey - Recipient's pubkey (hex or npub)
  * @param content - Message content
  * @param privateKeyBytes - Sender's private key as Uint8Array
@@ -91,7 +91,7 @@ export function createGiftWrap(
 
 /**
  * Unwrap a NIP-17 gift-wrapped message
- * 
+ *
  * @param wrapEvent - Kind 1059 gift wrap event
  * @param privateKeyBytes - Recipient's private key as Uint8Array
  * @returns Unwrapped message or null if decryption fails
@@ -178,7 +178,7 @@ export function normalizeNostrTarget(target: string): string | null {
     try {
       const decoded = nip19.decode(target);
       if (decoded.type === "npub") {
-        return decoded.data as string;
+        return decoded.data.toLowerCase();
       }
     } catch {
       return null;

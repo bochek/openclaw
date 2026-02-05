@@ -1,18 +1,18 @@
 /**
  * NIP-42 Authentication
- * 
+ *
  * Handles relay authentication for relays that require it.
- * 
+ *
  * Flow:
  * 1. Relay sends AUTH challenge: ["AUTH", "<challenge>"]
  * 2. Client signs kind:22242 event with challenge in tags
  * 3. Client sends: ["AUTH", <signed-event>]
  * 4. Relay verifies and grants access
- * 
+ *
  * @see https://github.com/nostr-protocol/nips/blob/master/42.md
  */
 
-import { finalizeEvent, type Event } from "nostr-tools";
+import { finalizeEvent, type Event, type EventTemplate, type VerifiedEvent } from "nostr-tools";
 import { makeAuthEvent as nostrToolsMakeAuthEvent } from "nostr-tools/nip42";
 
 // ============================================================================
@@ -39,9 +39,9 @@ export interface AuthResponse {
 
 /**
  * Create a NIP-42 authentication event
- * 
+ *
  * Uses nostr-tools' implementation for compatibility.
- * 
+ *
  * @param challenge - The challenge string from the relay
  * @param relayUrl - The relay URL requesting auth
  * @param privateKeyBytes - User's private key as Uint8Array
@@ -54,7 +54,7 @@ export function createAuthEvent(
 ): AuthResponse {
   // Use nostr-tools' makeAuthEvent for compatibility
   const event = nostrToolsMakeAuthEvent(relayUrl, challenge);
-  
+
   // Sign the event
   const signedEvent = finalizeEvent(event, privateKeyBytes);
 
@@ -70,15 +70,12 @@ export function createAuthEvent(
 
 /**
  * Parse an AUTH message from a relay
- * 
+ *
  * @param message - Raw message from relay (parsed JSON)
  * @param relayUrl - The relay URL
  * @returns AuthChallenge if valid, null otherwise
  */
-export function parseAuthChallenge(
-  message: unknown[],
-  relayUrl: string,
-): AuthChallenge | null {
+export function parseAuthChallenge(message: unknown[], relayUrl: string): AuthChallenge | null {
   // AUTH message format: ["AUTH", "<challenge>"]
   if (!Array.isArray(message)) {
     return null;
@@ -101,7 +98,7 @@ export function parseAuthChallenge(
 
 /**
  * Create the AUTH response message to send to relay
- * 
+ *
  * @param event - The signed auth event
  * @returns Message array to send: ["AUTH", <event>]
  */
@@ -116,6 +113,8 @@ export function createAuthMessage(event: Event): unknown[] {
 export interface AuthHandler {
   /** Handle an AUTH challenge from a relay */
   handleChallenge: (challenge: string, relayUrl: string) => AuthResponse;
+  /** Sign nostr-tools AUTH template events (SimplePool onauth callback) */
+  signAuthEvent: (eventTemplate: EventTemplate) => Promise<VerifiedEvent>;
   /** Check if a relay requires auth (based on past challenges) */
   requiresAuth: (relayUrl: string) => boolean;
   /** Mark a relay as authenticated */
@@ -126,7 +125,7 @@ export interface AuthHandler {
 
 /**
  * Create an auth handler for a specific private key
- * 
+ *
  * @param privateKeyBytes - User's private key
  * @returns AuthHandler instance
  */
@@ -138,6 +137,29 @@ export function createAuthHandler(privateKeyBytes: Uint8Array): AuthHandler {
     handleChallenge(challenge: string, relayUrl: string): AuthResponse {
       challengedRelays.add(relayUrl);
       return createAuthEvent(challenge, relayUrl, privateKeyBytes);
+    },
+
+    async signAuthEvent(eventTemplate: EventTemplate): Promise<VerifiedEvent> {
+      let relayUrl: string | null = null;
+      let challenge: string | null = null;
+
+      for (const tag of eventTemplate.tags ?? []) {
+        if (tag[0] === "relay" && typeof tag[1] === "string" && tag[1].length > 0) {
+          relayUrl = tag[1];
+        } else if (tag[0] === "challenge" && typeof tag[1] === "string" && tag[1].length > 0) {
+          challenge = tag[1];
+        }
+      }
+
+      if (relayUrl && challenge) {
+        challengedRelays.add(relayUrl);
+      }
+
+      const signedEvent = finalizeEvent(eventTemplate, privateKeyBytes);
+      if (relayUrl) {
+        authenticatedRelays.add(relayUrl);
+      }
+      return signedEvent;
     },
 
     requiresAuth(relayUrl: string): boolean {

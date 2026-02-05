@@ -7,9 +7,6 @@ import {
   type Event,
 } from "nostr-tools";
 import { decrypt as nip04Decrypt, encrypt as nip04Encrypt } from "nostr-tools/nip04";
-import { createGiftWrap, unwrapGiftWrap } from "./nip17.js";
-import { getRelaysForDm } from "./nip65.js";
-import { createAuthHandler, type AuthHandler } from "./nip42.js";
 import type { NostrProfile } from "./config-schema.js";
 import {
   createMetrics,
@@ -18,6 +15,9 @@ import {
   type MetricsSnapshot,
   type MetricEvent,
 } from "./metrics.js";
+import { createGiftWrap, unwrapGiftWrap } from "./nip17.js";
+import { createAuthHandler } from "./nip42.js";
+import { getRelaysForDm } from "./nip65.js";
 import { publishProfile as publishProfileFn, type ProfilePublishResult } from "./nostr-profile.js";
 import {
   readNostrBusState,
@@ -212,6 +212,10 @@ interface RelayHealthTracker {
   getSortedRelays: (relays: string[]) => string[];
 }
 
+type RelayAuthSigner = (
+  eventTemplate: import("nostr-tools").EventTemplate,
+) => Promise<import("nostr-tools").VerifiedEvent>;
+
 function createRelayHealthTracker(): RelayHealthTracker {
   const stats = new Map<string, RelayHealthStats>();
 
@@ -275,7 +279,7 @@ function createRelayHealthTracker(): RelayHealthTracker {
     },
 
     getSortedRelays(relays: string[]): string[] {
-      return [...relays].sort((a, b) => this.getScore(b) - this.getScore(a));
+      return [...relays].toSorted((a, b) => this.getScore(b) - this.getScore(a));
     },
   };
 }
@@ -325,7 +329,10 @@ export function getPublicKeyFromPrivate(privateKey: string): string {
 // ============================================================================
 
 /**
- * Start the Nostr DM bus - subscribes to NIP-04 encrypted DMs
+ * Start the Nostr DM bus.
+ *
+ * Inbound reads both NIP-04 and NIP-17 for compatibility during migration.
+ * Outbound uses the configured `dmProtocol`.
  */
 export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusHandle> {
   const {
@@ -339,7 +346,7 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
     maxSeenEntries = 100_000,
     seenTtlMs = 60 * 60 * 1000,
   } = options;
-  
+
   const useNip17 = dmProtocol === "nip17";
 
   const sk = validatePrivateKey(privateKey);
@@ -351,13 +358,7 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
   // NIP-42 auth handler for relays that require authentication
   // SimplePool accepts an onauth callback that signs AUTH events
   const authHandler = createAuthHandler(sk);
-  
-  // Auth signer function for SimplePool - signs AUTH events when challenged
-  const onauth = async (challenge: string, relay: string) => {
-    const response = authHandler.handleChallenge(challenge, relay);
-    authHandler.markAuthenticated(relay);
-    return response.event;
-  };
+  const onauth: RelayAuthSigner = authHandler.signAuthEvent;
 
   // Initialize metrics
   const metrics = onMetric ? createMetrics(onMetric) : createNoopMetrics();
@@ -459,11 +460,15 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
         onError?.(new Error("Invalid signature"), `event ${event.id}`);
         return;
       }
-      
-      // Self-message loop prevention
-      // For NIP-04: check event.pubkey
-      // For NIP-17: check after unwrapping (sender is inside the gift wrap)
-      if (!useNip17 && event.pubkey === pk) {
+
+      if (event.kind !== 4 && event.kind !== 1059) {
+        metrics.emit("event.rejected.wrong_kind");
+        return;
+      }
+
+      // For NIP-04, sender pubkey is on outer event.
+      // For NIP-17, sender pubkey is only available after unwrap.
+      if (event.kind === 4 && event.pubkey === pk) {
         metrics.emit("event.rejected.self_message");
         return;
       }
@@ -472,11 +477,11 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
       seen.add(event.id);
       metrics.emit("memory.seen_tracker_size", seen.size());
 
-      // Decrypt the message based on protocol
+      // Decrypt based on event kind.
       let plaintext: string;
       let senderPubkey: string;
-      
-      if (useNip17 && event.kind === 1059) {
+
+      if (event.kind === 1059) {
         // NIP-17 gift-wrapped message
         try {
           const unwrapped = unwrapGiftWrap(event, sk);
@@ -487,13 +492,13 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
           }
           plaintext = unwrapped.content;
           senderPubkey = unwrapped.senderPubkey;
-          
+
           // Self-message check for NIP-17 (after unwrapping)
           if (senderPubkey === pk) {
             metrics.emit("event.rejected.self_message");
             return;
           }
-          
+
           metrics.emit("decrypt.success");
         } catch (err) {
           metrics.emit("decrypt.failure");
@@ -547,13 +552,11 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
     }
   }
 
-  // Subscribe to DMs based on protocol
-  // NIP-17: kind 1059 (gift wrap) - sender is hidden, we're in the p-tag
-  // NIP-04: kind 4 (encrypted DM) - we're in the p-tag
-  const dmKinds = useNip17 ? [1059] : [4];
-  
-  const dmFilter = { kinds: dmKinds, "#p": [pk], since };
-  const sub = pool.subscribeMany(relays, [dmFilter] as import("nostr-tools").Filter[], {
+  // Always subscribe to both kinds during migration:
+  // - kind 4 (legacy NIP-04)
+  // - kind 1059 (NIP-17 gift wrap)
+  const dmFilter: import("nostr-tools").Filter = { kinds: [4, 1059], "#p": [pk], since };
+  const sub = pool.subscribeMany(relays, dmFilter, {
     onevent: handleEvent,
     oneose: () => {
       // EOSE handler - called when all stored events have been received
@@ -659,7 +662,7 @@ export async function startNostrBus(options: NostrBusOptions): Promise<NostrBusH
 
 /**
  * Send an encrypted DM to a pubkey
- * 
+ *
  * Uses NIP-65 to discover recipient's preferred relays before sending.
  */
 async function sendEncryptedDm(
@@ -673,7 +676,7 @@ async function sendEncryptedDm(
   circuitBreakers: Map<string, CircuitBreaker>,
   healthTracker: RelayHealthTracker,
   onError?: (error: Error, context: string) => void,
-  onauth?: (challenge: string, relay: string) => Promise<Event>,
+  onauth?: RelayAuthSigner,
 ): Promise<void> {
   // NIP-65: Discover recipient's preferred relays
   let relays: string[];
@@ -688,7 +691,7 @@ async function sendEncryptedDm(
 
   // Create the DM event based on protocol
   let dmEvent: Event;
-  
+
   if (useNip17) {
     // NIP-17: Gift-wrapped message
     const { event } = createGiftWrap(toPubkey, text, sk);
@@ -729,8 +732,7 @@ async function sendEncryptedDm(
 
     const startTime = Date.now();
     try {
-      // oxlint-disable-next-line typescript/await-thenable typescript/no-floating-promises
-      await pool.publish([relay], dmEvent, { onauth });
+      await Promise.all(pool.publish([relay], dmEvent, { onauth }));
       const latency = Date.now() - startTime;
 
       // Record success
@@ -793,10 +795,10 @@ export function normalizePubkey(input: string): string {
     if (decoded.type !== "npub") {
       throw new Error("Invalid npub key");
     }
-    // Convert Uint8Array to hex string
-    return Array.from(decoded.data as Uint8Array)
-      .map((b: number) => b.toString(16).padStart(2, "0"))
-      .join("");
+    if (typeof decoded.data !== "string" || !/^[0-9a-fA-F]{64}$/.test(decoded.data)) {
+      throw new Error("Invalid npub key");
+    }
+    return decoded.data.toLowerCase();
   }
 
   // Already hex - validate and return lowercase

@@ -2,8 +2,8 @@
  * Tests for NIP-17 gift wrap implementation
  */
 
-import { describe, it, expect } from "vitest";
 import { getPublicKey } from "nostr-tools";
+import { describe, it, expect } from "vitest";
 import {
   hexToBytes,
   bytesToHex,
@@ -100,17 +100,23 @@ describe("normalizeNostrTarget", () => {
 
   it("returns null for wrong length hex", () => {
     expect(normalizeNostrTarget("c220169537593d7126e9842f31a8d4d5")).toBeNull(); // 32 chars
-    expect(normalizeNostrTarget("c220169537593d7126e9842f31a8d4d5fa66e271ce396f12ddc2d455db855bf2aa")).toBeNull(); // 66 chars
+    expect(
+      normalizeNostrTarget("c220169537593d7126e9842f31a8d4d5fa66e271ce396f12ddc2d455db855bf2aa"),
+    ).toBeNull(); // 66 chars
   });
 });
 
 describe("looksLikeNostrId", () => {
   it("recognizes npub format", () => {
-    expect(looksLikeNostrId("npub1cgspd9fhty7hzfhfsshnr2x56haxdcn3ecuk7ykact29tku9t0eqtveawx")).toBe(true);
+    expect(
+      looksLikeNostrId("npub1cgspd9fhty7hzfhfsshnr2x56haxdcn3ecuk7ykact29tku9t0eqtveawx"),
+    ).toBe(true);
   });
 
   it("recognizes hex pubkey", () => {
-    expect(looksLikeNostrId("c220169537593d7126e9842f31a8d4d5fa66e271ce396f12ddc2d455db855bf2")).toBe(true);
+    expect(
+      looksLikeNostrId("c220169537593d7126e9842f31a8d4d5fa66e271ce396f12ddc2d455db855bf2"),
+    ).toBe(true);
   });
 
   it("rejects invalid formats", () => {
@@ -132,7 +138,7 @@ describe("createGiftWrap", () => {
 
   it("creates a kind:1059 event", () => {
     const { event, eventId } = createGiftWrap(recipientPk, "Hello!", senderSkBytes);
-    
+
     expect(event.kind).toBe(1059);
     expect(event.id).toBe(eventId);
     expect(eventId).toHaveLength(64);
@@ -140,15 +146,15 @@ describe("createGiftWrap", () => {
 
   it("includes recipient in p-tag", () => {
     const { event } = createGiftWrap(recipientPk, "Hello!", senderSkBytes);
-    
-    const pTags = event.tags.filter(t => t[0] === "p");
+
+    const pTags = event.tags.filter((t) => t[0] === "p");
     expect(pTags.length).toBeGreaterThan(0);
-    expect(pTags.some(t => t[1] === recipientPk)).toBe(true);
+    expect(pTags.some((t) => t[1] === recipientPk)).toBe(true);
   });
 
   it("has encrypted content", () => {
     const { event } = createGiftWrap(recipientPk, "Secret message", senderSkBytes);
-    
+
     // Content should not contain the plaintext
     expect(event.content).not.toContain("Secret message");
     // Content should be non-empty (encrypted)
@@ -158,7 +164,7 @@ describe("createGiftWrap", () => {
   it("uses ephemeral pubkey (not sender's)", () => {
     const senderPk = getPublicKey(senderSkBytes);
     const { event } = createGiftWrap(recipientPk, "Hello!", senderSkBytes);
-    
+
     // Gift wrap pubkey should be ephemeral, not the sender
     expect(event.pubkey).not.toBe(senderPk);
   });
@@ -166,7 +172,7 @@ describe("createGiftWrap", () => {
   it("accepts npub format for recipient", () => {
     const recipientNpub = "npub1cgspd9fhty7hzfhfsshnr2x56haxdcn3ecuk7ykact29tku9t0eqtveawx";
     const { event } = createGiftWrap(recipientNpub, "Hello!", senderSkBytes);
-    
+
     expect(event.kind).toBe(1059);
   });
 });
@@ -180,9 +186,9 @@ describe("unwrapGiftWrap", () => {
   it("unwraps a gift-wrapped message", () => {
     const message = "Test message for NIP-17";
     const { event } = createGiftWrap(recipientPk, message, senderSkBytes);
-    
+
     const unwrapped = unwrapGiftWrap(event, recipientSkBytes);
-    
+
     expect(unwrapped).not.toBeNull();
     expect(unwrapped?.content).toBe(message);
     expect(unwrapped?.senderPubkey).toBe(senderPk);
@@ -191,24 +197,24 @@ describe("unwrapGiftWrap", () => {
   it("returns sender npub", () => {
     const { event } = createGiftWrap(recipientPk, "Hello", senderSkBytes);
     const unwrapped = unwrapGiftWrap(event, recipientSkBytes);
-    
+
     expect(unwrapped?.senderNpub).toMatch(/^npub1/);
   });
 
   it("returns event ID", () => {
     const { event, eventId } = createGiftWrap(recipientPk, "Hello", senderSkBytes);
     const unwrapped = unwrapGiftWrap(event, recipientSkBytes);
-    
+
     expect(unwrapped?.eventId).toBe(eventId);
   });
 
   it("fails to unwrap with wrong key", () => {
     const message = "Secret message";
     const { event } = createGiftWrap(recipientPk, message, senderSkBytes);
-    
+
     const wrongKey = hexToBytes("1111111111111111111111111111111111111111111111111111111111111111");
     const unwrapped = unwrapGiftWrap(event, wrongKey);
-    
+
     expect(unwrapped).toBeNull();
   });
 
@@ -222,8 +228,11 @@ describe("unwrapGiftWrap", () => {
       id: "xxx",
       sig: "yyy",
     };
-    
-    const result = unwrapGiftWrap(fakeEvent as any, recipientSkBytes);
+
+    const result = unwrapGiftWrap(
+      fakeEvent as unknown as import("nostr-tools").Event,
+      recipientSkBytes,
+    );
     expect(result).toBeNull();
   });
 
@@ -237,8 +246,11 @@ describe("unwrapGiftWrap", () => {
       id: "xxx",
       sig: "yyy",
     };
-    
-    const result = unwrapGiftWrap(fakeEvent as any, recipientSkBytes);
+
+    const result = unwrapGiftWrap(
+      fakeEvent as unknown as import("nostr-tools").Event,
+      recipientSkBytes,
+    );
     expect(result).toBeNull();
   });
 
@@ -246,7 +258,7 @@ describe("unwrapGiftWrap", () => {
     const message = "Hello 👋 世界 🌍 مرحبا";
     const { event } = createGiftWrap(recipientPk, message, senderSkBytes);
     const unwrapped = unwrapGiftWrap(event, recipientSkBytes);
-    
+
     expect(unwrapped?.content).toBe(message);
   });
 
@@ -254,7 +266,7 @@ describe("unwrapGiftWrap", () => {
     const message = "x".repeat(10000);
     const { event } = createGiftWrap(recipientPk, message, senderSkBytes);
     const unwrapped = unwrapGiftWrap(event, recipientSkBytes);
-    
+
     expect(unwrapped?.content).toBe(message);
   });
 });
@@ -264,10 +276,10 @@ describe("roundtrip", () => {
     const senderSkBytes = hexToBytes(TEST_SENDER_SK);
     const recipientSkBytes = hexToBytes(TEST_RECIPIENT_SK);
     const recipientPk = getPublicKey(recipientSkBytes);
-    
+
     const originalMessage = "Roundtrip test";
     const { event } = createGiftWrap(recipientPk, originalMessage, senderSkBytes);
-    
+
     // Recipient unwraps
     const unwrapped = unwrapGiftWrap(event, recipientSkBytes);
     expect(unwrapped?.content).toBe(originalMessage);

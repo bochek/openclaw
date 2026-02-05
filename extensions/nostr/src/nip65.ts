@@ -1,13 +1,13 @@
 /**
  * NIP-65 Relay List Metadata + NIP-17 DM Inbox Relays
- * 
+ *
  * Fetches recipient's preferred relays before sending DMs.
- * 
+ *
  * Priority for DM delivery:
  * 1. kind:10050 — DM inbox relays (NIP-17 specific)
  * 2. kind:10002 — General relay list (write relays)
  * 3. Fallback to configured relays
- * 
+ *
  * @see https://github.com/nostr-protocol/nips/blob/master/65.md
  */
 
@@ -51,6 +51,101 @@ interface RelayList {
   all: string[];
 }
 
+function isIpv4Address(hostname: string): boolean {
+  return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname);
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+  const parts = hostname.split(".").map((part) => Number.parseInt(part, 10));
+  if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
+    return true;
+  }
+
+  const [a, b] = parts;
+  if (a === 10 || a === 127 || a === 0) {
+    return true;
+  }
+  if (a === 192 && b === 168) {
+    return true;
+  }
+  if (a === 172 && b >= 16 && b <= 31) {
+    return true;
+  }
+  if (a === 169 && b === 254) {
+    return true;
+  }
+  if (a >= 224) {
+    return true;
+  }
+  return false;
+}
+
+function isPrivateOrLocalHost(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase();
+  if (!normalized) {
+    return true;
+  }
+  if (normalized === "localhost" || normalized.endsWith(".localhost")) {
+    return true;
+  }
+  if (normalized.includes(":")) {
+    if (normalized === "::1") {
+      return true;
+    }
+    if (
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe80:")
+    ) {
+      return true;
+    }
+    return false;
+  }
+  if (isIpv4Address(normalized)) {
+    return isPrivateIpv4(normalized);
+  }
+  return false;
+}
+
+function normalizeRelayUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "wss:") {
+      return null;
+    }
+    if (isPrivateOrLocalHost(parsed.hostname)) {
+      return null;
+    }
+
+    // Normalize for dedupe: drop query/hash and trailing slash.
+    parsed.search = "";
+    parsed.hash = "";
+    const normalized = parsed.toString();
+    return normalized.endsWith("/") ? normalized.slice(0, -1) : normalized;
+  } catch {
+    return null;
+  }
+}
+
+export function sanitizeRelayUrls(relays: string[]): string[] {
+  const unique = new Set<string>();
+  for (const relay of relays) {
+    const normalized = normalizeRelayUrl(relay);
+    if (!normalized) {
+      continue;
+    }
+    unique.add(normalized);
+  }
+  return Array.from(unique);
+}
+
+function createScopedPool(pool?: SimplePool): { pool: SimplePool; ownsPool: boolean } {
+  if (pool) {
+    return { pool, ownsPool: false };
+  }
+  return { pool: new SimplePool(), ownsPool: true };
+}
+
 // ============================================================================
 // Cache
 // ============================================================================
@@ -92,39 +187,46 @@ async function queryRelays(
   timeoutMs: number = QUERY_TIMEOUT_MS,
 ): Promise<import("nostr-tools").Event[]> {
   const events: import("nostr-tools").Event[] = [];
-  
-  return new Promise((resolve) => {
-    const timeout = setTimeout(() => {
-      resolve(events);
-    }, timeoutMs);
 
-    // subscribeMany expects (relays, filters[], opts)
-    const sub = pool.subscribeMany(relays, [filter] as Filter[], {
-      onevent: (event: import("nostr-tools").Event) => {
-        events.push(event);
-      },
-      oneose: () => {
-        clearTimeout(timeout);
-        sub.close();
-        resolve(events);
-      },
-    });
+  return new Promise((resolve) => {
+    let settled = false;
+    let sub: { close: () => void } | null = null;
+
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timeout);
+      sub?.close();
+      resolve(events);
+    };
+    const timeout = setTimeout(finish, timeoutMs);
+
+    try {
+      sub = pool.subscribeMany(relays, filter, {
+        onevent: (event: import("nostr-tools").Event) => {
+          events.push(event);
+        },
+        oneose: finish,
+        onclose: () => finish(),
+      });
+    } catch {
+      finish();
+    }
   });
 }
 
 /**
  * Fetch user's DM inbox relays (kind:10050)
- * 
+ *
  * These are the relays where the user wants to receive DMs.
- * 
+ *
  * @param pubkey - User's hex pubkey
  * @param pool - SimplePool instance (optional, creates one if not provided)
  * @returns Array of relay URLs
  */
-export async function fetchDmInboxRelays(
-  pubkey: string,
-  pool?: SimplePool,
-): Promise<string[]> {
+export async function fetchDmInboxRelays(pubkey: string, pool?: SimplePool): Promise<string[]> {
   // Check cache
   const cacheKey = `dm:${pubkey}`;
   const cached = getCached(relayCache, cacheKey);
@@ -132,8 +234,8 @@ export async function fetchDmInboxRelays(
     return cached;
   }
 
-  const usePool = pool ?? new SimplePool();
-  const relays: string[] = [];
+  const { pool: usePool, ownsPool } = createScopedPool(pool);
+  const relayCandidates: string[] = [];
 
   try {
     const events = await queryRelays(usePool, BOOTSTRAP_RELAYS, {
@@ -149,14 +251,20 @@ export async function fetchDmInboxRelays(
 
       // Extract relay URLs from 'relay' tags
       for (const tag of event.tags) {
-        if (tag[0] === "relay" && tag[1]) {
-          relays.push(tag[1]);
+        if (tag[0] === "relay" && typeof tag[1] === "string") {
+          relayCandidates.push(tag[1]);
         }
       }
     }
   } catch {
     // Ignore errors, return empty
+  } finally {
+    if (ownsPool) {
+      usePool.destroy();
+    }
   }
+
+  const relays = sanitizeRelayUrls(relayCandidates);
 
   // Cache result (even if empty)
   setCache(relayCache, cacheKey, relays);
@@ -165,15 +273,12 @@ export async function fetchDmInboxRelays(
 
 /**
  * Fetch user's general relay list (kind:10002)
- * 
+ *
  * @param pubkey - User's hex pubkey
  * @param pool - SimplePool instance (optional)
  * @returns Object with read, write, and all relay arrays
  */
-export async function fetchRelayList(
-  pubkey: string,
-  pool?: SimplePool,
-): Promise<RelayList> {
+export async function fetchRelayList(pubkey: string, pool?: SimplePool): Promise<RelayList> {
   // Check cache
   const cacheKey = `list:${pubkey}`;
   const cached = getCached(relayListCache, cacheKey);
@@ -181,8 +286,11 @@ export async function fetchRelayList(
     return cached;
   }
 
-  const usePool = pool ?? new SimplePool();
+  const { pool: usePool, ownsPool } = createScopedPool(pool);
   const result: RelayList = { read: [], write: [], all: [] };
+  const readSet = new Set<string>();
+  const writeSet = new Set<string>();
+  const allSet = new Set<string>();
 
   try {
     const events = await queryRelays(usePool, BOOTSTRAP_RELAYS, {
@@ -196,33 +304,39 @@ export async function fetchRelayList(
       events.sort((a, b) => b.created_at - a.created_at);
       const event = events[0];
 
-      const seen = new Set<string>();
-
       for (const tag of event.tags) {
-        if (tag[0] === "r" && tag[1]) {
-          const url = tag[1];
+        if (tag[0] === "r" && typeof tag[1] === "string") {
+          const url = normalizeRelayUrl(tag[1]);
+          if (!url) {
+            continue;
+          }
           const marker = tag[2];
 
           if (marker === "read") {
-            result.read.push(url);
+            readSet.add(url);
           } else if (marker === "write") {
-            result.write.push(url);
+            writeSet.add(url);
           } else {
             // No marker = both read and write
-            result.read.push(url);
-            result.write.push(url);
+            readSet.add(url);
+            writeSet.add(url);
           }
 
-          if (!seen.has(url)) {
-            result.all.push(url);
-            seen.add(url);
-          }
+          allSet.add(url);
         }
       }
     }
   } catch {
     // Ignore errors, return empty
+  } finally {
+    if (ownsPool) {
+      usePool.destroy();
+    }
   }
+
+  result.read = Array.from(readSet);
+  result.write = Array.from(writeSet);
+  result.all = Array.from(allSet);
 
   // Cache result
   setCache(relayListCache, cacheKey, result);
@@ -231,12 +345,12 @@ export async function fetchRelayList(
 
 /**
  * Get optimal relays for sending a DM to a pubkey
- * 
+ *
  * Priority:
  * 1. kind:10050 DM inbox relays (most specific)
  * 2. kind:10002 write relays (general preference)
  * 3. Fallback relays (configured defaults)
- * 
+ *
  * @param recipientPubkey - Recipient's hex pubkey
  * @param fallbackRelays - Relays to use if discovery fails
  * @param pool - SimplePool instance (optional)
@@ -265,7 +379,7 @@ export async function getRelaysForDm(
 
 /**
  * Get user's write relays (for fetching their events like kind:3)
- * 
+ *
  * @param pubkey - User's hex pubkey
  * @param fallbackRelays - Relays to use if discovery fails
  * @param pool - SimplePool instance (optional)

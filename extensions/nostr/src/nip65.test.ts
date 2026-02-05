@@ -1,168 +1,246 @@
-/**
- * Tests for NIP-65 relay discovery
- * 
- * Note: These are unit tests for the logic. Integration tests
- * with real relays are in nip65.integration.test.ts
- */
+import type { Filter } from "nostr-tools";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  clearRelayCache,
+  fetchDmInboxRelays,
+  fetchRelayList,
+  getRelaysForDm,
+  sanitizeRelayUrls,
+} from "./nip65.js";
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { clearRelayCache } from "./nip65.js";
+interface SubscribeParams {
+  onevent?: (event: import("nostr-tools").Event) => void;
+  oneose?: () => void;
+  onclose?: () => void;
+}
 
-// We'll mock the relay queries for unit tests
-// Real integration tests would hit actual relays
+class FakePool {
+  public closeCount = 0;
+  public destroyCount = 0;
 
-describe("NIP-65 relay discovery", () => {
+  constructor(
+    private readonly onSubscribe: (
+      filter: Filter,
+      params: SubscribeParams,
+      close: () => void,
+    ) => void,
+  ) {}
+
+  subscribeMany(_relays: string[], filter: Filter, params: SubscribeParams): { close: () => void } {
+    const close = () => {
+      this.closeCount += 1;
+    };
+    this.onSubscribe(filter, params, close);
+    return { close };
+  }
+
+  destroy(): void {
+    this.destroyCount += 1;
+  }
+}
+
+const TEST_PUBKEY = "c220169537593d7126e9842f31a8d4d5fa66e271ce396f12ddc2d455db855bf2";
+
+describe("sanitizeRelayUrls", () => {
+  it("keeps valid public wss relays and deduplicates", () => {
+    const result = sanitizeRelayUrls([
+      "wss://relay.damus.io",
+      "wss://relay.damus.io/",
+      "wss://relay.primal.net?query=1",
+      "wss://nos.lol#hash",
+    ]);
+
+    expect(result).toEqual(["wss://relay.damus.io", "wss://relay.primal.net", "wss://nos.lol"]);
+  });
+
+  it("drops unsafe and invalid relays", () => {
+    const result = sanitizeRelayUrls([
+      "ws://relay.example.com",
+      "https://relay.example.com",
+      "wss://localhost:7447",
+      "wss://127.0.0.1:7447",
+      "wss://10.0.0.4:7447",
+      "not-a-url",
+      "wss://relay.example.com",
+    ]);
+
+    expect(result).toEqual(["wss://relay.example.com"]);
+  });
+});
+
+describe("fetchDmInboxRelays", () => {
   beforeEach(() => {
-    // Clear cache between tests
     clearRelayCache();
   });
 
-  describe("cache behavior", () => {
-    it("clearRelayCache clears all caches", () => {
-      // This is a basic sanity test
-      clearRelayCache();
-      // No error means success
-      expect(true).toBe(true);
+  it("parses kind:10050 relay tags and sanitizes output", async () => {
+    const pool = new FakePool((_filter, params) => {
+      setTimeout(() => {
+        params.onevent?.({
+          id: "x".repeat(64),
+          kind: 10050,
+          pubkey: TEST_PUBKEY,
+          created_at: 1,
+          tags: [
+            ["relay", "wss://relay.example.com"],
+            ["relay", "wss://relay.example.com/"],
+            ["relay", "wss://localhost:7447"],
+          ],
+          content: "",
+          sig: "y".repeat(128),
+        } as import("nostr-tools").Event);
+        params.oneose?.();
+      }, 0);
     });
+
+    const relays = await fetchDmInboxRelays(
+      TEST_PUBKEY,
+      pool as unknown as import("nostr-tools").SimplePool,
+    );
+    expect(relays).toEqual(["wss://relay.example.com"]);
   });
 
-  describe("getRelaysForDm logic", () => {
-    it.skip("returns fallback relays when discovery fails (requires network)", async () => {
-      // This test requires network access - skipped in unit tests
-      // Run integration tests for network behavior
-      const { getRelaysForDm } = await import("./nip65.js");
-      
-      const fallback = ["wss://relay1.test", "wss://relay2.test"];
-      const result = await getRelaysForDm("invalid-pubkey", fallback);
-      
-      expect(Array.isArray(result)).toBe(true);
+  it("closes subscriptions when discovery times out", async () => {
+    vi.useFakeTimers();
+    const pool = new FakePool(() => {
+      // Intentionally do nothing so query timeout path is exercised.
     });
 
-    it("uses fallback when provided empty array", () => {
-      // Synchronous test - no network
-      const fallback = ["wss://relay.test"];
-      expect(fallback.length).toBe(1);
-    });
-  });
+    const pending = fetchDmInboxRelays(
+      TEST_PUBKEY,
+      pool as unknown as import("nostr-tools").SimplePool,
+    );
 
-  describe("relay URL handling", () => {
-    it("handles wss:// URLs correctly", () => {
-      // Test that relay URLs are validated
-      const validUrl = "wss://relay.example.com";
-      expect(validUrl.startsWith("wss://")).toBe(true);
-    });
+    vi.advanceTimersByTime(5000);
+    await pending;
+    expect(pool.closeCount).toBe(1);
 
-    it("rejects non-wss URLs", () => {
-      const invalidUrls = [
-        "http://relay.example.com",
-        "https://relay.example.com",
-        "ws://relay.example.com",
-        "relay.example.com",
-      ];
-      
-      for (const url of invalidUrls) {
-        expect(url.startsWith("wss://")).toBe(false);
-      }
-    });
+    vi.useRealTimers();
   });
 });
 
-describe("BOOTSTRAP_RELAYS", () => {
-  it.skip("includes essential relays (requires network)", async () => {
-    // This test requires network access - skipped in unit tests
-    const { getRelaysForDm } = await import("./nip65.js");
-    
-    const result = await getRelaysForDm(
-      "0000000000000000000000000000000000000000000000000000000000000000",
-      []
-    );
-    
-    expect(Array.isArray(result)).toBe(true);
+describe("fetchRelayList", () => {
+  beforeEach(() => {
+    clearRelayCache();
   });
 
-  it("constants are valid wss URLs", () => {
-    // Test the URL format without network
-    const bootstrapRelays = [
-      "wss://relay.damus.io",
-      "wss://nos.lol",
-      "wss://relay.primal.net",
-      "wss://premium.primal.net",
-      "wss://purplepag.es",
-    ];
-    
-    for (const relay of bootstrapRelays) {
-      expect(relay.startsWith("wss://")).toBe(true);
-      expect(relay.length).toBeGreaterThan(10);
-    }
+  it("parses read/write relays from kind:10002 event and sanitizes", async () => {
+    const pool = new FakePool((_filter, params) => {
+      setTimeout(() => {
+        params.onevent?.({
+          id: "a".repeat(64),
+          kind: 10002,
+          pubkey: TEST_PUBKEY,
+          created_at: 1,
+          tags: [
+            ["r", "wss://relay-read.example.com", "read"],
+            ["r", "wss://relay-write.example.com", "write"],
+            ["r", "wss://relay-both.example.com"],
+            ["r", "wss://127.0.0.1:7447", "write"],
+          ],
+          content: "",
+          sig: "b".repeat(128),
+        } as import("nostr-tools").Event);
+        params.oneose?.();
+      }, 0);
+    });
+
+    const relayList = await fetchRelayList(
+      TEST_PUBKEY,
+      pool as unknown as import("nostr-tools").SimplePool,
+    );
+    expect(relayList.read).toEqual([
+      "wss://relay-read.example.com",
+      "wss://relay-both.example.com",
+    ]);
+    expect(relayList.write).toEqual([
+      "wss://relay-write.example.com",
+      "wss://relay-both.example.com",
+    ]);
+    expect(relayList.all).toEqual([
+      "wss://relay-read.example.com",
+      "wss://relay-write.example.com",
+      "wss://relay-both.example.com",
+    ]);
   });
 });
 
-describe("kind:10050 DM inbox relays", () => {
-  it.skip("fetchDmInboxRelays returns array (requires network)", async () => {
-    const { fetchDmInboxRelays } = await import("./nip65.js");
-    
-    const result = await fetchDmInboxRelays(
-      "0000000000000000000000000000000000000000000000000000000000000000"
+describe("getRelaysForDm", () => {
+  beforeEach(() => {
+    clearRelayCache();
+  });
+
+  it("prefers DM inbox relays over write relays", async () => {
+    const pool = new FakePool((filter, params) => {
+      setTimeout(() => {
+        if (filter.kinds?.includes(10050)) {
+          params.onevent?.({
+            id: "m".repeat(64),
+            kind: 10050,
+            pubkey: TEST_PUBKEY,
+            created_at: 2,
+            tags: [["relay", "wss://relay-dm.example.com"]],
+            content: "",
+            sig: "n".repeat(128),
+          } as import("nostr-tools").Event);
+        } else if (filter.kinds?.includes(10002)) {
+          params.onevent?.({
+            id: "o".repeat(64),
+            kind: 10002,
+            pubkey: TEST_PUBKEY,
+            created_at: 1,
+            tags: [["r", "wss://relay-write.example.com", "write"]],
+            content: "",
+            sig: "p".repeat(128),
+          } as import("nostr-tools").Event);
+        }
+        params.oneose?.();
+      }, 0);
+    });
+
+    const relays = await getRelaysForDm(
+      TEST_PUBKEY,
+      ["wss://relay-fallback.example.com"],
+      pool as unknown as import("nostr-tools").SimplePool,
     );
-    
-    expect(Array.isArray(result)).toBe(true);
+
+    expect(relays).toEqual(["wss://relay-dm.example.com"]);
   });
 
-  it("returns type matches expected interface", () => {
-    // Type-level test without network
-    type ExpectedReturn = Promise<string[]>;
-    const typeCheck: ExpectedReturn = Promise.resolve(["wss://test"]);
-    expect(typeCheck).toBeDefined();
-  });
-});
+  it("falls back to configured relays when discovered relays are unsafe", async () => {
+    const pool = new FakePool((filter, params) => {
+      setTimeout(() => {
+        if (filter.kinds?.includes(10050)) {
+          params.onevent?.({
+            id: "q".repeat(64),
+            kind: 10050,
+            pubkey: TEST_PUBKEY,
+            created_at: 2,
+            tags: [["relay", "wss://localhost:7447"]],
+            content: "",
+            sig: "r".repeat(128),
+          } as import("nostr-tools").Event);
+        } else if (filter.kinds?.includes(10002)) {
+          params.onevent?.({
+            id: "s".repeat(64),
+            kind: 10002,
+            pubkey: TEST_PUBKEY,
+            created_at: 1,
+            tags: [["r", "wss://127.0.0.1:7447", "write"]],
+            content: "",
+            sig: "t".repeat(128),
+          } as import("nostr-tools").Event);
+        }
+        params.oneose?.();
+      }, 0);
+    });
 
-describe("kind:10002 relay list", () => {
-  it.skip("fetchRelayList returns structured result (requires network)", async () => {
-    const { fetchRelayList } = await import("./nip65.js");
-    
-    const result = await fetchRelayList(
-      "0000000000000000000000000000000000000000000000000000000000000000"
+    const fallback = ["wss://relay-fallback.example.com"];
+    const relays = await getRelaysForDm(
+      TEST_PUBKEY,
+      fallback,
+      pool as unknown as import("nostr-tools").SimplePool,
     );
-    
-    expect(result).toHaveProperty("read");
-    expect(result).toHaveProperty("write");
-    expect(result).toHaveProperty("all");
-  });
-
-  it("result type has expected structure", () => {
-    // Type-level test without network
-    interface ExpectedResult {
-      read: string[];
-      write: string[];
-      all: string[];
-    }
-    const typeCheck: ExpectedResult = { read: [], write: [], all: [] };
-    expect(typeCheck.read).toEqual([]);
-    expect(typeCheck.write).toEqual([]);
-    expect(typeCheck.all).toEqual([]);
-  });
-});
-
-describe("getWriteRelays", () => {
-  it.skip("returns array of relays (requires network)", async () => {
-    const { getWriteRelays } = await import("./nip65.js");
-    
-    const fallback = ["wss://fallback.test"];
-    const result = await getWriteRelays(
-      "0000000000000000000000000000000000000000000000000000000000000000",
-      fallback
-    );
-    
-    expect(Array.isArray(result)).toBe(true);
-  });
-
-  it("fallback parameter is used correctly", () => {
-    // Test the fallback behavior conceptually
-    const fallback = ["wss://fallback1.test", "wss://fallback2.test"];
-    
-    // If discovery fails, fallback should be returned
-    // This tests the expected behavior without network
-    expect(fallback.length).toBe(2);
-    expect(fallback[0]).toMatch(/^wss:\/\//);
+    expect(relays).toEqual(fallback);
   });
 });

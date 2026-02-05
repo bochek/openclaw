@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026.2.5
+
+### Changes
+
+- Upgrade default outbound DM protocol to NIP-17, with `dmProtocol: "nip04"` fallback.
+- Keep inbound compatibility by reading both NIP-04 (`kind:4`) and NIP-17 (`kind:1059`) DMs.
+- Add NIP-42 AUTH signing support for auth-required relays.
+- Add NIP-65 relay discovery with safer relay URL filtering and fallback behavior.
+- Fix `npub` normalization to decode directly to hex pubkeys.
+- Add regression/unit tests for NIP-42 auth signing, NIP-65 relay handling, and `npub` normalization.
+
+## 2026.2.4
+
+### Changes
+
+- Version alignment with core OpenClaw release numbers.
+
 ## 2026.2.2
 
 ### Changes
