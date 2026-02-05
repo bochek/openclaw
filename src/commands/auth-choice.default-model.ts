@@ -20,6 +20,20 @@ export async function applyDefaultModelChoice(params: {
   }
 
   const next = params.applyProviderConfig(params.config);
+  const models = { ...next.agents?.defaults?.models };
+  models[params.defaultModel] = {
+    ...models[params.defaultModel],
+  };
+  const nextWithModel = {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        models,
+      },
+    },
+  };
   await params.noteAgentModel(params.defaultModel);
-  return { config: next, agentModelOverride: params.defaultModel };
+  return { config: nextWithModel, agentModelOverride: params.defaultModel };
 }
