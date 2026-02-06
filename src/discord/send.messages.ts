@@ -1,5 +1,5 @@
-import type { APIMessage } from "discord-api-types/v10";
-import { Routes } from "discord-api-types/v10";
+import type { APIChannel, APIMessage } from "discord-api-types/v10";
+import { ChannelType, Routes } from "discord-api-types/v10";
 import type {
   DiscordMessageEdit,
   DiscordMessageQuery,
@@ -105,7 +105,13 @@ export async function createThreadDiscord(
   if (payload.autoArchiveMinutes) {
     body.auto_archive_duration = payload.autoArchiveMinutes;
   }
-  const route = Routes.threads(channelId, payload.messageId);
+  // Forum channels (type 15) require a message field with content for the initial post
+  const channel = (await rest.get(Routes.channel(channelId))) as APIChannel;
+  const isForum = channel.type === ChannelType.GuildForum;
+  if (isForum) {
+    body.message = { content: payload.content || payload.name };
+  }
+  const route = isForum ? Routes.threads(channelId) : Routes.threads(channelId, payload.messageId);
   return await rest.post(route, { body });
 }
 
