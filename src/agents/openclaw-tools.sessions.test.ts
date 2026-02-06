@@ -225,9 +225,13 @@ describe("sessions tools", () => {
     const details = result.details as {
       messages?: Array<Record<string, unknown>>;
       truncated?: boolean;
+      droppedMessages?: boolean;
+      contentTruncated?: boolean;
       bytes?: number;
     };
     expect(details.truncated).toBe(true);
+    expect(details.droppedMessages).toBe(true);
+    expect(details.contentTruncated).toBe(true);
     expect(typeof details.bytes).toBe("number");
     expect((details.bytes ?? 0) <= 80 * 1024).toBe(true);
     expect(details.messages && details.messages.length > 0).toBe(true);
@@ -251,6 +255,50 @@ describe("sessions tools", () => {
     expect((textBlock?.text ?? "").length <= 4015).toBe(true);
     const thinkingBlock = first?.content?.find((block) => block.type === "thinking");
     expect(thinkingBlock?.thinkingSignature).toBeUndefined();
+  });
+
+  it("sessions_history enforces a hard byte cap even when a single message is huge", async () => {
+    callGatewayMock.mockReset();
+    callGatewayMock.mockImplementation(async (opts: unknown) => {
+      const request = opts as { method?: string };
+      if (request.method === "chat.history") {
+        return {
+          messages: [
+            {
+              role: "assistant",
+              content: [{ type: "text", text: "ok" }],
+              extra: "x".repeat(200_000),
+            },
+          ],
+        };
+      }
+      return {};
+    });
+
+    const tool = createOpenClawTools().find((candidate) => candidate.name === "sessions_history");
+    expect(tool).toBeDefined();
+    if (!tool) {
+      throw new Error("missing sessions_history tool");
+    }
+
+    const result = await tool.execute("call4c", {
+      sessionKey: "main",
+      includeTools: true,
+    });
+    const details = result.details as {
+      messages?: Array<Record<string, unknown>>;
+      truncated?: boolean;
+      droppedMessages?: boolean;
+      contentTruncated?: boolean;
+      bytes?: number;
+    };
+    expect(details.truncated).toBe(true);
+    expect(details.droppedMessages).toBe(true);
+    expect(details.contentTruncated).toBe(false);
+    expect(typeof details.bytes).toBe("number");
+    expect((details.bytes ?? 0) <= 80 * 1024).toBe(true);
+    expect(details.messages).toHaveLength(1);
+    expect(details.messages?.[0]?.content).toContain("[sessions_history omitted: message too large]");
   });
 
   it("sessions_history resolves sessionId inputs", async () => {
