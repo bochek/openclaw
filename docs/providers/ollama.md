@@ -174,13 +174,9 @@ Ollama is free and runs locally, so all model costs are set to $0.
 
 ### Streaming Configuration
 
-Due to a [known issue](https://github.com/badlogic/pi-mono/issues/1205) in the underlying SDK with Ollama's response format, **streaming is disabled by default** for Ollama models. This prevents corrupted responses when using tool-capable models.
+Due to a [known upstream SDK issue](https://github.com/badlogic/pi-mono/issues/1205) with some Ollama streaming delta payloads, OpenClaw defaults Ollama runs to non-streaming mode. This avoids corrupted responses when tool-capable models emit interleaved content and reasoning chunks.
 
-When streaming is disabled, responses are delivered all at once (non-streaming mode), which avoids the issue where interleaved content/reasoning deltas cause garbled output.
-
-#### Re-enable Streaming (Advanced)
-
-If you want to re-enable streaming for Ollama (may cause issues with tool-capable models):
+To opt in to streaming for a specific Ollama model, configure:
 
 ```json5
 {
@@ -188,17 +184,17 @@ If you want to re-enable streaming for Ollama (may cause issues with tool-capabl
     defaults: {
       models: {
         "ollama/gpt-oss:20b": {
-          streaming: true,
-        },
-      },
-    },
-  },
+          params: {
+            streaming: true
+          }
+        }
+      }
+    }
+  }
 }
 ```
 
-#### Disable Streaming for Other Providers
-
-You can also disable streaming for any provider if needed:
+You can also disable streaming for other providers via the same `params.streaming` key:
 
 ```json5
 {
@@ -206,11 +202,13 @@ You can also disable streaming for any provider if needed:
     defaults: {
       models: {
         "openai/gpt-4": {
-          streaming: false,
-        },
-      },
-    },
-  },
+          params: {
+            streaming: false
+          }
+        }
+      }
+    }
+  }
 }
 ```
 
@@ -263,12 +261,25 @@ ollama serve
 
 ### Corrupted responses or tool names in output
 
-If you see garbled responses containing tool names (like `sessions_send`, `memory_get`) or fragmented text when using Ollama models, this is due to an upstream SDK issue with streaming responses. **This is fixed by default** in the latest OpenClaw version by disabling streaming for Ollama models.
+If you see fragmented text or raw tool names in responses, check whether streaming was manually enabled for your Ollama model.
 
-If you manually enabled streaming and experience this issue:
+Set the model back to non-streaming:
 
-1. Remove the `streaming: true` configuration from your Ollama model entries, or
-2. Explicitly set `streaming: false` for Ollama models (see [Streaming Configuration](#streaming-configuration))
+```json5
+{
+  agents: {
+    defaults: {
+      models: {
+        "ollama/gpt-oss:20b": {
+          params: {
+            streaming: false
+          }
+        }
+      }
+    }
+  }
+}
+```
 
 ## See Also
 

@@ -91,4 +91,108 @@ describe("applyExtraParamsToAgent", () => {
       "X-Custom": "1",
     });
   });
+
+  it("defaults Ollama models to non-streaming", () => {
+    const calls: Array<Record<string, unknown> | undefined> = [];
+    const baseStreamFn: StreamFn = (_model, _context, options) => {
+      calls.push(options as Record<string, unknown> | undefined);
+      return new AssistantMessageEventStream();
+    };
+    const agent = { streamFn: baseStreamFn };
+
+    applyExtraParamsToAgent(agent, undefined, "ollama", "gpt-oss:20b");
+
+    const model = {
+      api: "openai-completions",
+      provider: "ollama",
+      id: "gpt-oss:20b",
+    } as Model<"openai-completions">;
+    const context: Context = { messages: [] };
+
+    void agent.streamFn?.(model, context, {});
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.streaming).toBe(false);
+  });
+
+  it("allows per-model Ollama streaming override from config", () => {
+    const calls: Array<Record<string, unknown> | undefined> = [];
+    const baseStreamFn: StreamFn = (_model, _context, options) => {
+      calls.push(options as Record<string, unknown> | undefined);
+      return new AssistantMessageEventStream();
+    };
+    const agent = { streamFn: baseStreamFn };
+
+    applyExtraParamsToAgent(
+      agent,
+      {
+        agents: {
+          defaults: {
+            models: {
+              "ollama/gpt-oss:20b": {
+                params: {
+                  streaming: true,
+                },
+              },
+            },
+          },
+        },
+      },
+      "ollama",
+      "gpt-oss:20b",
+    );
+
+    const model = {
+      api: "openai-completions",
+      provider: "ollama",
+      id: "gpt-oss:20b",
+    } as Model<"openai-completions">;
+    const context: Context = { messages: [] };
+
+    void agent.streamFn?.(model, context, {});
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.streaming).toBe(true);
+  });
+
+  it("applies per-run overrides after model defaults", () => {
+    const calls: Array<Record<string, unknown> | undefined> = [];
+    const baseStreamFn: StreamFn = (_model, _context, options) => {
+      calls.push(options as Record<string, unknown> | undefined);
+      return new AssistantMessageEventStream();
+    };
+    const agent = { streamFn: baseStreamFn };
+
+    applyExtraParamsToAgent(
+      agent,
+      {
+        agents: {
+          defaults: {
+            models: {
+              "ollama/gpt-oss:20b": {
+                params: {
+                  streaming: false,
+                },
+              },
+            },
+          },
+        },
+      },
+      "ollama",
+      "gpt-oss:20b",
+      { streaming: true },
+    );
+
+    const model = {
+      api: "openai-completions",
+      provider: "ollama",
+      id: "gpt-oss:20b",
+    } as Model<"openai-completions">;
+    const context: Context = { messages: [] };
+
+    void agent.streamFn?.(model, context, {});
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.streaming).toBe(true);
+  });
 });

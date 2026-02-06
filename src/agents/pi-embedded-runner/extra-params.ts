@@ -11,7 +11,7 @@ const OPENROUTER_APP_HEADERS: Record<string, string> = {
 
 /**
  * Resolve provider-specific extra params from model config.
- * Used to pass through stream params like temperature/maxTokens.
+ * Used to pass through stream params like temperature/maxTokens/streaming.
  *
  * @internal Exported for testing only
  */
@@ -28,7 +28,16 @@ export function resolveExtraParams(params: {
 type CacheRetention = "none" | "short" | "long";
 type CacheRetentionStreamOptions = Partial<SimpleStreamOptions> & {
   cacheRetention?: CacheRetention;
+  streaming?: boolean;
 };
+
+function resolveProviderDefaultExtraParams(provider: string): Record<string, unknown> | undefined {
+  // Ollama streaming is disabled by default due to upstream SDK stream-delta interleaving issues.
+  if (provider.trim().toLowerCase() === "ollama") {
+    return { streaming: false };
+  }
+  return undefined;
+}
 
 /**
  * Resolve cacheRetention from extraParams, supporting both new `cacheRetention`
@@ -79,6 +88,9 @@ function createStreamFnWithExtraParams(
   }
   if (typeof extraParams.maxTokens === "number") {
     streamParams.maxTokens = extraParams.maxTokens;
+  }
+  if (typeof extraParams.streaming === "boolean") {
+    streamParams.streaming = extraParams.streaming;
   }
   const cacheRetention = resolveCacheRetention(extraParams, provider);
   if (cacheRetention) {
@@ -141,7 +153,8 @@ export function applyExtraParamsToAgent(
           Object.entries(extraParamsOverride).filter(([, value]) => value !== undefined),
         )
       : undefined;
-  const merged = Object.assign({}, extraParams, override);
+  const providerDefaults = resolveProviderDefaultExtraParams(provider);
+  const merged = Object.assign({}, providerDefaults, extraParams, override);
   const wrappedStreamFn = createStreamFnWithExtraParams(agent.streamFn, merged, provider);
 
   if (wrappedStreamFn) {
