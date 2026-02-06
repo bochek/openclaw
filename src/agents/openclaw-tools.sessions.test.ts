@@ -298,7 +298,9 @@ describe("sessions tools", () => {
     expect(typeof details.bytes).toBe("number");
     expect((details.bytes ?? 0) <= 80 * 1024).toBe(true);
     expect(details.messages).toHaveLength(1);
-    expect(details.messages?.[0]?.content).toContain("[sessions_history omitted: message too large]");
+    expect(details.messages?.[0]?.content).toContain(
+      "[sessions_history omitted: message too large]",
+    );
   });
 
   it("sessions_history resolves sessionId inputs", async () => {
