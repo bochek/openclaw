@@ -46,10 +46,16 @@ function formatRelativeTime(ts: string): string {
   const diffMs = now - messageTime;
   const diffMin = Math.round(diffMs / 60_000);
 
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
+  if (diffMin < 1) {
+    return "just now";
+  }
+  if (diffMin < 60) {
+    return `${diffMin}m ago`;
+  }
   const diffHours = Math.round(diffMin / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffHours < 24) {
+    return `${diffHours}h ago`;
+  }
   const diffDays = Math.round(diffHours / 24);
   return `${diffDays}d ago`;
 }
@@ -100,11 +106,13 @@ export async function fetchChannelContext(
 
     // Messages come in reverse chronological order (newest first) from conversations.history.
     // Reverse so they read top-to-bottom chronologically.
-    const messages = [...result.messages].reverse();
+    const messages = (result.messages ?? []).toReversed();
 
     const lines: string[] = [];
     for (const msg of messages) {
-      if (!msg.text?.trim()) continue;
+      if (!msg.text?.trim()) {
+        continue;
+      }
       const userLabel = msg.user ? `<@${msg.user}>` : "unknown";
       const timeLabel = msg.ts ? formatRelativeTime(msg.ts) : "";
       const timeStr = timeLabel ? ` (${timeLabel})` : "";

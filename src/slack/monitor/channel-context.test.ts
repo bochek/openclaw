@@ -15,7 +15,7 @@ function createMockClient(channelName = "general") {
     conversations: {
       info: vi.fn().mockResolvedValue({ channel: { name: channelName } }),
     },
-  } as any;
+  } as unknown as import("@slack/web-api").WebClient;
 }
 
 describe("fetchChannelContext", () => {
@@ -157,7 +157,7 @@ describe("fetchChannelContext", () => {
       conversations: {
         info: vi.fn().mockRejectedValue(new Error("not_found")),
       },
-    } as any;
+    } as unknown as import("@slack/web-api").WebClient;
 
     const result = await fetchChannelContext({
       channelId: "C123",
