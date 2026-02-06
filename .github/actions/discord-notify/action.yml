@@ -1,0 +1,66 @@
+name: Discord Notify
+description: Send notifications to Discord webhook
+
+inputs:
+  webhook_url:
+    description: Discord webhook URL
+    required: true
+  title:
+    description: Notification title
+    required: true
+  description:
+    description: Notification description
+    required: true
+  color:
+    description: Embed color (decimal)
+    required: false
+    default: '3447003'
+  username:
+    description: Bot username
+    required: false
+    default: 'OpenClaw CI'
+  avatar_url:
+    description: Bot avatar URL
+    required: false
+    default: 'https://avatars.githubusercontent.com/u/182880377'
+  timestamp:
+    description: Include timestamp
+    required: false
+    default: 'true'
+  fields:
+    description: JSON array of embed fields
+    required: false
+    default: '[]'
+
+runs:
+  using: composite
+  steps:
+    - name: Send Discord notification
+      shell: bash
+      run: |
+        TIMESTAMP=""
+        if [ "${{ inputs.timestamp }}" = "true" ]; then
+          TIMESTAMP="\"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+        fi
+        
+        # Escape description for JSON
+        DESCRIPTION=$(echo '${{ inputs.description }}' | jq -Rs .)
+        
+        PAYLOAD=$(cat <<EOF
+        {
+          "username": "${{ inputs.username }}",
+          "avatar_url": "${{ inputs.avatar_url }}",
+          "embeds": [{
+            "title": "${{ inputs.title }}",
+            "description": $DESCRIPTION,
+            "color": ${{ inputs.color }},
+            $TIMESTAMP
+            "fields": ${{ inputs.fields }}
+          }]
+        }
+        EOF
+        )
+        
+        curl -H "Content-Type: application/json" \
+          -d "$PAYLOAD" \
+          "${{ inputs.webhook_url }}"
