@@ -11,27 +11,27 @@ on:
   workflow_call:
     inputs:
       release_type:
-        description: 'Release type: alpha, beta, or stable'
+        description: "Release type: alpha, beta, or stable"
         required: true
         type: string
       source_branch:
-        description: 'Source branch for the release'
+        description: "Source branch for the release"
         required: true
         type: string
       dry_run:
-        description: 'Perform a dry run without publishing'
+        description: "Perform a dry run without publishing"
         required: false
         type: boolean
         default: false
     outputs:
       version:
-        description: 'The released version'
+        description: "The released version"
         value: ${{ jobs.version.outputs.new_version }}
       release_url:
-        description: 'URL to the GitHub release'
+        description: "URL to the GitHub release"
         value: ${{ jobs.release.outputs.release_url }}
       status:
-        description: 'Release status'
+        description: "Release status"
         value: ${{ jobs.release.outputs.status }}
     secrets:
       NPM_TOKEN:
@@ -69,9 +69,9 @@ jobs:
               PATTERN="v[0-9]*.[0-9]*.[0-9]*"
               ;;
           esac
-          
+
           LATEST_TAG=$(git tag -l "$PATTERN" --sort=-v:refname | head -1)
-          
+
           if [ -z "$LATEST_TAG" ]; then
             # No previous tag, use all commits
             LATEST_TAG=$(git rev-list --max-parents=0 HEAD)
@@ -79,9 +79,9 @@ jobs:
           else
             echo "Latest ${{ inputs.release_type }} tag: $LATEST_TAG"
           fi
-          
+
           COMMITS=$(git log ${LATEST_TAG}..HEAD --oneline --format="- %s (%h)")
-          
+
           if [ -z "$COMMITS" ]; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
             echo "commits=" >> $GITHUB_OUTPUT
@@ -184,11 +184,11 @@ jobs:
         uses: ./.github/actions/discord-notify
         with:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          title: '🎉 Released: openclaw v${{ needs.version.outputs.new_version }}'
+          title: "🎉 Released: openclaw v${{ needs.version.outputs.new_version }}"
           description: |
             **Type**: ${{ inputs.release_type }}
             **Release**: ${{ needs.release.outputs.release_url }}
-          color: '3066993'
+          color: "3066993"
 
   # Notify on failure
   notify-failure:
@@ -207,9 +207,9 @@ jobs:
         uses: ./.github/actions/discord-notify
         with:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          title: '❌ Release Failed: ${{ inputs.release_type }}'
+          title: "❌ Release Failed: ${{ inputs.release_type }}"
           description: |
             **Branch**: ${{ inputs.source_branch }}
             **Tests**: ${{ needs.test.outputs.test_status }}
             [View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          color: '15158332'
+          color: "15158332"

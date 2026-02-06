@@ -11,17 +11,17 @@ on:
   workflow_call:
     inputs:
       test_stage:
-        description: 'Testing stage: develop, alpha, beta, or stable'
+        description: "Testing stage: develop, alpha, beta, or stable"
         required: true
         type: string
       app_version:
-        description: 'Version of the application being tested'
+        description: "Version of the application being tested"
         required: false
         type: string
-        default: 'dev'
+        default: "dev"
     outputs:
       test_status:
-        description: 'Overall test status'
+        description: "Overall test status"
         value: ${{ jobs.test-summary.outputs.overall_status }}
     secrets:
       DISCORD_WEBHOOK_URL:
@@ -154,7 +154,7 @@ jobs:
           echo "| CI (checks + secrets + windows) | ${{ needs.ci.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| macOS Checks | ${{ needs.checks-macos.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Install Smoke | ${{ needs.install-smoke.result || 'skipped' }} |" >> $GITHUB_STEP_SUMMARY
-          
+
           # CI must pass
           if [ "${{ needs.ci.result }}" != "success" ]; then
             echo "overall_status=failed" >> $GITHUB_OUTPUT
@@ -162,11 +162,11 @@ jobs:
             echo "### ❌ Core CI failed" >> $GITHUB_STEP_SUMMARY
             exit 0
           fi
-          
+
           # Stage-specific checks (stable only has extras)
           STAGE="${{ inputs.test_stage }}"
           FAILED=false
-          
+
           if [ "$STAGE" = "stable" ]; then
             if [ "${{ needs.checks-macos.result }}" = "failure" ]; then
               FAILED=true
@@ -175,7 +175,7 @@ jobs:
               FAILED=true
             fi
           fi
-          
+
           if [ "$FAILED" = "true" ]; then
             echo "overall_status=failed" >> $GITHUB_OUTPUT
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -203,17 +203,17 @@ jobs:
         uses: ./.github/actions/discord-notify
         with:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          title: '✅ Tests Passed: ${{ inputs.test_stage }} v${{ inputs.app_version }}'
-          description: 'All tests passed for ${{ inputs.test_stage }} stage!'
-          color: '3066993'
+          title: "✅ Tests Passed: ${{ inputs.test_stage }} v${{ inputs.app_version }}"
+          description: "All tests passed for ${{ inputs.test_stage }} stage!"
+          color: "3066993"
 
       - name: Discord failure notification
         if: ${{ env.DISCORD_WEBHOOK_URL != '' && needs.test-summary.outputs.overall_status != 'passed' }}
         uses: ./.github/actions/discord-notify
         with:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          title: '❌ Tests Failed: ${{ inputs.test_stage }} v${{ inputs.app_version }}'
+          title: "❌ Tests Failed: ${{ inputs.test_stage }} v${{ inputs.app_version }}"
           description: |
             Some tests failed for ${{ inputs.test_stage }} stage.
             [View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          color: '15158332'
+          color: "15158332"

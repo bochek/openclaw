@@ -9,32 +9,32 @@ on:
   workflow_call:
     inputs:
       release_type:
-        description: 'Release type: alpha, beta, or stable'
+        description: "Release type: alpha, beta, or stable"
         required: true
         type: string
       source_branch:
-        description: 'Source branch'
+        description: "Source branch"
         required: true
         type: string
       should_bump:
-        description: 'Whether to bump the version'
+        description: "Whether to bump the version"
         required: false
         type: boolean
         default: true
       dry_run:
-        description: 'Perform a dry run without committing'
+        description: "Perform a dry run without committing"
         required: false
         type: boolean
         default: false
     outputs:
       current_version:
-        description: 'Current version before bump'
+        description: "Current version before bump"
         value: ${{ jobs.version.outputs.current_version }}
       new_version:
-        description: 'New version after bump'
+        description: "New version after bump"
         value: ${{ jobs.version.outputs.new_version }}
       version_tag:
-        description: 'Version tag (with v prefix)'
+        description: "Version tag (with v prefix)"
         value: ${{ jobs.version.outputs.version_tag }}
 
 jobs:
@@ -70,13 +70,13 @@ jobs:
         run: |
           CURRENT="${{ steps.get-version.outputs.current }}"
           RELEASE_TYPE="${{ inputs.release_type }}"
-          
+
           # Get current date components
           YEAR=$(date +%Y)
           MONTH=$(date +%-m)
           DAY=$(date +%-d)
           TODAY="${YEAR}.${MONTH}.${DAY}"
-          
+
           # Parse current version to check if it's today + same type
           # Patterns: YYYY.M.D or YYYY.M.D-type.N
           if [[ "$CURRENT" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-([a-z]+)\.([0-9]+))?$ ]]; then
@@ -88,7 +88,7 @@ jobs:
             CURR_TYPE=""
             CURR_NUM=0
           fi
-          
+
           case "$RELEASE_TYPE" in
             alpha)
               if [ "$CURR_DATE" = "$TODAY" ] && [ "$CURR_TYPE" = "alpha" ]; then
@@ -117,7 +117,7 @@ jobs:
               exit 1
               ;;
           esac
-          
+
           echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "tag=v$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "New version: $NEW_VERSION"
@@ -126,7 +126,7 @@ jobs:
         if: ${{ inputs.should_bump && !inputs.dry_run }}
         run: |
           NEW_VERSION="${{ steps.bump-version.outputs.new }}"
-          
+
           # Update package.json version
           node -e "
             const fs = require('fs');
@@ -134,7 +134,7 @@ jobs:
             pkg.version = '$NEW_VERSION';
             fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
           "
-          
+
           echo "Updated package.json to version $NEW_VERSION"
 
       - name: Sync extension versions
@@ -152,13 +152,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           NEW_VERSION="${{ steps.bump-version.outputs.new }}"
-          
+
           # Stage all version-related changes
           git add package.json
           git add extensions/*/package.json 2>/dev/null || true
-          
+
           # Check if there are changes to commit
           if git diff --cached --quiet; then
             echo "No version changes to commit"
@@ -171,6 +171,6 @@ jobs:
         if: ${{ inputs.should_bump && !inputs.dry_run }}
         run: |
           TAG="${{ steps.bump-version.outputs.tag }}"
-          
+
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"

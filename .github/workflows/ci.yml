@@ -8,13 +8,13 @@ on:
     # Called by testing-strategy.yml for releases
     outputs:
       checks_result:
-        description: 'Result of core checks'
+        description: "Result of core checks"
         value: ${{ jobs.checks.result }}
       secrets_result:
-        description: 'Result of secrets scan'
+        description: "Result of secrets scan"
         value: ${{ jobs.secrets.result }}
       windows_result:
-        description: 'Result of Windows checks'
+        description: "Result of Windows checks"
         value: ${{ jobs.checks-windows.result }}
 
 concurrency:

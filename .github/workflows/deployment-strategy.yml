@@ -11,26 +11,26 @@ on:
   workflow_call:
     inputs:
       deployment_stage:
-        description: 'Deployment stage: alpha, beta, or stable'
+        description: "Deployment stage: alpha, beta, or stable"
         required: true
         type: string
       app_version:
-        description: 'Version of the application to deploy'
+        description: "Version of the application to deploy"
         required: true
         type: string
       source_branch:
-        description: 'Source branch for deployment'
+        description: "Source branch for deployment"
         required: true
         type: string
     outputs:
       deployment_status:
-        description: 'Status of the deployment'
+        description: "Status of the deployment"
         value: ${{ jobs.deploy-summary.outputs.status }}
       npm_url:
-        description: 'npm package URL'
+        description: "npm package URL"
         value: ${{ jobs.deploy-summary.outputs.npm_url }}
       docker_url:
-        description: 'Docker image URL'
+        description: "Docker image URL"
         value: ${{ jobs.deploy-summary.outputs.docker_url }}
     secrets:
       NPM_TOKEN:
@@ -74,7 +74,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: "https://registry.npmjs.org"
 
       - name: Setup pnpm (corepack retry)
         run: |
@@ -122,9 +122,9 @@ jobs:
             echo "npm_url=" >> $GITHUB_OUTPUT
             exit 0
           fi
-          
+
           NPM_TAG="${{ steps.npm-tag.outputs.tag }}"
-          
+
           if npm publish --tag "$NPM_TAG" --access public; then
             echo "status=success" >> $GITHUB_OUTPUT
             echo "npm_url=https://www.npmjs.com/package/openclaw/v/${{ inputs.app_version }}" >> $GITHUB_OUTPUT
@@ -255,13 +255,13 @@ jobs:
           STAGE="${{ inputs.deployment_stage }}"
           VERSION="${{ inputs.app_version }}"
           IMAGE="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          
+
           # Create version manifest
           docker buildx imagetools create \
             -t "${IMAGE}:${VERSION}" \
             "${IMAGE}:${VERSION}-amd64" \
             "${IMAGE}:${VERSION}-arm64"
-          
+
           # Create stage manifest (beta or latest)
           if [ "$STAGE" = "stable" ]; then
             docker buildx imagetools create \
@@ -294,16 +294,16 @@ jobs:
           NPM_STATUS="${{ needs.npm-publish.outputs.status || 'skipped' }}"
           NPM_URL="${{ needs.npm-publish.outputs.npm_url }}"
           DOCKER_URL="${{ needs.docker-manifest.outputs.docker_url || '' }}"
-          
+
           echo "npm_url=$NPM_URL" >> $GITHUB_OUTPUT
           echo "docker_url=$DOCKER_URL" >> $GITHUB_OUTPUT
-          
+
           if [ "$NPM_STATUS" = "success" ] || [ "$NPM_STATUS" = "skipped" ]; then
             echo "status=success" >> $GITHUB_OUTPUT
           else
             echo "status=failed" >> $GITHUB_OUTPUT
           fi
-          
+
           # Generate summary
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -331,19 +331,19 @@ jobs:
         uses: ./.github/actions/discord-notify
         with:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          title: '🚀 Deployed: ${{ inputs.deployment_stage }} v${{ inputs.app_version }}'
+          title: "🚀 Deployed: ${{ inputs.deployment_stage }} v${{ inputs.app_version }}"
           description: |
             **npm**: ${{ needs.deploy-summary.outputs.npm_url || 'skipped' }}
             **Docker**: ${{ needs.deploy-summary.outputs.docker_url || 'skipped' }}
-          color: '3066993'
+          color: "3066993"
 
       - name: Discord failure notification
         if: ${{ env.DISCORD_WEBHOOK_URL != '' && needs.deploy-summary.outputs.status != 'success' }}
         uses: ./.github/actions/discord-notify
         with:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          title: '❌ Deployment Failed: ${{ inputs.deployment_stage }}'
+          title: "❌ Deployment Failed: ${{ inputs.deployment_stage }}"
           description: |
             **Version**: ${{ inputs.app_version }}
             [View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          color: '15158332'
+          color: "15158332"

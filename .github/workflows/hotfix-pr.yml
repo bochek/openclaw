@@ -8,7 +8,7 @@ name: Hotfix PR
 on:
   push:
     branches:
-      - 'hotfix/**'
+      - "hotfix/**"
 
 permissions:
   contents: read
@@ -30,9 +30,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ github.ref_name }}"
-          
+
           EXISTING=$(gh pr list --head "$BRANCH" --base main --json number --jq '.[0].number // empty')
-          
+
           if [ -n "$EXISTING" ]; then
             echo "exists=true" >> $GITHUB_OUTPUT
             echo "pr_number=$EXISTING" >> $GITHUB_OUTPUT
@@ -47,39 +47,45 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           BRANCH="${{ github.ref_name }}"
-          
+
           # Extract title from branch name
           TITLE=$(echo "$BRANCH" | sed 's|^hotfix/||; s|-| |g; s|_| |g')
           TITLE="🚨 HOTFIX: $(echo "${TITLE:0:1}" | tr '[:lower:]' '[:upper:]')${TITLE:1}"
-          
+
+          # Create PR body
+          BODY=$(cat << 'PRBODY'
+          ## 🚨 Emergency Hotfix
+
+          **This PR bypasses the normal staging pipeline.**
+
+          ### What's broken?
+          <!-- Describe the production issue -->
+
+          ### Root cause
+          <!-- Brief explanation of what went wrong -->
+
+          ### Fix
+          <!-- What this hotfix does -->
+
+          ### Verification
+          - [ ] Tested locally
+          - [ ] Reviewed by at least one other maintainer
+          - [ ] Post-merge monitoring plan in place
+
+          ---
+          ⚠️ **After merging:** Cherry-pick this fix to `develop`, `alpha`, and `beta` branches to keep them in sync.
+
+          *This PR was auto-created by the hotfix-pr workflow.*
+          PRBODY
+          )
+
           gh pr create \
             --base main \
             --head "$BRANCH" \
             --title "$TITLE" \
             --label "hotfix,priority:critical" \
-            --body "## 🚨 Emergency Hotfix
+            --body "$BODY"
 
-**This PR bypasses the normal staging pipeline.**
-
-### What's broken?
-<!-- Describe the production issue -->
-
-### Root cause
-<!-- Brief explanation of what went wrong -->
-
-### Fix
-<!-- What this hotfix does -->
-
-### Verification
-- [ ] Tested locally
-- [ ] Reviewed by at least one other maintainer
-- [ ] Post-merge monitoring plan in place
-
----
-⚠️ **After merging:** Cherry-pick this fix to \`develop\`, \`alpha\`, and \`beta\` branches to keep them in sync.
-
-*This PR was auto-created by the hotfix-pr workflow.*"
-          
           echo "Created hotfix PR: $BRANCH → main"
 
       - name: Add urgent label

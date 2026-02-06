@@ -4,23 +4,23 @@ name: Release
 #
 # Branch → Release Type mapping:
 #   alpha  → releases from 'alpha' branch with -alpha.N suffix
-#   beta   → releases from 'beta' branch with -beta.N suffix  
+#   beta   → releases from 'beta' branch with -beta.N suffix
 #   stable → releases from 'main' branch with YYYY.M.D version
 
 on:
   workflow_dispatch:
     inputs:
       release_type:
-        description: 'Release type'
+        description: "Release type"
         required: true
         type: choice
         options:
           - alpha
           - beta
           - stable
-        default: 'alpha'
+        default: "alpha"
       dry_run:
-        description: 'Dry run (no publish)'
+        description: "Dry run (no publish)"
         required: false
         type: boolean
         default: false
