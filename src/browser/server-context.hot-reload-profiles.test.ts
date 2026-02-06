@@ -15,7 +15,7 @@ vi.mock("../config/config.js", async (importOriginal) => {
         profiles: { ...cfgProfiles },
       },
     }),
-    writeConfigFile: vi.fn(async () => {}),
+    writeConfigFile: vi.fn(async () => { }),
   };
 });
 
@@ -26,7 +26,7 @@ vi.mock("./chrome.js", () => ({
     throw new Error("launch disabled");
   }),
   resolveOpenClawUserDataDir: vi.fn(() => "/tmp/openclaw"),
-  stopOpenClawChrome: vi.fn(async () => {}),
+  stopOpenClawChrome: vi.fn(async () => { }),
 }));
 
 vi.mock("./cdp.js", () => ({
@@ -40,20 +40,20 @@ vi.mock("./cdp.js", () => ({
 }));
 
 vi.mock("./pw-ai.js", () => ({
-  closePlaywrightBrowserConnection: vi.fn(async () => {}),
+  closePlaywrightBrowserConnection: vi.fn(async () => { }),
 }));
 
 vi.mock("../media/store.js", () => ({
-  ensureMediaDir: vi.fn(async () => {}),
+  ensureMediaDir: vi.fn(async () => { }),
   saveMediaBuffer: vi.fn(async () => ({ path: "/tmp/fake.png" })),
 }));
 
 describe("server-context hot-reload profiles", () => {
   beforeEach(() => {
+    vi.resetModules();
     cfgProfiles = {
       openclaw: { cdpPort: 18800, color: "#FF4500" },
     };
-    vi.resetModules();
   });
 
   it("forProfile hot-reloads newly added profiles from config", async () => {
