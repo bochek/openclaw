@@ -50,10 +50,10 @@ vi.mock("../media/store.js", () => ({
 
 describe("server-context hot-reload profiles", () => {
   beforeEach(() => {
-    vi.resetModules();
     cfgProfiles = {
       openclaw: { cdpPort: 18800, color: "#FF4500" },
     };
+    vi.resetModules();
   });
 
   it("forProfile hot-reloads newly added profiles from config", async () => {
