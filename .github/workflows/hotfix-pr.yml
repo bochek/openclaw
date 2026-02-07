@@ -10,6 +10,10 @@ on:
     branches:
       - "hotfix/**"
 
+concurrency:
+  group: hotfix-${{ github.ref_name }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write

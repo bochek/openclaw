@@ -47,6 +47,10 @@ on:
       DISCORD_WEBHOOK_URL:
         required: false
 
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
   packages: write
