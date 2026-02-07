@@ -107,3 +107,25 @@ docker pull ghcr.io/openclaw/openclaw:2026.2.6
 - **Stable**: `YYYY.M.D` (e.g., `2026.2.6`)
 - **Beta**: `YYYY.M.D-beta.N` (e.g., `2026.2.6-beta.1`)
 - **Alpha**: `YYYY.M.D-alpha.N` (e.g., `2026.2.6-alpha.3`)
+
+## Setup
+
+### Required Secrets
+
+Configure these in GitHub repo Settings → Secrets and variables → Actions:
+
+| Secret | Required? | Purpose | How to get it |
+|--------|-----------|---------|---------------|
+| `GITHUB_TOKEN` | Automatic | PR creation, Docker registry, branch ops | Provided by GitHub Actions — no setup needed |
+| `NPM_TOKEN` | Yes (for publishing) | npm publish with `@alpha`, `@beta`, `@latest` tags | npmjs.com → Access Tokens → Generate New Token → Automation |
+| `DISCORD_WEBHOOK_URL` | Optional | Notifications for promotions, test results, deployments | Discord → Server Settings → Integrations → Webhooks |
+
+Without `NPM_TOKEN`, the pipeline runs normally but skips npm publishing. Without `DISCORD_WEBHOOK_URL`, notifications are silently skipped.
+
+### Branch Setup
+
+Staging branches are auto-created from `main` when the first promotion runs. No manual setup required.
+
+### Rollback
+
+The rollback workflow (`Actions → Rollback`) re-tags npm and Docker to a previous version. Requires `NPM_TOKEN` and is manual-trigger only.
