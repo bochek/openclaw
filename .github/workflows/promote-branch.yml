@@ -163,9 +163,10 @@ jobs:
           fi
 
           echo "count=$COMMIT_COUNT" >> $GITHUB_OUTPUT
-          echo "summary<<__COMMITS_DELIM__" >> $GITHUB_OUTPUT
+          DELIM="COMMITS_$(openssl rand -hex 16)"
+          echo "summary<<${DELIM}" >> $GITHUB_OUTPUT
           echo "$COMMIT_SUMMARY" >> $GITHUB_OUTPUT
-          echo "__COMMITS_DELIM__" >> $GITHUB_OUTPUT
+          echo "${DELIM}" >> $GITHUB_OUTPUT
 
       - name: Check for existing PR
         id: check-pr

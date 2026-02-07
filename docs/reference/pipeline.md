@@ -114,11 +114,11 @@ docker pull ghcr.io/openclaw/openclaw:2026.2.6
 
 Configure these in GitHub repo Settings → Secrets and variables → Actions:
 
-| Secret | Required? | Purpose | How to get it |
-|--------|-----------|---------|---------------|
-| `GITHUB_TOKEN` | Automatic | PR creation, Docker registry, branch ops | Provided by GitHub Actions — no setup needed |
-| `NPM_TOKEN` | Yes (for publishing) | npm publish with `@alpha`, `@beta`, `@latest` tags | npmjs.com → Access Tokens → Generate New Token → Automation |
-| `DISCORD_WEBHOOK_URL` | Optional | Notifications for promotions, test results, deployments | Discord → Server Settings → Integrations → Webhooks |
+| Secret                | Required?            | Purpose                                                 | How to get it                                               |
+| --------------------- | -------------------- | ------------------------------------------------------- | ----------------------------------------------------------- |
+| `GITHUB_TOKEN`        | Automatic            | PR creation, Docker registry, branch ops                | Provided by GitHub Actions — no setup needed                |
+| `NPM_TOKEN`           | Yes (for publishing) | npm publish with `@alpha`, `@beta`, `@latest` tags      | npmjs.com → Access Tokens → Generate New Token → Automation |
+| `DISCORD_WEBHOOK_URL` | Optional             | Notifications for promotions, test results, deployments | Discord → Server Settings → Integrations → Webhooks         |
 
 Without `NPM_TOKEN`, the pipeline runs normally but skips npm publishing. Without `DISCORD_WEBHOOK_URL`, notifications are silently skipped.
 

@@ -133,9 +133,10 @@ jobs:
             echo "commits=" >> $GITHUB_OUTPUT
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "commits<<__COMMITS_DELIM__" >> $GITHUB_OUTPUT
+            DELIM="COMMITS_$(openssl rand -hex 16)"
+            echo "commits<<${DELIM}" >> $GITHUB_OUTPUT
             echo "$COMMITS" >> $GITHUB_OUTPUT
-            echo "__COMMITS_DELIM__" >> $GITHUB_OUTPUT
+            echo "${DELIM}" >> $GITHUB_OUTPUT
           fi
 
   # Version operations
