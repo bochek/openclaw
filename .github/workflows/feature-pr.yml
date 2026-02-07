@@ -3,15 +3,12 @@ name: Feature PR
 # Auto-create PR from dev/* branches to develop
 # This is the entry point for new features into the staging pipeline
 
-# NOTE: push triggers disabled until staging pipeline is activated.
-# To enable: uncomment the push block and remove workflow_dispatch.
-#   push:
-#     branches:
-#       - "dev/**"
-#       - "feature/**"
-#       - "fix/**"
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - "dev/**"
+      - "feature/**"
+      - "fix/**"
 
 concurrency:
   group: feature-pr-${{ github.ref_name }}

@@ -97,17 +97,13 @@ Skills submitted as PRs to this repo will be redirected to ClawHub. If the core 
 
 ## Branch Strategy
 
-> **Note:** The staged promotion pipeline is not yet active. Workflows are in
-> place but dormant. For now, open PRs targeting `main` as usual. Once the
-> pipeline is activated, the flow below will apply.
-
-We will use staged branch promotion to keep `main` stable:
+We use staged branch promotion to keep `main` stable:
 
 ```
 dev/* / feature/* / fix/*  →  develop  →  alpha  →  beta  →  main
 ```
 
-### For External Contributors (once pipeline is active)
+### For External Contributors
 
 1. Fork the repo
 2. Create your branch (`dev/my-feature`, `fix/some-bug`, etc.)
@@ -115,7 +111,9 @@ dev/* / feature/* / fix/*  →  develop  →  alpha  →  beta  →  main
 4. CI runs lightweight checks only — no heavy platform tests on your PR
 5. Once merged to `develop`, your changes promote through alpha → beta → main automatically
 
-### For Maintainers (once pipeline is active)
+**Do not target `main`** — PRs to `main` will be redirected to `develop`.
+
+### For Maintainers
 
 - **Regular changes**: merge to `develop`, let the pipeline promote
 - **Hotfixes**: use `hotfix/*` branches for emergency fixes that bypass staging directly to `main`

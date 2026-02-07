@@ -7,16 +7,15 @@ name: Release Orchestrator
 #
 # Flow: version → changelog → test → deploy → release
 
-# NOTE: push-to-main trigger disabled until staging pipeline is activated.
-# To enable: uncomment the push block below.
-#   push:
-#     branches:
-#       - main
-#     paths-ignore:
-#       - "docs/**"
-#       - "*.md"
-#       - ".github/workflows/docs-*.yml"
 on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - ".github/workflows/docs-*.yml"
+
   workflow_call:
     inputs:
       release_type:

@@ -5,13 +5,10 @@ name: Hotfix PR
 #
 # Flow: hotfix/* → main (directly, with expedited review)
 
-# NOTE: push triggers disabled until staging pipeline is activated.
-# To enable: uncomment the push block and remove workflow_dispatch.
-#   push:
-#     branches:
-#       - "hotfix/**"
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - "hotfix/**"
 
 concurrency:
   group: hotfix-${{ github.ref_name }}

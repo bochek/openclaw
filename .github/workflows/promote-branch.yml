@@ -11,17 +11,15 @@ name: Promote Branch
 #
 # Merging to main triggers a release (handled separately by release workflow)
 
-# NOTE: push triggers disabled until staging pipeline is activated.
-# To enable: uncomment the push block below.
-#   push:
-#     branches:
-#       - develop
-#       - alpha
-#       - beta
-#     paths-ignore:
-#       - "docs/**"
-#       - "*.md"
 on:
+  push:
+    branches:
+      - develop
+      - alpha
+      - beta
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
   workflow_dispatch:
     inputs:
       source_branch:

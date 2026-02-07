@@ -1,12 +1,18 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
+  workflow_call:
+    # Called by testing-strategy.yml for staged releases
+    inputs:
+      test_stage:
+        description: "Testing stage: develop, alpha, beta, or stable. Controls which platform tests run."
+        required: false
+        type: string
+        default: ""
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.sha }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -187,6 +193,10 @@ jobs:
           fi
 
   checks-windows:
+    # Windows tests: beta+ staging only (not on regular PRs to save compute)
+    if: |
+      inputs.test_stage == 'beta' ||
+      inputs.test_stage == 'stable'
     runs-on: blacksmith-4vcpu-windows-2025
     env:
       NODE_OPTIONS: --max-old-space-size=4096
@@ -295,12 +305,9 @@ jobs:
       - name: Run ${{ matrix.task }} (${{ matrix.runtime }})
         run: ${{ matrix.command }}
 
-  # Consolidated macOS job: runs TS tests + Swift lint/build/test sequentially
-  # on a single runner. GitHub limits macOS concurrent jobs to 5 per org;
-  # running 4 separate jobs per PR (as before) starved the queue. One job
-  # per PR allows 5 PRs to run macOS checks simultaneously.
-  macos:
-    if: github.event_name == 'pull_request'
+  checks-macos:
+    # macOS tests: stable staging only (not on regular PRs to save compute)
+    if: inputs.test_stage == 'stable'
     runs-on: macos-latest
     steps:
       - name: Checkout
