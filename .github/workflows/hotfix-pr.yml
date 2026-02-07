@@ -87,11 +87,3 @@ jobs:
             --body "$BODY"
 
           echo "Created hotfix PR: $BRANCH → main"
-
-      - name: Add urgent label
-        if: steps.check-pr.outputs.exists != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Labels may not exist, so ignore errors
-          gh pr edit "${{ github.ref_name }}" --add-label "hotfix" 2>/dev/null || true

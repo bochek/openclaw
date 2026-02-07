@@ -40,27 +40,30 @@ runs:
       run: |
         TIMESTAMP=""
         if [ "${{ inputs.timestamp }}" = "true" ]; then
-          TIMESTAMP="\"timestamp\": \"$(date -u +%Y-%m-%dT%H:%M:%SZ)\","
+          TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
         fi
 
-        # Escape description for JSON (use double quotes for variable expansion)
-        DESCRIPTION=$(echo "${{ inputs.description }}" | jq -Rs .)
+        # Build JSON payload with jq to handle escaping properly
+        PAYLOAD=$(jq -n \
+          --arg username "${{ inputs.username }}" \
+          --arg avatar_url "${{ inputs.avatar_url }}" \
+          --arg title "${{ inputs.title }}" \
+          --arg description "${{ inputs.description }}" \
+          --argjson color "${{ inputs.color }}" \
+          --argjson fields '${{ inputs.fields }}' \
+          --arg timestamp "$TIMESTAMP" \
+          --argjson add_timestamp "${{ inputs.timestamp }}" \
+          '{
+            username: $username,
+            avatar_url: $avatar_url,
+            embeds: [{
+              title: $title,
+              description: $description,
+              color: $color,
+              fields: $fields
+            } + (if $add_timestamp then {timestamp: $timestamp} else {} end)]
+          }')
 
-        PAYLOAD=$(cat <<EOF
-        {
-          "username": "${{ inputs.username }}",
-          "avatar_url": "${{ inputs.avatar_url }}",
-          "embeds": [{
-            "title": "${{ inputs.title }}",
-            "description": $DESCRIPTION,
-            "color": ${{ inputs.color }},
-            $TIMESTAMP
-            "fields": ${{ inputs.fields }}
-          }]
-        }
-        EOF
-        )
-
-        curl -H "Content-Type: application/json" \
+        curl -sS -H "Content-Type: application/json" \
           -d "$PAYLOAD" \
           "${{ inputs.webhook_url }}"

@@ -39,12 +39,6 @@ jobs:
     name: macOS Checks
     if: inputs.test_stage == 'stable'
     runs-on: macos-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - task: test
-            command: pnpm test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,10 +88,10 @@ jobs:
           export PATH="$NODE_BIN:$PATH"
           pnpm install --frozen-lockfile --ignore-scripts=false --config.engine-strict=false --config.enable-pre-post-scripts=true
 
-      - name: Run ${{ matrix.task }}
+      - name: Run tests
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-        run: ${{ matrix.command }}
+        run: pnpm test
 
   # Install smoke test (stable only)
   install-smoke:

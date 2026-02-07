@@ -8,6 +8,14 @@ name: Release Orchestrator
 # Flow: version → changelog → test → deploy → release
 
 on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "*.md"
+      - ".github/workflows/docs-*.yml"
+
   workflow_call:
     inputs:
       release_type:
@@ -39,10 +47,39 @@ on:
       DISCORD_WEBHOOK_URL:
         required: false
 
+permissions:
+  contents: write
+  packages: write
+
 jobs:
+  # Determine release parameters (push vs workflow_call)
+  determine-params:
+    name: Determine Parameters
+    runs-on: ubuntu-latest
+    outputs:
+      release_type: ${{ steps.params.outputs.release_type }}
+      source_branch: ${{ steps.params.outputs.source_branch }}
+      dry_run: ${{ steps.params.outputs.dry_run }}
+    steps:
+      - name: Set parameters
+        id: params
+        run: |
+          # When triggered by push to main, use stable defaults
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "release_type=stable" >> $GITHUB_OUTPUT
+            echo "source_branch=main" >> $GITHUB_OUTPUT
+            echo "dry_run=false" >> $GITHUB_OUTPUT
+          else
+            # workflow_call - use provided inputs
+            echo "release_type=${{ inputs.release_type }}" >> $GITHUB_OUTPUT
+            echo "source_branch=${{ inputs.source_branch }}" >> $GITHUB_OUTPUT
+            echo "dry_run=${{ inputs.dry_run }}" >> $GITHUB_OUTPUT
+          fi
+
   # Get commits since last release
   get-commits:
     name: Get Commits
+    needs: determine-params
     runs-on: ubuntu-latest
     outputs:
       commits: ${{ steps.commits.outputs.commits }}
@@ -52,13 +89,13 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ inputs.source_branch }}
+          ref: ${{ needs.determine-params.outputs.source_branch }}
 
       - name: Get commits since last tag
         id: commits
         run: |
           # Get latest tag for this release type
-          case "${{ inputs.release_type }}" in
+          case "${{ needs.determine-params.outputs.release_type }}" in
             alpha)
               PATTERN="v*-alpha.*"
               ;;
@@ -75,9 +112,9 @@ jobs:
           if [ -z "$LATEST_TAG" ]; then
             # No previous tag, use all commits
             LATEST_TAG=$(git rev-list --max-parents=0 HEAD)
-            echo "No previous ${{ inputs.release_type }} tag found, using initial commit"
+            echo "No previous ${{ needs.determine-params.outputs.release_type }} tag found, using initial commit"
           else
-            echo "Latest ${{ inputs.release_type }} tag: $LATEST_TAG"
+            echo "Latest ${{ needs.determine-params.outputs.release_type }} tag: $LATEST_TAG"
           fi
 
           COMMITS=$(git log ${LATEST_TAG}..HEAD --oneline --format="- %s (%h)")
@@ -87,62 +124,62 @@ jobs:
             echo "commits=" >> $GITHUB_OUTPUT
           else
             echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "commits<<EOF" >> $GITHUB_OUTPUT
+            echo "commits<<__COMMITS_DELIM__" >> $GITHUB_OUTPUT
             echo "$COMMITS" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
+            echo "__COMMITS_DELIM__" >> $GITHUB_OUTPUT
           fi
 
   # Version operations
   version:
     name: Version
-    needs: get-commits
+    needs: [determine-params, get-commits]
     if: needs.get-commits.outputs.has_changes == 'true'
     uses: ./.github/workflows/version-operations.yml
     with:
-      release_type: ${{ inputs.release_type }}
-      source_branch: ${{ inputs.source_branch }}
+      release_type: ${{ needs.determine-params.outputs.release_type }}
+      source_branch: ${{ needs.determine-params.outputs.source_branch }}
       should_bump: true
-      dry_run: ${{ inputs.dry_run }}
+      dry_run: ${{ needs.determine-params.outputs.dry_run }}
 
   # Generate changelog
   changelog:
     name: Changelog
-    needs: [get-commits, version]
+    needs: [determine-params, get-commits, version]
     if: needs.get-commits.outputs.has_changes == 'true'
     uses: ./.github/workflows/generate-changelog.yml
     with:
       version: ${{ needs.version.outputs.new_version }}
       commits: ${{ needs.get-commits.outputs.commits }}
-      release_type: ${{ inputs.release_type }}
+      release_type: ${{ needs.determine-params.outputs.release_type }}
 
   # Run full test suite for the release type
   test:
     name: Test
-    needs: [get-commits, version]
+    needs: [determine-params, get-commits, version]
     if: needs.get-commits.outputs.has_changes == 'true'
     uses: ./.github/workflows/testing-strategy.yml
     with:
-      test_stage: ${{ inputs.release_type == 'stable' && 'stable' || inputs.release_type }}
+      test_stage: ${{ needs.determine-params.outputs.release_type == 'stable' && 'stable' || needs.determine-params.outputs.release_type }}
       app_version: ${{ needs.version.outputs.new_version }}
     secrets: inherit
 
   # Deploy (npm + Docker)
   deploy:
     name: Deploy
-    needs: [version, test]
-    if: ${{ !inputs.dry_run && needs.test.outputs.test_status == 'passed' }}
+    needs: [determine-params, version, test]
+    if: ${{ needs.determine-params.outputs.dry_run != 'true' && needs.test.outputs.test_status == 'passed' }}
     uses: ./.github/workflows/deployment-strategy.yml
     with:
-      deployment_stage: ${{ inputs.release_type }}
+      deployment_stage: ${{ needs.determine-params.outputs.release_type }}
       app_version: ${{ needs.version.outputs.new_version }}
-      source_branch: ${{ inputs.source_branch }}
+      source_branch: ${{ needs.determine-params.outputs.source_branch }}
     secrets: inherit
 
   # Create GitHub release
   release:
     name: GitHub Release
-    needs: [version, changelog, deploy]
-    if: ${{ !inputs.dry_run }}
+    needs: [determine-params, version, changelog, deploy]
+    if: ${{ needs.determine-params.outputs.dry_run != 'true' }}
     runs-on: ubuntu-latest
     outputs:
       release_url: ${{ steps.create-release.outputs.html_url }}
@@ -151,7 +188,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.source_branch }}
+          ref: ${{ needs.determine-params.outputs.source_branch }}
 
       - name: Create GitHub Release
         id: create-release
@@ -160,7 +197,7 @@ jobs:
           tag_name: v${{ needs.version.outputs.new_version }}
           name: openclaw ${{ needs.version.outputs.new_version }}
           body: ${{ needs.changelog.outputs.changelog }}
-          prerelease: ${{ inputs.release_type != 'stable' }}
+          prerelease: ${{ needs.determine-params.outputs.release_type != 'stable' }}
           draft: false
 
       - name: Set status
@@ -170,7 +207,7 @@ jobs:
   # Notify on success
   notify-success:
     name: Notify Success
-    needs: [version, release]
+    needs: [determine-params, version, release]
     if: ${{ always() && needs.release.result == 'success' }}
     runs-on: ubuntu-latest
     env:
@@ -186,15 +223,18 @@ jobs:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }}
           title: "🎉 Released: openclaw v${{ needs.version.outputs.new_version }}"
           description: |
-            **Type**: ${{ inputs.release_type }}
+            **Type**: ${{ needs.determine-params.outputs.release_type }}
             **Release**: ${{ needs.release.outputs.release_url }}
           color: "3066993"
 
   # Notify on failure
   notify-failure:
     name: Notify Failure
-    needs: [version, test, deploy, release]
-    if: ${{ always() && (needs.test.outputs.test_status != 'passed' || needs.deploy.result == 'failure' || needs.release.result == 'failure') }}
+    needs: [determine-params, version, test, deploy, release]
+    if: |
+      always() &&
+      needs.version.result != 'skipped' &&
+      (needs.test.result == 'failure' || needs.deploy.result == 'failure' || needs.release.result == 'failure')
     runs-on: ubuntu-latest
     env:
       DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -207,9 +247,9 @@ jobs:
         uses: ./.github/actions/discord-notify
         with:
           webhook_url: ${{ secrets.DISCORD_WEBHOOK_URL }}
-          title: "❌ Release Failed: ${{ inputs.release_type }}"
+          title: "❌ Release Failed: ${{ needs.determine-params.outputs.release_type }}"
           description: |
-            **Branch**: ${{ inputs.source_branch }}
+            **Branch**: ${{ needs.determine-params.outputs.source_branch }}
             **Tests**: ${{ needs.test.outputs.test_status }}
             [View Logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           color: "15158332"

@@ -37,6 +37,9 @@ on:
         description: "Version tag (with v prefix)"
         value: ${{ jobs.version.outputs.version_tag }}
 
+permissions:
+  contents: write
+
 jobs:
   version:
     name: Version Operations
@@ -109,8 +112,17 @@ jobs:
               NEW_VERSION="${TODAY}-beta.${NEW_NUM}"
               ;;
             stable)
-              # Stable releases use just the date
-              NEW_VERSION="${TODAY}"
+              # Stable releases use date; append counter if tag already exists
+              if git tag -l "v${TODAY}" | grep -q .; then
+                # Tag exists, find next available counter
+                COUNTER=1
+                while git tag -l "v${TODAY}.${COUNTER}" | grep -q .; do
+                  COUNTER=$((COUNTER + 1))
+                done
+                NEW_VERSION="${TODAY}.${COUNTER}"
+              else
+                NEW_VERSION="${TODAY}"
+              fi
               ;;
             *)
               echo "Unknown release type: $RELEASE_TYPE"
