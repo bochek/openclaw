@@ -6,6 +6,7 @@ on:
       - develop
       - alpha
       - beta
+      - main # release-orchestrator handles main pushes with full test suite
   pull_request:
   workflow_call:
     # Called by testing-strategy.yml for staged releases
@@ -15,22 +16,6 @@ on:
         required: false
         type: string
         default: ""
-    outputs:
-      checks_result:
-        description: "Result of core checks"
-        value: ${{ jobs.checks.result }}
-      secrets_result:
-        description: "Result of secrets scan"
-        value: ${{ jobs.secrets.result }}
-      windows_result:
-        description: "Result of Windows checks"
-        value: ${{ jobs.checks-windows.result }}
-      macos_result:
-        description: "Result of macOS checks"
-        value: ${{ jobs.checks-macos.result }}
-      macos_app_result:
-        description: "Result of macOS app checks"
-        value: ${{ jobs.macos-app.result }}
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
