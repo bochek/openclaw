@@ -100,11 +100,39 @@ type MatrixVerificationSession = {
   reciprocateQrCallbacks?: MatrixShowQrCodeCallbacks;
 };
 
+const MAX_TRACKED_VERIFICATION_SESSIONS = 256;
+const TERMINAL_SESSION_RETENTION_MS = 24 * 60 * 60 * 1000;
+
 export class MatrixVerificationManager {
   private readonly verificationSessions = new Map<string, MatrixVerificationSession>();
   private verificationSessionCounter = 0;
   private readonly trackedVerificationRequests = new WeakSet<object>();
   private readonly trackedVerificationVerifiers = new WeakSet<object>();
+
+  private pruneVerificationSessions(nowMs: number): void {
+    for (const [id, session] of this.verificationSessions) {
+      const phase = session.request.phase;
+      const isTerminal = phase === VerificationPhase.Done || phase === VerificationPhase.Cancelled;
+      if (isTerminal && nowMs - session.updatedAtMs > TERMINAL_SESSION_RETENTION_MS) {
+        this.verificationSessions.delete(id);
+      }
+    }
+
+    if (this.verificationSessions.size <= MAX_TRACKED_VERIFICATION_SESSIONS) {
+      return;
+    }
+
+    const sortedByAge = Array.from(this.verificationSessions.entries()).sort(
+      (a, b) => a[1].updatedAtMs - b[1].updatedAtMs,
+    );
+    const overflow = this.verificationSessions.size - MAX_TRACKED_VERIFICATION_SESSIONS;
+    for (let i = 0; i < overflow; i += 1) {
+      const entry = sortedByAge[i];
+      if (entry) {
+        this.verificationSessions.delete(entry[0]);
+      }
+    }
+  }
 
   private getVerificationPhaseName(phase: number): string {
     switch (phase) {
@@ -237,6 +265,7 @@ export class MatrixVerificationManager {
   }
 
   trackVerificationRequest(request: MatrixVerificationRequestLike): MatrixVerificationSummary {
+    this.pruneVerificationSessions(Date.now());
     const txId = request.transactionId?.trim();
     if (txId) {
       for (const existing of this.verificationSessions.values()) {
@@ -284,6 +313,7 @@ export class MatrixVerificationManager {
   }
 
   listVerifications(): MatrixVerificationSummary[] {
+    this.pruneVerificationSessions(Date.now());
     const summaries = Array.from(this.verificationSessions.values()).map((session) =>
       this.buildVerificationSummary(session),
     );
