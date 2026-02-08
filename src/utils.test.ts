@@ -13,6 +13,8 @@ import {
   resolveHomeDir,
   resolveJidToE164,
   resolveUserPath,
+  shortenHomeInString,
+  shortenHomePath,
   sleep,
   toWhatsappJid,
   withWhatsAppPrefix,
@@ -141,6 +143,32 @@ describe("resolveHomeDir", () => {
     vi.stubEnv("HOME", "/home/other");
 
     expect(resolveHomeDir()).toBe("/srv/openclaw-home");
+
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("shortenHomePath", () => {
+  it("uses $OPENCLAW_HOME prefix when OPENCLAW_HOME is set", () => {
+    vi.stubEnv("OPENCLAW_HOME", "/srv/openclaw-home");
+    vi.stubEnv("HOME", "/home/other");
+
+    expect(shortenHomePath("/srv/openclaw-home/.openclaw/openclaw.json")).toBe(
+      "$OPENCLAW_HOME/.openclaw/openclaw.json",
+    );
+
+    vi.unstubAllEnvs();
+  });
+});
+
+describe("shortenHomeInString", () => {
+  it("uses $OPENCLAW_HOME replacement when OPENCLAW_HOME is set", () => {
+    vi.stubEnv("OPENCLAW_HOME", "/srv/openclaw-home");
+    vi.stubEnv("HOME", "/home/other");
+
+    expect(shortenHomeInString("config: /srv/openclaw-home/.openclaw/openclaw.json")).toBe(
+      "config: $OPENCLAW_HOME/.openclaw/openclaw.json",
+    );
 
     vi.unstubAllEnvs();
   });
