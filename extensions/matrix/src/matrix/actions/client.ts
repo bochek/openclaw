@@ -41,6 +41,7 @@ export async function resolveActionClient(
     homeserver: auth.homeserver,
     userId: auth.userId,
     accessToken: auth.accessToken,
+    deviceId: auth.deviceId,
     encryption: auth.encryption,
     localTimeoutMs: opts.timeoutMs,
   });

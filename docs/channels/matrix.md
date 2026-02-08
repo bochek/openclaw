@@ -65,13 +65,16 @@ Details: [Plugins](/tools/plugin)
    - Or set `channels.matrix.userId` + `channels.matrix.password`: OpenClaw calls the same
      login endpoint, stores the access token in `~/.openclaw/credentials/matrix/credentials.json`,
      and reuses it on next start.
+   - Optional registration mode: set `channels.matrix.register: true` to attempt account creation
+     when password login fails (for homeservers that allow open registration).
 
 4. Configure credentials:
    - Env: `MATRIX_HOMESERVER`, `MATRIX_ACCESS_TOKEN` (or `MATRIX_USER_ID` + `MATRIX_PASSWORD`)
    - Or config: `channels.matrix.*`
    - If both are set, config takes precedence.
-   - With access token: user ID is fetched automatically via `/whoami`.
+   - With access token: user ID and device ID are fetched automatically via `/whoami` if missing.
    - When set, `channels.matrix.userId` should be the full Matrix ID (example: `@bot:example.org`).
+   - Optional: set `channels.matrix.deviceId` (or `MATRIX_DEVICE_ID`) to pin to a known device ID.
 5. Restart the gateway (or finish onboarding).
 6. Start a DM with the bot or invite it to a room from any Matrix client
    (Element, Beeper, etc.; see [https://matrix.org/ecosystem/clients/](https://matrix.org/ecosystem/clients/)). Beeper requires E2EE,
@@ -116,8 +119,11 @@ Enable with `channels.matrix.encryption: true`:
 
 - If the crypto module loads, encrypted rooms are decrypted automatically.
 - Outbound media is encrypted when sending to encrypted rooms.
-- On first connection, OpenClaw requests device verification from your other sessions.
-- Verify the device in another Matrix client (Element, etc.) to enable key sharing.
+- Cross-signing and secret storage are bootstrapped at startup when possible.
+- OpenClaw creates or reuses a recovery key for secret storage and stores it at:
+  `~/.openclaw/credentials/matrix/accounts/<account>/<homeserver>__<user>/<token-hash>/recovery-key.json`
+- On startup, OpenClaw requests self-verification and can accept incoming verification requests.
+- Verify in another Matrix client (Element, etc.) to establish trust and improve key sharing.
 - If the crypto module cannot be loaded, E2EE is disabled and encrypted rooms will not decrypt;
   OpenClaw logs a warning.
 - If you see missing crypto module errors (for example, `@matrix-org/matrix-sdk-crypto-nodejs-*`),
@@ -126,8 +132,9 @@ Enable with `channels.matrix.encryption: true`:
   `node node_modules/@matrix-org/matrix-sdk-crypto-nodejs/download-lib.js`.
 
 Crypto state is stored per account + access token in
-`~/.openclaw/matrix/accounts/<account>/<homeserver>__<user>/<token-hash>/crypto/`
-(SQLite database). Sync state lives alongside it in `bot-storage.json`.
+`~/.openclaw/credentials/matrix/accounts/<account>/<homeserver>__<user>/<token-hash>/`.
+Crypto data lives in IndexedDB plus a persisted snapshot (`crypto-idb-snapshot.json`),
+with sync state in `bot-storage.json`.
 If the access token (device) changes, a new store is created and the bot must be
 re-verified for encrypted rooms.
 
@@ -135,6 +142,25 @@ re-verified for encrypted rooms.
 When E2EE is enabled, the bot will request verification from your other sessions on startup.
 Open Element (or another client) and approve the verification request to establish trust.
 Once verified, the bot can decrypt messages in encrypted rooms.
+
+## Verification operations
+
+When E2EE is enabled and `channels.matrix.actions.verification` is on, the Matrix
+`permissions` action exposes verification operations:
+
+- `encryption-status`: report encryption and recovery key status.
+- `verification-list`: list tracked verification requests.
+- `verification-request`: start verification (`ownUser`, `userId+deviceId`, or `userId+roomId`).
+- `verification-accept`, `verification-cancel`: accept or cancel a request.
+- `verification-start`: start SAS verification.
+- `verification-sas`, `verification-confirm`, `verification-mismatch`: read and confirm or reject SAS.
+- `verification-generate-qr`, `verification-scan-qr`, `verification-confirm-qr`: QR-based flows.
+
+Use these via the `permissions` action by setting `operation` (or `mode`) to one of:
+`encryption-status`, `verification-list`, `verification-request`, `verification-accept`,
+`verification-cancel`, `verification-start`, `verification-generate-qr`,
+`verification-scan-qr`, `verification-sas`, `verification-confirm`,
+`verification-mismatch`, `verification-confirm-qr`.
 
 ## Routing model
 
@@ -239,6 +265,8 @@ Provider options:
 - `channels.matrix.userId`: Matrix user ID (optional with access token).
 - `channels.matrix.accessToken`: access token.
 - `channels.matrix.password`: password for login (token stored).
+- `channels.matrix.register`: try account registration if password login fails.
+- `channels.matrix.deviceId`: preferred device ID (used for E2EE initialization).
 - `channels.matrix.deviceName`: device display name.
 - `channels.matrix.encryption`: enable E2EE (default: false).
 - `channels.matrix.initialSyncLimit`: initial sync limit.
@@ -257,3 +285,4 @@ Provider options:
 - `channels.matrix.autoJoin`: invite handling (`always | allowlist | off`, default: always).
 - `channels.matrix.autoJoinAllowlist`: allowed room IDs/aliases for auto-join.
 - `channels.matrix.actions`: per-action tool gating (reactions/messages/pins/memberInfo/channelInfo).
+- `channels.matrix.actions.verification`: enable verification action operations.

@@ -49,6 +49,7 @@ export async function resolveMatrixClient(opts: {
     homeserver: auth.homeserver,
     userId: auth.userId,
     accessToken: auth.accessToken,
+    deviceId: auth.deviceId,
     encryption: auth.encryption,
     localTimeoutMs: opts.timeoutMs,
   });

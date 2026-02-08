@@ -1,32 +1,30 @@
+// Polyfill IndexedDB for WASM crypto in Node.js
+import "fake-indexeddb/auto";
 import { Attachment, EncryptedAttachment } from "@matrix-org/matrix-sdk-crypto-nodejs";
 import {
   ClientEvent,
-  MatrixEventEvent,
   createClient as createMatrixJsClient,
   type MatrixClient as MatrixJsClient,
   type MatrixEvent,
 } from "matrix-js-sdk";
+import { CryptoEvent } from "matrix-js-sdk/src/crypto-api/CryptoEvent.ts";
+import { VerificationMethod } from "matrix-js-sdk/src/types.ts";
 import { EventEmitter } from "node:events";
+import fs from "node:fs";
+import path from "node:path";
+import { MatrixDecryptBridge } from "./sdk/decrypt-bridge.js";
+import { persistIdbToDisk, restoreIdbFromDisk } from "./sdk/idb-persistence.js";
+import { ConsoleLogger, LogService, noop } from "./sdk/logger.js";
+import { type HttpMethod, type QueryParams, performMatrixRequest } from "./sdk/transport.js";
+import {
+  type MatrixVerificationCryptoApi,
+  MatrixVerificationManager,
+  type MatrixVerificationMethod,
+  type MatrixVerificationRequestLike,
+  type MatrixVerificationSummary,
+} from "./sdk/verification-manager.js";
 
-type Logger = {
-  trace: (module: string, ...messageOrObject: unknown[]) => void;
-  debug: (module: string, ...messageOrObject: unknown[]) => void;
-  info: (module: string, ...messageOrObject: unknown[]) => void;
-  warn: (module: string, ...messageOrObject: unknown[]) => void;
-  error: (module: string, ...messageOrObject: unknown[]) => void;
-};
-
-type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
-
-type QueryValue =
-  | string
-  | number
-  | boolean
-  | null
-  | undefined
-  | Array<string | number | boolean | null | undefined>;
-
-type QueryParams = Record<string, QueryValue> | null | undefined;
+export { ConsoleLogger, LogService };
 
 type MatrixRawEvent = {
   event_id: string;
@@ -49,56 +47,6 @@ type MatrixClientEventMap = {
   "room.failed_decryption": [roomId: string, event: MatrixRawEvent, error: Error];
   "room.invite": [roomId: string, event: MatrixRawEvent];
   "room.join": [roomId: string, event: MatrixRawEvent];
-};
-
-function noop(): void {
-  // no-op
-}
-
-export class ConsoleLogger {
-  trace(module: string, ...messageOrObject: unknown[]): void {
-    console.debug(`[${module}]`, ...messageOrObject);
-  }
-
-  debug(module: string, ...messageOrObject: unknown[]): void {
-    console.debug(`[${module}]`, ...messageOrObject);
-  }
-
-  info(module: string, ...messageOrObject: unknown[]): void {
-    console.info(`[${module}]`, ...messageOrObject);
-  }
-
-  warn(module: string, ...messageOrObject: unknown[]): void {
-    console.warn(`[${module}]`, ...messageOrObject);
-  }
-
-  error(module: string, ...messageOrObject: unknown[]): void {
-    console.error(`[${module}]`, ...messageOrObject);
-  }
-}
-
-const defaultLogger = new ConsoleLogger();
-let activeLogger: Logger = defaultLogger;
-
-export const LogService = {
-  setLogger(logger: Logger): void {
-    activeLogger = logger;
-  },
-  trace(module: string, ...messageOrObject: unknown[]): void {
-    activeLogger.trace(module, ...messageOrObject);
-  },
-  debug(module: string, ...messageOrObject: unknown[]): void {
-    activeLogger.debug(module, ...messageOrObject);
-  },
-  info(module: string, ...messageOrObject: unknown[]): void {
-    activeLogger.info(module, ...messageOrObject);
-  },
-  warn(module: string, ...messageOrObject: unknown[]): void {
-    activeLogger.warn(module, ...messageOrObject);
-  },
-  error(module: string, ...messageOrObject: unknown[]): void {
-    activeLogger.error(module, ...messageOrObject);
-  },
 };
 
 export type EncryptedFile = {
@@ -182,6 +130,115 @@ type MatrixCryptoFacade = {
   requestOwnUserVerification: () => Promise<unknown | null>;
   encryptMedia: (buffer: Buffer) => Promise<{ buffer: Buffer; file: Omit<EncryptedFile, "url"> }>;
   decryptMedia: (file: EncryptedFile) => Promise<Buffer>;
+  getRecoveryKey: () => Promise<{
+    encodedPrivateKey?: string;
+    keyId?: string | null;
+    createdAt?: string;
+  } | null>;
+  listVerifications: () => Promise<MatrixVerificationSummary[]>;
+  requestVerification: (params: {
+    ownUser?: boolean;
+    userId?: string;
+    deviceId?: string;
+    roomId?: string;
+  }) => Promise<MatrixVerificationSummary>;
+  acceptVerification: (id: string) => Promise<MatrixVerificationSummary>;
+  cancelVerification: (
+    id: string,
+    params?: { reason?: string; code?: string },
+  ) => Promise<MatrixVerificationSummary>;
+  startVerification: (
+    id: string,
+    method?: MatrixVerificationMethod,
+  ) => Promise<MatrixVerificationSummary>;
+  generateVerificationQr: (id: string) => Promise<{ qrDataBase64: string }>;
+  scanVerificationQr: (id: string, qrDataBase64: string) => Promise<MatrixVerificationSummary>;
+  confirmVerificationSas: (id: string) => Promise<MatrixVerificationSummary>;
+  mismatchVerificationSas: (id: string) => Promise<MatrixVerificationSummary>;
+  confirmVerificationReciprocateQr: (id: string) => Promise<MatrixVerificationSummary>;
+  getVerificationSas: (
+    id: string,
+  ) => Promise<{ decimal?: [number, number, number]; emoji?: Array<[string, string]> }>;
+};
+
+type MatrixSecretStorageStatus = {
+  ready: boolean;
+  defaultKeyId: string | null;
+};
+
+type MatrixGeneratedSecretStorageKey = {
+  keyId?: string | null;
+  keyInfo?: {
+    passphrase?: unknown;
+    name?: string;
+  };
+  privateKey: Uint8Array;
+  encodedPrivateKey?: string;
+};
+
+type MatrixCryptoBootstrapApi = {
+  on: (eventName: string, listener: (...args: unknown[]) => void) => void;
+  bootstrapCrossSigning: (opts: { setupNewCrossSigning?: boolean }) => Promise<void>;
+  bootstrapSecretStorage: (opts?: {
+    createSecretStorageKey?: () => Promise<MatrixGeneratedSecretStorageKey>;
+    setupNewSecretStorage?: boolean;
+    setupNewKeyBackup?: boolean;
+  }) => Promise<void>;
+  createRecoveryKeyFromPassphrase?: (password?: string) => Promise<MatrixGeneratedSecretStorageKey>;
+  getSecretStorageStatus?: () => Promise<MatrixSecretStorageStatus>;
+  requestOwnUserVerification: () => Promise<unknown | null>;
+  requestDeviceVerification?: (
+    userId: string,
+    deviceId: string,
+  ) => Promise<MatrixVerificationRequestLike>;
+  requestVerificationDM?: (
+    userId: string,
+    roomId: string,
+  ) => Promise<MatrixVerificationRequestLike>;
+  getDeviceVerificationStatus?: (
+    userId: string,
+    deviceId: string,
+  ) => Promise<MatrixDeviceVerificationStatusLike | null>;
+  setDeviceVerified?: (userId: string, deviceId: string, verified?: boolean) => Promise<void>;
+  crossSignDevice?: (deviceId: string) => Promise<void>;
+  isCrossSigningReady?: () => Promise<boolean>;
+};
+
+type MatrixDeviceVerificationStatusLike = {
+  isVerified?: () => boolean;
+  localVerified?: boolean;
+  crossSigningVerified?: boolean;
+  signedByOwner?: boolean;
+};
+
+type MatrixSecretStorageKeyDescription = {
+  passphrase?: unknown;
+  name?: string;
+  [key: string]: unknown;
+};
+
+type MatrixCryptoCallbacks = {
+  getSecretStorageKey?: (
+    params: { keys: Record<string, MatrixSecretStorageKeyDescription> },
+    name: string,
+  ) => Promise<[string, Uint8Array] | null>;
+  cacheSecretStorageKey?: (
+    keyId: string,
+    keyInfo: MatrixSecretStorageKeyDescription,
+    key: Uint8Array,
+  ) => void;
+};
+
+type MatrixStoredRecoveryKey = {
+  version: 1;
+  createdAt: string;
+  keyId?: string | null;
+  encodedPrivateKey?: string;
+  privateKeyBase64: string;
+  keyInfo?: {
+    passphrase?: unknown;
+    name?: string;
+  };
 };
 
 export class MatrixClient {
@@ -192,12 +249,20 @@ export class MatrixClient {
   private readonly localTimeoutMs: number;
   private readonly initialSyncLimit?: number;
   private readonly encryptionEnabled: boolean;
+  private readonly recoveryKeyPath?: string;
+  private readonly idbSnapshotPath?: string;
+  private readonly cryptoDatabasePrefix?: string;
   private bridgeRegistered = false;
   private started = false;
   private selfUserId: string | null;
   private readonly dmRoomIds = new Set<string>();
   private cryptoInitialized = false;
-  private readonly decryptedMessageDedupe = new Map<string, number>();
+  private readonly decryptBridge: MatrixDecryptBridge<MatrixRawEvent>;
+  private readonly verificationManager = new MatrixVerificationManager();
+  private readonly secretStorageKeyCache = new Map<
+    string,
+    { key: Uint8Array; keyInfo?: MatrixStoredRecoveryKey["keyInfo"] }
+  >();
 
   readonly dms = {
     update: async (): Promise<void> => {
@@ -219,6 +284,9 @@ export class MatrixClient {
       localTimeoutMs?: number;
       encryption?: boolean;
       initialSyncLimit?: number;
+      recoveryKeyPath?: string;
+      idbSnapshotPath?: string;
+      cryptoDatabasePrefix?: string;
     } = {},
   ) {
     this.homeserver = homeserver;
@@ -226,13 +294,37 @@ export class MatrixClient {
     this.localTimeoutMs = Math.max(1, opts.localTimeoutMs ?? 60_000);
     this.initialSyncLimit = opts.initialSyncLimit;
     this.encryptionEnabled = opts.encryption === true;
+    this.recoveryKeyPath = opts.recoveryKeyPath;
+    this.idbSnapshotPath = opts.idbSnapshotPath;
+    this.cryptoDatabasePrefix = opts.cryptoDatabasePrefix;
     this.selfUserId = opts.userId?.trim() || null;
+    const cryptoCallbacks = this.encryptionEnabled ? this.buildCryptoCallbacks() : undefined;
     this.client = createMatrixJsClient({
       baseUrl: homeserver,
       accessToken,
       userId: opts.userId,
       deviceId: opts.deviceId,
       localTimeoutMs: this.localTimeoutMs,
+      cryptoCallbacks,
+      verificationMethods: [
+        VerificationMethod.Sas,
+        VerificationMethod.ShowQrCode,
+        VerificationMethod.ScanQrCode,
+        VerificationMethod.Reciprocate,
+      ],
+    });
+    this.decryptBridge = new MatrixDecryptBridge<MatrixRawEvent>({
+      client: this.client,
+      toRaw: (event) => matrixEventToRaw(event),
+      emitDecryptedEvent: (roomId, event) => {
+        this.emitter.emit("room.decrypted_event", roomId, event);
+      },
+      emitMessage: (roomId, event) => {
+        this.emitter.emit("room.message", roomId, event);
+      },
+      emitFailedDecryption: (roomId, event, error) => {
+        this.emitter.emit("room.failed_decryption", roomId, event, error);
+      },
     });
 
     if (this.encryptionEnabled) {
@@ -260,6 +352,8 @@ export class MatrixClient {
     return this;
   }
 
+  private idbPersistTimer: ReturnType<typeof setInterval> | null = null;
+
   async start(): Promise<void> {
     if (this.started) {
       return;
@@ -268,9 +362,114 @@ export class MatrixClient {
     this.registerBridge();
 
     if (this.encryptionEnabled && !this.cryptoInitialized) {
+      // Restore persisted IndexedDB crypto store before initializing WASM crypto
+      await restoreIdbFromDisk(this.idbSnapshotPath);
+
       try {
-        await this.client.initRustCrypto();
+        await this.client.initRustCrypto({
+          cryptoDatabasePrefix: this.cryptoDatabasePrefix,
+        });
         this.cryptoInitialized = true;
+
+        // Bootstrap cross-signing and secret storage for automatic device verification
+        const crypto = this.client.getCrypto() as MatrixCryptoBootstrapApi | undefined;
+        if (crypto) {
+          try {
+            // Bootstrap cross-signing (create master/user-signing/self-signing keys if needed)
+            await crypto.bootstrapCrossSigning({ setupNewCrossSigning: true });
+            LogService.info("MatrixClientLite", "Cross-signing bootstrap complete");
+          } catch (err) {
+            LogService.warn("MatrixClientLite", "Failed to bootstrap cross-signing:", err);
+          }
+          try {
+            // Bootstrap secret storage and ensure we have a recovery key.
+            await this.bootstrapSecretStorageWithRecoveryKey(crypto);
+            LogService.info("MatrixClientLite", "Secret storage bootstrap complete");
+          } catch (err) {
+            LogService.warn("MatrixClientLite", "Failed to bootstrap secret storage:", err);
+          }
+          try {
+            await this.ensureOwnDeviceTrust(crypto);
+          } catch (err) {
+            LogService.warn("MatrixClientLite", "Failed to verify own Matrix device:", err);
+          }
+
+          // Auto-accept incoming verification requests from other users/devices
+          // This allows Element to verify this device automatically without manual steps
+          crypto.on(CryptoEvent.VerificationRequestReceived, async (request) => {
+            const verificationRequest = request as MatrixVerificationRequestLike;
+            this.verificationManager.trackVerificationRequest(verificationRequest);
+            const otherUserId = verificationRequest.otherUserId;
+            const isSelfVerification = verificationRequest.isSelfVerification;
+            const initiatedByMe = verificationRequest.initiatedByMe;
+
+            // Only auto-accept verifications from OTHER users (not self-verification)
+            // and only if we didn't initiate the request
+            if (isSelfVerification || initiatedByMe) {
+              LogService.debug(
+                "MatrixClientLite",
+                `Ignoring ${isSelfVerification ? "self" : "initiated"} verification request from ${otherUserId}`,
+              );
+              return;
+            }
+
+            try {
+              LogService.info(
+                "MatrixClientLite",
+                `Auto-accepting verification request from ${otherUserId}`,
+              );
+
+              // Accept the verification request (moves to Ready phase)
+              await verificationRequest.accept();
+
+              LogService.info(
+                "MatrixClientLite",
+                `Verification request from ${otherUserId} accepted, waiting for SAS...`,
+              );
+
+              // The SAS verification will complete automatically if the other side sends the accept
+              // We don't need to do anything else - the SDK handles the full flow
+            } catch (err) {
+              LogService.warn(
+                "MatrixClientLite",
+                `Failed to auto-accept verification from ${otherUserId}:`,
+                err,
+              );
+            }
+          });
+
+          const triggerDecryptRetry = (reason: string): void => {
+            this.decryptBridge.retryPendingNow(reason);
+          };
+          crypto.on(CryptoEvent.KeyBackupDecryptionKeyCached, () => {
+            triggerDecryptRetry("crypto.keyBackupDecryptionKeyCached");
+          });
+          crypto.on(CryptoEvent.RehydrationCompleted, () => {
+            triggerDecryptRetry("dehydration.RehydrationCompleted");
+          });
+          crypto.on(CryptoEvent.DevicesUpdated, () => {
+            triggerDecryptRetry("crypto.devicesUpdated");
+          });
+          crypto.on(CryptoEvent.KeysChanged, () => {
+            triggerDecryptRetry("crossSigning.keysChanged");
+          });
+
+          LogService.info("MatrixClientLite", "Verification request handler registered");
+        }
+
+        // Persist the crypto store after successful init (captures fresh keys on first run)
+        await persistIdbToDisk({
+          snapshotPath: this.idbSnapshotPath,
+          databasePrefix: this.cryptoDatabasePrefix,
+        });
+
+        // Periodically persist (every 60s) to capture new Olm sessions, room keys, etc.
+        this.idbPersistTimer = setInterval(() => {
+          persistIdbToDisk({
+            snapshotPath: this.idbSnapshotPath,
+            databasePrefix: this.cryptoDatabasePrefix,
+          }).catch(noop);
+        }, 60_000);
       } catch (err) {
         LogService.warn("MatrixClientLite", "Failed to initialize rust crypto:", err);
       }
@@ -284,8 +483,262 @@ export class MatrixClient {
   }
 
   stop(): void {
+    if (this.idbPersistTimer) {
+      clearInterval(this.idbPersistTimer);
+      this.idbPersistTimer = null;
+    }
+    this.decryptBridge.stop();
+    // Final persist on shutdown
+    persistIdbToDisk({
+      snapshotPath: this.idbSnapshotPath,
+      databasePrefix: this.cryptoDatabasePrefix,
+    }).catch(noop);
     this.client.stopClient();
     this.started = false;
+  }
+
+  private rememberSecretStorageKey(
+    keyId: string,
+    key: Uint8Array,
+    keyInfo?: MatrixStoredRecoveryKey["keyInfo"],
+  ): void {
+    if (!keyId.trim()) {
+      return;
+    }
+    this.secretStorageKeyCache.set(keyId, {
+      key: new Uint8Array(key),
+      keyInfo,
+    });
+  }
+
+  private buildCryptoCallbacks(): MatrixCryptoCallbacks {
+    return {
+      getSecretStorageKey: async ({ keys }) => {
+        const requestedKeyIds = Object.keys(keys ?? {});
+        if (requestedKeyIds.length === 0) {
+          return null;
+        }
+
+        for (const keyId of requestedKeyIds) {
+          const cached = this.secretStorageKeyCache.get(keyId);
+          if (cached) {
+            return [keyId, new Uint8Array(cached.key)];
+          }
+        }
+
+        const stored = this.loadStoredRecoveryKey();
+        if (!stored || !stored.privateKeyBase64) {
+          return null;
+        }
+        const privateKey = new Uint8Array(Buffer.from(stored.privateKeyBase64, "base64"));
+        if (privateKey.length === 0) {
+          return null;
+        }
+
+        if (stored.keyId && requestedKeyIds.includes(stored.keyId)) {
+          this.rememberSecretStorageKey(stored.keyId, privateKey, stored.keyInfo);
+          return [stored.keyId, privateKey];
+        }
+
+        // Fallback for older stored keys that predate keyId persistence.
+        const firstRequestedKeyId = requestedKeyIds[0];
+        if (!firstRequestedKeyId) {
+          return null;
+        }
+        this.rememberSecretStorageKey(firstRequestedKeyId, privateKey, stored.keyInfo);
+        return [firstRequestedKeyId, privateKey];
+      },
+      cacheSecretStorageKey: (keyId, keyInfo, key) => {
+        const privateKey = new Uint8Array(key);
+        const normalizedKeyInfo: MatrixStoredRecoveryKey["keyInfo"] = {
+          passphrase: keyInfo?.passphrase,
+          name: typeof keyInfo?.name === "string" ? keyInfo.name : undefined,
+        };
+        this.rememberSecretStorageKey(keyId, privateKey, normalizedKeyInfo);
+
+        const stored = this.loadStoredRecoveryKey();
+        this.saveRecoveryKeyToDisk({
+          keyId,
+          keyInfo: normalizedKeyInfo,
+          privateKey,
+          encodedPrivateKey: stored?.encodedPrivateKey,
+        });
+      },
+    };
+  }
+
+  private loadStoredRecoveryKey(): MatrixStoredRecoveryKey | null {
+    if (!this.recoveryKeyPath) {
+      return null;
+    }
+    try {
+      if (!fs.existsSync(this.recoveryKeyPath)) {
+        return null;
+      }
+      const raw = fs.readFileSync(this.recoveryKeyPath, "utf8");
+      const parsed = JSON.parse(raw) as Partial<MatrixStoredRecoveryKey>;
+      if (
+        parsed.version !== 1 ||
+        typeof parsed.createdAt !== "string" ||
+        typeof parsed.privateKeyBase64 !== "string" ||
+        !parsed.privateKeyBase64.trim()
+      ) {
+        return null;
+      }
+      return {
+        version: 1,
+        createdAt: parsed.createdAt,
+        keyId: typeof parsed.keyId === "string" ? parsed.keyId : null,
+        encodedPrivateKey:
+          typeof parsed.encodedPrivateKey === "string" ? parsed.encodedPrivateKey : undefined,
+        privateKeyBase64: parsed.privateKeyBase64,
+        keyInfo:
+          parsed.keyInfo && typeof parsed.keyInfo === "object"
+            ? {
+                passphrase: parsed.keyInfo.passphrase,
+                name: typeof parsed.keyInfo.name === "string" ? parsed.keyInfo.name : undefined,
+              }
+            : undefined,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private saveRecoveryKeyToDisk(params: MatrixGeneratedSecretStorageKey): void {
+    if (!this.recoveryKeyPath) {
+      return;
+    }
+    try {
+      const payload: MatrixStoredRecoveryKey = {
+        version: 1,
+        createdAt: new Date().toISOString(),
+        keyId: typeof params.keyId === "string" ? params.keyId : null,
+        encodedPrivateKey: params.encodedPrivateKey,
+        privateKeyBase64: Buffer.from(params.privateKey).toString("base64"),
+        keyInfo: params.keyInfo
+          ? {
+              passphrase: params.keyInfo.passphrase,
+              name: params.keyInfo.name,
+            }
+          : undefined,
+      };
+      fs.mkdirSync(path.dirname(this.recoveryKeyPath), { recursive: true });
+      fs.writeFileSync(this.recoveryKeyPath, JSON.stringify(payload, null, 2), "utf8");
+      fs.chmodSync(this.recoveryKeyPath, 0o600);
+    } catch (err) {
+      LogService.warn("MatrixClientLite", "Failed to persist recovery key:", err);
+    }
+  }
+
+  private async bootstrapSecretStorageWithRecoveryKey(
+    crypto: MatrixCryptoBootstrapApi,
+  ): Promise<void> {
+    let status: MatrixSecretStorageStatus | null = null;
+    if (typeof crypto.getSecretStorageStatus === "function") {
+      try {
+        status = await crypto.getSecretStorageStatus();
+      } catch (err) {
+        LogService.warn("MatrixClientLite", "Failed to read secret storage status:", err);
+      }
+    }
+
+    const hasDefaultSecretStorageKey = Boolean(status?.defaultKeyId);
+    let generatedRecoveryKey = false;
+    const storedRecovery = this.loadStoredRecoveryKey();
+    let recoveryKey = storedRecovery
+      ? {
+          keyInfo: storedRecovery.keyInfo,
+          privateKey: new Uint8Array(Buffer.from(storedRecovery.privateKeyBase64, "base64")),
+          encodedPrivateKey: storedRecovery.encodedPrivateKey,
+        }
+      : null;
+
+    if (recoveryKey && status?.defaultKeyId) {
+      const defaultKeyId = status.defaultKeyId;
+      this.rememberSecretStorageKey(defaultKeyId, recoveryKey.privateKey, recoveryKey.keyInfo);
+      if (storedRecovery?.keyId !== defaultKeyId) {
+        this.saveRecoveryKeyToDisk({
+          keyId: defaultKeyId,
+          keyInfo: recoveryKey.keyInfo,
+          privateKey: recoveryKey.privateKey,
+          encodedPrivateKey: recoveryKey.encodedPrivateKey,
+        });
+      }
+    }
+
+    const ensureRecoveryKey = async (): Promise<MatrixGeneratedSecretStorageKey> => {
+      if (recoveryKey) {
+        return recoveryKey;
+      }
+      if (typeof crypto.createRecoveryKeyFromPassphrase !== "function") {
+        throw new Error(
+          "Matrix crypto backend does not support recovery key generation (createRecoveryKeyFromPassphrase missing)",
+        );
+      }
+      recoveryKey = await crypto.createRecoveryKeyFromPassphrase();
+      this.saveRecoveryKeyToDisk(recoveryKey);
+      generatedRecoveryKey = true;
+      return recoveryKey;
+    };
+
+    const secretStorageOptions: {
+      createSecretStorageKey?: () => Promise<MatrixGeneratedSecretStorageKey>;
+      setupNewSecretStorage?: boolean;
+      setupNewKeyBackup?: boolean;
+    } = {
+      setupNewKeyBackup: false,
+    };
+
+    if (!hasDefaultSecretStorageKey) {
+      secretStorageOptions.setupNewSecretStorage = true;
+      secretStorageOptions.createSecretStorageKey = ensureRecoveryKey;
+    }
+
+    await crypto.bootstrapSecretStorage(secretStorageOptions);
+
+    if (generatedRecoveryKey && this.recoveryKeyPath) {
+      LogService.warn(
+        "MatrixClientLite",
+        `Generated Matrix recovery key and saved it to ${this.recoveryKeyPath}. Keep this file secure.`,
+      );
+    }
+  }
+
+  private async ensureOwnDeviceTrust(crypto: MatrixCryptoBootstrapApi): Promise<void> {
+    const deviceId = this.client.getDeviceId()?.trim();
+    if (!deviceId) {
+      return;
+    }
+    const userId = await this.getUserId();
+
+    const deviceStatus =
+      typeof crypto.getDeviceVerificationStatus === "function"
+        ? await crypto.getDeviceVerificationStatus(userId, deviceId).catch(() => null)
+        : null;
+    const alreadyVerified =
+      deviceStatus?.isVerified?.() === true ||
+      deviceStatus?.localVerified === true ||
+      deviceStatus?.crossSigningVerified === true ||
+      deviceStatus?.signedByOwner === true;
+
+    if (alreadyVerified) {
+      return;
+    }
+
+    if (typeof crypto.setDeviceVerified === "function") {
+      await crypto.setDeviceVerified(userId, deviceId, true);
+    }
+
+    if (typeof crypto.crossSignDevice === "function") {
+      const crossSigningReady =
+        typeof crypto.isCrossSigningReady === "function"
+          ? await crypto.isCrossSigningReady()
+          : true;
+      if (crossSigningReady) {
+        await crypto.crossSignDevice(deviceId);
+      }
+    }
   }
 
   async getUserId(): Promise<string> {
@@ -483,7 +936,7 @@ export class MatrixClient {
       if (isEncryptedEvent) {
         this.emitter.emit("room.encrypted_event", roomId, raw);
       } else {
-        if (!this.isDuplicateDecryptedMessage(roomId, raw.event_id)) {
+        if (this.decryptBridge.shouldEmitUnencryptedMessage(roomId, raw.event_id)) {
           this.emitter.emit("room.message", roomId, raw);
         }
       }
@@ -503,71 +956,9 @@ export class MatrixClient {
       }
 
       if (isEncryptedEvent) {
-        event.on(MatrixEventEvent.Decrypted, (decryptedEvent: MatrixEvent, err?: Error) => {
-          const decryptedRoomId = decryptedEvent.getRoomId() || roomId;
-          const decryptedRaw = matrixEventToRaw(decryptedEvent);
-          if (err) {
-            this.emitter.emit("room.failed_decryption", decryptedRoomId, decryptedRaw, err);
-            return;
-          }
-          const failed =
-            typeof (decryptedEvent as { isDecryptionFailure?: () => boolean })
-              .isDecryptionFailure === "function" &&
-            (decryptedEvent as { isDecryptionFailure: () => boolean }).isDecryptionFailure();
-          if (failed) {
-            this.emitter.emit(
-              "room.failed_decryption",
-              decryptedRoomId,
-              decryptedRaw,
-              new Error("Matrix event failed to decrypt"),
-            );
-            return;
-          }
-          this.emitter.emit("room.decrypted_event", decryptedRoomId, decryptedRaw);
-          this.rememberDecryptedMessage(decryptedRoomId, decryptedRaw.event_id);
-          this.emitter.emit("room.message", decryptedRoomId, decryptedRaw);
-        });
+        this.decryptBridge.attachEncryptedEvent(event, roomId);
       }
     });
-  }
-
-  private rememberDecryptedMessage(roomId: string, eventId: string): void {
-    if (!eventId) {
-      return;
-    }
-    const now = Date.now();
-    this.pruneDecryptedMessageDedupe(now);
-    this.decryptedMessageDedupe.set(`${roomId}|${eventId}`, now);
-  }
-
-  private isDuplicateDecryptedMessage(roomId: string, eventId: string): boolean {
-    if (!eventId) {
-      return false;
-    }
-    const key = `${roomId}|${eventId}`;
-    const createdAt = this.decryptedMessageDedupe.get(key);
-    if (createdAt === undefined) {
-      return false;
-    }
-    this.decryptedMessageDedupe.delete(key);
-    return true;
-  }
-
-  private pruneDecryptedMessageDedupe(now: number): void {
-    const ttlMs = 30_000;
-    for (const [key, createdAt] of this.decryptedMessageDedupe) {
-      if (now - createdAt > ttlMs) {
-        this.decryptedMessageDedupe.delete(key);
-      }
-    }
-    const maxEntries = 2048;
-    while (this.decryptedMessageDedupe.size > maxEntries) {
-      const oldest = this.decryptedMessageDedupe.keys().next().value;
-      if (oldest === undefined) {
-        break;
-      }
-      this.decryptedMessageDedupe.delete(oldest);
-    }
   }
 
   private createCryptoFacade(): MatrixCryptoFacade {
@@ -597,11 +988,8 @@ export class MatrixClient {
         }
       },
       requestOwnUserVerification: async (): Promise<unknown | null> => {
-        const crypto = this.client.getCrypto();
-        if (!crypto) {
-          return null;
-        }
-        return await crypto.requestOwnUserVerification();
+        const crypto = this.client.getCrypto() as MatrixVerificationCryptoApi | undefined;
+        return await this.verificationManager.requestOwnUserVerification(crypto);
       },
       encryptMedia: async (
         buffer: Buffer,
@@ -638,6 +1026,51 @@ export class MatrixClient {
         const decrypted = Attachment.decrypt(attachment);
         return Buffer.from(decrypted);
       },
+      getRecoveryKey: async () => {
+        const stored = this.loadStoredRecoveryKey();
+        if (!stored) {
+          return null;
+        }
+        return {
+          encodedPrivateKey: stored.encodedPrivateKey,
+          keyId: stored.keyId,
+          createdAt: stored.createdAt,
+        };
+      },
+      listVerifications: async () => {
+        return this.verificationManager.listVerifications();
+      },
+      requestVerification: async (params) => {
+        const crypto = this.client.getCrypto() as MatrixVerificationCryptoApi | undefined;
+        return await this.verificationManager.requestVerification(crypto, params);
+      },
+      acceptVerification: async (id) => {
+        return await this.verificationManager.acceptVerification(id);
+      },
+      cancelVerification: async (id, params) => {
+        return await this.verificationManager.cancelVerification(id, params);
+      },
+      startVerification: async (id, method = "sas") => {
+        return await this.verificationManager.startVerification(id, method);
+      },
+      generateVerificationQr: async (id) => {
+        return await this.verificationManager.generateVerificationQr(id);
+      },
+      scanVerificationQr: async (id, qrDataBase64) => {
+        return await this.verificationManager.scanVerificationQr(id, qrDataBase64);
+      },
+      confirmVerificationSas: async (id) => {
+        return await this.verificationManager.confirmVerificationSas(id);
+      },
+      mismatchVerificationSas: async (id) => {
+        return this.verificationManager.mismatchVerificationSas(id);
+      },
+      confirmVerificationReciprocateQr: async (id) => {
+        return this.verificationManager.confirmVerificationReciprocateQr(id);
+      },
+      getVerificationSas: async (id) => {
+        return this.verificationManager.getVerificationSas(id);
+      },
     };
   }
 
@@ -666,7 +1099,9 @@ export class MatrixClient {
     body?: unknown;
     timeoutMs: number;
   }): Promise<unknown> {
-    const { response, text } = await this.performRequest({
+    const { response, text } = await performMatrixRequest({
+      homeserver: this.homeserver,
+      accessToken: this.accessToken,
       method: params.method,
       endpoint: params.endpoint,
       qs: params.qs,
@@ -692,7 +1127,9 @@ export class MatrixClient {
     qs?: QueryParams;
     timeoutMs: number;
   }): Promise<Buffer> {
-    const { response, buffer } = await this.performRequest({
+    const { response, buffer } = await performMatrixRequest({
+      homeserver: this.homeserver,
+      accessToken: this.accessToken,
       method: params.method,
       endpoint: params.endpoint,
       qs: params.qs,
@@ -703,68 +1140,6 @@ export class MatrixClient {
       throw buildHttpError(response.status, buffer.toString("utf8"));
     }
     return buffer;
-  }
-
-  private async performRequest(params: {
-    method: HttpMethod;
-    endpoint: string;
-    qs?: QueryParams;
-    body?: unknown;
-    timeoutMs: number;
-    raw?: boolean;
-  }): Promise<{ response: Response; text: string; buffer: Buffer }> {
-    const baseUrl =
-      params.endpoint.startsWith("http://") || params.endpoint.startsWith("https://")
-        ? new URL(params.endpoint)
-        : new URL(normalizeEndpoint(params.endpoint), this.homeserver);
-    applyQuery(baseUrl, params.qs);
-
-    const headers = new Headers();
-    headers.set("Accept", params.raw ? "*/*" : "application/json");
-    if (this.accessToken) {
-      headers.set("Authorization", `Bearer ${this.accessToken}`);
-    }
-
-    let body: BodyInit | undefined;
-    if (params.body !== undefined) {
-      if (
-        params.body instanceof Uint8Array ||
-        params.body instanceof ArrayBuffer ||
-        typeof params.body === "string"
-      ) {
-        body = params.body as BodyInit;
-      } else {
-        headers.set("Content-Type", "application/json");
-        body = JSON.stringify(params.body);
-      }
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), params.timeoutMs);
-    try {
-      const response = await fetchWithSafeRedirects(baseUrl, {
-        method: params.method,
-        headers,
-        body,
-        signal: controller.signal,
-      });
-      if (params.raw) {
-        const bytes = Buffer.from(await response.arrayBuffer());
-        return {
-          response,
-          text: bytes.toString("utf8"),
-          buffer: bytes,
-        };
-      }
-      const text = await response.text();
-      return {
-        response,
-        text,
-        buffer: Buffer.from(text, "utf8"),
-      };
-    } finally {
-      clearTimeout(timeoutId);
-    }
   }
 }
 
@@ -806,34 +1181,6 @@ function resolveMatrixStateKey(event: MatrixEvent): string | undefined {
   return undefined;
 }
 
-function normalizeEndpoint(endpoint: string): string {
-  if (!endpoint) {
-    return "/";
-  }
-  return endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-}
-
-function applyQuery(url: URL, qs: QueryParams): void {
-  if (!qs) {
-    return;
-  }
-  for (const [key, rawValue] of Object.entries(qs)) {
-    if (rawValue === undefined || rawValue === null) {
-      continue;
-    }
-    if (Array.isArray(rawValue)) {
-      for (const item of rawValue) {
-        if (item === undefined || item === null) {
-          continue;
-        }
-        url.searchParams.append(key, String(item));
-      }
-      continue;
-    }
-    url.searchParams.set(key, String(rawValue));
-  }
-}
-
 function parseMxc(url: string): { server: string; mediaId: string } | null {
   const match = /^mxc:\/\/([^/]+)\/(.+)$/.exec(url.trim());
   if (!match) {
@@ -860,64 +1207,4 @@ function buildHttpError(statusCode: number, bodyText: string): Error & { statusC
     }
   }
   return Object.assign(new Error(message), { statusCode });
-}
-
-function isRedirectStatus(statusCode: number): boolean {
-  return statusCode >= 300 && statusCode < 400;
-}
-
-async function fetchWithSafeRedirects(url: URL, init: RequestInit): Promise<Response> {
-  let currentUrl = new URL(url.toString());
-  let method = (init.method ?? "GET").toUpperCase();
-  let body = init.body;
-  let headers = new Headers(init.headers ?? {});
-  const maxRedirects = 5;
-
-  for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
-    const response = await fetch(currentUrl, {
-      ...init,
-      method,
-      body,
-      headers,
-      redirect: "manual",
-    });
-
-    if (!isRedirectStatus(response.status)) {
-      return response;
-    }
-
-    const location = response.headers.get("location");
-    if (!location) {
-      throw new Error(`Matrix redirect missing location header (${currentUrl.toString()})`);
-    }
-
-    const nextUrl = new URL(location, currentUrl);
-    if (nextUrl.protocol !== currentUrl.protocol) {
-      throw new Error(
-        `Blocked cross-protocol redirect (${currentUrl.protocol} -> ${nextUrl.protocol})`,
-      );
-    }
-
-    if (nextUrl.origin !== currentUrl.origin) {
-      headers = new Headers(headers);
-      headers.delete("authorization");
-    }
-
-    if (
-      response.status === 303 ||
-      ((response.status === 301 || response.status === 302) &&
-        method !== "GET" &&
-        method !== "HEAD")
-    ) {
-      method = "GET";
-      body = undefined;
-      headers = new Headers(headers);
-      headers.delete("content-type");
-      headers.delete("content-length");
-    }
-
-    currentUrl = nextUrl;
-  }
-
-  throw new Error(`Too many redirects while requesting ${url.toString()}`);
 }

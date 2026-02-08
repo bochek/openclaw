@@ -37,8 +37,9 @@ async function noteMatrixAuthHelp(prompter: WizardPrompter): Promise<void> {
   await prompter.note(
     [
       "Matrix requires a homeserver URL.",
-      "Use an access token (recommended) or a password (logs in and stores a token).",
+      "Use an access token (recommended), password login, or account registration.",
       "With access token: user ID is fetched automatically.",
+      "Password + register mode can create an account on homeservers with open registration.",
       "Env vars supported: MATRIX_HOMESERVER, MATRIX_USER_ID, MATRIX_ACCESS_TOKEN, MATRIX_PASSWORD.",
       `Docs: ${formatDocsLink("/channels/matrix", "channels/matrix")}`,
     ].join("\n"),
@@ -266,6 +267,7 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
     let accessToken = existing.accessToken ?? "";
     let password = existing.password ?? "";
     let userId = existing.userId ?? "";
+    let register = existing.register === true;
 
     if (accessToken || password) {
       const keep = await prompter.confirm({
@@ -276,6 +278,7 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
         accessToken = "";
         password = "";
         userId = "";
+        register = false;
       }
     }
 
@@ -286,6 +289,10 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
         options: [
           { value: "token", label: "Access token (user ID fetched automatically)" },
           { value: "password", label: "Password (requires user ID)" },
+          {
+            value: "register",
+            label: "Register account (open homeserver registration required)",
+          },
         ],
       });
 
@@ -299,8 +306,9 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
         // With access token, we can fetch the userId automatically - don't prompt for it
         // The client.ts will use whoami() to get it
         userId = "";
+        register = false;
       } else {
-        // Password auth requires user ID upfront
+        // Password auth and registration mode require user ID upfront
         userId = String(
           await prompter.text({
             message: "Matrix user ID",
@@ -326,6 +334,7 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
             validate: (value) => (value?.trim() ? undefined : "Required"),
           }),
         ).trim();
+        register = authMode === "register";
       }
     }
 
@@ -353,6 +362,7 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
           userId: userId || undefined,
           accessToken: accessToken || undefined,
           password: password || undefined,
+          register,
           deviceName: deviceName || undefined,
           encryption: enableEncryption || undefined,
         },

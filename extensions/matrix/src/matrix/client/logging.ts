@@ -1,4 +1,4 @@
-import { ConsoleLogger, LogService } from "../sdk.js";
+import { ConsoleLogger, LogService } from "../sdk/logger.js";
 
 let matrixSdkLoggingConfigured = false;
 const matrixSdkBaseLogger = new ConsoleLogger();
