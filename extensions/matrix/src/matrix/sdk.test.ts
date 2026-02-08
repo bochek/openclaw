@@ -164,7 +164,23 @@ describe("MatrixClient request hardening", () => {
     vi.unstubAllGlobals();
   });
 
-  it("blocks cross-protocol redirects", async () => {
+  it("blocks absolute endpoints unless explicitly allowed", async () => {
+    const fetchMock = vi.fn(async () => {
+      return new Response("{}", {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const client = new MatrixClient("https://matrix.example.org", "token");
+    await expect(client.doRequest("GET", "https://matrix.example.org/start")).rejects.toThrow(
+      "Absolute Matrix endpoint is blocked by default",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks cross-protocol redirects when absolute endpoints are allowed", async () => {
     const fetchMock = vi.fn(async () => {
       return new Response("", {
         status: 302,
@@ -177,9 +193,11 @@ describe("MatrixClient request hardening", () => {
 
     const client = new MatrixClient("https://matrix.example.org", "token");
 
-    await expect(client.doRequest("GET", "https://matrix.example.org/start")).rejects.toThrow(
-      "Blocked cross-protocol redirect",
-    );
+    await expect(
+      client.doRequest("GET", "https://matrix.example.org/start", undefined, undefined, {
+        allowAbsoluteEndpoint: true,
+      }),
+    ).rejects.toThrow("Blocked cross-protocol redirect");
   });
 
   it("strips authorization when redirect crosses origin", async () => {
@@ -203,7 +221,9 @@ describe("MatrixClient request hardening", () => {
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new MatrixClient("https://matrix.example.org", "token");
-    await client.doRequest("GET", "https://matrix.example.org/start");
+    await client.doRequest("GET", "https://matrix.example.org/start", undefined, undefined, {
+      allowAbsoluteEndpoint: true,
+    });
 
     expect(calls).toHaveLength(2);
     expect(calls[0]?.url).toBe("https://matrix.example.org/start");

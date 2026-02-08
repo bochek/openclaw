@@ -107,11 +107,19 @@ export async function performMatrixRequest(params: {
   body?: unknown;
   timeoutMs: number;
   raw?: boolean;
+  allowAbsoluteEndpoint?: boolean;
 }): Promise<{ response: Response; text: string; buffer: Buffer }> {
-  const baseUrl =
-    params.endpoint.startsWith("http://") || params.endpoint.startsWith("https://")
-      ? new URL(params.endpoint)
-      : new URL(normalizeEndpoint(params.endpoint), params.homeserver);
+  const isAbsoluteEndpoint =
+    params.endpoint.startsWith("http://") || params.endpoint.startsWith("https://");
+  if (isAbsoluteEndpoint && params.allowAbsoluteEndpoint !== true) {
+    throw new Error(
+      `Absolute Matrix endpoint is blocked by default: ${params.endpoint}. Set allowAbsoluteEndpoint=true to opt in.`,
+    );
+  }
+
+  const baseUrl = isAbsoluteEndpoint
+    ? new URL(params.endpoint)
+    : new URL(normalizeEndpoint(params.endpoint), params.homeserver);
   applyQuery(baseUrl, params.qs);
 
   const headers = new Headers();

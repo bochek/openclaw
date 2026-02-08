@@ -13,6 +13,7 @@ export class MatrixAuthedHttpClient {
     qs?: QueryParams;
     body?: unknown;
     timeoutMs: number;
+    allowAbsoluteEndpoint?: boolean;
   }): Promise<unknown> {
     const { response, text } = await performMatrixRequest({
       homeserver: this.homeserver,
@@ -22,6 +23,7 @@ export class MatrixAuthedHttpClient {
       qs: params.qs,
       body: params.body,
       timeoutMs: params.timeoutMs,
+      allowAbsoluteEndpoint: params.allowAbsoluteEndpoint,
     });
     if (!response.ok) {
       throw buildHttpError(response.status, text);
@@ -41,6 +43,7 @@ export class MatrixAuthedHttpClient {
     endpoint: string;
     qs?: QueryParams;
     timeoutMs: number;
+    allowAbsoluteEndpoint?: boolean;
   }): Promise<Buffer> {
     const { response, buffer } = await performMatrixRequest({
       homeserver: this.homeserver,
@@ -50,6 +53,7 @@ export class MatrixAuthedHttpClient {
       qs: params.qs,
       timeoutMs: params.timeoutMs,
       raw: true,
+      allowAbsoluteEndpoint: params.allowAbsoluteEndpoint,
     });
     if (!response.ok) {
       throw buildHttpError(response.status, buffer.toString("utf8"));

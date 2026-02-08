@@ -123,6 +123,10 @@ Enable with `channels.matrix.encryption: true`:
 - OpenClaw creates or reuses a recovery key for secret storage and stores it at:
   `~/.openclaw/credentials/matrix/accounts/<account>/<homeserver>__<user>/<token-hash>/recovery-key.json`
 - On startup, OpenClaw requests self-verification and can accept incoming verification requests.
+- OpenClaw also marks and cross-signs its own device when crypto APIs are available, which improves
+  trust establishment on fresh sessions.
+- Failed decryptions are retried with bounded backoff and retried immediately again when new room keys
+  arrive, so new key-sharing events recover without waiting for the next retry window.
 - Verify in another Matrix client (Element, etc.) to establish trust and improve key sharing.
 - If the crypto module cannot be loaded, E2EE is disabled and encrypted rooms will not decrypt;
   OpenClaw logs a warning.
@@ -251,6 +255,11 @@ Common failures:
 - Logged in but room messages ignored: room blocked by `groupPolicy` or room allowlist.
 - DMs ignored: sender pending approval when `channels.matrix.dm.policy="pairing"`.
 - Encrypted rooms fail: crypto support or encryption settings mismatch.
+- "User verification unavailable" in Element for the bot profile:
+  - Ensure `channels.matrix.encryption: true` is set and restart.
+  - Ensure the bot logs in with a stable `channels.matrix.deviceId`.
+  - Send at least one new encrypted message after verification. Older messages from before
+    the current bot device login may remain undecryptable.
 
 For triage flow: [/channels/troubleshooting](/channels/troubleshooting).
 
