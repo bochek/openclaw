@@ -765,7 +765,7 @@ Inbound messages are routed to an agent via bindings.
 - `bindings[]`: routes inbound messages to an `agentId`.
   - `match.channel` (required)
   - `match.accountId` (optional; `*` = any account; omitted = default account)
-  - `match.peer` (optional; `{ kind: dm|group|channel, id }`)
+  - `match.peer` (optional; `{ kind: direct|group|channel, id }`)
   - `match.guildId` / `match.teamId` (optional; channel-specific)
 
 Deterministic match order:

@@ -3,7 +3,7 @@ import { normalizeMessageChannel } from "../../utils/message-channel.js";
 import { DEFAULT_IDLE_MINUTES } from "./types.js";
 
 export type SessionResetMode = "daily" | "idle";
-export type SessionResetType = "dm" | "group" | "thread";
+export type SessionResetType = "direct" | "group" | "thread";
 
 export type SessionResetPolicy = {
   mode: SessionResetMode;
@@ -46,7 +46,7 @@ export function resolveSessionResetType(params: {
   if (GROUP_SESSION_MARKERS.some((marker) => normalized.includes(marker))) {
     return "group";
   }
-  return "dm";
+  return "direct";
 }
 
 export function resolveThreadFlag(params: {

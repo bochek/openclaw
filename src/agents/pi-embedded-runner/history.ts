@@ -58,7 +58,7 @@ export function getDmHistoryLimitFromSessionKey(
   const kind = providerParts[1]?.toLowerCase();
   const userIdRaw = providerParts.slice(2).join(":");
   const userId = stripThreadSuffix(userIdRaw);
-  if (kind !== "dm") {
+  if (kind !== "direct") {
     return undefined;
   }
 
