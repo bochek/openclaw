@@ -2,8 +2,8 @@ import {
   VerificationPhase,
   VerificationRequestEvent,
   VerifierEvent,
-} from "matrix-js-sdk/src/crypto-api/verification.ts";
-import { VerificationMethod } from "matrix-js-sdk/src/types.ts";
+} from "matrix-js-sdk/lib/crypto-api/verification.js";
+import { VerificationMethod } from "matrix-js-sdk/lib/types.js";
 
 export type MatrixVerificationMethod = "sas" | "show-qr" | "scan-qr";
 

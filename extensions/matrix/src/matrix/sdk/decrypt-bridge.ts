@@ -1,4 +1,5 @@
 import { MatrixEventEvent, type MatrixEvent } from "matrix-js-sdk";
+import { CryptoEvent } from "matrix-js-sdk/lib/crypto-api/CryptoEvent.js";
 import { LogService, noop } from "./logger.js";
 
 type MatrixDecryptIfNeededClient = {
@@ -21,6 +22,10 @@ type MatrixDecryptRetryState = {
 
 type DecryptBridgeRawEvent = {
   event_id: string;
+};
+
+type MatrixCryptoRetrySignalSource = {
+  on: (eventName: string, listener: (...args: unknown[]) => void) => void;
 };
 
 const MATRIX_DECRYPT_RETRY_BASE_DELAY_MS = 1_500;
@@ -46,6 +51,7 @@ export class MatrixDecryptBridge<TRawEvent extends DecryptBridgeRawEvent> {
   private readonly decryptedMessageDedupe = new Map<string, number>();
   private readonly decryptRetries = new Map<string, MatrixDecryptRetryState>();
   private readonly failedDecryptionsNotified = new Set<string>();
+  private cryptoRetrySignalsBound = false;
 
   constructor(
     private readonly deps: {
@@ -101,6 +107,30 @@ export class MatrixDecryptBridge<TRawEvent extends DecryptBridgeRawEvent> {
       }
       this.runDecryptRetry(retryKey).catch(noop);
     }
+  }
+
+  bindCryptoRetrySignals(crypto: MatrixCryptoRetrySignalSource | undefined): void {
+    if (!crypto || this.cryptoRetrySignalsBound) {
+      return;
+    }
+    this.cryptoRetrySignalsBound = true;
+
+    const trigger = (reason: string): void => {
+      this.retryPendingNow(reason);
+    };
+
+    crypto.on(CryptoEvent.KeyBackupDecryptionKeyCached, () => {
+      trigger("crypto.keyBackupDecryptionKeyCached");
+    });
+    crypto.on(CryptoEvent.RehydrationCompleted, () => {
+      trigger("dehydration.RehydrationCompleted");
+    });
+    crypto.on(CryptoEvent.DevicesUpdated, () => {
+      trigger("crypto.devicesUpdated");
+    });
+    crypto.on(CryptoEvent.KeysChanged, () => {
+      trigger("crossSigning.keysChanged");
+    });
   }
 
   stop(): void {

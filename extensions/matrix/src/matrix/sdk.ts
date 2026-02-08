@@ -7,8 +7,8 @@ import {
   type MatrixClient as MatrixJsClient,
   type MatrixEvent,
 } from "matrix-js-sdk";
-import { CryptoEvent } from "matrix-js-sdk/src/crypto-api/CryptoEvent.ts";
-import { VerificationMethod } from "matrix-js-sdk/src/types.ts";
+import { CryptoEvent } from "matrix-js-sdk/lib/crypto-api/CryptoEvent.js";
+import { VerificationMethod } from "matrix-js-sdk/lib/types.js";
 import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import path from "node:path";
@@ -438,21 +438,7 @@ export class MatrixClient {
             }
           });
 
-          const triggerDecryptRetry = (reason: string): void => {
-            this.decryptBridge.retryPendingNow(reason);
-          };
-          crypto.on(CryptoEvent.KeyBackupDecryptionKeyCached, () => {
-            triggerDecryptRetry("crypto.keyBackupDecryptionKeyCached");
-          });
-          crypto.on(CryptoEvent.RehydrationCompleted, () => {
-            triggerDecryptRetry("dehydration.RehydrationCompleted");
-          });
-          crypto.on(CryptoEvent.DevicesUpdated, () => {
-            triggerDecryptRetry("crypto.devicesUpdated");
-          });
-          crypto.on(CryptoEvent.KeysChanged, () => {
-            triggerDecryptRetry("crossSigning.keysChanged");
-          });
+          this.decryptBridge.bindCryptoRetrySignals(crypto);
 
           LogService.info("MatrixClientLite", "Verification request handler registered");
         }
