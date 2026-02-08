@@ -3,6 +3,11 @@ export type FormatDurationSecondsOptions = {
   unit?: "s" | "seconds";
 };
 
+export type FormatDurationCompactOptions = {
+  /** Add space between units: "2m 5s" instead of "2m5s". Default: false */
+  spaced?: boolean;
+};
+
 export function formatDurationSeconds(
   ms: number,
   options: FormatDurationSecondsOptions = {},
@@ -41,14 +46,9 @@ export function formatDurationPrecise(
  * Omits trailing zero components: "1m" not "1m 0s", "2h" not "2h 0m".
  * Returns undefined for null/undefined/non-finite/non-positive input.
  */
-export function formatDurationCompact(ms: number, options?: { spaced?: boolean }): string;
 export function formatDurationCompact(
   ms?: number | null,
-  options?: { spaced?: boolean },
-): string | undefined;
-export function formatDurationCompact(
-  ms?: number | null,
-  options?: { spaced?: boolean },
+  options?: FormatDurationCompactOptions,
 ): string | undefined {
   if (ms == null || !Number.isFinite(ms) || ms <= 0) {
     return undefined;
