@@ -141,7 +141,7 @@ describe("format-datetime", () => {
 
     it("includes seconds when requested", () => {
       const date = new Date("2024-01-15T14:30:45.000Z");
-      expect(formatUtcTimestamp(date, { seconds: true })).toBe("2024-01-15T14:30:45Z");
+      expect(formatUtcTimestamp(date, { displaySeconds: true })).toBe("2024-01-15T14:30:45Z");
     });
   });
 
@@ -154,7 +154,7 @@ describe("format-datetime", () => {
 
     it("includes seconds when requested", () => {
       const date = new Date("2024-01-15T14:30:45.000Z");
-      const result = formatZonedTimestamp(date, { timeZone: "UTC", seconds: true });
+      const result = formatZonedTimestamp(date, { timeZone: "UTC", displaySeconds: true });
       expect(result).toMatch(/2024-01-15 14:30:45/);
     });
   });

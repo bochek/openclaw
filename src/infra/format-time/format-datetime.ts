@@ -20,7 +20,7 @@ export function resolveTimezone(value: string): string | undefined {
 
 export type FormatTimestampOptions = {
   /** Include seconds in the output. Default: false */
-  seconds?: boolean;
+  displaySeconds?: boolean;
 };
 
 /**
@@ -35,7 +35,7 @@ export function formatUtcTimestamp(date: Date, options?: FormatTimestampOptions)
   const dd = String(date.getUTCDate()).padStart(2, "0");
   const hh = String(date.getUTCHours()).padStart(2, "0");
   const min = String(date.getUTCMinutes()).padStart(2, "0");
-  if (!options?.seconds) {
+  if (!options?.displaySeconds) {
     return `${yyyy}-${mm}-${dd}T${hh}:${min}Z`;
   }
   const sec = String(date.getUTCSeconds()).padStart(2, "0");
@@ -52,7 +52,7 @@ export function formatUtcTimestamp(date: Date, options?: FormatTimestampOptions)
  */
 export function formatZonedTimestamp(
   date: Date,
-  options?: { timeZone?: string; seconds?: boolean },
+  options?: { timeZone?: string; displaySeconds?: boolean },
 ): string | undefined {
   const intlOptions: Intl.DateTimeFormatOptions = {
     timeZone: options?.timeZone,
@@ -64,7 +64,7 @@ export function formatZonedTimestamp(
     hourCycle: "h23",
     timeZoneName: "short",
   };
-  if (options?.seconds) {
+  if (options?.displaySeconds) {
     intlOptions.second = "2-digit";
   }
   const parts = new Intl.DateTimeFormat("en-US", intlOptions).formatToParts(date);
@@ -74,7 +74,7 @@ export function formatZonedTimestamp(
   const dd = pick("day");
   const hh = pick("hour");
   const min = pick("minute");
-  const sec = options?.seconds ? pick("second") : undefined;
+  const sec = options?.displaySeconds ? pick("second") : undefined;
   const tz = [...parts]
     .toReversed()
     .find((part) => part.type === "timeZoneName")
@@ -82,7 +82,7 @@ export function formatZonedTimestamp(
   if (!yyyy || !mm || !dd || !hh || !min) {
     return undefined;
   }
-  if (options?.seconds && sec) {
+  if (options?.displaySeconds && sec) {
     return `${yyyy}-${mm}-${dd} ${hh}:${min}:${sec}${tz ? ` ${tz}` : ""}`;
   }
   return `${yyyy}-${mm}-${dd} ${hh}:${min}${tz ? ` ${tz}` : ""}`;

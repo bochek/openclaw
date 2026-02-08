@@ -73,12 +73,15 @@ export async function prependSystemEvents(params: {
     }
     const zone = resolveSystemEventTimezone(cfg);
     if (zone.mode === "utc") {
-      return formatUtcTimestamp(date, { seconds: true });
+      return formatUtcTimestamp(date, { displaySeconds: true });
     }
     if (zone.mode === "local") {
-      return formatZonedTimestamp(date, { seconds: true }) ?? "unknown-time";
+      return formatZonedTimestamp(date, { displaySeconds: true }) ?? "unknown-time";
     }
-    return formatZonedTimestamp(date, { timeZone: zone.timeZone, seconds: true }) ?? "unknown-time";
+    return (
+      formatZonedTimestamp(date, { timeZone: zone.timeZone, displaySeconds: true }) ??
+      "unknown-time"
+    );
   };
 
   const systemLines: string[] = [];
