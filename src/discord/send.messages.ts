@@ -105,13 +105,26 @@ export async function createThreadDiscord(
   if (payload.autoArchiveMinutes) {
     body.auto_archive_duration = payload.autoArchiveMinutes;
   }
-  // Forum channels (type 15) require a message field with content for the initial post
-  const channel = (await rest.get(Routes.channel(channelId))) as APIChannel;
-  const isForum = channel.type === ChannelType.GuildForum;
-  if (isForum) {
-    body.message = { content: payload.content || payload.name };
+  let channelType: ChannelType | undefined;
+  if (!payload.messageId) {
+    // Only detect channel kind for route-less thread creation.
+    // If this lookup fails, keep prior behavior and let Discord validate.
+    try {
+      const channel = (await rest.get(Routes.channel(channelId))) as APIChannel | null | undefined;
+      channelType = channel?.type;
+    } catch {
+      channelType = undefined;
+    }
   }
-  const route = isForum ? Routes.threads(channelId) : Routes.threads(channelId, payload.messageId);
+  const isForumLike =
+    channelType === ChannelType.GuildForum || channelType === ChannelType.GuildMedia;
+  if (isForumLike) {
+    const starterContent = payload.content?.trim() ? payload.content : payload.name;
+    body.message = { content: starterContent };
+  }
+  const route = payload.messageId
+    ? Routes.threads(channelId, payload.messageId)
+    : Routes.threads(channelId);
   return await rest.post(route, { body });
 }
 
