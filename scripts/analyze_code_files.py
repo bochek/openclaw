@@ -5,9 +5,11 @@ Threshold can be set to warn about files longer or shorter than a certain number
 """
 
 import os
+import re
 import argparse
 from pathlib import Path
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Set
+from collections import defaultdict
 
 # File extensions to consider as code files
 CODE_EXTENSIONS = {
@@ -29,6 +31,35 @@ SKIP_SHORT_PATTERNS = {
     'index.js', 'index.ts', 'postinstall.js',
 }
 SKIP_SHORT_SUFFIXES = ('-cli.ts',)
+
+# Function names to skip in duplicate detection (common utilities, test helpers)
+SKIP_DUPLICATE_FUNCTIONS = {
+    # Common utility names
+    'main', 'init', 'setup', 'teardown', 'cleanup', 'dispose', 'destroy',
+    'open', 'close', 'connect', 'disconnect', 'execute', 'run', 'start', 'stop',
+    'render', 'update', 'refresh', 'reset', 'clear', 'flush',
+}
+
+SKIP_DUPLICATE_PREFIXES = (
+    # Transformers
+    'normalize', 'parse', 'validate', 'serialize', 'deserialize',
+    'convert', 'transform', 'extract', 'encode', 'decode',
+    # Predicates
+    'is', 'has', 'can', 'should', 'will',
+    # Constructors/factories
+    'create', 'make', 'build', 'generate', 'new',
+    # Accessors
+    'get', 'set', 'read', 'write', 'load', 'save', 'fetch',
+    # Handlers
+    'handle', 'on', 'emit',
+    # Modifiers
+    'add', 'remove', 'delete', 'update', 'insert', 'append',
+    # Other common
+    'to', 'from', 'with', 'apply', 'process', 'resolve', 'ensure', 'check',
+    'filter', 'map', 'reduce', 'merge', 'split', 'join', 'find', 'search',
+    'register', 'unregister', 'subscribe', 'unsubscribe',
+)
+SKIP_DUPLICATE_FILE_PATTERNS = ('.test.ts', '.test.tsx', '.spec.ts')
 
 # Known packages in the monorepo
 PACKAGES = {
@@ -72,6 +103,56 @@ def find_code_files(root_dir: Path) -> List[Tuple[Path, int]]:
                 files_with_counts.append((file_path, line_count))
     
     return files_with_counts
+
+
+# Regex patterns for TypeScript functions (exported and internal)
+TS_FUNCTION_PATTERNS = [
+    # export function name(...) or function name(...)
+    re.compile(r'^(?:export\s+)?(?:async\s+)?function\s+(\w+)', re.MULTILINE),
+    # export const name = or const name =
+    re.compile(r'^(?:export\s+)?const\s+(\w+)\s*=\s*(?:\([^)]*\)|\w+)\s*=>', re.MULTILINE),
+]
+
+
+def extract_functions(file_path: Path) -> Set[str]:
+    """Extract function names from a TypeScript file."""
+    if file_path.suffix.lower() not in {'.ts', '.tsx'}:
+        return set()
+    
+    try:
+        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+    except Exception:
+        return set()
+    
+    functions = set()
+    for pattern in TS_FUNCTION_PATTERNS:
+        for match in pattern.finditer(content):
+            functions.add(match.group(1))
+    
+    return functions
+
+
+def find_duplicate_functions(files: List[Tuple[Path, int]], root_dir: Path) -> Dict[str, List[Path]]:
+    """Find function names that appear in multiple files."""
+    function_locations: Dict[str, List[Path]] = defaultdict(list)
+    
+    for file_path, _ in files:
+        # Skip test files for duplicate detection
+        if any(file_path.name.endswith(pat) for pat in SKIP_DUPLICATE_FILE_PATTERNS):
+            continue
+        
+        functions = extract_functions(file_path)
+        for func in functions:
+            # Skip known common function names
+            if func in SKIP_DUPLICATE_FUNCTIONS:
+                continue
+            if any(func.startswith(prefix) for prefix in SKIP_DUPLICATE_PREFIXES):
+                continue
+            function_locations[func].append(file_path)
+    
+    # Filter to only duplicates
+    return {name: paths for name, paths in function_locations.items() if len(paths) > 1}
 
 
 def main():
@@ -211,6 +292,18 @@ def main():
             print(f"   - {path} ({count} lines)")
     else:
         print(f"\n✅ No files are {args.min_threshold} lines or less")
+    
+    # Duplicate function names
+    duplicates = find_duplicate_functions(files, root_dir)
+    if duplicates:
+        print(f"\n⚠️  Warning: {len(duplicates)} function name(s) appear in multiple files (consider renaming):")
+        for func_name in sorted(duplicates.keys()):
+            paths = duplicates[func_name]
+            print(f"   - {func_name}:")
+            for path in paths:
+                print(f"       {path.relative_to(root_dir)}")
+    else:
+        print(f"\n✅ No duplicate function names")
     
     print()
 
