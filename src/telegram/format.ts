@@ -58,6 +58,7 @@ export function markdownToTelegramHtml(
 ): string {
   const ir = markdownToIR(markdown ?? "", {
     linkify: true,
+    enableSpoilers: true,
     headingStyle: "none",
     blockquotePrefix: "",
     tableMode: options.tableMode,
@@ -83,6 +84,7 @@ export function markdownToTelegramChunks(
 ): TelegramFormattedChunk[] {
   const ir = markdownToIR(markdown ?? "", {
     linkify: true,
+    enableSpoilers: true,
     headingStyle: "none",
     blockquotePrefix: "",
     tableMode: options.tableMode,
