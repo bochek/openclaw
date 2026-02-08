@@ -9,7 +9,7 @@ import {
 
 export async function createMatrixClient(params: {
   homeserver: string;
-  userId: string;
+  userId?: string;
   accessToken: string;
   deviceId?: string;
   encryption?: boolean;
@@ -19,10 +19,12 @@ export async function createMatrixClient(params: {
 }): Promise<MatrixClient> {
   ensureMatrixSdkLoggingConfigured();
   const env = process.env;
+  const userId = params.userId?.trim() || "unknown";
+  const matrixClientUserId = params.userId?.trim() || undefined;
 
   const storagePaths = resolveMatrixStoragePaths({
     homeserver: params.homeserver,
-    userId: params.userId,
+    userId,
     accessToken: params.accessToken,
     accountId: params.accountId,
     env,
@@ -33,12 +35,12 @@ export async function createMatrixClient(params: {
   writeStorageMeta({
     storagePaths,
     homeserver: params.homeserver,
-    userId: params.userId,
+    userId,
     accountId: params.accountId,
   });
 
   return new MatrixClient(params.homeserver, params.accessToken, undefined, undefined, {
-    userId: params.userId,
+    userId: matrixClientUserId,
     deviceId: params.deviceId,
     encryption: params.encryption,
     localTimeoutMs: params.localTimeoutMs,

@@ -197,6 +197,7 @@ export class MatrixClient {
   private selfUserId: string | null;
   private readonly dmRoomIds = new Set<string>();
   private cryptoInitialized = false;
+  private readonly decryptedMessageDedupe = new Map<string, number>();
 
   readonly dms = {
     update: async (): Promise<void> => {
@@ -482,7 +483,9 @@ export class MatrixClient {
       if (isEncryptedEvent) {
         this.emitter.emit("room.encrypted_event", roomId, raw);
       } else {
-        this.emitter.emit("room.message", roomId, raw);
+        if (!this.isDuplicateDecryptedMessage(roomId, raw.event_id)) {
+          this.emitter.emit("room.message", roomId, raw);
+        }
       }
 
       const stateKey = raw.state_key ?? "";
@@ -521,10 +524,50 @@ export class MatrixClient {
             return;
           }
           this.emitter.emit("room.decrypted_event", decryptedRoomId, decryptedRaw);
+          this.rememberDecryptedMessage(decryptedRoomId, decryptedRaw.event_id);
           this.emitter.emit("room.message", decryptedRoomId, decryptedRaw);
         });
       }
     });
+  }
+
+  private rememberDecryptedMessage(roomId: string, eventId: string): void {
+    if (!eventId) {
+      return;
+    }
+    const now = Date.now();
+    this.pruneDecryptedMessageDedupe(now);
+    this.decryptedMessageDedupe.set(`${roomId}|${eventId}`, now);
+  }
+
+  private isDuplicateDecryptedMessage(roomId: string, eventId: string): boolean {
+    if (!eventId) {
+      return false;
+    }
+    const key = `${roomId}|${eventId}`;
+    const createdAt = this.decryptedMessageDedupe.get(key);
+    if (createdAt === undefined) {
+      return false;
+    }
+    this.decryptedMessageDedupe.delete(key);
+    return true;
+  }
+
+  private pruneDecryptedMessageDedupe(now: number): void {
+    const ttlMs = 30_000;
+    for (const [key, createdAt] of this.decryptedMessageDedupe) {
+      if (now - createdAt > ttlMs) {
+        this.decryptedMessageDedupe.delete(key);
+      }
+    }
+    const maxEntries = 2048;
+    while (this.decryptedMessageDedupe.size > maxEntries) {
+      const oldest = this.decryptedMessageDedupe.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.decryptedMessageDedupe.delete(oldest);
+    }
   }
 
   private createCryptoFacade(): MatrixCryptoFacade {
@@ -738,11 +781,29 @@ function matrixEventToRaw(event: MatrixEvent): MatrixRawEvent {
     content: ((event.getContent?.() ?? {}) as Record<string, unknown>) || {},
     unsigned,
   };
-  const stateKey = event.getStateKey?.();
-  if (typeof stateKey === "string" && stateKey.length > 0) {
+  const stateKey = resolveMatrixStateKey(event);
+  if (typeof stateKey === "string") {
     raw.state_key = stateKey;
   }
   return raw;
+}
+
+function resolveMatrixStateKey(event: MatrixEvent): string | undefined {
+  const direct = event.getStateKey?.();
+  if (typeof direct === "string") {
+    return direct;
+  }
+  const wireContent = (
+    event as { getWireContent?: () => { state_key?: unknown } }
+  ).getWireContent?.();
+  if (wireContent && typeof wireContent.state_key === "string") {
+    return wireContent.state_key;
+  }
+  const rawEvent = (event as { event?: { state_key?: unknown } }).event;
+  if (rawEvent && typeof rawEvent.state_key === "string") {
+    return rawEvent.state_key;
+  }
+  return undefined;
 }
 
 function normalizeEndpoint(endpoint: string): string {

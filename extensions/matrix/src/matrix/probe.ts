@@ -43,9 +43,10 @@ export async function probeMatrix(params: {
     };
   }
   try {
+    const inputUserId = params.userId?.trim() || undefined;
     const client = await createMatrixClient({
       homeserver: params.homeserver,
-      userId: params.userId ?? "",
+      userId: inputUserId,
       accessToken: params.accessToken,
       localTimeoutMs: params.timeoutMs,
     });

@@ -262,6 +262,8 @@ describe("MatrixClient event bridge", () => {
     expect(messageEvents).toHaveLength(0);
 
     encrypted.emit("decrypted", decrypted);
+    // Simulate a second normal event emission from the SDK after decryption.
+    matrixJsClient.emit("event", decrypted);
     expect(messageEvents).toEqual([
       {
         roomId: "!room:example.org",
@@ -309,5 +311,32 @@ describe("MatrixClient event bridge", () => {
 
     expect(failed).toEqual(["decrypt failed"]);
     expect(delivered).toHaveLength(0);
+  });
+
+  it("emits room.invite when a membership invite targets the current user", async () => {
+    const client = new MatrixClient("https://matrix.example.org", "token");
+    const invites: string[] = [];
+
+    client.on("room.invite", (roomId) => {
+      invites.push(roomId);
+    });
+
+    await client.start();
+
+    const inviteMembership = new FakeMatrixEvent({
+      roomId: "!room:example.org",
+      eventId: "$invite",
+      sender: "@alice:example.org",
+      type: "m.room.member",
+      ts: Date.now(),
+      stateKey: "@bot:example.org",
+      content: {
+        membership: "invite",
+      },
+    });
+
+    matrixJsClient.emit("event", inviteMembership);
+
+    expect(invites).toEqual(["!room:example.org"]);
   });
 });
