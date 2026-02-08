@@ -190,6 +190,11 @@ export function buildAuthChoiceOptions(params: {
   });
   options.push({ value: "openrouter-api-key", label: "OpenRouter API key" });
   options.push({
+    value: "litellm-api-key",
+    label: "LiteLLM API key",
+    hint: "Unified gateway for 100+ LLM providers",
+  });
+  options.push({
     value: "ai-gateway-api-key",
     label: "Vercel AI Gateway API key",
   });

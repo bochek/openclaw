@@ -29,6 +29,7 @@ import {
 } from "../agents/venice-models.js";
 import {
   CLOUDFLARE_AI_GATEWAY_DEFAULT_MODEL_REF,
+  LITELLM_DEFAULT_MODEL_REF,
   OPENROUTER_DEFAULT_MODEL_REF,
   TOGETHER_DEFAULT_MODEL_REF,
   VERCEL_AI_GATEWAY_DEFAULT_MODEL_REF,
@@ -246,6 +247,86 @@ export function applyOpenrouterConfig(cfg: OpenClawConfig): OpenClawConfig {
               }
             : undefined),
           primary: OPENROUTER_DEFAULT_MODEL_REF,
+        },
+      },
+    },
+  };
+}
+
+export const LITELLM_BASE_URL = "http://localhost:4000";
+export const LITELLM_DEFAULT_MODEL_ID = "claude-opus-4-6";
+
+function buildLitellmModelDefinition(): { id: string; name: string; reasoning: boolean; input: Array<"text" | "image">; cost: { input: number; output: number; cacheRead: number; cacheWrite: number }; contextWindow: number; maxTokens: number } {
+  return {
+    id: LITELLM_DEFAULT_MODEL_ID,
+    name: "Claude Opus 4.6",
+    reasoning: true,
+    input: ["text", "image"],
+    cost: { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
+    contextWindow: 200_000,
+    maxTokens: 64_000,
+  };
+}
+
+export function applyLitellmProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[LITELLM_DEFAULT_MODEL_REF] = {
+    ...models[LITELLM_DEFAULT_MODEL_REF],
+    alias: models[LITELLM_DEFAULT_MODEL_REF]?.alias ?? "LiteLLM",
+  };
+
+  const providers = { ...cfg.models?.providers };
+  const existingProvider = providers.litellm;
+  const existingModels = Array.isArray(existingProvider?.models) ? existingProvider.models : [];
+  const defaultModel = buildLitellmModelDefinition();
+  const hasDefaultModel = existingModels.some((model) => model.id === LITELLM_DEFAULT_MODEL_ID);
+  const mergedModels = hasDefaultModel ? existingModels : [...existingModels, defaultModel];
+  const { apiKey: existingApiKey, ...existingProviderRest } = (existingProvider ?? {}) as Record<
+    string,
+    unknown
+  > as { apiKey?: string };
+  const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
+  const normalizedApiKey = resolvedApiKey?.trim();
+  providers.litellm = {
+    ...existingProviderRest,
+    baseUrl: LITELLM_BASE_URL,
+    api: "openai-completions",
+    ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
+    models: mergedModels.length > 0 ? mergedModels : [defaultModel],
+  };
+
+  return {
+    ...cfg,
+    agents: {
+      ...cfg.agents,
+      defaults: {
+        ...cfg.agents?.defaults,
+        models,
+      },
+    },
+    models: {
+      mode: cfg.models?.mode ?? "merge",
+      providers,
+    },
+  };
+}
+
+export function applyLitellmConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const next = applyLitellmProviderConfig(cfg);
+  const existingModel = next.agents?.defaults?.model;
+  return {
+    ...next,
+    agents: {
+      ...next.agents,
+      defaults: {
+        ...next.agents?.defaults,
+        model: {
+          ...(existingModel && "fallbacks" in (existingModel as Record<string, unknown>)
+            ? {
+                fallbacks: (existingModel as { fallbacks?: string[] }).fallbacks,
+              }
+            : undefined),
+          primary: LITELLM_DEFAULT_MODEL_REF,
         },
       },
     },
