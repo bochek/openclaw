@@ -27,7 +27,7 @@ describe("resolveAgentRoute", () => {
       accountId: null,
       peer: { kind: "direct", id: "+15551234567" },
     });
-    expect(route.sessionKey).toBe("agent:main:dm:+15551234567");
+    expect(route.sessionKey).toBe("agent:main:direct:+15551234567");
   });
 
   test("dmScope=per-channel-peer isolates DM sessions per channel and sender", () => {
@@ -40,7 +40,7 @@ describe("resolveAgentRoute", () => {
       accountId: null,
       peer: { kind: "direct", id: "+15551234567" },
     });
-    expect(route.sessionKey).toBe("agent:main:whatsapp:dm:+15551234567");
+    expect(route.sessionKey).toBe("agent:main:whatsapp:direct:+15551234567");
   });
 
   test("identityLinks collapses per-peer DM sessions across providers", () => {
@@ -58,7 +58,7 @@ describe("resolveAgentRoute", () => {
       accountId: null,
       peer: { kind: "direct", id: "111111111" },
     });
-    expect(route.sessionKey).toBe("agent:main:dm:alice");
+    expect(route.sessionKey).toBe("agent:main:direct:alice");
   });
 
   test("identityLinks applies to per-channel-peer DM sessions", () => {
@@ -76,7 +76,7 @@ describe("resolveAgentRoute", () => {
       accountId: null,
       peer: { kind: "direct", id: "222222222222222222" },
     });
-    expect(route.sessionKey).toBe("agent:main:discord:dm:alice");
+    expect(route.sessionKey).toBe("agent:main:discord:direct:alice");
   });
 
   test("peer binding wins over account binding", () => {
@@ -237,7 +237,7 @@ test("dmScope=per-account-channel-peer isolates DM sessions per account, channel
     accountId: "tasks",
     peer: { kind: "direct", id: "7550356539" },
   });
-  expect(route.sessionKey).toBe("agent:main:telegram:tasks:dm:7550356539");
+  expect(route.sessionKey).toBe("agent:main:telegram:tasks:direct:7550356539");
 });
 
 test("dmScope=per-account-channel-peer uses default accountId when not provided", () => {
@@ -250,7 +250,7 @@ test("dmScope=per-account-channel-peer uses default accountId when not provided"
     accountId: null,
     peer: { kind: "direct", id: "7550356539" },
   });
-  expect(route.sessionKey).toBe("agent:main:telegram:default:dm:7550356539");
+  expect(route.sessionKey).toBe("agent:main:telegram:default:direct:7550356539");
 });
 
 describe("parentPeer binding inheritance (thread support)", () => {
