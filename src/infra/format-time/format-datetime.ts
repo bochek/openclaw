@@ -23,6 +23,11 @@ export type FormatTimestampOptions = {
   displaySeconds?: boolean;
 };
 
+export type FormatZonedTimestampOptions = FormatTimestampOptions & {
+  /** IANA timezone string (e.g., 'America/New_York'). Default: system timezone */
+  timeZone?: string;
+};
+
 /**
  * Format a Date as a UTC timestamp string.
  *
@@ -52,7 +57,7 @@ export function formatUtcTimestamp(date: Date, options?: FormatTimestampOptions)
  */
 export function formatZonedTimestamp(
   date: Date,
-  options?: { timeZone?: string; displaySeconds?: boolean },
+  options?: FormatZonedTimestampOptions,
 ): string | undefined {
   const intlOptions: Intl.DateTimeFormatOptions = {
     timeZone: options?.timeZone,
