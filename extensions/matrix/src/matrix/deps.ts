@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { getMatrixRuntime } from "../runtime.js";
 
-const MATRIX_SDK_PACKAGE = "@vector-im/matrix-bot-sdk";
+const MATRIX_SDK_PACKAGE = "matrix-js-sdk";
 
 export function isMatrixSdkAvailable(): boolean {
   try {
@@ -31,9 +31,9 @@ export async function ensureMatrixSdkInstalled(params: {
   }
   const confirm = params.confirm;
   if (confirm) {
-    const ok = await confirm("Matrix requires @vector-im/matrix-bot-sdk. Install now?");
+    const ok = await confirm("Matrix requires matrix-js-sdk. Install now?");
     if (!ok) {
-      throw new Error("Matrix requires @vector-im/matrix-bot-sdk (install dependencies first).");
+      throw new Error("Matrix requires matrix-js-sdk (install dependencies first).");
     }
   }
 
@@ -53,8 +53,6 @@ export async function ensureMatrixSdkInstalled(params: {
     );
   }
   if (!isMatrixSdkAvailable()) {
-    throw new Error(
-      "Matrix dependency install completed but @vector-im/matrix-bot-sdk is still missing.",
-    );
+    throw new Error("Matrix dependency install completed but matrix-js-sdk is still missing.");
   }
 }
