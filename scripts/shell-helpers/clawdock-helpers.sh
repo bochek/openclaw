@@ -360,12 +360,3 @@ clawdock-help() {
   echo ""
 }
 
-# Export functions so they're available in subshells
-export -f _cmd _clawdock_ensure_dir _clawdock_compose
-export -f clawdock-start clawdock-stop clawdock-restart clawdock-logs clawdock-status
-export -f clawdock-cd clawdock-config clawdock-workspace
-export -f clawdock-shell clawdock-exec clawdock-cli
-export -f clawdock-rebuild clawdock-clean
-export -f clawdock-health clawdock-token clawdock-fix-token
-export -f clawdock-dashboard clawdock-devices clawdock-approve
-export -f clawdock-help
