@@ -94,6 +94,7 @@ export type LocationMessageEventContent = MessageEventContent & {
 export type MatrixSecretStorageStatus = {
   ready: boolean;
   defaultKeyId: string | null;
+  secretStorageKeyValidityMap?: Record<string, boolean>;
 };
 
 export type MatrixGeneratedSecretStorageKey = {
@@ -143,9 +144,18 @@ export type MatrixStoredRecoveryKey = {
   };
 };
 
+export type MatrixAuthDict = Record<string, unknown>;
+
+export type MatrixUiAuthCallback = <T>(
+  makeRequest: (authData: MatrixAuthDict | null) => Promise<T>,
+) => Promise<T>;
+
 export type MatrixCryptoBootstrapApi = {
   on: (eventName: string, listener: (...args: unknown[]) => void) => void;
-  bootstrapCrossSigning: (opts: { setupNewCrossSigning?: boolean }) => Promise<void>;
+  bootstrapCrossSigning: (opts: {
+    setupNewCrossSigning?: boolean;
+    authUploadDeviceSigningKeys?: MatrixUiAuthCallback;
+  }) => Promise<void>;
   bootstrapSecretStorage: (opts?: {
     createSecretStorageKey?: () => Promise<MatrixGeneratedSecretStorageKey>;
     setupNewSecretStorage?: boolean;
@@ -169,4 +179,5 @@ export type MatrixCryptoBootstrapApi = {
   setDeviceVerified?: (userId: string, deviceId: string, verified?: boolean) => Promise<void>;
   crossSignDevice?: (deviceId: string) => Promise<void>;
   isCrossSigningReady?: () => Promise<boolean>;
+  userHasCrossSigningKeys?: (userId?: string, downloadUncached?: boolean) => Promise<boolean>;
 };

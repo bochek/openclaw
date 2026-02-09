@@ -5,12 +5,21 @@ import * as credentialsModule from "./credentials.js";
 import * as sdkModule from "./sdk.js";
 
 const saveMatrixCredentialsMock = vi.fn();
+const prepareMatrixRegisterModeMock = vi.fn(async () => null);
+const finalizeMatrixRegisterConfigAfterSuccessMock = vi.fn(async () => false);
 
 vi.mock("./credentials.js", () => ({
   loadMatrixCredentials: vi.fn(() => null),
   saveMatrixCredentials: (...args: unknown[]) => saveMatrixCredentialsMock(...args),
   credentialsMatchConfig: vi.fn(() => false),
   touchMatrixCredentials: vi.fn(),
+}));
+
+vi.mock("./client/register-mode.js", () => ({
+  prepareMatrixRegisterMode: (...args: unknown[]) => prepareMatrixRegisterModeMock(...args),
+  finalizeMatrixRegisterConfigAfterSuccess: (...args: unknown[]) =>
+    finalizeMatrixRegisterConfigAfterSuccessMock(...args),
+  resetPreparedMatrixRegisterModesForTests: vi.fn(),
 }));
 
 describe("resolveMatrixConfig", () => {
@@ -96,6 +105,8 @@ describe("resolveMatrixAuth", () => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
     saveMatrixCredentialsMock.mockReset();
+    prepareMatrixRegisterModeMock.mockReset();
+    finalizeMatrixRegisterConfigAfterSuccessMock.mockReset();
   });
 
   it("uses the hardened client request path for password login and persists deviceId", async () => {
@@ -180,6 +191,7 @@ describe("resolveMatrixAuth", () => {
       undefined,
       expect.objectContaining({
         type: "m.login.password",
+        device_id: undefined,
       }),
     );
     expect(doRequestSpy).toHaveBeenNthCalledWith(
@@ -199,6 +211,94 @@ describe("resolveMatrixAuth", () => {
       deviceId: "REGDEVICE123",
       encryption: true,
     });
+    expect(prepareMatrixRegisterModeMock).toHaveBeenCalledWith({
+      cfg,
+      homeserver: "https://matrix.example.org",
+      userId: "@newbot:example.org",
+      env: {} as NodeJS.ProcessEnv,
+    });
+    expect(finalizeMatrixRegisterConfigAfterSuccessMock).toHaveBeenCalledWith({
+      homeserver: "https://matrix.example.org",
+      userId: "@newbot:example.org",
+      deviceId: "REGDEVICE123",
+    });
+  });
+
+  it("ignores cached credentials when matrix.register=true", async () => {
+    vi.mocked(credentialsModule.loadMatrixCredentials).mockReturnValue({
+      homeserver: "https://matrix.example.org",
+      userId: "@bot:example.org",
+      accessToken: "cached-token",
+      deviceId: "CACHEDDEVICE",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    vi.mocked(credentialsModule.credentialsMatchConfig).mockReturnValue(true);
+
+    const doRequestSpy = vi.spyOn(sdkModule.MatrixClient.prototype, "doRequest").mockResolvedValue({
+      access_token: "tok-123",
+      user_id: "@bot:example.org",
+      device_id: "DEVICE123",
+    });
+
+    const cfg = {
+      channels: {
+        matrix: {
+          homeserver: "https://matrix.example.org",
+          userId: "@bot:example.org",
+          password: "secret",
+          register: true,
+        },
+      },
+    } as CoreConfig;
+
+    const auth = await resolveMatrixAuth({ cfg, env: {} as NodeJS.ProcessEnv });
+
+    expect(doRequestSpy).toHaveBeenCalledWith(
+      "POST",
+      "/_matrix/client/v3/login",
+      undefined,
+      expect.objectContaining({
+        type: "m.login.password",
+      }),
+    );
+    expect(auth.accessToken).toBe("tok-123");
+    expect(prepareMatrixRegisterModeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires matrix.password when matrix.register=true", async () => {
+    const cfg = {
+      channels: {
+        matrix: {
+          homeserver: "https://matrix.example.org",
+          userId: "@bot:example.org",
+          register: true,
+        },
+      },
+    } as CoreConfig;
+
+    await expect(resolveMatrixAuth({ cfg, env: {} as NodeJS.ProcessEnv })).rejects.toThrow(
+      "Matrix password is required when matrix.register=true",
+    );
+    expect(prepareMatrixRegisterModeMock).not.toHaveBeenCalled();
+    expect(finalizeMatrixRegisterConfigAfterSuccessMock).not.toHaveBeenCalled();
+  });
+
+  it("requires matrix.userId when matrix.register=true", async () => {
+    const cfg = {
+      channels: {
+        matrix: {
+          homeserver: "https://matrix.example.org",
+          password: "secret",
+          register: true,
+        },
+      },
+    } as CoreConfig;
+
+    await expect(resolveMatrixAuth({ cfg, env: {} as NodeJS.ProcessEnv })).rejects.toThrow(
+      "Matrix userId is required when matrix.register=true",
+    );
+    expect(prepareMatrixRegisterModeMock).not.toHaveBeenCalled();
+    expect(finalizeMatrixRegisterConfigAfterSuccessMock).not.toHaveBeenCalled();
   });
 
   it("falls back to config deviceId when cached credentials are missing it", async () => {

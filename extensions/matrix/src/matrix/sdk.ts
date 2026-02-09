@@ -74,6 +74,7 @@ export class MatrixClient {
     _cryptoStorage?: unknown,
     opts: {
       userId?: string;
+      password?: string;
       deviceId?: string;
       localTimeoutMs?: number;
       encryption?: boolean;
@@ -123,6 +124,7 @@ export class MatrixClient {
     });
     this.cryptoBootstrapper = new MatrixCryptoBootstrapper<MatrixRawEvent>({
       getUserId: () => this.getUserId(),
+      getPassword: () => opts.password,
       getDeviceId: () => this.client.getDeviceId(),
       verificationManager: this.verificationManager,
       recoveryKeyStore: this.recoveryKeyStore,
@@ -175,6 +177,7 @@ export class MatrixClient {
       initialSyncLimit: this.initialSyncLimit,
     });
     this.started = true;
+    this.emitOutstandingInviteEvents();
     await this.refreshDmCache().catch(noop);
   }
 
@@ -450,6 +453,58 @@ export class MatrixClient {
         this.decryptBridge.attachEncryptedEvent(event, roomId);
       }
     });
+
+    // Some SDK invite transitions are surfaced as room lifecycle events instead of raw timeline events.
+    this.client.on(ClientEvent.Room, (room) => {
+      this.emitMembershipForRoom(room);
+    });
+  }
+
+  private emitMembershipForRoom(room: unknown): void {
+    const roomObj = room as {
+      roomId?: string;
+      getMyMembership?: () => string | null | undefined;
+      selfMembership?: string | null | undefined;
+    };
+    const roomId = roomObj.roomId?.trim();
+    if (!roomId) {
+      return;
+    }
+    const membership = roomObj.getMyMembership?.() ?? roomObj.selfMembership ?? undefined;
+    const selfUserId = this.client.getUserId() ?? this.selfUserId ?? "";
+    if (!selfUserId) {
+      return;
+    }
+    const raw: MatrixRawEvent = {
+      type: "m.room.member",
+      room_id: roomId,
+      sender: selfUserId,
+      state_key: selfUserId,
+      content: { membership },
+      origin_server_ts: Date.now(),
+      unsigned: { age: 0 },
+    };
+    if (membership === "invite") {
+      this.emitter.emit("room.invite", roomId, raw);
+      return;
+    }
+    if (membership === "join") {
+      this.emitter.emit("room.join", roomId, raw);
+    }
+  }
+
+  private emitOutstandingInviteEvents(): void {
+    const listRooms = (this.client as { getRooms?: () => unknown[] }).getRooms;
+    if (typeof listRooms !== "function") {
+      return;
+    }
+    const rooms = listRooms.call(this.client);
+    if (!Array.isArray(rooms)) {
+      return;
+    }
+    for (const room of rooms) {
+      this.emitMembershipForRoom(room);
+    }
   }
 
   private async refreshDmCache(): Promise<void> {

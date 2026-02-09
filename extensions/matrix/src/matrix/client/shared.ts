@@ -36,6 +36,7 @@ async function createSharedMatrixClient(params: {
     homeserver: params.auth.homeserver,
     userId: params.auth.userId,
     accessToken: params.auth.accessToken,
+    password: params.auth.password,
     deviceId: params.auth.deviceId,
     encryption: params.auth.encryption,
     localTimeoutMs: params.timeoutMs,

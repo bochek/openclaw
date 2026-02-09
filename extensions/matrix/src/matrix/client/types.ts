@@ -21,6 +21,7 @@ export type MatrixAuth = {
   homeserver: string;
   userId: string;
   accessToken: string;
+  password?: string;
   deviceId?: string;
   deviceName?: string;
   initialSyncLimit?: number;

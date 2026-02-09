@@ -135,4 +135,42 @@ describe("MatrixRecoveryKeyStore", () => {
       keyId: "NEW",
     });
   });
+
+  it("recreates secret storage when default key exists but is not usable locally", async () => {
+    const recoveryKeyPath = createTempRecoveryKeyPath();
+    const store = new MatrixRecoveryKeyStore(recoveryKeyPath);
+    const generated = {
+      keyId: "RECOVERED",
+      keyInfo: { name: "recovered" },
+      privateKey: new Uint8Array([1, 1, 2, 3]),
+      encodedPrivateKey: "encoded-recovered-key",
+    };
+    const createRecoveryKeyFromPassphrase = vi.fn(async () => generated);
+    const bootstrapSecretStorage = vi.fn(
+      async (opts?: { createSecretStorageKey?: () => Promise<unknown> }) => {
+        await opts?.createSecretStorageKey?.();
+      },
+    );
+    const crypto = {
+      on: vi.fn(),
+      bootstrapCrossSigning: vi.fn(async () => {}),
+      bootstrapSecretStorage,
+      createRecoveryKeyFromPassphrase,
+      getSecretStorageStatus: vi.fn(async () => ({ ready: false, defaultKeyId: "LEGACY" })),
+      requestOwnUserVerification: vi.fn(async () => null),
+    } as unknown as MatrixCryptoBootstrapApi;
+
+    await store.bootstrapSecretStorageWithRecoveryKey(crypto);
+
+    expect(createRecoveryKeyFromPassphrase).toHaveBeenCalledTimes(1);
+    expect(bootstrapSecretStorage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        setupNewSecretStorage: true,
+      }),
+    );
+    expect(store.getRecoveryKeySummary()).toMatchObject({
+      keyId: "RECOVERED",
+      encodedPrivateKey: "encoded-recovered-key",
+    });
+  });
 });

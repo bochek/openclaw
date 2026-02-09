@@ -11,6 +11,7 @@ export async function createMatrixClient(params: {
   homeserver: string;
   userId?: string;
   accessToken: string;
+  password?: string;
   deviceId?: string;
   encryption?: boolean;
   localTimeoutMs?: number;
@@ -43,6 +44,7 @@ export async function createMatrixClient(params: {
 
   return new MatrixClient(params.homeserver, params.accessToken, undefined, undefined, {
     userId: matrixClientUserId,
+    password: params.password,
     deviceId: params.deviceId,
     encryption: params.encryption,
     localTimeoutMs: params.localTimeoutMs,

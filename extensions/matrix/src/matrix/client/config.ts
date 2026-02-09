@@ -3,6 +3,10 @@ import type { MatrixAuth, MatrixResolvedConfig } from "./types.js";
 import { getMatrixRuntime } from "../../runtime.js";
 import { MatrixClient } from "../sdk.js";
 import { ensureMatrixSdkLoggingConfigured } from "./logging.js";
+import {
+  finalizeMatrixRegisterConfigAfterSuccess,
+  prepareMatrixRegisterMode,
+} from "./register-mode.js";
 
 function clean(value?: string): string {
   return value?.trim() ?? "";
@@ -42,6 +46,7 @@ async function registerMatrixPasswordAccount(params: {
   homeserver: string;
   userId: string;
   password: string;
+  deviceId?: string;
   deviceName?: string;
 }): Promise<{
   access_token?: string;
@@ -53,6 +58,7 @@ async function registerMatrixPasswordAccount(params: {
     username: resolveMatrixLocalpart(params.userId),
     password: params.password,
     inhibit_login: false,
+    device_id: params.deviceId,
     initial_device_display_name: params.deviceName ?? "OpenClaw Gateway",
   };
 
@@ -128,6 +134,7 @@ export async function resolveMatrixAuth(params?: {
   const cfg = params?.cfg ?? (getMatrixRuntime().config.loadConfig() as CoreConfig);
   const env = params?.env ?? process.env;
   const resolved = resolveMatrixConfig(cfg, env);
+  const registerFromConfig = cfg.channels?.matrix?.register === true;
   if (!resolved.homeserver) {
     throw new Error("Matrix homeserver is required (matrix.homeserver)");
   }
@@ -149,8 +156,23 @@ export async function resolveMatrixAuth(params?: {
       ? cached
       : null;
 
+  if (registerFromConfig) {
+    if (!resolved.userId) {
+      throw new Error("Matrix userId is required when matrix.register=true");
+    }
+    if (!resolved.password) {
+      throw new Error("Matrix password is required when matrix.register=true");
+    }
+    await prepareMatrixRegisterMode({
+      cfg,
+      homeserver: resolved.homeserver,
+      userId: resolved.userId,
+      env,
+    });
+  }
+
   // If we have an access token, we can fetch userId via whoami if not provided
-  if (resolved.accessToken) {
+  if (resolved.accessToken && !registerFromConfig) {
     let userId = resolved.userId;
     const hasMatchingCachedToken = cachedCredentials?.accessToken === resolved.accessToken;
     let knownDeviceId = hasMatchingCachedToken
@@ -196,6 +218,7 @@ export async function resolveMatrixAuth(params?: {
       homeserver: resolved.homeserver,
       userId,
       accessToken: resolved.accessToken,
+      password: resolved.password,
       deviceId: knownDeviceId,
       deviceName: resolved.deviceName,
       initialSyncLimit: resolved.initialSyncLimit,
@@ -203,12 +226,13 @@ export async function resolveMatrixAuth(params?: {
     };
   }
 
-  if (cachedCredentials) {
+  if (cachedCredentials && !registerFromConfig) {
     touchMatrixCredentials(env);
     return {
       homeserver: cachedCredentials.homeserver,
       userId: cachedCredentials.userId,
       accessToken: cachedCredentials.accessToken,
+      password: resolved.password,
       deviceId: cachedCredentials.deviceId || resolved.deviceId,
       deviceName: resolved.deviceName,
       initialSyncLimit: resolved.initialSyncLimit,
@@ -239,6 +263,7 @@ export async function resolveMatrixAuth(params?: {
       type: "m.login.password",
       identifier: { type: "m.id.user", user: resolved.userId },
       password: resolved.password,
+      device_id: resolved.deviceId,
       initial_device_display_name: resolved.deviceName ?? "OpenClaw Gateway",
     })) as {
       access_token?: string;
@@ -254,6 +279,7 @@ export async function resolveMatrixAuth(params?: {
         homeserver: resolved.homeserver,
         userId: resolved.userId,
         password: resolved.password,
+        deviceId: resolved.deviceId,
         deviceName: resolved.deviceName,
       });
     } catch (registerErr) {
@@ -275,7 +301,8 @@ export async function resolveMatrixAuth(params?: {
     homeserver: resolved.homeserver,
     userId: login.user_id ?? resolved.userId,
     accessToken,
-    deviceId: login.device_id,
+    password: resolved.password,
+    deviceId: login.device_id ?? resolved.deviceId,
     deviceName: resolved.deviceName,
     initialSyncLimit: resolved.initialSyncLimit,
     encryption: resolved.encryption,
@@ -285,8 +312,16 @@ export async function resolveMatrixAuth(params?: {
     homeserver: auth.homeserver,
     userId: auth.userId,
     accessToken: auth.accessToken,
-    deviceId: login.device_id,
+    deviceId: auth.deviceId,
   });
+
+  if (registerFromConfig) {
+    await finalizeMatrixRegisterConfigAfterSuccess({
+      homeserver: auth.homeserver,
+      userId: auth.userId,
+      deviceId: auth.deviceId,
+    });
+  }
 
   return auth;
 }

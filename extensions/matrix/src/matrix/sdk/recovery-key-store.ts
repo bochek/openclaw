@@ -99,6 +99,9 @@ export class MatrixRecoveryKeyStore {
     }
 
     const hasDefaultSecretStorageKey = Boolean(status?.defaultKeyId);
+    const hasKnownInvalidSecrets = Object.values(status?.secretStorageKeyValidityMap ?? {}).some(
+      (valid) => valid === false,
+    );
     let generatedRecoveryKey = false;
     const storedRecovery = this.loadStoredRecoveryKey();
     let recoveryKey = storedRecovery
@@ -137,6 +140,16 @@ export class MatrixRecoveryKeyStore {
       return recoveryKey;
     };
 
+    const shouldRecreateSecretStorage =
+      !hasDefaultSecretStorageKey ||
+      (!recoveryKey && status?.ready === false) ||
+      hasKnownInvalidSecrets;
+
+    if (hasKnownInvalidSecrets) {
+      // Existing secret storage keys can't decrypt required secrets. Generate a fresh recovery key.
+      recoveryKey = null;
+    }
+
     const secretStorageOptions: {
       createSecretStorageKey?: () => Promise<MatrixGeneratedSecretStorageKey>;
       setupNewSecretStorage?: boolean;
@@ -145,7 +158,7 @@ export class MatrixRecoveryKeyStore {
       setupNewKeyBackup: false,
     };
 
-    if (!hasDefaultSecretStorageKey) {
+    if (shouldRecreateSecretStorage) {
       secretStorageOptions.setupNewSecretStorage = true;
       secretStorageOptions.createSecretStorageKey = ensureRecoveryKey;
     }

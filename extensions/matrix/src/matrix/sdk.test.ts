@@ -104,6 +104,7 @@ type MatrixJsClientStub = EventEmitter & {
   fetchRoomEvent: ReturnType<typeof vi.fn>;
   sendTyping: ReturnType<typeof vi.fn>;
   getRoom: ReturnType<typeof vi.fn>;
+  getRooms: ReturnType<typeof vi.fn>;
   getCrypto: ReturnType<typeof vi.fn>;
   decryptEventIfNeeded: ReturnType<typeof vi.fn>;
 };
@@ -132,6 +133,7 @@ function createMatrixJsClientStub(): MatrixJsClientStub {
   client.fetchRoomEvent = vi.fn(async () => ({}));
   client.sendTyping = vi.fn(async () => {});
   client.getRoom = vi.fn(() => ({ hasEncryptionStateEvent: () => false }));
+  client.getRooms = vi.fn(() => []);
   client.getCrypto = vi.fn(() => undefined);
   client.decryptEventIfNeeded = vi.fn(async () => {});
   return client;
@@ -141,7 +143,7 @@ let matrixJsClient = createMatrixJsClientStub();
 let lastCreateClientOpts: Record<string, unknown> | null = null;
 
 vi.mock("matrix-js-sdk", () => ({
-  ClientEvent: { Event: "event" },
+  ClientEvent: { Event: "event", Room: "Room" },
   MatrixEventEvent: { Decrypted: "decrypted" },
   createClient: vi.fn((opts: Record<string, unknown>) => {
     lastCreateClientOpts = opts;
@@ -599,6 +601,46 @@ describe("MatrixClient event bridge", () => {
 
     expect(invites).toEqual(["!room:example.org"]);
   });
+
+  it("emits room.invite when SDK emits Room event with invite membership", async () => {
+    const client = new MatrixClient("https://matrix.example.org", "token");
+    const invites: string[] = [];
+    client.on("room.invite", (roomId) => {
+      invites.push(roomId);
+    });
+
+    await client.start();
+
+    matrixJsClient.emit("Room", {
+      roomId: "!invite:example.org",
+      getMyMembership: () => "invite",
+    });
+
+    expect(invites).toEqual(["!invite:example.org"]);
+  });
+
+  it("replays outstanding invite rooms at startup", async () => {
+    matrixJsClient.getRooms = vi.fn(() => [
+      {
+        roomId: "!pending:example.org",
+        getMyMembership: () => "invite",
+      },
+      {
+        roomId: "!joined:example.org",
+        getMyMembership: () => "join",
+      },
+    ]);
+
+    const client = new MatrixClient("https://matrix.example.org", "token");
+    const invites: string[] = [];
+    client.on("room.invite", (roomId) => {
+      invites.push(roomId);
+    });
+
+    await client.start();
+
+    expect(invites).toEqual(["!pending:example.org"]);
+  });
 });
 
 describe("MatrixClient crypto bootstrapping", () => {
@@ -642,9 +684,11 @@ describe("MatrixClient crypto bootstrapping", () => {
 
     await client.start();
 
-    expect(bootstrapCrossSigning).toHaveBeenCalledWith({
-      setupNewCrossSigning: true,
-    });
+    expect(bootstrapCrossSigning).toHaveBeenCalledWith(
+      expect.objectContaining({
+        authUploadDeviceSigningKeys: expect.any(Function),
+      }),
+    );
   });
 
   it("provides secret storage callbacks and resolves stored recovery key", async () => {
