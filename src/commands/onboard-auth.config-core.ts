@@ -256,7 +256,15 @@ export function applyOpenrouterConfig(cfg: OpenClawConfig): OpenClawConfig {
 export const LITELLM_BASE_URL = "http://localhost:4000";
 export const LITELLM_DEFAULT_MODEL_ID = "claude-opus-4-6";
 
-function buildLitellmModelDefinition(): { id: string; name: string; reasoning: boolean; input: Array<"text" | "image">; cost: { input: number; output: number; cacheRead: number; cacheWrite: number }; contextWindow: number; maxTokens: number } {
+function buildLitellmModelDefinition(): {
+  id: string;
+  name: string;
+  reasoning: boolean;
+  input: Array<"text" | "image">;
+  cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  contextWindow: number;
+  maxTokens: number;
+} {
   return {
     id: LITELLM_DEFAULT_MODEL_ID,
     name: "Claude Opus 4.6",
