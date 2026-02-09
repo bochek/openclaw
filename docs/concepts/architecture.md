@@ -90,8 +90,6 @@ sequenceDiagram
     Gateway-->>Client: res:agent<br>final {runId, status, summary}
 ```
 
-</p>
-
 ## Wire protocol (summary)
 
 - Transport: WebSocket, text frames with JSON payloads.
