@@ -1556,7 +1556,6 @@
                   "zh-CN/providers/anthropic",
                   "zh-CN/providers/openai",
                   "zh-CN/providers/openrouter",
-                  "zh-CN/providers/litellm",
                   "zh-CN/providers/bedrock",
                   "zh-CN/providers/vercel-ai-gateway",
                   "zh-CN/providers/moonshot",
