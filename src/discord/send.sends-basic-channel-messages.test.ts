@@ -1,4 +1,4 @@
-import { PermissionFlagsBits, Routes } from "discord-api-types/v10";
+import { ChannelType, PermissionFlagsBits, Routes } from "discord-api-types/v10";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   deleteMessageDiscord,
@@ -58,7 +58,9 @@ describe("sendMessageDiscord", () => {
   });
 
   it("sends basic channel messages", async () => {
-    const { rest, postMock } = makeRest();
+    const { rest, postMock, getMock } = makeRest();
+    // Channel type lookup returns a normal text channel (not a forum).
+    getMock.mockResolvedValueOnce({ type: ChannelType.GuildText });
     postMock.mockResolvedValue({
       id: "msg1",
       channel_id: "789",
@@ -71,6 +73,31 @@ describe("sendMessageDiscord", () => {
     expect(postMock).toHaveBeenCalledWith(
       Routes.channelMessages("789"),
       expect.objectContaining({ body: { content: "hello world" } }),
+    );
+  });
+
+  it("auto-creates a forum thread when target is a Forum channel", async () => {
+    const { rest, postMock, getMock } = makeRest();
+    // Channel type lookup returns a Forum channel.
+    getMock.mockResolvedValueOnce({ type: ChannelType.GuildForum });
+    postMock.mockResolvedValue({
+      id: "thread1",
+      message: { id: "starter1", channel_id: "thread1" },
+    });
+    const res = await sendMessageDiscord("channel:forum1", "Discussion topic\nBody of the post", {
+      rest,
+      token: "t",
+    });
+    expect(res).toEqual({ messageId: "starter1", channelId: "thread1" });
+    // Should POST to threads route, not channelMessages.
+    expect(postMock).toHaveBeenCalledWith(
+      Routes.threads("forum1"),
+      expect.objectContaining({
+        body: {
+          name: "Discussion topic",
+          message: { content: "Discussion topic\nBody of the post" },
+        },
+      }),
     );
   });
 

@@ -1,5 +1,6 @@
 import type { RequestClient } from "@buape/carbon";
-import { Routes } from "discord-api-types/v10";
+import type { APIChannel } from "discord-api-types/v10";
+import { ChannelType, Routes } from "discord-api-types/v10";
 import type { RetryConfig } from "../infra/retry.js";
 import type { PollInput } from "../polls.js";
 import type { DiscordSendResult } from "./send.types.js";
@@ -31,6 +32,24 @@ type DiscordSendOpts = {
   embeds?: unknown[];
 };
 
+/** Discord thread names are capped at 100 characters. */
+const DISCORD_THREAD_NAME_LIMIT = 100;
+
+/** Derive a thread title from the first non-empty line of the message text. */
+function deriveForumThreadName(text: string): string {
+  const firstLine =
+    text
+      .split("\n")
+      .find((l) => l.trim())
+      ?.trim() ?? "";
+  return firstLine.slice(0, DISCORD_THREAD_NAME_LIMIT) || new Date().toISOString().slice(0, 16);
+}
+
+/** Forum/Media channels cannot receive regular messages; detect them here. */
+function isForumLikeType(channelType?: number): boolean {
+  return channelType === ChannelType.GuildForum || channelType === ChannelType.GuildMedia;
+}
+
 export async function sendMessageDiscord(
   to: string,
   text: string,
@@ -51,6 +70,53 @@ export async function sendMessageDiscord(
   const { token, rest, request } = createDiscordClient(opts, cfg);
   const recipient = await parseAndResolveRecipient(to, opts.accountId);
   const { channelId } = await resolveChannelId(rest, recipient, request);
+
+  // Forum/Media channels reject POST /messages; auto-create a thread post instead.
+  let channelType: number | undefined;
+  try {
+    const channel = (await rest.get(Routes.channel(channelId))) as APIChannel | undefined;
+    channelType = channel?.type;
+  } catch {
+    // If we can't fetch the channel, fall through to the normal send path.
+  }
+
+  if (isForumLikeType(channelType)) {
+    try {
+      const threadName = deriveForumThreadName(textWithTables);
+      const starterContent = textWithTables.trim() || threadName;
+      const threadRes = (await request(
+        () =>
+          rest.post(Routes.threads(channelId), {
+            body: {
+              name: threadName,
+              message: { content: starterContent },
+            },
+          }) as Promise<{ id: string; message?: { id: string; channel_id: string } }>,
+        "forum-thread",
+      )) as { id: string; message?: { id: string; channel_id: string } };
+
+      recordChannelActivity({
+        channel: "discord",
+        accountId: accountInfo.accountId,
+        direction: "outbound",
+      });
+      const threadId = threadRes.id;
+      const messageId = threadRes.message?.id ?? threadId;
+      const resultChannelId = threadRes.message?.channel_id ?? threadId;
+      return {
+        messageId: messageId ? String(messageId) : "unknown",
+        channelId: String(resultChannelId ?? channelId),
+      };
+    } catch (err) {
+      throw await buildDiscordSendError(err, {
+        channelId,
+        rest,
+        token,
+        hasMedia: Boolean(opts.mediaUrl),
+      });
+    }
+  }
+
   let result: { id: string; channel_id: string } | { id: string | null; channel_id: string };
   try {
     if (opts.mediaUrl) {
