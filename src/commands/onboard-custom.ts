@@ -4,6 +4,7 @@ import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import { DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { buildModelAliasIndex, modelKey } from "../agents/model-selection.js";
+import { fetchWithTimeout } from "../utils/fetch-timeout.js";
 import { applyPrimaryModel } from "./model-picker.js";
 import { normalizeAlias } from "./models/shared.js";
 
@@ -131,20 +132,6 @@ function buildAnthropicHeaders(apiKey: string) {
     headers["x-api-key"] = apiKey;
   }
   return headers;
-}
-
-async function fetchWithTimeout(
-  url: string,
-  init: RequestInit,
-  timeoutMs: number,
-): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetch(url, { ...init, signal: controller.signal });
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 function formatVerificationError(error: unknown): string {
