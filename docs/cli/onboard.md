@@ -12,6 +12,7 @@ Interactive onboarding wizard (local or remote Gateway setup).
 ## Related guides
 
 - CLI onboarding hub: [Onboarding Wizard (CLI)](/start/wizard)
+- Onboarding overview: [Onboarding Overview](/start/onboarding-overview)
 - CLI onboarding reference: [CLI Onboarding Reference](/start/wizard-cli-reference)
 - CLI automation: [CLI Automation](/start/wizard-cli-automation)
 - macOS onboarding: [Onboarding (macOS App)](/start/onboarding)
@@ -30,6 +31,8 @@ Flow notes:
 - `quickstart`: minimal prompts, auto-generates a gateway token.
 - `manual`: full prompts for port/bind/auth (alias of `advanced`).
 - Fastest first chat: `openclaw dashboard` (Control UI, no channel setup).
+- Custom API Endpoint: choose OpenAI-compatible or Anthropic-compatible endpoints
+  for self-hosted servers.
 
 ## Common follow-up commands
 

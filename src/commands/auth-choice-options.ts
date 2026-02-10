@@ -151,8 +151,8 @@ const AUTH_CHOICE_GROUP_DEFS: {
   },
   {
     value: "custom",
-    label: "Custom / Local API",
-    hint: "Ollama, LocalAI, vLLM, compatible endpoints",
+    label: "Custom API Endpoint",
+    hint: "Ollama, OpenAI/Anthropic-compatible endpoints",
     choices: ["custom-api-key"],
   },
 ];
@@ -259,7 +259,7 @@ export function buildAuthChoiceOptions(params: {
     label: "MiniMax M2.1 Lightning",
     hint: "Faster, higher output cost",
   });
-  options.push({ value: "custom-api-key", label: "Custom / Local API" });
+  options.push({ value: "custom-api-key", label: "Custom API Endpoint" });
 
   if (params.includeSkip) {
     options.push({ value: "skip", label: "Skip for now" });
