@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildExplorerSnapshot } from "./schema-spike.ts";
+import { buildExplorerSnapshot, resolveExplorerField } from "./schema-spike.ts";
 
 describe("buildExplorerSnapshot", () => {
   it("builds ordered sections and field metadata", () => {
@@ -34,5 +34,18 @@ describe("buildExplorerSnapshot", () => {
       .find((field) => field.path === "diagnostics.otel.headers");
     expect(recordField?.kind).toBe("object");
     expect(recordField?.recordValueKind).toBe("string");
+  });
+});
+
+describe("resolveExplorerField", () => {
+  it("resolves metadata for paths that do not have explicit UI hints", () => {
+    const port = resolveExplorerField("gateway.port");
+    expect(port).toBeTruthy();
+    expect(port?.kind).toBe("integer");
+    expect(port?.editable).toBe(true);
+  });
+
+  it("returns null for unknown paths", () => {
+    expect(resolveExplorerField("this.path.does.not.exist")).toBeNull();
   });
 });

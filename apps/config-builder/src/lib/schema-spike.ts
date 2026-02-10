@@ -1,4 +1,4 @@
-import { buildConfigSchema, type ConfigUiHint } from "@openclaw/config/schema.ts";
+import { buildConfigSchema, type ConfigUiHint, type ConfigUiHints } from "@openclaw/config/schema.ts";
 
 type JsonSchemaNode = {
   description?: string;
@@ -11,6 +11,13 @@ type JsonSchemaNode = {
   anyOf?: JsonSchemaNode[];
   oneOf?: JsonSchemaNode[];
   allOf?: JsonSchemaNode[];
+};
+
+type SchemaContext = {
+  schemaRoot: JsonSchemaNode;
+  uiHints: ConfigUiHints;
+  version: string;
+  generatedAt: string;
 };
 
 export type FieldKind =
@@ -56,6 +63,24 @@ export type ExplorerSnapshot = {
 };
 
 const SECTION_FALLBACK_ORDER = 500;
+
+let cachedContext: SchemaContext | null = null;
+
+function getSchemaContext(): SchemaContext {
+  if (cachedContext) {
+    return cachedContext;
+  }
+
+  const configSchema = buildConfigSchema();
+  const schemaRoot = asObjectNode(configSchema.schema) ?? {};
+  cachedContext = {
+    schemaRoot,
+    uiHints: configSchema.uiHints,
+    version: configSchema.version,
+    generatedAt: configSchema.generatedAt,
+  };
+  return cachedContext;
+}
 
 function humanizeKey(value: string): string {
   if (!value.trim()) {
@@ -241,11 +266,46 @@ function toEnumValues(values: unknown[] | undefined): string[] {
   return values.map((value) => String(value));
 }
 
+function buildExplorerField(path: string, hint: ConfigUiHint | undefined, root: JsonSchemaNode): ExplorerField {
+  const schemaNode = resolveSchemaNode(root, path);
+  const kind = resolveType(schemaNode);
+  const arrayItemNode = kind === "array" ? firstArrayItemNode(schemaNode) : null;
+  const itemKind = arrayItemNode ? resolveType(arrayItemNode) : null;
+  const recordNode = kind === "object" ? recordValueNode(schemaNode) : null;
+  const recordValueKind = recordNode ? resolveType(recordNode) : null;
+
+  return {
+    path,
+    label: hint?.label?.trim() || humanizeKey(lastPathSegment(path)),
+    help: hint?.help?.trim() ?? schemaNode?.description?.trim() ?? "",
+    sensitive: Boolean(hint?.sensitive),
+    advanced: Boolean(hint?.advanced),
+    kind,
+    enumValues: toEnumValues(schemaNode?.enum),
+    itemKind,
+    itemEnumValues: toEnumValues(arrayItemNode?.enum),
+    recordValueKind,
+    recordEnumValues: toEnumValues(recordNode?.enum),
+    hasDefault: schemaNode?.default !== undefined,
+    editable: isEditable(path, kind),
+  };
+}
+
+export function resolveExplorerField(path: string): ExplorerField | null {
+  const context = getSchemaContext();
+  const hint = context.uiHints[path];
+  const schemaNode = resolveSchemaNode(context.schemaRoot, path);
+  if (!schemaNode && !hint) {
+    return null;
+  }
+  return buildExplorerField(path, hint, context.schemaRoot);
+}
+
 export function buildExplorerSnapshot(): ExplorerSnapshot {
-  const configSchema = buildConfigSchema();
-  const uiHints = configSchema.uiHints;
-  const schemaRoot = asObjectNode(configSchema.schema);
-  const schemaProperties = schemaRoot?.properties ?? {};
+  const context = getSchemaContext();
+  const uiHints = context.uiHints;
+  const schemaRoot = context.schemaRoot;
+  const schemaProperties = schemaRoot.properties ?? {};
 
   const sections = new Map<string, ExplorerSection>();
 
@@ -305,28 +365,7 @@ export function buildExplorerSnapshot(): ExplorerSnapshot {
       continue;
     }
 
-    const schemaNode = resolveSchemaNode(schemaRoot ?? {}, path);
-    const kind = resolveType(schemaNode);
-    const arrayItemNode = kind === "array" ? firstArrayItemNode(schemaNode) : null;
-    const itemKind = arrayItemNode ? resolveType(arrayItemNode) : null;
-    const recordNode = kind === "object" ? recordValueNode(schemaNode) : null;
-    const recordValueKind = recordNode ? resolveType(recordNode) : null;
-
-    target.fields.push({
-      path,
-      label: hint.label?.trim() || humanizeKey(lastPathSegment(path)),
-      help: hint.help?.trim() ?? schemaNode?.description?.trim() ?? "",
-      sensitive: Boolean(hint.sensitive),
-      advanced: Boolean(hint.advanced),
-      kind,
-      enumValues: toEnumValues(schemaNode?.enum),
-      itemKind,
-      itemEnumValues: toEnumValues(arrayItemNode?.enum),
-      recordValueKind,
-      recordEnumValues: toEnumValues(recordNode?.enum),
-      hasDefault: schemaNode?.default !== undefined,
-      editable: isEditable(path, kind),
-    });
+    target.fields.push(buildExplorerField(path, hint, schemaRoot));
   }
 
   const orderedSections = Array.from(sections.values())
@@ -336,8 +375,8 @@ export function buildExplorerSnapshot(): ExplorerSnapshot {
   const fieldCount = orderedSections.reduce((sum, section) => sum + section.fields.length, 0);
 
   return {
-    version: configSchema.version,
-    generatedAt: configSchema.generatedAt,
+    version: context.version,
+    generatedAt: context.generatedAt,
     sectionCount: orderedSections.length,
     fieldCount,
     sections: orderedSections,
