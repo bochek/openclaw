@@ -473,6 +473,7 @@ const ERROR_PATTERNS = {
     "insufficient credits",
     "credit balance",
     "plans & billing",
+    "billing:",
     "insufficient balance",
   ],
   auth: [
@@ -534,7 +535,7 @@ export function isBillingErrorMessage(raw: string): boolean {
   if (!value) {
     return false;
   }
-  
+
   return matchesErrorPatterns(value, ERROR_PATTERNS.billing);
 }
 
