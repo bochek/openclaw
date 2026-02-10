@@ -36,7 +36,6 @@ import {
   iconSparkles,
   iconSun,
   iconTrash,
-  iconX,
   sectionIcon,
 } from "./components/icons.ts";
 import {
