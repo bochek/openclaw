@@ -71,6 +71,19 @@ function jsonValue(value: unknown): string {
   }
 }
 
+function scalarInputValue(value: unknown): string {
+  if (value == null) {
+    return "";
+  }
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number" || typeof value === "boolean" || typeof value === "bigint") {
+    return String(value);
+  }
+  return "";
+}
+
 function renderScalarControl(params: {
   field: ExplorerField;
   value: unknown;
@@ -139,7 +152,7 @@ function renderScalarControl(params: {
   }
 
   const inputType = field.kind === "number" || field.kind === "integer" ? "number" : "text";
-  const inputValue = value == null ? "" : String(value);
+  const inputValue = scalarInputValue(value);
 
   return html`
     <input
@@ -236,7 +249,7 @@ function renderPrimitiveArray(params: {
                           ? html`
                               <select
                                 class="cfg-select"
-                                .value=${String(item ?? "")}
+                                .value=${scalarInputValue(item)}
                                 @change=${(event: Event) => {
                                   const next = [...list];
                                   next[index] = (event.target as HTMLSelectElement).value;
@@ -252,7 +265,7 @@ function renderPrimitiveArray(params: {
                               <input
                                 class="cfg-input"
                                 type=${itemKind === "number" || itemKind === "integer" ? "number" : "text"}
-                                .value=${item == null ? "" : String(item)}
+                                .value=${scalarInputValue(item)}
                                 @input=${(event: Event) => {
                                   const raw = (event.target as HTMLInputElement).value;
                                   const next = [...list];
@@ -368,7 +381,7 @@ function renderRecordObject(params: {
                             <input
                               class="cfg-input cfg-input--sm"
                               type=${valueKind === "number" || valueKind === "integer" ? "number" : "text"}
-                              .value=${entryValue == null ? "" : String(entryValue)}
+                              .value=${scalarInputValue(entryValue)}
                               @input=${(event: Event) => {
                                 const raw = (event.target as HTMLInputElement).value;
                                 const next = { ...record };

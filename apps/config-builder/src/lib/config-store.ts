@@ -60,7 +60,10 @@ export function setFieldValue(config: ConfigDraft, path: string, value: unknown)
   let cursor: Record<string, unknown> = next;
 
   for (let index = 0; index < segments.length - 1; index += 1) {
-    const segment = segments[index]!;
+    const segment = segments[index];
+    if (!segment) {
+      continue;
+    }
     const existing = cursor[segment];
     if (isRecord(existing)) {
       cursor = existing;
@@ -94,8 +97,12 @@ export function clearFieldValue(config: ConfigDraft, path: string): ConfigDraft 
     if (!isRecord(cursor)) {
       return next;
     }
+    const segment = segments[index];
+    if (!segment) {
+      return next;
+    }
     parents.push(cursor);
-    cursor = cursor[segments[index]!];
+    cursor = cursor[segment];
   }
 
   if (!isRecord(cursor)) {
@@ -111,7 +118,10 @@ export function clearFieldValue(config: ConfigDraft, path: string): ConfigDraft 
 
   for (let index = segments.length - 2; index >= 0; index -= 1) {
     const parent = parents[index];
-    const key = segments[index]!;
+    const key = segments[index];
+    if (!parent || !key) {
+      continue;
+    }
     const child = parent[key];
     if (!isRecord(child)) {
       continue;
