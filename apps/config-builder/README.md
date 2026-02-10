@@ -12,11 +12,12 @@ Use the same front-end stack as the existing OpenClaw web UI (`ui/`):
 
 ## Current status
 
-Phase 0 spike is in place:
+Phase 0 and Phase 1 are in place:
 
 - app boots with Vite + Lit
 - `OpenClawSchema.toJSONSchema()` runs in browser bundle
 - `buildConfigSchema()` UI hints load in browser bundle
+- Explorer read-only scaffold renders grouped sections + field metadata
 
 To run locally:
 
