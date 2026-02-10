@@ -38,7 +38,7 @@ vi.mock("../config/config.js", async (importOriginal) => {
       // Clear the simulated cache
       cachedConfig = null;
     }),
-    writeConfigFile: vi.fn(async () => { }),
+    writeConfigFile: vi.fn(async () => {}),
   };
 });
 
@@ -49,7 +49,7 @@ vi.mock("./chrome.js", () => ({
     throw new Error("launch disabled");
   }),
   resolveOpenClawUserDataDir: vi.fn(() => "/tmp/openclaw"),
-  stopOpenClawChrome: vi.fn(async () => { }),
+  stopOpenClawChrome: vi.fn(async () => {}),
 }));
 
 vi.mock("./cdp.js", () => ({
@@ -63,11 +63,11 @@ vi.mock("./cdp.js", () => ({
 }));
 
 vi.mock("./pw-ai.js", () => ({
-  closePlaywrightBrowserConnection: vi.fn(async () => { }),
+  closePlaywrightBrowserConnection: vi.fn(async () => {}),
 }));
 
 vi.mock("../media/store.js", () => ({
-  ensureMediaDir: vi.fn(async () => { }),
+  ensureMediaDir: vi.fn(async () => {}),
   saveMediaBuffer: vi.fn(async () => ({ path: "/tmp/fake.png" })),
 }));
 
@@ -89,7 +89,7 @@ describe("server-context hot-reload profiles", () => {
     // 1. Prime the cache by calling loadConfig() first
     const cfg = loadConfig();
     const resolved = resolveBrowserConfig(cfg.browser, cfg);
-    
+
     // Verify cache is primed (without desktop)
     expect(cfg.browser.profiles.desktop).toBeUndefined();
     const state = {
@@ -121,12 +121,12 @@ describe("server-context hot-reload profiles", () => {
 
     // 5. Verify the new profile was merged into the cached state
     expect(state.resolved.profiles.desktop).toBeDefined();
-    
+
     // 6. Verify GLOBAL cache was NOT cleared - subsequent simple loadConfig() still sees STALE value
     // This confirms the fix: we read fresh config for the specific profile lookup without flushing the global cache
     const stillStaleCfg = loadConfig();
     expect(stillStaleCfg.browser.profiles.desktop).toBeUndefined();
-    
+
     // Verify clearConfigCache was not called
     const { clearConfigCache } = await import("../config/config.js");
     expect(clearConfigCache).not.toHaveBeenCalled();
