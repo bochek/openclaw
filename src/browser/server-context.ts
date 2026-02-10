@@ -9,7 +9,7 @@ import type {
   ProfileRuntimeState,
   ProfileStatus,
 } from "./server-context.types.js";
-import { clearConfigCache, loadConfig } from "../config/config.js";
+import { createConfigIO, loadConfig } from "../config/config.js";
 import { appendCdpPath, createTargetViaCdp, getHeadersWithAuth, normalizeCdpWsUrl } from "./cdp.js";
 import {
   isChromeCdpReady,
@@ -575,8 +575,7 @@ export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteCon
 
     // Hot-reload: try fresh config if profile not found
     if (!profile) {
-      clearConfigCache();
-      const freshCfg = loadConfig();
+      const freshCfg = createConfigIO().loadConfig();
       const freshResolved = resolveBrowserConfig(freshCfg.browser, freshCfg);
       profile = resolveProfile(freshResolved, name);
       if (profile) {

@@ -21,17 +21,23 @@ vi.mock("../config/config.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../config/config.js")>();
   return {
     ...actual,
+    createConfigIO: () => ({
+      loadConfig: () => {
+        // Always return fresh config for createConfigIO to simulate fresh disk read
+        return buildConfig();
+      },
+    }),
     loadConfig: () => {
-      // Simulate cache: return cached value if exists
+      // simulate stale loadConfig that doesn't see updates unless cache cleared
       if (!cachedConfig) {
         cachedConfig = buildConfig();
       }
       return cachedConfig;
     },
-    clearConfigCache: () => {
+    clearConfigCache: vi.fn(() => {
       // Clear the simulated cache
       cachedConfig = null;
-    },
+    }),
     writeConfigFile: vi.fn(async () => { }),
   };
 });
@@ -107,7 +113,8 @@ describe("server-context hot-reload profiles", () => {
     const staleCfg = loadConfig();
     expect(staleCfg.browser.profiles.desktop).toBeUndefined(); // Cache is stale!
 
-    // 4. Now forProfile should hot-reload (calls clearConfigCache internally) and find the new profile
+    // 4. Now forProfile should hot-reload (calls createConfigIO().loadConfig() internally)
+    // It should NOT clear the global cache
     const profileCtx = ctx.forProfile("desktop");
     expect(profileCtx.profile.name).toBe("desktop");
     expect(profileCtx.profile.cdpUrl).toBe("http://127.0.0.1:9222");
@@ -115,9 +122,14 @@ describe("server-context hot-reload profiles", () => {
     // 5. Verify the new profile was merged into the cached state
     expect(state.resolved.profiles.desktop).toBeDefined();
     
-    // 6. Verify cache was cleared - subsequent loadConfig() sees new value
-    const freshCfg = loadConfig();
-    expect(freshCfg.browser.profiles.desktop).toBeDefined();
+    // 6. Verify GLOBAL cache was NOT cleared - subsequent simple loadConfig() still sees STALE value
+    // This confirms the fix: we read fresh config for the specific profile lookup without flushing the global cache
+    const stillStaleCfg = loadConfig();
+    expect(stillStaleCfg.browser.profiles.desktop).toBeUndefined();
+    
+    // Verify clearConfigCache was not called
+    const { clearConfigCache } = await import("../config/config.js");
+    expect(clearConfigCache).not.toHaveBeenCalled();
   });
 
   it("forProfile still throws for profiles that don't exist in fresh config", async () => {
