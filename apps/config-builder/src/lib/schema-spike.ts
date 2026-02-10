@@ -31,6 +31,10 @@ export type ExplorerField = {
   advanced: boolean;
   kind: FieldKind;
   enumValues: string[];
+  itemKind: FieldKind | null;
+  itemEnumValues: string[];
+  recordValueKind: FieldKind | null;
+  recordEnumValues: string[];
   hasDefault: boolean;
   editable: boolean;
 };
@@ -202,11 +206,32 @@ function resolveType(node: JsonSchemaNode | null): FieldKind {
   }
 }
 
+function firstArrayItemNode(node: JsonSchemaNode | null): JsonSchemaNode | null {
+  if (!node) {
+    return null;
+  }
+  if (Array.isArray(node.items)) {
+    return asObjectNode(node.items[0] ?? null);
+  }
+  return asObjectNode(node.items);
+}
+
+function recordValueNode(node: JsonSchemaNode | null): JsonSchemaNode | null {
+  if (!node) {
+    return null;
+  }
+  const properties = node.properties ?? {};
+  if (Object.keys(properties).length > 0) {
+    return null;
+  }
+  return asObjectNode(node.additionalProperties);
+}
+
 function isEditable(path: string, kind: FieldKind): boolean {
   if (path.includes("*") || path.includes("[]")) {
     return false;
   }
-  return kind === "string" || kind === "number" || kind === "integer" || kind === "boolean" || kind === "enum";
+  return kind !== "unknown";
 }
 
 function toEnumValues(values: unknown[] | undefined): string[] {
@@ -282,6 +307,10 @@ export function buildExplorerSnapshot(): ExplorerSnapshot {
 
     const schemaNode = resolveSchemaNode(schemaRoot ?? {}, path);
     const kind = resolveType(schemaNode);
+    const arrayItemNode = kind === "array" ? firstArrayItemNode(schemaNode) : null;
+    const itemKind = arrayItemNode ? resolveType(arrayItemNode) : null;
+    const recordNode = kind === "object" ? recordValueNode(schemaNode) : null;
+    const recordValueKind = recordNode ? resolveType(recordNode) : null;
 
     target.fields.push({
       path,
@@ -291,6 +320,10 @@ export function buildExplorerSnapshot(): ExplorerSnapshot {
       advanced: Boolean(hint.advanced),
       kind,
       enumValues: toEnumValues(schemaNode?.enum),
+      itemKind,
+      itemEnumValues: toEnumValues(arrayItemNode?.enum),
+      recordValueKind,
+      recordEnumValues: toEnumValues(recordNode?.enum),
       hasDefault: schemaNode?.default !== undefined,
       editable: isEditable(path, kind),
     });

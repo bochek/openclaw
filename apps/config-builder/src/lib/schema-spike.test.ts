@@ -22,5 +22,17 @@ describe("buildExplorerSnapshot", () => {
       .flatMap((section) => section.fields)
       .find((field) => field.path.includes("*"));
     expect(wildcardField?.editable).toBe(false);
+
+    const arrayField = snapshot.sections
+      .flatMap((section) => section.fields)
+      .find((field) => field.path === "tools.alsoAllow");
+    expect(arrayField?.kind).toBe("array");
+    expect(arrayField?.itemKind).toBe("string");
+
+    const recordField = snapshot.sections
+      .flatMap((section) => section.fields)
+      .find((field) => field.path === "diagnostics.otel.headers");
+    expect(recordField?.kind).toBe("object");
+    expect(recordField?.recordValueKind).toBe("string");
   });
 });

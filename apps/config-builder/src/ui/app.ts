@@ -15,6 +15,7 @@ import {
   type ExplorerSection,
   type ExplorerSnapshot,
 } from "../lib/schema-spike.ts";
+import { renderFieldEditor } from "./components/field-renderer.ts";
 
 type AppState =
   | { status: "loading" }
@@ -58,6 +59,7 @@ class ConfigBuilderApp extends LitElement {
   private config: ConfigDraft = {};
   private selectedSectionId: string | null = null;
   private searchQuery = "";
+  private fieldErrors: Record<string, string> = {};
   private copyState: CopyState = "idle";
   private copyResetTimer: number | null = null;
 
@@ -107,54 +109,36 @@ class ConfigBuilderApp extends LitElement {
     this.requestUpdate();
   }
 
+  private setFieldError(path: string, message: string): void {
+    this.fieldErrors = {
+      ...this.fieldErrors,
+      [path]: message,
+    };
+    this.requestUpdate();
+  }
+
+  private clearFieldError(path: string): void {
+    if (!(path in this.fieldErrors)) {
+      return;
+    }
+    const next = { ...this.fieldErrors };
+    delete next[path];
+    this.fieldErrors = next;
+  }
+
   private clearField(path: string): void {
+    this.clearFieldError(path);
     this.saveConfig(clearFieldValue(this.config, path));
   }
 
   private setField(path: string, value: unknown): void {
+    this.clearFieldError(path);
     this.saveConfig(setFieldValue(this.config, path, value));
   }
 
   private resetAllFields(): void {
+    this.fieldErrors = {};
     this.saveConfig(resetDraft());
-  }
-
-  private parseAndSetField(field: ExplorerField, raw: string): void {
-    const trimmed = raw.trim();
-
-    if (trimmed.length === 0) {
-      this.clearField(field.path);
-      return;
-    }
-
-    if (field.kind === "number" || field.kind === "integer") {
-      const parsed = Number(trimmed);
-      if (Number.isNaN(parsed)) {
-        return;
-      }
-      this.setField(field.path, field.kind === "integer" ? Math.trunc(parsed) : parsed);
-      return;
-    }
-
-    if (field.kind === "boolean") {
-      if (trimmed === "true") {
-        this.setField(field.path, true);
-        return;
-      }
-      if (trimmed === "false") {
-        this.setField(field.path, false);
-      }
-      return;
-    }
-
-    if (field.kind === "enum") {
-      if (field.enumValues.includes(trimmed)) {
-        this.setField(field.path, trimmed);
-      }
-      return;
-    }
-
-    this.setField(field.path, raw);
   }
 
   private async copyPreview(text: string): Promise<void> {
@@ -245,9 +229,9 @@ class ConfigBuilderApp extends LitElement {
         <div class="config-sidebar__header">
           <div>
             <div class="config-sidebar__title">Config Builder</div>
-            <div class="builder-subtitle">Explorer + JSON5 preview</div>
+            <div class="builder-subtitle">Typed field renderer + JSON5 preview</div>
           </div>
-          <span class="pill pill--sm pill--ok">phase 2</span>
+          <span class="pill pill--sm pill--ok">phase 3</span>
         </div>
 
         ${this.renderSearch()}
@@ -287,76 +271,10 @@ class ConfigBuilderApp extends LitElement {
     `;
   }
 
-  private renderFieldControl(field: ExplorerField, value: unknown) {
-    if (!field.editable) {
-      return html`<div class="cfg-field__help">Phase 2 edits only primitive concrete paths.</div>`;
-    }
-
-    if (field.kind === "boolean") {
-      return html`
-        <label class="cfg-toggle-row builder-toggle-row">
-          <span class="cfg-field__help">Toggle to set this boolean value.</span>
-          <div class="cfg-toggle">
-            <input
-              type="checkbox"
-              .checked=${value === true}
-              @change=${(event: Event) =>
-                this.setField(field.path, (event.target as HTMLInputElement).checked)}
-            />
-            <span class="cfg-toggle__track"></span>
-          </div>
-        </label>
-      `;
-    }
-
-    if (field.kind === "enum") {
-      const selectValue = typeof value === "string" ? value : "";
-      return html`
-        <select
-          class="cfg-select"
-          .value=${selectValue}
-          @change=${(event: Event) => {
-            const next = (event.target as HTMLSelectElement).value;
-            if (!next) {
-              this.clearField(field.path);
-              return;
-            }
-            this.setField(field.path, next);
-          }}
-        >
-          <option value="">(unset)</option>
-          ${field.enumValues.map((option) => html`<option value=${option}>${option}</option>`)}
-        </select>
-      `;
-    }
-
-    if (field.kind === "number" || field.kind === "integer") {
-      const textValue = typeof value === "number" ? String(value) : "";
-      return html`
-        <input
-          class="cfg-input"
-          type="number"
-          .value=${textValue}
-          @input=${(event: Event) =>
-            this.parseAndSetField(field, (event.target as HTMLInputElement).value)}
-        />
-      `;
-    }
-
-    const textValue = typeof value === "string" ? value : "";
-    return html`
-      <input
-        class="cfg-input"
-        type=${field.sensitive ? "password" : "text"}
-        .value=${textValue}
-        @input=${(event: Event) => this.parseAndSetField(field, (event.target as HTMLInputElement).value)}
-      />
-    `;
-  }
-
   private renderField(field: ExplorerField) {
     const value = getFieldValue(this.config, field.path);
     const hasValue = value !== undefined;
+    const error = this.fieldErrors[field.path] ?? null;
 
     return html`
       <div class="cfg-field builder-field ${hasValue ? "builder-field--set" : ""}">
@@ -367,6 +285,12 @@ class ConfigBuilderApp extends LitElement {
             ${field.sensitive ? html`<span class="pill pill--sm pill--danger">sensitive</span>` : nothing}
             ${field.advanced ? html`<span class="pill pill--sm">advanced</span>` : nothing}
             <span class="pill pill--sm mono">${field.kind}</span>
+            ${field.kind === "array" && field.itemKind
+              ? html`<span class="pill pill--sm mono">item:${field.itemKind}</span>`
+              : nothing}
+            ${field.kind === "object" && field.recordValueKind
+              ? html`<span class="pill pill--sm mono">value:${field.recordValueKind}</span>`
+              : nothing}
           </div>
         </div>
 
@@ -374,7 +298,17 @@ class ConfigBuilderApp extends LitElement {
 
         ${field.help ? html`<div class="cfg-field__help">${field.help}</div>` : nothing}
 
-        <div class="builder-field__controls">${this.renderFieldControl(field, value)}</div>
+        <div class="builder-field__controls">
+          ${renderFieldEditor({
+            field,
+            value,
+            onSet: (nextValue: unknown) => this.setField(field.path, nextValue),
+            onClear: () => this.clearField(field.path),
+            onValidationError: (message: string) => this.setFieldError(field.path, message),
+          })}
+        </div>
+
+        ${error ? html`<div class="cfg-field__error">${error}</div>` : nothing}
 
         <div class="builder-field__actions">
           <button class="btn btn--sm" @click=${() => this.clearField(field.path)}>Clear</button>
@@ -464,7 +398,7 @@ class ConfigBuilderApp extends LitElement {
           <main class="config-main">
             <div class="config-actions">
               <div class="config-actions__left">
-                <span class="config-status">Phase 2: sparse state + live JSON5 preview</span>
+                <span class="config-status">Phase 3: typed field renderer + live JSON5 preview</span>
               </div>
               <div class="config-actions__right">
                 <span class="pill pill--sm">sections: ${snapshot.sectionCount}</span>
