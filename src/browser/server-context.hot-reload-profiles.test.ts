@@ -78,7 +78,7 @@ describe("server-context hot-reload profiles", () => {
     // Start with only openclaw profile
     const { createBrowserRouteContext } = await import("./server-context.js");
     const { resolveBrowserConfig } = await import("./config.js");
-    const { loadConfig, clearConfigCache } = await import("../config/config.js");
+    const { loadConfig } = await import("../config/config.js");
 
     // 1. Prime the cache by calling loadConfig() first
     const cfg = loadConfig();
