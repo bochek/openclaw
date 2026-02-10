@@ -410,7 +410,6 @@ function formatReactionEmoji(emoji: { id?: string | null; name?: string | null }
 
 export {
   buildDiscordSendError,
-  buildDiscordTextChunks,
   buildReactionIdentifier,
   createDiscordClient,
   formatReactionEmoji,
