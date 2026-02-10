@@ -15,7 +15,10 @@ import {
   type ExplorerSection,
   type ExplorerSnapshot,
 } from "../lib/schema-spike.ts";
+import { validateConfigDraft, type ValidationResult } from "../lib/validation.ts";
+import { modeToHash, parseModeFromHash, type ConfigBuilderMode } from "./navigation.ts";
 import { renderFieldEditor } from "./components/field-renderer.ts";
+import { WIZARD_STEPS, wizardStepByIndex, wizardStepFields } from "./wizard.ts";
 
 type AppState =
   | { status: "loading" }
@@ -56,12 +59,18 @@ function sectionGlyph(label: string): string {
 
 class ConfigBuilderApp extends LitElement {
   private state: AppState = { status: "loading" };
+  private mode: ConfigBuilderMode = "landing";
   private config: ConfigDraft = {};
+  private validation: ValidationResult = validateConfigDraft({});
   private selectedSectionId: string | null = null;
   private searchQuery = "";
   private fieldErrors: Record<string, string> = {};
+  private wizardStepIndex = 0;
+  private previewOpenMobile = false;
   private copyState: CopyState = "idle";
   private copyResetTimer: number | null = null;
+
+  private readonly hashChangeHandler = () => this.handleHashChange();
 
   override createRenderRoot() {
     // Match the existing OpenClaw web UI approach (global CSS classes/tokens).
@@ -71,9 +80,11 @@ class ConfigBuilderApp extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this.bootstrap();
+    window.addEventListener("hashchange", this.hashChangeHandler);
   }
 
   override disconnectedCallback(): void {
+    window.removeEventListener("hashchange", this.hashChangeHandler);
     if (this.copyResetTimer != null) {
       window.clearTimeout(this.copyResetTimer);
       this.copyResetTimer = null;
@@ -83,7 +94,9 @@ class ConfigBuilderApp extends LitElement {
 
   private bootstrap(): void {
     try {
+      this.mode = parseModeFromHash(window.location.hash);
       this.config = loadPersistedDraft();
+      this.validation = validateConfigDraft(this.config);
       const snapshot = buildExplorerSnapshot();
       this.state = { status: "ready", snapshot };
     } catch (error) {
@@ -91,6 +104,32 @@ class ConfigBuilderApp extends LitElement {
       this.state = { status: "error", message };
     }
     this.requestUpdate();
+  }
+
+  private handleHashChange(): void {
+    const next = parseModeFromHash(window.location.hash);
+    if (next === this.mode) {
+      return;
+    }
+    this.mode = next;
+    if (next !== "wizard") {
+      this.wizardStepIndex = 0;
+    }
+    this.requestUpdate();
+  }
+
+  private navigateMode(mode: ConfigBuilderMode): void {
+    if (mode !== this.mode) {
+      this.mode = mode;
+      this.requestUpdate();
+    }
+    const hash = modeToHash(mode);
+    if (window.location.hash !== hash) {
+      window.location.hash = hash;
+    }
+    if (mode === "wizard") {
+      this.focusWizardStep();
+    }
   }
 
   private setSection(sectionId: string | null): void {
@@ -105,6 +144,7 @@ class ConfigBuilderApp extends LitElement {
 
   private saveConfig(next: ConfigDraft): void {
     this.config = next;
+    this.validation = validateConfigDraft(next);
     persistDraft(next);
     this.requestUpdate();
   }
@@ -141,6 +181,14 @@ class ConfigBuilderApp extends LitElement {
     this.saveConfig(resetDraft());
   }
 
+  private sectionErrorCount(sectionId: string): number {
+    return this.validation.sectionErrorCounts[sectionId] ?? 0;
+  }
+
+  private totalErrorCount(): number {
+    return this.validation.issues.length;
+  }
+
   private async copyPreview(text: string): Promise<void> {
     try {
       await navigator.clipboard.writeText(text);
@@ -160,6 +208,24 @@ class ConfigBuilderApp extends LitElement {
     }, 1500);
 
     this.requestUpdate();
+  }
+
+  private setWizardStep(index: number): void {
+    const clamped = Math.max(0, Math.min(WIZARD_STEPS.length - 1, index));
+    if (clamped === this.wizardStepIndex) {
+      return;
+    }
+    this.wizardStepIndex = clamped;
+    this.requestUpdate();
+    this.focusWizardStep();
+  }
+
+  private focusWizardStep(): void {
+    window.setTimeout(() => {
+      const root = document.querySelector(".builder-wizard");
+      const target = root?.querySelector<HTMLElement>("input, select, textarea, button");
+      target?.focus();
+    }, 0);
   }
 
   private getVisibleSections(snapshot: ExplorerSnapshot): ExplorerSection[] {
@@ -186,6 +252,57 @@ class ConfigBuilderApp extends LitElement {
     }
 
     return visible;
+  }
+
+  private sensitiveFieldsWithValues(snapshot: ExplorerSnapshot): string[] {
+    const paths: string[] = [];
+    for (const section of snapshot.sections) {
+      for (const field of section.fields) {
+        if (!field.sensitive) {
+          continue;
+        }
+        if (getFieldValue(this.config, field.path) === undefined) {
+          continue;
+        }
+        paths.push(field.path);
+      }
+    }
+    return paths;
+  }
+
+  private renderTopbar() {
+    const modeButton = (mode: ConfigBuilderMode, label: string) => html`
+      <button
+        class="builder-mode-toggle__btn ${this.mode === mode ? "active" : ""}"
+        @click=${() => this.navigateMode(mode)}
+      >
+        ${label}
+      </button>
+    `;
+
+    return html`
+      <header class="builder-topbar">
+        <div class="builder-brand">
+          <div class="builder-brand__title">OpenClaw Config Builder</div>
+          <div class="builder-brand__subtitle">Wizard + Explorer</div>
+        </div>
+
+        <div class="builder-mode-toggle" role="tablist" aria-label="Builder mode">
+          ${modeButton("landing", "Home")}
+          ${modeButton("explorer", "Explorer")}
+          ${modeButton("wizard", "Wizard")}
+        </div>
+
+        <a
+          class="btn btn--sm"
+          href="https://docs.openclaw.ai/configuration"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Docs
+        </a>
+      </header>
+    `;
   }
 
   private renderSearch() {
@@ -228,10 +345,12 @@ class ConfigBuilderApp extends LitElement {
       <aside class="config-sidebar">
         <div class="config-sidebar__header">
           <div>
-            <div class="config-sidebar__title">Config Builder</div>
-            <div class="builder-subtitle">Typed field renderer + JSON5 preview</div>
+            <div class="config-sidebar__title">Explorer</div>
+            <div class="builder-subtitle">Schema-backed field editor</div>
           </div>
-          <span class="pill pill--sm pill--ok">phase 3</span>
+          <span class="pill pill--sm ${this.validation.valid ? "pill--ok" : "pill--danger"}">
+            ${this.validation.valid ? "valid" : "errors"}
+          </span>
         </div>
 
         ${this.renderSearch()}
@@ -257,6 +376,9 @@ class ConfigBuilderApp extends LitElement {
                 >
                 <span class="config-nav__label">${section.label}</span>
                 <span class="builder-count mono">${section.fields.length}</span>
+                ${this.sectionErrorCount(section.id) > 0
+                  ? html`<span class="builder-error-count">${this.sectionErrorCount(section.id)}</span>`
+                  : nothing}
               </button>
             `,
           )}
@@ -264,17 +386,18 @@ class ConfigBuilderApp extends LitElement {
 
         <div class="config-sidebar__footer">
           <div class="builder-footer-note">
-            Draft values persist in localStorage and render to JSON5 preview.
+            Draft values persist to localStorage. Validation updates in real time.
           </div>
         </div>
       </aside>
     `;
   }
 
-  private renderField(field: ExplorerField) {
+  private renderField(field: ExplorerField, context: "explorer" | "wizard") {
     const value = getFieldValue(this.config, field.path);
     const hasValue = value !== undefined;
-    const error = this.fieldErrors[field.path] ?? null;
+    const localError = this.fieldErrors[field.path] ?? null;
+    const schemaErrors = this.validation.issuesByPath[field.path] ?? [];
 
     return html`
       <div class="cfg-field builder-field ${hasValue ? "builder-field--set" : ""}">
@@ -308,16 +431,48 @@ class ConfigBuilderApp extends LitElement {
           })}
         </div>
 
-        ${error ? html`<div class="cfg-field__error">${error}</div>` : nothing}
+        ${localError ? html`<div class="cfg-field__error">${localError}</div>` : nothing}
+        ${schemaErrors.map((message) => html`<div class="cfg-field__error">${message}</div>`)}
 
         <div class="builder-field__actions">
           <button class="btn btn--sm" @click=${() => this.clearField(field.path)}>Clear</button>
+          ${context === "wizard"
+            ? html`<button class="btn btn--sm" @click=${() => this.navigateMode("explorer")}>Open in Explorer</button>`
+            : nothing}
         </div>
       </div>
     `;
   }
 
-  private renderSections(visibleSections: ExplorerSection[]) {
+  private renderValidationSummary() {
+    if (this.validation.valid) {
+      return nothing;
+    }
+
+    const sectionEntries = Object.entries(this.validation.sectionErrorCounts).toSorted((a, b) =>
+      a[0].localeCompare(b[0]),
+    );
+
+    return html`
+      <div class="callout danger builder-validation-summary" role="alert">
+        <div class="builder-validation-summary__title">
+          ${this.totalErrorCount()} validation error${this.totalErrorCount() === 1 ? "" : "s"}
+        </div>
+        <div class="builder-validation-summary__sections">
+          ${sectionEntries.map(
+            ([section, count]) => html`<span class="pill pill--sm">${section}: ${count}</span>`,
+          )}
+        </div>
+        <ul class="builder-validation-summary__list">
+          ${this.validation.issues.slice(0, 8).map(
+            (issue) => html`<li><span class="mono">${issue.path || "(root)"}</span> — ${issue.message}</li>`,
+          )}
+        </ul>
+      </div>
+    `;
+  }
+
+  private renderExplorerSections(visibleSections: ExplorerSection[]) {
     if (visibleSections.length === 0) {
       return html`<div class="config-empty"><div class="config-empty__text">No matching sections/fields for this filter.</div></div>`;
     }
@@ -336,13 +491,18 @@ class ConfigBuilderApp extends LitElement {
                   <div class="config-section-card__desc">
                     <span class="mono">${section.id}</span>
                     · ${section.fields.length} field hint${section.fields.length === 1 ? "" : "s"}
+                    ${this.sectionErrorCount(section.id) > 0
+                      ? html` · <span class="builder-error-text">${this.sectionErrorCount(section.id)} errors</span>`
+                      : nothing}
                     ${section.description ? html`<br />${section.description}` : nothing}
                   </div>
                 </div>
               </div>
 
               <div class="config-section-card__content">
-                <div class="cfg-fields">${section.fields.map((field) => this.renderField(field))}</div>
+                <div class="cfg-fields">
+                  ${section.fields.map((field) => this.renderField(field, "explorer"))}
+                </div>
               </div>
             </section>
           `,
@@ -351,15 +511,108 @@ class ConfigBuilderApp extends LitElement {
     `;
   }
 
-  private renderPreview() {
-    const preview = formatConfigJson5(this.config);
+  private renderWizardView() {
+    const step = wizardStepByIndex(this.wizardStepIndex);
+    const fields = wizardStepFields(step);
 
     return html`
-      <aside class="builder-preview">
-        <div class="builder-preview__header">
-          <div class="builder-preview__title mono">openclaw.json</div>
-          <div class="builder-preview__meta mono">${preview.lineCount} lines · ${preview.byteCount} B</div>
+      <div class="builder-wizard">
+        <div class="builder-wizard__progress" role="list">
+          ${WIZARD_STEPS.map((entry, index) => {
+            const state =
+              index < this.wizardStepIndex ? "done" : index === this.wizardStepIndex ? "active" : "todo";
+            return html`
+              <button
+                class="builder-wizard__step builder-wizard__step--${state}"
+                @click=${() => this.setWizardStep(index)}
+                role="listitem"
+                aria-current=${index === this.wizardStepIndex ? "step" : "false"}
+              >
+                <span class="builder-wizard__step-index">${index + 1}</span>
+                <span class="builder-wizard__step-label">${entry.label}</span>
+              </button>
+            `;
+          })}
         </div>
+
+        <section class="config-section-card">
+          <div class="config-section-card__header">
+            <div class="config-section-card__icon builder-section-glyph" aria-hidden="true">
+              ${sectionGlyph(step.label)}
+            </div>
+            <div class="config-section-card__titles">
+              <h2 class="config-section-card__title">${step.label}</h2>
+              <div class="config-section-card__desc">${step.description}</div>
+            </div>
+          </div>
+
+          <div class="config-section-card__content">
+            <div class="cfg-fields">
+              ${fields.map((field) => this.renderField(field, "wizard"))}
+            </div>
+
+            <div class="builder-wizard__actions">
+              <button
+                class="btn btn--sm"
+                ?disabled=${this.wizardStepIndex === 0}
+                @click=${() => this.setWizardStep(this.wizardStepIndex - 1)}
+              >
+                Back
+              </button>
+
+              <button
+                class="btn btn--sm primary"
+                @click=${() => {
+                  if (this.wizardStepIndex >= WIZARD_STEPS.length - 1) {
+                    this.navigateMode("explorer");
+                    return;
+                  }
+                  this.setWizardStep(this.wizardStepIndex + 1);
+                }}
+              >
+                ${this.wizardStepIndex >= WIZARD_STEPS.length - 1 ? "Finish" : "Continue"}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  private toggleMobilePreview(): void {
+    this.previewOpenMobile = !this.previewOpenMobile;
+    this.requestUpdate();
+  }
+
+  private renderPreview(snapshot: ExplorerSnapshot) {
+    const preview = formatConfigJson5(this.config);
+    const sensitivePaths = this.sensitiveFieldsWithValues(snapshot);
+
+    return html`
+      <aside class="builder-preview ${this.previewOpenMobile ? "mobile-open" : "mobile-collapsed"}">
+        <div class="builder-preview__header">
+          <div>
+            <div class="builder-preview__title mono">openclaw.json</div>
+            <div class="builder-preview__meta mono">${preview.lineCount} lines · ${preview.byteCount} B</div>
+          </div>
+
+          <button
+            class="btn btn--sm builder-preview__mobile-toggle"
+            @click=${() => this.toggleMobilePreview()}
+            aria-expanded=${this.previewOpenMobile ? "true" : "false"}
+          >
+            ${this.previewOpenMobile ? "Hide" : "Show"} preview
+          </button>
+        </div>
+
+        ${sensitivePaths.length > 0
+          ? html`
+              <div class="callout warn builder-sensitive-warning">
+                Sensitive values included in output (${sensitivePaths.length}).
+                <div class="mono builder-sensitive-warning__paths">${sensitivePaths.join(", ")}</div>
+              </div>
+            `
+          : nothing}
 
         <pre class="builder-preview__code code-block">${preview.text}</pre>
 
@@ -378,9 +631,78 @@ class ConfigBuilderApp extends LitElement {
     `;
   }
 
+  private renderLanding() {
+    return html`
+      <div class="builder-landing">
+        <section class="card builder-landing__card">
+          <h2 class="card-title">Choose your setup flow</h2>
+          <p class="card-sub">
+            Start with the guided wizard for common setups, or use explorer for full schema control.
+          </p>
+
+          <div class="builder-landing__actions">
+            <button class="btn primary" @click=${() => this.navigateMode("wizard")}>Start Wizard</button>
+            <button class="btn" @click=${() => this.navigateMode("explorer")}>Open Explorer</button>
+          </div>
+
+          <div class="builder-landing__notes">
+            <div class="pill pill--sm">7 curated wizard steps</div>
+            <div class="pill pill--sm">Live JSON5 preview</div>
+            <div class="pill pill--sm">Real-time schema validation</div>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  private renderWorkspace(snapshot: ExplorerSnapshot) {
+    const explorerSections = this.getVisibleSections(snapshot);
+    const layoutClass = this.mode === "wizard" ? "builder-layout builder-layout--wizard" : "builder-layout";
+
+    return html`
+      <div class="config-layout ${layoutClass}">
+        ${this.mode === "explorer" ? this.renderSidebar(snapshot) : nothing}
+
+        <main class="config-main">
+          <div class="config-actions">
+            <div class="config-actions__left">
+              <span class="config-status">
+                ${this.mode === "wizard"
+                  ? `Wizard step ${this.wizardStepIndex + 1} of ${WIZARD_STEPS.length}`
+                  : "Explorer mode"}
+              </span>
+            </div>
+            <div class="config-actions__right">
+              <span class="pill pill--sm">sections: ${snapshot.sectionCount}</span>
+              <span class="pill pill--sm">fields: ${snapshot.fieldCount}</span>
+              <span class="pill pill--sm mono">v${snapshot.version}</span>
+              ${this.totalErrorCount() > 0
+                ? html`<span class="pill pill--sm pill--danger">errors: ${this.totalErrorCount()}</span>`
+                : html`<span class="pill pill--sm pill--ok">valid</span>`}
+            </div>
+          </div>
+
+          <div class="config-content">
+            ${this.renderValidationSummary()}
+
+            ${this.mode === "explorer" && this.searchQuery
+              ? html`<div class="builder-search-state">Search: <span class="mono">${this.searchQuery}</span></div>`
+              : nothing}
+
+            ${this.mode === "wizard"
+              ? this.renderWizardView()
+              : this.renderExplorerSections(explorerSections)}
+          </div>
+        </main>
+
+        ${this.renderPreview(snapshot)}
+      </div>
+    `;
+  }
+
   override render() {
     if (this.state.status === "loading") {
-      return html`<div class="builder-screen"><div class="card">Loading schema explorer…</div></div>`;
+      return html`<div class="builder-screen"><div class="card">Loading config builder…</div></div>`;
     }
 
     if (this.state.status === "error") {
@@ -388,36 +710,11 @@ class ConfigBuilderApp extends LitElement {
     }
 
     const { snapshot } = this.state;
-    const visibleSections = this.getVisibleSections(snapshot);
 
     return html`
       <div class="builder-screen">
-        <div class="config-layout builder-layout">
-          ${this.renderSidebar(snapshot)}
-
-          <main class="config-main">
-            <div class="config-actions">
-              <div class="config-actions__left">
-                <span class="config-status">Phase 3: typed field renderer + live JSON5 preview</span>
-              </div>
-              <div class="config-actions__right">
-                <span class="pill pill--sm">sections: ${snapshot.sectionCount}</span>
-                <span class="pill pill--sm">fields: ${snapshot.fieldCount}</span>
-                <span class="pill pill--sm mono">v${snapshot.version}</span>
-              </div>
-            </div>
-
-            <div class="config-content">
-              ${this.searchQuery
-                ? html`<div class="builder-search-state">Search: <span class="mono">${this.searchQuery}</span></div>`
-                : nothing}
-
-              ${this.renderSections(visibleSections)}
-            </div>
-          </main>
-
-          ${this.renderPreview()}
-        </div>
+        ${this.renderTopbar()}
+        ${this.mode === "landing" ? this.renderLanding() : this.renderWorkspace(snapshot)}
       </div>
     `;
   }

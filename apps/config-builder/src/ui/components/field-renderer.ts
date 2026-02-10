@@ -305,6 +305,7 @@ function renderRecordObject(params: {
   const record = asObject(value);
   const entries = Object.entries(record);
   const valueKind = field.recordValueKind;
+  const recordEnums = field.recordEnumValues;
 
   if (!valueKind || valueKind === "unknown" || valueKind === "object" || valueKind === "array") {
     return renderJsonControl(params);
@@ -377,25 +378,42 @@ function renderRecordObject(params: {
                               </div>
                             </label>
                           `
-                        : html`
-                            <input
-                              class="cfg-input cfg-input--sm"
-                              type=${valueKind === "number" || valueKind === "integer" ? "number" : "text"}
-                              .value=${scalarInputValue(entryValue)}
-                              @input=${(event: Event) => {
-                                const raw = (event.target as HTMLInputElement).value;
-                                const next = { ...record };
-                                try {
-                                  next[key] = raw.trim() === "" ? defaultValueForKind(valueKind) : parseScalar(valueKind, raw);
+                        : valueKind === "enum" && recordEnums.length > 0
+                          ? html`
+                              <select
+                                class="cfg-select cfg-select--sm"
+                                .value=${String(entryValue)}
+                                @change=${(event: Event) => {
+                                  const next = { ...record };
+                                  next[key] = (event.target as HTMLSelectElement).value;
                                   onSet(next);
-                                } catch (error) {
-                                  onValidationError?.(
-                                    error instanceof Error ? error.message : String(error),
-                                  );
-                                }
-                              }}
-                            />
-                          `}
+                                }}
+                              >
+                                ${recordEnums.map((entry) => html`<option value=${entry}>${entry}</option>`)}
+                              </select>
+                            `
+                          : html`
+                              <input
+                                class="cfg-input cfg-input--sm"
+                                type=${valueKind === "number" || valueKind === "integer"
+                                  ? "number"
+                                  : "text"}
+                                .value=${scalarInputValue(entryValue)}
+                                @input=${(event: Event) => {
+                                  const raw = (event.target as HTMLInputElement).value;
+                                  const next = { ...record };
+                                  try {
+                                    next[key] =
+                                      raw.trim() === "" ? defaultValueForKind(valueKind) : parseScalar(valueKind, raw);
+                                    onSet(next);
+                                  } catch (error) {
+                                    onValidationError?.(
+                                      error instanceof Error ? error.message : String(error),
+                                    );
+                                  }
+                                }}
+                              />
+                            `}
                     </div>
 
                     <button

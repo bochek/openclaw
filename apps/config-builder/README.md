@@ -12,19 +12,33 @@ Use the same front-end stack as the existing OpenClaw web UI (`ui/`):
 
 ## Current status
 
-Phase 0, Phase 1, Phase 2, and Phase 3 are in place:
+Phase 0 through Phase 6 are implemented:
 
 - app boots with Vite + Lit
 - `OpenClawSchema.toJSONSchema()` runs in browser bundle
 - `buildConfigSchema()` UI hints load in browser bundle
-- Explorer scaffold renders grouped sections + field metadata
-- Sparse draft state persists to localStorage and renders to JSON5 preview
+- Explorer mode supports grouped schema editing + search/filter
 - Typed field renderer covers:
   - strings, numbers, integers, booleans, enums
   - primitive arrays with add/remove
   - record-like objects (key/value editor)
   - JSON fallback editor for complex array/object shapes
-- Live JSON5 preview supports copy/download/reset
+- Validation + error UX:
+  - real-time `OpenClawSchema` validation
+  - inline field-level errors
+  - section-level error counts + global summary
+- Wizard mode:
+  - 7 curated steps with progress indicators
+  - back/continue flow with shared renderer/state
+- JSON5 preview panel:
+  - sparse output
+  - copy/download/reset
+  - sensitive-value warning banner
+- Routing + polish:
+  - landing page + mode routing via hash (`#/`, `#/explorer`, `#/wizard`)
+  - responsive layout including mobile preview drawer behavior
+  - docs link in topbar
+  - Vercel static config (`apps/config-builder/vercel.json`)
 
 To run locally:
 

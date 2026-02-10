@@ -11,21 +11,123 @@ config-builder-app {
 
 .builder-screen {
   min-height: 100vh;
-  padding: 0;
   background: var(--bg);
 }
 
+/* -------------------------------------------
+   Topbar + mode routing controls
+   ------------------------------------------- */
+
+.builder-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--chrome);
+  backdrop-filter: blur(8px);
+}
+
+.builder-brand {
+  min-width: 0;
+}
+
+.builder-brand__title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.builder-brand__subtitle {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.builder-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+}
+
+.builder-mode-toggle__btn {
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.builder-mode-toggle__btn:hover {
+  color: var(--text);
+}
+
+.builder-mode-toggle__btn.active {
+  color: var(--accent-foreground);
+  background: var(--accent);
+}
+
+/* -------------------------------------------
+   Landing mode
+   ------------------------------------------- */
+
+.builder-landing {
+  min-height: calc(100vh - 58px);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.builder-landing__card {
+  max-width: 760px;
+  width: 100%;
+}
+
+.builder-landing__actions {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.builder-landing__notes {
+  margin-top: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* -------------------------------------------
+   Workspace layout
+   ------------------------------------------- */
+
 .builder-layout.config-layout {
   margin: 0;
-  height: 100vh;
   border: 0;
   border-radius: 0;
+  height: calc(100vh - 58px);
+  grid-template-columns: 260px minmax(0, 1fr) 400px;
 }
 
 @supports (height: 100dvh) {
   .builder-layout.config-layout {
-    height: 100dvh;
+    height: calc(100dvh - 58px);
   }
+}
+
+.builder-layout--wizard.config-layout {
+  grid-template-columns: minmax(0, 1fr) 400px;
 }
 
 .builder-subtitle {
@@ -48,6 +150,21 @@ config-builder-app {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.builder-error-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: var(--danger-subtle);
+  color: var(--danger);
   font-size: 10px;
   font-weight: 700;
 }
@@ -77,11 +194,50 @@ config-builder-app {
   color: var(--accent);
 }
 
+.builder-error-text {
+  color: var(--danger);
+}
+
+/* -------------------------------------------
+   Validation summary
+   ------------------------------------------- */
+
+.builder-validation-summary {
+  margin-bottom: 14px;
+}
+
+.builder-validation-summary__title {
+  font-weight: 700;
+}
+
+.builder-validation-summary__sections {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.builder-validation-summary__list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+}
+
+/* -------------------------------------------
+   Field rendering
+   ------------------------------------------- */
+
 .builder-field {
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--bg-accent);
+}
+
+.builder-field--set {
+  border-color: var(--border-strong);
 }
 
 .builder-field__head {
@@ -104,21 +260,97 @@ config-builder-app {
   word-break: break-word;
 }
 
-@media (max-width: 980px) {
-  .builder-layout.config-layout {
-    height: auto;
-    min-height: 100vh;
-  }
+.builder-field__controls {
+  display: grid;
+  gap: 8px;
 }
 
-/* Phase 2 layout: add dedicated JSON5 preview panel. */
-.builder-layout.config-layout {
-  grid-template-columns: 260px minmax(0, 1fr) 400px;
+.builder-field__actions {
+  margin-top: 2px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
+
+.builder-toggle-row {
+  margin: 0;
+}
+
+/* -------------------------------------------
+   Wizard mode
+   ------------------------------------------- */
+
+.builder-wizard {
+  display: grid;
+  gap: 14px;
+}
+
+.builder-wizard__progress {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.builder-wizard__step {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  color: var(--muted);
+  padding: 8px 6px;
+  cursor: pointer;
+}
+
+.builder-wizard__step:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.builder-wizard__step--active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+.builder-wizard__step--done {
+  border-color: rgba(34, 197, 94, 0.4);
+  color: var(--ok);
+}
+
+.builder-wizard__step-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-full);
+  border: 1px solid currentColor;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.builder-wizard__step-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.builder-wizard__actions {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* -------------------------------------------
+   Preview panel
+   ------------------------------------------- */
 
 .builder-preview {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   min-height: 0;
   background: var(--bg-accent);
   border-left: 1px solid var(--border);
@@ -150,6 +382,10 @@ config-builder-app {
   color: var(--muted);
 }
 
+.builder-preview__mobile-toggle {
+  display: none;
+}
+
 .builder-preview__code {
   margin: 0;
   border: 0;
@@ -161,30 +397,36 @@ config-builder-app {
   padding: 12px;
 }
 
-.builder-field--set {
-  border-color: var(--border-strong);
+.builder-sensitive-warning {
+  margin: 10px 12px 0;
 }
 
-.builder-field__controls {
-  display: grid;
-  gap: 8px;
+.builder-sensitive-warning__paths {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--warn);
+  word-break: break-word;
 }
 
-.builder-field__actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 2px;
-}
-
-.builder-toggle-row {
-  margin: 0;
-}
+/* -------------------------------------------
+   Responsive
+   ------------------------------------------- */
 
 @media (max-width: 1500px) {
   .builder-layout.config-layout {
     grid-template-columns: 260px minmax(0, 1fr);
     height: auto;
-    min-height: 100vh;
+    min-height: calc(100vh - 58px);
+  }
+
+  @supports (height: 100dvh) {
+    .builder-layout.config-layout {
+      min-height: calc(100dvh - 58px);
+    }
+  }
+
+  .builder-layout--wizard.config-layout {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .builder-preview {
@@ -192,5 +434,59 @@ config-builder-app {
     border-left: 0;
     border-top: 1px solid var(--border);
     min-height: 320px;
+  }
+}
+
+@media (max-width: 980px) {
+  .builder-topbar {
+    flex-wrap: wrap;
+  }
+
+  .builder-mode-toggle {
+    order: 3;
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .builder-mode-toggle__btn {
+    flex: 1;
+  }
+
+  .builder-layout.config-layout {
+    grid-template-columns: 1fr;
+    min-height: calc(100vh - 88px);
+  }
+
+  .config-sidebar {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .builder-wizard__progress {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .builder-preview {
+    position: sticky;
+    bottom: 0;
+    z-index: 20;
+    min-height: 0;
+    max-height: 72vh;
+    transition: transform var(--duration-normal) var(--ease-out);
+    border-top: 1px solid var(--border);
+    box-shadow: var(--shadow-lg);
+    background: var(--panel-strong);
+  }
+
+  .builder-preview__mobile-toggle {
+    display: inline-flex;
+  }
+
+  .builder-preview.mobile-collapsed {
+    transform: translateY(calc(100% - 46px));
+  }
+
+  .builder-preview.mobile-open {
+    transform: translateY(0);
   }
 }
