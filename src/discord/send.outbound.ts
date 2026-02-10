@@ -12,6 +12,7 @@ import { convertMarkdownTables } from "../markdown/tables.js";
 import { resolveDiscordAccount } from "./accounts.js";
 import {
   buildDiscordSendError,
+  buildDiscordTextChunks,
   createDiscordClient,
   normalizeDiscordPollInput,
   normalizeStickerIds,
@@ -81,32 +82,28 @@ export async function sendMessageDiscord(
   }
 
   if (isForumLikeType(channelType)) {
+    const threadName = deriveForumThreadName(textWithTables);
+    const chunks = buildDiscordTextChunks(textWithTables, {
+      maxLinesPerMessage: accountInfo.config.maxLinesPerMessage,
+      chunkMode,
+    });
+    const starterContent = chunks[0]?.trim() ? chunks[0] : threadName;
+    const starterEmbeds = opts.embeds?.length ? opts.embeds : undefined;
+    let threadRes: { id: string; message?: { id: string; channel_id: string } };
     try {
-      const threadName = deriveForumThreadName(textWithTables);
-      const starterContent = textWithTables.trim() || threadName;
-      const threadRes = (await request(
+      threadRes = (await request(
         () =>
           rest.post(Routes.threads(channelId), {
             body: {
               name: threadName,
-              message: { content: starterContent },
+              message: {
+                content: starterContent,
+                ...(starterEmbeds ? { embeds: starterEmbeds } : {}),
+              },
             },
           }) as Promise<{ id: string; message?: { id: string; channel_id: string } }>,
         "forum-thread",
       )) as { id: string; message?: { id: string; channel_id: string } };
-
-      recordChannelActivity({
-        channel: "discord",
-        accountId: accountInfo.accountId,
-        direction: "outbound",
-      });
-      const threadId = threadRes.id;
-      const messageId = threadRes.message?.id ?? threadId;
-      const resultChannelId = threadRes.message?.channel_id ?? threadId;
-      return {
-        messageId: messageId ? String(messageId) : "unknown",
-        channelId: String(resultChannelId ?? channelId),
-      };
     } catch (err) {
       throw await buildDiscordSendError(err, {
         channelId,
@@ -115,6 +112,70 @@ export async function sendMessageDiscord(
         hasMedia: Boolean(opts.mediaUrl),
       });
     }
+
+    const threadId = threadRes.id;
+    const messageId = threadRes.message?.id ?? threadId;
+    const resultChannelId = threadRes.message?.channel_id ?? threadId;
+    const remainingChunks = chunks.slice(1);
+
+    try {
+      if (opts.mediaUrl) {
+        const [mediaCaption, ...afterMediaChunks] = remainingChunks;
+        await sendDiscordMedia(
+          rest,
+          threadId,
+          mediaCaption ?? "",
+          opts.mediaUrl,
+          undefined,
+          request,
+          accountInfo.config.maxLinesPerMessage,
+          undefined,
+          chunkMode,
+        );
+        for (const chunk of afterMediaChunks) {
+          await sendDiscordText(
+            rest,
+            threadId,
+            chunk,
+            undefined,
+            request,
+            accountInfo.config.maxLinesPerMessage,
+            undefined,
+            chunkMode,
+          );
+        }
+      } else {
+        for (const chunk of remainingChunks) {
+          await sendDiscordText(
+            rest,
+            threadId,
+            chunk,
+            undefined,
+            request,
+            accountInfo.config.maxLinesPerMessage,
+            undefined,
+            chunkMode,
+          );
+        }
+      }
+    } catch (err) {
+      throw await buildDiscordSendError(err, {
+        channelId: threadId,
+        rest,
+        token,
+        hasMedia: Boolean(opts.mediaUrl),
+      });
+    }
+
+    recordChannelActivity({
+      channel: "discord",
+      accountId: accountInfo.accountId,
+      direction: "outbound",
+    });
+    return {
+      messageId: messageId ? String(messageId) : "unknown",
+      channelId: String(resultChannelId ?? channelId),
+    };
   }
 
   let result: { id: string; channel_id: string } | { id: string | null; channel_id: string };
