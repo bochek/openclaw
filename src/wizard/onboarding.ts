@@ -403,7 +403,7 @@ export async function runOnboardingWizard(
     nextConfig = authResult.config;
   }
 
-  if (authChoiceFromPrompt) {
+  if (authChoiceFromPrompt && authChoice !== "custom-api-key") {
     const modelSelection = await promptDefaultModel({
       config: nextConfig,
       prompter,
