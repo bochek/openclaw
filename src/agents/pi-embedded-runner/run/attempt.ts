@@ -917,6 +917,23 @@ export async function runEmbeddedAttempt(
       };
     } finally {
       // Always tear down the session (and release the lock) before we leave this attempt.
+      //
+      // BUGFIX: Wait for the agent to be truly idle before flushing pending tool results.
+      // pi-agent-core's auto-retry resolves waitForRetry() on assistant message receipt,
+      // *before* tool execution completes in the retried agent loop. Without this wait,
+      // flushPendingToolResults() fires while tools are still executing, inserting
+      // synthetic "missing tool result" errors and causing silent agent failures.
+      // See: https://github.com/openclaw/openclaw/issues/8643
+      if (session?.agent?.waitForIdle) {
+        try {
+          await Promise.race([
+            session.agent.waitForIdle(),
+            new Promise((resolve) => setTimeout(resolve, 30_000)), // safety timeout
+          ]);
+        } catch {
+          // Ignore errors during idle wait — we're in cleanup
+        }
+      }
       sessionManager?.flushPendingToolResults?.();
       session?.dispose();
       await sessionLock.release();
