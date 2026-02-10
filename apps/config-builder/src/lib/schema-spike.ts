@@ -1,8 +1,10 @@
 import { buildConfigSchema, type ConfigUiHint, type ConfigUiHints } from "@openclaw/config/schema.ts";
+import { OpenClawSchema } from "@openclaw/config/zod-schema.ts";
 
 type JsonSchemaNode = {
   description?: string;
   default?: unknown;
+  const?: unknown;
   type?: string | string[];
   enum?: unknown[];
   properties?: Record<string, JsonSchemaNode>;
@@ -30,6 +32,15 @@ export type FieldKind =
   | "object"
   | "unknown";
 
+export type ExplorerSchemaNode = {
+  kind: FieldKind;
+  enumValues: string[];
+  properties: Record<string, ExplorerSchemaNode>;
+  item: ExplorerSchemaNode | null;
+  additionalProperties: ExplorerSchemaNode | null;
+  allowsUnknownProperties: boolean;
+};
+
 export type ExplorerField = {
   path: string;
   label: string;
@@ -44,6 +55,7 @@ export type ExplorerField = {
   recordEnumValues: string[];
   hasDefault: boolean;
   editable: boolean;
+  schemaNode: ExplorerSchemaNode | null;
 };
 
 export type ExplorerSection = {
@@ -71,8 +83,16 @@ function getSchemaContext(): SchemaContext {
     return cachedContext;
   }
 
+  // buildConfigSchema() intentionally strips core channel schema from the base response.
+  // For the standalone builder we want the complete core schema for interactive controls,
+  // while still reusing uiHints/version metadata from buildConfigSchema().
   const configSchema = buildConfigSchema();
-  const schemaRoot = asObjectNode(configSchema.schema) ?? {};
+  const fullSchema = OpenClawSchema.toJSONSchema({
+    target: "draft-07",
+    unrepresentable: "any",
+  });
+  const schemaRoot = asObjectNode(fullSchema) ?? {};
+
   cachedContext = {
     schemaRoot,
     uiHints: configSchema.uiHints,
@@ -117,6 +137,23 @@ function sectionSort(a: ExplorerSection, b: ExplorerSection): number {
     return a.order - b.order;
   }
   return a.label.localeCompare(b.label);
+}
+
+function pruneRedundantCompositeFields(fields: ExplorerField[]): ExplorerField[] {
+  return fields.filter((field) => {
+    if (field.kind !== "object" && field.kind !== "array") {
+      return true;
+    }
+
+    // If we already expose concrete descendants as first-class fields,
+    // do not also render the composite parent card (it duplicates controls).
+    const prefix = `${field.path}.`;
+    const hasDescendant = fields.some((candidate) =>
+      candidate.path !== field.path && candidate.path.startsWith(prefix)
+    );
+
+    return !hasDescendant;
+  });
 }
 
 function normalizeSchemaPath(path: string): string[] {
@@ -193,18 +230,76 @@ function resolveSchemaNode(root: JsonSchemaNode, path: string): JsonSchemaNode |
     return null;
   }
 
-  return current ? resolveUnion(current) : null;
+  return current;
+}
+
+function enumValuesFromNode(node: JsonSchemaNode | null, depth = 0): string[] {
+  if (!node || depth > 5) {
+    return [];
+  }
+
+  const values = new Set<string>();
+
+  if (Array.isArray(node.enum)) {
+    for (const entry of node.enum) {
+      values.add(String(entry));
+    }
+  }
+
+  if (node.const !== undefined) {
+    values.add(String(node.const));
+  }
+
+  const unionPool = [...(node.anyOf ?? []), ...(node.oneOf ?? []), ...(node.allOf ?? [])];
+  for (const entry of unionPool) {
+    for (const option of enumValuesFromNode(entry, depth + 1)) {
+      values.add(option);
+    }
+  }
+
+  return Array.from(values);
+}
+
+function hasOpenScalarType(node: JsonSchemaNode | null, expected: "string" | "number" | "integer" | "boolean", depth = 0): boolean {
+  if (!node || depth > 8) {
+    return false;
+  }
+
+  const rawType = node.type;
+  const matchesType =
+    rawType === expected || (Array.isArray(rawType) && rawType.includes(expected));
+  if (matchesType && node.const === undefined && !Array.isArray(node.enum)) {
+    return true;
+  }
+
+  const unionPool = [...(node.anyOf ?? []), ...(node.oneOf ?? []), ...(node.allOf ?? [])];
+  return unionPool.some((entry) => hasOpenScalarType(entry, expected, depth + 1));
 }
 
 function resolveType(node: JsonSchemaNode | null): FieldKind {
   if (!node) {
     return "unknown";
   }
-  if (Array.isArray(node.enum) && node.enum.length > 0) {
+
+  const enumValues = enumValuesFromNode(node);
+  if (enumValues.length > 0) {
+    if (hasOpenScalarType(node, "string")) {
+      return "string";
+    }
+    if (hasOpenScalarType(node, "integer")) {
+      return "integer";
+    }
+    if (hasOpenScalarType(node, "number")) {
+      return "number";
+    }
+    if (hasOpenScalarType(node, "boolean")) {
+      return "boolean";
+    }
     return "enum";
   }
 
-  const rawType = node.type;
+  const resolved = resolveUnion(node);
+  const rawType = resolved.type;
   const type = Array.isArray(rawType) ? rawType.find((entry) => entry !== "null") : rawType;
 
   switch (type) {
@@ -221,10 +316,10 @@ function resolveType(node: JsonSchemaNode | null): FieldKind {
     case "object":
       return "object";
     default:
-      if (node.properties) {
+      if (resolved.properties) {
         return "object";
       }
-      if (node.items) {
+      if (resolved.items) {
         return "array";
       }
       return "unknown";
@@ -235,21 +330,23 @@ function firstArrayItemNode(node: JsonSchemaNode | null): JsonSchemaNode | null 
   if (!node) {
     return null;
   }
-  if (Array.isArray(node.items)) {
-    return asObjectNode(node.items[0] ?? null);
+  const resolved = resolveUnion(node);
+  if (Array.isArray(resolved.items)) {
+    return asObjectNode(resolved.items[0] ?? null);
   }
-  return asObjectNode(node.items);
+  return asObjectNode(resolved.items);
 }
 
 function recordValueNode(node: JsonSchemaNode | null): JsonSchemaNode | null {
   if (!node) {
     return null;
   }
-  const properties = node.properties ?? {};
+  const resolved = resolveUnion(node);
+  const properties = resolved.properties ?? {};
   if (Object.keys(properties).length > 0) {
     return null;
   }
-  return asObjectNode(node.additionalProperties);
+  return asObjectNode(resolved.additionalProperties);
 }
 
 function isEditable(path: string, kind: FieldKind): boolean {
@@ -259,11 +356,36 @@ function isEditable(path: string, kind: FieldKind): boolean {
   return kind !== "unknown";
 }
 
-function toEnumValues(values: unknown[] | undefined): string[] {
-  if (!values || values.length === 0) {
-    return [];
+function buildExplorerSchemaNode(node: JsonSchemaNode | null, depth = 0): ExplorerSchemaNode | null {
+  if (!node || depth > 8) {
+    return null;
   }
-  return values.map((value) => String(value));
+
+  const resolved = resolveUnion(node);
+  const kind = resolveType(resolved);
+
+  const properties: Record<string, ExplorerSchemaNode> = {};
+  for (const [key, child] of Object.entries(resolved.properties ?? {})) {
+    const childSchema = buildExplorerSchemaNode(asObjectNode(child), depth + 1);
+    if (childSchema) {
+      properties[key] = childSchema;
+    }
+  }
+
+  const item = buildExplorerSchemaNode(firstArrayItemNode(resolved), depth + 1);
+
+  const additionalRaw = resolved.additionalProperties;
+  const additionalProperties = buildExplorerSchemaNode(asObjectNode(additionalRaw), depth + 1);
+  const allowsUnknownProperties = additionalRaw === true;
+
+  return {
+    kind,
+    enumValues: enumValuesFromNode(node),
+    properties,
+    item,
+    additionalProperties,
+    allowsUnknownProperties,
+  };
 }
 
 function buildExplorerField(path: string, hint: ConfigUiHint | undefined, root: JsonSchemaNode): ExplorerField {
@@ -281,13 +403,14 @@ function buildExplorerField(path: string, hint: ConfigUiHint | undefined, root: 
     sensitive: Boolean(hint?.sensitive),
     advanced: Boolean(hint?.advanced),
     kind,
-    enumValues: toEnumValues(schemaNode?.enum),
+    enumValues: enumValuesFromNode(schemaNode),
     itemKind,
-    itemEnumValues: toEnumValues(arrayItemNode?.enum),
+    itemEnumValues: enumValuesFromNode(arrayItemNode),
     recordValueKind,
-    recordEnumValues: toEnumValues(recordNode?.enum),
+    recordEnumValues: enumValuesFromNode(recordNode),
     hasDefault: schemaNode?.default !== undefined,
     editable: isEditable(path, kind),
+    schemaNode: buildExplorerSchemaNode(schemaNode),
   };
 }
 
@@ -298,7 +421,8 @@ export function resolveExplorerField(path: string): ExplorerField | null {
   if (!schemaNode && !hint) {
     return null;
   }
-  return buildExplorerField(path, hint, context.schemaRoot);
+  const field = buildExplorerField(path, hint, context.schemaRoot);
+  return field.kind === "unknown" ? null : field;
 }
 
 export function buildExplorerSnapshot(): ExplorerSnapshot {
@@ -365,11 +489,20 @@ export function buildExplorerSnapshot(): ExplorerSnapshot {
       continue;
     }
 
-    target.fields.push(buildExplorerField(path, hint, schemaRoot));
+    const field = buildExplorerField(path, hint, schemaRoot);
+    if (field.kind === "unknown") {
+      // Ignore hint-only fields that do not resolve against the current schema.
+      continue;
+    }
+    target.fields.push(field);
   }
 
   const orderedSections = Array.from(sections.values())
-    .map((section) => ({ ...section, fields: section.fields.toSorted(fieldSort) }))
+    .map((section) => {
+      const sorted = section.fields.toSorted(fieldSort);
+      return { ...section, fields: pruneRedundantCompositeFields(sorted) };
+    })
+    .filter((section) => section.fields.length > 0)
     .toSorted(sectionSort);
 
   const fieldCount = orderedSections.reduce((sum, section) => sum + section.fields.length, 0);

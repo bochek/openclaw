@@ -23,17 +23,36 @@ describe("buildExplorerSnapshot", () => {
       .find((field) => field.path.includes("*"));
     expect(wildcardField?.editable).toBe(false);
 
+    const telegramToken = snapshot.sections
+      .flatMap((section) => section.fields)
+      .find((field) => field.path === "channels.telegram.botToken");
+    expect(telegramToken?.kind).toBe("string");
+
+    const updateChannel = snapshot.sections
+      .flatMap((section) => section.fields)
+      .find((field) => field.path === "update.channel");
+    expect(updateChannel?.kind).toBe("enum");
+    expect(updateChannel?.enumValues).toContain("stable");
+
     const arrayField = snapshot.sections
       .flatMap((section) => section.fields)
       .find((field) => field.path === "tools.alsoAllow");
     expect(arrayField?.kind).toBe("array");
     expect(arrayField?.itemKind).toBe("string");
+    expect(arrayField?.itemEnumValues).toContain("exec");
+    expect(arrayField?.itemEnumValues).toContain("group:fs");
 
     const recordField = snapshot.sections
       .flatMap((section) => section.fields)
       .find((field) => field.path === "diagnostics.otel.headers");
     expect(recordField?.kind).toBe("object");
     expect(recordField?.recordValueKind).toBe("string");
+
+    const browserFields = snapshot.sections
+      .find((section) => section.id === "browser")
+      ?.fields.map((field) => field.path) ?? [];
+    expect(browserFields.includes("browser.snapshotDefaults.mode")).toBe(true);
+    expect(browserFields.includes("browser.snapshotDefaults")).toBe(false);
   });
 });
 
@@ -47,5 +66,9 @@ describe("resolveExplorerField", () => {
 
   it("returns null for unknown paths", () => {
     expect(resolveExplorerField("this.path.does.not.exist")).toBeNull();
+  });
+
+  it("drops hint-only paths that are not in the schema", () => {
+    expect(resolveExplorerField("tools.web.fetch.firecrawl.enabled")).toBeNull();
   });
 });
