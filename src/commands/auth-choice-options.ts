@@ -152,7 +152,7 @@ const AUTH_CHOICE_GROUP_DEFS: {
   {
     value: "custom",
     label: "Custom API Endpoint",
-    hint: "Ollama, OpenAI/Anthropic-compatible endpoints",
+    hint: "Any OpenAI or Anthropic compatible endpoint",
     choices: ["custom-api-key"],
   },
 ];

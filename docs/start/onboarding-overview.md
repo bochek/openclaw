@@ -39,11 +39,12 @@ Use the OpenClaw app when you want a fully guided setup on macOS. Docs:
 
 ## Custom API Endpoint
 
-If you run your own model server, choose **Custom API Endpoint** in the CLI
-wizard. You will be asked to:
+If you need an endpoint that is not listed, including hosted providers that
+expose standard OpenAI or Anthropic APIs, choose **Custom API Endpoint** in the
+CLI wizard. You will be asked to:
 
-- Pick OpenAI-compatible or Anthropic-compatible endpoints.
-- Enter a base URL and optional API key.
+- Pick OpenAI-compatible, Anthropic-compatible, or **Unknown** (auto-detect).
+- Enter a base URL and API key (if required by the provider).
 - Provide a model ID and optional alias.
 - Choose an Endpoint ID so multiple custom endpoints can coexist.
 

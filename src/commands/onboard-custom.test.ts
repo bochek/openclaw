@@ -95,6 +95,99 @@ describe("promptCustomApiConfig", () => {
     expect(prompter.confirm).toHaveBeenCalled();
   });
 
+  it("detects openai compatibility when unknown", async () => {
+    const prompter = {
+      text: vi
+        .fn()
+        .mockResolvedValueOnce("https://example.com/v1") // Base URL
+        .mockResolvedValueOnce("test-key") // API Key
+        .mockResolvedValueOnce("detected-model") // Model ID
+        .mockResolvedValueOnce("custom") // Endpoint ID
+        .mockResolvedValueOnce("alias"), // Alias
+      progress: vi.fn(() => ({
+        update: vi.fn(),
+        stop: vi.fn(),
+      })),
+      select: vi.fn().mockResolvedValueOnce("unknown"),
+      confirm: vi.fn(),
+      note: vi.fn(),
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: [] }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({}),
+        }),
+    );
+
+    const result = await promptCustomApiConfig({
+      prompter: prompter as unknown as Parameters<typeof promptCustomApiConfig>[0]["prompter"],
+      runtime: { ...defaultRuntime, log: vi.fn() },
+      config: {},
+    });
+
+    expect(prompter.text).toHaveBeenCalledTimes(5);
+    expect(prompter.select).toHaveBeenCalledTimes(1);
+    expect(result.config.models?.providers?.custom?.api).toBe("openai-completions");
+  });
+
+  it("re-prompts base url when unknown detection fails", async () => {
+    const prompter = {
+      text: vi
+        .fn()
+        .mockResolvedValueOnce("https://bad.example.com/v1") // Base URL #1
+        .mockResolvedValueOnce("bad-key") // API Key #1
+        .mockResolvedValueOnce("bad-model") // Model ID #1
+        .mockResolvedValueOnce("https://ok.example.com/v1") // Base URL #2
+        .mockResolvedValueOnce("ok-key") // API Key #2
+        .mockResolvedValueOnce("ok-model") // Model ID #2
+        .mockResolvedValueOnce("custom") // Endpoint ID
+        .mockResolvedValueOnce(""), // Alias
+      progress: vi.fn(() => ({
+        update: vi.fn(),
+        stop: vi.fn(),
+      })),
+      select: vi.fn().mockResolvedValueOnce("unknown"),
+      confirm: vi.fn(),
+      note: vi.fn(),
+    };
+
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: [] }),
+        })
+        .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) })
+        .mockResolvedValueOnce({ ok: false, status: 404, json: async () => ({}) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ data: [] }),
+        })
+        .mockResolvedValueOnce({ ok: true, json: async () => ({}) }),
+    );
+
+    await promptCustomApiConfig({
+      prompter: prompter as unknown as Parameters<typeof promptCustomApiConfig>[0]["prompter"],
+      runtime: { ...defaultRuntime, log: vi.fn() },
+      config: {},
+    });
+
+    expect(prompter.note).toHaveBeenCalledWith(
+      expect.stringContaining("did not respond"),
+      "Endpoint detection",
+    );
+  });
+
   it("renames provider id when baseUrl differs", async () => {
     const prompter = {
       text: vi
