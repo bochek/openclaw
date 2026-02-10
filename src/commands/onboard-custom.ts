@@ -8,7 +8,7 @@ import { fetchWithTimeout } from "../utils/fetch-timeout.js";
 import { applyPrimaryModel } from "./model-picker.js";
 import { normalizeAlias } from "./models/shared.js";
 
-const DEFAULT_OPENAI_BASE_URL = "http://127.0.0.1:11434/v1";
+const DEFAULT_OLLAMA_BASE_URL = "http://127.0.0.1:11434/v1";
 const DEFAULT_CONTEXT_WINDOW = 4096;
 const DEFAULT_MAX_TOKENS = 4096;
 const VERIFY_TIMEOUT_MS = 10000;
@@ -227,7 +227,7 @@ async function promptBaseUrlAndKey(params: {
 }): Promise<{ baseUrl: string; apiKey: string }> {
   const baseUrlInput = await params.prompter.text({
     message: "API Base URL",
-    initialValue: params.initialBaseUrl ?? DEFAULT_OPENAI_BASE_URL,
+    initialValue: params.initialBaseUrl ?? DEFAULT_OLLAMA_BASE_URL,
     placeholder: "https://api.example.com/v1",
     validate: (val) => {
       try {
