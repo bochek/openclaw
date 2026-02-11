@@ -371,6 +371,25 @@ describe("coerceFormValues", () => {
     expect(pair[1]).toBe(42);
   });
 
+  it("preserves tuple indexes when a value is cleared", () => {
+    const schema: JsonSchema = {
+      type: "object",
+      properties: {
+        tuple: {
+          type: "array",
+          items: [{ type: "string" }, { type: "number" }, { type: "string" }],
+        },
+      },
+    };
+    const form = { tuple: ["left", "", "right"] };
+    const coerced = coerceFormValues(form, schema) as Record<string, unknown>;
+    const tuple = coerced.tuple as unknown[];
+    expect(tuple).toHaveLength(3);
+    expect(tuple[0]).toBe("left");
+    expect(tuple[1]).toBeUndefined();
+    expect(tuple[2]).toBe("right");
+  });
+
   it("omits cleared number field from object output", () => {
     const schema: JsonSchema = {
       type: "object",

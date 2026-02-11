@@ -128,12 +128,10 @@ export function coerceFormValues(value: unknown, schema: JsonSchema): unknown {
     if (Array.isArray(schema.items)) {
       // Tuple form: each index has its own schema
       const tuple = schema.items;
-      return value
-        .map((item, i) => {
-          const s = i < tuple.length ? tuple[i] : undefined;
-          return s ? coerceFormValues(item, s) : item;
-        })
-        .filter((v) => v !== undefined);
+      return value.map((item, i) => {
+        const s = i < tuple.length ? tuple[i] : undefined;
+        return s ? coerceFormValues(item, s) : item;
+      });
     }
     const itemsSchema = schema.items;
     if (!itemsSchema) {
