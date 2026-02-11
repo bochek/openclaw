@@ -255,6 +255,14 @@ export function applyOpenrouterConfig(cfg: OpenClawConfig): OpenClawConfig {
 
 export const LITELLM_BASE_URL = "http://localhost:4000";
 export const LITELLM_DEFAULT_MODEL_ID = "claude-opus-4-6";
+const LITELLM_DEFAULT_CONTEXT_WINDOW = 128_000;
+const LITELLM_DEFAULT_MAX_TOKENS = 8_192;
+const LITELLM_DEFAULT_COST = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+};
 
 function buildLitellmModelDefinition(): {
   id: string;
@@ -270,9 +278,10 @@ function buildLitellmModelDefinition(): {
     name: "Claude Opus 4.6",
     reasoning: true,
     input: ["text", "image"],
-    cost: { input: 15, output: 75, cacheRead: 1.5, cacheWrite: 18.75 },
-    contextWindow: 200_000,
-    maxTokens: 64_000,
+    // LiteLLM routes to many upstreams; keep neutral placeholders.
+    cost: LITELLM_DEFAULT_COST,
+    contextWindow: LITELLM_DEFAULT_CONTEXT_WINDOW,
+    maxTokens: LITELLM_DEFAULT_MAX_TOKENS,
   };
 }
 
@@ -293,11 +302,13 @@ export function applyLitellmProviderConfig(cfg: OpenClawConfig): OpenClawConfig 
     string,
     unknown
   > as { apiKey?: string };
+  const resolvedBaseUrl =
+    typeof existingProvider?.baseUrl === "string" ? existingProvider.baseUrl.trim() : "";
   const resolvedApiKey = typeof existingApiKey === "string" ? existingApiKey : undefined;
   const normalizedApiKey = resolvedApiKey?.trim();
   providers.litellm = {
     ...existingProviderRest,
-    baseUrl: LITELLM_BASE_URL,
+    baseUrl: resolvedBaseUrl || LITELLM_BASE_URL,
     api: "openai-completions",
     ...(normalizedApiKey ? { apiKey: normalizedApiKey } : {}),
     models: mergedModels.length > 0 ? mergedModels : [defaultModel],

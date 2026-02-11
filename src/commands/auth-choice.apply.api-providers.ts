@@ -215,17 +215,10 @@ export async function applyAuthChoiceApiProviders(
     const existingProfileId = profileOrder.find((profileId) => Boolean(store.profiles[profileId]));
     const existingCred = existingProfileId ? store.profiles[existingProfileId] : undefined;
     let profileId = "litellm:default";
-    let mode: "api_key" | "oauth" | "token" = "api_key";
     let hasCredential = false;
 
-    if (existingProfileId && existingCred?.type) {
+    if (existingProfileId && existingCred?.type === "api_key") {
       profileId = existingProfileId;
-      mode =
-        existingCred.type === "oauth"
-          ? "oauth"
-          : existingCred.type === "token"
-            ? "token"
-            : "api_key";
       hasCredential = true;
     }
 
@@ -272,7 +265,7 @@ export async function applyAuthChoiceApiProviders(
       nextConfig = applyAuthProfileConfig(nextConfig, {
         profileId,
         provider: "litellm",
-        mode,
+        mode: "api_key",
       });
     }
     {
