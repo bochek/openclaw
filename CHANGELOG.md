@@ -14,6 +14,7 @@ Docs: https://docs.openclaw.ai
 
 - Ollama: use configured `models.providers.ollama.baseUrl` for model discovery and normalize `/v1` endpoints to the native Ollama API root. (#14131) Thanks @shtse8.
 - Slack: detect control commands when channel messages start with bot mention prefixes (for example, `@Bot /new`). (#14142) Thanks @beefiker.
+- Discord: default standalone threads to public while honoring explicit thread type overrides. (#14162) Thanks @0xRaini.
 
 ## 2026.2.9
 
