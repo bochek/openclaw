@@ -565,6 +565,18 @@ export async function runEmbeddedAttempt(
           activeSession.agent.replaceMessages(limited);
         }
       } catch (err) {
+        // Wait for agent idle before flushing to avoid the same race condition
+        // as the main finally block (see comment below).
+        if (activeSession?.agent?.waitForIdle) {
+          try {
+            await Promise.race([
+              activeSession.agent.waitForIdle(),
+              new Promise<void>((resolve) => setTimeout(resolve, 30_000)),
+            ]);
+          } catch {
+            /* best-effort */
+          }
+        }
         sessionManager.flushPendingToolResults?.();
         activeSession.dispose();
         throw err;
