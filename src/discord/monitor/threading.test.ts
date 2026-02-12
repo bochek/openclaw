@@ -1,10 +1,12 @@
-import type { Client } from "@buape/carbon";
-import { describe, expect, it } from "vitest";
+import { ChannelType, type Client } from "@buape/carbon";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildAgentSessionKey } from "../../routing/resolve-route.js";
 import {
+  __resetDiscordThreadStarterCacheForTest,
   resolveDiscordAutoThreadContext,
   resolveDiscordAutoThreadReplyPlan,
   resolveDiscordReplyDeliveryPlan,
+  resolveDiscordThreadStarter,
 } from "./threading.js";
 
 describe("resolveDiscordAutoThreadContext", () => {
@@ -140,5 +142,47 @@ describe("resolveDiscordAutoThreadReplyPlan", () => {
     });
     expect(plan.deliverTarget).toBe("channel:parent");
     expect(plan.autoThreadContext).toBeNull();
+  });
+});
+
+describe("resolveDiscordThreadStarter cache", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    __resetDiscordThreadStarterCacheForTest();
+  });
+
+  it("expires cached entries after TTL", async () => {
+    vi.useFakeTimers();
+    const baseTime = new Date("2026-02-12T00:00:00Z").getTime();
+    vi.setSystemTime(baseTime);
+
+    const restGet = vi.fn(async () => ({
+      content: "starter",
+      author: { username: "starter", id: "user-1" },
+      timestamp: "2026-02-12T00:00:00Z",
+    }));
+    const client = { rest: { get: restGet } } as unknown as Client;
+
+    const params = {
+      channel: { id: "thread-1" },
+      client,
+      parentId: "parent-1",
+      parentType: ChannelType.GuildText,
+      resolveTimestampMs: () => baseTime,
+    };
+
+    const first = await resolveDiscordThreadStarter(params);
+    expect(first?.text).toBe("starter");
+    expect(restGet).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(baseTime + 60_000);
+    const second = await resolveDiscordThreadStarter(params);
+    expect(second).toEqual(first);
+    expect(restGet).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(baseTime + 60_000 + 5 * 60_000 + 1);
+    const third = await resolveDiscordThreadStarter(params);
+    expect(third).toEqual(first);
+    expect(restGet).toHaveBeenCalledTimes(2);
   });
 });
