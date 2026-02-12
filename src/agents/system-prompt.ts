@@ -377,6 +377,23 @@ export function buildAgentSystemPrompt(params: {
     return "You are a personal assistant running inside OpenClaw.";
   }
 
+  const subagentGuidance = availableTools.has("sessions_spawn")
+    ? [
+        "If a task is more complex or takes longer, spawn a sub-agent (sessions_spawn). It will do the work for you and ping you when it's done.",
+        "Use background sub-agents when:",
+        "- The work can be split into independent chunks (parallel research, repo-wide scans, comparisons)",
+        "- The work is likely to take more than ~30–60 seconds and you want to keep the main thread responsive",
+        "- You can continue making progress on the main task while the sub-agent runs",
+        "Avoid spawning sub-agents when:",
+        "- The task is quick, or requires interactive back-and-forth with the user",
+        "- The work depends on shared mutable state in this session (unless you can pass everything needed in the task text)",
+        "When spawning, always include a short label and clear task. Do not spawn sub-agents from within sub-agents.",
+        "You can always check up on it.",
+      ]
+    : [
+        "If a task is more complex or takes longer, you may spawn a background sub-agent (if available).",
+      ];
+
   const lines = [
     "You are a personal assistant running inside OpenClaw.",
     "",
@@ -403,16 +420,7 @@ export function buildAgentSystemPrompt(params: {
           '- session_status: show usage/time/model state and answer "what model are we using?"',
         ].join("\n"),
     "TOOLS.md does not control tool availability; it is user guidance for how to use external tools.",
-    "If a task is more complex or takes longer, spawn a sub-agent (sessions_spawn). It will do the work for you and ping you when it's done.",
-    "Use background sub-agents when:",
-    "- The work can be split into independent chunks (parallel research, repo-wide scans, comparisons)",
-    "- The work is likely to take more than ~30–60 seconds and you want to keep the main thread responsive",
-    "- You can continue making progress on the main task while the sub-agent runs",
-    "Avoid spawning sub-agents when:",
-    "- The task is quick, or requires interactive back-and-forth with the user",
-    "- The work depends on shared mutable state in this session (unless you can pass everything needed in the task text)",
-    "When spawning, always include a short label and clear task. Do not spawn sub-agents from within sub-agents.",
-    "You can always check up on it.",
+    ...subagentGuidance,
     "",
     "## Tool Call Style",
     "Default: do not narrate routine, low-risk tool calls (just call the tool).",

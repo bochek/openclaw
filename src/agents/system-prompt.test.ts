@@ -115,7 +115,7 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("sessions_send");
   });
 
-  it("includes background sub-agent spawning guidance", () => {
+  it("includes background sub-agent spawning guidance when sessions_spawn is available", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
       toolNames: ["sessions_spawn"],
@@ -125,6 +125,16 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("Use background sub-agents when:");
     expect(prompt).toContain("Avoid spawning sub-agents when:");
     expect(prompt).toContain("Do not spawn sub-agents from within sub-agents");
+  });
+
+  it("does not mention sessions_spawn when tool is unavailable", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["exec"],
+    });
+
+    expect(prompt).toContain("spawn a background sub-agent (if available)");
+    expect(prompt).not.toContain("sessions_spawn");
   });
 
   it("preserves tool casing in the prompt", () => {
