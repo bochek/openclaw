@@ -42,7 +42,11 @@ Docs: https://docs.openclaw.ai
 - Signal: enforce E.164 validation for the Signal bot account prompt so mistyped numbers are caught early. (#15063) Thanks @Duartemartins.
 - Signal: render mention placeholders as `@uuid`/`@phone` so mention gating and Clawdbot targeting work. (#2013) Thanks @alexgleason.
 - Onboarding/Providers: add Z.AI endpoint-specific auth choices (`zai-coding-global`, `zai-coding-cn`, `zai-global`, `zai-cn`) and expand default Z.AI model wiring. (#13456) Thanks @tomsun28.
+- Onboarding/Providers: auto-detect the correct Z.AI endpoint for your API key (prefer general API + `zai/glm-5`; fall back to Coding Plan + `zai/glm-4.7`) and add GLM-5 forward-compat resolution when provider catalogs lag. (#14786) Thanks @steipete.
 - Onboarding/Providers: update MiniMax API default/recommended models from M2.1 to M2.5, add M2.5/M2.5-Lightning model entries, and include `minimax-m2.5` in modern model filtering. (#14865) Thanks @adao-max.
+- Dependencies: bump `@mariozechner/pi-agent-core`, `@mariozechner/pi-ai`, `@mariozechner/pi-coding-agent`, and `@mariozechner/pi-tui` to `0.52.10`.
+- Agents: remove redundant OpenAI Codex and Z.AI GLM-5 forward-compat model shims now that latest pi catalogs these model IDs directly.
+- Auto-reply: include `openai-codex/gpt-5.3-codex-spark` in xhigh thinking support.
 - Ollama: use configured `models.providers.ollama.baseUrl` for model discovery and normalize `/v1` endpoints to the native Ollama API root. (#14131) Thanks @shtse8.
 - Voice Call: pass Twilio stream auth token via `<Parameter>` instead of query string. (#14029) Thanks @mcwigglesmcgee.
 - Feishu: pass `Buffer` directly to the Feishu SDK upload APIs instead of `Readable.from(...)` to avoid form-data upload failures. (#10345) Thanks @youngerstyle.
