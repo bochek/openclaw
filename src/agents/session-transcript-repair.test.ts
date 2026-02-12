@@ -114,10 +114,12 @@ describe("sanitizeToolUseResultPairing", () => {
     expect(out.map((m) => m.role)).toEqual(["user", "assistant"]);
   });
 
-  it("skips tool call extraction for assistant messages with stopReason 'error'", () => {
+  it("strips tool_use blocks from assistant messages with stopReason 'error'", () => {
     // When an assistant message has stopReason: "error", its tool_use blocks may be
-    // incomplete/malformed. We should NOT create synthetic tool_results for them,
-    // as this causes API 400 errors: "unexpected tool_use_id found in tool_result blocks"
+    // incomplete/malformed. We strip them to prevent the API from expecting matching
+    // tool_results that don't exist.
+    // See: https://github.com/openclaw/openclaw/issues/4597
+    // See: https://github.com/openclaw/openclaw/issues/15037
     const input = [
       {
         role: "assistant",
@@ -131,15 +133,41 @@ describe("sanitizeToolUseResultPairing", () => {
 
     // Should NOT add synthetic tool results for errored messages
     expect(result.added).toHaveLength(0);
-    // The assistant message should be passed through unchanged
-    expect(result.messages[0]?.role).toBe("assistant");
-    expect(result.messages[1]?.role).toBe("user");
-    expect(result.messages).toHaveLength(2);
+    // The assistant message with only tool calls should be dropped entirely
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]?.role).toBe("user");
   });
 
-  it("skips tool call extraction for assistant messages with stopReason 'aborted'", () => {
+  it("strips tool_use blocks but keeps text from errored assistant messages", () => {
+    // When an errored assistant message has both text and tool_use blocks,
+    // strip the tool_use blocks but keep the text content.
+    const input = [
+      {
+        role: "assistant",
+        content: [
+          { type: "text", text: "Let me try that..." },
+          { type: "toolCall", id: "call_error", name: "exec", arguments: {} },
+        ],
+        stopReason: "error",
+      },
+      { role: "user", content: "something went wrong" },
+    ] as AgentMessage[];
+
+    const result = repairToolUseResultPairing(input);
+
+    expect(result.added).toHaveLength(0);
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages[0]?.role).toBe("assistant");
+    // The assistant message should only have the text block, not the tool call
+    const content = (result.messages[0] as { content: unknown[] }).content;
+    expect(content).toHaveLength(1);
+    expect((content[0] as { type: string }).type).toBe("text");
+    expect(result.messages[1]?.role).toBe("user");
+  });
+
+  it("strips tool_use blocks from assistant messages with stopReason 'aborted'", () => {
     // When a request is aborted mid-stream, the assistant message may have incomplete
-    // tool_use blocks (with partialJson). We should NOT create synthetic tool_results.
+    // tool_use blocks (with partialJson). We strip them to prevent API 400 errors.
     const input = [
       {
         role: "assistant",
@@ -153,10 +181,9 @@ describe("sanitizeToolUseResultPairing", () => {
 
     // Should NOT add synthetic tool results for aborted messages
     expect(result.added).toHaveLength(0);
-    // Messages should be passed through without synthetic insertions
-    expect(result.messages).toHaveLength(2);
-    expect(result.messages[0]?.role).toBe("assistant");
-    expect(result.messages[1]?.role).toBe("user");
+    // The assistant message with only tool calls should be dropped
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]?.role).toBe("user");
   });
 
   it("still repairs tool results for normal assistant messages with stopReason 'toolUse'", () => {
@@ -178,9 +205,8 @@ describe("sanitizeToolUseResultPairing", () => {
   });
 
   it("drops orphan tool results that follow an aborted assistant message", () => {
-    // When an assistant message is aborted, any tool results that follow should be
-    // dropped as orphans (since we skip extracting tool calls from aborted messages).
-    // This addresses the edge case where a partial tool result was persisted before abort.
+    // When an assistant message is aborted, its tool_use blocks are stripped.
+    // Any tool results that follow should also be dropped as orphans.
     const input = [
       {
         role: "assistant",
@@ -199,11 +225,11 @@ describe("sanitizeToolUseResultPairing", () => {
 
     const result = repairToolUseResultPairing(input);
 
-    // The orphan tool result should be dropped
+    // The orphan tool result should be dropped, and the empty assistant message too
     expect(result.droppedOrphanCount).toBe(1);
-    expect(result.messages).toHaveLength(2);
-    expect(result.messages[0]?.role).toBe("assistant");
-    expect(result.messages[1]?.role).toBe("user");
+    // Only the user message should remain
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]?.role).toBe("user");
     // No synthetic results should be added
     expect(result.added).toHaveLength(0);
   });

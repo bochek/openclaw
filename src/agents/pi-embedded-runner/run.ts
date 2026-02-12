@@ -673,7 +673,12 @@ export async function runEmbeddedPiAgent(
               };
             }
             const promptFailoverReason = classifyFailoverReason(errorText);
-            if (promptFailoverReason && promptFailoverReason !== "timeout" && lastProfileId) {
+            // Don't mark auth profile as failed for format errors (400 Bad Request).
+            // Format errors indicate malformed session input (e.g., corrupted transcript),
+            // NOT a provider/auth issue. Cooling down the profile cascades failures to
+            // all sessions sharing the same auth profile.
+            // See: https://github.com/openclaw/openclaw/issues/15037
+            if (promptFailoverReason && promptFailoverReason !== "timeout" && promptFailoverReason !== "format" && lastProfileId) {
               await markAuthProfileFailure({
                 store: authStore,
                 profileId: lastProfileId,
