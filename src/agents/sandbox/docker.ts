@@ -86,6 +86,20 @@ export async function dockerContainerState(name: string) {
   return { exists: true, running: result.stdout.trim() === "true" };
 }
 
+export async function readDockerNetworkMode(containerName: string): Promise<string | null> {
+  const result = await execDocker(["inspect", "-f", "{{.HostConfig.NetworkMode}}", containerName], {
+    allowFailure: true,
+  });
+  if (result.code !== 0) {
+    return null;
+  }
+  const mode = result.stdout.trim();
+  if (!mode || mode === "<no value>") {
+    return null;
+  }
+  return mode;
+}
+
 function normalizeDockerLimit(value?: string | number) {
   if (value === undefined || value === null) {
     return undefined;

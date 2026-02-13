@@ -13,6 +13,7 @@ import {
   dockerContainerState,
   execDocker,
   readDockerPort,
+  readDockerNetworkMode,
 } from "./docker.js";
 import { updateBrowserRegistry } from "./registry.js";
 import { slugifySessionKey } from "./shared.js";
@@ -101,8 +102,21 @@ export async function ensureSandboxBrowser(params: {
   const slug = params.cfg.scope === "shared" ? "shared" : slugifySessionKey(params.scopeKey);
   const name = `${params.cfg.browser.containerPrefix}${slug}`;
   const containerName = name.slice(0, 63);
-  const state = await dockerContainerState(containerName);
-  if (!state.exists) {
+  const initialState = await dockerContainerState(containerName);
+  let shouldCreate = !initialState.exists;
+  let shouldStart = initialState.exists && !initialState.running;
+  if (initialState.exists) {
+    const networkMode = await readDockerNetworkMode(containerName);
+    if (networkMode !== "bridge") {
+      if (initialState.running) {
+        await execDocker(["stop", containerName]);
+      }
+      await execDocker(["rm", containerName]);
+      shouldCreate = true;
+      shouldStart = false;
+    }
+  }
+  if (shouldCreate) {
     await ensureSandboxBrowserImage(params.cfg.browser.image ?? DEFAULT_SANDBOX_BROWSER_IMAGE);
     const args = buildSandboxCreateArgs({
       name: containerName,
@@ -134,7 +148,7 @@ export async function ensureSandboxBrowser(params: {
     args.push(params.cfg.browser.image);
     await execDocker(args);
     await execDocker(["start", containerName]);
-  } else if (!state.running) {
+  } else if (shouldStart) {
     await execDocker(["start", containerName]);
   }
 
