@@ -227,15 +227,20 @@ export function repairToolUseResultPairing(messages: AgentMessage[]): ToolUseRep
     if (stopReason === "error" || stopReason === "aborted") {
       if (Array.isArray(assistant.content)) {
         const nonToolContent = assistant.content.filter((block) => {
-          if (!block || typeof block !== "object") return true;
-          const rec = block as { type?: unknown };
-          return !TOOL_CALL_TYPES.has(rec.type as string);
+          if (!block || typeof block !== "object") {
+            return true;
+          }
+          return !isToolCallBlock(block);
         });
+        const removedToolCalls = nonToolContent.length !== assistant.content.length;
         if (nonToolContent.length > 0) {
           out.push({ ...msg, content: nonToolContent } as AgentMessage);
         }
-        // If all content was tool calls, drop the entire message
-        changed = true;
+        if (removedToolCalls) {
+          // If all content was tool calls, drop the entire message.
+          // If only non-tool blocks remain, keep the message unchanged.
+          changed = true;
+        }
       } else {
         out.push(msg);
       }

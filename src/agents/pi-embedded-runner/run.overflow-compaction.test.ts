@@ -158,6 +158,8 @@ vi.mock("../pi-embedded-helpers.js", async () => {
 });
 
 import type { EmbeddedRunAttemptResult } from "./run/types.js";
+import { markAuthProfileFailure } from "../auth-profiles.js";
+import * as piEmbeddedHelpers from "../pi-embedded-helpers.js";
 import { compactEmbeddedPiSessionDirect } from "./compact.js";
 import { log } from "./logger.js";
 import { runEmbeddedPiAgent } from "./run.js";
@@ -173,6 +175,9 @@ const mockedSessionLikelyHasOversizedToolResults = vi.mocked(sessionLikelyHasOve
 const mockedTruncateOversizedToolResultsInSession = vi.mocked(
   truncateOversizedToolResultsInSession,
 );
+const mockedMarkAuthProfileFailure = vi.mocked(markAuthProfileFailure);
+const mockedClassifyFailoverReason = vi.mocked(piEmbeddedHelpers.classifyFailoverReason);
+const mockedIsFailoverAssistantError = vi.mocked(piEmbeddedHelpers.isFailoverAssistantError);
 
 function makeAttemptResult(
   overrides: Partial<EmbeddedRunAttemptResult> = {},
@@ -432,5 +437,44 @@ describe("overflow compaction in run loop", () => {
 
     expect(mockedCompactDirect).not.toHaveBeenCalled();
     expect(log.warn).not.toHaveBeenCalledWith(expect.stringContaining("source=assistantError"));
+  });
+
+  it("does not cooldown auth profile for assistant format errors", async () => {
+    mockedClassifyFailoverReason.mockReturnValue("format");
+    mockedIsFailoverAssistantError.mockReturnValue(true);
+
+    mockedRunEmbeddedAttempt.mockResolvedValueOnce(
+      makeAttemptResult({
+        promptError: null,
+        lastAssistant: {
+          stopReason: "error",
+          errorMessage: "Cloud Code Assist format error",
+        } as EmbeddedRunAttemptResult["lastAssistant"],
+      }),
+    );
+
+    const result = await runEmbeddedPiAgent(baseParams);
+
+    expect(result.meta.error).toBeUndefined();
+    expect(mockedMarkAuthProfileFailure).not.toHaveBeenCalled();
+    expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cooldown auth profile for prompt format errors", async () => {
+    mockedClassifyFailoverReason.mockReturnValue("format");
+
+    mockedRunEmbeddedAttempt.mockResolvedValueOnce(
+      makeAttemptResult({
+        promptError: new Error("Cloud Code Assist format error"),
+        lastAssistant: {
+          stopReason: "error",
+          errorMessage: "Cloud Code Assist format error",
+        } as EmbeddedRunAttemptResult["lastAssistant"],
+      }),
+    );
+
+    await expect(runEmbeddedPiAgent(baseParams)).rejects.toThrow("Cloud Code Assist format error");
+    expect(mockedMarkAuthProfileFailure).not.toHaveBeenCalled();
+    expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(1);
   });
 });

@@ -138,6 +138,23 @@ describe("sanitizeToolUseResultPairing", () => {
     expect(result.messages[0]?.role).toBe("user");
   });
 
+  it("keeps errored assistant text-only messages unchanged", () => {
+    const input = [
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "I ran into trouble and explained it." }],
+        stopReason: "error",
+      },
+      { role: "user", content: "okay" },
+    ] as AgentMessage[];
+
+    const result = repairToolUseResultPairing(input);
+
+    // No tool calls were removed, so no transcript rewrite should happen.
+    expect(result.messages).toBe(input);
+    expect(result.messages).toHaveLength(2);
+  });
+
   it("strips tool_use blocks but keeps text from errored assistant messages", () => {
     // When an errored assistant message has both text and tool_use blocks,
     // strip the tool_use blocks but keep the text content.

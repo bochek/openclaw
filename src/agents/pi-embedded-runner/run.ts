@@ -678,7 +678,12 @@ export async function runEmbeddedPiAgent(
             // NOT a provider/auth issue. Cooling down the profile cascades failures to
             // all sessions sharing the same auth profile.
             // See: https://github.com/openclaw/openclaw/issues/15037
-            if (promptFailoverReason && promptFailoverReason !== "timeout" && promptFailoverReason !== "format" && lastProfileId) {
+            if (
+              promptFailoverReason &&
+              promptFailoverReason !== "timeout" &&
+              promptFailoverReason !== "format" &&
+              lastProfileId
+            ) {
               await markAuthProfileFailure({
                 store: authStore,
                 profileId: lastProfileId,
@@ -758,8 +763,11 @@ export async function runEmbeddedPiAgent(
             );
           }
 
-          // Treat timeout as potential rate limit (Antigravity hangs on rate limit)
-          const shouldRotate = (!aborted && failoverFailure) || timedOut;
+          // Treat timeout as potential rate limit (Antigravity hangs on rate limit).
+          // Don't rotate profiles for format errors; those are usually session input
+          // issues and shouldn't affect shared auth profile health.
+          const shouldRotate =
+            timedOut || (!aborted && failoverFailure && assistantFailoverReason !== "format");
 
           if (shouldRotate) {
             if (lastProfileId) {
