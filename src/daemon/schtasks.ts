@@ -62,9 +62,9 @@ function parseCommandLine(value: string): string[] {
 
   for (let i = 0; i < value.length; i++) {
     const char = value[i];
-    // Only treat backslash as escape when followed by `"` or `\`.
-    // Bare backslashes are kept as-is so Windows paths survive parsing.
-    if (char === "\\" && i + 1 < value.length && (value[i + 1] === '"' || value[i + 1] === "\\")) {
+    // `buildTaskScript` only escapes quotes (`\"`).
+    // Keep all other backslashes literal so drive and UNC paths are preserved.
+    if (char === "\\" && i + 1 < value.length && value[i + 1] === '"') {
       current += value[i + 1];
       i++;
       continue;
