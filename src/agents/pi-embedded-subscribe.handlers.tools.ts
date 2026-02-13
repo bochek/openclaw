@@ -1,5 +1,6 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
 import type { EmbeddedPiSubscribeContext } from "./pi-embedded-subscribe.handlers.types.js";
+import type { PluginHookAfterToolCallEvent, PluginHookBeforeToolCallEvent } from "../plugins/types.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
 import { normalizeTextForComparison } from "./pi-embedded-helpers.js";
 import { isMessagingTool, isMessagingToolSendAction } from "./pi-embedded-messaging.js";
@@ -50,6 +51,20 @@ export async function handleToolExecutionStart(
   const toolName = normalizeToolName(rawToolName);
   const toolCallId = String(evt.toolCallId);
   const args = evt.args;
+
+  // Call before_tool_call hook
+  const hookRunner = ctx.hookRunner ?? (globalThis as any).__openclawHookRunner;
+  if (hookRunner?.hasHooks?.("before_tool_call")) {
+    try {
+      const hookEvent: PluginHookBeforeToolCallEvent = {
+        toolName,
+        params: args && typeof args === "object" ? (args as Record<string, unknown>) : {},
+      };
+      await hookRunner.runBeforeToolCall(hookEvent, { toolName });
+    } catch (err) {
+      ctx.log.debug(`before_tool_call hook failed: tool=${toolName} error=${String(err)}`);
+    }
+  }
 
   if (toolName === "read") {
     const record = args && typeof args === "object" ? (args as Record<string, unknown>) : {};
@@ -145,7 +160,7 @@ export function handleToolExecutionUpdate(
   });
 }
 
-export function handleToolExecutionEnd(
+export async function handleToolExecutionEnd(
   ctx: EmbeddedPiSubscribeContext,
   evt: AgentEvent & {
     toolName: string;
@@ -219,6 +234,22 @@ export function handleToolExecutionEnd(
   ctx.log.debug(
     `embedded run tool end: runId=${ctx.params.runId} tool=${toolName} toolCallId=${toolCallId}`,
   );
+
+  // Call after_tool_call hook
+  const hookRunnerAfter = ctx.hookRunner ?? (globalThis as any).__openclawHookRunner;
+  if (hookRunnerAfter?.hasHooks?.("after_tool_call")) {
+    try {
+      const hookEvent: PluginHookAfterToolCallEvent = {
+        toolName,
+        params: {}, // Input params not available in end handler; hook context has toolName
+        result: sanitizedResult,
+        error: isToolError ? extractToolErrorMessage(sanitizedResult) : undefined,
+      };
+      await hookRunnerAfter.runAfterToolCall(hookEvent, { toolName });
+    } catch (err) {
+      ctx.log.debug(`after_tool_call hook failed: tool=${toolName} error=${String(err)}`);
+    }
+  }
 
   if (ctx.params.onToolResult && ctx.shouldEmitToolOutput()) {
     const outputText = extractToolResultText(sanitizedResult);

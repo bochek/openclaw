@@ -9,6 +9,7 @@ import type {
   SubscribeEmbeddedPiSessionParams,
 } from "./pi-embedded-subscribe.types.js";
 import type { NormalizedUsage } from "./usage.js";
+import type { HookRunner } from "../plugins/hooks.js";
 
 export type EmbeddedSubscribeLogger = {
   debug: (message: string) => void;
@@ -69,6 +70,7 @@ export type EmbeddedPiSubscribeContext = {
   log: EmbeddedSubscribeLogger;
   blockChunking?: BlockReplyChunking;
   blockChunker: EmbeddedBlockChunker | null;
+  hookRunner?: HookRunner;
 
   shouldEmitToolResult: () => boolean;
   shouldEmitToolOutput: () => boolean;
