@@ -77,14 +77,15 @@ function resolvePathWithinSessionsDir(sessionsDir: string, candidate: string): s
     throw new Error("Session file path must not be empty");
   }
   const resolvedBase = path.resolve(sessionsDir);
-  // Normalize absolute paths that are within the sessions directory.
-  // Older versions stored absolute sessionFile paths in sessions.json;
-  // convert them to relative so the containment check passes.
+  // Older versions stored absolute sessionFile paths in sessions.json.
+  // Preserve compatibility, but validate containment against the resolved path.
   const normalized = path.isAbsolute(trimmed) ? path.relative(resolvedBase, trimmed) : trimmed;
-  if (!normalized || normalized.startsWith("..") || path.isAbsolute(normalized)) {
+  const resolvedCandidate = path.resolve(resolvedBase, normalized);
+  const relative = path.relative(resolvedBase, resolvedCandidate);
+  if (!normalized || relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error("Session file path must be within sessions directory");
   }
-  return path.resolve(resolvedBase, normalized);
+  return resolvedCandidate;
 }
 
 export function resolveSessionTranscriptPathInDir(

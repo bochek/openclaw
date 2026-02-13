@@ -56,6 +56,14 @@ describe("session path safety", () => {
     ).toThrow(/within sessions directory/);
 
     expect(() =>
+      resolveSessionFilePath(
+        "sess-1",
+        { sessionFile: "subdir/../../escape.jsonl" },
+        { sessionsDir },
+      ),
+    ).toThrow(/within sessions directory/);
+
+    expect(() =>
       resolveSessionFilePath("sess-1", { sessionFile: "/etc/passwd" }, { sessionsDir }),
     ).toThrow(/within sessions directory/);
   });
