@@ -226,6 +226,57 @@ export function sanitizeDiscordThreadName(rawName: string, fallbackId: string): 
   return truncateUtf16Safe(base, 100) || `Thread ${fallbackId}`;
 }
 
+const DISCORD_THREAD_ALREADY_EXISTS_HINTS = [
+  "thread has already been created on this message",
+  "thread already exists",
+];
+
+function extractDiscordErrorMessage(err: unknown): string {
+  if (!err) {
+    return "";
+  }
+  if (typeof err === "string") {
+    return err;
+  }
+  if (err instanceof Error && typeof err.message === "string") {
+    return err.message;
+  }
+  if (typeof err === "object" && err !== null && "message" in err) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string") {
+      return message;
+    }
+  }
+  if (typeof err === "number" || typeof err === "boolean") {
+    return err.toString();
+  }
+  if (typeof err === "bigint") {
+    return err.toString();
+  }
+  if (typeof err === "symbol") {
+    return err.description ?? "symbol";
+  }
+  if (typeof err === "function") {
+    return err.name ? `function ${err.name}` : "function";
+  }
+  if (typeof err === "object") {
+    try {
+      return JSON.stringify(err) ?? "";
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function isDiscordThreadAlreadyExistsError(err: unknown): boolean {
+  const message = extractDiscordErrorMessage(err).trim().toLowerCase();
+  if (!message) {
+    return false;
+  }
+  return DISCORD_THREAD_ALREADY_EXISTS_HINTS.some((hint) => message.includes(hint));
+}
+
 type DiscordReplyDeliveryPlan = {
   deliverTarget: string;
   replyTarget: string;
@@ -360,6 +411,9 @@ export async function maybeCreateDiscordAutoThread(params: {
     logVerbose(
       `discord: autoThread creation failed for ${params.message.channelId}/${params.message.id}: ${String(err)}`,
     );
+    if (!isDiscordThreadAlreadyExistsError(err)) {
+      return undefined;
+    }
     // Race condition: another agent may have already created a thread on this
     // message. Re-fetch the message to check for an existing thread.
     try {
@@ -373,8 +427,10 @@ export async function maybeCreateDiscordAutoThread(params: {
         );
         return existingThreadId;
       }
-    } catch {
-      // If the refetch also fails, fall through to return undefined.
+    } catch (refetchErr) {
+      logVerbose(
+        `discord: autoThread refetch failed for ${params.message.channelId}/${params.message.id}: ${String(refetchErr)}`,
+      );
     }
     return undefined;
   }

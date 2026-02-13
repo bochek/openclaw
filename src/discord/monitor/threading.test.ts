@@ -115,16 +115,14 @@ describe("resolveDiscordReplyDeliveryPlan", () => {
 
 describe("maybeCreateDiscordAutoThread", () => {
   it("returns existing thread ID when creation fails due to race condition", async () => {
-    // First call succeeds (simulating another agent creating the thread)
-    let callCount = 0;
+    let getCalls = 0;
     const client = {
       rest: {
         post: async () => {
-          callCount++;
           throw new Error("A thread has already been created on this message");
         },
         get: async () => {
-          // Return message with existing thread (simulating race condition resolution)
+          getCalls += 1;
           return { thread: { id: "existing-thread" } };
         },
       },
@@ -146,16 +144,18 @@ describe("maybeCreateDiscordAutoThread", () => {
     });
 
     expect(result).toBe("existing-thread");
+    expect(getCalls).toBe(1);
   });
 
-  it("returns undefined when creation fails and no existing thread found", async () => {
+  it("returns undefined when creation fails with non-race error", async () => {
+    let getCalls = 0;
     const client = {
       rest: {
         post: async () => {
           throw new Error("Some other error");
         },
         get: async () => {
-          // Message has no thread
+          getCalls += 1;
           return { thread: null };
         },
       },
@@ -177,6 +177,7 @@ describe("maybeCreateDiscordAutoThread", () => {
     });
 
     expect(result).toBeUndefined();
+    expect(getCalls).toBe(0);
   });
 });
 
