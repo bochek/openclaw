@@ -41,7 +41,6 @@ const FILE_EXTENSIONS_WITH_TLD = new Set([
   "at", // Assembly (Austria)
   "be", // Backend files (Belgium)
   "cc", // C++ source (Cocos Islands)
-  "co", // Configuration (Colombia)
 ]);
 
 /** Detects when markdown-it linkify auto-generated a link from a bare filename (e.g. README.md → http://README.md) */
@@ -150,7 +149,7 @@ export function wrapFileReferencesInHtml(html: string): string {
     return `<code>${escapeHtml(label)}</code>`;
   });
   const filePattern = new RegExp(
-    `(^|>|[\\s])([a-zA-Z0-9_.\\-./]+\\.(?:${extensionsPattern}))(?=$|[\\s<])`,
+    `(^|[^a-zA-Z0-9_\\-/])([a-zA-Z0-9_.\\-./]+\\.(?:${extensionsPattern}))(?=$|[^a-zA-Z0-9_\\-/])`,
     "gi",
   );
 
@@ -173,9 +172,16 @@ export function wrapFileReferencesInHtml(html: string): string {
 
     // Process text before this tag
     const textBefore = html.slice(lastIndex, tagStart);
-    result += textBefore.replace(filePattern, (m, prefix, filename) => {
+    result += textBefore.replace(filePattern, (m, prefix, filename, offset, source) => {
       // Skip if inside protected tags or if it's a URL
       if (codeDepth > 0 || preDepth > 0 || anchorDepth > 0) {
+        return m;
+      }
+      // Skip if we're inside any HTML tag (e.g., attributes on tags other than code/pre/a)
+      const filenameOffset = Number(offset) + String(prefix).length;
+      const lastOpen = String(source).lastIndexOf("<", filenameOffset);
+      const lastClose = String(source).lastIndexOf(">", filenameOffset);
+      if (lastOpen > lastClose) {
         return m;
       }
       if (filename.startsWith("//")) {
@@ -203,8 +209,14 @@ export function wrapFileReferencesInHtml(html: string): string {
 
   // Process remaining text
   const remainingText = html.slice(lastIndex);
-  result += remainingText.replace(filePattern, (m, prefix, filename) => {
+  result += remainingText.replace(filePattern, (m, prefix, filename, offset, source) => {
     if (codeDepth > 0 || preDepth > 0 || anchorDepth > 0) {
+      return m;
+    }
+    const filenameOffset = Number(offset) + String(prefix).length;
+    const lastOpen = String(source).lastIndexOf("<", filenameOffset);
+    const lastClose = String(source).lastIndexOf(">", filenameOffset);
+    if (lastOpen > lastClose) {
       return m;
     }
     if (filename.startsWith("//")) {

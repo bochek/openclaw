@@ -73,6 +73,13 @@ describe("wrapFileReferencesInHtml", () => {
     expect(wrapFileReferencesInHtml("Ends with file.md")).toContain("<code>file.md</code>");
   });
 
+  it("wraps file refs with punctuation boundaries", () => {
+    expect(wrapFileReferencesInHtml("See README.md.")).toContain("<code>README.md</code>.");
+    expect(wrapFileReferencesInHtml("See README.md,")).toContain("<code>README.md</code>,");
+    expect(wrapFileReferencesInHtml("(README.md)")).toContain("(<code>README.md</code>)");
+    expect(wrapFileReferencesInHtml("README.md:")).toContain("<code>README.md</code>:");
+  });
+
   it("de-linkifies auto-linkified file ref anchors", () => {
     const input = '<a href="http://README.md">README.md</a>';
     expect(wrapFileReferencesInHtml(input)).toBe("<code>README.md</code>");
@@ -193,15 +200,12 @@ describe("edge cases", () => {
     expect(result).toBe("README.md");
   });
 
-  it("wraps supported TLD extensions (.am, .at, .be, .cc, .co)", () => {
-    const result = markdownToTelegramHtml(
-      "Makefile.am and code.at and app.be and main.cc and config.co",
-    );
+  it("wraps supported TLD extensions (.am, .at, .be, .cc)", () => {
+    const result = markdownToTelegramHtml("Makefile.am and code.at and app.be and main.cc");
     expect(result).toContain("<code>Makefile.am</code>");
     expect(result).toContain("<code>code.at</code>");
     expect(result).toContain("<code>app.be</code>");
     expect(result).toContain("<code>main.cc</code>");
-    expect(result).toContain("<code>config.co</code>");
   });
 
   it("does not wrap popular domain TLDs (.ai, .io, .tv, .fm)", () => {
@@ -212,6 +216,14 @@ describe("edge cases", () => {
     expect(result).toContain('<a href="http://vercel.io">');
     expect(result).toContain('<a href="http://app.tv">');
     expect(result).toContain('<a href="http://radio.fm">');
+  });
+
+  it("keeps .co domains as links", () => {
+    const result = markdownToTelegramHtml("Visit t.co and openclaw.co");
+    expect(result).toContain('<a href="http://t.co">');
+    expect(result).toContain('<a href="http://openclaw.co">');
+    expect(result).not.toContain("<code>t.co</code>");
+    expect(result).not.toContain("<code>openclaw.co</code>");
   });
 
   it("does not wrap non-TLD extensions", () => {
