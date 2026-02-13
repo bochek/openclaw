@@ -67,6 +67,7 @@ describe("exec approval handlers", () => {
         cwd: "/tmp",
         host: "node",
         timeoutMs: 2000,
+        twoPhase: true,
       },
       respond,
       context: context as unknown as Parameters<
