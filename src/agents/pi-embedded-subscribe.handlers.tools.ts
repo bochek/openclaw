@@ -1,6 +1,10 @@
 import type { AgentEvent } from "@mariozechner/pi-agent-core";
+import type { HookRunner } from "../plugins/hooks.js";
+import type {
+  PluginHookAfterToolCallEvent,
+  PluginHookBeforeToolCallEvent,
+} from "../plugins/types.js";
 import type { EmbeddedPiSubscribeContext } from "./pi-embedded-subscribe.handlers.types.js";
-import type { PluginHookAfterToolCallEvent, PluginHookBeforeToolCallEvent } from "../plugins/types.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
 import { normalizeTextForComparison } from "./pi-embedded-helpers.js";
 import { isMessagingTool, isMessagingToolSendAction } from "./pi-embedded-messaging.js";
@@ -13,6 +17,10 @@ import {
 } from "./pi-embedded-subscribe.tools.js";
 import { inferToolMetaFromArgs } from "./pi-embedded-utils.js";
 import { normalizeToolName } from "./tool-policy.js";
+
+type OpenClawGlobal = typeof globalThis & {
+  __openclawHookRunner?: HookRunner;
+};
 
 function extendExecMeta(toolName: string, args: unknown, meta?: string): string | undefined {
   const normalized = toolName.trim().toLowerCase();
@@ -53,7 +61,7 @@ export async function handleToolExecutionStart(
   const args = evt.args;
 
   // Call before_tool_call hook
-  const hookRunner = ctx.hookRunner ?? (globalThis as any).__openclawHookRunner;
+  const hookRunner = ctx.hookRunner ?? (globalThis as OpenClawGlobal).__openclawHookRunner;
   if (hookRunner?.hasHooks?.("before_tool_call")) {
     try {
       const hookEvent: PluginHookBeforeToolCallEvent = {
@@ -236,7 +244,7 @@ export async function handleToolExecutionEnd(
   );
 
   // Call after_tool_call hook
-  const hookRunnerAfter = ctx.hookRunner ?? (globalThis as any).__openclawHookRunner;
+  const hookRunnerAfter = ctx.hookRunner ?? (globalThis as OpenClawGlobal).__openclawHookRunner;
   if (hookRunnerAfter?.hasHooks?.("after_tool_call")) {
     try {
       const hookEvent: PluginHookAfterToolCallEvent = {
