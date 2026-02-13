@@ -2,6 +2,7 @@ import fs from "node:fs";
 import type { ResolvedBrowserProfile } from "./config.js";
 import type { PwAiModule } from "./pw-ai-module.js";
 import type {
+  BrowserServerState,
   BrowserRouteContext,
   BrowserTab,
   ContextOptions,
@@ -9,7 +10,7 @@ import type {
   ProfileRuntimeState,
   ProfileStatus,
 } from "./server-context.types.js";
-import { createConfigIO } from "../config/config.js";
+import { createConfigIO, loadConfig } from "../config/config.js";
 import { appendCdpPath, createTargetViaCdp, getHeadersWithAuth, normalizeCdpWsUrl } from "./cdp.js";
 import {
   isChromeCdpReady,
@@ -35,6 +36,14 @@ export type {
   ProfileRuntimeState,
   ProfileStatus,
 } from "./server-context.types.js";
+
+export function listKnownProfileNames(state: BrowserServerState): string[] {
+  const names = new Set(Object.keys(state.resolved.profiles));
+  for (const name of state.profiles.keys()) {
+    names.add(name);
+  }
+  return [...names];
+}
 
 /**
  * Normalize a CDP WebSocket URL to use the correct base URL.
@@ -560,6 +569,8 @@ function createProfileContext(
 }
 
 export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteContext {
+  const refreshConfigFromDisk = opts.refreshConfigFromDisk === true;
+
   const state = () => {
     const current = opts.getState();
     if (!current) {
@@ -568,20 +579,51 @@ export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteCon
     return current;
   };
 
+  const applyResolvedConfig = (
+    current: BrowserServerState,
+    freshResolved: BrowserServerState["resolved"],
+  ) => {
+    current.resolved = freshResolved;
+    for (const [name, runtime] of current.profiles) {
+      const nextProfile = resolveProfile(freshResolved, name);
+      if (nextProfile) {
+        runtime.profile = nextProfile;
+        continue;
+      }
+      if (!runtime.running) {
+        current.profiles.delete(name);
+      }
+    }
+  };
+
+  const refreshResolvedConfig = (current: BrowserServerState) => {
+    if (!refreshConfigFromDisk) {
+      return;
+    }
+    const cfg = loadConfig();
+    const freshResolved = resolveBrowserConfig(cfg.browser, cfg);
+    applyResolvedConfig(current, freshResolved);
+  };
+
+  const refreshResolvedConfigFresh = (current: BrowserServerState) => {
+    if (!refreshConfigFromDisk) {
+      return;
+    }
+    const freshCfg = createConfigIO().loadConfig();
+    const freshResolved = resolveBrowserConfig(freshCfg.browser, freshCfg);
+    applyResolvedConfig(current, freshResolved);
+  };
+
   const forProfile = (profileName?: string): ProfileContext => {
     const current = state();
+    refreshResolvedConfig(current);
     const name = profileName ?? current.resolved.defaultProfile;
     let profile = resolveProfile(current.resolved, name);
 
     // Hot-reload: try fresh config if profile not found
     if (!profile) {
-      const freshCfg = createConfigIO().loadConfig();
-      const freshResolved = resolveBrowserConfig(freshCfg.browser, freshCfg);
-      profile = resolveProfile(freshResolved, name);
-      if (profile) {
-        // Replace entire resolved config to avoid stale fields (attachOnly, timeouts, etc.)
-        current.resolved = freshResolved;
-      }
+      refreshResolvedConfigFresh(current);
+      profile = resolveProfile(current.resolved, name);
     }
 
     if (!profile) {
@@ -593,6 +635,7 @@ export function createBrowserRouteContext(opts: ContextOptions): BrowserRouteCon
 
   const listProfiles = async (): Promise<ProfileStatus[]> => {
     const current = state();
+    refreshResolvedConfig(current);
     const result: ProfileStatus[] = [];
 
     for (const name of Object.keys(current.resolved.profiles)) {

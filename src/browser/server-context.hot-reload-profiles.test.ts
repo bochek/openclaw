@@ -101,6 +101,7 @@ describe("server-context hot-reload profiles", () => {
 
     const ctx = createBrowserRouteContext({
       getState: () => state,
+      refreshConfigFromDisk: true,
     });
 
     // Initially, "desktop" profile should not exist
@@ -148,9 +149,66 @@ describe("server-context hot-reload profiles", () => {
 
     const ctx = createBrowserRouteContext({
       getState: () => state,
+      refreshConfigFromDisk: true,
     });
 
     // Profile that doesn't exist anywhere should still throw
     expect(() => ctx.forProfile("nonexistent")).toThrow(/not found/);
+  });
+
+  it("forProfile refreshes existing profile config after loadConfig cache updates", async () => {
+    const { createBrowserRouteContext } = await import("./server-context.js");
+    const { resolveBrowserConfig } = await import("./config.js");
+    const { loadConfig } = await import("../config/config.js");
+
+    const cfg = loadConfig();
+    const resolved = resolveBrowserConfig(cfg.browser, cfg);
+    const state = {
+      server: null,
+      port: 18791,
+      resolved,
+      profiles: new Map(),
+    };
+
+    const ctx = createBrowserRouteContext({
+      getState: () => state,
+      refreshConfigFromDisk: true,
+    });
+
+    const before = ctx.forProfile("openclaw");
+    expect(before.profile.cdpPort).toBe(18800);
+
+    cfgProfiles.openclaw = { cdpPort: 19999, color: "#FF4500" };
+    cachedConfig = null;
+
+    const after = ctx.forProfile("openclaw");
+    expect(after.profile.cdpPort).toBe(19999);
+    expect(state.resolved.profiles.openclaw?.cdpPort).toBe(19999);
+  });
+
+  it("listProfiles refreshes config before enumerating profiles", async () => {
+    const { createBrowserRouteContext } = await import("./server-context.js");
+    const { resolveBrowserConfig } = await import("./config.js");
+    const { loadConfig } = await import("../config/config.js");
+
+    const cfg = loadConfig();
+    const resolved = resolveBrowserConfig(cfg.browser, cfg);
+    const state = {
+      server: null,
+      port: 18791,
+      resolved,
+      profiles: new Map(),
+    };
+
+    const ctx = createBrowserRouteContext({
+      getState: () => state,
+      refreshConfigFromDisk: true,
+    });
+
+    cfgProfiles.desktop = { cdpPort: 19999, color: "#0066CC" };
+    cachedConfig = null;
+
+    const profiles = await ctx.listProfiles();
+    expect(profiles.some((p) => p.name === "desktop")).toBe(true);
   });
 });
