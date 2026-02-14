@@ -229,6 +229,11 @@ export type ChannelThreadingAdapter = {
    * Default in shared reply flow: true for known providers; per-channel opt-out supported.
    */
   allowExplicitReplyTagsWhenOff?: boolean;
+  /**
+   * Deprecated alias for allowExplicitReplyTagsWhenOff.
+   * Kept for compatibility with older extensions/docks.
+   */
+  allowTagsWhenOff?: boolean;
   buildToolContext?: (params: {
     cfg: OpenClawConfig;
     accountId?: string | null;

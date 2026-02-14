@@ -59,8 +59,9 @@ export function createReplyToModeFilterForChannel(
   const isWebchat = normalized === "webchat";
   // Default: allow explicit reply tags/directives even when replyToMode is "off".
   // Unknown channels fail closed; internal webchat stays allowed.
+  const dock = provider ? getChannelDock(provider) : undefined;
   const allowExplicitReplyTagsWhenOff = provider
-    ? (getChannelDock(provider)?.threading?.allowExplicitReplyTagsWhenOff ?? true)
+    ? (dock?.threading?.allowExplicitReplyTagsWhenOff ?? dock?.threading?.allowTagsWhenOff ?? true)
     : isWebchat;
   return createReplyToModeFilter(mode, {
     allowExplicitReplyTagsWhenOff,
