@@ -1,20 +1,18 @@
 import { join } from "node:path";
 import { afterEach, vi } from "vitest";
+import type { MockFn } from "../test-utils/vitest-mock-fn.js";
 import { withTempHome as withTempHomeBase } from "../../test/helpers/temp-home.js";
 
-// Avoid exporting vitest mock types (TS2742 under pnpm + d.ts emit).
-// oxlint-disable-next-line typescript/no-explicit-any
-type AnyMock = any;
-// oxlint-disable-next-line typescript/no-explicit-any
-type AnyMocks = Record<string, any>;
+type AnyMock = MockFn<(...args: unknown[]) => unknown>;
+type AnyMockMap = Record<string, MockFn>;
 
 const piEmbeddedMocks = vi.hoisted(() => ({
-  abortEmbeddedPiRun: vi.fn().mockReturnValue(false),
-  compactEmbeddedPiSession: vi.fn(),
-  runEmbeddedPiAgent: vi.fn(),
-  queueEmbeddedPiMessage: vi.fn().mockReturnValue(false),
-  isEmbeddedPiRunActive: vi.fn().mockReturnValue(false),
-  isEmbeddedPiRunStreaming: vi.fn().mockReturnValue(false),
+  abortEmbeddedPiRun: vi.fn<(...args: unknown[]) => boolean>().mockReturnValue(false),
+  compactEmbeddedPiSession: vi.fn<(...args: unknown[]) => unknown>(),
+  runEmbeddedPiAgent: vi.fn<(...args: unknown[]) => unknown>(),
+  queueEmbeddedPiMessage: vi.fn<(...args: unknown[]) => boolean>().mockReturnValue(false),
+  isEmbeddedPiRunActive: vi.fn<(...args: unknown[]) => boolean>().mockReturnValue(false),
+  isEmbeddedPiRunStreaming: vi.fn<(...args: unknown[]) => boolean>().mockReturnValue(false),
 }));
 
 export function getAbortEmbeddedPiRunMock(): AnyMock {
@@ -50,12 +48,18 @@ const providerUsageMocks = vi.hoisted(() => ({
     updatedAt: 0,
     providers: [],
   }),
-  formatUsageSummaryLine: vi.fn().mockReturnValue("📊 Usage: Claude 80% left"),
-  formatUsageWindowSummary: vi.fn().mockReturnValue("Claude 80% left"),
-  resolveUsageProviderId: vi.fn((provider: string) => provider.split("/")[0]),
+  formatUsageSummaryLine: vi
+    .fn<(...args: unknown[]) => string>()
+    .mockReturnValue("📊 Usage: Claude 80% left"),
+  formatUsageWindowSummary: vi
+    .fn<(...args: unknown[]) => string>()
+    .mockReturnValue("Claude 80% left"),
+  resolveUsageProviderId: vi.fn<(provider: string) => string>(
+    (provider: string) => provider.split("/")[0],
+  ),
 }));
 
-export function getProviderUsageMocks(): AnyMocks {
+export function getProviderUsageMocks(): AnyMockMap {
   return providerUsageMocks;
 }
 
@@ -80,10 +84,10 @@ const modelCatalogMocks = vi.hoisted(() => ({
     { provider: "openai-codex", id: "gpt-5.2", name: "GPT-5.2 (Codex)" },
     { provider: "minimax", id: "MiniMax-M2.1", name: "MiniMax M2.1" },
   ]),
-  resetModelCatalogCacheForTest: vi.fn(),
+  resetModelCatalogCacheForTest: vi.fn<(...args: unknown[]) => unknown>(),
 }));
 
-export function getModelCatalogMocks(): AnyMocks {
+export function getModelCatalogMocks(): AnyMockMap {
   return modelCatalogMocks;
 }
 
@@ -95,7 +99,7 @@ const webSessionMocks = vi.hoisted(() => ({
   readWebSelfId: vi.fn().mockReturnValue({ e164: "+1999" }),
 }));
 
-export function getWebSessionMocks(): AnyMocks {
+export function getWebSessionMocks(): AnyMockMap {
   return webSessionMocks;
 }
 

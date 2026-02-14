@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, vi } from "vitest";
+import type { MockFn } from "../test-utils/vitest-mock-fn.js";
 import type { WebInboundMessage } from "./inbound.js";
 import { resetInboundDedupe } from "../auto-reply/reply/inbound-dedupe.js";
 import * as ssrf from "../infra/net/ssrf.js";
@@ -13,10 +14,6 @@ import {
 } from "./test-helpers.js";
 
 export { resetBaileysMocks, resetLoadConfigMock, setLoadConfigMock } from "./test-helpers.js";
-
-// Avoid exporting inferred vitest mock types (TS2742 under pnpm + d.ts emit).
-// oxlint-disable-next-line typescript/no-explicit-any
-type AnyExport = any;
 
 export const TEST_NET_IP = "203.0.113.10";
 
@@ -123,13 +120,20 @@ export function installWebAutoReplyUnitTestHooks(opts?: { pinDns?: boolean }) {
   });
 }
 
-export function createWebListenerFactoryCapture(): AnyExport {
+export type WebListenerFactoryCapture = {
+  listenerFactory: (opts: {
+    onMessage: (msg: WebInboundMessage) => Promise<void>;
+  }) => Promise<{ close: MockFn<() => void> }>;
+  getOnMessage: () => ((msg: WebInboundMessage) => Promise<void>) | undefined;
+};
+
+export function createWebListenerFactoryCapture(): WebListenerFactoryCapture {
   let capturedOnMessage: ((msg: WebInboundMessage) => Promise<void>) | undefined;
   const listenerFactory = async (opts: {
     onMessage: (msg: WebInboundMessage) => Promise<void>;
   }) => {
     capturedOnMessage = opts.onMessage;
-    return { close: vi.fn() };
+    return { close: vi.fn<() => void>() };
   };
 
   return {
@@ -138,11 +142,17 @@ export function createWebListenerFactoryCapture(): AnyExport {
   };
 }
 
-export function createWebInboundDeliverySpies(): AnyExport {
+export type WebInboundDeliverySpies = {
+  sendMedia: MockFn<(...args: unknown[]) => unknown>;
+  reply: MockFn<(...args: unknown[]) => Promise<void>>;
+  sendComposing: MockFn<(...args: unknown[]) => unknown>;
+};
+
+export function createWebInboundDeliverySpies(): WebInboundDeliverySpies {
   return {
-    sendMedia: vi.fn(),
-    reply: vi.fn().mockResolvedValue(undefined),
-    sendComposing: vi.fn(),
+    sendMedia: vi.fn<(...args: unknown[]) => unknown>(),
+    reply: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    sendComposing: vi.fn<(...args: unknown[]) => unknown>(),
   };
 }
 

@@ -331,10 +331,10 @@ describe("monitorIMessageProvider", () => {
     expect(replyMock).not.toHaveBeenCalled();
     expect(upsertPairingRequestMock).toHaveBeenCalled();
     expect(sendMock).toHaveBeenCalledTimes(1);
-    expect(String(sendMock.mock.calls[0]?.[1] ?? "")).toContain(
-      "Your iMessage sender id: +15550001111",
-    );
-    expect(String(sendMock.mock.calls[0]?.[1] ?? "")).toContain("Pairing code: PAIRCODE");
+    const body = sendMock.mock.calls[0]?.[1];
+    const bodyText = typeof body === "string" ? body : JSON.stringify(body ?? "");
+    expect(bodyText).toContain("Your iMessage sender id: +15550001111");
+    expect(bodyText).toContain("Pairing code: PAIRCODE");
   });
 
   it("delivers group replies when mentioned", async () => {

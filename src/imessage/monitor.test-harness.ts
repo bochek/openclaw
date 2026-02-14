@@ -1,25 +1,25 @@
 import { beforeEach, vi } from "vitest";
+import type { MockFn } from "../test-utils/vitest-mock-fn.js";
 
 type NotificationHandler = (msg: { method: string; params?: unknown }) => void;
 
-// Avoid exporting vitest mock types (TS2742 under pnpm + d.ts emit).
-// oxlint-disable-next-line typescript/no-explicit-any
-type AnyMock = any;
+type AnyMock = MockFn<(...args: unknown[]) => unknown>;
+type RequestMock = MockFn<(method: string, ...args: unknown[]) => Promise<unknown>>;
 
 const state = vi.hoisted(() => ({
-  requestMock: vi.fn(),
-  stopMock: vi.fn(),
-  sendMock: vi.fn(),
-  replyMock: vi.fn(),
-  updateLastRouteMock: vi.fn(),
-  readAllowFromStoreMock: vi.fn(),
-  upsertPairingRequestMock: vi.fn(),
+  requestMock: vi.fn<(method: string, ...args: unknown[]) => Promise<unknown>>(),
+  stopMock: vi.fn<(...args: unknown[]) => unknown>(),
+  sendMock: vi.fn<(...args: unknown[]) => unknown>(),
+  replyMock: vi.fn<(...args: unknown[]) => unknown>(),
+  updateLastRouteMock: vi.fn<(...args: unknown[]) => unknown>(),
+  readAllowFromStoreMock: vi.fn<(...args: unknown[]) => unknown>(),
+  upsertPairingRequestMock: vi.fn<(...args: unknown[]) => unknown>(),
   config: {} as Record<string, unknown>,
   notificationHandler: undefined as NotificationHandler | undefined,
   closeResolve: undefined as (() => void) | undefined,
 }));
 
-export function getRequestMock(): AnyMock {
+export function getRequestMock(): RequestMock {
   return state.requestMock;
 }
 
@@ -95,7 +95,7 @@ vi.mock("./client.js", () => ({
   createIMessageRpcClient: vi.fn(async (opts: { onNotification?: NotificationHandler }) => {
     state.notificationHandler = opts.onNotification;
     return {
-      request: (...args: unknown[]) => state.requestMock(...args),
+      request: (method: string, ...args: unknown[]) => state.requestMock(method, ...args),
       waitForClose: () =>
         new Promise<void>((resolve) => {
           state.closeResolve = resolve;

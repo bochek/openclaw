@@ -3,11 +3,8 @@ import fsSync from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, vi } from "vitest";
+import type { MockFn } from "../test-utils/vitest-mock-fn.js";
 import { resetLogger, setLoggerOverride } from "../logging.js";
-
-// Avoid exporting vitest mock types (TS2742 under pnpm + d.ts emit).
-// oxlint-disable-next-line typescript/no-explicit-any
-type AnyMockFn = any;
 
 export const DEFAULT_ACCOUNT_ID = "default";
 
@@ -24,24 +21,30 @@ export const DEFAULT_WEB_INBOX_CONFIG = {
   },
 } as const;
 
-export const mockLoadConfig: AnyMockFn = vi.fn().mockReturnValue(DEFAULT_WEB_INBOX_CONFIG);
+export const mockLoadConfig: MockFn<() => typeof DEFAULT_WEB_INBOX_CONFIG> = vi
+  .fn<() => typeof DEFAULT_WEB_INBOX_CONFIG>()
+  .mockReturnValue(DEFAULT_WEB_INBOX_CONFIG);
 
-export const readAllowFromStoreMock: AnyMockFn = vi.fn().mockResolvedValue([]);
-export const upsertPairingRequestMock: AnyMockFn = vi
-  .fn()
+export const readAllowFromStoreMock: MockFn<(...args: unknown[]) => Promise<unknown[]>> = vi
+  .fn<(...args: unknown[]) => Promise<unknown[]>>()
+  .mockResolvedValue([]);
+export const upsertPairingRequestMock: MockFn<
+  (...args: unknown[]) => Promise<{ code: string; created: boolean }>
+> = vi
+  .fn<(...args: unknown[]) => Promise<{ code: string; created: boolean }>>()
   .mockResolvedValue({ code: "PAIRCODE", created: true });
 
 export type MockSock = {
   ev: EventEmitter;
-  ws: { close: AnyMockFn };
-  sendPresenceUpdate: AnyMockFn;
-  sendMessage: AnyMockFn;
-  readMessages: AnyMockFn;
-  updateMediaMessage: AnyMockFn;
+  ws: { close: MockFn };
+  sendPresenceUpdate: MockFn;
+  sendMessage: MockFn;
+  readMessages: MockFn;
+  updateMediaMessage: MockFn;
   logger: Record<string, unknown>;
   signalRepository: {
     lidMapping: {
-      getPNForLID: AnyMockFn;
+      getPNForLID: MockFn;
     };
   };
   user: { id: string };
@@ -51,15 +54,15 @@ function createMockSock(): MockSock {
   const ev = new EventEmitter();
   return {
     ev,
-    ws: { close: vi.fn() },
-    sendPresenceUpdate: vi.fn().mockResolvedValue(undefined),
-    sendMessage: vi.fn().mockResolvedValue(undefined),
-    readMessages: vi.fn().mockResolvedValue(undefined),
-    updateMediaMessage: vi.fn(),
+    ws: { close: vi.fn<() => void>() },
+    sendPresenceUpdate: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    sendMessage: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    readMessages: vi.fn<(...args: unknown[]) => Promise<void>>().mockResolvedValue(undefined),
+    updateMediaMessage: vi.fn<(...args: unknown[]) => unknown>(),
     logger: {},
     signalRepository: {
       lidMapping: {
-        getPNForLID: vi.fn().mockResolvedValue(null),
+        getPNForLID: vi.fn<(...args: unknown[]) => Promise<unknown>>().mockResolvedValue(null),
       },
     },
     user: { id: "123@s.whatsapp.net" },
