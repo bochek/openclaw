@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ROOT_CONFIG_SCHEMA_KEY } from "./schema-root-metadata.js";
 import { ToolsSchema } from "./zod-schema.agent-runtime.js";
 import { AgentsSchema, AudioSchema, BindingsSchema, BroadcastSchema } from "./zod-schema.agents.js";
 import { ApprovalsSchema } from "./zod-schema.approvals.js";
@@ -95,7 +96,7 @@ const MemorySchema = z
 
 export const OpenClawSchema = z
   .object({
-    $schema: z.string().optional(),
+    [ROOT_CONFIG_SCHEMA_KEY]: z.string().optional(),
     meta: z
       .object({
         lastTouchedVersion: z.string().optional(),

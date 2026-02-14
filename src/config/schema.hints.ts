@@ -156,9 +156,8 @@ export function applySensitiveHints(
   return next;
 }
 
-// Seems to be the only way tsgo accepts us to check if we have a ZodClass
-// with an unwrap() method. And it's overly complex because oxlint and
-// tsgo are each forbidding what the other allows.
+// Tsgo and oxlint disagree on some Zod internals, so keep wrapper checks
+// explicit and narrow.
 interface ZodDummy {
   unwrap: () => z.ZodType;
 }
@@ -172,19 +171,67 @@ function isUnwrappable(object: unknown): object is ZodDummy {
   );
 }
 
+interface ZodPipeDummy {
+  _def: {
+    in?: z.ZodType;
+    out?: z.ZodType;
+  };
+}
+
+function getPipeTraversalSchema(schema: z.ZodType): z.ZodType | null {
+  if (!(schema instanceof z.ZodPipe)) {
+    return null;
+  }
+
+  const pipeSchema = schema as unknown as ZodPipeDummy;
+  const input = pipeSchema._def.in;
+  const output = pipeSchema._def.out;
+
+  if (output && !(output instanceof z.ZodTransform)) {
+    return output;
+  }
+  if (input && !(input instanceof z.ZodTransform)) {
+    return input;
+  }
+  return output ?? input ?? null;
+}
+
+function unwrapSchemaForTraversal(schema: z.ZodType): {
+  schema: z.ZodType;
+  isSensitive: boolean;
+} {
+  let currentSchema = schema;
+  let isSensitive = sensitive.has(currentSchema);
+
+  while (true) {
+    if (isUnwrappable(currentSchema)) {
+      currentSchema = currentSchema.unwrap();
+      isSensitive ||= sensitive.has(currentSchema);
+      continue;
+    }
+
+    const pipeTraversalSchema = getPipeTraversalSchema(currentSchema);
+    if (pipeTraversalSchema) {
+      currentSchema = pipeTraversalSchema;
+      isSensitive ||= sensitive.has(currentSchema);
+      continue;
+    }
+
+    break;
+  }
+
+  return { schema: currentSchema, isSensitive };
+}
+
 export function mapSensitivePaths(
   schema: z.ZodType,
   path: string,
   hints: ConfigUiHints,
 ): ConfigUiHints {
   let next = { ...hints };
-  let currentSchema = schema;
-  let isSensitive = sensitive.has(currentSchema);
-
-  while (isUnwrappable(currentSchema)) {
-    currentSchema = currentSchema.unwrap();
-    isSensitive ||= sensitive.has(currentSchema);
-  }
+  const unwrapped = unwrapSchemaForTraversal(schema);
+  let currentSchema = unwrapped.schema;
+  const isSensitive = unwrapped.isSensitive;
 
   if (isSensitive) {
     next[path] = { ...next[path], sensitive: true };

@@ -1,6 +1,7 @@
 import type { ConfigUiHint, ConfigUiHints } from "./schema.hints.js";
 import { CHANNEL_IDS } from "../channels/registry.js";
 import { VERSION } from "../version.js";
+import { ROOT_CONFIG_METADATA_KEYS, ROOT_CONFIG_METADATA_KEY_SET } from "./schema-root-metadata.js";
 import { applySensitiveHints, buildBaseHints, mapSensitivePaths } from "./schema.hints.js";
 import { OpenClawSchema } from "./zod-schema.js";
 
@@ -297,17 +298,29 @@ function applyChannelSchemas(schema: ConfigSchema, channels: ChannelUiMetadata[]
 
 let cachedBase: ConfigSchemaResponse | null = null;
 
-function stripChannelSchema(schema: ConfigSchema): ConfigSchema {
+function stripRootMetadataForUiSchema(schema: ConfigSchema): ConfigSchema {
   const next = cloneSchema(schema);
   const root = asSchemaObject(next);
   if (!root || !root.properties) {
     return next;
   }
-  // Allow `$schema` in config files for editor tooling, but hide it from the
-  // Control UI form schema so it does not show up as a configurable section.
-  delete root.properties.$schema;
+
+  // Allow root metadata keys in config files, but keep the Control UI focused
+  // on user-editable config sections.
+  for (const key of ROOT_CONFIG_METADATA_KEYS) {
+    delete root.properties[key];
+  }
   if (Array.isArray(root.required)) {
-    root.required = root.required.filter((key) => key !== "$schema");
+    root.required = root.required.filter((key) => !ROOT_CONFIG_METADATA_KEY_SET.has(key));
+  }
+  return next;
+}
+
+function stripChannelsForUiSchema(schema: ConfigSchema): ConfigSchema {
+  const next = cloneSchema(schema);
+  const root = asSchemaObject(next);
+  if (!root || !root.properties) {
+    return next;
   }
   const channelsNode = asSchemaObject(root.properties.channels);
   if (channelsNode) {
@@ -329,7 +342,7 @@ function buildBaseConfigSchema(): ConfigSchemaResponse {
   schema.title = "OpenClawConfig";
   const hints = mapSensitivePaths(OpenClawSchema, "", buildBaseHints());
   const next = {
-    schema: stripChannelSchema(schema),
+    schema: stripChannelsForUiSchema(stripRootMetadataForUiSchema(schema)),
     uiHints: hints,
     version: VERSION,
     generatedAt: new Date().toISOString(),
