@@ -8,6 +8,8 @@ describe("isVoiceCompatibleAudio", () => {
     { contentType: "audio/ogg; codecs=opus", fileName: null },
     { contentType: "audio/mpeg", fileName: null },
     { contentType: "audio/mp3", fileName: null },
+    { contentType: "audio/mp4", fileName: null },
+    { contentType: "audio/mp4; codecs=mp4a.40.2", fileName: null },
     { contentType: "audio/x-m4a", fileName: null },
     { contentType: "audio/m4a", fileName: null },
   ])("returns true for MIME type $contentType", (opts) => {
@@ -21,7 +23,6 @@ describe("isVoiceCompatibleAudio", () => {
   it.each([
     { contentType: "audio/wav", fileName: null },
     { contentType: "audio/flac", fileName: null },
-    { contentType: "audio/mp4", fileName: null },
     { contentType: "audio/aac", fileName: null },
     { contentType: "video/mp4", fileName: null },
   ])("returns false for unsupported MIME $contentType", (opts) => {

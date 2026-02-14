@@ -12,6 +12,7 @@ const VOICE_MIME_TYPES = new Set([
   "audio/opus",
   "audio/mpeg",
   "audio/mp3",
+  "audio/mp4",
   "audio/x-m4a",
   "audio/m4a",
 ]);
