@@ -1,9 +1,29 @@
 import type { Command } from "commander";
+import path from "node:path";
 import { danger } from "../../globals.js";
+import { resolvePreferredOpenClawTmpDir } from "../../infra/tmp-openclaw-dir.js";
 import { defaultRuntime } from "../../runtime.js";
 import { shortenHomePath } from "../../utils.js";
 import { callBrowserRequest, type BrowserParentOpts } from "../browser-cli-shared.js";
 import { resolveBrowserActionContext } from "./shared.js";
+
+function normalizeUploadPaths(paths: string[]): string[] {
+  const uploadRoot = path.resolve(path.join(resolvePreferredOpenClawTmpDir(), "uploads"));
+  return paths.map((p) => {
+    const raw = String(p ?? "").trim();
+    if (!raw) {
+      throw new Error("upload path is empty");
+    }
+    const resolved = path.resolve(uploadRoot, raw);
+    const rel = path.relative(uploadRoot, resolved);
+    if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
+      throw new Error(
+        `Invalid upload path: must stay within ${uploadRoot} (copy files there first)`,
+      );
+    }
+    return resolved;
+  });
+}
 
 export function registerBrowserFilesAndDownloadsCommands(
   browser: Command,
@@ -12,7 +32,10 @@ export function registerBrowserFilesAndDownloadsCommands(
   browser
     .command("upload")
     .description("Arm file upload for the next file chooser")
-    .argument("<paths...>", "File paths to upload")
+    .argument(
+      "<paths...>",
+      "File paths to upload (must be within OpenClaw temp uploads dir, e.g. /tmp/openclaw/uploads/file.pdf)",
+    )
     .option("--ref <ref>", "Ref id from snapshot to click after arming")
     .option("--input-ref <ref>", "Ref id for <input type=file> to set directly")
     .option("--element <selector>", "CSS selector for <input type=file>")
@@ -25,6 +48,7 @@ export function registerBrowserFilesAndDownloadsCommands(
     .action(async (paths: string[], opts, cmd) => {
       const { parent, profile } = resolveBrowserActionContext(cmd, parentOpts);
       try {
+        const normalizedPaths = normalizeUploadPaths(paths);
         const timeoutMs = Number.isFinite(opts.timeoutMs) ? opts.timeoutMs : undefined;
         const result = await callBrowserRequest<{ download: { path: string } }>(
           parent,
@@ -33,7 +57,7 @@ export function registerBrowserFilesAndDownloadsCommands(
             path: "/hooks/file-chooser",
             query: profile ? { profile } : undefined,
             body: {
-              paths,
+              paths: normalizedPaths,
               ref: opts.ref?.trim() || undefined,
               inputRef: opts.inputRef?.trim() || undefined,
               element: opts.element?.trim() || undefined,
