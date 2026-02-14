@@ -2,6 +2,12 @@
 
 Docs: https://docs.openclaw.ai
 
+## Unreleased
+
+### Fixes
+
+- Security: fix Chutes manual OAuth login state validation (thanks @aether-ai-agent). (#16058)
+
 ## 2026.2.13
 
 ### Changes

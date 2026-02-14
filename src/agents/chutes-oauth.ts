@@ -53,7 +53,7 @@ export function parseOAuthCallbackInput(
       return { error: "Missing 'state' parameter. Paste the full URL." };
     }
     if (state !== expectedState) {
-      return { error: "OAuth state mismatch — possible CSRF attack. Please retry login." };
+      return { error: "OAuth state mismatch - possible CSRF attack. Please retry login." };
     }
     return { code, state };
   } catch {

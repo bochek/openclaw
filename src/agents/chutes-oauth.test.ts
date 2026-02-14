@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseOAuthCallbackInput, generateChutesPkce } from "./chutes-oauth.js";
+import { generateChutesPkce, parseOAuthCallbackInput } from "./chutes-oauth.js";
 
 describe("parseOAuthCallbackInput", () => {
   const EXPECTED_STATE = "abc123def456";
@@ -41,10 +41,7 @@ describe("parseOAuthCallbackInput", () => {
   });
 
   it("rejects URL missing state parameter", () => {
-    const result = parseOAuthCallbackInput(
-      "http://localhost/cb?code=authcode_xyz",
-      EXPECTED_STATE,
-    );
+    const result = parseOAuthCallbackInput("http://localhost/cb?code=authcode_xyz", EXPECTED_STATE);
     expect(result).toHaveProperty("error");
   });
 });
