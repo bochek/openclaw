@@ -368,7 +368,7 @@ export const registerTelegramNativeCommands = ({
   ];
   const TELEGRAM_MAX_COMMANDS = 100;
   if (allCommandsFull.length > TELEGRAM_MAX_COMMANDS) {
-    runtime.warn?.(
+    runtime.log?.(
       `Telegram limits bots to ${TELEGRAM_MAX_COMMANDS} commands. ` +
         `${allCommandsFull.length} configured; registering first ${TELEGRAM_MAX_COMMANDS}. ` +
         `Use channels.telegram.commands.native: false to disable, or reduce skill/custom commands.`,
