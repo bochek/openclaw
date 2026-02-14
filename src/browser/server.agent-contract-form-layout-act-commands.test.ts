@@ -514,6 +514,15 @@ describe("browser control server", () => {
     expect(pwMocks.traceStopViaPlaywright).not.toHaveBeenCalled();
   });
 
+  it("trace stop rejects absolute path outside trace dir", async () => {
+    const base = await startServerAndBase();
+    const res = await postJson<{ error?: string }>(`${base}/trace/stop`, {
+      path: path.resolve("/", "pwned.zip"),
+    });
+    expect(res.error).toContain("Invalid path");
+    expect(pwMocks.traceStopViaPlaywright).not.toHaveBeenCalled();
+  });
+
   it("trace stop accepts in-root relative output path", async () => {
     const base = await startServerAndBase();
     const res = await postJson<{ ok?: boolean; path?: string }>(`${base}/trace/stop`, {
@@ -560,11 +569,30 @@ describe("browser control server", () => {
     expect(pwMocks.waitForDownloadViaPlaywright).not.toHaveBeenCalled();
   });
 
+  it("wait/download rejects absolute path outside downloads dir", async () => {
+    const base = await startServerAndBase();
+    const waitRes = await postJson<{ error?: string }>(`${base}/wait/download`, {
+      path: path.resolve("/", "pwned.pdf"),
+    });
+    expect(waitRes.error).toContain("Invalid path");
+    expect(pwMocks.waitForDownloadViaPlaywright).not.toHaveBeenCalled();
+  });
+
   it("download rejects traversal path outside downloads dir", async () => {
     const base = await startServerAndBase();
     const downloadRes = await postJson<{ error?: string }>(`${base}/download`, {
       ref: "e12",
       path: "../../pwned.pdf",
+    });
+    expect(downloadRes.error).toContain("Invalid path");
+    expect(pwMocks.downloadViaPlaywright).not.toHaveBeenCalled();
+  });
+
+  it("download rejects absolute path outside downloads dir", async () => {
+    const base = await startServerAndBase();
+    const downloadRes = await postJson<{ error?: string }>(`${base}/download`, {
+      ref: "e12",
+      path: path.resolve("/", "pwned.pdf"),
     });
     expect(downloadRes.error).toContain("Invalid path");
     expect(pwMocks.downloadViaPlaywright).not.toHaveBeenCalled();
