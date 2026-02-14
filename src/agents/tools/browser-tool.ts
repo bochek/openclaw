@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import path from "node:path";
 import {
   browserAct,
   browserArmDialog,
@@ -22,8 +21,8 @@ import {
 } from "../../browser/client.js";
 import { resolveBrowserConfig } from "../../browser/config.js";
 import { DEFAULT_AI_SNAPSHOT_MAX_CHARS } from "../../browser/constants.js";
+import { DEFAULT_UPLOAD_DIR, resolvePathsWithinRoot } from "../../browser/paths.js";
 import { loadConfig } from "../../config/config.js";
-import { resolvePreferredOpenClawTmpDir } from "../../infra/tmp-openclaw-dir.js";
 import { saveMediaBuffer } from "../../media/store.js";
 import { wrapExternalContent } from "../../security/external-content.js";
 import { BrowserToolSchema } from "./browser-tool.schema.js";
@@ -726,21 +725,15 @@ export function createBrowserTool(opts?: {
           if (paths.length === 0) {
             throw new Error("paths required");
           }
-          const uploadRoot = path.resolve(path.join(resolvePreferredOpenClawTmpDir(), "uploads"));
-          const normalizedPaths = paths.map((p) => {
-            const raw = String(p ?? "").trim();
-            if (!raw) {
-              throw new Error("upload path is empty");
-            }
-            const resolved = path.resolve(uploadRoot, raw);
-            const rel = path.relative(uploadRoot, resolved);
-            if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
-              throw new Error(
-                `Invalid upload path: must stay within ${uploadRoot} (copy files there first)`,
-              );
-            }
-            return resolved;
+          const uploadPathsResult = resolvePathsWithinRoot({
+            rootDir: DEFAULT_UPLOAD_DIR,
+            requestedPaths: paths,
+            scopeLabel: `uploads directory (${DEFAULT_UPLOAD_DIR})`,
           });
+          if (!uploadPathsResult.ok) {
+            throw new Error(uploadPathsResult.error);
+          }
+          const normalizedPaths = uploadPathsResult.paths;
           const ref = readStringParam(params, "ref");
           const inputRef = readStringParam(params, "inputRef");
           const element = readStringParam(params, "element");

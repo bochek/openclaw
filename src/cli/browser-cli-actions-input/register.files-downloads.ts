@@ -1,28 +1,21 @@
 import type { Command } from "commander";
-import path from "node:path";
+import { DEFAULT_UPLOAD_DIR, resolvePathsWithinRoot } from "../../browser/paths.js";
 import { danger } from "../../globals.js";
-import { resolvePreferredOpenClawTmpDir } from "../../infra/tmp-openclaw-dir.js";
 import { defaultRuntime } from "../../runtime.js";
 import { shortenHomePath } from "../../utils.js";
 import { callBrowserRequest, type BrowserParentOpts } from "../browser-cli-shared.js";
 import { resolveBrowserActionContext } from "./shared.js";
 
 function normalizeUploadPaths(paths: string[]): string[] {
-  const uploadRoot = path.resolve(path.join(resolvePreferredOpenClawTmpDir(), "uploads"));
-  return paths.map((p) => {
-    const raw = String(p ?? "").trim();
-    if (!raw) {
-      throw new Error("upload path is empty");
-    }
-    const resolved = path.resolve(uploadRoot, raw);
-    const rel = path.relative(uploadRoot, resolved);
-    if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) {
-      throw new Error(
-        `Invalid upload path: must stay within ${uploadRoot} (copy files there first)`,
-      );
-    }
-    return resolved;
+  const result = resolvePathsWithinRoot({
+    rootDir: DEFAULT_UPLOAD_DIR,
+    requestedPaths: paths,
+    scopeLabel: `uploads directory (${DEFAULT_UPLOAD_DIR})`,
   });
+  if (!result.ok) {
+    throw new Error(result.error);
+  }
+  return result.paths;
 }
 
 export function registerBrowserFilesAndDownloadsCommands(
