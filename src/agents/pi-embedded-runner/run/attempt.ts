@@ -17,7 +17,7 @@ import { resolveTelegramReactionLevel } from "../../../telegram/reaction-level.j
 import { buildTtsSystemPromptHint } from "../../../tts/tts.js";
 import { resolveUserPath } from "../../../utils.js";
 import { normalizeMessageChannel } from "../../../utils/message-channel.js";
-import { isReasoningTagProvider } from "../../../utils/provider-utils.js";
+import { requiresReasoningTags } from "../../../utils/provider-utils.js";
 import { resolveOpenClawAgentDir } from "../../agent-paths.js";
 import { resolveSessionAgentIds } from "../../agent-scope.js";
 import { createAnthropicPayloadLogger } from "../../anthropic-payload-log.js";
@@ -366,7 +366,7 @@ export async function runEmbeddedAttempt(
       config: params.config,
     });
     const sandboxInfo = buildEmbeddedSandboxInfo(sandbox, params.bashElevated);
-    const reasoningTagHint = isReasoningTagProvider(params.provider);
+    const reasoningTagHint = requiresReasoningTags(params.provider);
     // Resolve channel-specific message actions for system prompt
     const channelActions = runtimeChannel
       ? listChannelSupportedActions({

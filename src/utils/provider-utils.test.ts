@@ -1,39 +1,44 @@
 import { describe, expect, it } from "vitest";
-import { isReasoningTagProvider } from "./provider-utils.js";
+import { requiresReasoningTags } from "./provider-utils.js";
 
-describe("isReasoningTagProvider", () => {
+describe("requiresReasoningTags", () => {
   it("returns false for ollama - native reasoning field, no tags needed (#2279)", () => {
-    expect(isReasoningTagProvider("ollama")).toBe(false);
-    expect(isReasoningTagProvider("Ollama")).toBe(false);
+    expect(requiresReasoningTags("ollama")).toBe(false);
+    expect(requiresReasoningTags("Ollama")).toBe(false);
   });
 
   it("returns true for google-gemini-cli", () => {
-    expect(isReasoningTagProvider("google-gemini-cli")).toBe(true);
+    expect(requiresReasoningTags("google-gemini-cli")).toBe(true);
   });
 
   it("returns true for google-generative-ai", () => {
-    expect(isReasoningTagProvider("google-generative-ai")).toBe(true);
+    expect(requiresReasoningTags("google-generative-ai")).toBe(true);
   });
 
   it("returns true for google-antigravity", () => {
-    expect(isReasoningTagProvider("google-antigravity")).toBe(true);
-    expect(isReasoningTagProvider("google-antigravity/gemini-3")).toBe(true);
+    expect(requiresReasoningTags("google-antigravity")).toBe(true);
+    expect(requiresReasoningTags("google-antigravity/gemini-3")).toBe(true);
   });
 
   it("returns true for minimax", () => {
-    expect(isReasoningTagProvider("minimax")).toBe(true);
-    expect(isReasoningTagProvider("minimax-cn")).toBe(true);
+    expect(requiresReasoningTags("minimax")).toBe(true);
+    expect(requiresReasoningTags("minimax-cn")).toBe(true);
   });
 
   it("returns false for null/undefined/empty", () => {
-    expect(isReasoningTagProvider(null)).toBe(false);
-    expect(isReasoningTagProvider(undefined)).toBe(false);
-    expect(isReasoningTagProvider("")).toBe(false);
+    expect(requiresReasoningTags(null)).toBe(false);
+    expect(requiresReasoningTags(undefined)).toBe(false);
+    expect(requiresReasoningTags("")).toBe(false);
   });
 
   it("returns false for standard providers", () => {
-    expect(isReasoningTagProvider("anthropic")).toBe(false);
-    expect(isReasoningTagProvider("openai")).toBe(false);
-    expect(isReasoningTagProvider("openrouter")).toBe(false);
+    expect(requiresReasoningTags("anthropic")).toBe(false);
+    expect(requiresReasoningTags("openai")).toBe(false);
+    expect(requiresReasoningTags("openrouter")).toBe(false);
+  });
+
+  it("does not match substrings", () => {
+    expect(requiresReasoningTags("notgoogle-antigravity")).toBe(false);
+    expect(requiresReasoningTags("foo-minimax")).toBe(false);
   });
 });

@@ -12,6 +12,7 @@ import { getCustomProviderApiKey, resolveEnvApiKey } from "../agents/model-auth.
 import { normalizeProviderId } from "../agents/model-selection.js";
 import { loadConfig } from "../config/config.js";
 import { normalizeSecretInput } from "../utils/normalize-secret-input.js";
+import { GOOGLE_ANTIGRAVITY_API, GOOGLE_GEMINI_CLI_API } from "../utils/provider-ids.js";
 
 export type ProviderAuth = {
   provider: UsageProviderId;
@@ -191,7 +192,7 @@ async function resolveOAuthToken(params: {
         continue;
       }
       let token = resolved.apiKey;
-      if (params.provider === "google-gemini-cli" || params.provider === "google-antigravity") {
+      if (params.provider === GOOGLE_GEMINI_CLI_API || params.provider === GOOGLE_ANTIGRAVITY_API) {
         const parsed = parseGoogleToken(resolved.apiKey);
         token = parsed?.token ?? resolved.apiKey;
       }
@@ -219,8 +220,8 @@ function resolveOAuthProviders(agentDir?: string): UsageProviderId[] {
   const providers = [
     "anthropic",
     "github-copilot",
-    "google-gemini-cli",
-    "google-antigravity",
+    GOOGLE_GEMINI_CLI_API,
+    GOOGLE_ANTIGRAVITY_API,
     "openai-codex",
   ] satisfies UsageProviderId[];
   const isOAuthLikeCredential = (id: string) => {

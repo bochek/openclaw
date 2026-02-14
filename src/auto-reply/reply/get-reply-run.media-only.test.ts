@@ -33,7 +33,7 @@ vi.mock("../../routing/session-key.js", () => ({
 }));
 
 vi.mock("../../utils/provider-utils.js", () => ({
-  isReasoningTagProvider: vi.fn().mockReturnValue(false),
+  requiresReasoningTags: vi.fn().mockReturnValue(false),
 }));
 
 vi.mock("../command-detection.js", () => ({

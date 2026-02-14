@@ -8,6 +8,7 @@ import type { OpenClawConfig } from "../../config/config.js";
 import type { AuthProfileStore } from "./types.js";
 import { withFileLock } from "../../infra/file-lock.js";
 import { refreshQwenPortalCredentials } from "../../providers/qwen-portal-oauth.js";
+import { GOOGLE_ANTIGRAVITY_API, GOOGLE_GEMINI_CLI_API } from "../../utils/provider-ids.js";
 import { refreshChutesTokens } from "../chutes-oauth.js";
 import { AUTH_STORE_LOCK_OPTIONS, log } from "./constants.js";
 import { formatAuthDoctorHint } from "./doctor.js";
@@ -24,7 +25,7 @@ const resolveOAuthProvider = (provider: string): OAuthProvider | null =>
   isOAuthProvider(provider) ? provider : null;
 
 function buildOAuthApiKey(provider: string, credentials: OAuthCredentials): string {
-  const needsProjectId = provider === "google-gemini-cli" || provider === "google-antigravity";
+  const needsProjectId = provider === GOOGLE_GEMINI_CLI_API || provider === GOOGLE_ANTIGRAVITY_API;
   return needsProjectId
     ? JSON.stringify({
         token: credentials.access,
