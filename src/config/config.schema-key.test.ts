@@ -7,15 +7,8 @@ describe("$schema key in config (#14998)", () => {
       $schema: "https://openclaw.ai/config.json",
     });
     expect(result.success).toBe(true);
-  });
-
-  it("strips $schema from parsed output so it does not leak into UI", () => {
-    const result = OpenClawSchema.safeParse({
-      $schema: "https://openclaw.ai/config.json",
-    });
-    expect(result.success).toBe(true);
     if (result.success) {
-      expect("$schema" in result.data).toBe(false);
+      expect(result.data.$schema).toBe("https://openclaw.ai/config.json");
     }
   });
 
@@ -24,8 +17,8 @@ describe("$schema key in config (#14998)", () => {
     expect(result.success).toBe(true);
   });
 
-  it("ignores non-string $schema (stripped before validation)", () => {
+  it("rejects non-string $schema", () => {
     const result = OpenClawSchema.safeParse({ $schema: 123 });
-    expect(result.success).toBe(true);
+    expect(result.success).toBe(false);
   });
 });
