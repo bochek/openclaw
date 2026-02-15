@@ -341,6 +341,9 @@ export async function handleTelegramAction(
   }
 
   if (action === "createForumTopic") {
+    if (!isActionEnabled("createForumTopic")) {
+      throw new Error("Telegram createForumTopic is disabled.");
+    }
     const chatId = readStringOrNumberParam(params, "chatId", {
       required: true,
     });

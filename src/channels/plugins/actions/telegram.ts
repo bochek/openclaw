@@ -69,7 +69,9 @@ export const telegramMessageActions: ChannelMessageActionAdapter = {
       actions.add("sticker");
       actions.add("sticker-search");
     }
-    actions.add("topic-create");
+    if (gate("createForumTopic")) {
+      actions.add("topic-create");
+    }
     return Array.from(actions);
   },
   supportsButtons: ({ cfg }) => {
