@@ -533,7 +533,10 @@ export function createGatewayHttpServer(opts: {
 
         const mmRaw = configSnapshot.channels?.mattermost as Record<string, unknown> | undefined;
         const addMmCommands = (raw: unknown) => {
-          const commands = raw as Record<string, unknown> | undefined;
+          if (raw == null || typeof raw !== "object") {
+            return;
+          }
+          const commands = raw as Record<string, unknown>;
           mattermostCallbackPaths.add(normalizeCallbackPath(commands?.callbackPath));
           tryAddCallbackUrlPath(commands?.callbackUrl);
         };
