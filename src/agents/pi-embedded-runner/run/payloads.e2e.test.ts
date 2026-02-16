@@ -184,6 +184,28 @@ describe("buildEmbeddedRunPayloads", () => {
     expect(payloads[0]?.text).toContain("code 1");
   });
 
+  it("suppresses exec tool errors when mutatingAction is false and assistant produced a reply", () => {
+    const payloads = buildPayloads({
+      assistantTexts: ["I searched for PDF files but some directories were inaccessible."],
+      lastAssistant: makeAssistant({
+        stopReason: "stop",
+        errorMessage: undefined,
+        content: [],
+      }),
+      lastToolError: {
+        toolName: "exec",
+        error: "Command exited with code 1",
+        mutatingAction: false,
+      },
+    });
+
+    expect(payloads).toHaveLength(1);
+    expect(payloads[0]?.text).toBe(
+      "I searched for PDF files but some directories were inaccessible.",
+    );
+    expect(payloads[0]?.isError).toBeUndefined();
+  });
+
   it("suppresses recoverable tool errors containing 'required' for non-mutating tools", () => {
     const payloads = buildPayloads({
       lastToolError: { toolName: "browser", error: "url required" },
