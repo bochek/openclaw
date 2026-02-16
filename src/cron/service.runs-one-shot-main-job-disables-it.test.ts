@@ -444,7 +444,7 @@ describe("CronService", () => {
     await store.cleanup();
   });
 
-  it("passes agentId to runHeartbeatOnce for main-session wakeMode now jobs", async () => {
+  it("passes agentId + sessionKey to runHeartbeatOnce for main-session wakeMode now jobs", async () => {
     ensureDir(fixturesRoot);
     const store = await makeStorePath();
     const enqueueSystemEvent = vi.fn();
@@ -465,9 +465,11 @@ describe("CronService", () => {
     });
 
     await cron.start();
+    const sessionKey = "agent:ops:discord:channel:alerts";
     const job = await cron.add({
       name: "wakeMode now with agent",
       agentId: "ops",
+      sessionKey,
       enabled: true,
       schedule: { kind: "at", at: new Date(1).toISOString() },
       sessionTarget: "main",
@@ -482,12 +484,13 @@ describe("CronService", () => {
       expect.objectContaining({
         reason: `cron:${job.id}`,
         agentId: "ops",
+        sessionKey,
       }),
     );
     expect(requestHeartbeatNow).not.toHaveBeenCalled();
     expect(enqueueSystemEvent).toHaveBeenCalledWith(
       "hello",
-      expect.objectContaining({ agentId: "ops" }),
+      expect.objectContaining({ agentId: "ops", sessionKey }),
     );
 
     cron.stop();
@@ -524,8 +527,10 @@ describe("CronService", () => {
     });
 
     await cron.start();
+    const sessionKey = "agent:main:discord:channel:ops";
     const job = await cron.add({
       name: "wakeMode now fallback",
+      sessionKey,
       enabled: true,
       schedule: { kind: "at", at: new Date(1).toISOString() },
       sessionTarget: "main",
@@ -536,7 +541,12 @@ describe("CronService", () => {
     await cron.run(job.id, "force");
 
     expect(runHeartbeatOnce).toHaveBeenCalled();
-    expect(requestHeartbeatNow).toHaveBeenCalled();
+    expect(requestHeartbeatNow).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: `cron:${job.id}`,
+        sessionKey,
+      }),
+    );
     expect(job.state.lastStatus).toBe("ok");
     expect(job.state.lastError).toBeUndefined();
 
