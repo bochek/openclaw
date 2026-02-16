@@ -287,7 +287,12 @@ export const dispatchTelegramMessage = async ({
                 | undefined
             )?.buttons;
             let draftStoppedForPreviewEdit = false;
-            if (!hasMedia && payload.text && typeof previewMessageId === "number") {
+            if (
+              !finalizedViaPreviewMessage &&
+              !hasMedia &&
+              payload.text &&
+              typeof previewMessageId === "number"
+            ) {
               const canFinalizeViaPreviewEdit = payload.text.length <= draftMaxChars;
               if (canFinalizeViaPreviewEdit) {
                 draftStream?.stop();
