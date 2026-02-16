@@ -13,11 +13,25 @@ const noopLogger = {
 
 async function makeStorePath() {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-cron-delivery-"));
+  const cleanup = async () => {
+    // Windows can transiently lock files while background force-runs finish persistence.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      try {
+        await fs.rm(dir, { recursive: true, force: true });
+        return;
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY") {
+          throw err;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+      }
+    }
+    await fs.rm(dir, { recursive: true, force: true });
+  };
   return {
     storePath: path.join(dir, "cron", "jobs.json"),
-    cleanup: async () => {
-      await fs.rm(dir, { recursive: true, force: true });
-    },
+    cleanup,
   };
 }
 
