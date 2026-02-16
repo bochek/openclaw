@@ -79,6 +79,27 @@ export function registerQrCli(program: Command) {
         }
 
         const wantsRemote = opts.remote === true;
+        if (wantsRemote && !token && !password) {
+          const remoteToken =
+            typeof cfg.gateway?.remote?.token === "string" ? cfg.gateway.remote.token.trim() : "";
+          const remotePassword =
+            typeof cfg.gateway?.remote?.password === "string"
+              ? cfg.gateway.remote.password.trim()
+              : "";
+
+          // In remote mode, prefer the client-side remote credentials. These are expected to match the
+          // remote gateway's auth settings (gateway.remote.token/password ~= gateway.auth.token/password).
+          if (remoteToken) {
+            cfg.gateway.auth.mode = "token";
+            cfg.gateway.auth.token = remoteToken;
+            cfg.gateway.auth.password = undefined;
+          } else if (remotePassword) {
+            cfg.gateway.auth.mode = "password";
+            cfg.gateway.auth.password = remotePassword;
+            cfg.gateway.auth.token = undefined;
+          }
+        }
+
         if (wantsRemote && !opts.url && !opts.publicUrl) {
           const tailscaleMode = cfg.gateway?.tailscale?.mode ?? "off";
           const remoteUrl = cfg.gateway?.remote?.url;
