@@ -209,11 +209,20 @@ export async function run(state: CronServiceState, id: string, mode?: "due" | "f
     }
     if (forced) {
       // Fire-and-forget: don't block the caller waiting for job completion
-      void executeJob(state, job, now, { forced }).then(() => {
-        recomputeNextRuns(state);
-        persist(state).catch(() => {});
-        armTimer(state);
-      });
+      void executeJob(state, job, now, { forced })
+        .then(async () => {
+          await locked(state, async () => {
+            recomputeNextRuns(state);
+            await persist(state);
+            armTimer(state);
+          });
+        })
+        .catch((err) => {
+          state.deps.log.warn(
+            { err: err instanceof Error ? err.message : String(err), jobId: job.id },
+            "cron: force run persistence failed",
+          );
+        });
       return { ok: true, ran: true } as const;
     }
     await executeJob(state, job, now, { forced });
