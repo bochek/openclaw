@@ -2,7 +2,10 @@ import { Command } from "commander";
 import { describe, expect, it } from "vitest";
 import {
   collectCommandSelectorCandidates,
+  collectDirectSubcommandSelectorCandidates,
+  commandRequiresSubcommand,
   rankCommandSelectorCandidates,
+  resolveCommandByPath,
 } from "./command-selector.js";
 
 describe("command-selector", () => {
@@ -47,5 +50,44 @@ describe("command-selector", () => {
 
     expect(ranked[0]?.label).toBe("message send");
     expect(ranked.some((candidate) => candidate.label === "status")).toBe(false);
+  });
+
+  it("resolves commands by path", () => {
+    const program = new Command();
+    const models = program.command("models");
+    const auth = models.command("auth").description("Auth");
+
+    expect(resolveCommandByPath(program, ["models"]))?.toBe(models);
+    expect(resolveCommandByPath(program, ["models", "auth"]))?.toBe(auth);
+    expect(resolveCommandByPath(program, ["models", "missing"])).toBeNull();
+  });
+
+  it("detects commands that require subcommands", () => {
+    const program = new Command();
+    const models = program.command("models").description("Model commands");
+    models.command("auth").description("Auth command");
+
+    const status = program
+      .command("status")
+      .description("Status")
+      .action(() => undefined);
+
+    expect(commandRequiresSubcommand(models)).toBe(true);
+    expect(commandRequiresSubcommand(status)).toBe(false);
+  });
+
+  it("collects direct subcommand candidates", () => {
+    const program = new Command();
+    const models = program.command("models").description("Model commands");
+    models.command("auth").description("Authenticate");
+    models.command("scan").description("Scan models");
+
+    const candidates = collectDirectSubcommandSelectorCandidates(program, ["models"]);
+
+    expect(candidates.map((candidate) => candidate.label)).toEqual(["auth", "scan"]);
+    expect(candidates.map((candidate) => candidate.path.join(" "))).toEqual([
+      "models auth",
+      "models scan",
+    ]);
   });
 });
