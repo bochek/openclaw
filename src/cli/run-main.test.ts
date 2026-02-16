@@ -5,6 +5,7 @@ import {
   shouldRegisterPrimarySubcommand,
   shouldSkipPluginCommandRegistration,
   shouldUseInteractiveCommandSelector,
+  stripInteractiveSelectorArgs,
 } from "./run-main.js";
 
 describe("rewriteUpdateFlagArgv", () => {
@@ -105,20 +106,40 @@ describe("shouldSkipPluginCommandRegistration", () => {
 });
 
 describe("shouldUseInteractiveCommandSelector", () => {
-  it("enables selector for plain no-arg interactive invocations", () => {
+  it("enables selector for -i", () => {
     expect(
       shouldUseInteractiveCommandSelector({
-        argv: ["node", "openclaw"],
+        argv: ["node", "openclaw", "-i"],
         stdinIsTTY: true,
         stdoutIsTTY: true,
       }),
     ).toBe(true);
   });
 
-  it("disables selector when a command is already present", () => {
+  it("enables selector for interactive command", () => {
     expect(
       shouldUseInteractiveCommandSelector({
-        argv: ["node", "openclaw", "status"],
+        argv: ["node", "openclaw", "interactive"],
+        stdinIsTTY: true,
+        stdoutIsTTY: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps default no-arg invocation on fast help path", () => {
+    expect(
+      shouldUseInteractiveCommandSelector({
+        argv: ["node", "openclaw"],
+        stdinIsTTY: true,
+        stdoutIsTTY: true,
+      }),
+    ).toBe(false);
+  });
+
+  it("ignores -i when a real command is already present", () => {
+    expect(
+      shouldUseInteractiveCommandSelector({
+        argv: ["node", "openclaw", "-i", "status"],
         stdinIsTTY: true,
         stdoutIsTTY: true,
       }),
@@ -128,14 +149,14 @@ describe("shouldUseInteractiveCommandSelector", () => {
   it("disables selector for non-interactive terminals or CI", () => {
     expect(
       shouldUseInteractiveCommandSelector({
-        argv: ["node", "openclaw"],
+        argv: ["node", "openclaw", "-i"],
         stdinIsTTY: false,
         stdoutIsTTY: true,
       }),
     ).toBe(false);
     expect(
       shouldUseInteractiveCommandSelector({
-        argv: ["node", "openclaw"],
+        argv: ["node", "openclaw", "-i"],
         stdinIsTTY: true,
         stdoutIsTTY: true,
         ciEnv: "1",
@@ -143,7 +164,7 @@ describe("shouldUseInteractiveCommandSelector", () => {
     ).toBe(false);
     expect(
       shouldUseInteractiveCommandSelector({
-        argv: ["node", "openclaw"],
+        argv: ["node", "openclaw", "interactive"],
         stdinIsTTY: true,
         stdoutIsTTY: true,
         disableSelectorEnv: "1",
@@ -154,11 +175,33 @@ describe("shouldUseInteractiveCommandSelector", () => {
   it("disables selector for help/version invocations", () => {
     expect(
       shouldUseInteractiveCommandSelector({
-        argv: ["node", "openclaw", "--help"],
+        argv: ["node", "openclaw", "-i", "--help"],
         stdinIsTTY: true,
         stdoutIsTTY: true,
       }),
     ).toBe(false);
+  });
+});
+
+describe("stripInteractiveSelectorArgs", () => {
+  it("removes -i from root invocations", () => {
+    expect(stripInteractiveSelectorArgs(["node", "openclaw", "-i"])).toEqual(["node", "openclaw"]);
+  });
+
+  it("removes interactive command from root invocations", () => {
+    expect(stripInteractiveSelectorArgs(["node", "openclaw", "interactive"])).toEqual([
+      "node",
+      "openclaw",
+    ]);
+  });
+
+  it("keeps unrelated arguments", () => {
+    expect(stripInteractiveSelectorArgs(["node", "openclaw", "--profile", "dev", "-i"])).toEqual([
+      "node",
+      "openclaw",
+      "--profile",
+      "dev",
+    ]);
   });
 });
 

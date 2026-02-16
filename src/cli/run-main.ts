@@ -61,6 +61,46 @@ export function shouldEnsureCliPath(argv: string[]): boolean {
   return true;
 }
 
+const ROOT_OPTIONS_WITH_VALUE = new Set(["--profile"]);
+
+function parseRootInvocation(argv: string[]): {
+  primary: string | null;
+  hasInteractiveFlag: boolean;
+} {
+  const args = argv.slice(2);
+  let primary: string | null = null;
+  let hasInteractiveFlag = false;
+  let expectOptionValue = false;
+
+  for (const arg of args) {
+    if (expectOptionValue) {
+      expectOptionValue = false;
+      continue;
+    }
+    if (arg === "--") {
+      break;
+    }
+    if (arg === "-i" || arg === "--interactive") {
+      hasInteractiveFlag = true;
+      continue;
+    }
+    if (arg.startsWith("--profile=")) {
+      continue;
+    }
+    if (ROOT_OPTIONS_WITH_VALUE.has(arg)) {
+      expectOptionValue = true;
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      continue;
+    }
+    primary = arg;
+    break;
+  }
+
+  return { primary, hasInteractiveFlag };
+}
+
 export function shouldUseInteractiveCommandSelector(params: {
   argv: string[];
   stdinIsTTY: boolean;
@@ -71,7 +111,14 @@ export function shouldUseInteractiveCommandSelector(params: {
   if (hasHelpOrVersion(params.argv)) {
     return false;
   }
-  if (getPrimaryCommand(params.argv)) {
+  const root = parseRootInvocation(params.argv);
+  const requestedViaCommand = root.primary === "interactive";
+  if (!root.hasInteractiveFlag && !requestedViaCommand) {
+    return false;
+  }
+  // Keep -i as an explicit interactive entrypoint only for root invocations.
+  // If a real command is already present, run it normally and ignore -i.
+  if (root.primary && root.primary !== "interactive") {
     return false;
   }
   if (!params.stdinIsTTY || !params.stdoutIsTTY) {
@@ -81,6 +128,49 @@ export function shouldUseInteractiveCommandSelector(params: {
     return false;
   }
   return true;
+}
+
+export function stripInteractiveSelectorArgs(argv: string[]): string[] {
+  const args = argv.slice(2);
+  const next: string[] = [];
+  let sawPrimary = false;
+  let expectOptionValue = false;
+
+  for (const arg of args) {
+    if (!sawPrimary) {
+      if (expectOptionValue) {
+        expectOptionValue = false;
+        next.push(arg);
+        continue;
+      }
+      if (arg === "--") {
+        sawPrimary = true;
+        next.push(arg);
+        continue;
+      }
+      if (arg === "-i" || arg === "--interactive") {
+        continue;
+      }
+      if (arg.startsWith("--profile=")) {
+        next.push(arg);
+        continue;
+      }
+      if (ROOT_OPTIONS_WITH_VALUE.has(arg)) {
+        expectOptionValue = true;
+        next.push(arg);
+        continue;
+      }
+      if (!arg.startsWith("-")) {
+        sawPrimary = true;
+        if (arg === "interactive") {
+          continue;
+        }
+      }
+    }
+    next.push(arg);
+  }
+
+  return [...argv.slice(0, 2), ...next];
 }
 
 export async function runCli(argv: string[] = process.argv) {
@@ -114,6 +204,17 @@ export async function runCli(argv: string[] = process.argv) {
   });
 
   let parseArgv = rewriteUpdateFlagArgv(normalizedArgv);
+  const useInteractiveSelector = shouldUseInteractiveCommandSelector({
+    argv: parseArgv,
+    stdinIsTTY: Boolean(process.stdin.isTTY),
+    stdoutIsTTY: Boolean(process.stdout.isTTY),
+    ciEnv: process.env.CI,
+    disableSelectorEnv: process.env.OPENCLAW_DISABLE_COMMAND_SELECTOR,
+  });
+  if (useInteractiveSelector) {
+    parseArgv = stripInteractiveSelectorArgs(parseArgv);
+  }
+
   // Register the primary command (builtin or subcli) so help and command parsing
   // are correct even with lazy command registration.
   const primary = getPrimaryCommand(parseArgv);
@@ -142,15 +243,7 @@ export async function runCli(argv: string[] = process.argv) {
     registerPluginCliCommands(program, loadConfig());
   }
 
-  if (
-    shouldUseInteractiveCommandSelector({
-      argv: parseArgv,
-      stdinIsTTY: Boolean(process.stdin.isTTY),
-      stdoutIsTTY: Boolean(process.stdout.isTTY),
-      ciEnv: process.env.CI,
-      disableSelectorEnv: process.env.OPENCLAW_DISABLE_COMMAND_SELECTOR,
-    })
-  ) {
+  if (useInteractiveSelector) {
     const { runInteractiveCommandSelector } = await import("./program/command-selector.js");
     const selectedPath = await runInteractiveCommandSelector(program);
     if (selectedPath && selectedPath.length > 0) {

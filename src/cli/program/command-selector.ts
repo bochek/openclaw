@@ -48,6 +48,9 @@ function collectCandidatesRecursive(params: {
     if (isHiddenCommand(child) || child.name() === "help") {
       continue;
     }
+    if (params.parentPath.length === 0 && child.name() === "interactive") {
+      continue;
+    }
     const path = [...params.parentPath, child.name()];
     const label = path.join(" ");
     if (!params.seen.has(label)) {
