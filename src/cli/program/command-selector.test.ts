@@ -65,7 +65,11 @@ describe("command-selector", () => {
   it("detects commands that require subcommands", () => {
     const program = new Command();
     const models = program.command("models").description("Model commands");
-    models.command("auth").description("Auth command");
+    const auth = models
+      .command("auth")
+      .description("Auth command")
+      .action(() => undefined);
+    auth.command("login").description("Login auth profile");
 
     const status = program
       .command("status")
@@ -73,6 +77,7 @@ describe("command-selector", () => {
       .action(() => undefined);
 
     expect(commandRequiresSubcommand(models)).toBe(true);
+    expect(commandRequiresSubcommand(auth)).toBe(true);
     expect(commandRequiresSubcommand(status)).toBe(false);
   });
 

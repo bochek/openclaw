@@ -8,6 +8,7 @@ import { getSubCliEntries, registerSubCliByName } from "./register.subclis.js";
 
 const SHOW_HELP_VALUE = "__show_help__";
 const BACK_TO_MAIN_VALUE = "__back_to_main__";
+const RUN_CURRENT_VALUE = "__run_current__";
 const PATH_SEPARATOR = "\u0000";
 const MAX_RESULTS = 200;
 
@@ -22,7 +23,7 @@ type PreparedCommandSelectorCandidate = CommandSelectorCandidate & {
   searchTextLower: string;
 };
 
-type SelectorPromptResult = string[] | "back_to_main" | null;
+type SelectorPromptResult = string[] | "back_to_main" | "run_current" | null;
 
 function isHiddenCommand(command: Command): boolean {
   // Commander stores hidden state on a private field.
@@ -111,16 +112,9 @@ export function resolveCommandByPath(program: Command, path: string[]): Command 
   return current;
 }
 
-function hasActionHandler(command: Command): boolean {
-  return Boolean((command as Command & { _actionHandler?: unknown })._actionHandler);
-}
-
 export function commandRequiresSubcommand(command: Command): boolean {
   const visibleChildren = command.commands.filter((child) => !shouldSkipCommand(child, 1));
-  if (visibleChildren.length === 0) {
-    return false;
-  }
-  return !hasActionHandler(command);
+  return visibleChildren.length > 0;
 }
 
 export function collectDirectSubcommandSelectorCandidates(
@@ -196,6 +190,8 @@ async function promptForCommandSelection(params: {
   placeholder: string;
   candidates: PreparedCommandSelectorCandidate[];
   includeBackToMain?: boolean;
+  includeRunCurrent?: boolean;
+  currentPath?: string[];
 }): Promise<SelectorPromptResult> {
   const selection = await clackAutocomplete<string>({
     message: params.message,
@@ -213,6 +209,17 @@ async function promptForCommandSelection(params: {
           label: candidate.label,
           hint: stylePromptHint(candidate.description),
         })),
+        ...(params.includeRunCurrent
+          ? [
+              {
+                value: RUN_CURRENT_VALUE,
+                label: "./",
+                hint: stylePromptHint(
+                  `Run ${params.currentPath?.join(" ") ?? "selected command"} directly`,
+                ),
+              },
+            ]
+          : []),
         ...(params.includeBackToMain
           ? [
               {
@@ -237,6 +244,9 @@ async function promptForCommandSelection(params: {
   if (selection === BACK_TO_MAIN_VALUE) {
     return "back_to_main";
   }
+  if (selection === RUN_CURRENT_VALUE) {
+    return "run_current";
+  }
   return deserializePath(selection);
 }
 
@@ -254,7 +264,7 @@ export async function runInteractiveCommandSelector(program: Command): Promise<s
       placeholder: "Type to fuzzy-search (e.g. msg snd)",
       candidates: mainCandidates,
     });
-    if (!mainSelection || mainSelection === "back_to_main") {
+    if (!mainSelection || mainSelection === "back_to_main" || mainSelection === "run_current") {
       return null;
     }
 
@@ -276,6 +286,8 @@ export async function runInteractiveCommandSelector(program: Command): Promise<s
           `Select subcommand for ${selectedPath.join(" ")}`,
         placeholder: "Type to fuzzy-search subcommands",
         candidates: subcommandCandidates,
+        includeRunCurrent: true,
+        currentPath: selectedPath,
         includeBackToMain: true,
       });
       if (!subSelection) {
@@ -283,6 +295,9 @@ export async function runInteractiveCommandSelector(program: Command): Promise<s
       }
       if (subSelection === "back_to_main") {
         break;
+      }
+      if (subSelection === "run_current") {
+        return selectedPath;
       }
 
       selectedPath = subSelection;
