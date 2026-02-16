@@ -29,15 +29,19 @@ _Purpose: Capture operational insights, lessons learned, and behavioral refineme
 ## YYYY-MM-DD
 
 ### Context
+
 What was happening / What task were you doing
 
 ### Observation
+
 What happened / What went wrong / What worked well
 
 ### Insight
+
 What you learned / What should change
 
 ### Action
+
 Permanent behavior adjustment (if any)
 ```
 
@@ -51,15 +55,19 @@ Permanent behavior adjustment (if any)
 ## 2026-02-16
 
 ### Context
+
 Ravenclaw scheduled emails weren't sending on time.
 
 ### Observation
+
 The background checker wasn't running — Ravenclaw had crashed silently.
 
 ### Insight
+
 Need monitoring for the scheduler process, not just the Flask app.
 
 ### Action
+
 Added process health check in ops.sh script.
 ```
 
@@ -69,15 +77,19 @@ Added process health check in ops.sh script.
 ## 2026-02-15
 
 ### Context
+
 Successfully completed multi-hour coding session without errors.
 
 ### Observation
+
 Breaking work into 30-minute iterations with SOUVENIR.md checkins reduced context drift.
 
 ### Insight
+
 Short iteration loops + reflection beats marathon sessions.
 
 ### Action
+
 Default to 30-minute work blocks with SOUVENIR.md updates.
 ```
 
@@ -87,15 +99,19 @@ Default to 30-minute work blocks with SOUVENIR.md updates.
 ## 2026-02-14
 
 ### Context
+
 Pushed force update to shared repo, overwrote contributor changes.
 
 ### Observation
+
 Should have pulled first, merged, then pushed.
 
 ### Insight
+
 Never force push to shared branches. Ever.
 
 ### Action
+
 Use `git pull --rebase` or create merge commits on shared branches.
 ```
 

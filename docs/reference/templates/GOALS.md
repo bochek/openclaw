@@ -31,25 +31,31 @@ _[Your core mission statement — what you're here to achieve]_
 ## Active Goals
 
 ### Goal: [Goal Name]
+
 **Status:** Active | Completed | Blocked | Planned
 
 Success Criteria:
+
 - [Criterion 1]
 - [Criterion 2]
 
 Subtasks:
+
 - [ ] Subtask 1
 - [x] Subtask 2
 
 Dependencies:
+
 - [Dependency if any]
 
 ---
 
 ### Goal: [Another Goal]
+
 **Status:** [Status]
 
 Success Criteria:
+
 - [Criterion]
 
 ---
@@ -57,9 +63,11 @@ Success Criteria:
 ## Completed Goals
 
 ### Goal: [Completed Goal Name]
+
 **Completed:** YYYY-MM-DD
 
 Impact:
+
 - [What this achieved]
 
 ---
@@ -79,6 +87,7 @@ Impact:
 # GOALS.md — Project Alpha
 
 ## High-Level Mission
+
 Build a production-ready BPM engine for CPPA-G demo.
 
 ---
@@ -86,20 +95,24 @@ Build a production-ready BPM engine for CPPA-G demo.
 ## Active Goals
 
 ### Goal: Implement BPMN 2.0 Engine
+
 **Status:** Active
 
 Success Criteria:
+
 - All 21 tests passing
 - Supports parallel gateways
 - SLA tracking works
 
 Subtasks:
+
 - [x] Core engine architecture
 - [ ] Timer service
 - [x] Human task management
 - [ ] Parallel gateway support
 
 Dependencies:
+
 - None
 ```
 
