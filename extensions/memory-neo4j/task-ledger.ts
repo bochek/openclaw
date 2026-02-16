@@ -161,6 +161,14 @@ export function parseTaskLedger(content: string): TaskLedger {
       }
     }
 
+    if (
+      currentSection === "completed" &&
+      trimmed.startsWith("#") &&
+      !/^#\s+Completed/i.test(trimmed)
+    ) {
+      currentSection = "postamble";
+    }
+
     // Lines not part of a task
     switch (currentSection) {
       case "preamble":
