@@ -52,6 +52,28 @@ describe("command-selector", () => {
     expect(ranked.some((candidate) => candidate.label === "status")).toBe(false);
   });
 
+  it("prioritizes deep commands when querying a shared subcommand name", () => {
+    const program = new Command();
+    const models = program.command("models").description("Model commands");
+    const aliases = models.command("aliases").description("Alias commands");
+    aliases.command("add").description("Add alias");
+    const fallbacks = models.command("fallbacks").description("Fallback commands");
+    fallbacks.command("add").description("Add fallback");
+
+    const candidates = collectCommandSelectorCandidates(program);
+    const ranked = rankCommandSelectorCandidates(candidates, "add");
+    const topLabels = ranked.slice(0, 2).map((candidate) => candidate.label);
+
+    expect(topLabels).toEqual(["models aliases add", "models fallbacks add"]);
+    const aliasesParentIndex = ranked.findIndex(
+      (candidate) => candidate.label === "models aliases",
+    );
+    const aliasesAddIndex = ranked.findIndex(
+      (candidate) => candidate.label === "models aliases add",
+    );
+    expect(aliasesParentIndex).toBeGreaterThan(aliasesAddIndex);
+  });
+
   it("resolves commands by path", () => {
     const program = new Command();
     const models = program.command("models");
