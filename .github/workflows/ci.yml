@@ -53,11 +53,17 @@ jobs:
 
           if [ "${{ github.event_name }}" = "push" ]; then
             BASE="${{ github.event.before }}"
+            CHANGED="$(git diff --name-only "$BASE" HEAD 2>/dev/null || echo "UNKNOWN")"
           else
-            BASE="${{ github.event.pull_request.base.sha }}"
+            # pull_request runs use a merge commit checkout. Diffing parent branches is
+            # more reliable than relying on base SHA availability in rerun attempts.
+            if git rev-parse --verify HEAD^1 >/dev/null 2>&1 && git rev-parse --verify HEAD^2 >/dev/null 2>&1; then
+              CHANGED="$(git diff --name-only HEAD^1...HEAD^2 2>/dev/null || echo "UNKNOWN")"
+            else
+              BASE="${{ github.event.pull_request.base.sha }}"
+              CHANGED="$(git diff --name-only "$BASE" HEAD 2>/dev/null || echo "UNKNOWN")"
+            fi
           fi
-
-          CHANGED="$(git diff --name-only "$BASE" HEAD 2>/dev/null || echo "UNKNOWN")"
           if [ "$CHANGED" = "UNKNOWN" ] || [ -z "$CHANGED" ]; then
             # Fail-safe: run broad checks if detection fails.
             echo "run_node=true" >> "$GITHUB_OUTPUT"
