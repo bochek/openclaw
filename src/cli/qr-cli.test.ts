@@ -118,8 +118,8 @@ describe("registerQrCli", () => {
   it("uses gateway.remote.url when --remote is set (ignores device-pair publicUrl)", async () => {
     loadConfig.mockReturnValue({
       gateway: {
-        remote: { url: "wss://remote.example.com:444" },
-        auth: { mode: "token", token: "tok" },
+        auth: { mode: "token", token: "local-tok" },
+        remote: { url: "wss://remote.example.com:444", token: "remote-tok" },
       },
       plugins: {
         entries: {
@@ -139,7 +139,7 @@ describe("registerQrCli", () => {
 
     const expected = encodePairingSetupCode({
       url: "wss://remote.example.com:444",
-      token: "tok",
+      token: "remote-tok",
     });
     expect(runtime.log).toHaveBeenCalledWith(expected);
   });
