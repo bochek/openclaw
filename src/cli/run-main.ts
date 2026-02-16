@@ -1,7 +1,7 @@
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { loadDotEnv } from "../infra/dotenv.js";
-import { normalizeEnv } from "../infra/env.js";
+import { isTruthyEnvValue, normalizeEnv } from "../infra/env.js";
 import { formatUncaughtError } from "../infra/errors.js";
 import { isMainModule } from "../infra/is-main.js";
 import { ensureOpenClawCliOnPath } from "../infra/path-env.js";
@@ -61,6 +61,28 @@ export function shouldEnsureCliPath(argv: string[]): boolean {
   return true;
 }
 
+export function shouldUseInteractiveCommandSelector(params: {
+  argv: string[];
+  stdinIsTTY: boolean;
+  stdoutIsTTY: boolean;
+  ciEnv?: string;
+  disableSelectorEnv?: string;
+}): boolean {
+  if (hasHelpOrVersion(params.argv)) {
+    return false;
+  }
+  if (getPrimaryCommand(params.argv)) {
+    return false;
+  }
+  if (!params.stdinIsTTY || !params.stdoutIsTTY) {
+    return false;
+  }
+  if (isTruthyEnvValue(params.ciEnv) || isTruthyEnvValue(params.disableSelectorEnv)) {
+    return false;
+  }
+  return true;
+}
+
 export async function runCli(argv: string[] = process.argv) {
   const normalizedArgv = normalizeWindowsArgv(argv);
   loadDotEnv({ quiet: true });
@@ -91,7 +113,7 @@ export async function runCli(argv: string[] = process.argv) {
     process.exit(1);
   });
 
-  const parseArgv = rewriteUpdateFlagArgv(normalizedArgv);
+  let parseArgv = rewriteUpdateFlagArgv(normalizedArgv);
   // Register the primary command (builtin or subcli) so help and command parsing
   // are correct even with lazy command registration.
   const primary = getPrimaryCommand(parseArgv);
@@ -118,6 +140,22 @@ export async function runCli(argv: string[] = process.argv) {
     const { registerPluginCliCommands } = await import("../plugins/cli.js");
     const { loadConfig } = await import("../config/config.js");
     registerPluginCliCommands(program, loadConfig());
+  }
+
+  if (
+    shouldUseInteractiveCommandSelector({
+      argv: parseArgv,
+      stdinIsTTY: Boolean(process.stdin.isTTY),
+      stdoutIsTTY: Boolean(process.stdout.isTTY),
+      ciEnv: process.env.CI,
+      disableSelectorEnv: process.env.OPENCLAW_DISABLE_COMMAND_SELECTOR,
+    })
+  ) {
+    const { runInteractiveCommandSelector } = await import("./program/command-selector.js");
+    const selectedPath = await runInteractiveCommandSelector(program);
+    if (selectedPath && selectedPath.length > 0) {
+      parseArgv = [...parseArgv, ...selectedPath];
+    }
   }
 
   await program.parseAsync(parseArgv);
