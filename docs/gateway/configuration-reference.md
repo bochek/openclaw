@@ -579,7 +579,7 @@ Disables automatic creation of workspace bootstrap files (`AGENTS.md`, `SOUL.md`
 
 ### `agents.defaults.bootstrapMaxChars`
 
-Max characters per workspace bootstrap file before truncation. Default: `20000`.
+Optional max characters per workspace bootstrap file before truncation. If unset, per-file bootstrap injection is unlimited.
 
 ```json5
 {
@@ -589,7 +589,7 @@ Max characters per workspace bootstrap file before truncation. Default: `20000`.
 
 ### `agents.defaults.bootstrapTotalMaxChars`
 
-Max total characters injected across all workspace bootstrap files. Default: `24000`.
+Optional max total characters injected across all workspace bootstrap files. If unset, total bootstrap injection is unlimited.
 
 ```json5
 {

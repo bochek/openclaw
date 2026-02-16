@@ -4,7 +4,10 @@ import type { HandleCommandsParams } from "./commands-types.js";
 import { resolveSessionAgentIds } from "../../agents/agent-scope.js";
 import { resolveBootstrapContextForRun } from "../../agents/bootstrap-files.js";
 import { resolveDefaultModelForAgent } from "../../agents/model-selection.js";
-import { resolveBootstrapMaxChars } from "../../agents/pi-embedded-helpers.js";
+import {
+  resolveBootstrapMaxChars,
+  resolveBootstrapTotalMaxChars,
+} from "../../agents/pi-embedded-helpers.js";
 import { createOpenClawCodingTools } from "../../agents/pi-tools.js";
 import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import { buildWorkspaceSkillSnapshot } from "../../agents/skills.js";
@@ -59,6 +62,7 @@ async function resolveContextReport(
 
   const workspaceDir = params.workspaceDir;
   const bootstrapMaxChars = resolveBootstrapMaxChars(params.cfg);
+  const bootstrapTotalMaxChars = resolveBootstrapTotalMaxChars(params.cfg);
   const { bootstrapFiles, contextFiles: injectedFiles } = await resolveBootstrapContextForRun({
     workspaceDir,
     config: params.cfg,
@@ -169,6 +173,7 @@ async function resolveContextReport(
     model: params.model,
     workspaceDir,
     bootstrapMaxChars,
+    bootstrapTotalMaxChars,
     sandbox: { mode: sandboxRuntime.mode, sandboxed: sandboxRuntime.sandboxed },
     systemPrompt,
     bootstrapFiles,
@@ -249,7 +254,11 @@ export async function buildContextReply(params: HandleCommandsParams): Promise<R
   const bootstrapMaxLabel =
     typeof report.bootstrapMaxChars === "number"
       ? `${formatInt(report.bootstrapMaxChars)} chars`
-      : "? chars";
+      : "unlimited (unset)";
+  const bootstrapTotalLabel =
+    typeof report.bootstrapTotalMaxChars === "number"
+      ? `${formatInt(report.bootstrapTotalMaxChars)} chars`
+      : "unlimited (unset)";
 
   const totalsLine =
     session.totalTokens != null
@@ -280,6 +289,7 @@ export async function buildContextReply(params: HandleCommandsParams): Promise<R
         "🧠 Context breakdown (detailed)",
         `Workspace: ${workspaceLabel}`,
         `Bootstrap max/file: ${bootstrapMaxLabel}`,
+        `Bootstrap max/total: ${bootstrapTotalLabel}`,
         sandboxLine,
         systemPromptLine,
         "",
@@ -317,6 +327,7 @@ export async function buildContextReply(params: HandleCommandsParams): Promise<R
       "🧠 Context breakdown",
       `Workspace: ${workspaceLabel}`,
       `Bootstrap max/file: ${bootstrapMaxLabel}`,
+      `Bootstrap max/total: ${bootstrapTotalLabel}`,
       sandboxLine,
       systemPromptLine,
       "",

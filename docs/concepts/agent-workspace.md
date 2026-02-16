@@ -116,7 +116,8 @@ See [Memory](/concepts/memory) for the workflow and automatic memory flush.
 
 If any bootstrap file is missing, OpenClaw injects a "missing file" marker into
 the session and continues. Large bootstrap files are truncated when injected;
-adjust the limit with `agents.defaults.bootstrapMaxChars` (default: 20000).
+adjust limits with `agents.defaults.bootstrapMaxChars` and/or
+`agents.defaults.bootstrapTotalMaxChars` (unset = unlimited).
 `openclaw setup` can recreate missing defaults without overwriting existing
 files.
 

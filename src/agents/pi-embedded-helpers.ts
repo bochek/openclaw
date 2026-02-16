@@ -1,7 +1,5 @@
 export {
   buildBootstrapContextFiles,
-  DEFAULT_BOOTSTRAP_MAX_CHARS,
-  DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
   ensureSessionHeader,
   resolveBootstrapMaxChars,
   resolveBootstrapTotalMaxChars,

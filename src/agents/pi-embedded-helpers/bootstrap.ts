@@ -82,8 +82,6 @@ export function stripThoughtSignatures<T>(
   }) as T;
 }
 
-export const DEFAULT_BOOTSTRAP_MAX_CHARS = 20_000;
-export const DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS = 24_000;
 const MIN_BOOTSTRAP_FILE_BUDGET_CHARS = 64;
 const BOOTSTRAP_HEAD_RATIO = 0.7;
 const BOOTSTRAP_TAIL_RATIO = 0.2;
@@ -91,32 +89,38 @@ const BOOTSTRAP_TAIL_RATIO = 0.2;
 type TrimBootstrapResult = {
   content: string;
   truncated: boolean;
-  maxChars: number;
+  maxChars?: number;
   originalLength: number;
 };
 
-export function resolveBootstrapMaxChars(cfg?: OpenClawConfig): number {
-  const raw = cfg?.agents?.defaults?.bootstrapMaxChars;
+function resolveConfiguredBootstrapLimit(raw: unknown): number | undefined {
   if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
     return Math.floor(raw);
   }
-  return DEFAULT_BOOTSTRAP_MAX_CHARS;
+  return undefined;
 }
 
-export function resolveBootstrapTotalMaxChars(cfg?: OpenClawConfig): number {
-  const raw = cfg?.agents?.defaults?.bootstrapTotalMaxChars;
-  if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
-    return Math.floor(raw);
-  }
-  return DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS;
+export function resolveBootstrapMaxChars(cfg?: OpenClawConfig): number | undefined {
+  return resolveConfiguredBootstrapLimit(cfg?.agents?.defaults?.bootstrapMaxChars);
+}
+
+export function resolveBootstrapTotalMaxChars(cfg?: OpenClawConfig): number | undefined {
+  return resolveConfiguredBootstrapLimit(cfg?.agents?.defaults?.bootstrapTotalMaxChars);
 }
 
 function trimBootstrapContent(
   content: string,
   fileName: string,
-  maxChars: number,
+  maxChars?: number,
 ): TrimBootstrapResult {
   const trimmed = content.trimEnd();
+  if (typeof maxChars !== "number") {
+    return {
+      content: trimmed,
+      truncated: false,
+      originalLength: trimmed.length,
+    };
+  }
   if (trimmed.length <= maxChars) {
     return {
       content: trimmed,
@@ -188,48 +192,71 @@ export function buildBootstrapContextFiles(
   files: WorkspaceBootstrapFile[],
   opts?: { warn?: (message: string) => void; maxChars?: number; totalMaxChars?: number },
 ): EmbeddedContextFile[] {
-  const maxChars = opts?.maxChars ?? DEFAULT_BOOTSTRAP_MAX_CHARS;
-  const totalMaxChars = Math.max(
-    1,
-    Math.floor(opts?.totalMaxChars ?? Math.max(maxChars, DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS)),
-  );
+  const maxChars = resolveConfiguredBootstrapLimit(opts?.maxChars);
+  const totalMaxChars = resolveConfiguredBootstrapLimit(opts?.totalMaxChars);
   let remainingTotalChars = totalMaxChars;
   const result: EmbeddedContextFile[] = [];
   for (const file of files) {
-    if (remainingTotalChars <= 0) {
+    if (typeof remainingTotalChars === "number" && remainingTotalChars <= 0) {
       break;
     }
     if (file.missing) {
       const missingText = `[MISSING] Expected at: ${file.path}`;
-      const cappedMissingText = clampToBudget(missingText, remainingTotalChars);
+      const cappedMissingText =
+        typeof remainingTotalChars === "number"
+          ? clampToBudget(missingText, remainingTotalChars)
+          : missingText;
       if (!cappedMissingText) {
         break;
       }
-      remainingTotalChars = Math.max(0, remainingTotalChars - cappedMissingText.length);
+      if (typeof remainingTotalChars === "number") {
+        remainingTotalChars = Math.max(0, remainingTotalChars - cappedMissingText.length);
+      }
       result.push({
         path: file.path,
         content: cappedMissingText,
       });
       continue;
     }
-    if (remainingTotalChars < MIN_BOOTSTRAP_FILE_BUDGET_CHARS) {
+    if (
+      typeof remainingTotalChars === "number" &&
+      remainingTotalChars < MIN_BOOTSTRAP_FILE_BUDGET_CHARS
+    ) {
       opts?.warn?.(
         `remaining bootstrap budget is ${remainingTotalChars} chars (<${MIN_BOOTSTRAP_FILE_BUDGET_CHARS}); skipping additional bootstrap files`,
       );
       break;
     }
-    const fileMaxChars = Math.max(1, Math.min(maxChars, remainingTotalChars));
+    const fileMaxChars = (() => {
+      if (typeof maxChars === "number" && typeof remainingTotalChars === "number") {
+        return Math.max(1, Math.min(maxChars, remainingTotalChars));
+      }
+      if (typeof maxChars === "number") {
+        return Math.max(1, maxChars);
+      }
+      if (typeof remainingTotalChars === "number") {
+        return Math.max(1, remainingTotalChars);
+      }
+      return undefined;
+    })();
     const trimmed = trimBootstrapContent(file.content ?? "", file.name, fileMaxChars);
-    const contentWithinBudget = clampToBudget(trimmed.content, remainingTotalChars);
+    const contentWithinBudget =
+      typeof remainingTotalChars === "number"
+        ? clampToBudget(trimmed.content, remainingTotalChars)
+        : trimmed.content;
     if (!contentWithinBudget) {
       continue;
     }
     if (trimmed.truncated || contentWithinBudget.length < trimmed.content.length) {
+      const limitLabel =
+        typeof trimmed.maxChars === "number" ? trimmed.maxChars : "configured total budget";
       opts?.warn?.(
-        `workspace bootstrap file ${file.name} is ${trimmed.originalLength} chars (limit ${trimmed.maxChars}); truncating in injected context`,
+        `workspace bootstrap file ${file.name} is ${trimmed.originalLength} chars (limit ${limitLabel}); truncating in injected context`,
       );
     }
-    remainingTotalChars = Math.max(0, remainingTotalChars - contentWithinBudget.length);
+    if (typeof remainingTotalChars === "number") {
+      remainingTotalChars = Math.max(0, remainingTotalChars - contentWithinBudget.length);
+    }
     result.push({
       path: file.path,
       content: contentWithinBudget,

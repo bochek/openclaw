@@ -70,10 +70,11 @@ compaction.
 > are accessed on demand via the `memory_search` and `memory_get` tools, so they
 > do not count against the context window unless the model explicitly reads them.
 
-Large files are truncated with a marker. The max per-file size is controlled by
-`agents.defaults.bootstrapMaxChars` (default: 20000). Total injected bootstrap
-content across files is capped by `agents.defaults.bootstrapTotalMaxChars`
-(default: 24000). Missing files inject a short missing-file marker.
+Large files are truncated with a marker only when limits are configured. Use
+`agents.defaults.bootstrapMaxChars` for a per-file cap and
+`agents.defaults.bootstrapTotalMaxChars` for a total cap across all injected
+bootstrap files. If both are unset, bootstrap injection is unlimited. Missing
+files inject a short missing-file marker.
 
 Sub-agent sessions only inject `AGENTS.md` and `TOOLS.md` (other bootstrap files
 are filtered out to keep the sub-agent context small).

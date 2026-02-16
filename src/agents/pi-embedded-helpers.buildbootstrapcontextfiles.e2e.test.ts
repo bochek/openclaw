@@ -2,8 +2,6 @@ import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import {
   buildBootstrapContextFiles,
-  DEFAULT_BOOTSTRAP_MAX_CHARS,
-  DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS,
   resolveBootstrapMaxChars,
   resolveBootstrapTotalMaxChars,
 } from "./pi-embedded-helpers.js";
@@ -50,15 +48,15 @@ describe("buildBootstrapContextFiles", () => {
     expect(warnings[0]).toContain("TOOLS.md");
     expect(warnings[0]).toContain("limit 200");
   });
-  it("keeps content under the default limit", () => {
-    const long = "a".repeat(DEFAULT_BOOTSTRAP_MAX_CHARS - 10);
+  it("does not truncate bootstrap content by default", () => {
+    const long = "a".repeat(30_000);
     const files = [makeFile({ content: long })];
     const [result] = buildBootstrapContextFiles(files);
     expect(result?.content).toBe(long);
     expect(result?.content).not.toContain("[...truncated, read AGENTS.md for full content...]");
   });
 
-  it("caps total injected bootstrap characters across files", () => {
+  it("does not cap total injected bootstrap characters by default", () => {
     const files = [
       makeFile({ name: "AGENTS.md", content: "a".repeat(10_000) }),
       makeFile({ name: "SOUL.md", path: "/tmp/SOUL.md", content: "b".repeat(10_000) }),
@@ -66,7 +64,20 @@ describe("buildBootstrapContextFiles", () => {
     ];
     const result = buildBootstrapContextFiles(files);
     const totalChars = result.reduce((sum, entry) => sum + entry.content.length, 0);
-    expect(totalChars).toBeLessThanOrEqual(DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS);
+    expect(totalChars).toBe(30_000);
+    expect(result).toHaveLength(3);
+    expect(result[2]?.content).toBe("c".repeat(10_000));
+  });
+
+  it("caps total injected bootstrap characters when totalMaxChars is configured", () => {
+    const files = [
+      makeFile({ name: "AGENTS.md", content: "a".repeat(10_000) }),
+      makeFile({ name: "SOUL.md", path: "/tmp/SOUL.md", content: "b".repeat(10_000) }),
+      makeFile({ name: "USER.md", path: "/tmp/USER.md", content: "c".repeat(10_000) }),
+    ];
+    const result = buildBootstrapContextFiles(files, { totalMaxChars: 24_000 });
+    const totalChars = result.reduce((sum, entry) => sum + entry.content.length, 0);
+    expect(totalChars).toBeLessThanOrEqual(24_000);
     expect(result).toHaveLength(3);
     expect(result[2]?.content).toContain("[...truncated, read USER.md for full content...]");
   });
@@ -105,8 +116,8 @@ describe("buildBootstrapContextFiles", () => {
 });
 
 describe("resolveBootstrapMaxChars", () => {
-  it("returns default when unset", () => {
-    expect(resolveBootstrapMaxChars()).toBe(DEFAULT_BOOTSTRAP_MAX_CHARS);
+  it("returns undefined when unset", () => {
+    expect(resolveBootstrapMaxChars()).toBeUndefined();
   });
   it("uses configured value when valid", () => {
     const cfg = {
@@ -114,17 +125,17 @@ describe("resolveBootstrapMaxChars", () => {
     } as OpenClawConfig;
     expect(resolveBootstrapMaxChars(cfg)).toBe(12345);
   });
-  it("falls back when invalid", () => {
+  it("returns undefined when invalid", () => {
     const cfg = {
       agents: { defaults: { bootstrapMaxChars: -1 } },
     } as OpenClawConfig;
-    expect(resolveBootstrapMaxChars(cfg)).toBe(DEFAULT_BOOTSTRAP_MAX_CHARS);
+    expect(resolveBootstrapMaxChars(cfg)).toBeUndefined();
   });
 });
 
 describe("resolveBootstrapTotalMaxChars", () => {
-  it("returns default when unset", () => {
-    expect(resolveBootstrapTotalMaxChars()).toBe(DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS);
+  it("returns undefined when unset", () => {
+    expect(resolveBootstrapTotalMaxChars()).toBeUndefined();
   });
   it("uses configured value when valid", () => {
     const cfg = {
@@ -132,10 +143,10 @@ describe("resolveBootstrapTotalMaxChars", () => {
     } as OpenClawConfig;
     expect(resolveBootstrapTotalMaxChars(cfg)).toBe(12345);
   });
-  it("falls back when invalid", () => {
+  it("returns undefined when invalid", () => {
     const cfg = {
       agents: { defaults: { bootstrapTotalMaxChars: -1 } },
     } as OpenClawConfig;
-    expect(resolveBootstrapTotalMaxChars(cfg)).toBe(DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS);
+    expect(resolveBootstrapTotalMaxChars(cfg)).toBeUndefined();
   });
 });
