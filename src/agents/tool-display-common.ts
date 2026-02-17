@@ -220,6 +220,26 @@ export function resolveWriteDetail(toolKey: string, args: unknown): string | und
   return `${destinationPrefix} ${path}`;
 }
 
+export function resolveToolSpecificDetail(key: string, args: unknown): string | undefined {
+  if (key === "exec") {
+    return resolveExecDetail(args);
+  }
+  if (key === "read") {
+    return resolveReadDetail(args);
+  }
+  if (key === "write" || key === "edit" || key === "attach") {
+    return resolveWriteDetail(key, args);
+  }
+  if (key === "web_search") {
+    return resolveWebSearchDetail(args);
+  }
+  if (key === "web_fetch") {
+    return resolveWebFetchDetail(args);
+  }
+
+  return undefined;
+}
+
 export function resolveWebSearchDetail(args: unknown): string | undefined {
   const record = asRecord(args);
   if (!record) {

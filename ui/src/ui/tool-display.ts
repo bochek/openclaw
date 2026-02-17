@@ -1,17 +1,13 @@
+import type { IconName } from "./icons.ts";
 import {
   defaultTitle,
   normalizeToolName,
   normalizeVerb,
   resolveActionSpec,
   resolveDetailFromKeys,
-  resolveExecDetail,
-  resolveReadDetail,
-  resolveWebFetchDetail,
-  resolveWebSearchDetail,
-  resolveWriteDetail,
+  resolveToolSpecificDetail,
   type ToolDisplaySpec as ToolDisplaySpecBase,
 } from "../../../src/agents/tool-display-common.js";
-import type { IconName } from "./icons.ts";
 import rawConfig from "./tool-display.json" with { type: "json" };
 
 type ToolDisplaySpec = ToolDisplaySpecBase & {
@@ -83,24 +79,7 @@ export function resolveToolDisplay(params: {
         : key.replace(/_/g, " ").replace(/\./g, " ");
   const verb = normalizeVerb(actionSpec?.label ?? action ?? fallbackVerb);
 
-  let detail: string | undefined;
-  if (key === "exec") {
-    detail = resolveExecDetail(params.args);
-  }
-  if (!detail && key === "read") {
-    detail = resolveReadDetail(params.args);
-  }
-  if (!detail && (key === "write" || key === "edit" || key === "attach")) {
-    detail = resolveWriteDetail(key, params.args);
-  }
-
-  if (!detail && key === "web_search") {
-    detail = resolveWebSearchDetail(params.args);
-  }
-
-  if (!detail && key === "web_fetch") {
-    detail = resolveWebFetchDetail(params.args);
-  }
+  let detail: string | undefined = resolveToolSpecificDetail(key, params.args);
 
   const detailKeys = actionSpec?.detailKeys ?? spec?.detailKeys ?? FALLBACK.detailKeys ?? [];
   if (!detail && detailKeys.length > 0) {

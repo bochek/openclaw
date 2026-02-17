@@ -7,11 +7,7 @@ import {
   normalizeVerb,
   resolveActionSpec,
   resolveDetailFromKeys,
-  resolveExecDetail,
-  resolveReadDetail,
-  resolveWebFetchDetail,
-  resolveWebSearchDetail,
-  resolveWriteDetail,
+  resolveToolSpecificDetail,
   type ToolDisplaySpec as ToolDisplaySpecBase,
 } from "./tool-display-common.js";
 import TOOL_DISPLAY_JSON from "./tool-display.json" with { type: "json" };
@@ -83,24 +79,7 @@ export function resolveToolDisplay(params: {
         : key.replace(/_/g, " ").replace(/\./g, " ");
   const verb = normalizeVerb(actionSpec?.label ?? action ?? fallbackVerb);
 
-  let detail: string | undefined;
-  if (key === "exec") {
-    detail = resolveExecDetail(params.args);
-  }
-  if (!detail && key === "read") {
-    detail = resolveReadDetail(params.args);
-  }
-  if (!detail && (key === "write" || key === "edit" || key === "attach")) {
-    detail = resolveWriteDetail(key, params.args);
-  }
-
-  if (!detail && key === "web_search") {
-    detail = resolveWebSearchDetail(params.args);
-  }
-
-  if (!detail && key === "web_fetch") {
-    detail = resolveWebFetchDetail(params.args);
-  }
+  let detail: string | undefined = resolveToolSpecificDetail(key, params.args);
 
   const detailKeys = actionSpec?.detailKeys ?? spec?.detailKeys ?? FALLBACK.detailKeys ?? [];
   if (!detail && detailKeys.length > 0) {
