@@ -1,5 +1,5 @@
-import type { Command } from "commander";
 import { autocomplete as clackAutocomplete, isCancel } from "@clack/prompts";
+import type { Command } from "commander";
 import { stylePromptHint, stylePromptMessage } from "../../terminal/prompt-style.js";
 import { fuzzyFilterLower, prepareSearchItems } from "../../tui/components/fuzzy-filter.js";
 import { getCoreCliCommandNames, registerCoreCliByName } from "./command-registry.js";
@@ -31,7 +31,7 @@ function isHiddenCommand(command: Command): boolean {
   return Boolean((command as Command & { _hidden?: boolean })._hidden);
 }
 
-function shouldSkipCommand(command: Command, _parentDepth: number): boolean {
+function shouldSkipCommand(command: Command): boolean {
   return isHiddenCommand(command) || command.name() === "help";
 }
 
@@ -62,7 +62,7 @@ function collectCandidatesRecursive(params: {
   out: CommandSelectorCandidate[];
 }): void {
   for (const child of params.command.commands) {
-    if (shouldSkipCommand(child, params.parentPath.length)) {
+    if (shouldSkipCommand(child)) {
       continue;
     }
     const path = [...params.parentPath, child.name()];
@@ -108,8 +108,7 @@ export function resolveCommandByPath(program: Command, path: string[]): Command 
 }
 
 export function commandRequiresSubcommand(command: Command): boolean {
-  const visibleChildren = command.commands.filter((child) => !shouldSkipCommand(child, 1));
-  return visibleChildren.length > 0;
+  return command.commands.some((child) => !shouldSkipCommand(child));
 }
 
 export function collectDirectSubcommandSelectorCandidates(
@@ -123,7 +122,7 @@ export function collectDirectSubcommandSelectorCandidates(
 
   const raw: CommandSelectorCandidate[] = [];
   for (const child of parent.commands) {
-    if (shouldSkipCommand(child, basePath.length)) {
+    if (shouldSkipCommand(child)) {
       continue;
     }
     const path = [...basePath, child.name()];
