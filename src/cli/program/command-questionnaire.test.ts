@@ -1,6 +1,8 @@
-import { Option } from "commander";
+import { Command, Option } from "commander";
 import { describe, expect, it } from "vitest";
 import {
+  buildOptionalParameterEntries,
+  isRequiredOption,
   preferredOptionFlag,
   shouldPromptForOption,
   splitMultiValueInput,
@@ -33,5 +35,28 @@ describe("command-questionnaire", () => {
 
   it("prompts for regular options", () => {
     expect(shouldPromptForOption(new Option("--provider <name>"))).toBe(true);
+  });
+
+  it("detects required options", () => {
+    const required = new Option("--provider <name>").makeOptionMandatory(true);
+    const optional = new Option("--verbose");
+
+    expect(isRequiredOption(required)).toBe(true);
+    expect(isRequiredOption(optional)).toBe(false);
+  });
+
+  it("builds optional parameter entries from optional options and arguments", () => {
+    const command = new Command("demo")
+      .argument("<target>")
+      .argument("[note]")
+      .addOption(new Option("--provider <name>").makeOptionMandatory(true))
+      .option("--verbose", "Verbose output");
+
+    const entries = buildOptionalParameterEntries(command);
+
+    expect(entries.map((entry) => entry.label)).toContain("--verbose");
+    expect(entries.map((entry) => entry.label)).toContain("[note]");
+    expect(entries.map((entry) => entry.label)).not.toContain("--provider");
+    expect(entries.map((entry) => entry.label)).not.toContain("<target>");
   });
 });

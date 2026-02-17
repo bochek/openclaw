@@ -1,7 +1,7 @@
 import type { Argument, Command, Option } from "commander";
 import {
-  confirm as clackConfirm,
   isCancel,
+  multiselect as clackMultiselect,
   select as clackSelect,
   text as clackText,
 } from "@clack/prompts";
@@ -11,6 +11,22 @@ import { resolveCommandByPath } from "./command-selector.js";
 const INTERNAL_OPTION_NAMES = new Set(["help", "version", "interactive"]);
 
 type PromptResult = string[] | null;
+
+type OptionalParameterEntry =
+  | {
+      id: string;
+      label: string;
+      hint?: string;
+      kind: "option";
+      option: Option;
+    }
+  | {
+      id: string;
+      label: string;
+      hint?: string;
+      kind: "argument";
+      argument: Argument;
+    };
 
 export function splitMultiValueInput(raw: string): string[] {
   return raw
@@ -28,6 +44,62 @@ export function shouldPromptForOption(option: Option): boolean {
     return false;
   }
   return !INTERNAL_OPTION_NAMES.has(option.name());
+}
+
+export function isRequiredOption(option: Option): boolean {
+  return shouldPromptForOption(option) && option.mandatory;
+}
+
+function formatArgumentLabel(argument: Argument): string {
+  const wrapped = argument.required ? `<${argument.name()}>` : `[${argument.name()}]`;
+  return argument.variadic ? wrapped.replace(/([\]>])$/, "...$1") : wrapped;
+}
+
+function buildArgumentHint(argument: Argument): string {
+  if (argument.description) {
+    return argument.description;
+  }
+  return argument.required ? "Required argument" : "Optional argument";
+}
+
+function buildOptionHint(option: Option): string {
+  const desc = option.description?.trim();
+  if (desc) {
+    return desc;
+  }
+  return option.mandatory ? "Required option" : "Optional option";
+}
+
+export function buildOptionalParameterEntries(command: Command): OptionalParameterEntry[] {
+  const entries: OptionalParameterEntry[] = [];
+
+  for (const option of command.options) {
+    if (!shouldPromptForOption(option) || option.mandatory) {
+      continue;
+    }
+    entries.push({
+      id: `opt:${option.attributeName()}`,
+      label: preferredOptionFlag(option),
+      hint: buildOptionHint(option),
+      kind: "option",
+      option,
+    });
+  }
+
+  command.registeredArguments.forEach((argument, index) => {
+    if (argument.required) {
+      return;
+    }
+    entries.push({
+      id: `arg:${index}:${argument.name()}`,
+      label: formatArgumentLabel(argument),
+      hint: buildArgumentHint(argument),
+      kind: "argument",
+      argument,
+    });
+  });
+
+  return entries;
 }
 
 async function askValue(params: {
@@ -72,24 +144,9 @@ async function askChoice(params: {
   return choice;
 }
 
-async function promptArgumentValue(argument: Argument): Promise<PromptResult> {
+async function promptArgumentValue(argument: Argument, required: boolean): Promise<PromptResult> {
   const label = argument.name();
   const suffix = argument.description ? ` — ${argument.description}` : "";
-
-  if (!argument.required) {
-    const include = await clackConfirm({
-      message:
-        stylePromptMessage(`Provide optional argument <${label}>?${suffix}`) ??
-        `Provide optional argument <${label}>?${suffix}`,
-      initialValue: false,
-    });
-    if (isCancel(include)) {
-      return null;
-    }
-    if (!include) {
-      return [];
-    }
-  }
 
   if (argument.argChoices && argument.argChoices.length > 0 && !argument.variadic) {
     const choice = await askChoice({
@@ -103,14 +160,14 @@ async function promptArgumentValue(argument: Argument): Promise<PromptResult> {
   if (argument.variadic) {
     const raw = await askValue({
       message: `Values for <${label}...> (space/comma-separated)${suffix}`,
-      placeholder: argument.required ? "value1 value2" : "optional",
-      required: argument.required,
+      placeholder: required ? "value1 value2" : "optional",
+      required,
     });
     if (raw === null) {
       return null;
     }
     const values = splitMultiValueInput(raw);
-    if (argument.required && values.length === 0) {
+    if (required && values.length === 0) {
       return null;
     }
     return values;
@@ -118,45 +175,25 @@ async function promptArgumentValue(argument: Argument): Promise<PromptResult> {
 
   const value = await askValue({
     message: `Value for <${label}>${suffix}`,
-    required: argument.required,
+    required,
   });
   if (value === null) {
     return null;
   }
-  if (!value && !argument.required) {
+  if (!value && !required) {
     return [];
   }
   return [value];
 }
 
-async function promptOptionValue(option: Option): Promise<PromptResult> {
+async function promptOptionValue(option: Option, required: boolean): Promise<PromptResult> {
   const flag = preferredOptionFlag(option);
   const description = option.description ? ` — ${option.description}` : "";
 
   if (option.isBoolean()) {
-    const verb = option.negate ? "Disable" : "Enable";
-    const enabled = await clackConfirm({
-      message:
-        stylePromptMessage(`${verb} ${flag}?${description}`) ?? `${verb} ${flag}?${description}`,
-      initialValue: false,
-    });
-    if (isCancel(enabled)) {
-      return null;
-    }
-    return enabled ? [flag] : [];
-  }
-
-  const shouldAsk =
-    option.mandatory ||
-    (await clackConfirm({
-      message: stylePromptMessage(`Set ${flag}?${description}`) ?? `Set ${flag}?${description}`,
-      initialValue: false,
-    }));
-  if (isCancel(shouldAsk)) {
-    return null;
-  }
-  if (!shouldAsk) {
-    return [];
+    // Required booleans imply the flag must be set.
+    // Optional booleans are only prompted when selected in the optional multiselect.
+    return [flag];
   }
 
   if (option.argChoices && option.argChoices.length > 0 && !option.variadic) {
@@ -176,6 +213,9 @@ async function promptOptionValue(option: Option): Promise<PromptResult> {
     if (raw === null) {
       return null;
     }
+    if (required && raw.length === 0) {
+      return [flag];
+    }
     return raw.length > 0 ? [flag, raw] : [flag];
   }
 
@@ -183,14 +223,14 @@ async function promptOptionValue(option: Option): Promise<PromptResult> {
     const raw = await askValue({
       message: `Values for ${flag} (space/comma-separated)${description}`,
       placeholder: "value1 value2",
-      required: option.mandatory || option.required,
+      required,
     });
     if (raw === null) {
       return null;
     }
     const values = splitMultiValueInput(raw);
     if (values.length === 0) {
-      return option.mandatory || option.required ? null : [flag];
+      return required ? null : [flag];
     }
     const tokens: string[] = [];
     for (const value of values) {
@@ -201,12 +241,12 @@ async function promptOptionValue(option: Option): Promise<PromptResult> {
 
   const value = await askValue({
     message: `Value for ${flag}${description}`,
-    required: option.mandatory || option.required,
+    required,
   });
   if (value === null) {
     return null;
   }
-  if (!value && !(option.mandatory || option.required)) {
+  if (!value && !required) {
     return [];
   }
   return [flag, value];
@@ -222,24 +262,68 @@ export async function runCommandQuestionnaire(params: {
   }
 
   const optionTokens: string[] = [];
-  for (const option of command.options) {
-    if (!shouldPromptForOption(option)) {
+  const argumentTokens: string[] = [];
+
+  // 1) Ask only required parameters first.
+  for (const argument of command.registeredArguments) {
+    if (!argument.required) {
       continue;
     }
-    const tokens = await promptOptionValue(option);
+    const tokens = await promptArgumentValue(argument, true);
+    if (tokens === null) {
+      return null;
+    }
+    argumentTokens.push(...tokens);
+  }
+
+  for (const option of command.options) {
+    if (!isRequiredOption(option)) {
+      continue;
+    }
+    const tokens = await promptOptionValue(option, true);
     if (tokens === null) {
       return null;
     }
     optionTokens.push(...tokens);
   }
 
-  const argumentTokens: string[] = [];
-  for (const argument of command.registeredArguments) {
-    const tokens = await promptArgumentValue(argument);
-    if (tokens === null) {
+  // 2) Then let user pick optional parameters to activate.
+  const optionalEntries = buildOptionalParameterEntries(command);
+  if (optionalEntries.length > 0) {
+    const selected = await clackMultiselect<string>({
+      message:
+        stylePromptMessage("Select optional parameters to set") ??
+        "Select optional parameters to set",
+      options: optionalEntries.map((entry) => ({
+        value: entry.id,
+        label: entry.label,
+        hint: entry.hint ? stylePromptHint(entry.hint) : undefined,
+      })),
+      required: false,
+    });
+    if (isCancel(selected)) {
       return null;
     }
-    argumentTokens.push(...tokens);
+
+    const selectedIds = new Set(Array.isArray(selected) ? selected : []);
+    for (const entry of optionalEntries) {
+      if (!selectedIds.has(entry.id)) {
+        continue;
+      }
+      if (entry.kind === "option") {
+        const tokens = await promptOptionValue(entry.option, false);
+        if (tokens === null) {
+          return null;
+        }
+        optionTokens.push(...tokens);
+        continue;
+      }
+      const tokens = await promptArgumentValue(entry.argument, true);
+      if (tokens === null) {
+        return null;
+      }
+      argumentTokens.push(...tokens);
+    }
   }
 
   return [...optionTokens, ...argumentTokens];
