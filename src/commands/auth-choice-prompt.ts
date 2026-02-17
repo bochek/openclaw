@@ -1,9 +1,71 @@
 import type { AuthProfileStore } from "../agents/auth-profiles.js";
+import { listProfilesForProvider } from "../agents/auth-profiles.js";
+import { resolveEnvApiKey } from "../agents/model-auth.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
+import type { AuthChoiceGroup, AuthChoiceOption } from "./auth-choice-options.js";
 import { buildAuthChoiceGroups } from "./auth-choice-options.js";
+import { resolvePreferredProviderForAuthChoice } from "./auth-choice.preferred-provider.js";
 import type { AuthChoice } from "./onboard-types.js";
 
 const BACK_VALUE = "__back";
+
+function toKindLabel(type: "api_key" | "oauth" | "token" | undefined): "APIKey" | "OAuth" {
+  if (type === "oauth" || type === "token") {
+    return "OAuth";
+  }
+  return "APIKey";
+}
+
+function stripEnvSourcePrefix(source: string): string {
+  return source.replace(/^shell env: /, "").replace(/^env: /, "");
+}
+
+function resolveProviderKeysForGroup(group: AuthChoiceGroup): string[] {
+  const keys = group.options
+    .map((option) => resolvePreferredProviderForAuthChoice(option.value))
+    .filter((provider): provider is string => Boolean(provider));
+  return [...new Set(keys)];
+}
+
+export function resolveExistingAuthLinesForGroup(params: {
+  group: AuthChoiceGroup;
+  store: AuthProfileStore;
+}): string[] {
+  const providerKeys = resolveProviderKeysForGroup(params.group);
+  const showProvider = providerKeys.length > 1;
+  const lines = new Set<string>();
+
+  for (const providerKey of providerKeys) {
+    const profileIds = listProfilesForProvider(params.store, providerKey);
+    for (const profileId of profileIds) {
+      const kind = toKindLabel(params.store.profiles[profileId]?.type);
+      const providerSuffix = showProvider ? ` (${providerKey})` : "";
+      lines.add(`${kind}: ${profileId}${providerSuffix}`);
+    }
+
+    const envKey = resolveEnvApiKey(providerKey);
+    if (envKey) {
+      const kind = envKey.source.includes("OAUTH_TOKEN") ? "OAuth" : "APIKey";
+      const source = stripEnvSourcePrefix(envKey.source);
+      const providerSuffix = showProvider ? ` (${providerKey})` : "";
+      lines.add(`${kind}: ${source}${providerSuffix}`);
+    }
+  }
+
+  return [...lines];
+}
+
+export function buildKeepExistingOption(params: {
+  group: AuthChoiceGroup;
+  store: AuthProfileStore;
+}): AuthChoiceOption {
+  const lines = resolveExistingAuthLinesForGroup(params);
+  return {
+    value: "skip",
+    label: "Keep Existing",
+    hint: lines.length > 0 ? lines.join("\n") : "Use existing auth",
+  };
+}
 
 export async function promptAuthChoiceGrouped(params: {
   prompter: WizardPrompter;
@@ -46,9 +108,15 @@ export async function promptAuthChoiceGrouped(params: {
       return group.options[0].value;
     }
 
+    const methodOptions: Array<{ value: string; label: string; hint?: string }> = [
+      ...group.options,
+      ...(params.includeSkip ? [buildKeepExistingOption({ group, store: params.store })] : []),
+      { value: BACK_VALUE, label: "Back" },
+    ];
+
     const methodSelection = await params.prompter.select({
       message: `${group.label} auth method`,
-      options: [...group.options, { value: BACK_VALUE, label: "Back" }],
+      options: methodOptions,
     });
 
     if (methodSelection === BACK_VALUE) {
