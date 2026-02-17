@@ -101,6 +101,8 @@ By default, components are single use. Set `components.reusable=true` to allow b
 
 To restrict who can click a button, set `allowedUsers` on that button (Discord user IDs, tags, or `*`). When configured, unmatched users receive an ephemeral denial.
 
+To launch your app's Discord Activity from a component interaction, set `action: "launch-activity"` on a button. The interaction response uses `LAUNCH_ACTIVITY` (type 12). See [Discord Activities](/channels/discord-activities) for setup steps.
+
 File attachments:
 
 - `file` blocks must point to an attachment reference (`attachment://<filename>`)
@@ -163,6 +165,25 @@ Example:
         },
       ],
     },
+  },
+}
+```
+
+Activity launch example:
+
+```json5
+{
+  channel: "discord",
+  action: "send",
+  to: "channel:123456789012345678",
+  components: {
+    text: "Open the activity",
+    blocks: [
+      {
+        type: "actions",
+        buttons: [{ label: "Launch activity", action: "launch-activity" }],
+      },
+    ],
   },
 }
 ```

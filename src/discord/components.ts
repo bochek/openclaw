@@ -1,4 +1,3 @@
-import crypto from "node:crypto";
 import {
   Button,
   ChannelSelectMenu,
@@ -25,12 +24,15 @@ import {
   type TopLevelComponents,
 } from "@buape/carbon";
 import { ButtonStyle, MessageFlags, TextInputStyle } from "discord-api-types/v10";
+import crypto from "node:crypto";
 
 export const DISCORD_COMPONENT_CUSTOM_ID_KEY = "occomp";
 export const DISCORD_MODAL_CUSTOM_ID_KEY = "ocmodal";
 export const DISCORD_COMPONENT_ATTACHMENT_PREFIX = "attachment://";
 
 export type DiscordComponentButtonStyle = "primary" | "secondary" | "success" | "danger" | "link";
+
+export type DiscordComponentButtonAction = "launch-activity";
 
 export type DiscordComponentSelectType = "string" | "user" | "role" | "mentionable" | "channel";
 
@@ -54,6 +56,8 @@ export type DiscordComponentButtonSpec = {
   disabled?: boolean;
   /** Optional allowlist of users who can interact with this button (ids or names). */
   allowedUsers?: string[];
+  /** Optional special action to perform when clicked. */
+  action?: DiscordComponentButtonAction;
 };
 
 export type DiscordComponentSelectOption = {
@@ -164,6 +168,7 @@ export type DiscordComponentEntry = {
   accountId?: string;
   reusable?: boolean;
   allowedUsers?: string[];
+  action?: DiscordComponentButtonAction;
   messageId?: string;
   createdAt?: number;
   expiresAt?: number;
@@ -357,8 +362,20 @@ function parseButtonSpec(raw: unknown, label: string): DiscordComponentButtonSpe
   const obj = requireObject(raw, label);
   const style = readOptionalString(obj.style) as DiscordComponentButtonStyle | undefined;
   const url = readOptionalString(obj.url);
+  const actionRaw = readOptionalString(obj.action);
+  let action: DiscordComponentButtonAction | undefined;
+  if (actionRaw) {
+    const normalized = actionRaw.trim().toLowerCase();
+    if (normalized !== "launch-activity") {
+      throw new Error(`${label}.action must be "launch-activity"`);
+    }
+    action = "launch-activity";
+  }
   if ((style === "link" || url) && !url) {
     throw new Error(`${label}.url is required for link buttons`);
+  }
+  if (action && (style === "link" || url)) {
+    throw new Error(`${label}.action is not supported for link buttons`);
   }
   return {
     label: readString(obj.label, `${label}.label`),
@@ -377,6 +394,7 @@ function parseButtonSpec(raw: unknown, label: string): DiscordComponentButtonSpe
         : undefined,
     disabled: typeof obj.disabled === "boolean" ? obj.disabled : undefined,
     allowedUsers: readOptionalStringArray(obj.allowedUsers, `${label}.allowedUsers`),
+    action,
   };
 }
 
@@ -716,6 +734,7 @@ function createButtonComponent(params: {
       label: params.spec.label,
       modalId: params.modalId,
       allowedUsers: params.spec.allowedUsers,
+      action: params.spec.action,
     },
   };
 }

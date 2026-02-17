@@ -52,6 +52,47 @@ describe("discord components", () => {
     ).toThrow("options");
   });
 
+  it("supports launch activity button actions", () => {
+    const spec = readDiscordComponentSpec({
+      blocks: [
+        {
+          type: "actions",
+          buttons: [{ label: "Launch", action: "launch-activity" }],
+        },
+      ],
+    });
+    if (!spec) {
+      throw new Error("Expected component spec to be parsed");
+    }
+    const result = buildDiscordComponentMessage({ spec });
+    const entry = result.entries.find((component) => component.label === "Launch");
+    expect(entry?.action).toBe("launch-activity");
+  });
+
+  it("rejects invalid or link activity actions", () => {
+    expect(() =>
+      readDiscordComponentSpec({
+        blocks: [
+          {
+            type: "actions",
+            buttons: [{ label: "Launch", action: "nope" }],
+          },
+        ],
+      }),
+    ).toThrow("launch-activity");
+
+    expect(() =>
+      readDiscordComponentSpec({
+        blocks: [
+          {
+            type: "actions",
+            buttons: [{ label: "Launch", action: "launch-activity", url: "https://example.com" }],
+          },
+        ],
+      }),
+    ).toThrow("link buttons");
+  });
+
   it("requires attachment references for file blocks", () => {
     expect(() =>
       readDiscordComponentSpec({

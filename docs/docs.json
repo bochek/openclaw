@@ -888,6 +888,7 @@
                   "channels/whatsapp",
                   "channels/telegram",
                   "channels/discord",
+                  "channels/discord-activities",
                   "channels/irc",
                   "channels/slack",
                   "channels/feishu",

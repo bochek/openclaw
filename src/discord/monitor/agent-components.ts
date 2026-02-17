@@ -1,3 +1,4 @@
+import type { APIStringSelectComponent } from "discord-api-types/v10";
 import {
   Button,
   ChannelSelectMenu,
@@ -15,8 +16,9 @@ import {
   type StringSelectMenuInteraction,
   type UserSelectMenuInteraction,
 } from "@buape/carbon";
-import type { APIStringSelectComponent } from "discord-api-types/v10";
-import { ButtonStyle, ChannelType } from "discord-api-types/v10";
+import { ButtonStyle, ChannelType, InteractionResponseType, Routes } from "discord-api-types/v10";
+import type { OpenClawConfig } from "../../config/config.js";
+import type { DiscordAccountConfig } from "../../config/types.discord.js";
 import { resolveHumanDelayConfig } from "../../agents/identity.js";
 import { resolveChunkMode, resolveTextChunkLimit } from "../../auto-reply/chunk.js";
 import { formatInboundEnvelope, resolveEnvelopeFormatOptions } from "../../auto-reply/envelope.js";
@@ -25,10 +27,8 @@ import { dispatchReplyWithBufferedBlockDispatcher } from "../../auto-reply/reply
 import { createReplyReferencePlanner } from "../../auto-reply/reply/reply-reference.js";
 import { createReplyPrefixOptions } from "../../channels/reply-prefix.js";
 import { recordInboundSession } from "../../channels/session.js";
-import type { OpenClawConfig } from "../../config/config.js";
 import { resolveMarkdownTableMode } from "../../config/markdown-tables.js";
 import { readSessionUpdatedAt, resolveStorePath } from "../../config/sessions.js";
-import type { DiscordAccountConfig } from "../../config/types.discord.js";
 import { logVerbose } from "../../globals.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
 import { logDebug, logError } from "../../logger.js";
@@ -129,6 +129,48 @@ async function ackComponentInteraction(params: {
     });
   } catch (err) {
     logError(`${params.label}: failed to acknowledge interaction: ${String(err)}`);
+  }
+}
+
+async function launchDiscordActivity(params: {
+  interaction: AgentComponentMessageInteraction;
+  replyOpts: { ephemeral?: boolean };
+  label: string;
+}): Promise<boolean> {
+  const { interaction, replyOpts, label } = params;
+  const interactionId = interaction.rawData?.id;
+  const interactionToken = interaction.rawData?.token;
+  if (!interactionId || !interactionToken) {
+    logError(`${label}: missing interaction id/token for activity launch`);
+    try {
+      await interaction.reply({
+        content: "Unable to launch the activity right now.",
+        ...replyOpts,
+      });
+    } catch {
+      // Interaction may have expired
+    }
+    return false;
+  }
+  try {
+    await interaction.client.rest.post(
+      Routes.interactionCallback(interactionId, interactionToken),
+      {
+        body: { type: InteractionResponseType.LaunchActivity },
+      },
+    );
+    return true;
+  } catch (err) {
+    logError(`${label}: failed to launch activity: ${String(err)}`);
+    try {
+      await interaction.reply({
+        content: "Failed to launch the activity.",
+        ...replyOpts,
+      });
+    } catch {
+      // Interaction may have expired
+    }
+    return false;
   }
 }
 
@@ -951,6 +993,7 @@ async function handleDiscordComponentEvent(params: {
     interaction: params.interaction,
     label: params.label,
     componentLabel: params.componentLabel,
+    defer: entry.action === "launch-activity" ? false : undefined,
   });
   if (!interactionCtx) {
     return;
@@ -1015,6 +1058,15 @@ async function handleDiscordComponentEvent(params: {
     } catch {
       // Interaction may have expired
     }
+    return;
+  }
+
+  if (consumed.action === "launch-activity") {
+    await launchDiscordActivity({
+      interaction: params.interaction,
+      replyOpts,
+      label: params.label,
+    });
     return;
   }
 
