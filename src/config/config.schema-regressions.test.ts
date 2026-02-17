@@ -36,4 +36,16 @@ describe("config schema regressions", () => {
 
     expect(res.ok).toBe(true);
   });
+
+  it("accepts channels.slack.streamMode", () => {
+    const res = validateConfigObject({
+      channels: {
+        slack: {
+          streamMode: "append",
+        },
+      },
+    });
+
+    expect(res.ok).toBe(true);
+  });
 });

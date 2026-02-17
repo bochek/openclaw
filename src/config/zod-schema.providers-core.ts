@@ -460,7 +460,6 @@ export const GoogleChatAccountSchema = z
     chunkMode: z.enum(["length", "newline"]).optional(),
     blockStreaming: z.boolean().optional(),
     blockStreamingCoalesce: BlockStreamingCoalesceSchema.optional(),
-    streamMode: z.enum(["replace", "status_final", "append"]).optional().default("replace"),
     mediaMaxMb: z.number().positive().optional(),
     replyToMode: ReplyToModeSchema.optional(),
     actions: z
@@ -578,6 +577,7 @@ export const SlackAccountSchema = z
     // inheritance in multi-account setups (shallow merge works; nested dm object doesn't).
     dmPolicy: DmPolicySchema.optional(),
     allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
+    streamMode: z.enum(["replace", "status_final", "append"]).optional().default("replace"),
     dm: SlackDmSchema.optional(),
     channels: z.record(z.string(), SlackChannelSchema.optional()).optional(),
     heartbeat: ChannelHeartbeatVisibilitySchema,
