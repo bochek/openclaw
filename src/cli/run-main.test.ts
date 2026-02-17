@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isCommanderExitError,
   rewriteUpdateFlagArgv,
+  scanInteractiveRootArgv,
   shouldEnsureCliPath,
   shouldRegisterPrimarySubcommand,
   shouldSkipPluginCommandRegistration,
@@ -116,6 +117,27 @@ describe("shouldSkipPluginCommandRegistration", () => {
         hasBuiltinPrimary: false,
       }),
     ).toBe(false);
+  });
+});
+
+describe("scanInteractiveRootArgv", () => {
+  it("extracts interactive flag, primary, and stripped argv in one pass", () => {
+    expect(
+      scanInteractiveRootArgv(["node", "openclaw", "-i", "--profile", "dev"]).hasInteractiveFlag,
+    ).toBe(true);
+    expect(
+      scanInteractiveRootArgv(["node", "openclaw", "-i", "--profile", "dev"]).primary,
+    ).toBeNull();
+    expect(
+      scanInteractiveRootArgv(["node", "openclaw", "-i", "--profile", "dev"]).strippedArgv,
+    ).toEqual(["node", "openclaw", "--profile", "dev"]);
+  });
+
+  it("detects primary commands while stripping interactive flags", () => {
+    const scanned = scanInteractiveRootArgv(["node", "openclaw", "-i", "status", "--json"]);
+    expect(scanned.hasInteractiveFlag).toBe(true);
+    expect(scanned.primary).toBe("status");
+    expect(scanned.strippedArgv).toEqual(["node", "openclaw", "status", "--json"]);
   });
 });
 

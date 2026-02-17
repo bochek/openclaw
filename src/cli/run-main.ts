@@ -63,42 +63,56 @@ export function shouldEnsureCliPath(argv: string[]): boolean {
 
 const ROOT_OPTIONS_WITH_VALUE = new Set(["--profile"]);
 
-function parseRootInvocation(argv: string[]): {
+export function scanInteractiveRootArgv(argv: string[]): {
   primary: string | null;
   hasInteractiveFlag: boolean;
+  strippedArgv: string[];
 } {
   const args = argv.slice(2);
+  const next: string[] = [];
   let primary: string | null = null;
   let hasInteractiveFlag = false;
   let expectOptionValue = false;
+  let sawPrimary = false;
 
   for (const arg of args) {
-    if (expectOptionValue) {
-      expectOptionValue = false;
-      continue;
+    if (!sawPrimary) {
+      if (expectOptionValue) {
+        expectOptionValue = false;
+        next.push(arg);
+        continue;
+      }
+      if (arg === "--") {
+        sawPrimary = true;
+        next.push(arg);
+        continue;
+      }
+      if (arg === "-i" || arg === "--interactive") {
+        hasInteractiveFlag = true;
+        continue;
+      }
+      if (arg.startsWith("--profile=")) {
+        next.push(arg);
+        continue;
+      }
+      if (ROOT_OPTIONS_WITH_VALUE.has(arg)) {
+        expectOptionValue = true;
+        next.push(arg);
+        continue;
+      }
+      if (!arg.startsWith("-")) {
+        primary = arg;
+        sawPrimary = true;
+      }
     }
-    if (arg === "--") {
-      break;
-    }
-    if (arg === "-i" || arg === "--interactive") {
-      hasInteractiveFlag = true;
-      continue;
-    }
-    if (arg.startsWith("--profile=")) {
-      continue;
-    }
-    if (ROOT_OPTIONS_WITH_VALUE.has(arg)) {
-      expectOptionValue = true;
-      continue;
-    }
-    if (arg.startsWith("-")) {
-      continue;
-    }
-    primary = arg;
-    break;
+    next.push(arg);
   }
 
-  return { primary, hasInteractiveFlag };
+  return {
+    primary,
+    hasInteractiveFlag,
+    strippedArgv: [...argv.slice(0, 2), ...next],
+  };
 }
 
 export function shouldUseInteractiveCommandSelector(params: {
@@ -111,7 +125,7 @@ export function shouldUseInteractiveCommandSelector(params: {
   if (hasHelpOrVersion(params.argv)) {
     return false;
   }
-  const root = parseRootInvocation(params.argv);
+  const root = scanInteractiveRootArgv(params.argv);
   if (!root.hasInteractiveFlag) {
     return false;
   }
@@ -130,43 +144,7 @@ export function shouldUseInteractiveCommandSelector(params: {
 }
 
 export function stripInteractiveSelectorArgs(argv: string[]): string[] {
-  const args = argv.slice(2);
-  const next: string[] = [];
-  let sawPrimary = false;
-  let expectOptionValue = false;
-
-  for (const arg of args) {
-    if (!sawPrimary) {
-      if (expectOptionValue) {
-        expectOptionValue = false;
-        next.push(arg);
-        continue;
-      }
-      if (arg === "--") {
-        sawPrimary = true;
-        next.push(arg);
-        continue;
-      }
-      if (arg === "-i" || arg === "--interactive") {
-        continue;
-      }
-      if (arg.startsWith("--profile=")) {
-        next.push(arg);
-        continue;
-      }
-      if (ROOT_OPTIONS_WITH_VALUE.has(arg)) {
-        expectOptionValue = true;
-        next.push(arg);
-        continue;
-      }
-      if (!arg.startsWith("-")) {
-        sawPrimary = true;
-      }
-    }
-    next.push(arg);
-  }
-
-  return [...argv.slice(0, 2), ...next];
+  return scanInteractiveRootArgv(argv).strippedArgv;
 }
 
 export function isCommanderExitError(error: unknown): boolean {
