@@ -115,8 +115,8 @@ export async function promptAuthChoiceGrouped(params: {
       ? buildKeepExistingOption({ group, store: params.store })
       : undefined;
     const methodOptions: Array<{ value: string; label: string; hint?: string }> = [
-      ...group.options,
       ...(keepExistingOption ? [keepExistingOption] : []),
+      ...group.options,
       { value: BACK_VALUE, label: "Back" },
     ];
 
