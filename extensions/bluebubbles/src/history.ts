@@ -48,8 +48,11 @@ export async function fetchBlueBubblesHistory(
     return [];
   }
 
-  const { baseUrl, password, accountId } = resolveAccount(opts);
-  if (!baseUrl || !password) {
+  let baseUrl: string;
+  let password: string;
+  try {
+    ({ baseUrl, password } = resolveAccount(opts));
+  } catch {
     return [];
   }
 
@@ -101,13 +104,9 @@ export async function fetchBlueBubblesHistory(
           continue;
         }
 
-        // Skip from-me messages to avoid duplication
-        if (msg.is_from_me) {
-          continue;
-        }
-
-        const sender =
-          msg.sender?.display_name || msg.sender?.address || msg.handle_id || "Unknown";
+        const sender = msg.is_from_me
+          ? "me"
+          : msg.sender?.display_name || msg.sender?.address || msg.handle_id || "Unknown";
         const timestamp = msg.date_created || msg.date_delivered;
 
         historyEntries.push({
