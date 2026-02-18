@@ -1,9 +1,9 @@
 import "./isolated-agent.mocks.js";
 import fs from "node:fs/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { CliDeps } from "../cli/deps.js";
 import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
 import { runSubagentAnnounceFlow } from "../agents/subagent-announce.js";
-import type { CliDeps } from "../cli/deps.js";
 import { runCronIsolatedAgentTurn } from "./isolated-agent.js";
 import {
   makeCfg,
@@ -179,6 +179,63 @@ describe("runCronIsolatedAgentTurn", () => {
           }
         | undefined;
       expect(announceArgs?.requesterSessionKey).toBe("agent:main:telegram:direct:123");
+      expect(announceArgs?.requesterOrigin?.channel).toBe("telegram");
+      expect(announceArgs?.requesterOrigin?.to).toBe("123");
+    });
+  });
+
+  it("uses the agent main session key when announce delivery is not pinned", async () => {
+    await withTempCronHome(async (home) => {
+      const storePath = await writeSessionStore(home, { lastProvider: "webchat", lastTo: "" });
+      await fs.writeFile(
+        storePath,
+        JSON.stringify(
+          {
+            "agent:main:main": {
+              sessionId: "main-session",
+              updatedAt: Date.now(),
+              lastChannel: "telegram",
+              lastTo: "123",
+            },
+          },
+          null,
+          2,
+        ),
+        "utf-8",
+      );
+      const deps = createCliDeps();
+      mockAgentPayloads([{ text: "Final weather summary" }]);
+
+      const res = await runCronIsolatedAgentTurn({
+        cfg: makeCfg(home, storePath, {
+          session: {
+            store: storePath,
+            mainKey: "main",
+            dmScope: "per-channel-peer",
+          },
+          channels: {
+            telegram: { botToken: "t-1" },
+          },
+        }),
+        deps,
+        job: {
+          ...makeJob({ kind: "agentTurn", message: "do it" }),
+          delivery: { mode: "announce" },
+        },
+        message: "do it",
+        sessionKey: "cron:job-1",
+        lane: "cron",
+      });
+
+      expect(res.status).toBe("ok");
+      expect(runSubagentAnnounceFlow).toHaveBeenCalledTimes(1);
+      const announceArgs = vi.mocked(runSubagentAnnounceFlow).mock.calls[0]?.[0] as
+        | {
+            requesterSessionKey?: string;
+            requesterOrigin?: { channel?: string; to?: string };
+          }
+        | undefined;
+      expect(announceArgs?.requesterSessionKey).toBe("agent:main:main");
       expect(announceArgs?.requesterOrigin?.channel).toBe("telegram");
       expect(announceArgs?.requesterOrigin?.to).toBe("123");
     });
