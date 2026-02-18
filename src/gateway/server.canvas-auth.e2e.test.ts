@@ -240,6 +240,52 @@ describe("gateway canvas host auth", () => {
     });
   }, 60_000);
 
+  test("allows A2UI activity token access from public IPs", async () => {
+    const resolvedAuth: ResolvedGatewayAuth = {
+      mode: "token",
+      token: "test-token",
+      password: undefined,
+      allowTailscale: false,
+    };
+
+    await withTempConfig({
+      cfg: {
+        gateway: {
+          trustedProxies: ["127.0.0.1"],
+        },
+        canvasHost: {
+          activity: {
+            enabled: true,
+            token: "activity-token",
+          },
+        },
+      },
+      prefix: "openclaw-canvas-auth-activity-test-",
+      run: async () => {
+        await withCanvasGatewayHarness({
+          resolvedAuth,
+          handleHttpRequest: async () => false,
+          run: async ({ listener }) => {
+            const publicIp = "203.0.113.10";
+            const unauthorized = await fetch(`http://127.0.0.1:${listener.port}${A2UI_PATH}/`, {
+              headers: { "x-forwarded-for": publicIp },
+            });
+            expect(unauthorized.status).toBe(401);
+
+            const authorized = await fetch(
+              `http://127.0.0.1:${listener.port}${A2UI_PATH}/?activityToken=activity-token`,
+              {
+                headers: { "x-forwarded-for": publicIp },
+              },
+            );
+            expect(authorized.status).toBe(200);
+            expect(await authorized.text()).toContain("openclaw-a2ui-host");
+          },
+        });
+      },
+    });
+  }, 60_000);
+
   test("returns 429 for repeated failed canvas auth attempts (HTTP + WS upgrade)", async () => {
     const resolvedAuth: ResolvedGatewayAuth = {
       mode: "token",

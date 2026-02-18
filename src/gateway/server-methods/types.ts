@@ -4,6 +4,7 @@ import type { HealthSummary } from "../../commands/health.js";
 import type { CronService } from "../../cron/service.js";
 import type { createSubsystemLogger } from "../../logging/subsystem.js";
 import type { WizardSession } from "../../wizard/session.js";
+import type { A2uiActivityHub } from "../a2ui-activity.js";
 import type { ChatAbortControllerEntry } from "../chat-abort.js";
 import type { ExecApprovalManager } from "../exec-approval-manager.js";
 import type { NodeRegistry } from "../node-registry.js";
@@ -40,6 +41,7 @@ export type GatewayRequestContext = {
   getHealthVersion: () => number;
   broadcast: GatewayBroadcastFn;
   broadcastToConnIds: GatewayBroadcastToConnIdsFn;
+  a2uiActivityHub?: A2uiActivityHub;
   nodeSendToSession: (sessionKey: string, event: string, payload: unknown) => void;
   nodeSendToAllSubscribed: (event: string, payload: unknown) => void;
   nodeSubscribe: (nodeId: string, sessionKey: string) => void;

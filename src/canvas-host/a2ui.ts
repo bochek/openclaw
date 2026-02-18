@@ -7,6 +7,8 @@ import { resolveFileWithinRoot } from "./file-resolver.js";
 
 export const A2UI_PATH = "/__openclaw__/a2ui";
 
+export const A2UI_ACTIVITY_WS_PATH = "/__openclaw__/a2ui/ws";
+
 export const CANVAS_HOST_PATH = "/__openclaw__/canvas";
 
 export const CANVAS_WS_PATH = "/__openclaw__/ws";

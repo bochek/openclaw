@@ -5,12 +5,14 @@ import { type ChannelId, listChannelPlugins } from "../channels/plugins/index.js
 import { stopGmailWatcher } from "../hooks/gmail-watcher.js";
 import type { HeartbeatRunner } from "../infra/heartbeat-runner.js";
 import type { PluginServicesHandle } from "../plugins/services.js";
+import type { A2uiActivityHub } from "./a2ui-activity.js";
 
 export function createGatewayCloseHandler(params: {
   bonjourStop: (() => Promise<void>) | null;
   tailscaleCleanup: (() => Promise<void>) | null;
   canvasHost: CanvasHostHandler | null;
   canvasHostServer: CanvasHostServer | null;
+  a2uiActivityHub?: A2uiActivityHub;
   stopChannel: (name: ChannelId, accountId?: string) => Promise<void>;
   pluginServices: PluginServicesHandle | null;
   cron: { stop: () => void };
@@ -57,6 +59,13 @@ export function createGatewayCloseHandler(params: {
     if (params.canvasHostServer) {
       try {
         await params.canvasHostServer.close();
+      } catch {
+        /* ignore */
+      }
+    }
+    if (params.a2uiActivityHub) {
+      try {
+        await params.a2uiActivityHub.close();
       } catch {
         /* ignore */
       }

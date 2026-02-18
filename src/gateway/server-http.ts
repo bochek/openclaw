@@ -9,6 +9,7 @@ import type { TlsOptions } from "node:tls";
 import type { WebSocketServer } from "ws";
 import { resolveAgentAvatar } from "../agents/identity-avatar.js";
 import {
+  A2UI_ACTIVITY_WS_PATH,
   A2UI_PATH,
   CANVAS_HOST_PATH,
   CANVAS_WS_PATH,
@@ -16,9 +17,11 @@ import {
 } from "../canvas-host/a2ui.js";
 import type { CanvasHostHandler } from "../canvas-host/server.js";
 import { loadConfig } from "../config/config.js";
+import type { CanvasHostActivityConfig } from "../config/types.gateway.js";
 import type { createSubsystemLogger } from "../logging/subsystem.js";
 import { safeEqualSecret } from "../security/secret-equal.js";
 import { handleSlackHttpRequest } from "../slack/http/index.js";
+import { isA2uiActivityAccessAllowed, type A2uiActivityHub } from "./a2ui-activity.js";
 import type { AuthRateLimiter } from "./auth-rate-limit.js";
 import {
   authorizeGatewayConnect,
@@ -111,9 +114,15 @@ async function authorizeCanvasRequest(params: {
   auth: ResolvedGatewayAuth;
   trustedProxies: string[];
   clients: Set<GatewayWsClient>;
+  activity?: CanvasHostActivityConfig;
   rateLimiter?: AuthRateLimiter;
 }): Promise<GatewayAuthResult> {
   const { req, auth, trustedProxies, clients, rateLimiter } = params;
+  const url = new URL(req.url ?? "/", "http://localhost");
+  const isA2uiRequest = url.pathname === A2UI_PATH || url.pathname.startsWith(`${A2UI_PATH}/`);
+  if (isA2uiRequest && isA2uiActivityAccessAllowed(params.activity, req)) {
+    return { ok: true };
+  }
   if (isLocalDirectRequest(req, trustedProxies)) {
     return { ok: true };
   }
@@ -550,6 +559,7 @@ export function createGatewayHttpServer(opts: {
             auth: resolvedAuth,
             trustedProxies,
             clients,
+            activity: configSnapshot.canvasHost?.activity,
             rateLimiter,
           });
           if (!ok.ok) {
@@ -601,17 +611,20 @@ export function attachGatewayUpgradeHandler(opts: {
   httpServer: HttpServer;
   wss: WebSocketServer;
   canvasHost: CanvasHostHandler | null;
+  a2uiActivityHub?: A2uiActivityHub;
   clients: Set<GatewayWsClient>;
   resolvedAuth: ResolvedGatewayAuth;
   /** Optional rate limiter for auth brute-force protection. */
   rateLimiter?: AuthRateLimiter;
 }) {
-  const { httpServer, wss, canvasHost, clients, resolvedAuth, rateLimiter } = opts;
+  const { httpServer, wss, canvasHost, a2uiActivityHub, clients, resolvedAuth, rateLimiter } = opts;
   httpServer.on("upgrade", (req, socket, head) => {
     void (async () => {
       if (canvasHost) {
         const url = new URL(req.url ?? "/", "http://localhost");
-        if (url.pathname === CANVAS_WS_PATH) {
+        const isCanvasWs = url.pathname === CANVAS_WS_PATH;
+        const isA2uiActivityWs = url.pathname === A2UI_ACTIVITY_WS_PATH;
+        if (isCanvasWs || isA2uiActivityWs) {
           const configSnapshot = loadConfig();
           const trustedProxies = configSnapshot.gateway?.trustedProxies ?? [];
           const ok = await authorizeCanvasRequest({
@@ -619,6 +632,7 @@ export function attachGatewayUpgradeHandler(opts: {
             auth: resolvedAuth,
             trustedProxies,
             clients,
+            activity: configSnapshot.canvasHost?.activity,
             rateLimiter,
           });
           if (!ok.ok) {
@@ -626,6 +640,13 @@ export function attachGatewayUpgradeHandler(opts: {
             socket.destroy();
             return;
           }
+        }
+        if (isA2uiActivityWs) {
+          if (a2uiActivityHub?.handleUpgrade(req, socket, head)) {
+            return;
+          }
+          socket.destroy();
+          return;
         }
         if (canvasHost.handleUpgrade(req, socket, head)) {
           return;

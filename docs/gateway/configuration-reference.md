@@ -2139,6 +2139,10 @@ Auth: `Authorization: Bearer <token>` or `x-openclaw-token: <token>`.
   canvasHost: {
     root: "~/.openclaw/workspace/canvas",
     liveReload: true,
+    activity: {
+      enabled: true,
+      token: "ACTIVITY_TOKEN",
+    },
     // enabled: false, // or OPENCLAW_SKIP_CANVAS_HOST=1
   },
 }
@@ -2149,6 +2153,7 @@ Auth: `Authorization: Bearer <token>` or `x-openclaw-token: <token>`.
   - `http://<gateway-host>:<gateway.port>/__openclaw__/a2ui/`
 - Local-only: keep `gateway.bind: "loopback"` (default).
 - Non-loopback binds: canvas routes require Gateway auth (token/password/trusted-proxy), same as other Gateway HTTP surfaces.
+- `canvasHost.activity` allows public A2UI access for Discord Activities; set `activity.token` and include `?activityToken=...` in the Activity URL to avoid fully unauthenticated access.
 - Node WebViews typically don't send auth headers; after a node is paired and connected, the Gateway allows a private-IP fallback so the node can load canvas/A2UI without leaking secrets into URLs.
 - Injects live-reload client into served HTML.
 - Auto-creates starter `index.html` when empty.

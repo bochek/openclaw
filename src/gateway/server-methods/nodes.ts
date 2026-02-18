@@ -437,6 +437,19 @@ export const nodeHandlers: GatewayRequestHandlers = {
       if (!respondUnavailableOnNodeInvokeError(respond, res)) {
         return;
       }
+
+      if (context.a2uiActivityHub?.enabled) {
+        if (command === "canvas.a2ui.pushJSONL") {
+          const rawParams = forwardedParams.params as { jsonl?: unknown } | undefined;
+          const jsonl = typeof rawParams?.jsonl === "string" ? rawParams.jsonl : undefined;
+          if (jsonl) {
+            context.a2uiActivityHub.broadcastPush(jsonl);
+          }
+        } else if (command === "canvas.a2ui.reset") {
+          context.a2uiActivityHub.broadcastReset();
+        }
+      }
+
       const payload = res.payloadJSON ? safeParseJson(res.payloadJSON) : res.payload;
       respond(
         true,

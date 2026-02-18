@@ -350,6 +350,7 @@ export async function startGatewayServer(
     removeChatRun,
     chatAbortControllers,
     toolEventRecipients,
+    a2uiActivityHub,
   } = await createGatewayRuntimeState({
     cfg: cfgAtStart,
     bindHost,
@@ -596,6 +597,7 @@ export async function startGatewayServer(
       markChannelLoggedOut,
       wizardRunner,
       broadcastVoiceWakeChanged,
+      a2uiActivityHub,
     },
   });
   logGatewayStartup({
@@ -693,6 +695,7 @@ export async function startGatewayServer(
     tailscaleCleanup,
     canvasHost,
     canvasHostServer,
+    a2uiActivityHub,
     stopChannel,
     pluginServices,
     cron,

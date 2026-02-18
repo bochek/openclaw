@@ -31,12 +31,29 @@ Discord Activities run a web app inside Discord. OpenClaw can reuse the Gateway 
 
 ## Expose A2UI from OpenClaw
 
-The Gateway serves A2UI from `/__openclaw__/a2ui/` on the canvas host port (default is the Gateway port plus 4). Ensure the canvas host port is reachable via HTTPS and routed to the Gateway.
+The Gateway serves A2UI from `/__openclaw__/a2ui/` on the same HTTP server and port as the Gateway. Ensure the canvas host URL is reachable via HTTPS and routed to the Gateway.
 
 Example reverse proxy target:
 
 - Public URL: `https://gateway-host.example.com/__openclaw__/a2ui/`
-- Gateway canvas host: `http://gateway-host.example.com:18793/__openclaw__/a2ui/`
+- Gateway target: `http://gateway-host.example.com:18789/__openclaw__/a2ui/` (replace `18789` with your Gateway port)
+
+If Gateway auth is enabled, configure the activity bridge so Discord can load A2UI without a gateway token:
+
+```json5
+{
+  canvasHost: {
+    activity: {
+      enabled: true,
+      token: "ACTIVITY_TOKEN",
+    },
+  },
+}
+```
+
+Then set the Activity URL to include the token:
+
+`https://gateway-host.example.com/__openclaw__/a2ui/?activityToken=ACTIVITY_TOKEN`
 
 ## Send a launch button
 
@@ -64,6 +81,7 @@ When the button is pressed, OpenClaw responds with the `LAUNCH_ACTIVITY` interac
 ## Notes
 
 - The bundled A2UI page renders in Discord, but the node action bridge is not available in the Discord client. If you need Activity user actions to reach the Gateway, add a browser bridge to post actions back to the Gateway.
+- The activity token is shared with anyone who can open the Activity URL. Omit the token only if you want fully public A2UI access.
 
 Related:
 

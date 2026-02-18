@@ -303,5 +303,103 @@
         };
       })();
     </script>
+    <script>
+      (() => {
+        const hasNativeBridge =
+          !!window.webkit?.messageHandlers?.openclawCanvasA2UIAction ||
+          (window.openclawCanvasA2UIAction &&
+            typeof window.openclawCanvasA2UIAction.postMessage === "function");
+        if (hasNativeBridge) {
+          return;
+        }
+
+        const a2ui = window.openclawA2UI;
+        if (!a2ui || typeof a2ui.applyMessages !== "function") {
+          return;
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const activityToken = params.get("activityToken") || params.get("a2uiToken") || "";
+        const proto = window.location.protocol === "https:" ? "wss" : "ws";
+        const query = activityToken ? `?activityToken=${encodeURIComponent(activityToken)}` : "";
+        const wsUrl = `${proto}://${window.location.host}/__openclaw__/a2ui/ws${query}`;
+
+        const parseJsonl = (jsonl) => {
+          if (typeof jsonl !== "string") return [];
+          const messages = [];
+          for (const line of jsonl.split(/\r?\n/)) {
+            const trimmed = line.trim();
+            if (!trimmed) continue;
+            try {
+              messages.push(JSON.parse(trimmed));
+            } catch (err) {
+              console.warn("A2UI JSONL parse failed", err);
+            }
+          }
+          return messages;
+        };
+
+        const setStatus = (title, subtitle) => {
+          if (window.__openclaw?.setStatus) {
+            window.__openclaw.setStatus(title, subtitle);
+          }
+        };
+
+        let reconnectTimer = null;
+        let retries = 0;
+
+        const scheduleReconnect = () => {
+          if (reconnectTimer) return;
+          const delay = Math.min(1000 * 2 ** Math.min(retries, 5), 15000);
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            retries += 1;
+            connect();
+          }, delay);
+        };
+
+        const connect = () => {
+          try {
+            const ws = new WebSocket(wsUrl);
+            ws.onopen = () => {
+              retries = 0;
+              setStatus("Activity bridge", "Connected");
+            };
+            ws.onclose = () => {
+              setStatus("Activity bridge", "Disconnected");
+              scheduleReconnect();
+            };
+            ws.onerror = () => {
+              setStatus("Activity bridge", "Error");
+            };
+            ws.onmessage = (event) => {
+              if (!event?.data) return;
+              let payload;
+              try {
+                payload = JSON.parse(event.data);
+              } catch {
+                return;
+              }
+              if (payload?.type === "a2ui.reset") {
+                if (typeof a2ui.reset === "function") {
+                  a2ui.reset();
+                }
+                return;
+              }
+              if (payload?.type === "a2ui.push" || payload?.type === "a2ui.state") {
+                const messages = parseJsonl(payload.jsonl ?? "");
+                if (messages.length > 0) {
+                  a2ui.applyMessages(messages);
+                }
+              }
+            };
+          } catch (err) {
+            console.warn("Failed to connect A2UI activity bridge", err);
+          }
+        };
+
+        connect();
+      })();
+    </script>
   </body>
 </html>
