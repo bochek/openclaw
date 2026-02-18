@@ -37,6 +37,11 @@ import { getCachedBlueBubblesPrivateApiStatus } from "./probe.js";
 import { normalizeBlueBubblesReactionInput, sendBlueBubblesReaction } from "./reactions.js";
 import { resolveChatGuidForTarget, sendMessageBlueBubbles } from "./send.js";
 import { formatBlueBubblesChatTarget, isAllowedBlueBubblesSender } from "./targets.js";
+import {
+  fetchBlueBubblesHistory,
+  buildInboundHistoryFromEntries,
+  type BlueBubblesHistoryEntry,
+} from "./history.js";
 
 const DEFAULT_TEXT_LIMIT = 4000;
 const invalidAckReactions = new Set<string>();
@@ -813,9 +818,49 @@ export async function processMessage(
       .trim();
   };
 
+  // Fetch history for backfill (both groups and DMs)
+  const historyLimit = isGroup 
+    ? (account.config.historyLimit ?? 0)
+    : (account.config.dmHistoryLimit ?? 0);
+  
+  let inboundHistory: Array<{ sender: string; body: string; timestamp?: number }> | undefined;
+  
+  if (historyLimit > 0) {
+    // Determine chat identifier for history fetching
+    const historyIdentifier = chatGuid || 
+      chatIdentifier || 
+      (chatId ? String(chatId) : null) ||
+      (isGroup ? null : message.senderId);
+    
+    if (historyIdentifier) {
+      try {
+        const historyEntries = await fetchBlueBubblesHistory(historyIdentifier, historyLimit, {
+          cfg: config,
+          accountId: account.accountId,
+        });
+        
+        if (historyEntries.length > 0) {
+          inboundHistory = buildInboundHistoryFromEntries(historyEntries);
+          logVerbose(
+            core,
+            runtime,
+            `fetched ${historyEntries.length} history messages for ${isGroup ? 'group' : 'DM'}: ${historyIdentifier}`
+          );
+        }
+      } catch (err) {
+        logVerbose(
+          core,
+          runtime,
+          `history fetch failed for ${historyIdentifier}: ${String(err)}`
+        );
+      }
+    }
+  }
+
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
     BodyForAgent: rawBody,
+    InboundHistory: inboundHistory,
     RawBody: rawBody,
     CommandBody: rawBody,
     BodyForCommands: rawBody,
