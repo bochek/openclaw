@@ -41,7 +41,7 @@ import {
 } from "./commands-registry.js";
 import type { CommandCategory } from "./commands-registry.types.js";
 import { resolveActiveFallbackState } from "./fallback-state.js";
-import { resolveSelectedAndActiveModel } from "./model-runtime.js";
+import { formatProviderModelRef, resolveSelectedAndActiveModel } from "./model-runtime.js";
 import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "./thinking.js";
 
 type AgentDefaults = NonNullable<NonNullable<OpenClawConfig["agents"]>["defaults"]>;
@@ -492,19 +492,19 @@ export function buildStatusMessage(args: StatusArgs): string {
   const costLabel = showCost && hasUsage ? formatUsd(cost) : undefined;
 
   const selectedModelLabel = modelRefs.selected.label || "unknown";
+  const activeModelLabel = formatProviderModelRef(activeProvider, activeModel) || "unknown";
   const fallbackState = resolveActiveFallbackState({
-    selectedModelRef: `${selectedProvider}/${selectedModel}`,
-    activeModelRef: `${activeProvider}/${activeModel}`,
+    selectedModelRef: selectedModelLabel,
+    activeModelRef: activeModelLabel,
     state: entry,
   });
   const selectedAuthLabel = selectedAuthLabelValue ? ` · 🔑 ${selectedAuthLabelValue}` : "";
-  const modelLine = `🧠 Model: ${selectedModelLabel}${selectedAuthLabel}${
-    fallbackState.active ? " (selected)" : ""
-  }`;
-  const activeModelLine = fallbackState.active
-    ? `🧠 Active: ${activeProvider}/${activeModel}${
-        activeAuthLabelValue ? ` · 🔑 ${activeAuthLabelValue}` : ""
-      } (Reason: ${fallbackState.reason ?? "selected model unavailable"})`
+  const modelLine = `🧠 Model: ${selectedModelLabel}${selectedAuthLabel}`;
+  const showFallbackAuth = activeAuthLabelValue && activeAuthLabelValue !== selectedAuthLabelValue;
+  const fallbackLine = fallbackState.active
+    ? `↪️ Fallback: ${activeModelLabel}${
+        showFallbackAuth ? ` · 🔑 ${activeAuthLabelValue}` : ""
+      } (${fallbackState.reason ?? "selected model unavailable"})`
     : null;
   const commit = resolveCommitHash();
   const versionLine = `🦞 OpenClaw ${VERSION}${commit ? ` (${commit})` : ""}`;
@@ -519,7 +519,7 @@ export function buildStatusMessage(args: StatusArgs): string {
     versionLine,
     args.timeLine,
     modelLine,
-    activeModelLine,
+    fallbackLine,
     usageCostLine,
     `📚 ${contextLine}`,
     mediaLine,

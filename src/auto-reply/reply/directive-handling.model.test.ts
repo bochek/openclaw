@@ -85,7 +85,7 @@ describe("/model chat UX", () => {
       },
     });
 
-    expect(reply?.text).toContain("Current: fireworks/fireworks/minimax-m2p5 (selected)");
+    expect(reply?.text).toContain("Current: fireworks/minimax-m2p5 (selected)");
     expect(reply?.text).toContain("Active: deepinfra/moonshotai/Kimi-K2.5 (runtime)");
   });
 

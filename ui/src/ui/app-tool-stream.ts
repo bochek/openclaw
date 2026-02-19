@@ -49,6 +49,13 @@ function resolveModelLabel(provider: unknown, model: unknown): string | null {
   }
   const providerValue = toTrimmedString(provider);
   if (providerValue) {
+    const prefix = `${providerValue}/`;
+    if (modelValue.toLowerCase().startsWith(prefix.toLowerCase())) {
+      const trimmedModel = modelValue.slice(prefix.length).trim();
+      if (trimmedModel) {
+        return `${providerValue}/${trimmedModel}`;
+      }
+    }
     return `${providerValue}/${modelValue}`;
   }
   const slashIndex = modelValue.indexOf("/");
@@ -347,9 +354,10 @@ function handleLifecycleFallbackEvent(host: CompactionHost, payload: AgentEventP
     if (summaries.length > 0) {
       return summaries;
     }
-    return parseFallbackAttempts(data.attempts).map(
-      (attempt) => `${attempt.provider}/${attempt.model}: ${attempt.reason}`,
-    );
+    return parseFallbackAttempts(data.attempts).map((attempt) => {
+      const modelRef = resolveModelLabel(attempt.provider, attempt.model);
+      return `${modelRef ?? `${attempt.provider}/${attempt.model}`}: ${attempt.reason}`;
+    });
   })();
 
   if (host.fallbackClearTimer != null) {

@@ -574,7 +574,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
     const payloads = res as { text?: string }[];
     expect(payloads[0]?.text).toContain("Model Fallback:");
     expect(payloads[0]?.text).toContain("deepinfra/moonshotai/Kimi-K2.5");
-    expect(sessionEntry.fallbackNoticeReason).toBe("fireworks/fireworks/minimax-m2p5 rate limit");
+    expect(sessionEntry.fallbackNoticeReason).toBe("rate limit");
   });
 
   it("does not announce model fallback when verbose is off", async () => {
@@ -946,7 +946,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
       const res = await run();
       const firstText = Array.isArray(res) ? res[0]?.text : res?.text;
       expect(firstText).not.toContain("Model Fallback:");
-      expect(sessionEntry.fallbackNoticeReason).toBe("anthropic/claude rate limit");
+      expect(sessionEntry.fallbackNoticeReason).toBe("rate limit");
     } finally {
       fallbackSpy.mockRestore();
     }
@@ -958,7 +958,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
       updatedAt: Date.now(),
       fallbackNoticeSelectedModel: "anthropic/claude",
       fallbackNoticeActiveModel: "deepinfra/moonshotai/Kimi-K2.5",
-      fallbackNoticeReason: "anthropic/claude rate limit",
+      fallbackNoticeReason: "rate limit",
       modelProvider: "deepinfra",
       model: "moonshotai/Kimi-K2.5",
     };
@@ -996,7 +996,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
       const res = await run();
       const firstText = Array.isArray(res) ? res[0]?.text : res?.text;
       expect(firstText).not.toContain("Model Fallback:");
-      expect(sessionEntry.fallbackNoticeReason).toBe("anthropic/claude timeout");
+      expect(sessionEntry.fallbackNoticeReason).toBe("timeout");
     } finally {
       fallbackSpy.mockRestore();
     }
@@ -1011,9 +1011,9 @@ describe("runReplyAgent typing (heartbeat)", () => {
         sessionId,
         updatedAt: Date.now(),
         sessionFile: transcriptPath,
-        fallbackNoticeSelectedModel: "fireworks/fireworks/minimax-m2p5",
+        fallbackNoticeSelectedModel: "fireworks/minimax-m2p5",
         fallbackNoticeActiveModel: "deepinfra/moonshotai/Kimi-K2.5",
-        fallbackNoticeReason: "fireworks/fireworks/minimax-m2p5 rate limit",
+        fallbackNoticeReason: "rate limit",
       };
       const sessionStore = { main: sessionEntry };
 

@@ -51,13 +51,13 @@ describe("app-tool-stream fallback lifecycle handling", () => {
         selectedModel: "fireworks/minimax-m2p5",
         activeProvider: "deepinfra",
         activeModel: "moonshotai/Kimi-K2.5",
-        reasonSummary: "fireworks/fireworks/minimax-m2p5 rate limit",
+        reasonSummary: "rate limit",
       },
     });
 
-    expect(host.fallbackStatus?.selected).toBe("fireworks/fireworks/minimax-m2p5");
+    expect(host.fallbackStatus?.selected).toBe("fireworks/minimax-m2p5");
     expect(host.fallbackStatus?.active).toBe("deepinfra/moonshotai/Kimi-K2.5");
-    expect(host.fallbackStatus?.reason).toBe("fireworks/fireworks/minimax-m2p5 rate limit");
+    expect(host.fallbackStatus?.reason).toBe("rate limit");
     vi.useRealTimers();
   });
 

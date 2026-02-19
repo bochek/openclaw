@@ -1,4 +1,5 @@
 import type { SessionEntry } from "../config/sessions.js";
+import { formatProviderModelRef } from "./model-runtime.js";
 import type { RuntimeFallbackAttempt } from "./reply/agent-runner-execution.js";
 
 const FALLBACK_REASON_PART_MAX = 80;
@@ -37,13 +38,13 @@ export function formatFallbackAttemptReason(attempt: RuntimeFallbackAttempt): st
 }
 
 function formatFallbackAttemptSummary(attempt: RuntimeFallbackAttempt): string {
-  return `${attempt.provider}/${attempt.model} ${formatFallbackAttemptReason(attempt)}`;
+  return `${formatProviderModelRef(attempt.provider, attempt.model)} ${formatFallbackAttemptReason(attempt)}`;
 }
 
 export function buildFallbackReasonSummary(attempts: RuntimeFallbackAttempt[]): string {
   const firstAttempt = attempts[0];
   const firstReason = firstAttempt
-    ? formatFallbackAttemptSummary(firstAttempt)
+    ? formatFallbackAttemptReason(firstAttempt)
     : "selected model unavailable";
   const moreAttempts = attempts.length > 1 ? ` (+${attempts.length - 1} more attempts)` : "";
   return `${truncateFallbackReasonPart(firstReason)}${moreAttempts}`;
@@ -62,8 +63,8 @@ export function buildFallbackNotice(params: {
   activeModel: string;
   attempts: RuntimeFallbackAttempt[];
 }): string | null {
-  const selected = `${params.selectedProvider}/${params.selectedModel}`;
-  const active = `${params.activeProvider}/${params.activeModel}`;
+  const selected = formatProviderModelRef(params.selectedProvider, params.selectedModel);
+  const active = formatProviderModelRef(params.activeProvider, params.activeModel);
   if (selected === active) {
     return null;
   }
@@ -76,7 +77,7 @@ export function buildFallbackClearedNotice(params: {
   selectedModel: string;
   previousActiveModel?: string;
 }): string {
-  const selected = `${params.selectedProvider}/${params.selectedModel}`;
+  const selected = formatProviderModelRef(params.selectedProvider, params.selectedModel);
   const previous = normalizeFallbackModelRef(params.previousActiveModel);
   if (previous && previous !== selected) {
     return `↪️ Model Fallback cleared: ${selected} (was ${previous})`;
@@ -131,8 +132,8 @@ export function resolveFallbackTransition(params: {
   attempts: RuntimeFallbackAttempt[];
   state?: FallbackNoticeState;
 }): ResolvedFallbackTransition {
-  const selectedModelRef = `${params.selectedProvider}/${params.selectedModel}`;
-  const activeModelRef = `${params.activeProvider}/${params.activeModel}`;
+  const selectedModelRef = formatProviderModelRef(params.selectedProvider, params.selectedModel);
+  const activeModelRef = formatProviderModelRef(params.activeProvider, params.activeModel);
   const previousState = {
     selectedModel: normalizeFallbackModelRef(params.state?.fallbackNoticeSelectedModel),
     activeModel: normalizeFallbackModelRef(params.state?.fallbackNoticeActiveModel),

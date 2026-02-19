@@ -15,30 +15,30 @@ const baseAttempt = {
 describe("fallback-state", () => {
   it("treats fallback as active only when state matches selected and active refs", () => {
     const state: FallbackNoticeState = {
-      fallbackNoticeSelectedModel: "fireworks/fireworks/minimax-m2p5",
+      fallbackNoticeSelectedModel: "fireworks/minimax-m2p5",
       fallbackNoticeActiveModel: "deepinfra/moonshotai/Kimi-K2.5",
-      fallbackNoticeReason: "fireworks/fireworks/minimax-m2p5 rate limit",
+      fallbackNoticeReason: "rate limit",
     };
 
     const resolved = resolveActiveFallbackState({
-      selectedModelRef: "fireworks/fireworks/minimax-m2p5",
+      selectedModelRef: "fireworks/minimax-m2p5",
       activeModelRef: "deepinfra/moonshotai/Kimi-K2.5",
       state,
     });
 
     expect(resolved.active).toBe(true);
-    expect(resolved.reason).toBe("fireworks/fireworks/minimax-m2p5 rate limit");
+    expect(resolved.reason).toBe("rate limit");
   });
 
   it("does not treat runtime drift as fallback when persisted state does not match", () => {
     const state: FallbackNoticeState = {
       fallbackNoticeSelectedModel: "anthropic/claude",
       fallbackNoticeActiveModel: "deepinfra/moonshotai/Kimi-K2.5",
-      fallbackNoticeReason: "anthropic/claude rate limit",
+      fallbackNoticeReason: "rate limit",
     };
 
     const resolved = resolveActiveFallbackState({
-      selectedModelRef: "fireworks/fireworks/minimax-m2p5",
+      selectedModelRef: "fireworks/minimax-m2p5",
       activeModelRef: "deepinfra/moonshotai/Kimi-K2.5",
       state,
     });
@@ -61,8 +61,8 @@ describe("fallback-state", () => {
     expect(resolved.fallbackTransitioned).toBe(true);
     expect(resolved.fallbackCleared).toBe(false);
     expect(resolved.stateChanged).toBe(true);
-    expect(resolved.reasonSummary).toBe("fireworks/fireworks/minimax-m2p5 rate limit");
-    expect(resolved.nextState.selectedModel).toBe("fireworks/fireworks/minimax-m2p5");
+    expect(resolved.reasonSummary).toBe("rate limit");
+    expect(resolved.nextState.selectedModel).toBe("fireworks/minimax-m2p5");
     expect(resolved.nextState.activeModel).toBe("deepinfra/moonshotai/Kimi-K2.5");
   });
 
@@ -74,15 +74,15 @@ describe("fallback-state", () => {
       activeModel: "moonshotai/Kimi-K2.5",
       attempts: [{ ...baseAttempt, reason: "timeout" }],
       state: {
-        fallbackNoticeSelectedModel: "fireworks/fireworks/minimax-m2p5",
+        fallbackNoticeSelectedModel: "fireworks/minimax-m2p5",
         fallbackNoticeActiveModel: "deepinfra/moonshotai/Kimi-K2.5",
-        fallbackNoticeReason: "fireworks/fireworks/minimax-m2p5 rate limit",
+        fallbackNoticeReason: "rate limit",
       },
     });
 
     expect(resolved.fallbackTransitioned).toBe(false);
     expect(resolved.stateChanged).toBe(true);
-    expect(resolved.nextState.reason).toBe("fireworks/fireworks/minimax-m2p5 timeout");
+    expect(resolved.nextState.reason).toBe("timeout");
   });
 
   it("marks fallback as cleared when runtime returns to selected model", () => {
@@ -93,9 +93,9 @@ describe("fallback-state", () => {
       activeModel: "fireworks/minimax-m2p5",
       attempts: [],
       state: {
-        fallbackNoticeSelectedModel: "fireworks/fireworks/minimax-m2p5",
+        fallbackNoticeSelectedModel: "fireworks/minimax-m2p5",
         fallbackNoticeActiveModel: "deepinfra/moonshotai/Kimi-K2.5",
-        fallbackNoticeReason: "fireworks/fireworks/minimax-m2p5 rate limit",
+        fallbackNoticeReason: "rate limit",
       },
     });
 
