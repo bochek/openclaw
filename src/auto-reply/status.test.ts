@@ -205,7 +205,7 @@ describe("buildStatusMessage", () => {
         model: "claude-haiku-4-5",
         fallbackNoticeSelectedModel: "openai/gpt-4.1-mini",
         fallbackNoticeActiveModel: "anthropic/claude-haiku-4-5",
-        fallbackNoticeReason: "fireworks/fireworks/minimax-m2p5 rate limit",
+        fallbackNoticeReason: "rate limit",
         contextTokens: 32_000,
       },
       sessionKey: "agent:main:main",
@@ -217,11 +217,10 @@ describe("buildStatusMessage", () => {
 
     const normalized = normalizeTestText(text);
     expect(normalized).toContain("Model: openai/gpt-4.1-mini");
-    expect(normalized).toContain("(selected)");
-    expect(normalized).toContain("Active: anthropic/claude-haiku-4-5");
-    expect(normalized).toContain("(Reason: fireworks/fireworks/minimax-m2p5 rate limit)");
+    expect(normalized).toContain("Fallback: anthropic/claude-haiku-4-5");
+    expect(normalized).toContain("(rate limit)");
     expect(normalized).not.toContain(" - Reason:");
-    expect(normalized).not.toContain("Active Reason:");
+    expect(normalized).not.toContain("Active:");
     expect(normalized).toContain("di_123...abc");
   });
 
@@ -236,9 +235,9 @@ describe("buildStatusMessage", () => {
         updatedAt: 0,
         modelProvider: "anthropic",
         model: "claude-haiku-4-5",
-        fallbackNoticeSelectedModel: "fireworks/fireworks/minimax-m2p5",
+        fallbackNoticeSelectedModel: "fireworks/minimax-m2p5",
         fallbackNoticeActiveModel: "deepinfra/moonshotai/Kimi-K2.5",
-        fallbackNoticeReason: "fireworks/fireworks/minimax-m2p5 rate limit",
+        fallbackNoticeReason: "rate limit",
       },
       sessionKey: "agent:main:main",
       sessionScope: "per-sender",
@@ -249,9 +248,8 @@ describe("buildStatusMessage", () => {
 
     const normalized = normalizeTestText(text);
     expect(normalized).toContain("Model: openai/gpt-4.1-mini");
-    expect(normalized).not.toContain("(selected)");
-    expect(normalized).not.toContain("Active:");
-    expect(normalized).not.toContain("Reason:");
+    expect(normalized).not.toContain("Fallback:");
+    expect(normalized).not.toContain("(rate limit)");
   });
 
   it("omits active lines when runtime matches selected model", () => {
@@ -265,7 +263,7 @@ describe("buildStatusMessage", () => {
         updatedAt: 0,
         modelProvider: "openai",
         model: "gpt-4.1-mini",
-        fallbackNoticeReason: "openai/gpt-4.1-mini unknown",
+        fallbackNoticeReason: "unknown",
       },
       sessionKey: "agent:main:main",
       sessionScope: "per-sender",
@@ -274,8 +272,7 @@ describe("buildStatusMessage", () => {
     });
 
     const normalized = normalizeTestText(text);
-    expect(normalized).not.toContain("Active:");
-    expect(normalized).not.toContain("Active Reason:");
+    expect(normalized).not.toContain("Fallback:");
   });
 
   it("keeps provider prefix from configured model", () => {

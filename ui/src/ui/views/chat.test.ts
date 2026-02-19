@@ -119,9 +119,9 @@ describe("chat view", () => {
       renderChat(
         createProps({
           fallbackStatus: {
-            selected: "fireworks/fireworks/minimax-m2p5",
+            selected: "fireworks/minimax-m2p5",
             active: "deepinfra/moonshotai/Kimi-K2.5",
-            attempts: ["fireworks/fireworks/minimax-m2p5: rate limit"],
+            attempts: ["fireworks/minimax-m2p5: rate limit"],
             occurredAt: 900,
           },
         }),
@@ -142,7 +142,7 @@ describe("chat view", () => {
       renderChat(
         createProps({
           fallbackStatus: {
-            selected: "fireworks/fireworks/minimax-m2p5",
+            selected: "fireworks/minimax-m2p5",
             active: "deepinfra/moonshotai/Kimi-K2.5",
             attempts: [],
             occurredAt: 0,
@@ -164,8 +164,8 @@ describe("chat view", () => {
         createProps({
           fallbackStatus: {
             phase: "cleared",
-            selected: "fireworks/fireworks/minimax-m2p5",
-            active: "fireworks/fireworks/minimax-m2p5",
+            selected: "fireworks/minimax-m2p5",
+            active: "fireworks/minimax-m2p5",
             previous: "deepinfra/moonshotai/Kimi-K2.5",
             attempts: [],
             occurredAt: 900,
@@ -177,7 +177,7 @@ describe("chat view", () => {
 
     const indicator = container.querySelector(".compaction-indicator--fallback-cleared");
     expect(indicator).not.toBeNull();
-    expect(indicator?.textContent).toContain("Fallback cleared: fireworks/fireworks/minimax-m2p5");
+    expect(indicator?.textContent).toContain("Fallback cleared: fireworks/minimax-m2p5");
     nowSpy.mockRestore();
   });
 
