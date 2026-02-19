@@ -21,6 +21,7 @@ export async function resolveDeliveryTarget(
   jobPayload: {
     channel?: "last" | ChannelId;
     to?: string;
+    sessionKey?: string;
   },
 ): Promise<{
   channel: Exclude<OutboundChannel, "none">;
@@ -32,6 +33,8 @@ export async function resolveDeliveryTarget(
 }> {
   const requestedChannel = typeof jobPayload.channel === "string" ? jobPayload.channel : "last";
   const explicitTo = typeof jobPayload.to === "string" ? jobPayload.to : undefined;
+  const originSessionKey =
+    typeof jobPayload.sessionKey === "string" ? jobPayload.sessionKey.trim() : "";
   const allowMismatchedLastTo = requestedChannel === "last";
 
   const sessionCfg = cfg.session;
@@ -39,13 +42,31 @@ export async function resolveDeliveryTarget(
   const storePath = resolveStorePath(sessionCfg?.store, { agentId });
   const store = loadSessionStore(storePath);
   const main = store[mainSessionKey];
+  const origin = originSessionKey ? store[originSessionKey] : undefined;
 
-  const preliminary = resolveSessionDeliveryTarget({
+  const preliminaryFromOrigin = origin
+    ? resolveSessionDeliveryTarget({
+        entry: origin,
+        requestedChannel,
+        explicitTo,
+        allowMismatchedLastTo,
+      })
+    : undefined;
+  const preliminaryFromMain = resolveSessionDeliveryTarget({
     entry: main,
     requestedChannel,
     explicitTo,
     allowMismatchedLastTo,
   });
+
+  const hasResolvedTarget = (value?: { channel?: string; to?: string }) =>
+    Boolean(value?.channel && value?.to);
+  const useMainContext =
+    hasResolvedTarget(preliminaryFromMain) && !hasResolvedTarget(preliminaryFromOrigin);
+  const contextEntry = useMainContext ? main : (origin ?? main);
+  const preliminary = useMainContext
+    ? preliminaryFromMain
+    : (preliminaryFromOrigin ?? preliminaryFromMain);
 
   let fallbackChannel: Exclude<OutboundChannel, "none"> | undefined;
   if (!preliminary.channel) {
@@ -59,7 +80,7 @@ export async function resolveDeliveryTarget(
 
   const resolved = fallbackChannel
     ? resolveSessionDeliveryTarget({
-        entry: main,
+        entry: contextEntry,
         requestedChannel,
         explicitTo,
         fallbackChannel,

@@ -1,9 +1,9 @@
 import "./isolated-agent.mocks.js";
 import fs from "node:fs/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { CliDeps } from "../cli/deps.js";
 import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
 import { runSubagentAnnounceFlow } from "../agents/subagent-announce.js";
+import type { CliDeps } from "../cli/deps.js";
 import { runCronIsolatedAgentTurn } from "./isolated-agent.js";
 import {
   makeCfg,
@@ -184,15 +184,22 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
-  it("uses the agent main session key when announce delivery is not pinned", async () => {
+  it("uses cron origin session for unpinned announce fallback and implicit delivery resolution", async () => {
     await withTempCronHome(async (home) => {
       const storePath = await writeSessionStore(home, { lastProvider: "webchat", lastTo: "" });
+      const originSessionKey = "agent:main:bluebubbles:direct:+19257864429";
       await fs.writeFile(
         storePath,
         JSON.stringify(
           {
             "agent:main:main": {
               sessionId: "main-session",
+              updatedAt: Date.now(),
+              lastChannel: "telegram",
+              lastTo: "999",
+            },
+            [originSessionKey]: {
+              sessionId: "origin-session",
               updatedAt: Date.now(),
               lastChannel: "telegram",
               lastTo: "123",
@@ -220,6 +227,7 @@ describe("runCronIsolatedAgentTurn", () => {
         deps,
         job: {
           ...makeJob({ kind: "agentTurn", message: "do it" }),
+          sessionKey: originSessionKey,
           delivery: { mode: "announce" },
         },
         message: "do it",
@@ -235,7 +243,7 @@ describe("runCronIsolatedAgentTurn", () => {
             requesterOrigin?: { channel?: string; to?: string };
           }
         | undefined;
-      expect(announceArgs?.requesterSessionKey).toBe("agent:main:main");
+      expect(announceArgs?.requesterSessionKey).toBe(originSessionKey);
       expect(announceArgs?.requesterOrigin?.channel).toBe("telegram");
       expect(announceArgs?.requesterOrigin?.to).toBe("123");
     });

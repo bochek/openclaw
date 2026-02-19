@@ -128,4 +128,31 @@ describe("resolveDeliveryTarget", () => {
 
     expect(result.accountId).toBeUndefined();
   });
+
+  it("prefers origin session context for implicit last-target resolution", async () => {
+    vi.mocked(loadSessionStore).mockReturnValue({
+      "agent:test:main": {
+        sessionId: "main-session",
+        updatedAt: 1000,
+        lastChannel: "telegram",
+        lastTo: "main-target",
+        lastAccountId: "main-account",
+      },
+      "agent:test:bluebubbles:direct:+19257864429": {
+        sessionId: "origin-session",
+        updatedAt: 1001,
+        lastChannel: "telegram",
+        lastTo: "origin-target",
+        lastAccountId: "origin-account",
+      },
+    });
+
+    const result = await resolveDeliveryTarget(makeCfg(), "agent-b", {
+      channel: "last",
+      sessionKey: "agent:test:bluebubbles:direct:+19257864429",
+    });
+
+    expect(result.channel).toBe("telegram");
+    expect(result.accountId).toBe("origin-account");
+  });
 });

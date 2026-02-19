@@ -1,7 +1,3 @@
-import type { MessagingToolSend } from "../../agents/pi-embedded-messaging.js";
-import type { OpenClawConfig } from "../../config/config.js";
-import type { AgentDefaultsConfig } from "../../config/types.js";
-import type { CronJob, CronRunOutcome, CronRunTelemetry } from "../types.js";
 import {
   resolveAgentConfig,
   resolveAgentDir,
@@ -24,6 +20,7 @@ import {
   resolveHooksGmailModel,
   resolveThinkingDefault,
 } from "../../agents/model-selection.js";
+import type { MessagingToolSend } from "../../agents/pi-embedded-messaging.js";
 import { runEmbeddedPiAgent } from "../../agents/pi-embedded.js";
 import { runSubagentAnnounceFlow } from "../../agents/subagent-announce.js";
 import { countActiveDescendantRuns } from "../../agents/subagent-registry.js";
@@ -37,11 +34,13 @@ import {
 } from "../../auto-reply/thinking.js";
 import { SILENT_REPLY_TOKEN } from "../../auto-reply/tokens.js";
 import { createOutboundSendDeps, type CliDeps } from "../../cli/outbound-send-deps.js";
+import type { OpenClawConfig } from "../../config/config.js";
 import {
   resolveAgentMainSessionKey,
   resolveSessionTranscriptPath,
   updateSessionStore,
 } from "../../config/sessions.js";
+import type { AgentDefaultsConfig } from "../../config/types.js";
 import { registerAgentRunContext } from "../../infra/agent-events.js";
 import { deliverOutboundPayloads } from "../../infra/outbound/deliver.js";
 import { resolveAgentOutboundIdentity } from "../../infra/outbound/identity.js";
@@ -55,6 +54,7 @@ import {
   isExternalHookSession,
 } from "../../security/external-content.js";
 import { resolveCronDeliveryPlan } from "../delivery.js";
+import type { CronJob, CronRunOutcome, CronRunTelemetry } from "../types.js";
 import { resolveDeliveryTarget } from "./delivery-target.js";
 import {
   isHeartbeatOnlyResponse,
@@ -368,10 +368,17 @@ export async function runCronIsolatedAgentTurn(params: {
   const agentPayload = params.job.payload.kind === "agentTurn" ? params.job.payload : null;
   const deliveryPlan = resolveCronDeliveryPlan(params.job);
   const deliveryRequested = deliveryPlan.requested;
+  const cronOriginSessionKey =
+    params.job.sessionKey?.trim() ||
+    resolveAgentMainSessionKey({
+      cfg: params.cfg,
+      agentId,
+    });
 
   const resolvedDelivery = await resolveDeliveryTarget(cfgWithAgentDefaults, agentId, {
     channel: deliveryPlan.channel ?? "last",
     to: deliveryPlan.to,
+    sessionKey: cronOriginSessionKey,
   });
 
   const { formattedTime, timeLine } = resolveCronStyleNow(params.cfg, now);
@@ -667,10 +674,6 @@ export async function runCronIsolatedAgentTurn(params: {
         }
       }
     } else if (synthesizedText) {
-      const announceMainSessionKey = resolveAgentMainSessionKey({
-        cfg: params.cfg,
-        agentId,
-      });
       const announceUsesPinnedTarget = hasPinnedCronAnnounceTarget({
         channel: deliveryPlan.channel,
         to: deliveryPlan.to,
@@ -679,7 +682,7 @@ export async function runCronIsolatedAgentTurn(params: {
         ? await resolveCronAnnounceSessionKey({
             cfg: cfgWithAgentDefaults,
             agentId,
-            fallbackSessionKey: announceMainSessionKey,
+            fallbackSessionKey: cronOriginSessionKey,
             delivery: {
               channel: resolvedDelivery.channel,
               to: resolvedDelivery.to,
@@ -687,7 +690,7 @@ export async function runCronIsolatedAgentTurn(params: {
               threadId: resolvedDelivery.threadId,
             },
           })
-        : announceMainSessionKey;
+        : cronOriginSessionKey;
       const taskLabel =
         typeof params.job.name === "string" && params.job.name.trim()
           ? params.job.name.trim()
