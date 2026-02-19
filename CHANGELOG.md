@@ -7,6 +7,7 @@ Docs: https://docs.openclaw.ai
 ### Changes
 
 - iOS/Gateway: stabilize background wake and reconnect behavior with background reconnect suppression/lease windows, BGAppRefresh wake fallback, location wake hook throttling, and APNs wake retry+nudge instrumentation. (#21226) thanks @mbelinky.
+- Auto-reply/UI: add model fallback lifecycle visibility in verbose logs, /status active-model context with fallback reason, and cohesive WebUI fallback indicators. Thanks @joshavant.
 
 ### Fixes
 
@@ -27,7 +28,6 @@ Docs: https://docs.openclaw.ai
 - Security/Audit: add `gateway.http.no_auth` findings when `gateway.auth.mode="none"` leaves Gateway HTTP APIs reachable, with loopback warning and remote-exposure critical severity, plus regression coverage and docs updates.
 - Skills: harden coding-agent skill guidance by removing shell-command examples that interpolate untrusted issue text directly into command strings.
 - Dev tooling: align `oxfmt` local/CI formatting behavior. (#12579) Thanks @vincentkoc.
-- Auto-reply/UI: add model fallback lifecycle visibility in verbose logs, /status active-model context with fallback reason, and cohesive WebUI fallback indicators. Thanks @joshavant.
 
 ### Fixes
 
