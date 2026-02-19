@@ -256,11 +256,11 @@ export const handleRestartCommand: CommandHandler = async (params, allowTextComm
     );
     return { shouldContinue: false };
   }
-  if (params.cfg.commands?.restart !== true) {
+  if (params.cfg.commands?.restart === false) {
     return {
       shouldContinue: false,
       reply: {
-        text: "⚠️ /restart is disabled. Set commands.restart=true to enable.",
+        text: "⚠️ /restart is disabled (commands.restart=false).",
       },
     };
   }

@@ -12,9 +12,11 @@ type UpdateCheckState = {
   lastCheckedAt?: string;
   lastNotifiedVersion?: string;
   lastNotifiedTag?: string;
+  lastAvailableVersion?: string;
+  lastAvailableTag?: string;
 };
 
-type UpdateAvailable = {
+export type UpdateAvailable = {
   currentVersion: string;
   latestVersion: string;
   channel: string;
@@ -24,6 +26,45 @@ let updateAvailableCache: UpdateAvailable | null = null;
 
 export function getUpdateAvailable(): UpdateAvailable | null {
   return updateAvailableCache;
+}
+
+function sameUpdateAvailable(a: UpdateAvailable | null, b: UpdateAvailable | null): boolean {
+  if (a === b) {
+    return true;
+  }
+  if (!a || !b) {
+    return false;
+  }
+  return (
+    a.currentVersion === b.currentVersion &&
+    a.latestVersion === b.latestVersion &&
+    a.channel === b.channel
+  );
+}
+
+function setUpdateAvailableCache(next: UpdateAvailable | null): boolean {
+  if (sameUpdateAvailable(updateAvailableCache, next)) {
+    return false;
+  }
+  updateAvailableCache = next;
+  return true;
+}
+
+function resolvePersistedUpdateAvailable(state: UpdateCheckState): UpdateAvailable | null {
+  const latestVersion = state.lastAvailableVersion?.trim();
+  const channel = state.lastAvailableTag?.trim();
+  if (!latestVersion || !channel) {
+    return null;
+  }
+  const cmp = compareSemverStrings(VERSION, latestVersion);
+  if (cmp != null && cmp < 0) {
+    return {
+      currentVersion: VERSION,
+      latestVersion,
+      channel,
+    };
+  }
+  return null;
 }
 
 const UPDATE_CHECK_FILENAME = "update-check.json";
@@ -59,7 +100,14 @@ export async function runGatewayUpdateCheck(params: {
   log: { info: (msg: string, meta?: Record<string, unknown>) => void };
   isNixMode: boolean;
   allowInTests?: boolean;
+  onUpdateAvailableChange?: (value: UpdateAvailable | null) => void;
 }): Promise<void> {
+  const notifyIfChanged = (changed: boolean) => {
+    if (!changed) {
+      return;
+    }
+    params.onUpdateAvailableChange?.(updateAvailableCache);
+  };
   if (shouldSkipCheck(Boolean(params.allowInTests))) {
     return;
   }
@@ -72,6 +120,7 @@ export async function runGatewayUpdateCheck(params: {
 
   const statePath = path.join(resolveStateDir(), UPDATE_CHECK_FILENAME);
   const state = await readState(statePath);
+  notifyIfChanged(setUpdateAvailableCache(resolvePersistedUpdateAvailable(state)));
   const now = Date.now();
   const lastCheckedAt = state.lastCheckedAt ? Date.parse(state.lastCheckedAt) : null;
   if (lastCheckedAt && Number.isFinite(lastCheckedAt)) {
@@ -98,6 +147,9 @@ export async function runGatewayUpdateCheck(params: {
   };
 
   if (status.installKind !== "package") {
+    delete nextState.lastAvailableVersion;
+    delete nextState.lastAvailableTag;
+    notifyIfChanged(setUpdateAvailableCache(null));
     await writeState(statePath, nextState);
     return;
   }
@@ -112,11 +164,15 @@ export async function runGatewayUpdateCheck(params: {
 
   const cmp = compareSemverStrings(VERSION, resolved.version);
   if (cmp != null && cmp < 0) {
-    updateAvailableCache = {
-      currentVersion: VERSION,
-      latestVersion: resolved.version,
-      channel: tag,
-    };
+    notifyIfChanged(
+      setUpdateAvailableCache({
+        currentVersion: VERSION,
+        latestVersion: resolved.version,
+        channel: tag,
+      }),
+    );
+    nextState.lastAvailableVersion = resolved.version;
+    nextState.lastAvailableTag = tag;
     const shouldNotify =
       state.lastNotifiedVersion !== resolved.version || state.lastNotifiedTag !== tag;
     if (shouldNotify) {
@@ -126,15 +182,24 @@ export async function runGatewayUpdateCheck(params: {
       nextState.lastNotifiedVersion = resolved.version;
       nextState.lastNotifiedTag = tag;
     }
+  } else {
+    delete nextState.lastAvailableVersion;
+    delete nextState.lastAvailableTag;
+    notifyIfChanged(setUpdateAvailableCache(null));
   }
 
   await writeState(statePath, nextState);
+}
+
+export function resetUpdateAvailableStateForTest(): void {
+  updateAvailableCache = null;
 }
 
 export function scheduleGatewayUpdateCheck(params: {
   cfg: ReturnType<typeof loadConfig>;
   log: { info: (msg: string, meta?: Record<string, unknown>) => void };
   isNixMode: boolean;
+  onUpdateAvailableChange?: (value: UpdateAvailable | null) => void;
 }): void {
   void runGatewayUpdateCheck(params).catch(() => {});
 }

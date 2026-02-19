@@ -49,6 +49,8 @@ describe("update-startup", () => {
   let checkUpdateStatus: (typeof import("./update-check.js"))["checkUpdateStatus"];
   let resolveNpmChannelTag: (typeof import("./update-check.js"))["resolveNpmChannelTag"];
   let runGatewayUpdateCheck: (typeof import("./update-startup.js"))["runGatewayUpdateCheck"];
+  let getUpdateAvailable: (typeof import("./update-startup.js"))["getUpdateAvailable"];
+  let resetUpdateAvailableStateForTest: (typeof import("./update-startup.js"))["resetUpdateAvailableStateForTest"];
   let loaded = false;
 
   beforeAll(async () => {
@@ -77,13 +79,21 @@ describe("update-startup", () => {
     if (!loaded) {
       ({ resolveOpenClawPackageRoot } = await import("./openclaw-root.js"));
       ({ checkUpdateStatus, resolveNpmChannelTag } = await import("./update-check.js"));
-      ({ runGatewayUpdateCheck } = await import("./update-startup.js"));
+      ({ runGatewayUpdateCheck, getUpdateAvailable, resetUpdateAvailableStateForTest } =
+        await import("./update-startup.js"));
       loaded = true;
     }
+    vi.mocked(resolveOpenClawPackageRoot).mockReset();
+    vi.mocked(checkUpdateStatus).mockReset();
+    vi.mocked(resolveNpmChannelTag).mockReset();
+    resetUpdateAvailableStateForTest();
   });
 
   afterEach(async () => {
     vi.useRealTimers();
+    if (loaded) {
+      resetUpdateAvailableStateForTest();
+    }
     if (hadStateDir) {
       process.env.OPENCLAW_STATE_DIR = prevStateDir;
     } else {
@@ -167,5 +177,81 @@ describe("update-startup", () => {
 
     expect(log.info).not.toHaveBeenCalled();
     await expect(fs.stat(path.join(tempDir, "update-check.json"))).rejects.toThrow();
+  });
+
+  it("hydrates persisted update availability when throttle skips a fresh check", async () => {
+    const statePath = path.join(tempDir, "update-check.json");
+    await fs.writeFile(
+      statePath,
+      JSON.stringify({
+        lastCheckedAt: "2026-01-17T09:55:00Z",
+        lastAvailableVersion: "2.0.0",
+        lastAvailableTag: "latest",
+      }),
+      "utf-8",
+    );
+
+    const log = { info: vi.fn() };
+    const onUpdateAvailableChange = vi.fn();
+    await runGatewayUpdateCheck({
+      cfg: { update: { channel: "stable" } },
+      log,
+      isNixMode: false,
+      allowInTests: true,
+      onUpdateAvailableChange,
+    });
+
+    expect(checkUpdateStatus).not.toHaveBeenCalled();
+    expect(getUpdateAvailable()).toEqual({
+      currentVersion: "1.0.0",
+      latestVersion: "2.0.0",
+      channel: "latest",
+    });
+    expect(onUpdateAvailableChange).toHaveBeenCalledWith({
+      currentVersion: "1.0.0",
+      latestVersion: "2.0.0",
+      channel: "latest",
+    });
+  });
+
+  it("clears cached update availability when current version is up to date", async () => {
+    vi.mocked(resolveOpenClawPackageRoot).mockResolvedValue("/opt/openclaw");
+    vi.mocked(checkUpdateStatus).mockResolvedValue({
+      root: "/opt/openclaw",
+      installKind: "package",
+      packageManager: "npm",
+    } satisfies UpdateCheckResult);
+    vi.mocked(resolveNpmChannelTag).mockResolvedValue({
+      tag: "latest",
+      version: "1.0.0",
+    });
+
+    const statePath = path.join(tempDir, "update-check.json");
+    await fs.writeFile(
+      statePath,
+      JSON.stringify({
+        lastAvailableVersion: "2.0.0",
+        lastAvailableTag: "latest",
+      }),
+      "utf-8",
+    );
+
+    const onUpdateAvailableChange = vi.fn();
+    await runGatewayUpdateCheck({
+      cfg: { update: { channel: "stable" } },
+      log: { info: vi.fn() },
+      isNixMode: false,
+      allowInTests: true,
+      onUpdateAvailableChange,
+    });
+
+    expect(getUpdateAvailable()).toBeNull();
+    expect(onUpdateAvailableChange).toHaveBeenLastCalledWith(null);
+    const parsed = JSON.parse(await fs.readFile(statePath, "utf-8")) as {
+      lastAvailableVersion?: string;
+      lastAvailableTag?: string;
+    };
+    expect(parsed.lastAvailableVersion).toBeUndefined();
+    expect(parsed.lastAvailableTag).toBeUndefined();
   });
 });

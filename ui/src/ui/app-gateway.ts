@@ -57,6 +57,12 @@ type GatewayHost = {
   updateAvailable: { currentVersion: string; latestVersion: string; channel: string } | null;
 };
 
+type UpdateAvailableSnapshot = {
+  currentVersion: string;
+  latestVersion: string;
+  channel: string;
+};
+
 type SessionDefaultsSnapshot = {
   defaultAgentId?: string;
   mainKey?: string;
@@ -244,6 +250,12 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     return;
   }
 
+  if (evt.event === "update.available") {
+    const payload = evt.payload as { updateAvailable?: UpdateAvailableSnapshot | null } | undefined;
+    host.updateAvailable = payload?.updateAvailable ?? null;
+    return;
+  }
+
   if (evt.event === "cron" && host.tab === "cron") {
     void loadCron(host as unknown as Parameters<typeof loadCron>[0]);
   }
@@ -279,7 +291,7 @@ export function applySnapshot(host: GatewayHost, hello: GatewayHelloOk) {
         presence?: PresenceEntry[];
         health?: HealthSnapshot;
         sessionDefaults?: SessionDefaultsSnapshot;
-        updateAvailable?: { currentVersion: string; latestVersion: string; channel: string };
+        updateAvailable?: UpdateAvailableSnapshot;
       }
     | undefined;
   if (snapshot?.presence && Array.isArray(snapshot.presence)) {
