@@ -578,6 +578,7 @@ describe("runReplyAgent typing (heartbeat)", () => {
   });
 
   it("does not announce model fallback when verbose is off", async () => {
+    const { onAgentEvent } = await import("../../infra/agent-events.js");
     state.runEmbeddedPiAgentMock.mockResolvedValueOnce({ payloads: [{ text: "final" }], meta: {} });
     const modelFallback = await import("../../agents/model-fallback.js");
     vi.spyOn(modelFallback, "runWithModelFallback").mockImplementationOnce(
@@ -599,9 +600,18 @@ describe("runReplyAgent typing (heartbeat)", () => {
     const { run } = createMinimalRun({
       resolvedVerboseLevel: "off",
     });
+    const phases: string[] = [];
+    const off = onAgentEvent((evt) => {
+      const phase = typeof evt.data?.phase === "string" ? evt.data.phase : null;
+      if (evt.stream === "lifecycle" && phase) {
+        phases.push(phase);
+      }
+    });
     const res = await run();
+    off();
     const payload = Array.isArray(res) ? (res[0] as { text?: string }) : (res as { text?: string });
     expect(payload.text).not.toContain("Model Fallback:");
+    expect(phases.filter((phase) => phase === "fallback")).toHaveLength(1);
   });
 
   it("announces model fallback only once per active fallback state", async () => {
@@ -807,6 +817,85 @@ describe("runReplyAgent typing (heartbeat)", () => {
       expect(firstText).toContain("Model Fallback:");
       expect(secondText).toContain("Model Fallback cleared:");
       expect(thirdText).not.toContain("Model Fallback cleared:");
+      expect(phases.filter((phase) => phase === "fallback")).toHaveLength(1);
+      expect(phases.filter((phase) => phase === "fallback_cleared")).toHaveLength(1);
+    } finally {
+      fallbackSpy.mockRestore();
+    }
+  });
+
+  it("emits fallback lifecycle events while verbose is off", async () => {
+    const { onAgentEvent } = await import("../../infra/agent-events.js");
+    const sessionEntry: SessionEntry = {
+      sessionId: "session",
+      updatedAt: Date.now(),
+    };
+    const sessionStore = { main: sessionEntry };
+    let callCount = 0;
+
+    state.runEmbeddedPiAgentMock.mockResolvedValue({
+      payloads: [{ text: "final" }],
+      meta: {},
+    });
+    const modelFallback = await import("../../agents/model-fallback.js");
+    const fallbackSpy = vi
+      .spyOn(modelFallback, "runWithModelFallback")
+      .mockImplementation(
+        async ({
+          provider,
+          model,
+          run,
+        }: {
+          provider: string;
+          model: string;
+          run: (provider: string, model: string) => Promise<unknown>;
+        }) => {
+          callCount += 1;
+          if (callCount === 1) {
+            return {
+              result: await run("deepinfra", "moonshotai/Kimi-K2.5"),
+              provider: "deepinfra",
+              model: "moonshotai/Kimi-K2.5",
+              attempts: [
+                {
+                  provider: "fireworks",
+                  model: "fireworks/minimax-m2p5",
+                  error: "Provider fireworks is in cooldown (all profiles unavailable)",
+                  reason: "rate_limit",
+                },
+              ],
+            };
+          }
+          return {
+            result: await run(provider, model),
+            provider,
+            model,
+            attempts: [],
+          };
+        },
+      );
+    try {
+      const { run } = createMinimalRun({
+        resolvedVerboseLevel: "off",
+        sessionEntry,
+        sessionStore,
+        sessionKey: "main",
+      });
+      const phases: string[] = [];
+      const off = onAgentEvent((evt) => {
+        const phase = typeof evt.data?.phase === "string" ? evt.data.phase : null;
+        if (evt.stream === "lifecycle" && phase) {
+          phases.push(phase);
+        }
+      });
+      const first = await run();
+      const second = await run();
+      off();
+
+      const firstText = Array.isArray(first) ? first[0]?.text : first?.text;
+      const secondText = Array.isArray(second) ? second[0]?.text : second?.text;
+      expect(firstText).not.toContain("Model Fallback:");
+      expect(secondText).not.toContain("Model Fallback cleared:");
       expect(phases.filter((phase) => phase === "fallback")).toHaveLength(1);
       expect(phases.filter((phase) => phase === "fallback_cleared")).toHaveLength(1);
     } finally {

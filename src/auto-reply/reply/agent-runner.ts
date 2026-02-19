@@ -606,7 +606,7 @@ export async function runReplyAgent(params: {
       verboseNotices.push({ text: `🧭 New session: ${followupRun.run.sessionId}` });
     }
 
-    if (verboseEnabled && fallbackTransition.fallbackTransitioned) {
+    if (fallbackTransition.fallbackTransitioned) {
       emitAgentEvent({
         runId,
         sessionKey,
@@ -622,18 +622,20 @@ export async function runReplyAgent(params: {
           attempts: fallbackAttempts,
         },
       });
-      const fallbackNotice = buildFallbackNotice({
-        selectedProvider,
-        selectedModel,
-        activeProvider: providerUsed,
-        activeModel: modelUsed,
-        attempts: fallbackAttempts,
-      });
-      if (fallbackNotice) {
-        verboseNotices.push({ text: fallbackNotice });
+      if (verboseEnabled) {
+        const fallbackNotice = buildFallbackNotice({
+          selectedProvider,
+          selectedModel,
+          activeProvider: providerUsed,
+          activeModel: modelUsed,
+          attempts: fallbackAttempts,
+        });
+        if (fallbackNotice) {
+          verboseNotices.push({ text: fallbackNotice });
+        }
       }
     }
-    if (verboseEnabled && fallbackTransition.fallbackCleared) {
+    if (fallbackTransition.fallbackCleared) {
       emitAgentEvent({
         runId,
         sessionKey,
@@ -647,13 +649,15 @@ export async function runReplyAgent(params: {
           previousActiveModel: fallbackTransition.previousState.activeModel,
         },
       });
-      verboseNotices.push({
-        text: buildFallbackClearedNotice({
-          selectedProvider,
-          selectedModel,
-          previousActiveModel: fallbackTransition.previousState.activeModel,
-        }),
-      });
+      if (verboseEnabled) {
+        verboseNotices.push({
+          text: buildFallbackClearedNotice({
+            selectedProvider,
+            selectedModel,
+            previousActiveModel: fallbackTransition.previousState.activeModel,
+          }),
+        });
+      }
     }
 
     if (autoCompactionCompleted) {
