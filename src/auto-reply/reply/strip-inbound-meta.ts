@@ -85,5 +85,5 @@ export function stripInboundMetadata(text: string): string {
     result.push(line);
   }
 
-  return result.join("\n").trimStart();
+  return result.join("\n").replace(/^\n+/, "");
 }

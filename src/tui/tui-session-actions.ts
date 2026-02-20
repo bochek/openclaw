@@ -1,4 +1,5 @@
 import type { TUI } from "@mariozechner/pi-tui";
+import { stripInboundMetadata } from "../auto-reply/reply/strip-inbound-meta.js";
 import type { SessionsPatchResult } from "../gateway/protocol/index.js";
 import {
   normalizeAgentId,
@@ -8,7 +9,6 @@ import {
 import type { ChatLog } from "./components/chat-log.js";
 import type { GatewayAgentsList, GatewayChatClient } from "./gateway-chat.js";
 import { asString, extractTextFromMessage, isCommandMessage } from "./tui-formatters.js";
-import { stripInboundMetadata } from "../auto-reply/reply/strip-inbound-meta.js";
 import type { TuiOptions, TuiStateAccess } from "./tui-types.js";
 
 type SessionActionContext = {

@@ -77,4 +77,9 @@ describe("stripInboundMetadata", () => {
     const input = `${CONV_BLOCK}\n\nActual message`;
     expect(stripInboundMetadata(input)).toBe("Actual message");
   });
+
+  it("preserves leading spaces in user content after stripping", () => {
+    const input = `${CONV_BLOCK}\n\n  Indented message`;
+    expect(stripInboundMetadata(input)).toBe("  Indented message");
+  });
 });
