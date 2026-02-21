@@ -167,12 +167,7 @@ async function completeSubagentRun(params: {
       entry,
       reason: params.reason,
     });
-  const shouldDeferEndedHook =
-    shouldEmitEndedHook &&
-    params.triggerCleanup &&
-    entry.expectsCompletionMessage === true &&
-    !suppressedForSteerRestart;
-  if (!shouldDeferEndedHook && shouldEmitEndedHook) {
+  if (shouldEmitEndedHook) {
     await emitSubagentEndedHookForRun({
       entry,
       reason: params.reason,
@@ -210,7 +205,6 @@ function startSubagentAnnounceCleanupFlow(runId: string, entry: SubagentRunRecor
     label: entry.label,
     outcome: entry.outcome,
     spawnMode: entry.spawnMode,
-    expectsCompletionMessage: entry.expectsCompletionMessage,
   }).then((didAnnounce) => {
     void finalizeSubagentCleanup(runId, entry.cleanup, didAnnounce);
   });
@@ -245,11 +239,7 @@ function resumeSubagentRun(runId: string) {
   const now = Date.now();
   const delayMs = resolveAnnounceRetryDelayMs(entry.announceRetryCount ?? 0);
   const earliestRetryAt = (entry.lastAnnounceRetryAt ?? 0) + delayMs;
-  if (
-    entry.expectsCompletionMessage === true &&
-    entry.lastAnnounceRetryAt &&
-    now < earliestRetryAt
-  ) {
+  if (entry.lastAnnounceRetryAt && now < earliestRetryAt) {
     const waitMs = Math.max(1, earliestRetryAt - now);
     setTimeout(() => {
       resumeSubagentRun(runId);
@@ -493,7 +483,6 @@ async function emitCompletionEndedHookIfNeeded(
   reason: SubagentLifecycleEndedReason,
 ) {
   if (
-    entry.expectsCompletionMessage === true &&
     shouldEmitEndedHookForRun({
       entry,
       reason,
@@ -679,8 +668,8 @@ export function registerSubagentRun(params: {
   label?: string;
   model?: string;
   runTimeoutSeconds?: number;
-  expectsCompletionMessage?: boolean;
   spawnMode?: "run" | "session";
+  [key: string]: unknown;
 }) {
   const now = Date.now();
   const cfg = loadConfig();
@@ -699,7 +688,6 @@ export function registerSubagentRun(params: {
     requesterDisplayKey: params.requesterDisplayKey,
     task: params.task,
     cleanup: params.cleanup,
-    expectsCompletionMessage: params.expectsCompletionMessage,
     spawnMode,
     label: params.label,
     model: params.model,
