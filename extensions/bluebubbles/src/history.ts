@@ -134,16 +134,3 @@ export async function fetchBlueBubblesHistory(
   // If none of the API paths worked, return empty history
   return [];
 }
-
-/**
- * Build inbound history array for finalizeInboundContext from history entries.
- */
-export function buildInboundHistoryFromEntries(
-  entries: BlueBubblesHistoryEntry[],
-): Array<{ sender: string; body: string; timestamp?: number }> {
-  return entries.map((entry) => ({
-    sender: entry.sender,
-    body: entry.body,
-    timestamp: entry.timestamp,
-  }));
-}
