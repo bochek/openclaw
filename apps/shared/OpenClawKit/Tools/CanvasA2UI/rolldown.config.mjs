@@ -1,4 +1,5 @@
 import path from "node:path";
+import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "rolldown";
 
@@ -17,6 +18,26 @@ const outputFile = path.resolve(
 
 const a2uiLitDist = path.resolve(repoRoot, "vendor/a2ui/renderers/lit/dist/src");
 const a2uiThemeContext = path.resolve(a2uiLitDist, "0.8/ui/context/theme.js");
+const uiNodeModules = path.resolve(uiRoot, "node_modules");
+const repoNodeModules = path.resolve(repoRoot, "node_modules");
+
+function resolveUiDependency(moduleId) {
+  const candidates = [
+    path.resolve(uiNodeModules, moduleId),
+    path.resolve(repoNodeModules, moduleId),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  const fallbackCandidates = candidates.join(", ");
+  throw new Error(
+    `A2UI bundle config cannot resolve ${moduleId}. Checked: ${fallbackCandidates}. ` +
+      "Keep dependency installed in ui workspace or repo root before bundling.",
+  );
+}
 
 export default defineConfig({
   input: fromHere("bootstrap.js"),
@@ -29,12 +50,13 @@ export default defineConfig({
       "@a2ui/lit": path.resolve(a2uiLitDist, "index.js"),
       "@a2ui/lit/ui": path.resolve(a2uiLitDist, "0.8/ui/ui.js"),
       "@openclaw/a2ui-theme-context": a2uiThemeContext,
-      "@lit/context": path.resolve(uiRoot, "node_modules/@lit/context/index.js"),
-      "@lit/context/": path.resolve(uiRoot, "node_modules/@lit/context/"),
-      "@lit-labs/signals": path.resolve(uiRoot, "node_modules/@lit-labs/signals/index.js"),
-      "@lit-labs/signals/": path.resolve(uiRoot, "node_modules/@lit-labs/signals/"),
-      lit: path.resolve(uiRoot, "node_modules/lit/index.js"),
-      "lit/": path.resolve(uiRoot, "node_modules/lit/"),
+      "@lit/context": resolveUiDependency("@lit/context"),
+      "@lit/context/": resolveUiDependency("@lit/context/"),
+      "@lit-labs/signals": resolveUiDependency("@lit-labs/signals"),
+      "@lit-labs/signals/": resolveUiDependency("@lit-labs/signals/"),
+      lit: resolveUiDependency("lit"),
+      "lit/": resolveUiDependency("lit/"),
+      "signal-utils": resolveUiDependency("signal-utils"),
     },
   },
   output: {
