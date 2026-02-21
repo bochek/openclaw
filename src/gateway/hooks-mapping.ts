@@ -80,6 +80,8 @@ const hookPresetMappings: Record<string, HookMappingConfig[]> = {
 
 const transformCache = new Map<string, HookTransformFn>();
 
+const BLOCKED_PATH_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+
 type HookTransformResult = Partial<{
   kind: HookAction["kind"];
   text: string;
@@ -464,6 +466,9 @@ function getByPath(input: Record<string, unknown>, pathExpr: string): unknown {
       }
       current = current[part] as unknown;
       continue;
+    }
+    if (BLOCKED_PATH_KEYS.has(part)) {
+      return undefined;
     }
     if (typeof current !== "object") {
       return undefined;
