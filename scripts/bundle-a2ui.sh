@@ -4,16 +4,13 @@ set -euo pipefail
 on_error() {
   echo "A2UI bundling failed. Re-run with: pnpm canvas:a2ui:bundle" >&2
   echo "If this persists, verify pnpm deps and try again." >&2
-  rm -f "$A2UI_VENDOR_NODE_MODULES"
 }
 trap on_error ERR
-trap 'rm -f "$A2UI_VENDOR_NODE_MODULES"' EXIT
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 HASH_FILE="$ROOT_DIR/src/canvas-host/a2ui/.bundle.hash"
 OUTPUT_FILE="$ROOT_DIR/src/canvas-host/a2ui/a2ui.bundle.js"
 A2UI_RENDERER_DIR="$ROOT_DIR/vendor/a2ui/renderers/lit"
-A2UI_VENDOR_NODE_MODULES="$A2UI_RENDERER_DIR/node_modules"
 A2UI_APP_DIR="$ROOT_DIR/apps/shared/OpenClawKit/Tools/CanvasA2UI"
 
 # Docker builds exclude vendor/apps via .dockerignore.
@@ -26,12 +23,6 @@ if [[ ! -d "$A2UI_RENDERER_DIR" || ! -d "$A2UI_APP_DIR" ]]; then
   echo "A2UI sources missing and no prebuilt bundle found at: $OUTPUT_FILE" >&2
   exit 1
 fi
-
-mkdir -p "$A2UI_RENDERER_DIR"
-if [[ -L "$A2UI_VENDOR_NODE_MODULES" || -e "$A2UI_VENDOR_NODE_MODULES" ]]; then
-  rm -rf "$A2UI_VENDOR_NODE_MODULES"
-fi
-ln -s "$ROOT_DIR/ui/node_modules" "$A2UI_VENDOR_NODE_MODULES"
 
 INPUT_PATHS=(
   "$ROOT_DIR/package.json"
