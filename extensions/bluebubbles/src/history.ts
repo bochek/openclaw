@@ -9,6 +9,15 @@ export type BlueBubblesHistoryEntry = {
   messageId?: string;
 };
 
+export type BlueBubblesHistoryFetchResult = {
+  entries: BlueBubblesHistoryEntry[];
+  /**
+   * True when at least one API path returned a recognized response shape.
+   * False means all attempts failed or returned unusable data.
+   */
+  resolved: boolean;
+};
+
 export type BlueBubblesMessageData = {
   guid?: string;
   text?: string;
@@ -43,9 +52,9 @@ export async function fetchBlueBubblesHistory(
   chatIdentifier: string,
   limit: number,
   opts: BlueBubblesChatOpts = {},
-): Promise<BlueBubblesHistoryEntry[]> {
+): Promise<BlueBubblesHistoryFetchResult> {
   if (!chatIdentifier.trim() || limit <= 0) {
-    return [];
+    return { entries: [], resolved: true };
   }
 
   let baseUrl: string;
@@ -53,7 +62,7 @@ export async function fetchBlueBubblesHistory(
   try {
     ({ baseUrl, password } = resolveAccount(opts));
   } catch {
-    return [];
+    return { entries: [], resolved: false };
   }
 
   // Try different common API patterns for fetching messages
@@ -124,7 +133,10 @@ export async function fetchBlueBubblesHistory(
         return aTime - bTime;
       });
 
-      return historyEntries.slice(0, limit); // Ensure we don't exceed the requested limit
+      return {
+        entries: historyEntries.slice(0, limit), // Ensure we don't exceed the requested limit
+        resolved: true,
+      };
     } catch (error) {
       // Continue to next path
       continue;
@@ -132,5 +144,5 @@ export async function fetchBlueBubblesHistory(
   }
 
   // If none of the API paths worked, return empty history
-  return [];
+  return { entries: [], resolved: false };
 }

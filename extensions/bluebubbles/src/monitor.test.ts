@@ -4,6 +4,7 @@ import type { OpenClawConfig, PluginRuntime } from "openclaw/plugin-sdk";
 import { removeAckReactionAfterReply, shouldAckReaction } from "openclaw/plugin-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResolvedBlueBubblesAccount } from "./accounts.js";
+import { fetchBlueBubblesHistory } from "./history.js";
 import {
   handleBlueBubblesWebhookRequest,
   registerBlueBubblesWebhookTarget,
@@ -37,6 +38,10 @@ vi.mock("./reactions.js", async () => {
     sendBlueBubblesReaction: vi.fn().mockResolvedValue(undefined),
   };
 });
+
+vi.mock("./history.js", () => ({
+  fetchBlueBubblesHistory: vi.fn().mockResolvedValue({ entries: [], resolved: true }),
+}));
 
 // Mock runtime
 const mockEnqueueSystemEvent = vi.fn();
@@ -86,6 +91,7 @@ const mockChunkByNewline = vi.fn((text: string) => (text ? [text] : []));
 const mockChunkTextWithMode = vi.fn((text: string) => (text ? [text] : []));
 const mockChunkMarkdownTextWithMode = vi.fn((text: string) => (text ? [text] : []));
 const mockResolveChunkMode = vi.fn(() => "length");
+const mockFetchBlueBubblesHistory = vi.mocked(fetchBlueBubblesHistory);
 
 function createMockRuntime(): PluginRuntime {
   return {
@@ -355,6 +361,7 @@ describe("BlueBubbles webhook monitor", () => {
     vi.clearAllMocks();
     // Reset short ID state between tests for predictable behavior
     _resetBlueBubblesShortIdState();
+    mockFetchBlueBubblesHistory.mockResolvedValue({ entries: [], resolved: true });
     mockReadAllowFromStore.mockResolvedValue([]);
     mockUpsertPairingRequest.mockResolvedValue({ code: "TESTCODE", created: true });
     mockResolveRequireMention.mockReturnValue(false);
@@ -2876,6 +2883,213 @@ describe("BlueBubbles webhook monitor", () => {
       expect(() => resolveBlueBubblesMessageId("999", { requireKnownShortId: true })).toThrow(
         /short message id/i,
       );
+    });
+  });
+
+  describe("history backfill", () => {
+    it("scopes in-memory history by account to avoid cross-account leakage", async () => {
+      mockFetchBlueBubblesHistory.mockImplementation(async (_chatIdentifier, _limit, opts) => {
+        if (opts?.accountId === "acc-a") {
+          return {
+            resolved: true,
+            entries: [
+              { sender: "A", body: "a-history", messageId: "a-history-1", timestamp: 1000 },
+            ],
+          };
+        }
+        if (opts?.accountId === "acc-b") {
+          return {
+            resolved: true,
+            entries: [
+              { sender: "B", body: "b-history", messageId: "b-history-1", timestamp: 1000 },
+            ],
+          };
+        }
+        return { resolved: true, entries: [] };
+      });
+
+      const accountA: ResolvedBlueBubblesAccount = {
+        ...createMockAccount({ dmHistoryLimit: 3, password: "password-a" }),
+        accountId: "acc-a",
+      };
+      const accountB: ResolvedBlueBubblesAccount = {
+        ...createMockAccount({ dmHistoryLimit: 3, password: "password-b" }),
+        accountId: "acc-b",
+      };
+      const config: OpenClawConfig = {};
+      const core = createMockRuntime();
+      setBlueBubblesRuntime(core);
+
+      const unregisterA = registerBlueBubblesWebhookTarget({
+        account: accountA,
+        config,
+        runtime: { log: vi.fn(), error: vi.fn() },
+        core,
+        path: "/bluebubbles-webhook",
+      });
+      const unregisterB = registerBlueBubblesWebhookTarget({
+        account: accountB,
+        config,
+        runtime: { log: vi.fn(), error: vi.fn() },
+        core,
+        path: "/bluebubbles-webhook",
+      });
+      unregister = () => {
+        unregisterA();
+        unregisterB();
+      };
+
+      await handleBlueBubblesWebhookRequest(
+        createMockRequest("POST", "/bluebubbles-webhook?password=password-a", {
+          type: "new-message",
+          data: {
+            text: "message for account a",
+            handle: { address: "+15551234567" },
+            isGroup: false,
+            isFromMe: false,
+            guid: "a-msg-1",
+            chatGuid: "iMessage;-;+15551234567",
+            date: Date.now(),
+          },
+        }),
+        createMockResponse(),
+      );
+      await flushAsync();
+
+      await handleBlueBubblesWebhookRequest(
+        createMockRequest("POST", "/bluebubbles-webhook?password=password-b", {
+          type: "new-message",
+          data: {
+            text: "message for account b",
+            handle: { address: "+15551234567" },
+            isGroup: false,
+            isFromMe: false,
+            guid: "b-msg-1",
+            chatGuid: "iMessage;-;+15551234567",
+            date: Date.now(),
+          },
+        }),
+        createMockResponse(),
+      );
+      await flushAsync();
+
+      expect(mockDispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalledTimes(2);
+      const firstCall = mockDispatchReplyWithBufferedBlockDispatcher.mock.calls[0]?.[0];
+      const secondCall = mockDispatchReplyWithBufferedBlockDispatcher.mock.calls[1]?.[0];
+      const firstHistory = (firstCall?.ctx.InboundHistory ?? []) as Array<{ body: string }>;
+      const secondHistory = (secondCall?.ctx.InboundHistory ?? []) as Array<{ body: string }>;
+      expect(firstHistory.map((entry) => entry.body)).toContain("a-history");
+      expect(secondHistory.map((entry) => entry.body)).toContain("b-history");
+      expect(secondHistory.map((entry) => entry.body)).not.toContain("a-history");
+    });
+
+    it("dedupes and caps merged history to dmHistoryLimit", async () => {
+      mockFetchBlueBubblesHistory.mockResolvedValueOnce({
+        resolved: true,
+        entries: [
+          { sender: "Friend", body: "older context", messageId: "hist-1", timestamp: 1000 },
+          { sender: "Friend", body: "current text", messageId: "msg-1", timestamp: 2000 },
+        ],
+      });
+
+      const account = createMockAccount({ dmHistoryLimit: 2 });
+      const config: OpenClawConfig = {};
+      const core = createMockRuntime();
+      setBlueBubblesRuntime(core);
+
+      unregister = registerBlueBubblesWebhookTarget({
+        account,
+        config,
+        runtime: { log: vi.fn(), error: vi.fn() },
+        core,
+        path: "/bluebubbles-webhook",
+      });
+
+      const req = createMockRequest("POST", "/bluebubbles-webhook", {
+        type: "new-message",
+        data: {
+          text: "current text",
+          handle: { address: "+15551234567" },
+          isGroup: false,
+          isFromMe: false,
+          guid: "msg-1",
+          chatGuid: "iMessage;-;+15550002002",
+          date: Date.now(),
+        },
+      });
+      const res = createMockResponse();
+
+      await handleBlueBubblesWebhookRequest(req, res);
+      await flushAsync();
+
+      const callArgs = getFirstDispatchCall();
+      const inboundHistory = (callArgs.ctx.InboundHistory ?? []) as Array<{ body: string }>;
+      expect(inboundHistory).toHaveLength(2);
+      expect(inboundHistory.map((entry) => entry.body)).toEqual(["older context", "current text"]);
+      expect(inboundHistory.filter((entry) => entry.body === "current text")).toHaveLength(1);
+    });
+
+    it("retries unresolved backfill and stops retrying after a resolved fetch", async () => {
+      mockFetchBlueBubblesHistory
+        .mockResolvedValueOnce({ resolved: false, entries: [] })
+        .mockResolvedValueOnce({
+          resolved: true,
+          entries: [
+            { sender: "Friend", body: "older context", messageId: "hist-1", timestamp: 1000 },
+          ],
+        });
+
+      const account = createMockAccount({ dmHistoryLimit: 3 });
+      const config: OpenClawConfig = {};
+      const core = createMockRuntime();
+      setBlueBubblesRuntime(core);
+
+      unregister = registerBlueBubblesWebhookTarget({
+        account,
+        config,
+        runtime: { log: vi.fn(), error: vi.fn() },
+        core,
+        path: "/bluebubbles-webhook",
+      });
+
+      const mkPayload = (guid: string, text: string) => ({
+        type: "new-message",
+        data: {
+          text,
+          handle: { address: "+15551234567" },
+          isGroup: false,
+          isFromMe: false,
+          guid,
+          chatGuid: "iMessage;-;+15550003003",
+          date: Date.now(),
+        },
+      });
+
+      await handleBlueBubblesWebhookRequest(
+        createMockRequest("POST", "/bluebubbles-webhook", mkPayload("msg-1", "first text")),
+        createMockResponse(),
+      );
+      await flushAsync();
+      expect(mockFetchBlueBubblesHistory).toHaveBeenCalledTimes(1);
+
+      await handleBlueBubblesWebhookRequest(
+        createMockRequest("POST", "/bluebubbles-webhook", mkPayload("msg-2", "second text")),
+        createMockResponse(),
+      );
+      await flushAsync();
+      expect(mockFetchBlueBubblesHistory).toHaveBeenCalledTimes(2);
+
+      const secondCall = mockDispatchReplyWithBufferedBlockDispatcher.mock.calls[1]?.[0];
+      const secondHistory = (secondCall?.ctx.InboundHistory ?? []) as Array<{ body: string }>;
+      expect(secondHistory.map((entry) => entry.body)).toContain("older context");
+      expect(secondHistory.map((entry) => entry.body)).toContain("second text");
+
+      await handleBlueBubblesWebhookRequest(
+        createMockRequest("POST", "/bluebubbles-webhook", mkPayload("msg-3", "third text")),
+        createMockResponse(),
+      );
+      await flushAsync();
+      expect(mockFetchBlueBubblesHistory).toHaveBeenCalledTimes(2);
     });
   });
 

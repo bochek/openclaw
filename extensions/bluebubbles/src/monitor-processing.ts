@@ -1,6 +1,5 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk";
 import {
-  buildPendingHistoryContextFromMap,
   createReplyPrefixOptions,
   logAckFailure,
   logInboundDrop,
@@ -242,11 +241,72 @@ function resolveBlueBubblesAckReaction(params: {
 }
 
 /**
- * In-memory rolling history map keyed by chat identifier.
- * Populated from incoming messages during the session; API backfill only
- * happens on the first message for a given chat (when the map is empty).
+ * In-memory rolling history map keyed by account + chat identifier.
+ * Populated from incoming messages during the session.
+ * API backfill is attempted until one fetch resolves (or retries are exhausted).
  */
 const chatHistories = new Map<string, HistoryEntry[]>();
+const completedHistoryBackfills = new Set<string>();
+const historyBackfillAttempts = new Map<string, number>();
+const MAX_HISTORY_BACKFILL_ATTEMPTS = 3;
+
+function buildAccountScopedHistoryKey(accountId: string, historyIdentifier: string): string {
+  return `${accountId}\u0000${historyIdentifier}`;
+}
+
+function historyDedupKey(entry: HistoryEntry): string {
+  const messageId = entry.messageId?.trim();
+  if (messageId) {
+    return `id:${messageId}`;
+  }
+  return `fallback:${entry.sender}\u0000${entry.body}\u0000${entry.timestamp ?? ""}`;
+}
+
+function mergeHistoryEntries(params: {
+  apiEntries: HistoryEntry[];
+  currentEntries: HistoryEntry[];
+  limit: number;
+}): HistoryEntry[] {
+  if (params.limit <= 0) {
+    return [];
+  }
+
+  const merged: HistoryEntry[] = [];
+  const seen = new Set<string>();
+  const appendUnique = (entry: HistoryEntry) => {
+    const key = historyDedupKey(entry);
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    merged.push(entry);
+  };
+
+  for (const entry of params.apiEntries) {
+    appendUnique(entry);
+  }
+  for (const entry of params.currentEntries) {
+    appendUnique(entry);
+  }
+
+  if (merged.length <= params.limit) {
+    return merged;
+  }
+  return merged.slice(merged.length - params.limit);
+}
+
+function pruneHistoryBackfillState(): void {
+  for (const key of completedHistoryBackfills) {
+    if (!chatHistories.has(key)) {
+      completedHistoryBackfills.delete(key);
+    }
+  }
+  for (const key of historyBackfillAttempts.keys()) {
+    if (!chatHistories.has(key)) {
+      historyBackfillAttempts.delete(key);
+    }
+  }
+}
 
 export async function processMessage(
   message: NormalizedWebhookMessage,
@@ -824,22 +884,25 @@ export async function processMessage(
       .trim();
   };
 
-  // History: in-memory rolling map with API backfill on first message per chat
+  // History: in-memory rolling map with bounded API backfill retries
   const historyLimit = isGroup
     ? (account.config.historyLimit ?? 0)
     : (account.config.dmHistoryLimit ?? 0);
 
-  const historyKey =
+  const historyIdentifier =
     chatGuid ||
     chatIdentifier ||
     (chatId ? String(chatId) : null) ||
     (isGroup ? null : message.senderId) ||
     "";
+  const historyKey = historyIdentifier
+    ? buildAccountScopedHistoryKey(account.accountId, historyIdentifier)
+    : "";
 
   // Record the current message into rolling history
   if (historyKey && historyLimit > 0) {
     const senderLabel = message.fromMe ? "me" : message.senderName || message.senderId;
-    recordPendingHistoryEntryIfEnabled({
+    const currentEntries = recordPendingHistoryEntryIfEnabled({
       historyMap: chatHistories,
       limit: historyLimit,
       historyKey,
@@ -847,37 +910,61 @@ export async function processMessage(
         ? {
             sender: senderLabel,
             body: text,
-            timestamp: Date.now(),
+            timestamp: message.timestamp ?? Date.now(),
             messageId: message.messageId ?? undefined,
           }
         : null,
     });
+    pruneHistoryBackfillState();
 
-    // API backfill only on first message (when history map was empty before recording)
-    const existing = chatHistories.get(historyKey);
-    if (existing && existing.length <= 1) {
+    const attempts = historyBackfillAttempts.get(historyKey) ?? 0;
+    const shouldTryBackfill =
+      !completedHistoryBackfills.has(historyKey) && attempts < MAX_HISTORY_BACKFILL_ATTEMPTS;
+    if (shouldTryBackfill) {
+      historyBackfillAttempts.set(historyKey, attempts + 1);
       try {
-        const historyEntries = await fetchBlueBubblesHistory(historyKey, historyLimit, {
+        const backfillResult = await fetchBlueBubblesHistory(historyIdentifier, historyLimit, {
           cfg: config,
           accountId: account.accountId,
         });
-        if (historyEntries.length > 0) {
-          // Prepend API history before the current message
-          const apiEntries: HistoryEntry[] = historyEntries.map((e) => ({
+        if (backfillResult.resolved) {
+          completedHistoryBackfills.add(historyKey);
+          historyBackfillAttempts.delete(historyKey);
+        }
+        if (backfillResult.entries.length > 0) {
+          const apiEntries: HistoryEntry[] = backfillResult.entries.map((e) => ({
             sender: e.sender,
             body: e.body,
             timestamp: e.timestamp,
             messageId: e.messageId,
           }));
-          chatHistories.set(historyKey, [...apiEntries, ...existing]);
+          const merged = mergeHistoryEntries({
+            apiEntries,
+            currentEntries:
+              currentEntries.length > 0 ? currentEntries : (chatHistories.get(historyKey) ?? []),
+            limit: historyLimit,
+          });
+          chatHistories.set(historyKey, merged);
           logVerbose(
             core,
             runtime,
-            `backfilled ${historyEntries.length} history messages for ${isGroup ? "group" : "DM"}: ${historyKey}`,
+            `backfilled ${backfillResult.entries.length} history messages for ${isGroup ? "group" : "DM"}: ${historyIdentifier}`,
+          );
+        } else if (!backfillResult.resolved) {
+          const remainingAttempts = MAX_HISTORY_BACKFILL_ATTEMPTS - (attempts + 1);
+          logVerbose(
+            core,
+            runtime,
+            `history backfill unresolved for ${historyIdentifier}; retries left=${Math.max(remainingAttempts, 0)}`,
           );
         }
       } catch (err) {
-        logVerbose(core, runtime, `history backfill failed for ${historyKey}: ${String(err)}`);
+        const remainingAttempts = MAX_HISTORY_BACKFILL_ATTEMPTS - (attempts + 1);
+        logVerbose(
+          core,
+          runtime,
+          `history backfill failed for ${historyIdentifier}: ${String(err)} (retries left=${Math.max(remainingAttempts, 0)})`,
+        );
       }
     }
   }
