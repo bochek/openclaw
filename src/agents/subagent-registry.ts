@@ -161,8 +161,10 @@ async function completeSubagentRun(params: {
   }
 
   const suppressedForSteerRestart = suppressAnnounceForSteerRestart(entry);
+  const shouldDeferEndedHookUntilCompletion = entry.expectsCompletionMessage === true;
   const shouldEmitEndedHook =
     !suppressedForSteerRestart &&
+    !shouldDeferEndedHookUntilCompletion &&
     shouldEmitEndedHookForRun({
       entry,
       reason: params.reason,
@@ -189,6 +191,18 @@ function startSubagentAnnounceCleanupFlow(runId: string, entry: SubagentRunRecor
   if (!beginSubagentCleanup(runId)) {
     return false;
   }
+
+  // Completion-mode runs should not announce intermediate turns while their
+  // spawned descendants are still active. Defer cleanup/announce until the
+  // full descendant tree settles.
+  if (
+    entry.expectsCompletionMessage === true &&
+    Math.max(0, countActiveDescendantRuns(entry.childSessionKey)) > 0
+  ) {
+    void finalizeSubagentCleanup(runId, entry.cleanup, false);
+    return true;
+  }
+
   const requesterOrigin = normalizeDeliveryContext(entry.requesterOrigin);
   void runSubagentAnnounceFlow({
     childSessionKey: entry.childSessionKey,
@@ -669,6 +683,7 @@ export function registerSubagentRun(params: {
   model?: string;
   runTimeoutSeconds?: number;
   spawnMode?: "run" | "session";
+  expectsCompletionMessage?: boolean;
   [key: string]: unknown;
 }) {
   const now = Date.now();
@@ -692,6 +707,7 @@ export function registerSubagentRun(params: {
     label: params.label,
     model: params.model,
     runTimeoutSeconds,
+    expectsCompletionMessage: params.expectsCompletionMessage === true,
     createdAt: now,
     startedAt: now,
     archiveAtMs,
