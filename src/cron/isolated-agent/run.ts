@@ -155,9 +155,17 @@ export async function runCronIsolatedAgentTurn(params: {
   job: CronJob;
   message: string;
   sessionKey: string;
+  signal?: AbortSignal;
   agentId?: string;
   lane?: string;
 }): Promise<RunCronAgentTurnResult> {
+  const isAborted = () => params.signal?.aborted === true;
+  const abortReason = () => {
+    const reason = params.signal?.reason;
+    return typeof reason === "string" && reason.trim()
+      ? reason.trim()
+      : "cron: job execution timed out";
+  };
   const isFastTestEnv = process.env.OPENCLAW_TEST_FAST === "1";
   const defaultAgentId = resolveDefaultAgentId(params.cfg);
   const requestedAgentId =
@@ -503,6 +511,10 @@ export async function runCronIsolatedAgentTurn(params: {
     return withRunSession({ status: "error", error: String(err) });
   }
 
+  if (isAborted()) {
+    return withRunSession({ status: "error", error: abortReason() });
+  }
+
   const payloads = runResult.payloads ?? [];
 
   // Update token+model fields in the session store.
@@ -555,6 +567,10 @@ export async function runCronIsolatedAgentTurn(params: {
       };
     }
     await persistSessionEntry();
+  }
+
+  if (isAborted()) {
+    return withRunSession({ status: "error", error: abortReason(), ...telemetry });
   }
   const firstText = payloads[0]?.text ?? "";
   let summary = pickSummaryFromPayloads(payloads) ?? pickSummaryFromOutput(firstText);
