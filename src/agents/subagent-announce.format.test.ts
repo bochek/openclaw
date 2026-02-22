@@ -1130,7 +1130,7 @@ describe("subagent announce formatting", () => {
       childRunId: "run-worker-queued",
       requesterSessionKey: "agent:main:subagent:orchestrator",
       requesterDisplayKey: "agent:main:subagent:orchestrator",
-      requesterOrigin: { channel: "whatsapp", to: "+1555", accountId: "acct" },
+      requesterOrigin: { channel: "whatsapp", to: "+1555", accountId: "acct", threadId: "777" },
       ...defaultOutcomeAnnounce,
     });
 
@@ -1142,6 +1142,7 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.deliver).toBe(false);
     expect(call?.params?.channel).toBeUndefined();
     expect(call?.params?.to).toBeUndefined();
+    expect(call?.params?.threadId).toBe("777");
   });
 
   it.each([
@@ -1278,7 +1279,12 @@ describe("subagent announce formatting", () => {
       childSessionKey: "agent:main:subagent:worker",
       childRunId: "run-worker",
       requesterSessionKey: "agent:main:subagent:orchestrator",
-      requesterOrigin: { channel: "whatsapp", accountId: "acct-123", to: "+1555" },
+      requesterOrigin: {
+        channel: "whatsapp",
+        accountId: "acct-123",
+        to: "+1555",
+        threadId: "thread-1",
+      },
       requesterDisplayKey: "agent:main:subagent:orchestrator",
       ...defaultOutcomeAnnounce,
     });
@@ -1289,6 +1295,7 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.deliver).toBe(false);
     expect(call?.params?.channel).toBeUndefined();
     expect(call?.params?.to).toBeUndefined();
+    expect(call?.params?.threadId).toBe("thread-1");
   });
 
   it("keeps completion-mode announce internal for nested requester subagent sessions", async () => {
@@ -1299,7 +1306,12 @@ describe("subagent announce formatting", () => {
       childSessionKey: "agent:main:subagent:orchestrator:subagent:worker",
       childRunId: "run-worker-nested-completion",
       requesterSessionKey: "agent:main:subagent:orchestrator",
-      requesterOrigin: { channel: "whatsapp", accountId: "acct-123", to: "+1555" },
+      requesterOrigin: {
+        channel: "whatsapp",
+        accountId: "acct-123",
+        to: "+1555",
+        threadId: "thread-2",
+      },
       requesterDisplayKey: "agent:main:subagent:orchestrator",
       expectsCompletionMessage: true,
       ...defaultOutcomeAnnounce,
@@ -1312,6 +1324,7 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.deliver).toBe(false);
     expect(call?.params?.channel).toBeUndefined();
     expect(call?.params?.to).toBeUndefined();
+    expect(call?.params?.threadId).toBe("thread-2");
     const message = typeof call?.params?.message === "string" ? call.params.message : "";
     expect(message).toContain(
       "Convert this completion into a concise internal orchestration update for your parent agent",

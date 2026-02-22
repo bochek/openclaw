@@ -490,7 +490,9 @@ async function sendAnnounce(item: AnnounceQueueItem) {
       channel: requesterIsSubagent ? undefined : origin?.channel,
       accountId: requesterIsSubagent ? undefined : origin?.accountId,
       to: requesterIsSubagent ? undefined : origin?.to,
-      threadId: requesterIsSubagent ? undefined : threadId,
+      // Keep thread context on internal nested announce injections so parent
+      // orchestrators can continue thread-aware delivery after processing.
+      threadId,
       deliver: !requesterIsSubagent,
       idempotencyKey,
     },
@@ -713,7 +715,9 @@ async function sendSubagentAnnounceDirectly(params: {
         channel: params.requesterIsSubagent ? undefined : directOrigin?.channel,
         accountId: params.requesterIsSubagent ? undefined : directOrigin?.accountId,
         to: params.requesterIsSubagent ? undefined : directOrigin?.to,
-        threadId: params.requesterIsSubagent ? undefined : threadId,
+        // Preserve root thread context even when we intentionally keep nested
+        // announce delivery internal (`deliver=false`).
+        threadId,
         idempotencyKey: params.directIdempotencyKey,
       },
       expectFinal: true,
