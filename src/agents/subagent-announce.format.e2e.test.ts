@@ -477,7 +477,6 @@ describe("subagent announce formatting", () => {
       requesterDisplayKey: "main",
       requesterOrigin: { channel: "discord", to: "channel:12345", accountId: "acct-1" },
       ...defaultOutcomeAnnounce,
-      spawnMode: "session",
     });
 
     expect(didAnnounce).toBe(true);
@@ -561,7 +560,6 @@ describe("subagent announce formatting", () => {
           accountId: "acct-1",
         },
         ...defaultOutcomeAnnounce,
-        spawnMode: "session",
       }),
       runSubagentAnnounceFlow({
         childSessionKey: "agent:main:subagent:child-b",
@@ -574,7 +572,6 @@ describe("subagent announce formatting", () => {
           accountId: "acct-1",
         },
         ...defaultOutcomeAnnounce,
-        spawnMode: "session",
       }),
     ]);
 
@@ -613,7 +610,6 @@ describe("subagent announce formatting", () => {
       requesterOrigin: { channel: "discord", to: "channel:12345", accountId: "acct-1" },
       ...defaultOutcomeAnnounce,
       outcome: { status: "error", error: "boom" },
-      spawnMode: "session",
     });
 
     expect(didAnnounce).toBe(true);
@@ -757,7 +753,6 @@ describe("subagent announce formatting", () => {
         threadId: "777",
       },
       ...defaultOutcomeAnnounce,
-      spawnMode: "session",
     });
 
     expect(didAnnounce).toBe(true);
@@ -772,7 +767,6 @@ describe("subagent announce formatting", () => {
           threadId: "777",
         },
         childRunId: "run-direct-thread-bound",
-        spawnMode: "session",
       },
       {
         runId: "run-direct-thread-bound",
@@ -813,7 +807,6 @@ describe("subagent announce formatting", () => {
         accountId: "acct-1",
       },
       ...defaultOutcomeAnnounce,
-      spawnMode: "session",
     });
 
     expect(didAnnounce).toBe(true);
@@ -840,7 +833,6 @@ describe("subagent announce formatting", () => {
         accountId: "acct-1",
       },
       ...defaultOutcomeAnnounce,
-      spawnMode: "session",
     });
 
     expect(didAnnounce).toBe(true);
@@ -872,7 +864,6 @@ describe("subagent announce formatting", () => {
         accountId: "acct-1",
       },
       ...defaultOutcomeAnnounce,
-      spawnMode: "session",
     });
 
     expect(didAnnounce).toBe(true);
@@ -907,7 +898,6 @@ describe("subagent announce formatting", () => {
         threadId: "999",
       },
       ...defaultOutcomeAnnounce,
-      spawnMode: "session",
     });
 
     expect(didAnnounce).toBe(true);

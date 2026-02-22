@@ -9,10 +9,7 @@ import {
   resolveStorePath,
 } from "../config/sessions.js";
 import { callGateway } from "../gateway/call.js";
-import { createBoundDeliveryRouter } from "../infra/outbound/bound-delivery-router.js";
-import type { ConversationRef } from "../infra/outbound/session-binding-service.js";
-import { getGlobalHookRunner } from "../plugins/hook-runner-global.js";
-import { normalizeAccountId, normalizeMainKey } from "../routing/session-key.js";
+import { normalizeMainKey } from "../routing/session-key.js";
 import { defaultRuntime } from "../runtime.js";
 import {
   type DeliveryContext,
@@ -20,7 +17,7 @@ import {
   mergeDeliveryContext,
   normalizeDeliveryContext,
 } from "../utils/delivery-context.js";
-import { isDeliverableMessageChannel } from "../utils/message-channel.js";
+import { isInternalMessageChannel } from "../utils/message-channel.js";
 import {
   buildAnnounceIdFromChildRun,
   buildAnnounceIdempotencyKey,
@@ -33,58 +30,7 @@ import {
 } from "./pi-embedded.js";
 import { type AnnounceQueueItem, enqueueAnnounce } from "./subagent-announce-queue.js";
 import { getSubagentDepthFromSessionStore } from "./subagent-depth.js";
-import type { SpawnSubagentMode } from "./subagent-spawn.js";
 import { readLatestAssistantReply } from "./tools/agent-step.js";
-
-async function readLatestAssistantReplyWithRetry(params: {
-  sessionKey: string;
-  initialReply?: string;
-  maxWaitMs: number;
-}): Promise<string | undefined> {
-  const RETRY_INTERVAL_MS = 100;
-  let reply = params.initialReply?.trim() ? params.initialReply : undefined;
-  if (reply) {
-    return reply;
-  }
-
-  const deadline = Date.now() + Math.max(0, Math.min(params.maxWaitMs, 15_000));
-  while (Date.now() < deadline) {
-    await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
-    const latest = await readLatestAssistantReply({ sessionKey: params.sessionKey });
-    if (latest?.trim()) {
-      return latest;
-    }
-  }
-  return reply;
-}
-
-async function waitForSubagentOutputChange(params: {
-  sessionKey: string;
-  baselineReply: string;
-  maxWaitMs: number;
-}): Promise<string> {
-  const baseline = params.baselineReply.trim();
-  if (!baseline) {
-    return params.baselineReply;
-  }
-  const RETRY_INTERVAL_MS = 100;
-  const deadline = Date.now() + Math.max(0, Math.min(params.maxWaitMs, 5_000));
-  let latest = params.baselineReply;
-  while (Date.now() < deadline) {
-    const next = await readLatestAssistantReply({
-      sessionKey: params.sessionKey,
-      limit: 50,
-    });
-    if (next?.trim()) {
-      latest = next;
-      if (next.trim() !== baseline) {
-        return next;
-      }
-    }
-    await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
-  }
-  return latest;
-}
 
 function formatDurationShort(valueMs?: number) {
   if (!valueMs || !Number.isFinite(valueMs) || valueMs <= 0) {
@@ -164,8 +110,8 @@ function resolveAnnounceOrigin(
 ): DeliveryContext | undefined {
   const normalizedRequester = normalizeDeliveryContext(requesterOrigin);
   const normalizedEntry = deliveryContextFromSession(entry);
-  if (normalizedRequester?.channel && !isDeliverableMessageChannel(normalizedRequester.channel)) {
-    // Ignore internal/non-deliverable channel hints (for example webchat)
+  if (normalizedRequester?.channel && isInternalMessageChannel(normalizedRequester.channel)) {
+    // Ignore internal channel hints, for example webchat,
     // so a valid persisted route can still be used for outbound delivery.
     return mergeDeliveryContext(
       {
@@ -175,98 +121,10 @@ function resolveAnnounceOrigin(
       normalizedEntry,
     );
   }
-  // requesterOrigin (captured at spawn time) reflects the channel the user is
+  // requesterOrigin, captured at spawn time, reflects the channel the user is
   // actually on and must take priority over the session entry, which may carry
   // stale lastChannel / lastTo values from a previous channel interaction.
-  const entryForMerge =
-    normalizedRequester?.to &&
-    normalizedRequester.threadId == null &&
-    normalizedEntry?.threadId != null
-      ? (() => {
-          const { threadId: _ignore, ...rest } = normalizedEntry;
-          return rest;
-        })()
-      : normalizedEntry;
-  return mergeDeliveryContext(normalizedRequester, entryForMerge);
-}
-
-async function resolveSubagentDeliveryOrigin(params: {
-  childSessionKey: string;
-  requesterSessionKey: string;
-  requesterOrigin?: DeliveryContext;
-  childRunId?: string;
-  spawnMode?: SpawnSubagentMode;
-}): Promise<DeliveryContext | undefined> {
-  const requesterOrigin = normalizeDeliveryContext(params.requesterOrigin);
-  const requesterConversation = (() => {
-    const channel = requesterOrigin?.channel?.trim().toLowerCase();
-    const to = requesterOrigin?.to?.trim();
-    const accountId = normalizeAccountId(requesterOrigin?.accountId);
-    const threadId =
-      requesterOrigin?.threadId != null && requesterOrigin.threadId !== ""
-        ? String(requesterOrigin.threadId).trim()
-        : undefined;
-    const conversationId =
-      threadId || (to?.startsWith("channel:") ? to.slice("channel:".length) : "");
-    if (!channel || !conversationId) {
-      return undefined;
-    }
-    const ref: ConversationRef = {
-      channel,
-      accountId,
-      conversationId,
-    };
-    return ref;
-  })();
-  const route = createBoundDeliveryRouter().resolveDestination({
-    eventKind: "task_completion",
-    targetSessionKey: params.childSessionKey,
-    requester: requesterConversation,
-    failClosed: false,
-  });
-  if (route.mode === "bound" && route.binding) {
-    const boundOrigin: DeliveryContext = {
-      channel: route.binding.conversation.channel,
-      accountId: route.binding.conversation.accountId,
-      to: `channel:${route.binding.conversation.conversationId}`,
-      threadId: route.binding.conversation.conversationId,
-    };
-    // Bound target is authoritative; requester hints fill only missing fields.
-    return mergeDeliveryContext(boundOrigin, requesterOrigin);
-  }
-
-  const hookRunner = getGlobalHookRunner();
-  if (!hookRunner?.hasHooks("subagent_delivery_target")) {
-    return requesterOrigin;
-  }
-  try {
-    const hookEvent = {
-      childSessionKey: params.childSessionKey,
-      requesterSessionKey: params.requesterSessionKey,
-      requesterOrigin,
-      childRunId: params.childRunId,
-      spawnMode: params.spawnMode,
-    };
-    const result = await hookRunner.runSubagentDeliveryTarget(
-      hookEvent as Parameters<typeof hookRunner.runSubagentDeliveryTarget>[0],
-      {
-        runId: params.childRunId,
-        childSessionKey: params.childSessionKey,
-        requesterSessionKey: params.requesterSessionKey,
-      },
-    );
-    const hookOrigin = normalizeDeliveryContext(result?.origin);
-    if (!hookOrigin) {
-      return requesterOrigin;
-    }
-    if (hookOrigin.channel && !isDeliverableMessageChannel(hookOrigin.channel)) {
-      return requesterOrigin;
-    }
-    // Hook-provided origin should override requester defaults when present.
-    return mergeDeliveryContext(hookOrigin, requesterOrigin);
-  } catch {
-    return requesterOrigin;
-  }
+  return mergeDeliveryContext(normalizedRequester, normalizedEntry);
 }
 
 async function sendAnnounce(item: AnnounceQueueItem) {
@@ -387,53 +245,71 @@ async function maybeQueueSubagentAnnounce(params: {
   return "none";
 }
 
-async function sendSubagentAnnounceDirectly(params: {
-  targetRequesterSessionKey: string;
-  triggerMessage: string;
-  directIdempotencyKey: string;
-  directOrigin?: DeliveryContext;
-  requesterIsSubagent: boolean;
-}): Promise<void> {
-  // ⚠️ CRITICAL: DO NOT ADD A "send" PATH HERE
-  // All subagent completions MUST route through method: "agent" so the parent
-  // session's LLM can process the result. Using method: "send" bypasses the
-  // LLM entirely and breaks: subagent orchestration, cron subagents, nested
-  // subagent chains, and any workflow that depends on the parent processing
-  // results. This has been broken and reverted 3 times already.
-  // Contact @tyler6204 before making ANY changes to this function.
-  const cfg = loadConfig();
-  const canonicalRequesterSessionKey = resolveRequesterStoreKey(
-    cfg,
-    params.targetRequesterSessionKey,
-  );
-  const directOrigin = normalizeDeliveryContext(params.directOrigin);
-  const threadId =
-    directOrigin?.threadId != null && directOrigin.threadId !== ""
-      ? String(directOrigin.threadId)
-      : undefined;
-  await callGateway({
-    method: "agent",
-    params: {
-      sessionKey: canonicalRequesterSessionKey,
-      message: params.triggerMessage,
-      deliver: !params.requesterIsSubagent,
-      channel: params.requesterIsSubagent ? undefined : directOrigin?.channel,
-      accountId: params.requesterIsSubagent ? undefined : directOrigin?.accountId,
-      to: params.requesterIsSubagent ? undefined : directOrigin?.to,
-      threadId: params.requesterIsSubagent ? undefined : threadId,
-      idempotencyKey: params.directIdempotencyKey,
-    },
-    expectFinal: true,
-    timeoutMs: 15_000,
-  });
-}
-
 function loadSessionEntryByKey(sessionKey: string) {
   const cfg = loadConfig();
   const agentId = resolveAgentIdFromSessionKey(sessionKey);
   const storePath = resolveStorePath(cfg.session?.store, { agentId });
   const store = loadSessionStore(storePath);
   return store[sessionKey];
+}
+
+async function readLatestAssistantReplyWithRetry(params: {
+  sessionKey: string;
+  initialReply?: string;
+  maxWaitMs: number;
+}): Promise<string | undefined> {
+  const RETRY_INTERVAL_MS = 100;
+  let reply = params.initialReply?.trim() ? params.initialReply : undefined;
+  if (reply) {
+    return reply;
+  }
+
+  const deadline = Date.now() + Math.max(0, Math.min(params.maxWaitMs, 15_000));
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
+    const latest = await readLatestAssistantReply({ sessionKey: params.sessionKey });
+    if (latest?.trim()) {
+      return latest;
+    }
+  }
+  return reply;
+}
+
+function isLikelyWaitingForDescendantResult(reply?: string): boolean {
+  const text = reply?.trim();
+  if (!text) {
+    return false;
+  }
+  const normalized = text.toLowerCase();
+  if (!normalized.includes("waiting")) {
+    return false;
+  }
+  return (
+    normalized.includes("subagent") ||
+    normalized.includes("child") ||
+    normalized.includes("auto-announce") ||
+    normalized.includes("auto announced") ||
+    normalized.includes("result")
+  );
+}
+
+async function waitForAssistantReplyChange(params: {
+  sessionKey: string;
+  previousReply?: string;
+  maxWaitMs: number;
+}): Promise<string | undefined> {
+  const RETRY_INTERVAL_MS = 200;
+  const previous = params.previousReply?.trim() ?? "";
+  const deadline = Date.now() + Math.max(0, Math.min(params.maxWaitMs, 30_000));
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, RETRY_INTERVAL_MS));
+    const latest = await readLatestAssistantReply({ sessionKey: params.sessionKey });
+    const normalizedLatest = latest?.trim() ?? "";
+    if (normalizedLatest && normalizedLatest !== previous) {
+      return latest;
+    }
+  }
+  return undefined;
 }
 
 export function buildSubagentSystemPrompt(params: {
@@ -566,8 +442,6 @@ export async function runSubagentAnnounceFlow(params: {
   label?: string;
   outcome?: SubagentRunOutcome;
   announceType?: SubagentAnnounceType;
-  spawnMode?: SpawnSubagentMode;
-  [key: string]: unknown;
 }): Promise<boolean> {
   let didAnnounce = false;
   let shouldDeleteChildSession = params.cleanup === "delete";
@@ -655,8 +529,6 @@ export async function runSubagentAnnounceFlow(params: {
       outcome = { status: "unknown" };
     }
 
-    let requesterDepth = getSubagentDepthFromSessionStore(targetRequesterSessionKey);
-
     let activeChildDescendantRuns = 0;
     try {
       const { countActiveDescendantRuns } = await import("./subagent-registry.js");
@@ -670,13 +542,39 @@ export async function runSubagentAnnounceFlow(params: {
       shouldDeleteChildSession = false;
       return false;
     }
-
-    if (requesterDepth >= 1 && reply?.trim()) {
-      reply = await waitForSubagentOutputChange({
+    // If the subagent reply is still a "waiting for nested result" placeholder,
+    // hold this announce and wait for the follow-up turn that synthesizes child output.
+    let hasAnyChildDescendantRuns = false;
+    try {
+      const { listDescendantRunsForRequester } = await import("./subagent-registry.js");
+      hasAnyChildDescendantRuns = listDescendantRunsForRequester(params.childSessionKey).length > 0;
+    } catch {
+      // Best-effort only; fall back to existing behavior when unavailable.
+    }
+    if (hasAnyChildDescendantRuns && isLikelyWaitingForDescendantResult(reply)) {
+      const followupReply = await waitForAssistantReplyChange({
         sessionKey: params.childSessionKey,
-        baselineReply: reply,
-        maxWaitMs: Math.max(250, Math.min(params.timeoutMs, 2_000)),
+        previousReply: reply,
+        maxWaitMs: settleTimeoutMs,
       });
+      if (!followupReply?.trim()) {
+        shouldDeleteChildSession = false;
+        return false;
+      }
+      reply = followupReply;
+      try {
+        const { countActiveDescendantRuns } = await import("./subagent-registry.js");
+        activeChildDescendantRuns = Math.max(0, countActiveDescendantRuns(params.childSessionKey));
+      } catch {
+        activeChildDescendantRuns = 0;
+      }
+      if (
+        activeChildDescendantRuns > 0 ||
+        (hasAnyChildDescendantRuns && isLikelyWaitingForDescendantResult(reply))
+      ) {
+        shouldDeleteChildSession = false;
+        return false;
+      }
     }
 
     // Build status label
@@ -696,6 +594,7 @@ export async function runSubagentAnnounceFlow(params: {
     const findings = reply || "(no output)";
     let triggerMessage = "";
 
+    let requesterDepth = getSubagentDepthFromSessionStore(targetRequesterSessionKey);
     let requesterIsSubagent = requesterDepth >= 1;
     // If the requester subagent has already finished, bubble the announce to its
     // requester (typically main) so descendant completion is not silently lost.
@@ -755,20 +654,37 @@ export async function runSubagentAnnounceFlow(params: {
       startedAt: params.startedAt,
       endedAt: params.endedAt,
     });
-    const internalSummaryMessage = [
+    triggerMessage = [
       `[System Message] [sessionId: ${announceSessionId}] A ${announceType} "${taskLabel}" just ${statusLabel}.`,
       "",
       "Result:",
       findings,
       "",
       statsLine,
+      "",
+      replyInstruction,
     ].join("\n");
-    triggerMessage = [internalSummaryMessage, "", replyInstruction].join("\n");
 
     const announceId = buildAnnounceIdFromChildRun({
       childSessionKey: params.childSessionKey,
       childRunId: params.childRunId,
     });
+    const queued = await maybeQueueSubagentAnnounce({
+      requesterSessionKey: targetRequesterSessionKey,
+      announceId,
+      triggerMessage,
+      summaryLine: taskLabel,
+      requesterOrigin: targetRequesterOrigin,
+    });
+    if (queued === "steered") {
+      didAnnounce = true;
+      return true;
+    }
+    if (queued === "queued") {
+      didAnnounce = true;
+      return true;
+    }
+
     // Send to the requester session. For nested subagents this is an internal
     // follow-up injection (deliver=false) so the orchestrator receives it.
     let directOrigin = targetRequesterOrigin;
@@ -776,44 +692,29 @@ export async function runSubagentAnnounceFlow(params: {
       const { entry } = loadRequesterSessionEntry(targetRequesterSessionKey);
       directOrigin = resolveAnnounceOrigin(entry, targetRequesterOrigin);
     }
-    let deliveryOrigin = directOrigin;
-    if (!requesterIsSubagent) {
-      const resolvedOrigin = await resolveSubagentDeliveryOrigin({
-        childSessionKey: params.childSessionKey,
-        requesterSessionKey: targetRequesterSessionKey,
-        requesterOrigin: directOrigin,
-        childRunId: params.childRunId,
-        spawnMode: params.spawnMode,
-      });
-      deliveryOrigin = resolvedOrigin ?? deliveryOrigin;
-    }
-    const queueOutcome = await maybeQueueSubagentAnnounce({
-      requesterSessionKey: targetRequesterSessionKey,
-      announceId,
-      triggerMessage,
-      summaryLine: taskLabel,
-      requesterOrigin: deliveryOrigin,
-    });
-    if (queueOutcome === "steered") {
-      didAnnounce = true;
-      return true;
-    }
-    if (queueOutcome === "queued") {
-      didAnnounce = true;
-      return true;
-    }
-
     // Use a deterministic idempotency key so the gateway dedup cache
     // catches duplicates if this announce is also queued by the gateway-
     // level message queue while the main session is busy (#17122).
     const directIdempotencyKey = buildAnnounceIdempotencyKey(announceId);
-    await sendSubagentAnnounceDirectly({
-      targetRequesterSessionKey,
-      triggerMessage,
-      directIdempotencyKey,
-      directOrigin: deliveryOrigin,
-      requesterIsSubagent,
+    await callGateway({
+      method: "agent",
+      params: {
+        sessionKey: targetRequesterSessionKey,
+        message: triggerMessage,
+        deliver: !requesterIsSubagent,
+        channel: requesterIsSubagent ? undefined : directOrigin?.channel,
+        accountId: requesterIsSubagent ? undefined : directOrigin?.accountId,
+        to: requesterIsSubagent ? undefined : directOrigin?.to,
+        threadId:
+          !requesterIsSubagent && directOrigin?.threadId != null && directOrigin.threadId !== ""
+            ? String(directOrigin.threadId)
+            : undefined,
+        idempotencyKey: directIdempotencyKey,
+      },
+      expectFinal: true,
+      timeoutMs: 15_000,
     });
+
     didAnnounce = true;
   } catch (err) {
     defaultRuntime.error?.(`Subagent announce failed: ${String(err)}`);
@@ -835,11 +736,7 @@ export async function runSubagentAnnounceFlow(params: {
       try {
         await callGateway({
           method: "sessions.delete",
-          params: {
-            key: params.childSessionKey,
-            deleteTranscript: true,
-            emitLifecycleHooks: false,
-          },
+          params: { key: params.childSessionKey, deleteTranscript: true },
           timeoutMs: 10_000,
         });
       } catch {
