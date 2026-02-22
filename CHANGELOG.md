@@ -8,6 +8,7 @@ Docs: https://docs.openclaw.ai
 
 - Update/Core: add an optional built-in auto-updater for package installs (`update.auto.*`), default-off, with stable rollout delay+jitter and beta hourly cadence.
 - CLI/Update: add `openclaw update --dry-run` to preview channel/tag/target/restart actions without mutating config, installing, syncing plugins, or restarting.
+- Onboarding/Media: add first-class Mistral API-key onboarding (`--mistral-api-key`, auth-choice flow + config defaults) and Mistral Voxtral audio transcription provider defaults for media understanding. Thanks @jaimegh-es and @JamesEBall.
 - Skills: remove bundled `food-order` skill from this repo; manage/install it from ClawHub instead.
 - Docs/Subagents: make thread-bound session guidance channel-first instead of Discord-specific, and list thread-supporting channels explicitly. (#23589) Thanks @osolmaz.
 - Channels/Config: unify channel preview streaming config handling with a shared resolver and canonical migration path.
