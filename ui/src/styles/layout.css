@@ -6,7 +6,7 @@
   --shell-pad: 12px;
   --shell-gap: 12px;
   --shell-nav-width: 220px;
-  --shell-topbar-height: 52px;
+  --shell-topbar-height: 56px;
   --shell-focus-duration: 200ms;
   --shell-focus-ease: var(--ease-out);
   height: 100vh;
@@ -142,17 +142,17 @@
 .topbar-search {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
-  min-width: 160px;
-  max-width: 280px;
+  gap: 8px;
+  padding: 7px 14px;
+  min-width: 180px;
+  max-width: 600px;
   flex: 1;
-  height: 30px;
+  height: 36px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-full);
+  border-radius: 10px;
   background: color-mix(in srgb, var(--secondary) 60%, transparent);
   color: var(--muted);
-  font-size: 12px;
+  font-size: 14px;
   font-family: var(--font-body);
   cursor: pointer;
   transition:
@@ -298,12 +298,12 @@
   border-color: color-mix(in srgb, var(--warn) 30%, transparent);
 }
 
-/* Topbar theme select sizing */
+/* Topbar theme orb sizing */
 
-.topbar-status .theme-select {
+.topbar-status .theme-orb__trigger {
+  width: 26px;
   height: 26px;
-  min-width: 82px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 /* ===========================================
@@ -474,14 +474,14 @@
 }
 
 .sidebar-brand__logo {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
   object-fit: contain;
 }
 
 .sidebar-brand__title {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.1;
@@ -632,7 +632,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
-  padding: 9px 12px;
+  padding: 10px 14px;
   border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: transparent;
@@ -648,8 +648,8 @@
 }
 
 .nav-item__icon {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -659,8 +659,8 @@
 }
 
 .nav-item__icon svg {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   stroke: currentColor;
   fill: none;
   stroke-width: 1.5px;
@@ -669,7 +669,7 @@
 }
 
 .nav-item__text {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
   white-space: nowrap;
 }

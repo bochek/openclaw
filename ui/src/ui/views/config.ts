@@ -422,6 +422,7 @@ function countSensitiveValues(formValue: Record<string, unknown> | null): number
 }
 
 let rawRevealed = false;
+let sidebarCollapsed = false;
 
 export function renderConfig(props: ConfigProps) {
   const validity = props.valid == null ? "unknown" : props.valid ? "valid" : "invalid";
@@ -485,17 +486,43 @@ export function renderConfig(props: ConfigProps) {
   const canUpdate = props.connected && !props.applying && !props.updating;
 
   return html`
-    <div class="config-layout">
+    <div class="config-layout ${sidebarCollapsed ? "config-layout--sidebar-collapsed" : ""}">
       <!-- Sidebar -->
       <aside class="config-sidebar">
         <div class="config-sidebar__header">
           <div class="config-sidebar__title">Settings</div>
-          <span
-            class="pill pill--sm ${
-              validity === "valid" ? "pill--ok" : validity === "invalid" ? "pill--danger" : ""
-            }"
-            >${validity}</span
-          >
+          <div class="config-sidebar__header-right">
+            ${
+              validity === "invalid"
+                ? html`
+                    <span class="pill pill--sm pill--danger">invalid</span>
+                  `
+                : ""
+            }
+            <button
+              class="config-sidebar__collapse-btn"
+              title="${sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}"
+              @click=${(e: Event) => {
+                sidebarCollapsed = !sidebarCollapsed;
+                const layout = (e.currentTarget as HTMLElement).closest(".config-layout");
+                if (layout) {
+                  layout.classList.toggle("config-layout--sidebar-collapsed", sidebarCollapsed);
+                }
+              }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                ${
+                  sidebarCollapsed
+                    ? html`
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                      `
+                    : html`
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                      `
+                }
+              </svg>
+            </button>
+          </div>
         </div>
 
         <!-- Search -->

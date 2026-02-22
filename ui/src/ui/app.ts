@@ -315,8 +315,8 @@ export class OpenClawApp extends LitElement {
   // Overview dashboard state
   @state() attentionItems: import("./types.js").AttentionItem[] = [];
   @state() paletteOpen = false;
-  paletteQuery = "";
-  paletteActiveIndex = 0;
+  @state() paletteQuery = "";
+  @state() paletteActiveIndex = 0;
   @state() streamMode = (() => {
     try {
       const stored = localStorage.getItem("openclaw:stream-mode");

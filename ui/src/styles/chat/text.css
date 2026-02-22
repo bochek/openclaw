@@ -58,6 +58,71 @@
   border-radius: 5px;
 }
 
+/* Code block wrapper with header + copy button */
+.code-block-wrapper {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--secondary) 82%, transparent);
+  overflow: hidden;
+}
+
+.code-block-wrapper pre {
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  margin: 0;
+}
+
+.code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  min-height: 28px;
+}
+
+.code-block-lang {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: lowercase;
+}
+
+.code-block-copy {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  transition:
+    background 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.code-block-copy:hover {
+  background: color-mix(in srgb, var(--border) 50%, transparent);
+  color: var(--text);
+}
+
+.code-block-copy__done {
+  display: none;
+}
+
+.code-block-copy.copied .code-block-copy__idle {
+  display: none;
+}
+
+.code-block-copy.copied .code-block-copy__done {
+  display: inline;
+  color: var(--ok, #22c55e);
+}
+
 .chat-text :where(pre) {
   background: color-mix(in srgb, var(--secondary) 82%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 84%, transparent);

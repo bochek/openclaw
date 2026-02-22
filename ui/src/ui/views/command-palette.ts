@@ -156,16 +156,25 @@ function selectItem(item: PaletteItem, props: CommandPaletteProps) {
   props.onToggle();
 }
 
+function scrollActiveIntoView() {
+  requestAnimationFrame(() => {
+    const el = document.querySelector(".cmd-palette__item--active");
+    el?.scrollIntoView({ block: "nearest" });
+  });
+}
+
 function handleKeydown(e: KeyboardEvent, props: CommandPaletteProps) {
   const items = filteredItems(props.query);
   switch (e.key) {
     case "ArrowDown":
       e.preventDefault();
       props.onActiveIndexChange(Math.min(props.activeIndex + 1, items.length - 1));
+      scrollActiveIntoView();
       break;
     case "ArrowUp":
       e.preventDefault();
       props.onActiveIndexChange(Math.max(props.activeIndex - 1, 0));
+      scrollActiveIntoView();
       break;
     case "Enter":
       e.preventDefault();

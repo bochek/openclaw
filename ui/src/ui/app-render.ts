@@ -337,22 +337,26 @@ export function renderApp(state: AppViewState) {
             </div>`
             : nothing
         }
-        <section class="content-header">
-          <div>
-            ${
-              isChat
-                ? renderChatSessionSelect(state)
-                : state.tab === "skills"
-                  ? nothing
-                  : html`<div class="page-title">${titleForTab(state.tab)}</div>`
-            }
-            ${isChat || state.tab === "skills" ? nothing : html`<div class="page-sub">${subtitleForTab(state.tab)}</div>`}
-          </div>
-          <div class="page-meta">
-            ${state.lastError ? html`<div class="pill danger">${state.lastError}</div>` : nothing}
-            ${isChat ? renderChatControls(state) : nothing}
-          </div>
-        </section>
+        ${
+          state.tab === "config"
+            ? nothing
+            : html`<section class="content-header">
+              <div>
+                ${
+                  isChat
+                    ? renderChatSessionSelect(state)
+                    : state.tab === "skills"
+                      ? nothing
+                      : html`<div class="page-title">${titleForTab(state.tab)}</div>`
+                }
+                ${isChat || state.tab === "skills" ? nothing : html`<div class="page-sub">${subtitleForTab(state.tab)}</div>`}
+              </div>
+              <div class="page-meta">
+                ${state.lastError ? html`<div class="pill danger">${state.lastError}</div>` : nothing}
+                ${isChat ? renderChatControls(state) : nothing}
+              </div>
+            </section>`
+        }
 
         ${
           state.tab === "overview"

@@ -382,6 +382,13 @@ function exportMarkdown(props: ChatProps): void {
   URL.revokeObjectURL(url);
 }
 
+const WELCOME_SUGGESTIONS = [
+  "What can you do?",
+  "Summarize my recent sessions",
+  "Help me configure a channel",
+  "Check system health",
+];
+
 function renderWelcomeState(props: ChatProps): TemplateResult {
   const name = props.assistantName || "Assistant";
   const avatar = props.assistantAvatar ?? props.assistantAvatarUrl;
@@ -402,6 +409,20 @@ function renderWelcomeState(props: ChatProps): TemplateResult {
       <p class="agent-chat__hint">
         Type a message below &middot; <kbd>/</kbd> for commands
       </p>
+      <div class="agent-chat__suggestions">
+        ${WELCOME_SUGGESTIONS.map(
+          (text) => html`
+            <button
+              type="button"
+              class="agent-chat__suggestion"
+              @click=${() => {
+                props.onDraftChange(text);
+                props.onSend();
+              }}
+            >${text}</button>
+          `,
+        )}
+      </div>
     </div>
   `;
 }
@@ -573,6 +594,21 @@ export function renderChat(props: ChatProps) {
   const splitRatio = props.splitRatio ?? 0.6;
   const sidebarOpen = Boolean(props.sidebarOpen && props.onCloseSidebar);
 
+  const handleCodeBlockCopy = (e: Event) => {
+    const btn = (e.target as HTMLElement).closest(".code-block-copy");
+    if (!btn) {
+      return;
+    }
+    const code = (btn as HTMLElement).dataset.code ?? "";
+    navigator.clipboard.writeText(code).then(
+      () => {
+        btn.classList.add("copied");
+        setTimeout(() => btn.classList.remove("copied"), 1500);
+      },
+      () => {},
+    );
+  };
+
   const chatItems = buildChatItems(props);
   const isEmpty = chatItems.length === 0 && !props.loading;
 
@@ -582,7 +618,9 @@ export function renderChat(props: ChatProps) {
       role="log"
       aria-live="polite"
       @scroll=${props.onChatScroll}
+      @click=${handleCodeBlockCopy}
     >
+      <div class="chat-thread-inner">
       ${
         props.loading
           ? html`
@@ -642,6 +680,7 @@ export function renderChat(props: ChatProps) {
           return nothing;
         },
       )}
+      </div>
     </div>
   `;
 

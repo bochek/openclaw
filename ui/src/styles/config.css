@@ -7,10 +7,11 @@
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
   gap: 0;
-  height: calc(100vh - 160px);
-  margin: -16px;
-  border-radius: var(--radius-xl);
-  border: 1px solid var(--border);
+  height: calc(100vh - var(--shell-topbar-height, 52px));
+  margin: -12px -14px -24px;
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid var(--border);
   background: var(--panel);
 }
 
@@ -31,7 +32,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 18px;
+  padding: 14px 18px;
+  min-height: 55px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -39,6 +41,33 @@
   font-weight: 600;
   font-size: 15px;
   letter-spacing: -0.01em;
+}
+
+.config-sidebar__header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.config-sidebar__collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) ease,
+    color var(--duration-fast) ease;
+}
+
+.config-sidebar__collapse-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .config-sidebar__footer {
@@ -51,6 +80,7 @@
 .config-search {
   position: relative;
   padding: 14px;
+  min-height: 70px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -236,6 +266,7 @@
   justify-content: space-between;
   gap: 14px;
   padding: 14px 22px;
+  min-height: 55px;
   background: var(--bg-accent);
   border-bottom: 1px solid var(--border);
 }
@@ -351,7 +382,8 @@
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 16px 22px;
+  padding: 14px 22px;
+  min-height: 70px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-accent);
 }
@@ -1215,6 +1247,54 @@
 .pill--danger {
   border-color: rgba(239, 68, 68, 0.35);
   color: var(--danger);
+}
+
+/* ===========================================
+   Collapsed Sidebar
+   =========================================== */
+
+.config-layout--sidebar-collapsed {
+  grid-template-columns: 60px minmax(0, 1fr);
+}
+
+.config-layout--sidebar-collapsed .config-sidebar__title,
+.config-layout--sidebar-collapsed .config-sidebar__header-right .pill,
+.config-layout--sidebar-collapsed .config-search,
+.config-layout--sidebar-collapsed .config-nav__label,
+.config-layout--sidebar-collapsed .config-sidebar__footer {
+  display: none;
+}
+
+.config-layout--sidebar-collapsed .config-sidebar__header {
+  justify-content: center;
+  padding: 14px 8px;
+}
+
+.config-layout--sidebar-collapsed .config-sidebar__header-right {
+  gap: 0;
+}
+
+.config-layout--sidebar-collapsed .config-nav {
+  padding: 10px 6px;
+}
+
+.config-layout--sidebar-collapsed .config-nav__item {
+  justify-content: center;
+  padding: 10px;
+  gap: 0;
+}
+
+.config-layout--sidebar-collapsed .config-nav__icon {
+  width: 22px;
+  height: 22px;
+}
+
+.config-layout {
+  transition: grid-template-columns var(--duration-normal) var(--ease-out);
+}
+
+.config-sidebar {
+  transition: width var(--duration-normal) var(--ease-out);
 }
 
 /* ===========================================

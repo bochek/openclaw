@@ -12,9 +12,11 @@ const allowedTags = [
   "b",
   "blockquote",
   "br",
+  "button",
   "code",
   "del",
   "details",
+  "div",
   "em",
   "h1",
   "h2",
@@ -26,6 +28,7 @@ const allowedTags = [
   "ol",
   "p",
   "pre",
+  "span",
   "strong",
   "summary",
   "table",
@@ -38,7 +41,19 @@ const allowedTags = [
   "img",
 ];
 
-const allowedAttrs = ["class", "href", "rel", "target", "title", "start", "src", "alt"];
+const allowedAttrs = [
+  "class",
+  "href",
+  "rel",
+  "target",
+  "title",
+  "start",
+  "src",
+  "alt",
+  "data-code",
+  "type",
+  "aria-label",
+];
 const sanitizeOptions = {
   ALLOWED_TAGS: allowedTags,
   ALLOWED_ATTR: allowedAttrs,
@@ -146,6 +161,14 @@ htmlEscapeRenderer.code = ({
   const langClass = lang ? ` class="language-${lang}"` : "";
   const safeText = escaped ? text : escapeHtml(text);
   const codeBlock = `<pre><code${langClass}>${safeText}</code></pre>`;
+  const langLabel = lang ? `<span class="code-block-lang">${escapeHtml(lang)}</span>` : "";
+  const attrSafe = text
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const copyBtn = `<button type="button" class="code-block-copy" data-code="${attrSafe}" aria-label="Copy code"><span class="code-block-copy__idle">Copy</span><span class="code-block-copy__done">Copied!</span></button>`;
+  const header = `<div class="code-block-header">${langLabel}${copyBtn}</div>`;
 
   const trimmed = text.trim();
   const isJson =
@@ -157,10 +180,10 @@ htmlEscapeRenderer.code = ({
   if (isJson) {
     const lineCount = text.split("\n").length;
     const label = lineCount > 1 ? `JSON &middot; ${lineCount} lines` : "JSON";
-    return `<details class="json-collapse"><summary>${label}</summary>${codeBlock}</details>`;
+    return `<details class="json-collapse"><summary>${label}</summary><div class="code-block-wrapper">${header}${codeBlock}</div></details>`;
   }
 
-  return codeBlock;
+  return `<div class="code-block-wrapper">${header}${codeBlock}</div>`;
 };
 
 function escapeHtml(value: string): string {

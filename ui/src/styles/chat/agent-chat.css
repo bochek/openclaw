@@ -226,6 +226,35 @@
   font-family: inherit;
 }
 
+.agent-chat__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 16px;
+  max-width: 480px;
+}
+
+.agent-chat__suggestion {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition:
+    background 150ms ease-out,
+    border-color 150ms ease-out,
+    color 150ms ease-out;
+}
+
+.agent-chat__suggestion:hover {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--text);
+}
+
 /* ─── Avatar Circle ─── */
 
 .agent-chat__avatar {
@@ -469,20 +498,24 @@
 }
 
 @keyframes cursor-blink {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0;
   }
 }
 
 @keyframes chat-pulse {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -494,7 +527,8 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  margin: 0 18px 14px;
+  min-width: 96%;
+  margin: 0 auto 14px;
   padding: 0;
   background: var(--card);
   border: 1px solid var(--border);
@@ -520,7 +554,7 @@
 
 /* Textarea — full width, borderless inside the container */
 
-.agent-chat__input > textarea {
+.agent-chat__input>textarea {
   width: 100%;
   min-height: 40px;
   max-height: 150px;
@@ -536,7 +570,7 @@
   box-sizing: border-box;
 }
 
-.agent-chat__input > textarea::placeholder {
+.agent-chat__input>textarea::placeholder {
   color: var(--muted);
 }
 
@@ -842,7 +876,7 @@
   scrollbar-width: thin;
 }
 
-.slash-menu-group + .slash-menu-group {
+.slash-menu-group+.slash-menu-group {
   margin-top: 4px;
   padding-top: 4px;
   border-top: 1px solid color-mix(in srgb, var(--border) 50%, transparent);

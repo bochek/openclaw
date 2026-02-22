@@ -400,30 +400,66 @@ function resolveSessionOptions(
   return options;
 }
 
-type ThemeOption = { id: ThemeMode; label: string };
+type ThemeOption = { id: ThemeMode; label: string; icon: string };
 const THEME_OPTIONS: ThemeOption[] = [
-  { id: "dark", label: "Claw" },
-  { id: "light", label: "Light" },
-  { id: "openknot", label: "Knot" },
-  { id: "fieldmanual", label: "Field" },
-  { id: "clawdash", label: "Chrome" },
+  { id: "dark", label: "Claw", icon: "🦀" },
+  { id: "light", label: "Light", icon: "☀️" },
+  { id: "openknot", label: "Knot", icon: "🪢" },
+  { id: "fieldmanual", label: "Field", icon: "🏕️" },
+  { id: "clawdash", label: "Chrome", icon: "💎" },
 ];
 
+function currentThemeIcon(theme: ThemeMode): string {
+  return THEME_OPTIONS.find((o) => o.id === theme)?.icon ?? "🎨";
+}
+
 export function renderThemeToggle(state: AppViewState) {
+  const toggleOpen = (e: Event) => {
+    const orb = (e.currentTarget as HTMLElement).closest(".theme-orb");
+    if (!orb) {
+      return;
+    }
+    const isOpen = orb.classList.contains("theme-orb--open");
+    if (isOpen) {
+      orb.classList.remove("theme-orb--open");
+    } else {
+      orb.classList.add("theme-orb--open");
+      const close = (ev: MouseEvent) => {
+        if (!orb.contains(ev.target as Node)) {
+          orb.classList.remove("theme-orb--open");
+          document.removeEventListener("click", close);
+        }
+      };
+      requestAnimationFrame(() => document.addEventListener("click", close));
+    }
+  };
+
+  const pick = (opt: ThemeOption, e: Event) => {
+    const orb = (e.currentTarget as HTMLElement).closest(".theme-orb");
+    orb?.classList.remove("theme-orb--open");
+    if (opt.id !== state.theme) {
+      const context: ThemeTransitionContext = { element: orb ?? undefined };
+      state.setTheme(opt.id, context);
+    }
+  };
+
   return html`
-    <select
-      class="theme-select"
-      .value=${state.theme}
-      aria-label="Theme"
-      title="Theme"
-      @change=${(e: Event) => {
-        const select = e.target as HTMLSelectElement;
-        const next = select.value as ThemeMode;
-        const context: ThemeTransitionContext = { element: select };
-        state.setTheme(next, context);
-      }}
-    >
-      ${THEME_OPTIONS.map((opt) => html`<option value=${opt.id}>${opt.label}</option>`)}
-    </select>
+    <div class="theme-orb" aria-label="Theme">
+      <button
+        class="theme-orb__trigger"
+        title="Theme"
+        @click=${toggleOpen}
+      >${currentThemeIcon(state.theme)}</button>
+      <div class="theme-orb__menu">
+        ${THEME_OPTIONS.map(
+          (opt) => html`
+            <button
+              class="theme-orb__option ${opt.id === state.theme ? "theme-orb__option--active" : ""}"
+              title=${opt.label}
+              @click=${(e: Event) => pick(opt, e)}
+            >${opt.icon}</button>`,
+        )}
+      </div>
+    </div>
   `;
 }
