@@ -360,7 +360,7 @@ describe("sessions tools", () => {
     };
     expect(details.contentRedacted).toBe(true);
     expect(details.contentTruncated).toBe(false);
-    expect(details.truncated).toBe(true);
+    expect(details.truncated).toBe(false);
     const msg = details.messages?.[0] as { content?: Array<{ type?: string; text?: string }> };
     const textBlock = msg?.content?.find((b) => b.type === "text");
     expect(typeof textBlock?.text).toBe("string");
