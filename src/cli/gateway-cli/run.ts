@@ -17,8 +17,6 @@ import { setVerbose } from "../../globals.js";
 import { GatewayLockError } from "../../infra/gateway-lock.js";
 import { formatPortDiagnostics, inspectPortUsage } from "../../infra/ports.js";
 import { setConsoleSubsystemFilter, setConsoleTimestampPrefix } from "../../logging/console.js";
-import { normalizeLogLevel } from "../../logging/levels.js";
-import { setLoggerOverride } from "../../logging/logger.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { defaultRuntime } from "../../runtime.js";
 import { formatCliCommand } from "../command-format.js";
@@ -52,7 +50,6 @@ type GatewayRunOpts = {
   rawStreamPath?: unknown;
   dev?: boolean;
   reset?: boolean;
-  logLevel?: string;
 };
 
 const gatewayLog = createSubsystemLogger("gateway");
@@ -66,7 +63,6 @@ const GATEWAY_RUN_VALUE_KEYS = [
   "tailscale",
   "wsLog",
   "rawStreamPath",
-  "logLevel",
 ] as const;
 
 const GATEWAY_RUN_BOOLEAN_KEYS = [
@@ -91,15 +87,6 @@ function resolveGatewayRunOptions(opts: GatewayRunOpts, command?: Command): Gate
       resolved[key] = inherited ?? resolved[key];
       continue;
     }
-    if (key === "logLevel") {
-      resolved.logLevel =
-        typeof resolved.logLevel === "string"
-          ? resolved.logLevel
-          : typeof inherited === "string"
-            ? inherited
-            : undefined;
-      continue;
-    }
     resolved[key] = resolved[key] ?? inherited;
   }
 
@@ -122,11 +109,6 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
 
   setConsoleTimestampPrefix(true);
   setVerbose(Boolean(opts.verbose));
-  const logLevelRaw = typeof opts.logLevel === "string" ? opts.logLevel.trim() : undefined;
-  if (logLevelRaw) {
-    const level = normalizeLogLevel(logLevelRaw, "info");
-    setLoggerOverride({ level, consoleLevel: level });
-  }
   if (opts.claudeCliLogs) {
     setConsoleSubsystemFilter(["agent/claude-cli"]);
     process.env.OPENCLAW_CLAUDE_CLI_LOG_OUTPUT = "1";
@@ -401,10 +383,6 @@ export function addGatewayRunCommand(cmd: Command): Command {
       false,
     )
     .option("--force", "Kill any existing listener on the target port before starting", false)
-    .option(
-      "--log-level <level>",
-      "Log level for file and console (silent|fatal|error|warn|info|debug|trace)",
-    )
     .option("--verbose", "Verbose logging to stdout/stderr", false)
     .option(
       "--claude-cli-logs",
