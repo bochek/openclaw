@@ -104,47 +104,47 @@
   --vscode-bg: #ebe6dd;
   --vscode-sidebar: #ddd7cc;
   --vscode-panel: #f5f2eb;
-  --vscode-panel-border: rgba(42, 36, 32, 0.08);
+  --vscode-panel-border: rgba(42, 36, 32, 0.15);
   --vscode-surface: #f5f2eb;
-  --vscode-hover: #d5cfc4;
-  --vscode-contrast: #d0c9be;
-  --vscode-text: #2a2420;
-  --vscode-muted: #6f635a;
-  --vscode-subtle: #968a80;
-  --vscode-ghost: #d5cfc4;
-  --vscode-accent: #c73526;
-  --vscode-accent-alpha: rgba(199, 53, 38, 0.12);
-  --vscode-selection: rgba(199, 53, 38, 0.18);
-  --vscode-success: #1a9e7e;
-  --vscode-danger: #c73526;
+  --vscode-hover: #cfc8bb;
+  --vscode-contrast: #c5bcae;
+  --vscode-text: #231e1a;
+  --vscode-muted: #5a4e44;
+  --vscode-subtle: #7d7168;
+  --vscode-ghost: #c4bdb1;
+  --vscode-accent: #b82e20;
+  --vscode-accent-alpha: rgba(184, 46, 32, 0.15);
+  --vscode-selection: rgba(184, 46, 32, 0.22);
+  --vscode-success: #168868;
+  --vscode-danger: #b82e20;
 
-  --kn-claw: #c73526;
-  --kn-claw-bright: #e85a4a;
-  --kn-claw-dim: rgba(199, 53, 38, 0.1);
-  --kn-claw-ember: #d94a3a;
-  --kn-claw-deep: #9a2a1e;
+  --kn-claw: #b82e20;
+  --kn-claw-bright: #d94a3a;
+  --kn-claw-dim: rgba(184, 46, 32, 0.13);
+  --kn-claw-ember: #c94030;
+  --kn-claw-deep: #8a2418;
   --kn-ocean: #ebe6dd;
   --kn-ocean-bright: #f5f2eb;
   --kn-ocean-mid: #ddd7cc;
   --kn-ocean-dim: rgba(235, 230, 221, 0.9);
-  --kn-ocean-deep: #d5cfc4;
-  --kn-silver: #6f635a;
-  --kn-silver-bright: #2a2420;
-  --kn-silver-dim: rgba(111, 99, 90, 0.1);
-  --kn-bioluminescence: #1a9e7e;
-  --kn-warm-dark: #2a2420;
-  --kn-void: #d5cfc4;
+  --kn-ocean-deep: #cfc8bb;
+  --kn-silver: #5a4e44;
+  --kn-silver-bright: #231e1a;
+  --kn-silver-dim: rgba(90, 78, 68, 0.14);
+  --kn-bioluminescence: #168868;
+  --kn-warm-dark: #231e1a;
+  --kn-void: #c4bdb1;
 
   --glass-blur: 12px;
   --glass-saturate: 110%;
   --glass-bg: rgba(245, 242, 235, 0.92);
   --glass-bg-elevated: rgba(245, 242, 235, 0.96);
-  --glass-border: rgba(42, 36, 32, 0.16);
-  --glass-border-hover: rgba(199, 53, 38, 0.35);
+  --glass-border: rgba(42, 36, 32, 0.24);
+  --glass-border-hover: rgba(184, 46, 32, 0.45);
   --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  --glass-shadow-sm: 0 1px 4px rgba(42, 36, 32, 0.07), 0 1px 2px rgba(42, 36, 32, 0.04);
-  --glass-shadow-md: 0 4px 16px rgba(42, 36, 32, 0.08), 0 1px 4px rgba(42, 36, 32, 0.04);
-  --glass-shadow-lg: 0 10px 36px rgba(42, 36, 32, 0.1), 0 2px 8px rgba(42, 36, 32, 0.05);
+  --glass-shadow-sm: 0 1px 4px rgba(42, 36, 32, 0.1), 0 1px 2px rgba(42, 36, 32, 0.06);
+  --glass-shadow-md: 0 4px 16px rgba(42, 36, 32, 0.12), 0 1px 4px rgba(42, 36, 32, 0.06);
+  --glass-shadow-lg: 0 10px 36px rgba(42, 36, 32, 0.15), 0 2px 8px rgba(42, 36, 32, 0.08);
 
   --radius-xs: 4px;
   --radius-sm: 8px;
@@ -498,7 +498,8 @@
   --primary-foreground: #ffffff;
   --destructive-foreground: #ffffff;
   --focus-offset-color: var(--bg);
-  --grid-line: rgba(42, 36, 32, 0.06);
+  --grid-line: rgba(42, 36, 32, 0.1);
+  --muted-strong: var(--vscode-muted);
 }
 
 /* ─── Accessibility: High Contrast ─── */

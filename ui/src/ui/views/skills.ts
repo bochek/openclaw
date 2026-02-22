@@ -37,7 +37,17 @@ export function renderSkills(props: SkillsProps) {
 
   return html`
     <section class="card">
-      <div class="filters" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <div class="card-title">Skills</div>
+          <div class="card-sub">Installed skills and their status.</div>
+        </div>
+        <button class="btn" ?disabled=${props.loading} @click=${props.onRefresh}>
+          ${props.loading ? "Loading…" : "Refresh"}
+        </button>
+      </div>
+
+      <div class="filters" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 14px;">
         <a
           class="btn"
           href="https://clawhub.com"
@@ -53,9 +63,6 @@ export function renderSkills(props: SkillsProps) {
           />
         </label>
         <div class="muted">${filtered.length} shown</div>
-        <button class="btn" ?disabled=${props.loading} @click=${props.onRefresh}>
-          ${props.loading ? "Loading…" : "Refresh"}
-        </button>
       </div>
 
       ${
