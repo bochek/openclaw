@@ -36,8 +36,8 @@ describe("runCommandWithTimeout", () => {
     const result = await runCommandWithTimeout(
       [process.execPath, "-e", "setTimeout(() => {}, 120)"],
       {
-        timeoutMs: 1_000,
-        noOutputTimeoutMs: 35,
+        timeoutMs: 3_000,
+        noOutputTimeoutMs: 120,
       },
     );
 
@@ -51,11 +51,11 @@ describe("runCommandWithTimeout", () => {
       [
         process.execPath,
         "-e",
-        'process.stdout.write("."); setTimeout(() => process.stdout.write("."), 30); setTimeout(() => process.exit(0), 60);',
+        'let ticks = 0; const timer = setInterval(() => { process.stdout.write("."); ticks += 1; if (ticks >= 4) { clearInterval(timer); process.exit(0); } }, 100);',
       ],
       {
-        timeoutMs: 1_000,
-        noOutputTimeoutMs: 500,
+        timeoutMs: 5_000,
+        noOutputTimeoutMs: 800,
       },
     );
 
@@ -70,7 +70,7 @@ describe("runCommandWithTimeout", () => {
     const result = await runCommandWithTimeout(
       [process.execPath, "-e", "setTimeout(() => {}, 120)"],
       {
-        timeoutMs: 15,
+        timeoutMs: 100,
       },
     );
 

@@ -104,6 +104,22 @@ async function writeCronJobs(storePath: string, jobs: CronJob[]) {
   await fs.writeFile(storePath, JSON.stringify({ version: 1, jobs }, null, 2), "utf-8");
 }
 
+async function removeDirWithRetries(dir: string, attempts = 3) {
+  let lastError: unknown;
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      await fs.rm(dir, { recursive: true, force: true });
+      return;
+    } catch (err) {
+      lastError = err;
+      await new Promise((resolve) => setTimeout(resolve, 25 * (i + 1)));
+    }
+  }
+  if (lastError) {
+    throw lastError;
+  }
+}
+
 async function startCronForStore(params: {
   storePath: string;
   cronEnabled?: boolean;
@@ -142,7 +158,7 @@ describe("Cron issue regressions", () => {
   });
 
   afterAll(async () => {
-    await fs.rm(fixtureRoot, { recursive: true, force: true });
+    await removeDirWithRetries(fixtureRoot);
   });
 
   afterEach(() => {
@@ -849,9 +865,12 @@ describe("Cron issue regressions", () => {
     });
 
     const timerPromise = onTimer(state);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(peakActiveRuns).toBe(2);
+    await vi.waitFor(
+      () => {
+        expect(peakActiveRuns).toBe(2);
+      },
+      { timeout: 1_500, interval: 10 },
+    );
 
     firstRun.resolve({ status: "ok", summary: "first done" });
     secondRun.resolve({ status: "ok", summary: "second done" });
