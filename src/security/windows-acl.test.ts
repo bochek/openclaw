@@ -100,11 +100,11 @@ Successfully processed 1 files`;
     it("parses SID-format principals", () => {
       const output =
         "C:\\test\\file.txt S-1-5-18:(F)\n" +
-        "                  S-1-5-21-1824257776-4070701511-781240313-1001:(F)";
+        "                  *S-1-5-21-1824257776-4070701511-781240313-1001:(F)";
       const entries = parseIcaclsOutput(output, "C:\\test\\file.txt");
       expect(entries).toHaveLength(2);
       expect(entries[0].principal).toBe("S-1-5-18");
-      expect(entries[1].principal).toBe("S-1-5-21-1824257776-4070701511-781240313-1001");
+      expect(entries[1].principal).toBe("*S-1-5-21-1824257776-4070701511-781240313-1001");
     });
 
     it("handles quoted target paths", () => {
@@ -264,6 +264,22 @@ Successfully processed 1 files`;
       expect(summary.untrustedGroup).toHaveLength(0);
     });
 
+    it("classifies world SID (S-1-1-0) as world", () => {
+      const entries: WindowsAclEntry[] = [
+        {
+          principal: "S-1-1-0",
+          rights: ["R"],
+          rawRights: "(R)",
+          canRead: true,
+          canWrite: false,
+        },
+      ];
+      const summary = summarizeWindowsAcl(entries);
+      expect(summary.untrustedWorld).toHaveLength(1);
+      expect(summary.untrustedGroup).toHaveLength(0);
+      expect(summary.trusted).toHaveLength(0);
+    });
+
     it("classifies unknown SID as group (not world)", () => {
       const entries: WindowsAclEntry[] = [
         {
@@ -338,6 +354,56 @@ Successfully processed 1 files`;
       const result = await inspectWindowsAcl("C:\\test\\file.txt", { exec: mockExec });
       expect(result.ok).toBe(true);
       expect(result.entries).toHaveLength(2);
+    });
+
+    it("translates localized principals to trusted SIDs", async () => {
+      const localizedSystem = "NT AUTHORITY\\СИСТЕМА";
+      const mockExec = vi.fn(async (cmd: string, args: string[]) => {
+        if (cmd === "icacls") {
+          return {
+            stdout: `C:\\test\\file.txt ${localizedSystem}:(F)\nWORKGROUP\\TestUser:(F)`,
+            stderr: "",
+          };
+        }
+        if (cmd === "powershell") {
+          expect(args.at(-1)).toBe(localizedSystem);
+          return { stdout: "S-1-5-18\n", stderr: "" };
+        }
+        throw new Error(`unexpected command: ${cmd}`);
+      });
+
+      const result = await inspectWindowsAcl("C:\\test\\file.txt", {
+        env: { USERNAME: "TestUser", USERDOMAIN: "WORKGROUP" },
+        exec: mockExec,
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.untrustedGroup).toHaveLength(0);
+      expect(result.trusted).toHaveLength(2);
+      expect(result.entries.map((entry) => entry.principal)).toContain("s-1-5-18");
+    });
+
+    it("resolves caller SID from whoami for SID-only ACL output", async () => {
+      const ownerSid = "S-1-5-21-1824257776-4070701511-781240313-1001";
+      const mockExec = vi.fn(async (cmd: string) => {
+        if (cmd === "icacls") {
+          return {
+            stdout: `C:\\test\\file.txt S-1-5-18:(F)\n${ownerSid}:(F)`,
+            stderr: "",
+          };
+        }
+        if (cmd === "whoami") {
+          return { stdout: `USER INFORMATION\n${ownerSid}\n`, stderr: "" };
+        }
+        throw new Error(`unexpected command: ${cmd}`);
+      });
+
+      const result = await inspectWindowsAcl("C:\\test\\file.txt", { exec: mockExec });
+
+      expect(result.ok).toBe(true);
+      expect(result.trusted).toHaveLength(2);
+      expect(result.untrustedGroup).toHaveLength(0);
+      expect(mockExec).toHaveBeenCalledWith("whoami", ["/user"]);
     });
   });
 

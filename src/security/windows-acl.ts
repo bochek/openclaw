@@ -38,13 +38,27 @@ const WORLD_SUFFIXES = ["\\users", "\\authenticated users"];
 const TRUSTED_SUFFIXES = ["\\administrators", "\\system"];
 
 const SID_RE = /^s-\d+-\d+(-\d+)+$/i;
+const SID_MATCH_RE = /\*?s-\d+-\d+(-\d+)+/i;
 const TRUSTED_SIDS = new Set([
   "s-1-5-18",
   "s-1-5-32-544",
   "s-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464",
 ]);
+const WORLD_SIDS = new Set(["s-1-1-0", "s-1-5-11", "s-1-5-32-545"]);
+const SID_TRANSLATE_POWERSHELL_SCRIPT =
+  "$ErrorActionPreference='Stop';$p=$args[0];try{(New-Object System.Security.Principal.NTAccount($p)).Translate([System.Security.Principal.SecurityIdentifier]).Value}catch{exit 1}";
 
 const normalize = (value: string) => value.trim().toLowerCase();
+
+function normalizeSid(value: string): string | null {
+  const normalized = normalize(value).replace(/^\*/, "");
+  return SID_RE.test(normalized) ? normalized : null;
+}
+
+function extractSid(value: string): string | null {
+  const match = value.match(SID_MATCH_RE);
+  return match ? normalizeSid(match[0]) : null;
+}
 
 export function resolveWindowsUserPrincipal(env?: NodeJS.ProcessEnv): string | null {
   const username = env?.USERNAME?.trim() || os.userInfo().username?.trim();
@@ -66,8 +80,8 @@ function buildTrustedPrincipals(env?: NodeJS.ProcessEnv): Set<string> {
       trusted.add(normalize(userOnly));
     }
   }
-  const userSid = env?.USERSID?.trim().toLowerCase();
-  if (userSid && SID_RE.test(userSid)) {
+  const userSid = normalizeSid(env?.USERSID ?? "");
+  if (userSid) {
     trusted.add(userSid);
   }
   return trusted;
@@ -80,8 +94,15 @@ function classifyPrincipal(
   const normalized = normalize(principal);
   const trusted = buildTrustedPrincipals(env);
 
-  if (SID_RE.test(normalized)) {
-    return TRUSTED_SIDS.has(normalized) || trusted.has(normalized) ? "trusted" : "group";
+  const sid = normalizeSid(normalized);
+  if (sid) {
+    if (TRUSTED_SIDS.has(sid) || trusted.has(sid)) {
+      return "trusted";
+    }
+    if (WORLD_SIDS.has(sid)) {
+      return "world";
+    }
+    return "group";
   }
 
   if (trusted.has(normalized) || TRUSTED_SUFFIXES.some((s) => normalized.endsWith(s))) {
@@ -184,6 +205,68 @@ export function summarizeWindowsAcl(
   return { trusted, untrustedWorld, untrustedGroup };
 }
 
+async function resolvePrincipalSid(principal: string, exec: ExecFn): Promise<string | null> {
+  try {
+    const { stdout, stderr } = await exec("powershell", [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      SID_TRANSLATE_POWERSHELL_SCRIPT,
+      principal,
+    ]);
+    return extractSid(`${stdout}\n${stderr}`);
+  } catch {
+    return null;
+  }
+}
+
+async function resolveWindowsUserSid(
+  exec: ExecFn,
+  env?: NodeJS.ProcessEnv,
+): Promise<string | null> {
+  const fromEnv = normalizeSid(env?.USERSID ?? "");
+  if (fromEnv) {
+    return fromEnv;
+  }
+  try {
+    const { stdout, stderr } = await exec("whoami", ["/user"]);
+    return extractSid(`${stdout}\n${stderr}`);
+  } catch {
+    return null;
+  }
+}
+
+async function mapUnknownPrincipalsToSid(
+  entries: WindowsAclEntry[],
+  exec: ExecFn,
+  env?: NodeJS.ProcessEnv,
+): Promise<WindowsAclEntry[]> {
+  const sidByPrincipal = new Map<string, string>();
+  for (const entry of entries) {
+    if (normalizeSid(entry.principal)) {
+      continue;
+    }
+    if (classifyPrincipal(entry.principal, env) !== "group") {
+      continue;
+    }
+    if (sidByPrincipal.has(entry.principal)) {
+      continue;
+    }
+    const sid = await resolvePrincipalSid(entry.principal, exec);
+    if (sid) {
+      sidByPrincipal.set(entry.principal, sid);
+    }
+  }
+
+  if (sidByPrincipal.size === 0) {
+    return entries;
+  }
+  return entries.map((entry) => {
+    const sid = sidByPrincipal.get(entry.principal);
+    return sid ? { ...entry, principal: sid } : entry;
+  });
+}
+
 export async function inspectWindowsAcl(
   targetPath: string,
   opts?: { env?: NodeJS.ProcessEnv; exec?: ExecFn },
@@ -192,8 +275,19 @@ export async function inspectWindowsAcl(
   try {
     const { stdout, stderr } = await exec("icacls", [targetPath]);
     const output = `${stdout}\n${stderr}`.trim();
-    const entries = parseIcaclsOutput(output, targetPath);
-    const { trusted, untrustedWorld, untrustedGroup } = summarizeWindowsAcl(entries, opts?.env);
+    const parsedEntries = parseIcaclsOutput(output, targetPath);
+
+    const hasSidEntry = parsedEntries.some((entry) => normalizeSid(entry.principal));
+    const resolvedUserSid = hasSidEntry ? await resolveWindowsUserSid(exec, opts?.env) : null;
+    const envForClassification: NodeJS.ProcessEnv | undefined = resolvedUserSid
+      ? { ...opts?.env, USERSID: resolvedUserSid }
+      : opts?.env;
+
+    const entries = await mapUnknownPrincipalsToSid(parsedEntries, exec, envForClassification);
+    const { trusted, untrustedWorld, untrustedGroup } = summarizeWindowsAcl(
+      entries,
+      envForClassification,
+    );
     return { ok: true, entries, trusted, untrustedWorld, untrustedGroup };
   } catch (err) {
     return {
