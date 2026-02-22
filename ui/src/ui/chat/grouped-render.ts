@@ -413,16 +413,11 @@ function renderAvatar(
         alt="${assistantName}"
       />`;
     }
-    /* Use OpenClaw logo instead of emoji (e.g. ✨) for assistant avatar */
-    const logoUrl = basePath ? agentLogoUrl(basePath) : "";
-    if (logoUrl) {
-      return html`<img
-        class="chat-avatar ${className} chat-avatar--logo"
-        src="${logoUrl}"
-        alt="${assistantName}"
-      />`;
-    }
-    return html`<div class="chat-avatar ${className}">${assistantAvatar}</div>`;
+    return html`<img
+      class="chat-avatar ${className} chat-avatar--logo"
+      src="${agentLogoUrl(basePath ?? "")}"
+      alt="${assistantName}"
+    />`;
   }
 
   /* Assistant with no custom avatar: use logo when basePath available */

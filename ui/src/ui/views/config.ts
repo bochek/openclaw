@@ -515,6 +515,7 @@ const THEME_OPTIONS: ThemeOption[] = [
   { id: "openknot", label: "Knot", description: "Warm earthy tones", icon: "🪢" },
   { id: "fieldmanual", label: "Field", description: "Olive & tan field notes", icon: "🏕️" },
   { id: "clawdash", label: "Chrome", description: "Cool metallic blue", icon: "💎" },
+  { id: "system", label: "System", description: "Follow OS dark/light", icon: "🖥️" },
 ];
 
 function renderAppearanceSection(props: ConfigProps) {

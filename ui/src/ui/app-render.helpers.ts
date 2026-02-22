@@ -407,6 +407,7 @@ const THEME_OPTIONS: ThemeOption[] = [
   { id: "openknot", label: "Knot", icon: "🪢" },
   { id: "fieldmanual", label: "Field", icon: "🏕️" },
   { id: "clawdash", label: "Chrome", icon: "💎" },
+  { id: "system", label: "System", icon: "🖥️" },
 ];
 
 function currentThemeIcon(theme: ThemeMode): string {
@@ -515,6 +516,14 @@ const SIDEBAR_THEMES: ThemePreview[] = [
     sidebar: "#08080c",
     accent: "#ca3a29",
     glow: "#c0c8d4",
+  },
+  {
+    id: "system",
+    label: "System",
+    bg: "#040810",
+    sidebar: "#f5f2eb",
+    accent: "#ca3a29",
+    glow: "#00d4aa",
   },
 ];
 

@@ -33,6 +33,8 @@ import {
 import { saveSettings, type UiSettings } from "./storage.ts";
 import { startThemeTransition, type ThemeTransitionContext } from "./theme-transition.ts";
 import { resolveTheme, type ResolvedTheme, type ThemeMode } from "./theme.ts";
+
+let systemThemeCleanup: (() => void) | null = null;
 import type { AgentsListResult, AttentionItem } from "./types.ts";
 
 type SettingsHost = {
@@ -164,17 +166,19 @@ export function setTab(host: SettingsHost, next: Tab) {
 }
 
 export function setTheme(host: SettingsHost, next: ThemeMode, context?: ThemeTransitionContext) {
+  const resolved = resolveTheme(next);
   const applyTheme = () => {
     host.theme = next;
     applySettings(host, { ...host.settings, theme: next });
-    applyResolvedTheme(host, resolveTheme(next));
+    applyResolvedTheme(host, resolved);
   };
   startThemeTransition({
-    nextTheme: next,
+    nextTheme: resolved,
     applyTheme,
     context,
-    currentTheme: host.theme,
+    currentTheme: host.themeResolved,
   });
+  syncSystemThemeListener(host);
 }
 
 export async function refreshActiveTab(host: SettingsHost) {
@@ -260,6 +264,7 @@ export function inferBasePath() {
 export function syncThemeWithSettings(host: SettingsHost) {
   host.theme = host.settings.theme ?? "dark";
   applyResolvedTheme(host, resolveTheme(host.theme));
+  syncSystemThemeListener(host);
 }
 
 export function applyResolvedTheme(host: SettingsHost, resolved: ResolvedTheme) {
@@ -270,6 +275,32 @@ export function applyResolvedTheme(host: SettingsHost, resolved: ResolvedTheme) 
   const root = document.documentElement;
   root.dataset.theme = resolved;
   root.style.colorScheme = resolved === "light" ? "light" : "dark";
+}
+
+function syncSystemThemeListener(host: SettingsHost) {
+  if (host.theme !== "system") {
+    if (systemThemeCleanup) {
+      systemThemeCleanup();
+      systemThemeCleanup = null;
+    }
+    return;
+  }
+  if (systemThemeCleanup) {
+    return;
+  }
+  if (typeof globalThis.matchMedia !== "function") {
+    return;
+  }
+
+  const mql = globalThis.matchMedia("(prefers-color-scheme: light)");
+  const onChange = () => {
+    if (host.theme !== "system") {
+      return;
+    }
+    applyResolvedTheme(host, resolveTheme("system"));
+  };
+  mql.addEventListener("change", onChange);
+  systemThemeCleanup = () => mql.removeEventListener("change", onChange);
 }
 
 export function syncTabWithLocation(host: SettingsHost, replace: boolean) {
