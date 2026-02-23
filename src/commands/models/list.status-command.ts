@@ -154,6 +154,7 @@ export async function modelsStatusCommand(
     "openrouter",
     "zai",
     "mistral",
+    "cohere",
     "synthetic",
   ];
   for (const provider of envProbeProviders) {
