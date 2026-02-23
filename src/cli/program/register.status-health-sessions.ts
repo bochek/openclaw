@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { healthCommand } from "../../commands/health.js";
+import { sessionsCleanupCommand } from "../../commands/sessions-cleanup.js";
 import { sessionsCommand } from "../../commands/sessions.js";
 import { statusCommand } from "../../commands/status.js";
 import { setVerbose } from "../../globals.js";
@@ -111,7 +112,7 @@ export function registerStatusHealthSessionsCommands(program: Command) {
       });
     });
 
-  program
+  const sessionsCmd = program
     .command("sessions")
     .description("List stored conversation sessions")
     .option("--json", "Output as JSON", false)
@@ -145,5 +146,47 @@ export function registerStatusHealthSessionsCommands(program: Command) {
         },
         defaultRuntime,
       );
+    });
+  sessionsCmd.enablePositionalOptions();
+
+  sessionsCmd
+    .command("cleanup")
+    .description("Run session-store maintenance now")
+    .option("--store <path>", "Path to session store (default: resolved from config)")
+    .option("--dry-run", "Preview maintenance actions without writing", false)
+    .option("--enforce", "Apply maintenance even when configured mode is warn", false)
+    .option("--active-key <key>", "Protect this session key from budget-eviction")
+    .option("--json", "Output JSON", false)
+    .addHelpText(
+      "after",
+      () =>
+        `\n${theme.heading("Examples:")}\n${formatHelpExamples([
+          ["openclaw sessions cleanup --dry-run", "Preview stale/cap cleanup."],
+          ["openclaw sessions cleanup --enforce", "Apply maintenance now."],
+          [
+            "openclaw sessions cleanup --enforce --store ./tmp/sessions.json",
+            "Use a specific store.",
+          ],
+        ])}`,
+    )
+    .action(async (opts, command) => {
+      const parentOpts = command.parent?.opts() as
+        | {
+            store?: string;
+            json?: boolean;
+          }
+        | undefined;
+      await runCommandWithRuntime(defaultRuntime, async () => {
+        await sessionsCleanupCommand(
+          {
+            store: (opts.store as string | undefined) ?? parentOpts?.store,
+            dryRun: Boolean(opts.dryRun),
+            enforce: Boolean(opts.enforce),
+            activeKey: opts.activeKey as string | undefined,
+            json: Boolean(opts.json || parentOpts?.json),
+          },
+          defaultRuntime,
+        );
+      });
     });
 }

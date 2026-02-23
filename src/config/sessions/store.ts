@@ -20,6 +20,7 @@ import {
 import { getFileMtimeMs, isCacheEnabled, resolveCacheTtlMs } from "../cache-utils.js";
 import { loadConfig } from "../config.js";
 import type { SessionMaintenanceConfig, SessionMaintenanceMode } from "../types.base.js";
+import { enforceSessionDiskBudget } from "./disk-budget.js";
 import { deriveSessionMetaPatch } from "./metadata.js";
 import { mergeSessionEntry, type SessionEntry } from "./types.js";
 
@@ -299,6 +300,7 @@ const DEFAULT_SESSION_PRUNE_AFTER_MS = 30 * 24 * 60 * 60 * 1000;
 const DEFAULT_SESSION_MAX_ENTRIES = 500;
 const DEFAULT_SESSION_ROTATE_BYTES = 10_485_760; // 10 MB
 const DEFAULT_SESSION_MAINTENANCE_MODE: SessionMaintenanceMode = "warn";
+const DEFAULT_SESSION_DISK_BUDGET_HIGH_WATER_RATIO = 0.8;
 
 export type SessionMaintenanceWarning = {
   activeSessionKey: string;
@@ -315,6 +317,9 @@ type ResolvedSessionMaintenanceConfig = {
   pruneAfterMs: number;
   maxEntries: number;
   rotateBytes: number;
+  resetArchiveRetentionMs: number | null;
+  maxDiskBytes: number | null;
+  highWaterBytes: number | null;
 };
 
 function resolvePruneAfterMs(maintenance?: SessionMaintenanceConfig): number {
@@ -341,6 +346,70 @@ function resolveRotateBytes(maintenance?: SessionMaintenanceConfig): number {
   }
 }
 
+function resolveResetArchiveRetentionMs(
+  maintenance: SessionMaintenanceConfig | undefined,
+  pruneAfterMs: number,
+): number | null {
+  const raw = maintenance?.resetArchiveRetention;
+  if (raw === false) {
+    return null;
+  }
+  if (raw === undefined || raw === null || raw === "") {
+    return pruneAfterMs;
+  }
+  try {
+    return parseDurationMs(String(raw).trim(), { defaultUnit: "d" });
+  } catch {
+    return pruneAfterMs;
+  }
+}
+
+function resolveMaxDiskBytes(maintenance?: SessionMaintenanceConfig): number | null {
+  const raw = maintenance?.maxDiskBytes;
+  if (raw === undefined || raw === null || raw === "") {
+    return null;
+  }
+  try {
+    return parseByteSize(String(raw).trim(), { defaultUnit: "b" });
+  } catch {
+    return null;
+  }
+}
+
+function resolveHighWaterBytes(
+  maintenance: SessionMaintenanceConfig | undefined,
+  maxDiskBytes: number | null,
+): number | null {
+  const computeDefault = () => {
+    if (maxDiskBytes == null) {
+      return null;
+    }
+    if (maxDiskBytes <= 0) {
+      return 0;
+    }
+    return Math.max(
+      1,
+      Math.min(
+        maxDiskBytes,
+        Math.floor(maxDiskBytes * DEFAULT_SESSION_DISK_BUDGET_HIGH_WATER_RATIO),
+      ),
+    );
+  };
+  if (maxDiskBytes == null) {
+    return null;
+  }
+  const raw = maintenance?.highWaterBytes;
+  if (raw === undefined || raw === null || raw === "") {
+    return computeDefault();
+  }
+  try {
+    const parsed = parseByteSize(String(raw).trim(), { defaultUnit: "b" });
+    return Math.min(parsed, maxDiskBytes);
+  } catch {
+    return computeDefault();
+  }
+}
+
 /**
  * Resolve maintenance settings from openclaw.json (`session.maintenance`).
  * Falls back to built-in defaults when config is missing or unset.
@@ -352,11 +421,16 @@ export function resolveMaintenanceConfig(): ResolvedSessionMaintenanceConfig {
   } catch {
     // Config may not be available (e.g. in tests). Use defaults.
   }
+  const pruneAfterMs = resolvePruneAfterMs(maintenance);
+  const maxDiskBytes = resolveMaxDiskBytes(maintenance);
   return {
     mode: maintenance?.mode ?? DEFAULT_SESSION_MAINTENANCE_MODE,
-    pruneAfterMs: resolvePruneAfterMs(maintenance),
+    pruneAfterMs,
     maxEntries: maintenance?.maxEntries ?? DEFAULT_SESSION_MAX_ENTRIES,
     rotateBytes: resolveRotateBytes(maintenance),
+    resetArchiveRetentionMs: resolveResetArchiveRetentionMs(maintenance, pruneAfterMs),
+    maxDiskBytes,
+    highWaterBytes: resolveHighWaterBytes(maintenance, maxDiskBytes),
   };
 }
 
@@ -439,7 +513,10 @@ export function getActiveSessionMaintenanceWarning(params: {
 export function capEntryCount(
   store: Record<string, SessionEntry>,
   overrideMax?: number,
-  opts: { log?: boolean } = {},
+  opts: {
+    log?: boolean;
+    onCapped?: (params: { key: string; entry: SessionEntry }) => void;
+  } = {},
 ): number {
   const maxEntries = overrideMax ?? resolveMaintenanceConfig().maxEntries;
   const keys = Object.keys(store);
@@ -456,6 +533,10 @@ export function capEntryCount(
 
   const toRemove = sorted.slice(maxEntries);
   for (const key of toRemove) {
+    const entry = store[key];
+    if (entry) {
+      opts.onCapped?.({ key, entry });
+    }
     delete store[key];
   }
   if (opts.log !== false) {
@@ -539,6 +620,8 @@ type SaveSessionStoreOptions = {
   activeSessionKey?: string;
   /** Optional callback for warn-only maintenance. */
   onWarn?: (warning: SessionMaintenanceWarning) => void | Promise<void>;
+  /** Optional overrides used by maintenance commands. */
+  maintenanceOverride?: Partial<ResolvedSessionMaintenanceConfig>;
 };
 
 async function saveSessionStoreUnlocked(
@@ -553,7 +636,7 @@ async function saveSessionStoreUnlocked(
 
   if (!opts?.skipMaintenance) {
     // Resolve maintenance config once (avoids repeated loadConfig() calls).
-    const maintenance = resolveMaintenanceConfig();
+    const maintenance = { ...resolveMaintenanceConfig(), ...opts?.maintenanceOverride };
     const shouldWarnOnly = maintenance.mode === "warn";
 
     if (shouldWarnOnly) {
@@ -576,39 +659,80 @@ async function saveSessionStoreUnlocked(
           await opts?.onWarn?.(warning);
         }
       }
+      await enforceSessionDiskBudget({
+        store,
+        storePath,
+        activeSessionKey: opts?.activeSessionKey,
+        maintenance,
+        warnOnly: true,
+        log,
+      });
     } else {
       // Prune stale entries and cap total count before serializing.
-      const prunedSessionFiles = new Map<string, string | undefined>();
+      const removedSessionFiles = new Map<string, string | undefined>();
       pruneStaleEntries(store, maintenance.pruneAfterMs, {
         onPruned: ({ entry }) => {
-          if (!prunedSessionFiles.has(entry.sessionId) || entry.sessionFile) {
-            prunedSessionFiles.set(entry.sessionId, entry.sessionFile);
+          if (!removedSessionFiles.has(entry.sessionId) || entry.sessionFile) {
+            removedSessionFiles.set(entry.sessionId, entry.sessionFile);
           }
         },
       });
-      capEntryCount(store, maintenance.maxEntries);
+      capEntryCount(store, maintenance.maxEntries, {
+        onCapped: ({ entry }) => {
+          if (!removedSessionFiles.has(entry.sessionId) || entry.sessionFile) {
+            removedSessionFiles.set(entry.sessionId, entry.sessionFile);
+          }
+        },
+      });
       const archivedDirs = new Set<string>();
-      for (const [sessionId, sessionFile] of prunedSessionFiles) {
+      const referencedSessionIds = new Set(
+        Object.values(store)
+          .map((entry) => entry?.sessionId)
+          .filter((id): id is string => Boolean(id)),
+      );
+      for (const [sessionId, sessionFile] of removedSessionFiles) {
+        if (referencedSessionIds.has(sessionId)) {
+          continue;
+        }
         const archived = archiveSessionTranscripts({
           sessionId,
           storePath,
           sessionFile,
           reason: "deleted",
+          restrictToStoreDir: true,
         });
         for (const archivedPath of archived) {
           archivedDirs.add(path.dirname(archivedPath));
         }
       }
-      if (archivedDirs.size > 0) {
+      if (archivedDirs.size > 0 || maintenance.resetArchiveRetentionMs != null) {
+        const targetDirs =
+          archivedDirs.size > 0 ? [...archivedDirs] : [path.dirname(path.resolve(storePath))];
         await cleanupArchivedSessionTranscripts({
-          directories: [...archivedDirs],
+          directories: targetDirs,
           olderThanMs: maintenance.pruneAfterMs,
           reason: "deleted",
         });
+        if (maintenance.resetArchiveRetentionMs != null) {
+          await cleanupArchivedSessionTranscripts({
+            directories: targetDirs,
+            olderThanMs: maintenance.resetArchiveRetentionMs,
+            reason: "reset",
+          });
+        }
       }
 
       // Rotate the on-disk file if it exceeds the size threshold.
       await rotateSessionFile(storePath, maintenance.rotateBytes);
+
+      await enforceSessionDiskBudget({
+        store,
+        storePath,
+        activeSessionKey: opts?.activeSessionKey,
+        maintenance,
+        warnOnly: false,
+        log,
+      });
     }
   }
 

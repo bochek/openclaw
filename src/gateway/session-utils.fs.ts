@@ -2,6 +2,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  formatSessionArchiveTimestamp,
+  parseSessionArchiveTimestamp,
+  type SessionArchiveReason,
   resolveSessionFilePath,
   resolveSessionTranscriptPath,
   resolveSessionTranscriptPathInDir,
@@ -159,10 +162,10 @@ export function resolveSessionTranscriptCandidates(
   return Array.from(new Set(candidates));
 }
 
-export type ArchiveFileReason = "bak" | "reset" | "deleted";
+export type ArchiveFileReason = SessionArchiveReason;
 
 export function archiveFileOnDisk(filePath: string, reason: ArchiveFileReason): string {
-  const ts = new Date().toISOString().replaceAll(":", "-");
+  const ts = formatSessionArchiveTimestamp();
   const archived = `${filePath}.${reason}.${ts}`;
   fs.renameSync(filePath, archived);
   return archived;
@@ -178,14 +181,27 @@ export function archiveSessionTranscripts(opts: {
   sessionFile?: string;
   agentId?: string;
   reason: "reset" | "deleted";
+  /**
+   * When true, only archive files resolved under the session store directory.
+   * This prevents maintenance operations from mutating paths outside the agent sessions dir.
+   */
+  restrictToStoreDir?: boolean;
 }): string[] {
   const archived: string[] = [];
+  const storeDir =
+    opts.restrictToStoreDir && opts.storePath ? path.resolve(path.dirname(opts.storePath)) : null;
   for (const candidate of resolveSessionTranscriptCandidates(
     opts.sessionId,
     opts.storePath,
     opts.sessionFile,
     opts.agentId,
   )) {
+    if (storeDir) {
+      const relative = path.relative(storeDir, path.resolve(candidate));
+      if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+        continue;
+      }
+    }
     if (!fs.existsSync(candidate)) {
       continue;
     }
@@ -198,32 +214,10 @@ export function archiveSessionTranscripts(opts: {
   return archived;
 }
 
-function restoreArchiveTimestamp(raw: string): string {
-  const [datePart, timePart] = raw.split("T");
-  if (!datePart || !timePart) {
-    return raw;
-  }
-  return `${datePart}T${timePart.replace(/-/g, ":")}`;
-}
-
-function parseArchivedTimestamp(fileName: string, reason: ArchiveFileReason): number | null {
-  const marker = `.${reason}.`;
-  const index = fileName.lastIndexOf(marker);
-  if (index < 0) {
-    return null;
-  }
-  const raw = fileName.slice(index + marker.length);
-  if (!raw) {
-    return null;
-  }
-  const timestamp = Date.parse(restoreArchiveTimestamp(raw));
-  return Number.isNaN(timestamp) ? null : timestamp;
-}
-
 export async function cleanupArchivedSessionTranscripts(opts: {
   directories: string[];
   olderThanMs: number;
-  reason?: "deleted";
+  reason?: ArchiveFileReason;
   nowMs?: number;
 }): Promise<{ removed: number; scanned: number }> {
   if (!Number.isFinite(opts.olderThanMs) || opts.olderThanMs < 0) {
@@ -238,7 +232,7 @@ export async function cleanupArchivedSessionTranscripts(opts: {
   for (const dir of directories) {
     const entries = await fs.promises.readdir(dir).catch(() => []);
     for (const entry of entries) {
-      const timestamp = parseArchivedTimestamp(entry, reason);
+      const timestamp = parseSessionArchiveTimestamp(entry, reason);
       if (timestamp == null) {
         continue;
       }
