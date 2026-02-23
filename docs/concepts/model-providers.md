@@ -134,6 +134,9 @@ OpenClaw ships with the pi‑ai catalog. These providers require **no**
 - Mistral: `mistral` (`MISTRAL_API_KEY`)
 - Example model: `mistral/mistral-large-latest`
 - CLI: `openclaw onboard --auth-choice mistral-api-key`
+- Cohere: `cohere` (`COHERE_API_KEY`)
+- Example model: `cohere/command-a-03-2025`
+- CLI: `openclaw onboard --auth-choice cohere-api-key`
 - Groq: `groq` (`GROQ_API_KEY`)
 - Cerebras: `cerebras` (`CEREBRAS_API_KEY`)
   - GLM models on Cerebras use ids `zai-glm-4.7` and `zai-glm-4.6`.
