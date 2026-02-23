@@ -30,6 +30,14 @@ export type CameraClipPayload = {
   hasAudio: boolean;
 };
 
+function normalizeHostname(value: string): string {
+  const trimmed = value.trim().toLowerCase();
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
 export function parseCameraSnapPayload(value: unknown): CameraSnapPayload {
   const obj = asRecord(value);
   const format = asString(obj.format);
@@ -73,15 +81,35 @@ export function cameraTempPath(opts: {
   return path.join(tmpDir, `${cliName}-camera-${opts.kind}${facingPart}-${id}${ext}`);
 }
 
-export async function writeUrlToFile(filePath: string, url: string) {
+export async function writeUrlToFile(
+  filePath: string,
+  url: string,
+  opts?: { expectedHost?: string },
+) {
   const parsed = new URL(url);
   if (parsed.protocol !== "https:") {
     throw new Error(`writeUrlToFile: only https URLs are allowed, got ${parsed.protocol}`);
   }
+  const expectedHost = opts?.expectedHost ? normalizeHostname(opts.expectedHost) : undefined;
+  if (expectedHost && normalizeHostname(parsed.hostname) !== expectedHost) {
+    throw new Error(
+      `writeUrlToFile: url host ${parsed.hostname} must match node host ${opts?.expectedHost}`,
+    );
+  }
+
+  const policy =
+    expectedHost !== undefined
+      ? {
+          allowPrivateNetwork: true,
+          allowedHostnames: [expectedHost],
+          hostnameAllowlist: [expectedHost],
+        }
+      : undefined;
 
   const { response: res, release } = await fetchWithSsrFGuard({
     url,
     auditContext: "writeUrlToFile",
+    policy,
   });
 
   let bytes = 0;
@@ -155,6 +183,7 @@ export async function writeCameraClipPayloadToFile(params: {
   facing: CameraFacing;
   tmpDir?: string;
   id?: string;
+  expectedHost?: string;
 }): Promise<string> {
   const filePath = cameraTempPath({
     kind: "clip",
@@ -164,7 +193,7 @@ export async function writeCameraClipPayloadToFile(params: {
     id: params.id,
   });
   if (params.payload.url) {
-    await writeUrlToFile(filePath, params.payload.url);
+    await writeUrlToFile(filePath, params.payload.url, { expectedHost: params.expectedHost });
   } else if (params.payload.base64) {
     await writeBase64ToFile(filePath, params.payload.base64);
   } else {

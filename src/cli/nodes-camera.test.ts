@@ -132,6 +132,27 @@ describe("nodes camera helpers", () => {
     });
   });
 
+  it("enforces expected node host for url payloads", async () => {
+    stubFetchResponse(new Response("node-hosted", { status: 200 }));
+    await withCameraTempDir(async (dir) => {
+      const out = path.join(dir, "node.bin");
+      await writeUrlToFile(out, "https://example.com/clip.mp4", {
+        expectedHost: "example.com",
+      });
+      await expect(fs.readFile(out, "utf8")).resolves.toBe("node-hosted");
+    });
+  });
+
+  it("rejects url payload host mismatch against node host", async () => {
+    stubFetchResponse(new Response("mismatch", { status: 200 }));
+    await withCameraTempDir(async (dir) => {
+      const out = path.join(dir, "mismatch.bin");
+      await expect(
+        writeUrlToFile(out, "https://example.com/clip.mp4", { expectedHost: "node.local" }),
+      ).rejects.toThrow(/must match node host/i);
+    });
+  });
+
   it("rejects invalid url payload responses", async () => {
     const cases: Array<{
       name: string;
