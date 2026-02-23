@@ -1,6 +1,6 @@
 {
-  "name": "@openclaw/matrix",
-  "version": "2026.2.6-3",
+  "name": "@openclaw/matrix-js",
+  "version": "2026.2.22",
   "description": "OpenClaw Matrix channel plugin",
   "type": "module",
   "dependencies": {
@@ -19,9 +19,9 @@
       "./index.ts"
     ],
     "channel": {
-      "id": "matrix",
-      "label": "Matrix",
-      "selectionLabel": "Matrix (plugin)",
+      "id": "matrix-js",
+      "label": "Matrix-js",
+      "selectionLabel": "Matrix-js (plugin)",
       "docsPath": "/channels/matrix",
       "docsLabel": "matrix",
       "blurb": "open protocol; install the plugin to enable.",
@@ -29,8 +29,8 @@
       "quickstartAllowFrom": true
     },
     "install": {
-      "npmSpec": "@openclaw/matrix",
-      "localPath": "extensions/matrix",
+      "npmSpec": "@openclaw/matrix-js",
+      "localPath": "extensions/matrix-js",
       "defaultChoice": "npm"
     }
   }

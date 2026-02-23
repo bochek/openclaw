@@ -1,6 +1,6 @@
 {
-  "id": "matrix",
-  "channels": ["matrix"],
+  "id": "matrix-js",
+  "channels": ["matrix-js"],
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
