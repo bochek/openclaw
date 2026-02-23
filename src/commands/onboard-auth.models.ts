@@ -161,6 +161,30 @@ export function buildMistralModelDefinition(): ModelDefinitionConfig {
   };
 }
 
+export const COHERE_BASE_URL = "https://api.cohere.ai/compatibility/v1";
+export const COHERE_DEFAULT_MODEL_ID = "command-a-03-2025";
+export const COHERE_DEFAULT_MODEL_REF = `cohere/${COHERE_DEFAULT_MODEL_ID}`;
+export const COHERE_DEFAULT_CONTEXT_WINDOW = 256000;
+export const COHERE_DEFAULT_MAX_TOKENS = 8192;
+export const COHERE_DEFAULT_COST = {
+  input: 0,
+  output: 0,
+  cacheRead: 0,
+  cacheWrite: 0,
+};
+
+export function buildCohereModelDefinition(): ModelDefinitionConfig {
+  return {
+    id: COHERE_DEFAULT_MODEL_ID,
+    name: "Command A",
+    reasoning: false,
+    input: ["text", "image"],
+    cost: COHERE_DEFAULT_COST,
+    contextWindow: COHERE_DEFAULT_CONTEXT_WINDOW,
+    maxTokens: COHERE_DEFAULT_MAX_TOKENS,
+  };
+}
+
 export function buildZaiModelDefinition(params: {
   id: string;
   name?: string;
