@@ -58,11 +58,15 @@ import {
   applyProviderConfigWithModelCatalog,
 } from "./onboard-auth.config-shared.js";
 import {
+  buildCohereModelDefinition,
   buildMistralModelDefinition,
   buildZaiModelDefinition,
   buildMoonshotModelDefinition,
   buildXaiModelDefinition,
+  COHERE_BASE_URL,
+  COHERE_DEFAULT_MODEL_ID,
   MISTRAL_BASE_URL,
+  COHERE_DEFAULT_MODEL_REF,
   MISTRAL_DEFAULT_MODEL_ID,
   QIANFAN_BASE_URL,
   QIANFAN_DEFAULT_MODEL_REF,
@@ -428,6 +432,30 @@ export function applyMistralProviderConfig(cfg: OpenClawConfig): OpenClawConfig 
 export function applyMistralConfig(cfg: OpenClawConfig): OpenClawConfig {
   const next = applyMistralProviderConfig(cfg);
   return applyAgentDefaultModelPrimary(next, MISTRAL_DEFAULT_MODEL_REF);
+}
+
+export function applyCohereProviderConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const models = { ...cfg.agents?.defaults?.models };
+  models[COHERE_DEFAULT_MODEL_REF] = {
+    ...models[COHERE_DEFAULT_MODEL_REF],
+    alias: models[COHERE_DEFAULT_MODEL_REF]?.alias ?? "Cohere",
+  };
+
+  const defaultModel = buildCohereModelDefinition();
+
+  return applyProviderConfigWithDefaultModel(cfg, {
+    agentModels: models,
+    providerId: "cohere",
+    api: "openai-completions",
+    baseUrl: COHERE_BASE_URL,
+    defaultModel,
+    defaultModelId: COHERE_DEFAULT_MODEL_ID,
+  });
+}
+
+export function applyCohereConfig(cfg: OpenClawConfig): OpenClawConfig {
+  const next = applyCohereProviderConfig(cfg);
+  return applyAgentDefaultModelPrimary(next, COHERE_DEFAULT_MODEL_REF);
 }
 
 export function applyAuthProfileConfig(
