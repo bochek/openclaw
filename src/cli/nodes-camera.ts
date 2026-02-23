@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { fetchWithSsrFGuard } from "../infra/net/fetch-guard.js";
+import { normalizeHostname } from "../infra/net/hostname.js";
 import { resolveCliName } from "./cli-name.js";
 import {
   asBoolean,
@@ -29,14 +30,6 @@ export type CameraClipPayload = {
   durationMs: number;
   hasAudio: boolean;
 };
-
-function normalizeHostname(value: string): string {
-  const trimmed = value.trim().toLowerCase();
-  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-    return trimmed.slice(1, -1);
-  }
-  return trimmed;
-}
 
 export function parseCameraSnapPayload(value: unknown): CameraSnapPayload {
   const obj = asRecord(value);
