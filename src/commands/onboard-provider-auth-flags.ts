@@ -5,6 +5,7 @@ type OnboardProviderAuthOptionKey = keyof Pick<
   | "anthropicApiKey"
   | "openaiApiKey"
   | "mistralApiKey"
+  | "cohereApiKey"
   | "openrouterApiKey"
   | "aiGatewayApiKey"
   | "cloudflareAiGatewayApiKey"
@@ -56,6 +57,13 @@ export const ONBOARD_PROVIDER_AUTH_FLAGS: ReadonlyArray<OnboardProviderAuthFlag>
     cliFlag: "--mistral-api-key",
     cliOption: "--mistral-api-key <key>",
     description: "Mistral API key",
+  },
+  {
+    optionKey: "cohereApiKey",
+    authChoice: "cohere-api-key",
+    cliFlag: "--cohere-api-key",
+    cliOption: "--cohere-api-key <key>",
+    description: "Cohere API key",
   },
   {
     optionKey: "openrouterApiKey",
