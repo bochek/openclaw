@@ -8,6 +8,7 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- Provider/Cohere: add Cohere API-key onboarding (`cohere-api-key`), default provider config (`cohere/command-a-03-2025`), env key resolution (`COHERE_API_KEY`), and docs.
 - Providers/Vercel AI Gateway: accept Claude shorthand model refs (`vercel-ai-gateway/claude-*`) by normalizing to canonical Anthropic-routed model ids. (#23985) Thanks @sallyom, @markbooch, and @vincentkoc.
 
 ### Breaking
