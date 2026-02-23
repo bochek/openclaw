@@ -1,3 +1,4 @@
+import { normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import { getMatrixRuntime } from "../../runtime.js";
 import { MatrixClient } from "../sdk.js";
 import type { CoreConfig } from "../types.js";
@@ -30,6 +31,27 @@ function parseOptionalBoolean(value: unknown): boolean | undefined {
     return false;
   }
   return undefined;
+}
+
+function findAccountConfig(cfg: CoreConfig, accountId: string): Record<string, unknown> {
+  const accounts = cfg.channels?.["matrix-js"]?.accounts;
+  if (!accounts || typeof accounts !== "object") {
+    return {};
+  }
+  if (accounts[accountId] && typeof accounts[accountId] === "object") {
+    return accounts[accountId] as Record<string, unknown>;
+  }
+  const normalized = normalizeAccountId(accountId);
+  for (const key of Object.keys(accounts)) {
+    if (normalizeAccountId(key) === normalized) {
+      const candidate = accounts[key];
+      if (candidate && typeof candidate === "object") {
+        return candidate as Record<string, unknown>;
+      }
+      return {};
+    }
+  }
+  return {};
 }
 
 function resolveMatrixLocalpart(userId: string): string {
@@ -100,7 +122,7 @@ export function resolveMatrixConfig(
   cfg: CoreConfig = getMatrixRuntime().config.loadConfig() as CoreConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): MatrixResolvedConfig {
-  const matrix = cfg.channels?.matrix ?? {};
+  const matrix = cfg.channels?.["matrix-js"] ?? {};
   const homeserver = clean(matrix.homeserver) || clean(env.MATRIX_HOMESERVER);
   const userId = clean(matrix.userId) || clean(env.MATRIX_USER_ID);
   const accessToken = clean(matrix.accessToken) || clean(env.MATRIX_ACCESS_TOKEN) || undefined;
@@ -127,16 +149,86 @@ export function resolveMatrixConfig(
   };
 }
 
+export function resolveMatrixConfigForAccount(
+  cfg: CoreConfig,
+  accountId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): MatrixResolvedConfig {
+  const matrix = cfg.channels?.["matrix-js"] ?? {};
+  const account = findAccountConfig(cfg, accountId);
+
+  const accountHomeserver = clean(
+    typeof account.homeserver === "string" ? account.homeserver : undefined,
+  );
+  const accountUserId = clean(typeof account.userId === "string" ? account.userId : undefined);
+  const accountAccessToken = clean(
+    typeof account.accessToken === "string" ? account.accessToken : undefined,
+  );
+  const accountPassword = clean(
+    typeof account.password === "string" ? account.password : undefined,
+  );
+  const accountDeviceId = clean(
+    typeof account.deviceId === "string" ? account.deviceId : undefined,
+  );
+  const accountDeviceName = clean(
+    typeof account.deviceName === "string" ? account.deviceName : undefined,
+  );
+
+  const homeserver = accountHomeserver || clean(matrix.homeserver) || clean(env.MATRIX_HOMESERVER);
+  const userId = accountUserId || clean(matrix.userId) || clean(env.MATRIX_USER_ID);
+  const accessToken =
+    accountAccessToken || clean(matrix.accessToken) || clean(env.MATRIX_ACCESS_TOKEN) || undefined;
+  const password =
+    accountPassword || clean(matrix.password) || clean(env.MATRIX_PASSWORD) || undefined;
+  const register =
+    parseOptionalBoolean(account.register) ??
+    parseOptionalBoolean(matrix.register) ??
+    parseOptionalBoolean(env.MATRIX_REGISTER) ??
+    false;
+  const deviceId =
+    accountDeviceId || clean(matrix.deviceId) || clean(env.MATRIX_DEVICE_ID) || undefined;
+  const deviceName =
+    accountDeviceName || clean(matrix.deviceName) || clean(env.MATRIX_DEVICE_NAME) || undefined;
+
+  const accountInitialSyncLimit =
+    typeof account.initialSyncLimit === "number"
+      ? Math.max(0, Math.floor(account.initialSyncLimit))
+      : undefined;
+  const initialSyncLimit =
+    accountInitialSyncLimit ??
+    (typeof matrix.initialSyncLimit === "number"
+      ? Math.max(0, Math.floor(matrix.initialSyncLimit))
+      : undefined);
+  const encryption =
+    typeof account.encryption === "boolean" ? account.encryption : (matrix.encryption ?? false);
+
+  return {
+    homeserver,
+    userId,
+    accessToken,
+    password,
+    register,
+    deviceId,
+    deviceName,
+    initialSyncLimit,
+    encryption,
+  };
+}
+
 export async function resolveMatrixAuth(params?: {
   cfg?: CoreConfig;
   env?: NodeJS.ProcessEnv;
+  accountId?: string | null;
 }): Promise<MatrixAuth> {
   const cfg = params?.cfg ?? (getMatrixRuntime().config.loadConfig() as CoreConfig);
   const env = params?.env ?? process.env;
-  const resolved = resolveMatrixConfig(cfg, env);
-  const registerFromConfig = cfg.channels?.matrix?.register === true;
+  const accountId = params?.accountId;
+  const resolved = accountId
+    ? resolveMatrixConfigForAccount(cfg, accountId, env)
+    : resolveMatrixConfig(cfg, env);
+  const registerFromConfig = resolved.register === true;
   if (!resolved.homeserver) {
-    throw new Error("Matrix homeserver is required (matrix.homeserver)");
+    throw new Error("Matrix homeserver is required (matrix-js.homeserver)");
   }
 
   const {
@@ -146,7 +238,7 @@ export async function resolveMatrixAuth(params?: {
     touchMatrixCredentials,
   } = await import("../credentials.js");
 
-  const cached = loadMatrixCredentials(env);
+  const cached = loadMatrixCredentials(env, accountId);
   const cachedCredentials =
     cached &&
     credentialsMatchConfig(cached, {
@@ -158,10 +250,10 @@ export async function resolveMatrixAuth(params?: {
 
   if (registerFromConfig) {
     if (!resolved.userId) {
-      throw new Error("Matrix userId is required when matrix.register=true");
+      throw new Error("Matrix userId is required when matrix-js.register=true");
     }
     if (!resolved.password) {
-      throw new Error("Matrix password is required when matrix.register=true");
+      throw new Error("Matrix password is required when matrix-js.register=true");
     }
     await prepareMatrixRegisterMode({
       cfg,
@@ -205,14 +297,18 @@ export async function resolveMatrixAuth(params?: {
       cachedCredentials.userId !== userId ||
       (cachedCredentials.deviceId || undefined) !== knownDeviceId;
     if (shouldRefreshCachedCredentials) {
-      saveMatrixCredentials({
-        homeserver: resolved.homeserver,
-        userId,
-        accessToken: resolved.accessToken,
-        deviceId: knownDeviceId,
-      });
+      saveMatrixCredentials(
+        {
+          homeserver: resolved.homeserver,
+          userId,
+          accessToken: resolved.accessToken,
+          deviceId: knownDeviceId,
+        },
+        env,
+        accountId,
+      );
     } else if (hasMatchingCachedToken) {
-      touchMatrixCredentials(env);
+      touchMatrixCredentials(env, accountId);
     }
     return {
       homeserver: resolved.homeserver,
@@ -227,7 +323,7 @@ export async function resolveMatrixAuth(params?: {
   }
 
   if (cachedCredentials && !registerFromConfig) {
-    touchMatrixCredentials(env);
+    touchMatrixCredentials(env, accountId);
     return {
       homeserver: cachedCredentials.homeserver,
       userId: cachedCredentials.userId,
@@ -241,12 +337,14 @@ export async function resolveMatrixAuth(params?: {
   }
 
   if (!resolved.userId) {
-    throw new Error("Matrix userId is required when no access token is configured (matrix.userId)");
+    throw new Error(
+      "Matrix userId is required when no access token is configured (matrix-js.userId)",
+    );
   }
 
   if (!resolved.password) {
     throw new Error(
-      "Matrix password is required when no access token is configured (matrix.password)",
+      "Matrix password is required when no access token is configured (matrix-js.password)",
     );
   }
 
@@ -308,12 +406,16 @@ export async function resolveMatrixAuth(params?: {
     encryption: resolved.encryption,
   };
 
-  saveMatrixCredentials({
-    homeserver: auth.homeserver,
-    userId: auth.userId,
-    accessToken: auth.accessToken,
-    deviceId: auth.deviceId,
-  });
+  saveMatrixCredentials(
+    {
+      homeserver: auth.homeserver,
+      userId: auth.userId,
+      accessToken: auth.accessToken,
+      deviceId: auth.deviceId,
+    },
+    env,
+    accountId,
+  );
 
   if (registerFromConfig) {
     await finalizeMatrixRegisterConfigAfterSuccess({

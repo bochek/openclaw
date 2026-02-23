@@ -38,9 +38,9 @@ import type { CoreConfig } from "./types.js";
 let matrixStartupLock: Promise<void> = Promise.resolve();
 
 const meta = {
-  id: "matrix",
-  label: "Matrix",
-  selectionLabel: "Matrix (plugin)",
+  id: "matrix-js",
+  label: "Matrix-js",
+  selectionLabel: "Matrix-js (plugin)",
   docsPath: "/channels/matrix",
   docsLabel: "matrix",
   blurb: "open protocol; configure a homeserver + access token.",
@@ -73,12 +73,12 @@ function buildMatrixConfigUpdate(
     initialSyncLimit?: number;
   },
 ): CoreConfig {
-  const existing = cfg.channels?.matrix ?? {};
+  const existing = cfg.channels?.["matrix-js"] ?? {};
   return {
     ...cfg,
     channels: {
       ...cfg.channels,
-      matrix: {
+      "matrix-js": {
         ...existing,
         enabled: true,
         ...(input.homeserver ? { homeserver: input.homeserver } : {}),
@@ -96,7 +96,7 @@ function buildMatrixConfigUpdate(
 }
 
 export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
-  id: "matrix",
+  id: "matrix-js",
   meta,
   onboarding: matrixOnboardingAdapter,
   pairing: {
@@ -113,7 +113,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
     threads: true,
     media: true,
   },
-  reload: { configPrefixes: ["channels.matrix"] },
+  reload: { configPrefixes: ["channels.matrix-js"] },
   configSchema: buildChannelConfigSchema(MatrixConfigSchema),
   config: {
     listAccountIds: (cfg) => listMatrixAccountIds(cfg as CoreConfig),
@@ -122,7 +122,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
     setAccountEnabled: ({ cfg, accountId, enabled }) =>
       setAccountEnabledInConfigSection({
         cfg: cfg as CoreConfig,
-        sectionKey: "matrix",
+        sectionKey: "matrix-js",
         accountId,
         enabled,
         allowTopLevel: true,
@@ -130,7 +130,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
     deleteAccount: ({ cfg, accountId }) =>
       deleteAccountFromConfigSection({
         cfg: cfg as CoreConfig,
-        sectionKey: "matrix",
+        sectionKey: "matrix-js",
         accountId,
         clearBaseFields: [
           "name",
@@ -162,21 +162,21 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
       const accountId = account.accountId;
       const prefix =
         accountId && accountId !== "default"
-          ? `channels.matrix.accounts.${accountId}.dm`
-          : "channels.matrix.dm";
+          ? `channels.matrix-js.accounts.${accountId}.dm`
+          : "channels.matrix-js.dm";
       return {
         policy: account.config.dm?.policy ?? "pairing",
         allowFrom: account.config.dm?.allowFrom ?? [],
         policyPath: `${prefix}.policy`,
         allowFromPath: `${prefix}.allowFrom`,
-        approveHint: formatPairingApproveHint("matrix"),
+        approveHint: formatPairingApproveHint("matrix-js"),
         normalizeEntry: (raw) => normalizeMatrixUserId(raw),
       };
     },
     collectWarnings: ({ account, cfg }) => {
       const defaultGroupPolicy = resolveDefaultGroupPolicy(cfg as CoreConfig);
       const { groupPolicy } = resolveAllowlistProviderRuntimeGroupPolicy({
-        providerConfigPresent: (cfg as CoreConfig).channels?.matrix !== undefined,
+        providerConfigPresent: (cfg as CoreConfig).channels?.["matrix-js"] !== undefined,
         groupPolicy: account.config.groupPolicy,
         defaultGroupPolicy,
       });
@@ -184,7 +184,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         return [];
       }
       return [
-        '- Matrix rooms: groupPolicy="open" allows any room to trigger (mention-gated). Set channels.matrix.groupPolicy="allowlist" + channels.matrix.groups (and optionally channels.matrix.groupAllowFrom) to restrict rooms.',
+        '- Matrix rooms: groupPolicy="open" allows any room to trigger (mention-gated). Set channels.matrix-js.groupPolicy="allowlist" + channels.matrix-js.groups (and optionally channels.matrix-js.groupAllowFrom) to restrict rooms.',
       ];
     },
   },
@@ -316,7 +316,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
     applyAccountName: ({ cfg, accountId, name }) =>
       applyAccountNameToChannelSection({
         cfg: cfg as CoreConfig,
-        channelKey: "matrix",
+        channelKey: "matrix-js",
         accountId,
         name,
       }),
@@ -346,7 +346,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
     applyAccountConfig: ({ cfg, input }) => {
       const namedConfig = applyAccountNameToChannelSection({
         cfg: cfg as CoreConfig,
-        channelKey: "matrix",
+        channelKey: "matrix-js",
         accountId: DEFAULT_ACCOUNT_ID,
         name: input.name,
       });
@@ -355,8 +355,8 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
           ...namedConfig,
           channels: {
             ...namedConfig.channels,
-            matrix: {
-              ...namedConfig.channels?.matrix,
+            "matrix-js": {
+              ...namedConfig.channels?.["matrix-js"],
               enabled: true,
             },
           },
@@ -389,7 +389,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         }
         return [
           {
-            channel: "matrix",
+            channel: "matrix-js",
             accountId: account.accountId,
             kind: "runtime",
             message: `Channel error: ${lastError}`,

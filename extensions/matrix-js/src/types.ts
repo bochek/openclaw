@@ -102,7 +102,7 @@ export type MatrixConfig = {
 
 export type CoreConfig = {
   channels?: {
-    matrix?: MatrixConfig;
+    "matrix-js"?: MatrixConfig;
     defaults?: {
       groupPolicy?: "open" | "allowlist" | "disabled";
     };

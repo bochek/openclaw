@@ -100,7 +100,13 @@ export async function resolveSharedMatrixClient(
     accountId?: string | null;
   } = {},
 ): Promise<MatrixClient> {
-  const auth = params.auth ?? (await resolveMatrixAuth({ cfg: params.cfg, env: params.env }));
+  const auth =
+    params.auth ??
+    (await resolveMatrixAuth({
+      cfg: params.cfg,
+      env: params.env,
+      accountId: params.accountId,
+    }));
   const key = buildSharedClientKey(auth, params.accountId);
   const shouldStart = params.startClient !== false;
 
@@ -170,4 +176,16 @@ export function stopSharedClient(): void {
     sharedClientState.client.stop();
     sharedClientState = null;
   }
+}
+
+export function stopSharedClientForAccount(auth: MatrixAuth, accountId?: string | null): void {
+  if (!sharedClientState) {
+    return;
+  }
+  const key = buildSharedClientKey(auth, accountId);
+  if (sharedClientState.key !== key) {
+    return;
+  }
+  sharedClientState.client.stop();
+  sharedClientState = null;
 }

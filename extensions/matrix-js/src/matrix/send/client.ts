@@ -19,8 +19,8 @@ export function ensureNodeRuntime() {
 
 export function resolveMediaMaxBytes(): number | undefined {
   const cfg = getCore().config.loadConfig() as CoreConfig;
-  if (typeof cfg.channels?.matrix?.mediaMaxMb === "number") {
-    return cfg.channels.matrix.mediaMaxMb * 1024 * 1024;
+  if (typeof cfg.channels?.["matrix-js"]?.mediaMaxMb === "number") {
+    return cfg.channels["matrix-js"].mediaMaxMb * 1024 * 1024;
   }
   return undefined;
 }
@@ -28,12 +28,13 @@ export function resolveMediaMaxBytes(): number | undefined {
 export async function resolveMatrixClient(opts: {
   client?: MatrixClient;
   timeoutMs?: number;
+  accountId?: string | null;
 }): Promise<{ client: MatrixClient; stopOnDone: boolean }> {
   ensureNodeRuntime();
   if (opts.client) {
     return { client: opts.client, stopOnDone: false };
   }
-  const active = getActiveMatrixClient();
+  const active = getActiveMatrixClient(opts.accountId);
   if (active) {
     return { client: active, stopOnDone: false };
   }
@@ -41,10 +42,11 @@ export async function resolveMatrixClient(opts: {
   if (shouldShareClient) {
     const client = await resolveSharedMatrixClient({
       timeoutMs: opts.timeoutMs,
+      accountId: opts.accountId,
     });
     return { client, stopOnDone: false };
   }
-  const auth = await resolveMatrixAuth();
+  const auth = await resolveMatrixAuth({ accountId: opts.accountId });
   const client = await createMatrixClient({
     homeserver: auth.homeserver,
     userId: auth.userId,
@@ -53,6 +55,7 @@ export async function resolveMatrixClient(opts: {
     deviceId: auth.deviceId,
     encryption: auth.encryption,
     localTimeoutMs: opts.timeoutMs,
+    accountId: opts.accountId,
   });
   if (auth.encryption && client.crypto) {
     try {

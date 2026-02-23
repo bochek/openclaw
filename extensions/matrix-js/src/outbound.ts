@@ -17,7 +17,7 @@ export const matrixOutbound: ChannelOutboundAdapter = {
       accountId: accountId ?? undefined,
     });
     return {
-      channel: "matrix",
+      channel: "matrix-js",
       messageId: result.messageId,
       roomId: result.roomId,
     };
@@ -33,7 +33,7 @@ export const matrixOutbound: ChannelOutboundAdapter = {
       accountId: accountId ?? undefined,
     });
     return {
-      channel: "matrix",
+      channel: "matrix-js",
       messageId: result.messageId,
       roomId: result.roomId,
     };
@@ -46,7 +46,7 @@ export const matrixOutbound: ChannelOutboundAdapter = {
       accountId: accountId ?? undefined,
     });
     return {
-      channel: "matrix",
+      channel: "matrix-js",
       messageId: result.eventId,
       roomId: result.roomId,
       pollId: result.eventId,

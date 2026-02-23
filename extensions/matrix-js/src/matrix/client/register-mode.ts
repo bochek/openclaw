@@ -65,7 +65,7 @@ export async function prepareMatrixRegisterMode(params: {
   const backupDir = path.join(backupRoot, buildBackupDirName());
   fs.mkdirSync(backupDir, { recursive: true });
 
-  const matrixConfig = params.cfg.channels?.matrix ?? {};
+  const matrixConfig = params.cfg.channels?.["matrix-js"] ?? {};
   fs.writeFileSync(
     path.join(backupDir, "matrix-config.json"),
     JSON.stringify(matrixConfig, null, 2).trimEnd().concat("\n"),
@@ -93,11 +93,11 @@ export async function finalizeMatrixRegisterConfigAfterSuccess(params: {
   }
 
   const cfg = runtime.config.loadConfig() as CoreConfig;
-  if (cfg.channels?.matrix?.register !== true) {
+  if (cfg.channels?.["matrix-js"]?.register !== true) {
     return false;
   }
 
-  const matrixCfg = cfg.channels?.matrix ?? {};
+  const matrixCfg = cfg.channels?.["matrix-js"] ?? {};
   const nextMatrix: Record<string, unknown> = {
     ...matrixCfg,
     register: false,
@@ -112,7 +112,7 @@ export async function finalizeMatrixRegisterConfigAfterSuccess(params: {
     ...cfg,
     channels: {
       ...(cfg.channels ?? {}),
-      matrix: nextMatrix as CoreConfig["channels"]["matrix"],
+      "matrix-js": nextMatrix as CoreConfig["channels"]["matrix-js"],
     },
   };
 

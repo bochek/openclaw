@@ -24,7 +24,7 @@ describe("matrix register mode helpers", () => {
   it("moves existing matrix state into a .bak snapshot before fresh registration", async () => {
     const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "matrix-register-mode-"));
     tempDirs.push(stateDir);
-    const credentialsDir = path.join(stateDir, "credentials", "matrix");
+    const credentialsDir = path.join(stateDir, "credentials", "matrix-js");
     const accountsDir = path.join(credentialsDir, "accounts");
     fs.mkdirSync(accountsDir, { recursive: true });
     fs.writeFileSync(path.join(credentialsDir, "credentials.json"), '{"accessToken":"old"}\n');
@@ -32,7 +32,7 @@ describe("matrix register mode helpers", () => {
 
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           userId: "@pinguini:matrix.gumadeiras.com",
           register: true,
           encryption: true,
@@ -62,7 +62,7 @@ describe("matrix register mode helpers", () => {
         loadConfig: () =>
           ({
             channels: {
-              matrix: {
+              "matrix-js": {
                 register: true,
                 accessToken: "stale-token",
                 userId: "@pinguini:matrix.gumadeiras.com",
@@ -82,7 +82,7 @@ describe("matrix register mode helpers", () => {
     expect(writeConfigFile).toHaveBeenCalledWith(
       expect.objectContaining({
         channels: expect.objectContaining({
-          matrix: expect.objectContaining({
+          "matrix-js": expect.objectContaining({
             register: false,
             homeserver: "https://matrix.gumadeiras.com",
             userId: "@pinguini:matrix.gumadeiras.com",
@@ -92,6 +92,6 @@ describe("matrix register mode helpers", () => {
       }),
     );
     const written = writeConfigFile.mock.calls[0]?.[0] as CoreConfig;
-    expect(written.channels?.matrix?.accessToken).toBeUndefined();
+    expect(written.channels?.["matrix-js"]?.accessToken).toBeUndefined();
   });
 });

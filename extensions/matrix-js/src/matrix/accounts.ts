@@ -30,7 +30,7 @@ export type ResolvedMatrixAccount = {
 };
 
 function listConfiguredAccountIds(cfg: CoreConfig): string[] {
-  const accounts = cfg.channels?.matrix?.accounts;
+  const accounts = cfg.channels?.["matrix-js"]?.accounts;
   if (!accounts || typeof accounts !== "object") {
     return [];
   }
@@ -62,7 +62,7 @@ export function resolveDefaultMatrixAccountId(cfg: CoreConfig): string {
 }
 
 function resolveAccountConfig(cfg: CoreConfig, accountId: string): MatrixConfig | undefined {
-  const accounts = cfg.channels?.matrix?.accounts;
+  const accounts = cfg.channels?.["matrix-js"]?.accounts;
   if (!accounts || typeof accounts !== "object") {
     return undefined;
   }
@@ -85,7 +85,7 @@ export function resolveMatrixAccount(params: {
   accountId?: string | null;
 }): ResolvedMatrixAccount {
   const accountId = normalizeAccountId(params.accountId);
-  const matrixBase = params.cfg.channels?.matrix ?? {};
+  const matrixBase = params.cfg.channels?.["matrix-js"] ?? {};
   const base = resolveMatrixAccountConfig({ cfg: params.cfg, accountId });
   const enabled = base.enabled !== false && matrixBase.enabled !== false;
 
@@ -120,7 +120,7 @@ export function resolveMatrixAccountConfig(params: {
   accountId?: string | null;
 }): MatrixConfig {
   const accountId = normalizeAccountId(params.accountId);
-  const matrixBase = params.cfg.channels?.matrix ?? {};
+  const matrixBase = params.cfg.channels?.["matrix-js"] ?? {};
   const accountConfig = resolveAccountConfig(params.cfg, accountId);
   if (!accountConfig) {
     return matrixBase;

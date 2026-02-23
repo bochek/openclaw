@@ -40,7 +40,7 @@ describe("resolveMatrixAccount", () => {
   it("treats access-token-only config as configured", () => {
     const cfg: CoreConfig = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           accessToken: "tok-access",
         },
@@ -54,7 +54,7 @@ describe("resolveMatrixAccount", () => {
   it("requires userId + password when no access token is set", () => {
     const cfg: CoreConfig = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           userId: "@bot:example.org",
         },
@@ -68,7 +68,7 @@ describe("resolveMatrixAccount", () => {
   it("marks password auth as configured when userId is present", () => {
     const cfg: CoreConfig = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           userId: "@bot:example.org",
           password: "secret",

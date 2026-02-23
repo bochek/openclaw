@@ -17,7 +17,7 @@ export const matrixMessageActions: ChannelMessageActionAdapter = {
     if (!account.enabled || !account.configured) {
       return [];
     }
-    const gate = createActionGate((cfg as CoreConfig).channels?.matrix?.actions);
+    const gate = createActionGate((cfg as CoreConfig).channels?.["matrix-js"]?.actions);
     const actions = new Set<ChannelMessageActionName>(["send", "poll"]);
     if (gate("reactions")) {
       actions.add("react");
@@ -203,6 +203,9 @@ export const matrixMessageActions: ChannelMessageActionAdapter = {
         .toLowerCase();
       const operationToAction: Record<string, string> = {
         "encryption-status": "encryptionStatus",
+        "verification-status": "verificationStatus",
+        "verification-bootstrap": "verificationBootstrap",
+        "verification-recovery-key": "verificationRecoveryKey",
         "verification-list": "verificationList",
         "verification-request": "verificationRequest",
         "verification-accept": "verificationAccept",
@@ -232,6 +235,6 @@ export const matrixMessageActions: ChannelMessageActionAdapter = {
       );
     }
 
-    throw new Error(`Action ${action} is not supported for provider matrix.`);
+    throw new Error(`Action ${action} is not supported for provider matrix-js.`);
   },
 };

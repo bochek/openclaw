@@ -14,19 +14,21 @@ import { ensureMatrixSdkInstalled, isMatrixSdkAvailable } from "./matrix/deps.js
 import { resolveMatrixTargets } from "./resolve-targets.js";
 import type { CoreConfig } from "./types.js";
 
-const channel = "matrix" as const;
+const channel = "matrix-js" as const;
 
 function setMatrixDmPolicy(cfg: CoreConfig, policy: DmPolicy) {
   const allowFrom =
-    policy === "open" ? addWildcardAllowFrom(cfg.channels?.matrix?.dm?.allowFrom) : undefined;
+    policy === "open"
+      ? addWildcardAllowFrom(cfg.channels?.["matrix-js"]?.dm?.allowFrom)
+      : undefined;
   return {
     ...cfg,
     channels: {
       ...cfg.channels,
-      matrix: {
-        ...cfg.channels?.matrix,
+      "matrix-js": {
+        ...cfg.channels?.["matrix-js"],
         dm: {
-          ...cfg.channels?.matrix?.dm,
+          ...cfg.channels?.["matrix-js"]?.dm,
           policy,
           ...(allowFrom ? { allowFrom } : {}),
         },
@@ -54,7 +56,7 @@ async function promptMatrixAllowFrom(params: {
   prompter: WizardPrompter;
 }): Promise<CoreConfig> {
   const { cfg, prompter } = params;
-  const existingAllowFrom = cfg.channels?.matrix?.dm?.allowFrom ?? [];
+  const existingAllowFrom = cfg.channels?.["matrix-js"]?.dm?.allowFrom ?? [];
   const account = resolveMatrixAccount({ cfg });
   const canResolve = Boolean(account.configured);
 
@@ -125,11 +127,11 @@ async function promptMatrixAllowFrom(params: {
       ...cfg,
       channels: {
         ...cfg.channels,
-        matrix: {
-          ...cfg.channels?.matrix,
+        "matrix-js": {
+          ...cfg.channels?.["matrix-js"],
           enabled: true,
           dm: {
-            ...cfg.channels?.matrix?.dm,
+            ...cfg.channels?.["matrix-js"]?.dm,
             policy: "allowlist",
             allowFrom: unique,
           },
@@ -144,8 +146,8 @@ function setMatrixGroupPolicy(cfg: CoreConfig, groupPolicy: "open" | "allowlist"
     ...cfg,
     channels: {
       ...cfg.channels,
-      matrix: {
-        ...cfg.channels?.matrix,
+      "matrix-js": {
+        ...cfg.channels?.["matrix-js"],
         enabled: true,
         groupPolicy,
       },
@@ -159,8 +161,8 @@ function setMatrixGroupRooms(cfg: CoreConfig, roomKeys: string[]) {
     ...cfg,
     channels: {
       ...cfg.channels,
-      matrix: {
-        ...cfg.channels?.matrix,
+      "matrix-js": {
+        ...cfg.channels?.["matrix-js"],
         enabled: true,
         groups,
       },
@@ -171,9 +173,9 @@ function setMatrixGroupRooms(cfg: CoreConfig, roomKeys: string[]) {
 const dmPolicy: ChannelOnboardingDmPolicy = {
   label: "Matrix",
   channel,
-  policyKey: "channels.matrix.dm.policy",
-  allowFromKey: "channels.matrix.dm.allowFrom",
-  getCurrent: (cfg) => (cfg as CoreConfig).channels?.matrix?.dm?.policy ?? "pairing",
+  policyKey: "channels.matrix-js.dm.policy",
+  allowFromKey: "channels.matrix-js.dm.allowFrom",
+  getCurrent: (cfg) => (cfg as CoreConfig).channels?.["matrix-js"]?.dm?.policy ?? "pairing",
   setPolicy: (cfg, policy) => setMatrixDmPolicy(cfg as CoreConfig, policy),
   promptAllowFrom: promptMatrixAllowFrom,
 };
@@ -203,7 +205,7 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
           initialValue: true,
         }),
     });
-    const existing = next.channels?.matrix ?? {};
+    const existing = next.channels?.["matrix-js"] ?? {};
     const account = resolveMatrixAccount({ cfg: next });
     if (!account.configured) {
       await noteMatrixAuthHelp(prompter);
@@ -231,8 +233,8 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
           ...next,
           channels: {
             ...next.channels,
-            matrix: {
-              ...next.channels?.matrix,
+            "matrix-js": {
+              ...next.channels?.["matrix-js"],
               enabled: true,
             },
           },
@@ -352,8 +354,8 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
       ...next,
       channels: {
         ...next.channels,
-        matrix: {
-          ...next.channels?.matrix,
+        "matrix-js": {
+          ...next.channels?.["matrix-js"],
           enabled: true,
           homeserver,
           userId: userId || undefined,
@@ -370,11 +372,12 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
       next = await promptMatrixAllowFrom({ cfg: next, prompter });
     }
 
-    const existingGroups = next.channels?.matrix?.groups ?? next.channels?.matrix?.rooms;
+    const existingGroups =
+      next.channels?.["matrix-js"]?.groups ?? next.channels?.["matrix-js"]?.rooms;
     const accessConfig = await promptChannelAccessConfig({
       prompter,
       label: "Matrix rooms",
-      currentPolicy: next.channels?.matrix?.groupPolicy ?? "allowlist",
+      currentPolicy: next.channels?.["matrix-js"]?.groupPolicy ?? "allowlist",
       currentEntries: Object.keys(existingGroups ?? {}),
       placeholder: "!roomId:server, #alias:server, Project Room",
       updatePrompt: Boolean(existingGroups),
@@ -446,7 +449,7 @@ export const matrixOnboardingAdapter: ChannelOnboardingAdapter = {
     ...(cfg as CoreConfig),
     channels: {
       ...(cfg as CoreConfig).channels,
-      matrix: { ...(cfg as CoreConfig).channels?.matrix, enabled: false },
+      "matrix-js": { ...(cfg as CoreConfig).channels?.["matrix-js"], enabled: false },
     },
   }),
 };

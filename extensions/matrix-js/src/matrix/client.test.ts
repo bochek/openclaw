@@ -26,7 +26,7 @@ describe("resolveMatrixConfig", () => {
   it("prefers config over env", () => {
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://cfg.example.org",
           userId: "@cfg:example.org",
           accessToken: "cfg-token",
@@ -82,7 +82,7 @@ describe("resolveMatrixConfig", () => {
   it("reads register flag from config and env", () => {
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           register: true,
         },
       },
@@ -118,7 +118,7 @@ describe("resolveMatrixAuth", () => {
 
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           userId: "@bot:example.org",
           password: "secret",
@@ -154,6 +154,8 @@ describe("resolveMatrixAuth", () => {
         accessToken: "tok-123",
         deviceId: "DEVICE123",
       }),
+      expect.any(Object),
+      undefined,
     );
   });
 
@@ -169,7 +171,7 @@ describe("resolveMatrixAuth", () => {
 
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           userId: "@newbot:example.org",
           password: "secret",
@@ -224,7 +226,7 @@ describe("resolveMatrixAuth", () => {
     });
   });
 
-  it("ignores cached credentials when matrix.register=true", async () => {
+  it("ignores cached credentials when matrix-js.register=true", async () => {
     vi.mocked(credentialsModule.loadMatrixCredentials).mockReturnValue({
       homeserver: "https://matrix.example.org",
       userId: "@bot:example.org",
@@ -242,7 +244,7 @@ describe("resolveMatrixAuth", () => {
 
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           userId: "@bot:example.org",
           password: "secret",
@@ -265,10 +267,10 @@ describe("resolveMatrixAuth", () => {
     expect(prepareMatrixRegisterModeMock).toHaveBeenCalledTimes(1);
   });
 
-  it("requires matrix.password when matrix.register=true", async () => {
+  it("requires matrix-js.password when matrix-js.register=true", async () => {
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           userId: "@bot:example.org",
           register: true,
@@ -277,16 +279,16 @@ describe("resolveMatrixAuth", () => {
     } as CoreConfig;
 
     await expect(resolveMatrixAuth({ cfg, env: {} as NodeJS.ProcessEnv })).rejects.toThrow(
-      "Matrix password is required when matrix.register=true",
+      "Matrix password is required when matrix-js.register=true",
     );
     expect(prepareMatrixRegisterModeMock).not.toHaveBeenCalled();
     expect(finalizeMatrixRegisterConfigAfterSuccessMock).not.toHaveBeenCalled();
   });
 
-  it("requires matrix.userId when matrix.register=true", async () => {
+  it("requires matrix-js.userId when matrix-js.register=true", async () => {
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           password: "secret",
           register: true,
@@ -295,7 +297,7 @@ describe("resolveMatrixAuth", () => {
     } as CoreConfig;
 
     await expect(resolveMatrixAuth({ cfg, env: {} as NodeJS.ProcessEnv })).rejects.toThrow(
-      "Matrix userId is required when matrix.register=true",
+      "Matrix userId is required when matrix-js.register=true",
     );
     expect(prepareMatrixRegisterModeMock).not.toHaveBeenCalled();
     expect(finalizeMatrixRegisterConfigAfterSuccessMock).not.toHaveBeenCalled();
@@ -312,7 +314,7 @@ describe("resolveMatrixAuth", () => {
 
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           userId: "@bot:example.org",
           accessToken: "tok-123",
@@ -332,6 +334,8 @@ describe("resolveMatrixAuth", () => {
         accessToken: "tok-123",
         deviceId: "DEVICE123",
       }),
+      expect.any(Object),
+      undefined,
     );
   });
 
@@ -343,7 +347,7 @@ describe("resolveMatrixAuth", () => {
 
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           accessToken: "tok-123",
           encryption: true,
@@ -377,7 +381,7 @@ describe("resolveMatrixAuth", () => {
 
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           homeserver: "https://matrix.example.org",
           userId: "@bot:example.org",
           deviceId: "DEVICE123",

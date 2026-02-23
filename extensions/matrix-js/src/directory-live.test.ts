@@ -7,7 +7,7 @@ vi.mock("./matrix/client.js", () => ({
 }));
 
 describe("matrix directory live", () => {
-  const cfg = { channels: { matrix: {} } };
+  const cfg = { channels: { "matrix-js": {} } };
 
   beforeEach(() => {
     vi.mocked(resolveMatrixAuth).mockReset();

@@ -40,7 +40,7 @@ export async function createMatrixClient(params: {
     accountId: params.accountId,
   });
 
-  const cryptoDatabasePrefix = `openclaw-matrix-${storagePaths.accountKey}-${storagePaths.tokenHash}`;
+  const cryptoDatabasePrefix = `openclaw-matrix-js-${storagePaths.accountKey}-${storagePaths.tokenHash}`;
 
   return new MatrixClient(params.homeserver, params.accessToken, undefined, undefined, {
     userId: matrixClientUserId,

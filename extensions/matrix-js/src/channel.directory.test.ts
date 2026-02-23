@@ -24,7 +24,7 @@ describe("matrix directory", () => {
   it("lists peers and groups from config", async () => {
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           dm: { allowFrom: ["matrix:@alice:example.org", "bob"] },
           groupAllowFrom: ["@dana:example.org"],
           groups: {
@@ -75,7 +75,7 @@ describe("matrix directory", () => {
   it("resolves replyToMode from account config", () => {
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           replyToMode: "off",
           accounts: {
             Assistant: {
@@ -106,7 +106,7 @@ describe("matrix directory", () => {
   it("resolves group mention policy from account config", () => {
     const cfg = {
       channels: {
-        matrix: {
+        "matrix-js": {
           groups: {
             "!room:example.org": { requireMention: true },
           },

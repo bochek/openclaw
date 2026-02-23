@@ -39,8 +39,8 @@ function resolveLegacyStoragePaths(env: NodeJS.ProcessEnv = process.env): {
 } {
   const stateDir = getMatrixRuntime().state.resolveStateDir(env, os.homedir);
   return {
-    storagePath: path.join(stateDir, "credentials", "matrix", "bot-storage.json"),
-    cryptoPath: path.join(stateDir, "credentials", "matrix", "crypto"),
+    storagePath: path.join(stateDir, "credentials", "matrix-js", "bot-storage.json"),
+    cryptoPath: path.join(stateDir, "credentials", "matrix-js", "crypto"),
   };
 }
 
@@ -60,7 +60,7 @@ export function resolveMatrixStoragePaths(params: {
   const rootDir = path.join(
     stateDir,
     "credentials",
-    "matrix",
+    "matrix-js",
     "accounts",
     accountKey,
     `${serverKey}__${userKey}`,
