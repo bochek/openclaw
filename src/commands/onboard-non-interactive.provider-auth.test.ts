@@ -270,6 +270,23 @@ describe("onboard (non-interactive): provider auth", () => {
     });
   }, 60_000);
 
+  it("infers Cohere auth choice from --cohere-api-key and sets default model", async () => {
+    await withOnboardEnv("openclaw-onboard-cohere-infer-", async (env) => {
+      const cfg = await runOnboardingAndReadConfig(env, {
+        cohereApiKey: "cohere-test-key",
+      });
+
+      expect(cfg.auth?.profiles?.["cohere:default"]?.provider).toBe("cohere");
+      expect(cfg.auth?.profiles?.["cohere:default"]?.mode).toBe("api_key");
+      expect(cfg.agents?.defaults?.model?.primary).toBe("cohere/command-a-03-2025");
+      await expectApiKeyProfile({
+        profileId: "cohere:default",
+        provider: "cohere",
+        key: "cohere-test-key",
+      });
+    });
+  }, 60_000);
+
   it("stores Volcano Engine API key and sets default model", async () => {
     await withOnboardEnv("openclaw-onboard-volcengine-", async (env) => {
       const cfg = await runOnboardingAndReadConfig(env, {
