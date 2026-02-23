@@ -21,6 +21,13 @@ export type GatewayRestartSnapshot = {
   staleGatewayPids: number[];
 };
 
+function listenerOwnedByRuntimePid(params: {
+  listener: PortUsage["listeners"][number];
+  runtimePid: number;
+}): boolean {
+  return params.listener.pid === params.runtimePid || params.listener.ppid === params.runtimePid;
+}
+
 export async function inspectGatewayRestart(params: {
   service: GatewayService;
   port: number;
@@ -56,16 +63,26 @@ export async function inspectGatewayRestart(params: {
   const running = runtime.status === "running";
   const ownsPort =
     runtime.pid != null
-      ? portUsage.listeners.some((listener) => listener.pid === runtime.pid)
+      ? portUsage.listeners.some((listener) =>
+          listenerOwnedByRuntimePid({ listener, runtimePid: runtime.pid }),
+        )
       : gatewayListeners.length > 0 ||
         (portUsage.status === "busy" && portUsage.listeners.length === 0);
   const healthy = running && ownsPort;
   const staleGatewayPids = Array.from(
     new Set(
       gatewayListeners
-        .map((listener) => listener.pid)
-        .filter((pid): pid is number => Number.isFinite(pid))
-        .filter((pid) => runtime.pid == null || pid !== runtime.pid || !running),
+        .filter((listener) => Number.isFinite(listener.pid))
+        .filter((listener) => {
+          if (!running) {
+            return true;
+          }
+          if (runtime.pid == null) {
+            return true;
+          }
+          return !listenerOwnedByRuntimePid({ listener, runtimePid: runtime.pid });
+        })
+        .map((listener) => listener.pid as number),
     ),
   );
 
