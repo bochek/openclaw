@@ -61,13 +61,20 @@ describe("sessionsCleanupCommand", () => {
       maxDiskBytes: null,
       highWaterBytes: null,
     });
-    mocks.pruneStaleEntries.mockImplementation((store: Record<string, SessionEntry>) => {
-      if (store.stale) {
-        delete store.stale;
-        return 1;
-      }
-      return 0;
-    });
+    mocks.pruneStaleEntries.mockImplementation(
+      (
+        store: Record<string, SessionEntry>,
+        _maxAgeMs: number,
+        opts?: { onPruned?: (params: { key: string; entry: SessionEntry }) => void },
+      ) => {
+        if (store.stale) {
+          opts?.onPruned?.({ key: "stale", entry: store.stale });
+          delete store.stale;
+          return 1;
+        }
+        return 0;
+      },
+    );
     mocks.capEntryCount.mockImplementation(() => 0);
     mocks.updateSessionStore.mockResolvedValue(undefined);
     mocks.enforceSessionDiskBudget.mockResolvedValue({
@@ -150,5 +157,26 @@ describe("sessionsCleanupCommand", () => {
         removedEntries: 1,
       }),
     );
+  });
+
+  it("renders a dry-run action table with keep/prune actions", async () => {
+    mocks.enforceSessionDiskBudget.mockResolvedValue(null);
+    mocks.loadSessionStore.mockReturnValue({
+      stale: { sessionId: "stale", updatedAt: 1, model: "pi:opus" },
+      fresh: { sessionId: "fresh", updatedAt: 2, model: "pi:opus" },
+    });
+
+    const { runtime, logs } = makeRuntime();
+    await sessionsCleanupCommand(
+      {
+        dryRun: true,
+      },
+      runtime,
+    );
+
+    expect(logs.some((line) => line.includes("Planned session actions:"))).toBe(true);
+    expect(logs.some((line) => line.includes("Action") && line.includes("Key"))).toBe(true);
+    expect(logs.some((line) => line.includes("fresh") && line.includes("keep"))).toBe(true);
+    expect(logs.some((line) => line.includes("stale") && line.includes("prune-stale"))).toBe(true);
   });
 });
