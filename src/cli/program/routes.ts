@@ -43,7 +43,9 @@ const routeStatus: RouteSpec = {
 };
 
 const routeSessions: RouteSpec = {
-  match: (path) => path[0] === "sessions",
+  // Fast-path only bare `sessions`; subcommands (e.g. `sessions cleanup`)
+  // must fall through to Commander so nested handlers run.
+  match: (path) => path[0] === "sessions" && !path[1],
   run: async (argv) => {
     const json = hasFlag(argv, "--json");
     const store = getFlagValue(argv, "--store");

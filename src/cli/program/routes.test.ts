@@ -30,6 +30,10 @@ describe("program routes", () => {
     await expectRunFalse(["sessions"], ["node", "openclaw", "sessions", "--active"]);
   });
 
+  it("does not fast-route sessions subcommands", () => {
+    expect(findRoutedCommand(["sessions", "cleanup"])).toBeNull();
+  });
+
   it("does not match unknown routes", () => {
     expect(findRoutedCommand(["definitely-not-real"])).toBeNull();
   });
