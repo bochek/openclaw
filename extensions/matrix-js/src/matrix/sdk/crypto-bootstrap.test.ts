@@ -1,3 +1,4 @@
+import { VerificationPhase } from "matrix-js-sdk/lib/crypto-api/verification.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MatrixCryptoBootstrapper, type MatrixCryptoBootstrapperDeps } from "./crypto-bootstrap.js";
 import type { MatrixCryptoBootstrapApi, MatrixRawEvent } from "./types.js";
@@ -291,6 +292,41 @@ describe("MatrixCryptoBootstrapper", () => {
     await listener?.(verificationRequest);
 
     expect(verificationRequest.accept).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips auto-accept for requests that are no longer requested", async () => {
+    const deps = createBootstrapperDeps();
+    const listeners = new Map<string, (...args: unknown[]) => void>();
+    const crypto = createCryptoApi({
+      getDeviceVerificationStatus: vi.fn(async () => ({
+        isVerified: () => true,
+      })),
+      on: vi.fn((eventName: string, listener: (...args: unknown[]) => void) => {
+        listeners.set(eventName, listener);
+      }),
+    });
+    const bootstrapper = new MatrixCryptoBootstrapper(
+      deps as unknown as MatrixCryptoBootstrapperDeps<MatrixRawEvent>,
+    );
+
+    await bootstrapper.bootstrap(crypto);
+
+    const verificationRequest = {
+      otherUserId: "@alice:example.org",
+      isSelfVerification: false,
+      initiatedByMe: false,
+      phase: VerificationPhase.Cancelled,
+      accepting: false,
+      declining: false,
+      accept: vi.fn(async () => {}),
+    };
+    const listener = Array.from(listeners.entries()).find(([eventName]) =>
+      eventName.toLowerCase().includes("verificationrequest"),
+    )?.[1];
+    expect(listener).toBeTypeOf("function");
+    await listener?.(verificationRequest);
+
+    expect(verificationRequest.accept).not.toHaveBeenCalled();
   });
 
   it("registers verification listeners only once across repeated bootstrap calls", async () => {

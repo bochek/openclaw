@@ -1,4 +1,5 @@
 import { CryptoEvent } from "matrix-js-sdk/lib/crypto-api/CryptoEvent.js";
+import { VerificationPhase } from "matrix-js-sdk/lib/crypto-api/verification.js";
 import type { MatrixDecryptBridge } from "./decrypt-bridge.js";
 import { LogService } from "./logger.js";
 import type { MatrixRecoveryKeyStore } from "./recovery-key-store.js";
@@ -233,11 +234,24 @@ export class MatrixCryptoBootstrapper<TRawEvent extends MatrixRawEvent> {
       const otherUserId = verificationRequest.otherUserId;
       const isSelfVerification = verificationRequest.isSelfVerification;
       const initiatedByMe = verificationRequest.initiatedByMe;
+      const phase =
+        typeof verificationRequest.phase === "number"
+          ? verificationRequest.phase
+          : VerificationPhase.Requested;
+      const accepting = verificationRequest.accepting === true;
+      const declining = verificationRequest.declining === true;
 
       if (isSelfVerification || initiatedByMe) {
         LogService.debug(
           "MatrixClientLite",
           `Ignoring ${isSelfVerification ? "self" : "initiated"} verification request from ${otherUserId}`,
+        );
+        return;
+      }
+      if (phase !== VerificationPhase.Requested || accepting || declining) {
+        LogService.debug(
+          "MatrixClientLite",
+          `Skipping auto-accept for ${otherUserId} in phase=${phase} accepting=${accepting} declining=${declining}`,
         );
         return;
       }

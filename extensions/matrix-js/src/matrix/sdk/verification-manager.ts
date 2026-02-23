@@ -22,6 +22,10 @@ export type MatrixVerificationSummary = {
   chosenMethod?: string | null;
   canAccept: boolean;
   hasSas: boolean;
+  sas?: {
+    decimal?: [number, number, number];
+    emoji?: Array<[string, string]>;
+  };
   hasReciprocateQr: boolean;
   completed: boolean;
   error?: string;
@@ -96,6 +100,7 @@ type MatrixVerificationSession = {
   activeVerifier?: MatrixVerifierLike;
   verifyPromise?: Promise<void>;
   verifyStarted: boolean;
+  startRequested: boolean;
   sasCallbacks?: MatrixShowSasCallbacks;
   reciprocateQrCallbacks?: MatrixShowQrCodeCallbacks;
 };
@@ -179,6 +184,10 @@ export class MatrixVerificationManager {
     const methods = Array.isArray(methodsRaw)
       ? methodsRaw.filter((entry): entry is string => typeof entry === "string")
       : [];
+    const sasCallbacks = session.sasCallbacks ?? session.activeVerifier?.getShowSasCallbacks();
+    if (sasCallbacks) {
+      session.sasCallbacks = sasCallbacks;
+    }
     const canAccept = phase < VerificationPhase.Ready && !accepting && !declining;
     return {
       id: session.id,
@@ -194,7 +203,13 @@ export class MatrixVerificationManager {
       methods,
       chosenMethod: this.readRequestValue(request, () => request.chosenMethod ?? null, null),
       canAccept,
-      hasSas: Boolean(session.sasCallbacks),
+      hasSas: Boolean(sasCallbacks),
+      sas: sasCallbacks
+        ? {
+            decimal: sasCallbacks.sas.decimal,
+            emoji: sasCallbacks.sas.emoji,
+          }
+        : undefined,
       hasReciprocateQr: Boolean(session.reciprocateQrCallbacks),
       completed: phase === VerificationPhase.Done,
       error: session.error,
@@ -229,7 +244,54 @@ export class MatrixVerificationManager {
       if (verifier) {
         this.attachVerifierToVerificationSession(session, verifier);
       }
+      this.maybeAutoStartInboundSas(session);
     });
+  }
+
+  private maybeAutoStartInboundSas(session: MatrixVerificationSession): void {
+    if (session.activeVerifier || session.verifyStarted || session.startRequested) {
+      return;
+    }
+    if (this.readRequestValue(session.request, () => session.request.initiatedByMe, true)) {
+      return;
+    }
+    const phase = this.readRequestValue(
+      session.request,
+      () => session.request.phase,
+      VerificationPhase.Requested,
+    );
+    if (phase < VerificationPhase.Ready || phase >= VerificationPhase.Cancelled) {
+      return;
+    }
+    const methodsRaw = this.readRequestValue<unknown>(
+      session.request,
+      () => session.request.methods,
+      [],
+    );
+    const methods = Array.isArray(methodsRaw)
+      ? methodsRaw.filter((entry): entry is string => typeof entry === "string")
+      : [];
+    const chosenMethod = this.readRequestValue(
+      session.request,
+      () => session.request.chosenMethod,
+      null,
+    );
+    const supportsSas =
+      methods.includes(VerificationMethod.Sas) || chosenMethod === VerificationMethod.Sas;
+    if (!supportsSas) {
+      return;
+    }
+
+    session.startRequested = true;
+    void session.request
+      .startVerification(VerificationMethod.Sas)
+      .then((verifier) => {
+        this.attachVerifierToVerificationSession(session, verifier);
+        this.touchVerificationSession(session);
+      })
+      .catch(() => {
+        session.startRequested = false;
+      });
   }
 
   private attachVerifierToVerificationSession(
@@ -250,6 +312,7 @@ export class MatrixVerificationManager {
 
     const verifierObj = verifier as unknown as object;
     if (this.trackedVerificationVerifiers.has(verifierObj)) {
+      this.ensureVerificationStarted(session);
       return;
     }
     this.trackedVerificationVerifiers.add(verifierObj);
@@ -266,6 +329,7 @@ export class MatrixVerificationManager {
       session.error = err instanceof Error ? err.message : String(err);
       this.touchVerificationSession(session);
     });
+    this.ensureVerificationStarted(session);
   }
 
   private ensureVerificationStarted(session: MatrixVerificationSession): void {
@@ -316,6 +380,7 @@ export class MatrixVerificationManager {
       createdAtMs: now,
       updatedAtMs: now,
       verifyStarted: false,
+      startRequested: false,
     };
     this.verificationSessions.set(session.id, session);
     this.ensureVerificationRequestTracked(session);
@@ -323,6 +388,7 @@ export class MatrixVerificationManager {
     if (verifier) {
       this.attachVerifierToVerificationSession(session, verifier);
     }
+    this.maybeAutoStartInboundSas(session);
     return this.buildVerificationSummary(session);
   }
 

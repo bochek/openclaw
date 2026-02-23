@@ -1,5 +1,8 @@
 import { EventEmitter } from "node:events";
-import { VerificationPhase } from "matrix-js-sdk/lib/crypto-api/verification.js";
+import {
+  VerificationPhase,
+  VerificationRequestEvent,
+} from "matrix-js-sdk/lib/crypto-api/verification.js";
 import { describe, expect, it, vi } from "vitest";
 import {
   MatrixVerificationManager,
@@ -154,6 +157,8 @@ describe("MatrixVerificationManager", () => {
 
     const started = await manager.startVerification(tracked.id, "sas");
     expect(started.hasSas).toBe(true);
+    expect(started.sas?.decimal).toEqual([111, 222, 333]);
+    expect(started.sas?.emoji?.length).toBe(3);
 
     const sas = manager.getVerificationSas(tracked.id);
     expect(sas.decimal).toEqual([111, 222, 333]);
@@ -164,6 +169,91 @@ describe("MatrixVerificationManager", () => {
 
     manager.mismatchVerificationSas(tracked.id);
     expect(mismatch).toHaveBeenCalledTimes(1);
+  });
+
+  it("auto-starts an incoming verifier exposed via request change events", async () => {
+    const verify = vi.fn(async () => {});
+    const verifier = new MockVerifier(
+      {
+        sas: {
+          decimal: [6158, 1986, 3513],
+          emoji: [
+            ["gift", "Gift"],
+            ["globe", "Globe"],
+            ["horse", "Horse"],
+          ],
+        },
+        confirm: vi.fn(async () => {}),
+        mismatch: vi.fn(),
+        cancel: vi.fn(),
+      },
+      null,
+      verify,
+    );
+    const request = new MockVerificationRequest({
+      transactionId: "txn-incoming-change",
+      verifier: undefined,
+    });
+    const manager = new MatrixVerificationManager();
+    const tracked = manager.trackVerificationRequest(request);
+
+    request.verifier = verifier;
+    request.emit(VerificationRequestEvent.Change);
+
+    await vi.waitFor(() => {
+      expect(verify).toHaveBeenCalledTimes(1);
+    });
+    const summary = manager.listVerifications().find((item) => item.id === tracked.id);
+    expect(summary?.hasSas).toBe(true);
+    expect(summary?.sas?.decimal).toEqual([6158, 1986, 3513]);
+    expect(manager.getVerificationSas(tracked.id).decimal).toEqual([6158, 1986, 3513]);
+  });
+
+  it("auto-starts inbound SAS when request becomes ready without a verifier", async () => {
+    const verify = vi.fn(async () => {});
+    const verifier = new MockVerifier(
+      {
+        sas: {
+          decimal: [1234, 5678, 9012],
+          emoji: [
+            ["gift", "Gift"],
+            ["rocket", "Rocket"],
+            ["butterfly", "Butterfly"],
+          ],
+        },
+        confirm: vi.fn(async () => {}),
+        mismatch: vi.fn(),
+        cancel: vi.fn(),
+      },
+      null,
+      verify,
+    );
+    const request = new MockVerificationRequest({
+      transactionId: "txn-auto-start-sas",
+      initiatedByMe: false,
+      verifier: undefined,
+    });
+    request.startVerification = vi.fn(async (_method: string) => {
+      request.phase = VerificationPhase.Started;
+      request.verifier = verifier;
+      return verifier;
+    });
+    const manager = new MatrixVerificationManager();
+    const tracked = manager.trackVerificationRequest(request);
+
+    request.phase = VerificationPhase.Ready;
+    request.emit(VerificationRequestEvent.Change);
+
+    await vi.waitFor(() => {
+      expect(request.startVerification).toHaveBeenCalledWith("m.sas.v1");
+    });
+    await vi.waitFor(() => {
+      expect(verify).toHaveBeenCalledTimes(1);
+    });
+    const summary = manager.listVerifications().find((item) => item.id === tracked.id);
+    expect(summary?.hasSas).toBe(true);
+    expect(summary?.sas?.decimal).toEqual([1234, 5678, 9012]);
+    expect(manager.getVerificationSas(tracked.id).decimal).toEqual([1234, 5678, 9012]);
   });
 
   it("prunes stale terminal sessions during list operations", () => {
