@@ -34,6 +34,8 @@ export type MatrixCryptoBootstrapResult = {
 };
 
 export class MatrixCryptoBootstrapper<TRawEvent extends MatrixRawEvent> {
+  private verificationHandlerRegistered = false;
+
   constructor(private readonly deps: MatrixCryptoBootstrapperDeps<TRawEvent>) {}
 
   async bootstrap(
@@ -41,6 +43,9 @@ export class MatrixCryptoBootstrapper<TRawEvent extends MatrixRawEvent> {
     options: MatrixCryptoBootstrapOptions = {},
   ): Promise<MatrixCryptoBootstrapResult> {
     const strict = options.strict === true;
+    // Register verification listeners before expensive bootstrap work so incoming requests
+    // are not missed during startup.
+    this.registerVerificationRequestHandler(crypto);
     await this.bootstrapSecretStorage(crypto, strict);
     const crossSigning = await this.bootstrapCrossSigning(crypto, {
       forceResetCrossSigning: options.forceResetCrossSigning === true,
@@ -48,7 +53,6 @@ export class MatrixCryptoBootstrapper<TRawEvent extends MatrixRawEvent> {
     });
     await this.bootstrapSecretStorage(crypto, strict);
     const ownDeviceVerified = await this.ensureOwnDeviceTrust(crypto, strict);
-    this.registerVerificationRequestHandler(crypto);
     return {
       crossSigningReady: crossSigning.ready,
       crossSigningPublished: crossSigning.published,
@@ -209,6 +213,11 @@ export class MatrixCryptoBootstrapper<TRawEvent extends MatrixRawEvent> {
   }
 
   private registerVerificationRequestHandler(crypto: MatrixCryptoBootstrapApi): void {
+    if (this.verificationHandlerRegistered) {
+      return;
+    }
+    this.verificationHandlerRegistered = true;
+
     // Auto-accept incoming verification requests from other users/devices.
     crypto.on(CryptoEvent.VerificationRequestReceived, async (request) => {
       const verificationRequest = request as MatrixVerificationRequestLike;

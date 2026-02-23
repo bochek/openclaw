@@ -257,4 +257,22 @@ describe("MatrixCryptoBootstrapper", () => {
     );
     expect(verificationRequest.accept).toHaveBeenCalledTimes(1);
   });
+
+  it("registers verification listeners only once across repeated bootstrap calls", async () => {
+    const deps = createBootstrapperDeps();
+    const crypto = createCryptoApi({
+      getDeviceVerificationStatus: vi.fn(async () => ({
+        isVerified: () => true,
+      })),
+    });
+    const bootstrapper = new MatrixCryptoBootstrapper(
+      deps as unknown as MatrixCryptoBootstrapperDeps<MatrixRawEvent>,
+    );
+
+    await bootstrapper.bootstrap(crypto);
+    await bootstrapper.bootstrap(crypto);
+
+    expect(crypto.on).toHaveBeenCalledTimes(1);
+    expect(deps.decryptBridge.bindCryptoRetrySignals).toHaveBeenCalledTimes(1);
+  });
 });
