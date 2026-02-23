@@ -1,5 +1,5 @@
-import type { MatrixClient } from "@vector-im/matrix-bot-sdk";
 import { describe, expect, it, vi } from "vitest";
+import type { MatrixClient } from "../sdk.js";
 import { listMatrixReactions, removeMatrixReactions } from "./reactions.js";
 
 function createReactionsClient(params: {

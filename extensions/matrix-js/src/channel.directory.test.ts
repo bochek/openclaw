@@ -4,25 +4,6 @@ import { matrixPlugin } from "./channel.js";
 import { setMatrixRuntime } from "./runtime.js";
 import type { CoreConfig } from "./types.js";
 
-vi.mock("@vector-im/matrix-bot-sdk", () => ({
-  ConsoleLogger: class {
-    trace = vi.fn();
-    debug = vi.fn();
-    info = vi.fn();
-    warn = vi.fn();
-    error = vi.fn();
-  },
-  MatrixClient: class {},
-  LogService: {
-    setLogger: vi.fn(),
-    warn: vi.fn(),
-    info: vi.fn(),
-    debug: vi.fn(),
-  },
-  SimpleFsStorageProvider: class {},
-  RustSdkCryptoStorageProvider: class {},
-}));
-
 describe("matrix directory", () => {
   const runtimeEnv: RuntimeEnv = {
     log: vi.fn(),
