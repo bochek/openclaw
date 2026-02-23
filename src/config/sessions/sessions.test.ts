@@ -56,16 +56,37 @@ describe("session path safety", () => {
     expect(resolved).toBe(path.resolve(sessionsDir, "sess-1-topic-topic%2Fa%2Bb.jsonl"));
   });
 
-  it("rejects absolute sessionFile paths outside known agent sessions dirs", () => {
+  it("falls back to derived path when sessionFile is outside known agent sessions dirs", () => {
     const sessionsDir = "/tmp/openclaw/agents/main/sessions";
 
-    expect(() =>
-      resolveSessionFilePath(
-        "sess-1",
-        { sessionFile: "/tmp/openclaw/agents/work/not-sessions/abc-123.jsonl" },
-        { sessionsDir },
-      ),
-    ).toThrow(/within sessions directory/);
+    const resolved = resolveSessionFilePath(
+      "sess-1",
+      { sessionFile: "/tmp/openclaw/agents/work/not-sessions/abc-123.jsonl" },
+      { sessionsDir },
+    );
+    expect(resolved).toBe(path.resolve(sessionsDir, "sess-1.jsonl"));
+  });
+
+  it("accepts symlink-alias session paths that resolve under the sessions dir", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-symlink-session-"));
+    const realRoot = path.join(tmpDir, "real-state");
+    const aliasRoot = path.join(tmpDir, "alias-state");
+    try {
+      const sessionsDir = path.join(realRoot, "agents", "main", "sessions");
+      fs.mkdirSync(sessionsDir, { recursive: true });
+      fs.symlinkSync(realRoot, aliasRoot, "dir");
+      const viaAlias = path.join(aliasRoot, "agents", "main", "sessions", "sess-1.jsonl");
+      fs.writeFileSync(path.join(sessionsDir, "sess-1.jsonl"), "");
+      const resolved = resolveSessionFilePath("sess-1", { sessionFile: viaAlias }, { sessionsDir });
+      expect(fs.realpathSync(resolved)).toBe(
+        fs.realpathSync(path.join(sessionsDir, "sess-1.jsonl")),
+      );
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });
 
