@@ -45,6 +45,7 @@ export type AuthChoice =
   | "qwen-portal"
   | "xai-api-key"
   | "mistral-api-key"
+  | "cohere-api-key"
   | "volcengine-api-key"
   | "byteplus-api-key"
   | "qianfan-api-key"
@@ -69,6 +70,7 @@ export type AuthChoiceGroupId =
   | "synthetic"
   | "venice"
   | "mistral"
+  | "cohere"
   | "qwen"
   | "together"
   | "huggingface"
@@ -107,6 +109,7 @@ export type OnboardOptions = {
   anthropicApiKey?: string;
   openaiApiKey?: string;
   mistralApiKey?: string;
+  cohereApiKey?: string;
   openrouterApiKey?: string;
   litellmApiKey?: string;
   aiGatewayApiKey?: string;
