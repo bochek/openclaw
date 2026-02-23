@@ -140,6 +140,29 @@ describe("registerStatusHealthSessionsCommands", () => {
     );
   });
 
+  it("runs sessions command with --agent forwarding", async () => {
+    await runCli(["sessions", "--agent", "work"]);
+
+    expect(sessionsCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agent: "work",
+        allAgents: false,
+      }),
+      runtime,
+    );
+  });
+
+  it("runs sessions command with --all-agents forwarding", async () => {
+    await runCli(["sessions", "--all-agents"]);
+
+    expect(sessionsCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allAgents: true,
+      }),
+      runtime,
+    );
+  });
+
   it("runs sessions cleanup subcommand with forwarded options", async () => {
     await runCli([
       "sessions",
@@ -156,10 +179,23 @@ describe("registerStatusHealthSessionsCommands", () => {
     expect(sessionsCleanupCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         store: "/tmp/sessions.json",
+        agent: undefined,
+        allAgents: false,
         dryRun: true,
         enforce: true,
         activeKey: "agent:main:main",
         json: true,
+      }),
+      runtime,
+    );
+  });
+
+  it("forwards parent-level all-agents to cleanup subcommand", async () => {
+    await runCli(["sessions", "--all-agents", "cleanup", "--dry-run"]);
+
+    expect(sessionsCleanupCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allAgents: true,
       }),
       runtime,
     );

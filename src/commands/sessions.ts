@@ -1,16 +1,12 @@
-import { resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { lookupContextTokens } from "../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../agents/defaults.js";
 import { loadConfig } from "../config/config.js";
-import {
-  loadSessionStore,
-  resolveFreshSessionTotalTokens,
-  resolveStorePath,
-} from "../config/sessions.js";
+import { loadSessionStore, resolveFreshSessionTotalTokens } from "../config/sessions.js";
 import { classifySessionKey } from "../gateway/session-utils.js";
 import { info } from "../globals.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { isRich, theme } from "../terminal/theme.js";
+import { resolveSessionStoreTargets } from "./session-store-targets.js";
 import {
   formatSessionAgeCell,
   formatSessionFlagsCell,
@@ -86,7 +82,7 @@ const formatKindCell = (kind: SessionRow["kind"], rich: boolean) => {
 };
 
 export async function sessionsCommand(
-  opts: { json?: boolean; store?: string; active?: string },
+  opts: { json?: boolean; store?: string; active?: string; agent?: string; allAgents?: boolean },
   runtime: RuntimeEnv,
 ) {
   const cfg = loadConfig();
@@ -95,10 +91,18 @@ export async function sessionsCommand(
     cfg.agents?.defaults?.contextTokens ??
     lookupContextTokens(displayDefaults.model) ??
     DEFAULT_CONTEXT_TOKENS;
-  const configModel = displayDefaults.model;
-  const defaultAgentId = resolveDefaultAgentId(cfg);
-  const storePath = resolveStorePath(opts.store ?? cfg.session?.store, { agentId: defaultAgentId });
-  const store = loadSessionStore(storePath);
+  let targets: ReturnType<typeof resolveSessionStoreTargets>;
+  try {
+    targets = resolveSessionStoreTargets(cfg, {
+      store: opts.store,
+      agent: opts.agent,
+      allAgents: opts.allAgents,
+    });
+  } catch (error) {
+    runtime.error(error instanceof Error ? error.message : String(error));
+    runtime.exit(1);
+    return;
+  }
 
   let activeMinutes: number | undefined;
   if (opts.active !== undefined) {
@@ -111,11 +115,14 @@ export async function sessionsCommand(
     activeMinutes = parsed;
   }
 
-  const rows = toSessionDisplayRows(store)
-    .map((row) => ({
-      ...row,
-      kind: classifySessionKey(row.key, store[row.key]),
-    }))
+  const rows = targets
+    .flatMap((target) => {
+      const store = loadSessionStore(target.storePath);
+      return toSessionDisplayRows(store).map((row) => ({
+        ...row,
+        kind: classifySessionKey(row.key, store[row.key]),
+      }));
+    })
     .filter((row) => {
       if (activeMinutes === undefined) {
         return true;
@@ -124,13 +131,22 @@ export async function sessionsCommand(
         return false;
       }
       return Date.now() - row.updatedAt <= activeMinutes * 60_000;
-    });
+    })
+    .toSorted((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 
   if (opts.json) {
+    const multi = targets.length > 1;
     runtime.log(
       JSON.stringify(
         {
-          path: storePath,
+          path: multi ? null : (targets[0]?.storePath ?? null),
+          stores: multi
+            ? targets.map((target) => ({
+                agentId: target.agentId,
+                path: target.storePath,
+              }))
+            : undefined,
+          allAgents: multi ? true : undefined,
           count: rows.length,
           activeMinutes: activeMinutes ?? null,
           sessions: rows.map((r) => {
@@ -153,7 +169,13 @@ export async function sessionsCommand(
     return;
   }
 
-  runtime.log(info(`Session store: ${storePath}`));
+  if (targets.length === 1) {
+    runtime.log(info(`Session store: ${targets[0]?.storePath}`));
+  } else {
+    runtime.log(
+      info(`Session stores: ${targets.length} (${targets.map((t) => t.agentId).join(", ")})`),
+    );
+  }
   runtime.log(info(`Sessions listed: ${rows.length}`));
   if (activeMinutes) {
     runtime.log(info(`Filtered to last ${activeMinutes} minute(s)`));
@@ -176,7 +198,7 @@ export async function sessionsCommand(
   runtime.log(rich ? theme.heading(header) : header);
 
   for (const row of rows) {
-    const model = resolveSessionDisplayModel(cfg, row, displayDefaults) ?? configModel;
+    const model = resolveSessionDisplayModel(cfg, row, displayDefaults);
     const contextTokens = row.contextTokens ?? lookupContextTokens(model) ?? configContextTokens;
     const total = resolveFreshSessionTotalTokens(row);
 

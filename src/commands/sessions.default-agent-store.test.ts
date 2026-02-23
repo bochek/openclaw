@@ -69,4 +69,19 @@ describe("sessionsCommand default store agent selection", () => {
     });
     expect(logs[0]).toContain("Session store: /tmp/sessions-voice.json");
   });
+
+  it("uses all configured agent stores with --all-agents", async () => {
+    resolveStorePathMock.mockClear();
+    const { runtime, logs } = createRuntime();
+
+    await sessionsCommand({ allAgents: true }, runtime);
+
+    expect(resolveStorePathMock).toHaveBeenCalledWith("/tmp/sessions-{agentId}.json", {
+      agentId: "main",
+    });
+    expect(resolveStorePathMock).toHaveBeenCalledWith("/tmp/sessions-{agentId}.json", {
+      agentId: "voice",
+    });
+    expect(logs[0]).toContain("Session stores: 2 (main, voice)");
+  });
 });

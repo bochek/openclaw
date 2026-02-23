@@ -4,8 +4,7 @@ import type { RuntimeEnv } from "../runtime.js";
 
 const mocks = vi.hoisted(() => ({
   loadConfig: vi.fn(),
-  resolveDefaultAgentId: vi.fn(),
-  resolveStorePath: vi.fn(),
+  resolveSessionStoreTargets: vi.fn(),
   resolveMaintenanceConfig: vi.fn(),
   loadSessionStore: vi.fn(),
   pruneStaleEntries: vi.fn(),
@@ -18,12 +17,11 @@ vi.mock("../config/config.js", () => ({
   loadConfig: mocks.loadConfig,
 }));
 
-vi.mock("../agents/agent-scope.js", () => ({
-  resolveDefaultAgentId: mocks.resolveDefaultAgentId,
+vi.mock("./session-store-targets.js", () => ({
+  resolveSessionStoreTargets: mocks.resolveSessionStoreTargets,
 }));
 
 vi.mock("../config/sessions.js", () => ({
-  resolveStorePath: mocks.resolveStorePath,
   resolveMaintenanceConfig: mocks.resolveMaintenanceConfig,
   loadSessionStore: mocks.loadSessionStore,
   pruneStaleEntries: mocks.pruneStaleEntries,
@@ -50,8 +48,9 @@ describe("sessionsCleanupCommand", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.loadConfig.mockReturnValue({ session: { store: "/cfg/sessions.json" } });
-    mocks.resolveDefaultAgentId.mockReturnValue("main");
-    mocks.resolveStorePath.mockReturnValue("/resolved/sessions.json");
+    mocks.resolveSessionStoreTargets.mockReturnValue([
+      { agentId: "main", storePath: "/resolved/sessions.json" },
+    ]);
     mocks.resolveMaintenanceConfig.mockReturnValue({
       mode: "warn",
       pruneAfterMs: 7 * 24 * 60 * 60 * 1000,
@@ -178,5 +177,32 @@ describe("sessionsCleanupCommand", () => {
     expect(logs.some((line) => line.includes("Action") && line.includes("Key"))).toBe(true);
     expect(logs.some((line) => line.includes("fresh") && line.includes("keep"))).toBe(true);
     expect(logs.some((line) => line.includes("stale") && line.includes("prune-stale"))).toBe(true);
+  });
+
+  it("returns grouped JSON for --all-agents dry-runs", async () => {
+    mocks.resolveSessionStoreTargets.mockReturnValue([
+      { agentId: "main", storePath: "/resolved/main-sessions.json" },
+      { agentId: "work", storePath: "/resolved/work-sessions.json" },
+    ]);
+    mocks.enforceSessionDiskBudget.mockResolvedValue(null);
+    mocks.loadSessionStore
+      .mockReturnValueOnce({ stale: { sessionId: "stale-main", updatedAt: 1 } })
+      .mockReturnValueOnce({ stale: { sessionId: "stale-work", updatedAt: 1 } });
+
+    const { runtime, logs } = makeRuntime();
+    await sessionsCleanupCommand(
+      {
+        json: true,
+        dryRun: true,
+        allAgents: true,
+      },
+      runtime,
+    );
+
+    expect(logs).toHaveLength(1);
+    const payload = JSON.parse(logs[0] ?? "{}") as Record<string, unknown>;
+    expect(payload.allAgents).toBe(true);
+    expect(Array.isArray(payload.stores)).toBe(true);
+    expect((payload.stores as unknown[]).length).toBe(2);
   });
 });

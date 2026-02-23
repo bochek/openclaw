@@ -30,6 +30,10 @@ describe("program routes", () => {
     await expectRunFalse(["sessions"], ["node", "openclaw", "sessions", "--active"]);
   });
 
+  it("returns false for sessions route when --agent value is missing", async () => {
+    await expectRunFalse(["sessions"], ["node", "openclaw", "sessions", "--agent"]);
+  });
+
   it("does not fast-route sessions subcommands", () => {
     expect(findRoutedCommand(["sessions", "cleanup"])).toBeNull();
   });
