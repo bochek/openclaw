@@ -68,6 +68,7 @@ describe("applyAuthChoice", () => {
     "CLOUDFLARE_AI_GATEWAY_API_KEY",
     "MOONSHOT_API_KEY",
     "MISTRAL_API_KEY",
+    "COHERE_API_KEY",
     "KIMI_API_KEY",
     "GEMINI_API_KEY",
     "XIAOMI_API_KEY",
@@ -549,6 +550,13 @@ describe("applyAuthChoice", () => {
       profileId: "mistral:default",
       provider: "mistral",
       modelPrefix: "mistral/",
+    },
+    {
+      authChoice: "cohere-api-key",
+      tokenProvider: "cohere",
+      profileId: "cohere:default",
+      provider: "cohere",
+      modelPrefix: "cohere/",
     },
     {
       authChoice: "kimi-code-api-key",
@@ -1312,6 +1320,10 @@ describe("resolvePreferredProviderForAuthChoice", () => {
 
   it("maps mistral-api-key to the provider", () => {
     expect(resolvePreferredProviderForAuthChoice("mistral-api-key")).toBe("mistral");
+  });
+
+  it("maps cohere-api-key to the provider", () => {
+    expect(resolvePreferredProviderForAuthChoice("cohere-api-key")).toBe("cohere");
   });
 
   it("returns undefined for unknown choices", () => {
