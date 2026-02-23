@@ -22,8 +22,8 @@
       "id": "matrix-js",
       "label": "Matrix-js",
       "selectionLabel": "Matrix-js (plugin)",
-      "docsPath": "/channels/matrix",
-      "docsLabel": "matrix",
+      "docsPath": "/channels/matrix-js",
+      "docsLabel": "matrix-js",
       "blurb": "open protocol; install the plugin to enable.",
       "order": 70,
       "quickstartAllowFrom": true

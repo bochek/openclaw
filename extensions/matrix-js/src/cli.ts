@@ -38,7 +38,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
   const root = params.program
     .command("matrix-js")
     .description("Matrix-js channel utilities")
-    .addHelpText("after", () => "\nDocs: https://docs.openclaw.ai/channels/matrix\n");
+    .addHelpText("after", () => "\nDocs: https://docs.openclaw.ai/channels/matrix-js\n");
 
   const verify = root.command("verify").description("Device verification for Matrix E2EE");
 

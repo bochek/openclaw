@@ -7,6 +7,10 @@ title: "Matrix"
 
 # Matrix (plugin)
 
+This page documents the legacy Matrix plugin (`@openclaw/matrix`) built on
+`@vector-im/matrix-bot-sdk`.
+For the current plugin built on `matrix-js-sdk`, see [Matrix-js](/channels/matrix-js).
+
 Matrix is an open, decentralized messaging protocol. OpenClaw connects as a Matrix **user**
 on any homeserver, so you need a Matrix account for the bot. Once it is logged in, you can DM
 the bot directly or invite it to rooms (Matrix "groups"). Beeper is a valid client option too,

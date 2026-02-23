@@ -903,6 +903,7 @@
                   "channels/msteams",
                   "channels/synology-chat",
                   "channels/line",
+                  "channels/matrix-js",
                   "channels/matrix",
                   "channels/nextcloud-talk",
                   "channels/nostr",
