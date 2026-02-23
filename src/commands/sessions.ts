@@ -22,9 +22,11 @@ import {
 } from "./sessions-table.js";
 
 type SessionRow = SessionDisplayRow & {
+  agentId: string;
   kind: "direct" | "group" | "global" | "unknown";
 };
 
+const AGENT_PAD = 10;
 const KIND_PAD = 6;
 const TOKENS_PAD = 20;
 
@@ -120,6 +122,7 @@ export async function sessionsCommand(
       const store = loadSessionStore(target.storePath);
       return toSessionDisplayRows(store).map((row) => ({
         ...row,
+        agentId: target.agentId,
         kind: classifySessionKey(row.key, store[row.key]),
       }));
     })
@@ -186,7 +189,9 @@ export async function sessionsCommand(
   }
 
   const rich = isRich();
+  const showAgentColumn = targets.length > 1;
   const header = [
+    ...(showAgentColumn ? ["Agent".padEnd(AGENT_PAD)] : []),
     "Kind".padEnd(KIND_PAD),
     "Key".padEnd(SESSION_KEY_PAD),
     "Age".padEnd(SESSION_AGE_PAD),
@@ -203,6 +208,9 @@ export async function sessionsCommand(
     const total = resolveFreshSessionTotalTokens(row);
 
     const line = [
+      ...(showAgentColumn
+        ? [rich ? theme.accentBright(row.agentId.padEnd(AGENT_PAD)) : row.agentId.padEnd(AGENT_PAD)]
+        : []),
       formatKindCell(row.kind, rich),
       formatSessionKeyCell(row.key, rich),
       formatSessionAgeCell(row.updatedAt, rich),

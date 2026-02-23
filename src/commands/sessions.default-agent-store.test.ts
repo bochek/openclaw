@@ -25,6 +25,7 @@ const resolveStorePathMock = vi.hoisted(() =>
     return `/tmp/sessions-${opts?.agentId ?? "missing"}.json`;
   }),
 );
+const loadSessionStoreMock = vi.hoisted(() => vi.fn(() => ({})));
 
 vi.mock("../config/config.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../config/config.js")>();
@@ -39,7 +40,7 @@ vi.mock("../config/sessions.js", async (importOriginal) => {
   return {
     ...actual,
     resolveStorePath: resolveStorePathMock,
-    loadSessionStore: vi.fn(() => ({})),
+    loadSessionStore: loadSessionStoreMock,
   };
 });
 
@@ -58,6 +59,29 @@ function createRuntime(): { runtime: RuntimeEnv; logs: string[] } {
 }
 
 describe("sessionsCommand default store agent selection", () => {
+  it("includes agentId on sessions rows for --all-agents JSON output", async () => {
+    resolveStorePathMock.mockClear();
+    loadSessionStoreMock.mockReset();
+    loadSessionStoreMock
+      .mockReturnValueOnce({
+        main_row: { sessionId: "s1", updatedAt: Date.now() - 60_000, model: "pi:opus" },
+      })
+      .mockReturnValueOnce({
+        voice_row: { sessionId: "s2", updatedAt: Date.now() - 120_000, model: "pi:opus" },
+      });
+    const { runtime, logs } = createRuntime();
+
+    await sessionsCommand({ allAgents: true, json: true }, runtime);
+
+    const payload = JSON.parse(logs[0] ?? "{}") as {
+      allAgents?: boolean;
+      sessions?: Array<{ key: string; agentId?: string }>;
+    };
+    expect(payload.allAgents).toBe(true);
+    expect(payload.sessions?.map((session) => session.agentId)).toContain("main");
+    expect(payload.sessions?.map((session) => session.agentId)).toContain("voice");
+  });
+
   it("uses configured default agent id when resolving implicit session store path", async () => {
     resolveStorePathMock.mockClear();
     const { runtime, logs } = createRuntime();
@@ -72,6 +96,12 @@ describe("sessionsCommand default store agent selection", () => {
 
   it("uses all configured agent stores with --all-agents", async () => {
     resolveStorePathMock.mockClear();
+    loadSessionStoreMock.mockReset();
+    loadSessionStoreMock
+      .mockReturnValueOnce({
+        main_row: { sessionId: "s1", updatedAt: Date.now() - 60_000, model: "pi:opus" },
+      })
+      .mockReturnValueOnce({});
     const { runtime, logs } = createRuntime();
 
     await sessionsCommand({ allAgents: true }, runtime);
@@ -83,5 +113,6 @@ describe("sessionsCommand default store agent selection", () => {
       agentId: "voice",
     });
     expect(logs[0]).toContain("Session stores: 2 (main, voice)");
+    expect(logs[2]).toContain("Agent");
   });
 });
