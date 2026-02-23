@@ -84,6 +84,25 @@ class MockVerificationRequest extends EventEmitter implements MatrixVerification
 }
 
 describe("MatrixVerificationManager", () => {
+  it("handles rust verification requests whose methods getter throws", () => {
+    const manager = new MatrixVerificationManager();
+    const request = new MockVerificationRequest({
+      transactionId: "txn-rust-methods",
+      phase: VerificationPhase.Requested,
+    });
+    Object.defineProperty(request, "methods", {
+      get() {
+        throw new Error("not implemented");
+      },
+    });
+
+    const summary = manager.trackVerificationRequest(request);
+
+    expect(summary.id).toBeTruthy();
+    expect(summary.methods).toEqual([]);
+    expect(summary.phase).toBe(VerificationPhase.Requested);
+  });
+
   it("reuses the same tracked id for repeated transaction IDs", () => {
     const manager = new MatrixVerificationManager();
     const first = new MockVerificationRequest({

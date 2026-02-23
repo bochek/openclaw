@@ -221,7 +221,15 @@ export class MatrixCryptoBootstrapper<TRawEvent extends MatrixRawEvent> {
     // Auto-accept incoming verification requests from other users/devices.
     crypto.on(CryptoEvent.VerificationRequestReceived, async (request) => {
       const verificationRequest = request as MatrixVerificationRequestLike;
-      this.deps.verificationManager.trackVerificationRequest(verificationRequest);
+      try {
+        this.deps.verificationManager.trackVerificationRequest(verificationRequest);
+      } catch (err) {
+        LogService.warn(
+          "MatrixClientLite",
+          `Failed to track verification request from ${verificationRequest.otherUserId}:`,
+          err,
+        );
+      }
       const otherUserId = verificationRequest.otherUserId;
       const isSelfVerification = verificationRequest.isSelfVerification;
       const initiatedByMe = verificationRequest.initiatedByMe;

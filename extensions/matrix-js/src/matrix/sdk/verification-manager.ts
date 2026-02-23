@@ -109,9 +109,21 @@ export class MatrixVerificationManager {
   private readonly trackedVerificationRequests = new WeakSet<object>();
   private readonly trackedVerificationVerifiers = new WeakSet<object>();
 
+  private readRequestValue<T>(
+    request: MatrixVerificationRequestLike,
+    reader: () => T,
+    fallback: T,
+  ): T {
+    try {
+      return reader();
+    } catch {
+      return fallback;
+    }
+  }
+
   private pruneVerificationSessions(nowMs: number): void {
     for (const [id, session] of this.verificationSessions) {
-      const phase = session.request.phase;
+      const phase = this.readRequestValue(session.request, () => session.request.phase, -1);
       const isTerminal = phase === VerificationPhase.Done || phase === VerificationPhase.Cancelled;
       if (isTerminal && nowMs - session.updatedAtMs > TERMINAL_SESSION_RETENTION_MS) {
         this.verificationSessions.delete(id);
@@ -159,21 +171,28 @@ export class MatrixVerificationManager {
 
   private buildVerificationSummary(session: MatrixVerificationSession): MatrixVerificationSummary {
     const request = session.request;
-    const phase = request.phase;
-    const canAccept = phase < VerificationPhase.Ready && !request.accepting && !request.declining;
+    const phase = this.readRequestValue(request, () => request.phase, VerificationPhase.Requested);
+    const accepting = this.readRequestValue(request, () => request.accepting, false);
+    const declining = this.readRequestValue(request, () => request.declining, false);
+    const pending = this.readRequestValue(request, () => request.pending, false);
+    const methodsRaw = this.readRequestValue<unknown>(request, () => request.methods, []);
+    const methods = Array.isArray(methodsRaw)
+      ? methodsRaw.filter((entry): entry is string => typeof entry === "string")
+      : [];
+    const canAccept = phase < VerificationPhase.Ready && !accepting && !declining;
     return {
       id: session.id,
-      transactionId: request.transactionId,
-      roomId: request.roomId,
-      otherUserId: request.otherUserId,
-      otherDeviceId: request.otherDeviceId,
-      isSelfVerification: request.isSelfVerification,
-      initiatedByMe: request.initiatedByMe,
+      transactionId: this.readRequestValue(request, () => request.transactionId, undefined),
+      roomId: this.readRequestValue(request, () => request.roomId, undefined),
+      otherUserId: this.readRequestValue(request, () => request.otherUserId, "unknown"),
+      otherDeviceId: this.readRequestValue(request, () => request.otherDeviceId, undefined),
+      isSelfVerification: this.readRequestValue(request, () => request.isSelfVerification, false),
+      initiatedByMe: this.readRequestValue(request, () => request.initiatedByMe, false),
       phase,
       phaseName: this.getVerificationPhaseName(phase),
-      pending: request.pending,
-      methods: Array.isArray(request.methods) ? request.methods : [],
-      chosenMethod: request.chosenMethod ?? null,
+      pending,
+      methods,
+      chosenMethod: this.readRequestValue(request, () => request.chosenMethod ?? null, null),
       canAccept,
       hasSas: Boolean(session.sasCallbacks),
       hasReciprocateQr: Boolean(session.reciprocateQrCallbacks),
@@ -190,7 +209,8 @@ export class MatrixVerificationManager {
       return direct;
     }
     for (const session of this.verificationSessions.values()) {
-      if (session.request.transactionId === id) {
+      const txId = this.readRequestValue(session.request, () => session.request.transactionId, "");
+      if (txId === id) {
         return session;
       }
     }
@@ -205,8 +225,9 @@ export class MatrixVerificationManager {
     this.trackedVerificationRequests.add(requestObj);
     session.request.on(VerificationRequestEvent.Change, () => {
       this.touchVerificationSession(session);
-      if (session.request.verifier) {
-        this.attachVerifierToVerificationSession(session, session.request.verifier);
+      const verifier = this.readRequestValue(session.request, () => session.request.verifier, null);
+      if (verifier) {
+        this.attachVerifierToVerificationSession(session, verifier);
       }
     });
   }
@@ -266,14 +287,20 @@ export class MatrixVerificationManager {
 
   trackVerificationRequest(request: MatrixVerificationRequestLike): MatrixVerificationSummary {
     this.pruneVerificationSessions(Date.now());
-    const txId = request.transactionId?.trim();
+    const txId = this.readRequestValue(request, () => request.transactionId?.trim(), "");
     if (txId) {
       for (const existing of this.verificationSessions.values()) {
-        if (existing.request.transactionId === txId) {
+        const existingTxId = this.readRequestValue(
+          existing.request,
+          () => existing.request.transactionId,
+          "",
+        );
+        if (existingTxId === txId) {
           existing.request = request;
           this.ensureVerificationRequestTracked(existing);
-          if (request.verifier) {
-            this.attachVerifierToVerificationSession(existing, request.verifier);
+          const verifier = this.readRequestValue(request, () => request.verifier, null);
+          if (verifier) {
+            this.attachVerifierToVerificationSession(existing, verifier);
           }
           this.touchVerificationSession(existing);
           return this.buildVerificationSummary(existing);
@@ -292,8 +319,9 @@ export class MatrixVerificationManager {
     };
     this.verificationSessions.set(session.id, session);
     this.ensureVerificationRequestTracked(session);
-    if (request.verifier) {
-      this.attachVerifierToVerificationSession(session, request.verifier);
+    const verifier = this.readRequestValue(request, () => request.verifier, null);
+    if (verifier) {
+      this.attachVerifierToVerificationSession(session, verifier);
     }
     return this.buildVerificationSummary(session);
   }
