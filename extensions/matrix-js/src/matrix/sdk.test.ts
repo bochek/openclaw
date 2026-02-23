@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { encodeRecoveryKey } from "matrix-js-sdk/lib/crypto-api/recovery-key.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 class FakeMatrixEvent extends EventEmitter {
@@ -691,6 +692,60 @@ describe("MatrixClient crypto bootstrapping", () => {
     );
   });
 
+  it("retries bootstrap with forced reset when initial publish/verification is incomplete", async () => {
+    matrixJsClient.getCrypto = vi.fn(() => ({ on: vi.fn() }));
+    const client = new MatrixClient("https://matrix.example.org", "token", undefined, undefined, {
+      encryption: true,
+      password: "secret-password",
+    });
+    const bootstrapSpy = vi
+      .fn()
+      .mockResolvedValueOnce({
+        crossSigningReady: false,
+        crossSigningPublished: false,
+        ownDeviceVerified: false,
+      })
+      .mockResolvedValueOnce({
+        crossSigningReady: true,
+        crossSigningPublished: true,
+        ownDeviceVerified: true,
+      });
+    (
+      client as unknown as {
+        cryptoBootstrapper: { bootstrap: typeof bootstrapSpy };
+      }
+    ).cryptoBootstrapper.bootstrap = bootstrapSpy;
+
+    await client.start();
+
+    expect(bootstrapSpy).toHaveBeenCalledTimes(2);
+    expect(bootstrapSpy.mock.calls[1]?.[1]).toEqual({
+      forceResetCrossSigning: true,
+      strict: true,
+    });
+  });
+
+  it("does not force-reset bootstrap when password is unavailable", async () => {
+    matrixJsClient.getCrypto = vi.fn(() => ({ on: vi.fn() }));
+    const client = new MatrixClient("https://matrix.example.org", "token", undefined, undefined, {
+      encryption: true,
+    });
+    const bootstrapSpy = vi.fn().mockResolvedValue({
+      crossSigningReady: false,
+      crossSigningPublished: false,
+      ownDeviceVerified: false,
+    });
+    (
+      client as unknown as {
+        cryptoBootstrapper: { bootstrap: typeof bootstrapSpy };
+      }
+    ).cryptoBootstrapper.bootstrap = bootstrapSpy;
+
+    await client.start();
+
+    expect(bootstrapSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("provides secret storage callbacks and resolves stored recovery key", async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "matrix-sdk-test-"));
     const recoveryKeyPath = path.join(tmpDir, "recovery-key.json");
@@ -747,5 +802,149 @@ describe("MatrixClient crypto bootstrapping", () => {
     const callsAfterStop = databasesSpy.mock.calls.length;
     await vi.advanceTimersByTimeAsync(120_000);
     expect(databasesSpy.mock.calls.length).toBe(callsAfterStop);
+  });
+
+  it("reports own verification status when crypto marks device as verified", async () => {
+    matrixJsClient.getUserId = vi.fn(() => "@bot:example.org");
+    matrixJsClient.getDeviceId = vi.fn(() => "DEVICE123");
+    matrixJsClient.getCrypto = vi.fn(() => ({
+      on: vi.fn(),
+      bootstrapCrossSigning: vi.fn(async () => {}),
+      bootstrapSecretStorage: vi.fn(async () => {}),
+      requestOwnUserVerification: vi.fn(async () => null),
+      getDeviceVerificationStatus: vi.fn(async () => ({
+        isVerified: () => true,
+        localVerified: true,
+        crossSigningVerified: true,
+        signedByOwner: true,
+      })),
+    }));
+
+    const client = new MatrixClient("https://matrix.example.org", "token", undefined, undefined, {
+      encryption: true,
+    });
+    await client.start();
+
+    const status = await client.getOwnDeviceVerificationStatus();
+    expect(status.encryptionEnabled).toBe(true);
+    expect(status.verified).toBe(true);
+    expect(status.userId).toBe("@bot:example.org");
+    expect(status.deviceId).toBe("DEVICE123");
+  });
+
+  it("verifies with a provided recovery key and reports success", async () => {
+    const encoded = encodeRecoveryKey(new Uint8Array(Array.from({ length: 32 }, (_, i) => i + 1)));
+    expect(encoded).toBeTypeOf("string");
+
+    matrixJsClient.getUserId = vi.fn(() => "@bot:example.org");
+    matrixJsClient.getDeviceId = vi.fn(() => "DEVICE123");
+    const bootstrapSecretStorage = vi.fn(async () => {});
+    const bootstrapCrossSigning = vi.fn(async () => {});
+    const getSecretStorageStatus = vi.fn(async () => ({
+      ready: true,
+      defaultKeyId: "SSSSKEY",
+      secretStorageKeyValidityMap: { SSSSKEY: true },
+    }));
+    const getDeviceVerificationStatus = vi.fn(async () => ({
+      isVerified: () => true,
+      localVerified: true,
+      crossSigningVerified: true,
+      signedByOwner: true,
+    }));
+    matrixJsClient.getCrypto = vi.fn(() => ({
+      on: vi.fn(),
+      bootstrapCrossSigning,
+      bootstrapSecretStorage,
+      requestOwnUserVerification: vi.fn(async () => null),
+      getSecretStorageStatus,
+      getDeviceVerificationStatus,
+    }));
+
+    const recoveryDir = fs.mkdtempSync(path.join(os.tmpdir(), "matrix-sdk-verify-key-"));
+    const client = new MatrixClient("https://matrix.example.org", "token", undefined, undefined, {
+      encryption: true,
+      recoveryKeyPath: path.join(recoveryDir, "recovery-key.json"),
+    });
+    await client.start();
+
+    const result = await client.verifyWithRecoveryKey(encoded as string);
+    expect(result.success).toBe(true);
+    expect(result.verified).toBe(true);
+    expect(result.recoveryKeyStored).toBe(true);
+    expect(result.deviceId).toBe("DEVICE123");
+    expect(bootstrapSecretStorage).toHaveBeenCalled();
+    expect(bootstrapCrossSigning).toHaveBeenCalled();
+  });
+
+  it("reports bootstrap failure when cross-signing keys are not published", async () => {
+    matrixJsClient.getUserId = vi.fn(() => "@bot:example.org");
+    matrixJsClient.getDeviceId = vi.fn(() => "DEVICE123");
+    matrixJsClient.getCrypto = vi.fn(() => ({
+      on: vi.fn(),
+      bootstrapCrossSigning: vi.fn(async () => {}),
+      bootstrapSecretStorage: vi.fn(async () => {}),
+      requestOwnUserVerification: vi.fn(async () => null),
+      isCrossSigningReady: vi.fn(async () => false),
+      userHasCrossSigningKeys: vi.fn(async () => false),
+      getDeviceVerificationStatus: vi.fn(async () => ({
+        isVerified: () => true,
+        localVerified: true,
+        crossSigningVerified: true,
+        signedByOwner: true,
+      })),
+    }));
+
+    const client = new MatrixClient("https://matrix.example.org", "token", undefined, undefined, {
+      encryption: true,
+    });
+    vi.spyOn(client, "getOwnCrossSigningPublicationStatus").mockResolvedValue({
+      userId: "@bot:example.org",
+      masterKeyPublished: false,
+      selfSigningKeyPublished: false,
+      userSigningKeyPublished: false,
+      published: false,
+    });
+
+    const result = await client.bootstrapOwnDeviceVerification();
+    expect(result.success).toBe(false);
+    expect(result.error).toContain(
+      "Cross-signing bootstrap finished but server keys are still not published",
+    );
+  });
+
+  it("reports bootstrap success when own device is verified and keys are published", async () => {
+    matrixJsClient.getUserId = vi.fn(() => "@bot:example.org");
+    matrixJsClient.getDeviceId = vi.fn(() => "DEVICE123");
+    matrixJsClient.getCrypto = vi.fn(() => ({
+      on: vi.fn(),
+      bootstrapCrossSigning: vi.fn(async () => {}),
+      bootstrapSecretStorage: vi.fn(async () => {}),
+      requestOwnUserVerification: vi.fn(async () => null),
+      isCrossSigningReady: vi.fn(async () => true),
+      userHasCrossSigningKeys: vi.fn(async () => true),
+      getDeviceVerificationStatus: vi.fn(async () => ({
+        isVerified: () => true,
+        localVerified: true,
+        crossSigningVerified: true,
+        signedByOwner: true,
+      })),
+    }));
+
+    const client = new MatrixClient("https://matrix.example.org", "token", undefined, undefined, {
+      encryption: true,
+    });
+    vi.spyOn(client, "getOwnCrossSigningPublicationStatus").mockResolvedValue({
+      userId: "@bot:example.org",
+      masterKeyPublished: true,
+      selfSigningKeyPublished: true,
+      userSigningKeyPublished: true,
+      published: true,
+    });
+
+    const result = await client.bootstrapOwnDeviceVerification();
+    expect(result.success).toBe(true);
+    expect(result.verification.verified).toBe(true);
+    expect(result.crossSigning.published).toBe(true);
+    expect(result.cryptoBootstrap).not.toBeNull();
   });
 });

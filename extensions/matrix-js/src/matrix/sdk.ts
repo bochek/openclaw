@@ -9,6 +9,7 @@ import {
 } from "matrix-js-sdk";
 import { VerificationMethod } from "matrix-js-sdk/lib/types.js";
 import { MatrixCryptoBootstrapper } from "./sdk/crypto-bootstrap.js";
+import type { MatrixCryptoBootstrapResult } from "./sdk/crypto-bootstrap.js";
 import { createMatrixCryptoFacade, type MatrixCryptoFacade } from "./sdk/crypto-facade.js";
 import { MatrixDecryptBridge } from "./sdk/decrypt-bridge.js";
 import { matrixEventToRaw, parseMxc } from "./sdk/event-helpers.js";
@@ -20,6 +21,7 @@ import { type HttpMethod, type QueryParams } from "./sdk/transport.js";
 import type {
   MatrixClientEventMap,
   MatrixCryptoBootstrapApi,
+  MatrixDeviceVerificationStatusLike,
   MatrixRawEvent,
   MessageEventContent,
 } from "./sdk/types.js";
@@ -39,6 +41,54 @@ export type {
   TextualMessageEventContent,
 } from "./sdk/types.js";
 
+export type MatrixOwnDeviceVerificationStatus = {
+  encryptionEnabled: boolean;
+  userId: string | null;
+  deviceId: string | null;
+  verified: boolean;
+  localVerified: boolean;
+  crossSigningVerified: boolean;
+  signedByOwner: boolean;
+  recoveryKeyStored: boolean;
+  recoveryKeyCreatedAt: string | null;
+  recoveryKeyId: string | null;
+  backupVersion: string | null;
+};
+
+export type MatrixRecoveryKeyVerificationResult = MatrixOwnDeviceVerificationStatus & {
+  success: boolean;
+  verifiedAt?: string;
+  error?: string;
+};
+
+export type MatrixOwnCrossSigningPublicationStatus = {
+  userId: string | null;
+  masterKeyPublished: boolean;
+  selfSigningKeyPublished: boolean;
+  userSigningKeyPublished: boolean;
+  published: boolean;
+};
+
+export type MatrixVerificationBootstrapResult = {
+  success: boolean;
+  error?: string;
+  verification: MatrixOwnDeviceVerificationStatus;
+  crossSigning: MatrixOwnCrossSigningPublicationStatus;
+  pendingVerifications: number;
+  cryptoBootstrap: MatrixCryptoBootstrapResult | null;
+};
+
+function isMatrixDeviceVerified(
+  status: MatrixDeviceVerificationStatusLike | null | undefined,
+): boolean {
+  return (
+    status?.isVerified?.() === true ||
+    status?.localVerified === true ||
+    status?.crossSigningVerified === true ||
+    status?.signedByOwner === true
+  );
+}
+
 export class MatrixClient {
   private readonly client: MatrixJsClient;
   private readonly emitter = new EventEmitter();
@@ -46,10 +96,12 @@ export class MatrixClient {
   private readonly localTimeoutMs: number;
   private readonly initialSyncLimit?: number;
   private readonly encryptionEnabled: boolean;
+  private readonly password?: string;
   private readonly idbSnapshotPath?: string;
   private readonly cryptoDatabasePrefix?: string;
   private bridgeRegistered = false;
   private started = false;
+  private cryptoBootstrapped = false;
   private selfUserId: string | null;
   private readonly dmRoomIds = new Set<string>();
   private cryptoInitialized = false;
@@ -88,6 +140,7 @@ export class MatrixClient {
     this.localTimeoutMs = Math.max(1, opts.localTimeoutMs ?? 60_000);
     this.initialSyncLimit = opts.initialSyncLimit;
     this.encryptionEnabled = opts.encryption === true;
+    this.password = opts.password;
     this.idbSnapshotPath = opts.idbSnapshotPath;
     this.cryptoDatabasePrefix = opts.cryptoDatabasePrefix;
     this.selfUserId = opts.userId?.trim() || null;
@@ -176,6 +229,7 @@ export class MatrixClient {
     await this.client.startClient({
       initialSyncLimit: this.initialSyncLimit,
     });
+    await this.bootstrapCryptoIfNeeded();
     this.started = true;
     this.emitOutstandingInviteEvents();
     await this.refreshDmCache().catch(noop);
@@ -196,6 +250,45 @@ export class MatrixClient {
     this.started = false;
   }
 
+  private async bootstrapCryptoIfNeeded(): Promise<void> {
+    if (!this.encryptionEnabled || !this.cryptoInitialized || this.cryptoBootstrapped) {
+      return;
+    }
+    const crypto = this.client.getCrypto() as MatrixCryptoBootstrapApi | undefined;
+    if (!crypto) {
+      return;
+    }
+    const initial = await this.cryptoBootstrapper.bootstrap(crypto);
+    if (!initial.crossSigningPublished || initial.ownDeviceVerified === false) {
+      if (this.password?.trim()) {
+        try {
+          const repaired = await this.cryptoBootstrapper.bootstrap(crypto, {
+            forceResetCrossSigning: true,
+            strict: true,
+          });
+          if (repaired.crossSigningPublished && repaired.ownDeviceVerified !== false) {
+            LogService.info(
+              "MatrixClientLite",
+              "Cross-signing/bootstrap recovered after forced reset",
+            );
+          }
+        } catch (err) {
+          LogService.warn(
+            "MatrixClientLite",
+            "Failed to recover cross-signing/bootstrap with forced reset:",
+            err,
+          );
+        }
+      } else {
+        LogService.warn(
+          "MatrixClientLite",
+          "Cross-signing/bootstrap incomplete and no password is configured for UIA fallback",
+        );
+      }
+    }
+    this.cryptoBootstrapped = true;
+  }
+
   private async initializeCryptoIfNeeded(): Promise<void> {
     if (!this.encryptionEnabled || this.cryptoInitialized) {
       return;
@@ -209,11 +302,6 @@ export class MatrixClient {
         cryptoDatabasePrefix: this.cryptoDatabasePrefix,
       });
       this.cryptoInitialized = true;
-
-      const crypto = this.client.getCrypto() as MatrixCryptoBootstrapApi | undefined;
-      if (crypto) {
-        await this.cryptoBootstrapper.bootstrap(crypto);
-      }
 
       // Persist the crypto store after successful init (captures fresh keys on first run).
       await persistIdbToDisk({
@@ -410,6 +498,241 @@ export class MatrixClient {
       body: {},
       timeoutMs: this.localTimeoutMs,
     });
+  }
+
+  async getOwnDeviceVerificationStatus(): Promise<MatrixOwnDeviceVerificationStatus> {
+    const recoveryKey = this.recoveryKeyStore.getRecoveryKeySummary();
+    const userId = this.client.getUserId() ?? this.selfUserId ?? null;
+    const deviceId = this.client.getDeviceId()?.trim() || null;
+
+    if (!this.encryptionEnabled) {
+      return {
+        encryptionEnabled: false,
+        userId,
+        deviceId,
+        verified: false,
+        localVerified: false,
+        crossSigningVerified: false,
+        signedByOwner: false,
+        recoveryKeyStored: Boolean(recoveryKey),
+        recoveryKeyCreatedAt: recoveryKey?.createdAt ?? null,
+        recoveryKeyId: recoveryKey?.keyId ?? null,
+        backupVersion: null,
+      };
+    }
+
+    const crypto = this.client.getCrypto() as MatrixCryptoBootstrapApi | undefined;
+    let deviceStatus: MatrixDeviceVerificationStatusLike | null = null;
+    if (crypto && userId && deviceId && typeof crypto.getDeviceVerificationStatus === "function") {
+      deviceStatus = await crypto.getDeviceVerificationStatus(userId, deviceId).catch(() => null);
+    }
+
+    return {
+      encryptionEnabled: true,
+      userId,
+      deviceId,
+      verified: isMatrixDeviceVerified(deviceStatus),
+      localVerified: deviceStatus?.localVerified === true,
+      crossSigningVerified: deviceStatus?.crossSigningVerified === true,
+      signedByOwner: deviceStatus?.signedByOwner === true,
+      recoveryKeyStored: Boolean(recoveryKey),
+      recoveryKeyCreatedAt: recoveryKey?.createdAt ?? null,
+      recoveryKeyId: recoveryKey?.keyId ?? null,
+      backupVersion: await this.resolveRoomKeyBackupVersion(),
+    };
+  }
+
+  async verifyWithRecoveryKey(
+    rawRecoveryKey: string,
+  ): Promise<MatrixRecoveryKeyVerificationResult> {
+    if (!this.encryptionEnabled) {
+      return {
+        success: false,
+        error: "Matrix encryption is disabled for this client",
+        encryptionEnabled: false,
+        userId: this.client.getUserId() ?? this.selfUserId ?? null,
+        deviceId: this.client.getDeviceId()?.trim() || null,
+        verified: false,
+        localVerified: false,
+        crossSigningVerified: false,
+        signedByOwner: false,
+        recoveryKeyStored: false,
+        recoveryKeyCreatedAt: null,
+        recoveryKeyId: null,
+        backupVersion: null,
+      };
+    }
+
+    const crypto = this.client.getCrypto() as MatrixCryptoBootstrapApi | undefined;
+    if (!crypto) {
+      return {
+        success: false,
+        error: "Matrix crypto is not available (start client with encryption enabled)",
+        ...(await this.getOwnDeviceVerificationStatus()),
+      };
+    }
+
+    const trimmedRecoveryKey = rawRecoveryKey.trim();
+    if (!trimmedRecoveryKey) {
+      return {
+        success: false,
+        error: "Matrix recovery key is required",
+        ...(await this.getOwnDeviceVerificationStatus()),
+      };
+    }
+
+    let defaultKeyId: string | null | undefined = undefined;
+    if (typeof crypto.getSecretStorageStatus === "function") {
+      const status = await crypto.getSecretStorageStatus().catch(() => null);
+      defaultKeyId = status?.defaultKeyId;
+    }
+
+    try {
+      this.recoveryKeyStore.storeEncodedRecoveryKey({
+        encodedPrivateKey: trimmedRecoveryKey,
+        keyId: defaultKeyId,
+      });
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+        ...(await this.getOwnDeviceVerificationStatus()),
+      };
+    }
+
+    await this.cryptoBootstrapper.bootstrap(crypto);
+    const status = await this.getOwnDeviceVerificationStatus();
+    if (!status.verified) {
+      return {
+        success: false,
+        error:
+          "Matrix device is still unverified after applying recovery key. Verify your recovery key and ensure cross-signing is available.",
+        ...status,
+      };
+    }
+
+    return {
+      success: true,
+      verifiedAt: new Date().toISOString(),
+      ...status,
+    };
+  }
+
+  async getOwnCrossSigningPublicationStatus(): Promise<MatrixOwnCrossSigningPublicationStatus> {
+    const userId = this.client.getUserId() ?? this.selfUserId ?? null;
+    if (!userId) {
+      return {
+        userId: null,
+        masterKeyPublished: false,
+        selfSigningKeyPublished: false,
+        userSigningKeyPublished: false,
+        published: false,
+      };
+    }
+
+    try {
+      const response = (await this.doRequest("POST", "/_matrix/client/v3/keys/query", undefined, {
+        device_keys: { [userId]: [] as string[] },
+      })) as {
+        master_keys?: Record<string, unknown>;
+        self_signing_keys?: Record<string, unknown>;
+        user_signing_keys?: Record<string, unknown>;
+      };
+      const masterKeyPublished = Boolean(response.master_keys?.[userId]);
+      const selfSigningKeyPublished = Boolean(response.self_signing_keys?.[userId]);
+      const userSigningKeyPublished = Boolean(response.user_signing_keys?.[userId]);
+      return {
+        userId,
+        masterKeyPublished,
+        selfSigningKeyPublished,
+        userSigningKeyPublished,
+        published: masterKeyPublished && selfSigningKeyPublished && userSigningKeyPublished,
+      };
+    } catch {
+      return {
+        userId,
+        masterKeyPublished: false,
+        selfSigningKeyPublished: false,
+        userSigningKeyPublished: false,
+        published: false,
+      };
+    }
+  }
+
+  async bootstrapOwnDeviceVerification(params?: {
+    recoveryKey?: string;
+    forceResetCrossSigning?: boolean;
+  }): Promise<MatrixVerificationBootstrapResult> {
+    const pendingVerifications = async (): Promise<number> =>
+      this.crypto ? (await this.crypto.listVerifications()).length : 0;
+    if (!this.encryptionEnabled) {
+      return {
+        success: false,
+        error: "Matrix encryption is disabled for this client",
+        verification: await this.getOwnDeviceVerificationStatus(),
+        crossSigning: await this.getOwnCrossSigningPublicationStatus(),
+        pendingVerifications: await pendingVerifications(),
+        cryptoBootstrap: null,
+      };
+    }
+
+    let bootstrapError: string | undefined;
+    let bootstrapSummary: MatrixCryptoBootstrapResult | null = null;
+    try {
+      await this.initializeCryptoIfNeeded();
+      const crypto = this.client.getCrypto() as MatrixCryptoBootstrapApi | undefined;
+      if (!crypto) {
+        throw new Error("Matrix crypto is not available (start client with encryption enabled)");
+      }
+
+      const rawRecoveryKey = params?.recoveryKey?.trim();
+      if (rawRecoveryKey) {
+        let defaultKeyId: string | null | undefined = undefined;
+        if (typeof crypto.getSecretStorageStatus === "function") {
+          const status = await crypto.getSecretStorageStatus().catch(() => null);
+          defaultKeyId = status?.defaultKeyId;
+        }
+        this.recoveryKeyStore.storeEncodedRecoveryKey({
+          encodedPrivateKey: rawRecoveryKey,
+          keyId: defaultKeyId,
+        });
+      }
+
+      bootstrapSummary = await this.cryptoBootstrapper.bootstrap(crypto, {
+        forceResetCrossSigning: params?.forceResetCrossSigning === true,
+        strict: true,
+      });
+    } catch (err) {
+      bootstrapError = err instanceof Error ? err.message : String(err);
+    }
+
+    const verification = await this.getOwnDeviceVerificationStatus();
+    const crossSigning = await this.getOwnCrossSigningPublicationStatus();
+    const success = verification.verified && crossSigning.published;
+    const error =
+      bootstrapError ??
+      (success
+        ? undefined
+        : "Matrix verification bootstrap did not produce a verified device with published cross-signing keys");
+    return {
+      success,
+      error,
+      verification,
+      crossSigning,
+      pendingVerifications: await pendingVerifications(),
+      cryptoBootstrap: bootstrapSummary,
+    };
+  }
+
+  private async resolveRoomKeyBackupVersion(): Promise<string | null> {
+    try {
+      const response = (await this.doRequest("GET", "/_matrix/client/v3/room_keys/version")) as {
+        version?: string;
+      };
+      return response.version?.trim() || null;
+    } catch {
+      return null;
+    }
   }
 
   private registerBridge(): void {
