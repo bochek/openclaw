@@ -96,6 +96,10 @@
       "destination": "/providers/mistral"
     },
     {
+      "source": "/cohere",
+      "destination": "/providers/cohere"
+    },
+    {
       "source": "/openrouter",
       "destination": "/providers/openrouter"
     },
@@ -1072,6 +1076,7 @@
                   "providers/vercel-ai-gateway",
                   "providers/moonshot",
                   "providers/mistral",
+                  "providers/cohere",
                   "providers/minimax",
                   "providers/opencode",
                   "providers/glm",
