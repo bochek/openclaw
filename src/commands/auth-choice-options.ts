@@ -77,6 +77,12 @@ const AUTH_CHOICE_GROUP_DEFS: {
     choices: ["mistral-api-key"],
   },
   {
+    value: "cohere",
+    label: "Cohere",
+    hint: "API key",
+    choices: ["cohere-api-key"],
+  },
+  {
     value: "volcengine",
     label: "Volcano Engine",
     hint: "API key",
@@ -198,6 +204,7 @@ const BASE_AUTH_CHOICE_OPTIONS: ReadonlyArray<AuthChoiceOption> = [
   },
   { value: "openai-api-key", label: "OpenAI API key" },
   { value: "mistral-api-key", label: "Mistral API key" },
+  { value: "cohere-api-key", label: "Cohere API key" },
   { value: "xai-api-key", label: "xAI (Grok) API key" },
   { value: "volcengine-api-key", label: "Volcano Engine API key" },
   { value: "byteplus-api-key", label: "BytePlus API key" },
