@@ -46,6 +46,7 @@ export type RoomTopicEventContent = {
 export type MatrixActionClientOpts = {
   client?: MatrixClient;
   timeoutMs?: number;
+  accountId?: string | null;
 };
 
 export type MatrixMessageSummary = {

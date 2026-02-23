@@ -1,15 +1,23 @@
+import type { ChatType } from "../channels/chat-type.js";
 import { parseAgentSessionKey, type ParsedAgentSessionKey } from "../sessions/session-key-utils.js";
+import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "./account-id.js";
 
 export {
+  getSubagentDepth,
+  isCronSessionKey,
   isAcpSessionKey,
   isSubagentSessionKey,
   parseAgentSessionKey,
   type ParsedAgentSessionKey,
 } from "../sessions/session-key-utils.js";
+export {
+  DEFAULT_ACCOUNT_ID,
+  normalizeAccountId,
+  normalizeOptionalAccountId,
+} from "./account-id.js";
 
 export const DEFAULT_AGENT_ID = "main";
 export const DEFAULT_MAIN_KEY = "main";
-export const DEFAULT_ACCOUNT_ID = "default";
 export type SessionKeyShape = "missing" | "agent" | "legacy_or_alias" | "malformed_agent";
 
 // Pre-compiled regex
@@ -91,39 +99,7 @@ export function normalizeAgentId(value: string | undefined | null): string {
 }
 
 export function sanitizeAgentId(value: string | undefined | null): string {
-  const trimmed = (value ?? "").trim();
-  if (!trimmed) {
-    return DEFAULT_AGENT_ID;
-  }
-  if (VALID_ID_RE.test(trimmed)) {
-    return trimmed.toLowerCase();
-  }
-  return (
-    trimmed
-      .toLowerCase()
-      .replace(INVALID_CHARS_RE, "-")
-      .replace(LEADING_DASH_RE, "")
-      .replace(TRAILING_DASH_RE, "")
-      .slice(0, 64) || DEFAULT_AGENT_ID
-  );
-}
-
-export function normalizeAccountId(value: string | undefined | null): string {
-  const trimmed = (value ?? "").trim();
-  if (!trimmed) {
-    return DEFAULT_ACCOUNT_ID;
-  }
-  if (VALID_ID_RE.test(trimmed)) {
-    return trimmed.toLowerCase();
-  }
-  return (
-    trimmed
-      .toLowerCase()
-      .replace(INVALID_CHARS_RE, "-")
-      .replace(LEADING_DASH_RE, "")
-      .replace(TRAILING_DASH_RE, "")
-      .slice(0, 64) || DEFAULT_ACCOUNT_ID
-  );
+  return normalizeAgentId(value);
 }
 
 export function buildAgentMainSessionKey(params: {
@@ -140,14 +116,14 @@ export function buildAgentPeerSessionKey(params: {
   mainKey?: string | undefined;
   channel: string;
   accountId?: string | null;
-  peerKind?: "dm" | "group" | "channel" | null;
+  peerKind?: ChatType | null;
   peerId?: string | null;
   identityLinks?: Record<string, string[]>;
   /** DM session scope. */
   dmScope?: "main" | "per-peer" | "per-channel-peer" | "per-account-channel-peer";
 }): string {
-  const peerKind = params.peerKind ?? "dm";
-  if (peerKind === "dm") {
+  const peerKind = params.peerKind ?? "direct";
+  if (peerKind === "direct") {
     const dmScope = params.dmScope ?? "main";
     let peerId = (params.peerId ?? "").trim();
     const linkedPeerId =
@@ -165,14 +141,14 @@ export function buildAgentPeerSessionKey(params: {
     if (dmScope === "per-account-channel-peer" && peerId) {
       const channel = (params.channel ?? "").trim().toLowerCase() || "unknown";
       const accountId = normalizeAccountId(params.accountId);
-      return `agent:${normalizeAgentId(params.agentId)}:${channel}:${accountId}:dm:${peerId}`;
+      return `agent:${normalizeAgentId(params.agentId)}:${channel}:${accountId}:direct:${peerId}`;
     }
     if (dmScope === "per-channel-peer" && peerId) {
       const channel = (params.channel ?? "").trim().toLowerCase() || "unknown";
-      return `agent:${normalizeAgentId(params.agentId)}:${channel}:dm:${peerId}`;
+      return `agent:${normalizeAgentId(params.agentId)}:${channel}:direct:${peerId}`;
     }
     if (dmScope === "per-peer" && peerId) {
-      return `agent:${normalizeAgentId(params.agentId)}:dm:${peerId}`;
+      return `agent:${normalizeAgentId(params.agentId)}:direct:${peerId}`;
     }
     return buildAgentMainSessionKey({
       agentId: params.agentId,

@@ -1,10 +1,18 @@
-import { describe, expect, it } from "vitest";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import {
   resolveAgentConfig,
+  resolveAgentDir,
+  resolveEffectiveModelFallbacks,
   resolveAgentModelFallbacksOverride,
   resolveAgentModelPrimary,
+  resolveAgentWorkspaceDir,
 } from "./agent-scope.js";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("resolveAgentConfig", () => {
   it("should return undefined when no agents config exists", () => {
@@ -105,6 +113,60 @@ describe("resolveAgentConfig", () => {
       },
     };
     expect(resolveAgentModelFallbacksOverride(cfgDisable, "linus")).toEqual([]);
+
+    expect(
+      resolveEffectiveModelFallbacks({
+        cfg,
+        agentId: "linus",
+        hasSessionModelOverride: false,
+      }),
+    ).toEqual(["openai/gpt-5.2"]);
+    expect(
+      resolveEffectiveModelFallbacks({
+        cfg,
+        agentId: "linus",
+        hasSessionModelOverride: true,
+      }),
+    ).toEqual(["openai/gpt-5.2"]);
+    expect(
+      resolveEffectiveModelFallbacks({
+        cfg: cfgNoOverride,
+        agentId: "linus",
+        hasSessionModelOverride: true,
+      }),
+    ).toEqual([]);
+
+    const cfgInheritDefaults: OpenClawConfig = {
+      agents: {
+        defaults: {
+          model: {
+            fallbacks: ["openai/gpt-4.1"],
+          },
+        },
+        list: [
+          {
+            id: "linus",
+            model: {
+              primary: "anthropic/claude-opus-4",
+            },
+          },
+        ],
+      },
+    };
+    expect(
+      resolveEffectiveModelFallbacks({
+        cfg: cfgInheritDefaults,
+        agentId: "linus",
+        hasSessionModelOverride: true,
+      }),
+    ).toEqual(["openai/gpt-4.1"]);
+    expect(
+      resolveEffectiveModelFallbacks({
+        cfg: cfgDisable,
+        agentId: "linus",
+        hasSessionModelOverride: true,
+      }),
+    ).toEqual([]);
   });
 
   it("should return agent-specific sandbox config", () => {
@@ -199,5 +261,23 @@ describe("resolveAgentConfig", () => {
     const result = resolveAgentConfig(cfg, "");
     expect(result).toBeDefined();
     expect(result?.workspace).toBe("~/openclaw");
+  });
+
+  it("uses OPENCLAW_HOME for default agent workspace", () => {
+    const home = path.join(path.sep, "srv", "openclaw-home");
+    vi.stubEnv("OPENCLAW_HOME", home);
+
+    const workspace = resolveAgentWorkspaceDir({} as OpenClawConfig, "main");
+    expect(workspace).toBe(path.join(path.resolve(home), ".openclaw", "workspace"));
+  });
+
+  it("uses OPENCLAW_HOME for default agentDir", () => {
+    const home = path.join(path.sep, "srv", "openclaw-home");
+    vi.stubEnv("OPENCLAW_HOME", home);
+    // Clear state dir so it falls back to OPENCLAW_HOME
+    vi.stubEnv("OPENCLAW_STATE_DIR", "");
+
+    const agentDir = resolveAgentDir({} as OpenClawConfig, "main");
+    expect(agentDir).toBe(path.join(path.resolve(home), ".openclaw", "agents", "main", "agent"));
   });
 });
