@@ -106,14 +106,17 @@ export async function writeUrlToFile(
         }
       : undefined;
 
-  const { response: res, release } = await fetchWithSsrFGuard({
-    url,
-    auditContext: "writeUrlToFile",
-    policy,
-  });
-
+  let release: () => Promise<void> = async () => {};
   let bytes = 0;
   try {
+    const guarded = await fetchWithSsrFGuard({
+      url,
+      auditContext: "writeUrlToFile",
+      policy,
+    });
+    const res = guarded.response;
+    release = guarded.release;
+
     if (!res.ok) {
       throw new Error(`failed to download ${url}: ${res.status} ${res.statusText}`);
     }
