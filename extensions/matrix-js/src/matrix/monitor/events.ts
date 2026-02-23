@@ -75,7 +75,7 @@ export function registerMatrixMonitorEvents(params: {
       if (auth.encryption !== true && !warnedEncryptedRooms.has(roomId)) {
         warnedEncryptedRooms.add(roomId);
         const warning =
-          "matrix: encrypted event received without encryption enabled; set channels.matrix.encryption=true and verify the device to decrypt";
+          "matrix: encrypted event received without encryption enabled; set channels.matrix-js.encryption=true and verify the device to decrypt";
         logger.warn({ roomId }, warning);
       }
       if (auth.encryption === true && !client.crypto && !warnedCryptoMissingRooms.has(roomId)) {

@@ -124,7 +124,7 @@ function resolveDefaultIdbSnapshotPath(): string {
     process.env.OPENCLAW_STATE_DIR ||
     process.env.MOLTBOT_STATE_DIR ||
     path.join(process.env.HOME || "/tmp", ".openclaw");
-  return path.join(stateDir, "credentials", "matrix", "crypto-idb-snapshot.json");
+  return path.join(stateDir, "credentials", "matrix-js", "crypto-idb-snapshot.json");
 }
 
 export async function restoreIdbFromDisk(snapshotPath?: string): Promise<boolean> {

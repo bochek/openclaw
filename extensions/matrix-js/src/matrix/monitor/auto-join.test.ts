@@ -41,7 +41,7 @@ describe("registerMatrixAutoJoin", () => {
     const { client, getInviteHandler, joinRoom } = createClientStub();
     const cfg: CoreConfig = {
       channels: {
-        matrix: {
+        "matrix-js": {
           autoJoin: "always",
         },
       },
@@ -71,7 +71,7 @@ describe("registerMatrixAutoJoin", () => {
     });
     const cfg: CoreConfig = {
       channels: {
-        matrix: {
+        "matrix-js": {
           autoJoin: "allowlist",
           autoJoinAllowlist: ["#allowed:example.org"],
         },
@@ -102,7 +102,7 @@ describe("registerMatrixAutoJoin", () => {
     });
     const cfg: CoreConfig = {
       channels: {
-        matrix: {
+        "matrix-js": {
           autoJoin: "allowlist",
           autoJoinAllowlist: [" #allowed:example.org "],
         },

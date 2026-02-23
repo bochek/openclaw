@@ -13,17 +13,20 @@ export { listMatrixReactions, removeMatrixReactions } from "./actions/reactions.
 export { pinMatrixMessage, unpinMatrixMessage, listMatrixPins } from "./actions/pins.js";
 export { getMatrixMemberInfo, getMatrixRoomInfo } from "./actions/room.js";
 export {
+  bootstrapMatrixVerification,
   acceptMatrixVerification,
   cancelMatrixVerification,
   confirmMatrixVerificationReciprocateQr,
   confirmMatrixVerificationSas,
   generateMatrixVerificationQr,
   getMatrixEncryptionStatus,
+  getMatrixVerificationStatus,
   getMatrixVerificationSas,
   listMatrixVerifications,
   mismatchMatrixVerificationSas,
   requestMatrixVerification,
   scanMatrixVerificationQr,
   startMatrixVerification,
+  verifyMatrixRecoveryKey,
 } from "./actions/verification.js";
 export { reactMatrixMessage } from "./send.js";

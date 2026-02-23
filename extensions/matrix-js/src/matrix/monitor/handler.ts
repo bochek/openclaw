@@ -234,10 +234,10 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
 
       const senderName = await getMemberDisplayName(roomId, senderId);
       const storeAllowFrom = await core.channel.pairing
-        .readAllowFromStore("matrix")
+        .readAllowFromStore("matrix-js")
         .catch(() => []);
       const effectiveAllowFrom = normalizeMatrixAllowList([...allowFrom, ...storeAllowFrom]);
-      const groupAllowFrom = cfg.channels?.matrix?.groupAllowFrom ?? [];
+      const groupAllowFrom = cfg.channels?.["matrix-js"]?.groupAllowFrom ?? [];
       const effectiveGroupAllowFrom = normalizeMatrixAllowList(groupAllowFrom);
       const groupAllowConfigured = effectiveGroupAllowFrom.length > 0;
 
@@ -254,7 +254,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
           if (!allowMatch.allowed) {
             if (dmPolicy === "pairing") {
               const { code, created } = await core.channel.pairing.upsertPairingRequest({
-                channel: "matrix",
+                channel: "matrix-js",
                 id: senderId,
                 meta: { name: senderName },
               });
@@ -271,7 +271,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
                       `Pairing code: ${code}`,
                       "",
                       "Ask the bot owner to approve with:",
-                      "openclaw pairing approve matrix <code>",
+                      "openclaw pairing approve matrix-js <code>",
                     ].join("\n"),
                     { client },
                   );
@@ -375,7 +375,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       });
       const allowTextCommands = core.channel.commands.shouldHandleTextCommands({
         cfg,
-        surface: "matrix",
+        surface: "matrix-js",
       });
       const useAccessGroups = cfg.commands?.useAccessGroups !== false;
       const senderAllowedForCommands = resolveMatrixAllowListMatches({
@@ -410,7 +410,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       if (isRoom && commandGate.shouldBlock) {
         logInboundDrop({
           log: logVerboseMessage,
-          channel: "matrix",
+          channel: "matrix-js",
           reason: "control command (unauthorized)",
           target: senderId,
         });
@@ -451,7 +451,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
 
       const route = core.channel.routing.resolveAgentRoute({
         cfg,
-        channel: "matrix",
+        channel: "matrix-js",
         peer: {
           kind: isDirectMessage ? "dm" : "channel",
           id: isDirectMessage ? senderId : roomId,
@@ -493,8 +493,8 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         GroupSubject: isRoom ? (roomName ?? roomId) : undefined,
         GroupChannel: isRoom ? (roomInfo.canonicalAlias ?? roomId) : undefined,
         GroupSystemPrompt: isRoom ? groupSystemPrompt : undefined,
-        Provider: "matrix" as const,
-        Surface: "matrix" as const,
+        Provider: "matrix-js" as const,
+        Surface: "matrix-js" as const,
         WasMentioned: isRoom ? wasMentioned : undefined,
         MessageSid: messageId,
         ReplyToId: threadTarget ? undefined : (replyToEventId ?? undefined),
@@ -506,7 +506,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         ...locationPayload?.context,
         CommandAuthorized: commandAuthorized,
         CommandSource: "text" as const,
-        OriginatingChannel: "matrix" as const,
+        OriginatingChannel: "matrix-js" as const,
         OriginatingTo: `room:${roomId}`,
       });
 
@@ -517,7 +517,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         updateLastRoute: isDirectMessage
           ? {
               sessionKey: route.mainSessionKey,
-              channel: "matrix",
+              channel: "matrix-js",
               to: `room:${roomId}`,
               accountId: route.accountId,
             }
@@ -576,13 +576,13 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       let didSendReply = false;
       const tableMode = core.channel.text.resolveMarkdownTableMode({
         cfg,
-        channel: "matrix",
+        channel: "matrix-js",
         accountId: route.accountId,
       });
       const { onModelSelected, ...prefixOptions } = createReplyPrefixOptions({
         cfg,
         agentId: route.agentId,
-        channel: "matrix",
+        channel: "matrix-js",
         accountId: route.accountId,
       });
       const typingCallbacks = createTypingCallbacks({
@@ -591,7 +591,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         onStartError: (err) => {
           logTypingFailure({
             log: logVerboseMessage,
-            channel: "matrix",
+            channel: "matrix-js",
             action: "start",
             target: roomId,
             error: err,
@@ -600,7 +600,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         onStopError: (err) => {
           logTypingFailure({
             log: logVerboseMessage,
-            channel: "matrix",
+            channel: "matrix-js",
             action: "stop",
             target: roomId,
             error: err,

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { encodeRecoveryKey } from "matrix-js-sdk/lib/crypto-api/recovery-key.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { MatrixRecoveryKeyStore } from "./recovery-key-store.js";
 import type { MatrixCryptoBootstrapApi } from "./types.js";
@@ -172,5 +173,30 @@ describe("MatrixRecoveryKeyStore", () => {
       keyId: "RECOVERED",
       encodedPrivateKey: "encoded-recovered-key",
     });
+  });
+
+  it("stores an encoded recovery key and decodes its private key material", () => {
+    const recoveryKeyPath = createTempRecoveryKeyPath();
+    const store = new MatrixRecoveryKeyStore(recoveryKeyPath);
+    const encoded = encodeRecoveryKey(new Uint8Array(Array.from({ length: 32 }, (_, i) => i + 1)));
+    expect(encoded).toBeTypeOf("string");
+
+    const summary = store.storeEncodedRecoveryKey({
+      encodedPrivateKey: encoded as string,
+      keyId: "SSSSKEY",
+    });
+
+    expect(summary.keyId).toBe("SSSSKEY");
+    expect(summary.encodedPrivateKey).toBe(encoded);
+    const persisted = JSON.parse(fs.readFileSync(recoveryKeyPath, "utf8")) as {
+      privateKeyBase64?: string;
+      keyId?: string;
+    };
+    expect(persisted.keyId).toBe("SSSSKEY");
+    expect(
+      Buffer.from(persisted.privateKeyBase64 ?? "", "base64").equals(
+        Buffer.from(Array.from({ length: 32 }, (_, i) => i + 1)),
+      ),
+    ).toBe(true);
   });
 });

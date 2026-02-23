@@ -5,7 +5,9 @@ function requireCrypto(
   client: import("../sdk.js").MatrixClient,
 ): NonNullable<import("../sdk.js").MatrixClient["crypto"]> {
   if (!client.crypto) {
-    throw new Error("Matrix encryption is not available (enable channels.matrix.encryption=true)");
+    throw new Error(
+      "Matrix encryption is not available (enable channels.matrix-js.encryption=true)",
+    );
   }
   return client.crypto;
 }
@@ -212,6 +214,64 @@ export async function getMatrixEncryptionStatus(
       ...(opts.includeRecoveryKey ? { recoveryKey: recoveryKey?.encodedPrivateKey ?? null } : {}),
       pendingVerifications: (await crypto.listVerifications()).length,
     };
+  } finally {
+    if (stopOnDone) {
+      client.stop();
+    }
+  }
+}
+
+export async function getMatrixVerificationStatus(
+  opts: MatrixActionClientOpts & { includeRecoveryKey?: boolean } = {},
+) {
+  const { client, stopOnDone } = await resolveActionClient(opts);
+  try {
+    const status = await client.getOwnDeviceVerificationStatus();
+    const payload = {
+      ...status,
+      pendingVerifications: client.crypto ? (await client.crypto.listVerifications()).length : 0,
+    };
+    if (!opts.includeRecoveryKey) {
+      return payload;
+    }
+    const recoveryKey = client.crypto ? await client.crypto.getRecoveryKey() : null;
+    return {
+      ...payload,
+      recoveryKey: recoveryKey?.encodedPrivateKey ?? null,
+    };
+  } finally {
+    if (stopOnDone) {
+      client.stop();
+    }
+  }
+}
+
+export async function verifyMatrixRecoveryKey(
+  recoveryKey: string,
+  opts: MatrixActionClientOpts = {},
+) {
+  const { client, stopOnDone } = await resolveActionClient(opts);
+  try {
+    return await client.verifyWithRecoveryKey(recoveryKey);
+  } finally {
+    if (stopOnDone) {
+      client.stop();
+    }
+  }
+}
+
+export async function bootstrapMatrixVerification(
+  opts: MatrixActionClientOpts & {
+    recoveryKey?: string;
+    forceResetCrossSigning?: boolean;
+  } = {},
+) {
+  const { client, stopOnDone } = await resolveActionClient(opts);
+  try {
+    return await client.bootstrapOwnDeviceVerification({
+      recoveryKey: opts.recoveryKey?.trim() || undefined,
+      forceResetCrossSigning: opts.forceResetCrossSigning === true,
+    });
   } finally {
     if (stopOnDone) {
       client.stop();

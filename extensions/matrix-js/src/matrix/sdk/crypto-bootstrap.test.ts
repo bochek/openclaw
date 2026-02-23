@@ -98,6 +98,25 @@ describe("MatrixCryptoBootstrapper", () => {
     );
   });
 
+  it("fails in strict mode when cross-signing keys are still unpublished", async () => {
+    const deps = createBootstrapperDeps();
+    const crypto = createCryptoApi({
+      bootstrapCrossSigning: vi.fn(async () => {}),
+      isCrossSigningReady: vi.fn(async () => false),
+      userHasCrossSigningKeys: vi.fn(async () => false),
+      getDeviceVerificationStatus: vi.fn(async () => ({
+        isVerified: () => true,
+      })),
+    });
+    const bootstrapper = new MatrixCryptoBootstrapper(
+      deps as unknown as MatrixCryptoBootstrapperDeps<MatrixRawEvent>,
+    );
+
+    await expect(bootstrapper.bootstrap(crypto, { strict: true })).rejects.toThrow(
+      "Cross-signing bootstrap finished but server keys are still not published",
+    );
+  });
+
   it("uses password UIA fallback when null and dummy auth fail", async () => {
     const deps = createBootstrapperDeps();
     const bootstrapCrossSigning = vi.fn(async () => {});

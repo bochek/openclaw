@@ -20,7 +20,7 @@ export async function deliverMatrixReplies(params: {
     params.tableMode ??
     core.channel.text.resolveMarkdownTableMode({
       cfg,
-      channel: "matrix",
+      channel: "matrix-js",
       accountId: params.accountId,
     });
   const logVerbose = (message: string) => {
@@ -29,7 +29,7 @@ export async function deliverMatrixReplies(params: {
     }
   };
   const chunkLimit = Math.min(params.textLimit, 4000);
-  const chunkMode = core.channel.text.resolveChunkMode(cfg, "matrix", params.accountId);
+  const chunkMode = core.channel.text.resolveChunkMode(cfg, "matrix-js", params.accountId);
   let hasReplied = false;
   for (const reply of params.replies) {
     const hasMedia = Boolean(reply?.mediaUrl) || (reply?.mediaUrls?.length ?? 0) > 0;

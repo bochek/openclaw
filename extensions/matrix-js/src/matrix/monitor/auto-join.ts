@@ -16,9 +16,9 @@ export function registerMatrixAutoJoin(params: {
     }
     runtime.log?.(message);
   };
-  const autoJoin = cfg.channels?.matrix?.autoJoin ?? "always";
+  const autoJoin = cfg.channels?.["matrix-js"]?.autoJoin ?? "always";
   const autoJoinAllowlist = new Set(
-    (cfg.channels?.matrix?.autoJoinAllowlist ?? [])
+    (cfg.channels?.["matrix-js"]?.autoJoinAllowlist ?? [])
       .map((entry) => String(entry).trim())
       .filter(Boolean),
   );

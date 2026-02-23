@@ -43,7 +43,7 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
   }
   const core = getMatrixRuntime();
   let cfg = core.config.loadConfig() as CoreConfig;
-  if (cfg.channels?.matrix?.enabled === false) {
+  if (cfg.channels?.["matrix-js"]?.enabled === false) {
     return;
   }
 
@@ -220,10 +220,10 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
     ...cfg,
     channels: {
       ...cfg.channels,
-      matrix: {
-        ...cfg.channels?.matrix,
+      "matrix-js": {
+        ...cfg.channels?.["matrix-js"],
         dm: {
-          ...cfg.channels?.matrix?.dm,
+          ...cfg.channels?.["matrix-js"]?.dm,
           allowFrom,
         },
         groupAllowFrom,
@@ -253,13 +253,13 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
   const defaultGroupPolicy = resolveDefaultGroupPolicy(cfg);
   const { groupPolicy: groupPolicyRaw, providerMissingFallbackApplied } =
     resolveAllowlistProviderRuntimeGroupPolicy({
-      providerConfigPresent: cfg.channels?.matrix !== undefined,
+      providerConfigPresent: cfg.channels?.["matrix-js"] !== undefined,
       groupPolicy: accountConfig.groupPolicy,
       defaultGroupPolicy,
     });
   warnMissingProviderGroupPolicyFallbackOnce({
     providerMissingFallbackApplied,
-    providerKey: "matrix",
+    providerKey: "matrix-js",
     accountId: account.accountId,
     blockedLabel: GROUP_POLICY_BLOCKED_LABEL.room,
     log: (message) => logVerboseMessage(message),
@@ -271,7 +271,7 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
   const dmEnabled = dmConfig?.enabled ?? true;
   const dmPolicyRaw = dmConfig?.policy ?? "pairing";
   const dmPolicy = allowlistOnly && dmPolicyRaw !== "disabled" ? "allowlist" : dmPolicyRaw;
-  const textLimit = core.channel.text.resolveTextChunkLimit(cfg, "matrix");
+  const textLimit = core.channel.text.resolveTextChunkLimit(cfg, "matrix-js");
   const mediaMaxMb = opts.mediaMaxMb ?? accountConfig.mediaMaxMb ?? DEFAULT_MEDIA_MAX_MB;
   const mediaMaxBytes = Math.max(1, mediaMaxMb) * 1024 * 1024;
   const startupMs = Date.now();
@@ -329,18 +329,19 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
   // Shared client is already started via resolveSharedMatrixClient.
   logger.info(`matrix: logged in as ${auth.userId}`);
 
-  // If E2EE is enabled, trigger device verification
+  // If E2EE is enabled, report device verification status and guidance.
   if (auth.encryption && client.crypto) {
     try {
-      // Request verification from other sessions
-      const verificationRequest = await (
-        client.crypto as { requestOwnUserVerification?: () => Promise<unknown> }
-      ).requestOwnUserVerification?.();
-      if (verificationRequest) {
-        logger.info("matrix: device verification requested - please verify in another client");
+      const status = await client.getOwnDeviceVerificationStatus();
+      if (status.verified) {
+        logger.info("matrix: device is verified and ready for encrypted rooms");
+      } else {
+        logger.info(
+          "matrix: device not verified — run 'openclaw matrix-js verify recovery-key <key>' to enable E2EE",
+        );
       }
     } catch (err) {
-      logger.debug?.("Device verification request failed (may already be verified)", {
+      logger.debug?.("Failed to resolve matrix-js verification status (non-fatal)", {
         error: String(err),
       });
     }

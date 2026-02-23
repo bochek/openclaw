@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { decodeRecoveryKey } from "matrix-js-sdk/lib/crypto-api/recovery-key.js";
 import { LogService } from "./logger.js";
 import type {
   MatrixCryptoBootstrapApi,
@@ -86,6 +87,43 @@ export class MatrixRecoveryKeyStore {
       keyId: stored.keyId,
       createdAt: stored.createdAt,
     };
+  }
+
+  storeEncodedRecoveryKey(params: {
+    encodedPrivateKey: string;
+    keyId?: string | null;
+    keyInfo?: MatrixStoredRecoveryKey["keyInfo"];
+  }): {
+    encodedPrivateKey?: string;
+    keyId?: string | null;
+    createdAt?: string;
+  } {
+    const encodedPrivateKey = params.encodedPrivateKey.trim();
+    if (!encodedPrivateKey) {
+      throw new Error("Matrix recovery key is required");
+    }
+    let privateKey: Uint8Array;
+    try {
+      privateKey = decodeRecoveryKey(encodedPrivateKey);
+    } catch (err) {
+      throw new Error(
+        `Invalid Matrix recovery key: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    const normalizedKeyId =
+      typeof params.keyId === "string" && params.keyId.trim() ? params.keyId.trim() : null;
+    const keyInfo = params.keyInfo ?? this.loadStoredRecoveryKey()?.keyInfo;
+    this.saveRecoveryKeyToDisk({
+      keyId: normalizedKeyId,
+      keyInfo,
+      privateKey,
+      encodedPrivateKey,
+    });
+    if (normalizedKeyId) {
+      this.rememberSecretStorageKey(normalizedKeyId, privateKey, keyInfo);
+    }
+    return this.getRecoveryKeySummary() ?? {};
   }
 
   async bootstrapSecretStorageWithRecoveryKey(crypto: MatrixCryptoBootstrapApi): Promise<void> {
