@@ -64,6 +64,14 @@ openclaw onboard --non-interactive \
   --mistral-api-key "$MISTRAL_API_KEY"
 ```
 
+Non-interactive Cohere example:
+
+```bash
+openclaw onboard --non-interactive \
+  --auth-choice cohere-api-key \
+  --cohere-api-key "$COHERE_API_KEY"
+```
+
 Flow notes:
 
 - `quickstart`: minimal prompts, auto-generates a gateway token.
