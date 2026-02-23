@@ -88,6 +88,33 @@ describe("session path safety", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("falls back when sessionFile is a symlink that escapes sessions dir", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-symlink-escape-"));
+    const sessionsDir = path.join(tmpDir, "agents", "main", "sessions");
+    const outsideDir = path.join(tmpDir, "outside");
+    try {
+      fs.mkdirSync(sessionsDir, { recursive: true });
+      fs.mkdirSync(outsideDir, { recursive: true });
+      const outsideFile = path.join(outsideDir, "escaped.jsonl");
+      fs.writeFileSync(outsideFile, "");
+      const symlinkPath = path.join(sessionsDir, "escaped.jsonl");
+      fs.symlinkSync(outsideFile, symlinkPath, "file");
+
+      const resolved = resolveSessionFilePath(
+        "sess-1",
+        { sessionFile: symlinkPath },
+        { sessionsDir },
+      );
+      expect(fs.realpathSync(path.dirname(resolved))).toBe(fs.realpathSync(sessionsDir));
+      expect(path.basename(resolved)).toBe("sess-1.jsonl");
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("resolveSessionResetPolicy", () => {
