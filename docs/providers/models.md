@@ -40,6 +40,7 @@ See [Venice AI](/providers/venice).
 - [Cloudflare AI Gateway](/providers/cloudflare-ai-gateway)
 - [Moonshot AI (Kimi + Kimi Coding)](/providers/moonshot)
 - [Mistral](/providers/mistral)
+- [Cohere](/providers/cohere)
 - [Synthetic](/providers/synthetic)
 - [OpenCode Zen](/providers/opencode)
 - [Z.AI](/providers/zai)
@@ -49,5 +50,5 @@ See [Venice AI](/providers/venice).
 - [Amazon Bedrock](/providers/bedrock)
 - [Qianfan](/providers/qianfan)
 
-For the full provider catalog (xAI, Groq, Mistral, etc.) and advanced configuration,
+For the full provider catalog (xAI, Groq, Cohere, Mistral, etc.) and advanced configuration,
 see [Model providers](/concepts/model-providers).
