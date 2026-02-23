@@ -4,8 +4,8 @@ import { matrixPlugin } from "./src/channel.js";
 import { setMatrixRuntime } from "./src/runtime.js";
 
 const plugin = {
-  id: "matrix",
-  name: "Matrix",
+  id: "matrix-js",
+  name: "Matrix-js",
   description: "Matrix channel plugin (matrix-js-sdk)",
   configSchema: emptyPluginConfigSchema(),
   register(api: OpenClawPluginApi) {
