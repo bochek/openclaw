@@ -28,6 +28,7 @@ import {
   applyVercelAiGatewayConfig,
   applyLitellmConfig,
   applyMistralConfig,
+  applyCohereConfig,
   applyXaiConfig,
   applyXiaomiConfig,
   applyZaiConfig,
@@ -38,6 +39,7 @@ import {
   setKimiCodingApiKey,
   setLitellmApiKey,
   setMistralApiKey,
+  setCohereApiKey,
   setMinimaxApiKey,
   setMoonshotApiKey,
   setOpencodeZenApiKey,
@@ -327,6 +329,29 @@ export async function applyNonInteractiveAuthChoice(params: {
       mode: "api_key",
     });
     return applyMistralConfig(nextConfig);
+  }
+
+  if (authChoice === "cohere-api-key") {
+    const resolved = await resolveNonInteractiveApiKey({
+      provider: "cohere",
+      cfg: baseConfig,
+      flagValue: opts.cohereApiKey,
+      flagName: "--cohere-api-key",
+      envVar: "COHERE_API_KEY",
+      runtime,
+    });
+    if (!resolved) {
+      return null;
+    }
+    if (resolved.source !== "profile") {
+      await setCohereApiKey(resolved.key);
+    }
+    nextConfig = applyAuthProfileConfig(nextConfig, {
+      profileId: "cohere:default",
+      provider: "cohere",
+      mode: "api_key",
+    });
+    return applyCohereConfig(nextConfig);
   }
 
   if (authChoice === "volcengine-api-key") {
