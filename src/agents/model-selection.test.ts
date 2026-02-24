@@ -21,6 +21,8 @@ describe("model-selection", () => {
       expect(normalizeProviderId("kimi-code")).toBe("kimi-coding");
       expect(normalizeProviderId("bedrock")).toBe("amazon-bedrock");
       expect(normalizeProviderId("aws-bedrock")).toBe("amazon-bedrock");
+      expect(normalizeProviderId("aws_bedrock")).toBe("amazon-bedrock");
+      expect(normalizeProviderId("amazon bedrock")).toBe("amazon-bedrock");
       expect(normalizeProviderId("amazon-bedrock")).toBe("amazon-bedrock");
     });
   });
@@ -108,6 +110,17 @@ describe("model-selection", () => {
       expect(parseModelRef("vercel-ai-gateway/opus-4.6", "openai")).toEqual({
         provider: "vercel-ai-gateway",
         model: "anthropic/claude-opus-4-6",
+      });
+    });
+
+    it("normalizes bedrock provider aliases in full model refs", () => {
+      expect(parseModelRef("aws_bedrock/us.anthropic.claude-opus-4-6-v1", "openai")).toEqual({
+        provider: "amazon-bedrock",
+        model: "us.anthropic.claude-opus-4-6-v1",
+      });
+      expect(parseModelRef("amazon bedrock/us.anthropic.claude-opus-4-6-v1", "openai")).toEqual({
+        provider: "amazon-bedrock",
+        model: "us.anthropic.claude-opus-4-6-v1",
       });
     });
 

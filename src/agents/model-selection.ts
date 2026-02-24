@@ -38,6 +38,7 @@ export function modelKey(provider: string, model: string) {
 
 export function normalizeProviderId(provider: string): string {
   const normalized = provider.trim().toLowerCase();
+  const normalizedWithDashes = normalized.replace(/[\s_]+/g, "-");
   if (normalized === "z.ai" || normalized === "z-ai") {
     return "zai";
   }
@@ -50,7 +51,11 @@ export function normalizeProviderId(provider: string): string {
   if (normalized === "kimi-code") {
     return "kimi-coding";
   }
-  if (normalized === "bedrock" || normalized === "aws-bedrock") {
+  if (
+    normalizedWithDashes === "bedrock" ||
+    normalizedWithDashes === "aws-bedrock" ||
+    normalizedWithDashes === "amazon-bedrock"
+  ) {
     return "amazon-bedrock";
   }
   // Backward compatibility for older provider naming.

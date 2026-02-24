@@ -89,6 +89,15 @@ describe("resolveModelAuthMode", () => {
       "aws-sdk",
     );
   });
+
+  it("returns aws-sdk for underscore/space bedrock aliases without explicit auth override", () => {
+    expect(resolveModelAuthMode("aws_bedrock", undefined, { version: 1, profiles: {} })).toBe(
+      "aws-sdk",
+    );
+    expect(resolveModelAuthMode("amazon bedrock", undefined, { version: 1, profiles: {} })).toBe(
+      "aws-sdk",
+    );
+  });
 });
 
 describe("requireApiKey", () => {
