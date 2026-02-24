@@ -31,10 +31,34 @@ import { createWebOnMessageHandler } from "./monitor/on-message.js";
 import type { WebChannelStatus, WebInboundMsg, WebMonitorTuning } from "./types.js";
 import { isLikelyWhatsAppCryptoError } from "./util.js";
 
+function normalizeWebCloseStatus(statusCode: unknown): number | undefined {
+  if (typeof statusCode === "number" && Number.isFinite(statusCode)) {
+    return Math.trunc(statusCode);
+  }
+  if (typeof statusCode === "string" && statusCode.trim()) {
+    const parsed = Number(statusCode);
+    if (Number.isInteger(parsed)) {
+      return parsed;
+    }
+  }
+  return undefined;
+}
+
+function formatWebCloseStatus(statusCode: unknown): number | string {
+  const normalized = normalizeWebCloseStatus(statusCode);
+  if (typeof normalized === "number") {
+    return normalized;
+  }
+  if (typeof statusCode === "string" && statusCode.trim()) {
+    return statusCode.trim();
+  }
+  return "unknown";
+}
+
 function isNonRetryableWebCloseStatus(statusCode: unknown): boolean {
   // WhatsApp 440 = session conflict ("Unknown Stream Errored (conflict)").
   // This is persistent until the operator resolves the conflicting session.
-  return statusCode === 440;
+  return normalizeWebCloseStatus(statusCode) === 440;
 }
 
 export async function monitorWebChannel(
@@ -362,10 +386,12 @@ export async function monitorWebChannel(
       break;
     }
 
-    const statusCode =
+    const rawStatusCode =
       (typeof reason === "object" && reason && "status" in reason
-        ? (reason as { status?: number }).status
+        ? (reason as { status?: number | string }).status
         : undefined) ?? "unknown";
+    const statusCode = formatWebCloseStatus(rawStatusCode);
+    const normalizedStatusCode = normalizeWebCloseStatus(rawStatusCode);
     const loggedOut =
       typeof reason === "object" &&
       reason &&
@@ -377,7 +403,7 @@ export async function monitorWebChannel(
     status.lastEventAt = Date.now();
     status.lastDisconnect = {
       at: status.lastEventAt,
-      status: typeof statusCode === "number" ? statusCode : undefined,
+      status: normalizedStatusCode,
       error: errorStr,
       loggedOut: Boolean(loggedOut),
     };
@@ -408,7 +434,7 @@ export async function monitorWebChannel(
       break;
     }
 
-    if (isNonRetryableWebCloseStatus(statusCode)) {
+    if (isNonRetryableWebCloseStatus(rawStatusCode)) {
       reconnectLogger.warn(
         {
           connectionId,
