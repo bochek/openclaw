@@ -7,6 +7,7 @@ Docs: https://docs.openclaw.ai
 ### Changes
 
 - Auto-reply/Abort shortcuts: expand standalone stop phrases (`stop openclaw`, `stop action`, `stop run`, `stop agent`, `please stop`, and related variants), accept trailing punctuation (for example `STOP OPENCLAW!!!`), and add multilingual stop keywords (including ES/FR/ZH/HI/AR/JP/DE/PT/RU forms) so emergency stop messages are caught more reliably. (#25103) Thanks @steipete and @vincentkoc.
+- iOS/Settings + Gateway: centralize device/platform/version helpers into `DeviceInfoHelper` so Settings display strings and gateway/device metadata stay aligned from one source (`platformStringForDisplay` keeps the legacy `iOS X.Y.Z` label in Settings). (#25101) Thanks @DoncicX.
 
 ### Fixes
 
