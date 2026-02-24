@@ -129,6 +129,10 @@ describe("setupChannels", () => {
       );
     });
     expect(sawHardStop).toBe(false);
+    expect(note).toHaveBeenCalledWith(
+      expect.stringContaining("continuing with onboarding"),
+      "Channel setup",
+    );
   });
 
   it("shows explicit dmScope config command in channel primer", async () => {
