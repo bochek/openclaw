@@ -142,6 +142,12 @@ describe("gateway plugin HTTP auth boundary", () => {
       run: async () => {
         const handlePluginRequest = vi.fn(async (req: IncomingMessage, res: ServerResponse) => {
           const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+          if (pathname === "/api/channels-health") {
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.end(JSON.stringify({ ok: true, route: "channel-health" }));
+            return true;
+          }
           if (pathname === "/api/channels") {
             res.statusCode = 200;
             res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -195,6 +201,26 @@ describe("gateway plugin HTTP auth boundary", () => {
         expect(unauthenticatedRoot.getBody()).toContain("Unauthorized");
         expect(handlePluginRequest).not.toHaveBeenCalled();
 
+        const unauthenticatedRootWithQuery = createResponse();
+        await dispatchRequest(
+          server,
+          createRequest({ path: "/api/channels?view=compact" }),
+          unauthenticatedRootWithQuery.res,
+        );
+        expect(unauthenticatedRootWithQuery.res.statusCode).toBe(401);
+        expect(unauthenticatedRootWithQuery.getBody()).toContain("Unauthorized");
+        expect(handlePluginRequest).not.toHaveBeenCalled();
+
+        const unauthenticatedRootWithTrailingSlash = createResponse();
+        await dispatchRequest(
+          server,
+          createRequest({ path: "/api/channels/" }),
+          unauthenticatedRootWithTrailingSlash.res,
+        );
+        expect(unauthenticatedRootWithTrailingSlash.res.statusCode).toBe(401);
+        expect(unauthenticatedRootWithTrailingSlash.getBody()).toContain("Unauthorized");
+        expect(handlePluginRequest).not.toHaveBeenCalled();
+
         const authenticated = createResponse();
         await dispatchRequest(
           server,
@@ -216,7 +242,16 @@ describe("gateway plugin HTTP auth boundary", () => {
         expect(unauthenticatedPublic.res.statusCode).toBe(200);
         expect(unauthenticatedPublic.getBody()).toContain('"route":"public"');
 
-        expect(handlePluginRequest).toHaveBeenCalledTimes(2);
+        const unauthenticatedNearMiss = createResponse();
+        await dispatchRequest(
+          server,
+          createRequest({ path: "/api/channels-health" }),
+          unauthenticatedNearMiss.res,
+        );
+        expect(unauthenticatedNearMiss.res.statusCode).toBe(200);
+        expect(unauthenticatedNearMiss.getBody()).toContain('"route":"channel-health"');
+
+        expect(handlePluginRequest).toHaveBeenCalledTimes(3);
       },
     });
   });
