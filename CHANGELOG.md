@@ -21,6 +21,7 @@ Docs: https://docs.openclaw.ai
 - macOS/Menu bar: stop reusing the injector delegate for the "Usage cost (30 days)" submenu to prevent recursive submenu injection loops when opening cost history. (#25341) Thanks @yingchunbai.
 - Control UI/Chat images: harden image-open clicks against reverse tabnabbing by using opener isolation (`noopener,noreferrer` plus `window.opener = null`). (#18685) Thanks @Mariana-Codebase.
 - CLI/Doctor: correct stale recovery hints to use valid commands (`openclaw gateway status --deep` and `openclaw configure --section model`). (#24485) Thanks @chilu18.
+- Doctor/Plugins: auto-enable now resolves third-party channel plugins by manifest plugin id (not channel id), preventing invalid `plugins.entries.<channelId>` writes when ids differ. (#25275) Thanks @zerone0x.
 
 ## 2026.2.23
 
