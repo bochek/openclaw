@@ -75,17 +75,24 @@ export function registerBrowserAgentSnapshotRoutes(
         let currentTargetId = tab.targetId;
         try {
           const refreshed = await profileCtx.listTabs();
-          const byUrl = refreshed.find((t) => t.url === result.url);
-          if (byUrl) {
-            currentTargetId = byUrl.targetId;
-          } else if (!refreshed.some((t) => t.targetId === tab.targetId)) {
-            await new Promise((r) => setTimeout(r, 800));
-            const retried = await profileCtx.listTabs();
-            const match =
-              retried.find((t) => t.url === result.url) ??
-              (retried.length === 1 ? retried[0] : null);
-            if (match) {
-              currentTargetId = match.targetId;
+          if (!refreshed.some((t) => t.targetId === tab.targetId)) {
+            // Renderer swap: old target gone, resolve the replacement.
+            // Prefer a URL match whose targetId differs from the old one
+            // to avoid picking a pre-existing tab when multiple share the URL.
+            const byUrl = refreshed.filter((t) => t.url === result.url);
+            const replaced = byUrl.find((t) => t.targetId !== tab.targetId) ?? byUrl[0];
+            if (replaced) {
+              currentTargetId = replaced.targetId;
+            } else {
+              await new Promise((r) => setTimeout(r, 800));
+              const retried = await profileCtx.listTabs();
+              const match =
+                retried.find((t) => t.url === result.url && t.targetId !== tab.targetId) ??
+                retried.find((t) => t.url === result.url) ??
+                (retried.length === 1 ? retried[0] : null);
+              if (match) {
+                currentTargetId = match.targetId;
+              }
             }
           }
         } catch {
