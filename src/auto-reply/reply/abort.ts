@@ -23,27 +23,77 @@ import type { FinalizedMsgContext, MsgContext } from "../templating.js";
 import { stripMentions, stripStructuralPrefixes } from "./mentions.js";
 import { clearSessionQueues } from "./queue.js";
 
-const ABORT_TRIGGERS = new Set(["stop", "esc", "abort", "wait", "exit", "interrupt"]);
+const ABORT_TRIGGERS = new Set([
+  "stop",
+  "esc",
+  "abort",
+  "wait",
+  "exit",
+  "interrupt",
+  // Most common stop words in major languages.
+  "detente",
+  "deten",
+  "detén",
+  "arrete",
+  "arrête",
+  "停止",
+  "やめて",
+  "止めて",
+  "रुको",
+  "توقف",
+  "stopp",
+  "pare",
+]);
+const ABORT_TRIGGER_PHRASES = new Set([
+  "stop openclaw",
+  "openclaw stop",
+  "stop action",
+  "stop current action",
+  "stop run",
+  "stop current run",
+  "stop agent",
+  "stop the agent",
+  "stop don't do anything",
+  "stop dont do anything",
+  "stop do not do anything",
+  "stop doing anything",
+  "stop don’t do anything",
+  "please stop",
+  "stop please",
+]);
 const ABORT_MEMORY = new Map<string, boolean>();
 const ABORT_MEMORY_MAX = 2000;
+
+function normalizeAbortCandidate(text: string): string {
+  const lowered = text.trim().toLowerCase();
+  if (!lowered) {
+    return "";
+  }
+  const unquoted = lowered.replace(/^["'`“”‘’]+|["'`“”‘’]+$/gu, "");
+  const withoutTrailingPunctuation = unquoted.replace(/[.!?,;:。！？、…؟]+$/gu, "").trimEnd();
+  return withoutTrailingPunctuation.replace(/\s+/g, " ").trim();
+}
 
 export function isAbortTrigger(text?: string): boolean {
   if (!text) {
     return false;
   }
-  const normalized = text.trim().toLowerCase();
-  return ABORT_TRIGGERS.has(normalized);
+  const normalized = normalizeAbortCandidate(text);
+  if (!normalized || normalized.startsWith("/")) {
+    return false;
+  }
+  return ABORT_TRIGGERS.has(normalized) || ABORT_TRIGGER_PHRASES.has(normalized);
 }
 
 export function isAbortRequestText(text?: string, options?: CommandNormalizeOptions): boolean {
   if (!text) {
     return false;
   }
-  const normalized = normalizeCommandBody(text, options).trim();
+  const normalized = normalizeAbortCandidate(normalizeCommandBody(text, options));
   if (!normalized) {
     return false;
   }
-  return normalized.toLowerCase() === "/stop" || isAbortTrigger(normalized);
+  return normalized === "/stop" || isAbortTrigger(normalized);
 }
 
 export function getAbortMemory(key: string): boolean | undefined {
