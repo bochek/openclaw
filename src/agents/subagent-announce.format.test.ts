@@ -1628,6 +1628,35 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.to).toBe("telegram:123");
   });
 
+  it("preserves non-internal requesterOrigin channel over stale session lastChannel", async () => {
+    embeddedRunMock.isEmbeddedPiRunActive.mockReturnValue(true);
+    embeddedRunMock.isEmbeddedPiRunStreaming.mockReturnValue(false);
+    sessionStore = {
+      "agent:main:main": {
+        sessionId: "session-stale-custom",
+        lastChannel: "whatsapp",
+        queueMode: "collect",
+        queueDebounceMs: 0,
+      },
+    };
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:test",
+      childRunId: "run-stale-custom-channel",
+      requesterSessionKey: "main",
+      requesterOrigin: { channel: "custombridge", to: "room:42" },
+      requesterDisplayKey: "main",
+      ...defaultOutcomeAnnounce,
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(agentSpy).toHaveBeenCalledTimes(1);
+
+    const call = agentSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
+    expect(call?.params?.channel).toBe("custombridge");
+    expect(call?.params?.to).toBe("room:42");
+  });
+
   it("routes or falls back for ended parent subagent sessions (#18037)", async () => {
     const cases = [
       {
