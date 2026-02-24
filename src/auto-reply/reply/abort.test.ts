@@ -147,6 +147,16 @@ describe("abort detection", () => {
       "STOP OPENCLAW",
       "stop openclaw!!!",
       "stop don’t do anything",
+      "detente",
+      "detén",
+      "arrête",
+      "停止",
+      "やめて",
+      "止めて",
+      "रुको",
+      "توقف",
+      "stopp",
+      "pare",
     ];
     for (const candidate of positives) {
       expect(isAbortTrigger(candidate)).toBe(true);
@@ -164,6 +174,10 @@ describe("abort detection", () => {
     expect(isAbortRequestText("stop")).toBe(true);
     expect(isAbortRequestText("stop action")).toBe(true);
     expect(isAbortRequestText("stop openclaw!!!")).toBe(true);
+    expect(isAbortRequestText("やめて")).toBe(true);
+    expect(isAbortRequestText("stopp")).toBe(true);
+    expect(isAbortRequestText("pare")).toBe(true);
+    expect(isAbortRequestText(" توقف ")).toBe(true);
     expect(isAbortRequestText("/stop@openclaw_bot", { botUsername: "openclaw_bot" })).toBe(true);
 
     expect(isAbortRequestText("/status")).toBe(false);
