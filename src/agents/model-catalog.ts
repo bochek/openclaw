@@ -2,6 +2,7 @@ import path from "node:path";
 import { type OpenClawConfig, loadConfig } from "../config/config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveOpenClawAgentDir } from "./agent-paths.js";
+import { normalizeProviderId } from "./model-selection.js";
 import { ensureOpenClawModelsJson } from "./models-config.js";
 
 const log = createSubsystemLogger("model-catalog");
@@ -99,6 +100,25 @@ function normalizeInput(modalities: unknown): Array<"text" | "image"> | undefine
   return hasImage ? ["text", "image"] : ["text"];
 }
 
+function normalizeCatalogProvider(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return normalizeProviderId(trimmed);
+}
+
+function modelCatalogMergeKey(entry: Pick<ModelCatalogEntry, "provider" | "id">): string {
+  const provider = normalizeCatalogProvider(entry.provider);
+  const id = String(entry.id ?? "")
+    .trim()
+    .toLowerCase();
+  return `${provider}/${id}`;
+}
+
 function readConfiguredModelsFromConfig(cfg: OpenClawConfig): ModelCatalogEntry[] {
   const providers = cfg.models?.providers;
   if (!providers) {
@@ -106,7 +126,7 @@ function readConfiguredModelsFromConfig(cfg: OpenClawConfig): ModelCatalogEntry[
   }
   const entries: ModelCatalogEntry[] = [];
   for (const [providerIdRaw, providerValue] of Object.entries(providers)) {
-    const provider = String(providerIdRaw ?? "").trim();
+    const provider = normalizeCatalogProvider(providerIdRaw);
     if (!provider || !providerValue) {
       continue;
     }
@@ -140,12 +160,10 @@ function mergeMissingCatalogEntries(
   discoveredModels: ModelCatalogEntry[],
   configuredModels: ModelCatalogEntry[],
 ): ModelCatalogEntry[] {
-  const seen = new Set(
-    discoveredModels.map((entry) => `${entry.provider.toLowerCase()}/${entry.id.toLowerCase()}`),
-  );
+  const seen = new Set(discoveredModels.map((entry) => modelCatalogMergeKey(entry)));
   const merged = [...discoveredModels];
   for (const entry of configuredModels) {
-    const key = `${entry.provider.toLowerCase()}/${entry.id.toLowerCase()}`;
+    const key = modelCatalogMergeKey(entry);
     if (seen.has(key)) {
       continue;
     }
@@ -205,7 +223,7 @@ export async function loadModelCatalog(params?: {
         if (!id) {
           continue;
         }
-        const provider = String(entry?.provider ?? "").trim();
+        const provider = normalizeCatalogProvider(entry?.provider);
         if (!provider) {
           continue;
         }

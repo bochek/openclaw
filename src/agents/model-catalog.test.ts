@@ -162,4 +162,94 @@ describe("loadModelCatalog", () => {
       }),
     );
   });
+
+  it("normalizes configured provider aliases in merged catalog entries", async () => {
+    const cfg = {
+      models: {
+        providers: {
+          "z-ai": {
+            baseUrl: "https://api.z.ai/api/paas/v4/",
+            api: "openai-completions",
+            models: [
+              {
+                id: "glm-5:free",
+                name: "GLM-5 (Free)",
+                reasoning: true,
+                input: ["text"],
+                contextWindow: 202800,
+                maxTokens: 131072,
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+              },
+            ],
+          },
+        },
+      },
+    } satisfies OpenClawConfig;
+
+    __setModelCatalogImportForTest(
+      async () =>
+        ({
+          AuthStorage: class {},
+          ModelRegistry: class {
+            getAll() {
+              return [];
+            }
+          },
+        }) as unknown as PiSdkModule,
+    );
+
+    const result = await loadModelCatalog({ config: cfg });
+    expect(result).toContainEqual(
+      expect.objectContaining({
+        provider: "zai",
+        id: "glm-5:free",
+      }),
+    );
+  });
+
+  it("dedupes discovered and configured entries using normalized provider aliases", async () => {
+    const cfg = {
+      models: {
+        providers: {
+          "z-ai": {
+            baseUrl: "https://api.z.ai/api/paas/v4/",
+            api: "openai-completions",
+            models: [
+              {
+                id: "glm-5:free",
+                name: "GLM-5 (Free)",
+                reasoning: true,
+                input: ["text"],
+                contextWindow: 202800,
+                maxTokens: 131072,
+                cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+              },
+            ],
+          },
+        },
+      },
+    } satisfies OpenClawConfig;
+
+    __setModelCatalogImportForTest(
+      async () =>
+        ({
+          AuthStorage: class {},
+          ModelRegistry: class {
+            getAll() {
+              return [
+                {
+                  id: "glm-5:free",
+                  name: "GLM-5 (Free)",
+                  provider: "zai",
+                },
+              ];
+            }
+          },
+        }) as unknown as PiSdkModule,
+    );
+
+    const result = await loadModelCatalog({ config: cfg });
+    const matches = result.filter((entry) => entry.provider === "zai" && entry.id === "glm-5:free");
+    expect(matches).toHaveLength(1);
+  });
 });
