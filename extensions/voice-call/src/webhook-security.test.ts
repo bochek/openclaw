@@ -232,6 +232,54 @@ describe("verifyTelnyxWebhook", () => {
     expect(second.ok).toBe(true);
     expect(second.isReplay).toBe(true);
   });
+
+  it("detects replay across equivalent base64/base64url signature encodings", () => {
+    const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519");
+    const pemPublicKey = publicKey.export({ format: "pem", type: "spki" }).toString();
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const rawBody = JSON.stringify({
+      data: { event_type: "call.answered", payload: { call_control_id: "call-2" } },
+      nonce: crypto.randomUUID(),
+    });
+    const signedPayload = `${timestamp}|${rawBody}`;
+    const signatureBase64 = crypto
+      .sign(null, Buffer.from(signedPayload), privateKey)
+      .toString("base64");
+    const signatureBase64Url = signatureBase64
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+
+    const first = verifyTelnyxWebhook(
+      {
+        headers: {
+          "telnyx-signature-ed25519": signatureBase64,
+          "telnyx-timestamp": timestamp,
+        },
+        rawBody,
+        url: "https://example.com/voice/webhook",
+        method: "POST",
+      },
+      pemPublicKey,
+    );
+    const second = verifyTelnyxWebhook(
+      {
+        headers: {
+          "telnyx-signature-ed25519": signatureBase64Url,
+          "telnyx-timestamp": timestamp,
+        },
+        rawBody,
+        url: "https://example.com/voice/webhook",
+        method: "POST",
+      },
+      pemPublicKey,
+    );
+
+    expect(first.ok).toBe(true);
+    expect(first.isReplay).toBeFalsy();
+    expect(second.ok).toBe(true);
+    expect(second.isReplay).toBe(true);
+  });
 });
 
 describe("verifyTwilioWebhook", () => {

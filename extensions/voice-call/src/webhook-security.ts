@@ -401,6 +401,18 @@ export interface TelnyxVerificationResult {
   isReplay?: boolean;
 }
 
+function createTelnyxReplayKey(params: {
+  timestampSec: number;
+  signatureBytes: Buffer;
+  rawBody: string;
+}): string {
+  // Canonicalize signature/timestamp so equivalent header encodings
+  // (for example Base64 vs Base64URL) map to the same replay key.
+  return `telnyx:${sha256Hex(
+    `${params.timestampSec}\n${params.signatureBytes.toString("base64")}\n${params.rawBody}`,
+  )}`;
+}
+
 function createTwilioReplayKey(params: {
   ctx: WebhookContext;
   signature: string;
@@ -506,7 +518,11 @@ export function verifyTelnyxWebhook(
       return { ok: false, reason: "Timestamp too old" };
     }
 
-    const replayKey = `telnyx:${sha256Hex(`${timestamp}\n${signature}\n${ctx.rawBody}`)}`;
+    const replayKey = createTelnyxReplayKey({
+      timestampSec: eventTimeSec,
+      signatureBytes: signatureBuffer,
+      rawBody: ctx.rawBody,
+    });
     const isReplay = markReplay(telnyxReplayCache, replayKey);
     return { ok: true, isReplay };
   } catch (err) {
