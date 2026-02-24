@@ -252,6 +252,11 @@ describe("external-content security", () => {
       expect(isExternalHookSession("  HOOK:webhook:123  ")).toBe(true);
     });
 
+    it("identifies Unicode full-width hook prefixes", () => {
+      expect(isExternalHookSession("ＨＯＯＫ:gmail:msg-123")).toBe(true);
+      expect(isExternalHookSession("ＨＯＯＫ：custom:456")).toBe(true);
+    });
+
     it("rejects non-hook sessions", () => {
       expect(isExternalHookSession("cron:daily-task")).toBe(false);
       expect(isExternalHookSession("agent:main")).toBe(false);
@@ -276,6 +281,11 @@ describe("external-content security", () => {
       expect(getHookType("HOOK:gmail:msg-123")).toBe("email");
       expect(getHookType("  HOOK:webhook:123  ")).toBe("webhook");
       expect(getHookType("Hook:custom:456")).toBe("webhook");
+    });
+
+    it("returns hook type for Unicode full-width hook prefixes", () => {
+      expect(getHookType("ＨＯＯＫ:gmail:msg-123")).toBe("email");
+      expect(getHookType(" ＨＯＯＫ：custom:456 ")).toBe("webhook");
     });
 
     it("returns unknown for non-hook sessions", () => {

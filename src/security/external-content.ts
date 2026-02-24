@@ -285,8 +285,14 @@ export function buildSafeExternalPrompt(params: {
 /**
  * Checks if a session key indicates an external hook source.
  */
+function normalizeHookSessionKey(sessionKey: string): string {
+  // NFKC folds common full-width forms so hook-prefix checks cannot be bypassed by
+  // visually similar Unicode spellings like "ＨＯＯＫ：...".
+  return sessionKey.normalize("NFKC").trim().toLowerCase();
+}
+
 export function isExternalHookSession(sessionKey: string): boolean {
-  const normalized = sessionKey.trim().toLowerCase();
+  const normalized = normalizeHookSessionKey(sessionKey);
   return (
     normalized.startsWith("hook:gmail:") ||
     normalized.startsWith("hook:webhook:") ||
@@ -298,7 +304,7 @@ export function isExternalHookSession(sessionKey: string): boolean {
  * Extracts the hook type from a session key.
  */
 export function getHookType(sessionKey: string): ExternalContentSource {
-  const normalized = sessionKey.trim().toLowerCase();
+  const normalized = normalizeHookSessionKey(sessionKey);
   if (normalized.startsWith("hook:gmail:")) {
     return "email";
   }
