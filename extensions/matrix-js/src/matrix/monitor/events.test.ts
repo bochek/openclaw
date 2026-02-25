@@ -22,11 +22,13 @@ function createHarness(params?: {
   const listeners = new Map<string, (...args: unknown[]) => void>();
   const onRoomMessage = vi.fn(async () => {});
   const listVerifications = vi.fn(async () => params?.verifications ?? []);
+  const sendMessage = vi.fn(async () => "$notice");
   const client = {
     on: vi.fn((eventName: string, listener: (...args: unknown[]) => void) => {
       listeners.set(eventName, listener);
       return client;
     }),
+    sendMessage,
     crypto: {
       listVerifications,
     },
@@ -50,15 +52,20 @@ function createHarness(params?: {
 
   return {
     onRoomMessage,
+    sendMessage,
     roomEventListener,
     listVerifications,
+    roomMessageListener: listeners.get("room.message") as RoomEventListener | undefined,
   };
 }
 
 describe("registerMatrixMonitorEvents verification routing", () => {
-  it("routes verification request events into synthetic room messages", async () => {
-    const { onRoomMessage, roomEventListener } = createHarness();
-    roomEventListener("!room:example.org", {
+  it("posts verification request notices directly into the room", async () => {
+    const { onRoomMessage, sendMessage, roomMessageListener } = createHarness();
+    if (!roomMessageListener) {
+      throw new Error("room.message listener was not registered");
+    }
+    roomMessageListener("!room:example.org", {
       event_id: "$req1",
       sender: "@alice:example.org",
       type: EventType.RoomMessage,
@@ -70,17 +77,15 @@ describe("registerMatrixMonitorEvents verification routing", () => {
     });
 
     await vi.waitFor(() => {
-      expect(onRoomMessage).toHaveBeenCalledTimes(1);
+      expect(sendMessage).toHaveBeenCalledTimes(1);
     });
-    const routed = onRoomMessage.mock.calls[0]?.[1] as MatrixRawEvent | undefined;
-    expect(routed?.type).toBe(EventType.RoomMessage);
-    expect((routed?.content as { body?: string }).body).toContain(
-      "Matrix verification request received from @alice:example.org.",
-    );
+    expect(onRoomMessage).not.toHaveBeenCalled();
+    const body = (sendMessage.mock.calls[0]?.[1] as { body?: string } | undefined)?.body ?? "";
+    expect(body).toContain("Matrix verification request received from @alice:example.org.");
   });
 
-  it("routes SAS emoji/decimal details when verification summaries expose them", async () => {
-    const { onRoomMessage, roomEventListener } = createHarness({
+  it("posts SAS emoji/decimal details when verification summaries expose them", async () => {
+    const { sendMessage, roomEventListener } = createHarness({
       verifications: [
         {
           id: "verification-1",
@@ -110,8 +115,8 @@ describe("registerMatrixMonitorEvents verification routing", () => {
     });
 
     await vi.waitFor(() => {
-      const bodies = onRoomMessage.mock.calls.map(
-        (call) => ((call[1] as MatrixRawEvent).content as { body?: string }).body ?? "",
+      const bodies = sendMessage.mock.calls.map((call) =>
+        ((call[1] as { body?: string } | undefined)?.body ?? "").toString(),
       );
       expect(bodies.some((body) => body.includes("SAS emoji:"))).toBe(true);
       expect(bodies.some((body) => body.includes("SAS decimal: 6158 1986 3513"))).toBe(true);
@@ -119,7 +124,7 @@ describe("registerMatrixMonitorEvents verification routing", () => {
   });
 
   it("does not emit duplicate SAS notices for the same verification payload", async () => {
-    const { onRoomMessage, roomEventListener } = createHarness({
+    const { sendMessage, roomEventListener } = createHarness({
       verifications: [
         {
           id: "verification-3",
@@ -148,7 +153,7 @@ describe("registerMatrixMonitorEvents verification routing", () => {
       },
     });
     await vi.waitFor(() => {
-      expect(onRoomMessage.mock.calls.length).toBeGreaterThan(0);
+      expect(sendMessage.mock.calls.length).toBeGreaterThan(0);
     });
 
     roomEventListener("!room:example.org", {
@@ -162,8 +167,8 @@ describe("registerMatrixMonitorEvents verification routing", () => {
     });
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    const sasBodies = onRoomMessage.mock.calls
-      .map((call) => ((call[1] as MatrixRawEvent).content as { body?: string }).body ?? "")
+    const sasBodies = sendMessage.mock.calls
+      .map((call) => ((call[1] as { body?: string } | undefined)?.body ?? "").toString())
       .filter((body) => body.includes("SAS emoji:"));
     expect(sasBodies).toHaveLength(1);
   });

@@ -198,16 +198,17 @@ openclaw matrix-js verify backup restore --verbose
 All `verify` commands are concise by default (including quiet internal SDK logging) and show detailed diagnostics only with `--verbose`.
 Use `--json` for full machine-readable output when scripting.
 
-## Automatic verification routing
+## Automatic verification notices
 
-Matrix-js automatically routes verification lifecycle updates to the agent as normal inbound messages.
+Matrix-js now posts verification lifecycle notices directly into the Matrix room as `m.notice` messages.
 That includes:
 
 - verification request notices
 - verification start and completion notices
 - SAS details (emoji and decimal) when available
 
-This means an agent can guide users through verification directly in chat without ad hoc harness scripts.
+Inbound SAS requests are auto-confirmed by the bot device, so once the user confirms "They match"
+in their Matrix client, verification completes without requiring a manual OpenClaw tool step.
 
 ## DM and room policy example
 

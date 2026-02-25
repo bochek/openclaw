@@ -101,6 +101,7 @@ type MatrixVerificationSession = {
   verifyPromise?: Promise<void>;
   verifyStarted: boolean;
   startRequested: boolean;
+  sasAutoConfirmStarted: boolean;
   sasCallbacks?: MatrixShowSasCallbacks;
   reciprocateQrCallbacks?: MatrixShowQrCodeCallbacks;
 };
@@ -304,6 +305,7 @@ export class MatrixVerificationManager {
     const maybeSas = verifier.getShowSasCallbacks();
     if (maybeSas) {
       session.sasCallbacks = maybeSas;
+      this.maybeAutoConfirmSas(session);
     }
     const maybeReciprocateQr = verifier.getReciprocateQrCodeCallbacks();
     if (maybeReciprocateQr) {
@@ -320,6 +322,7 @@ export class MatrixVerificationManager {
     verifier.on(VerifierEvent.ShowSas, (sas) => {
       session.sasCallbacks = sas as MatrixShowSasCallbacks;
       this.touchVerificationSession(session);
+      this.maybeAutoConfirmSas(session);
     });
     verifier.on(VerifierEvent.ShowReciprocateQr, (qr) => {
       session.reciprocateQrCallbacks = qr as MatrixShowQrCodeCallbacks;
@@ -330,6 +333,30 @@ export class MatrixVerificationManager {
       this.touchVerificationSession(session);
     });
     this.ensureVerificationStarted(session);
+  }
+
+  private maybeAutoConfirmSas(session: MatrixVerificationSession): void {
+    if (session.sasAutoConfirmStarted) {
+      return;
+    }
+    if (this.readRequestValue(session.request, () => session.request.initiatedByMe, true)) {
+      return;
+    }
+    const callbacks = session.sasCallbacks ?? session.activeVerifier?.getShowSasCallbacks();
+    if (!callbacks) {
+      return;
+    }
+    session.sasCallbacks = callbacks;
+    session.sasAutoConfirmStarted = true;
+    void callbacks
+      .confirm()
+      .then(() => {
+        this.touchVerificationSession(session);
+      })
+      .catch((err) => {
+        session.error = err instanceof Error ? err.message : String(err);
+        this.touchVerificationSession(session);
+      });
   }
 
   private ensureVerificationStarted(session: MatrixVerificationSession): void {
@@ -381,6 +408,7 @@ export class MatrixVerificationManager {
       updatedAtMs: now,
       verifyStarted: false,
       startRequested: false,
+      sasAutoConfirmStarted: false,
     };
     this.verificationSessions.set(session.id, session);
     this.ensureVerificationRequestTracked(session);

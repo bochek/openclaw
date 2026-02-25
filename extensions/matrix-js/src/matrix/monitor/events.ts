@@ -120,29 +120,6 @@ function formatVerificationSasNotice(summary: MatrixVerificationSummaryLike): st
   return lines.join("\n");
 }
 
-function createSyntheticVerificationMessage(params: {
-  senderId: string;
-  sourceEventId: string | null;
-  body: string;
-  originServerTs?: number;
-}): MatrixRawEvent {
-  const { senderId, sourceEventId, body, originServerTs } = params;
-  const safeEventId = sourceEventId?.replace(/[^A-Za-z0-9_.=-]/g, "_") ?? "unknown";
-  return {
-    event_id: `mxjs-verification-${safeEventId}-${Date.now().toString(36)}`,
-    sender: senderId,
-    type: EventType.RoomMessage,
-    origin_server_ts: originServerTs ?? Date.now(),
-    content: {
-      msgtype: "m.notice",
-      body,
-    },
-    unsigned: {
-      age: 0,
-    },
-  };
-}
-
 async function resolveVerificationSummaryByFlowId(
   client: MatrixClient,
   flowId: string | null,
@@ -169,6 +146,28 @@ function trackBounded(set: Set<string>, value: string): boolean {
   return true;
 }
 
+async function sendVerificationNotice(params: {
+  client: MatrixClient;
+  roomId: string;
+  body: string;
+  logVerboseMessage: (message: string) => void;
+}): Promise<void> {
+  const roomId = trimMaybeString(params.roomId);
+  if (!roomId) {
+    return;
+  }
+  try {
+    await params.client.sendMessage(roomId, {
+      msgtype: "m.notice",
+      body: params.body,
+    });
+  } catch (err) {
+    params.logVerboseMessage(
+      `matrix: failed sending verification notice room=${roomId}: ${String(err)}`,
+    );
+  }
+}
+
 export function registerMatrixMonitorEvents(params: {
   client: MatrixClient;
   auth: MatrixAuth;
@@ -192,7 +191,63 @@ export function registerMatrixMonitorEvents(params: {
   const routedVerificationEvents = new Set<string>();
   const routedVerificationSasFingerprints = new Set<string>();
 
-  client.on("room.message", onRoomMessage);
+  const routeVerificationEvent = (roomId: string, event: MatrixRawEvent): boolean => {
+    const senderId = trimMaybeString(event?.sender);
+    if (!senderId) {
+      return false;
+    }
+    const signal = readVerificationSignal(event);
+    if (!signal) {
+      return false;
+    }
+
+    void (async () => {
+      const flowId = signal.flowId;
+      const sourceEventId = trimMaybeString(event?.event_id);
+      const sourceFingerprint = sourceEventId ?? `${senderId}:${event.type}:${flowId ?? "none"}`;
+      if (!trackBounded(routedVerificationEvents, sourceFingerprint)) {
+        return;
+      }
+
+      const stageNotice = formatVerificationStageNotice({ stage: signal.stage, senderId, event });
+      const summary = await resolveVerificationSummaryByFlowId(client, flowId).catch(() => null);
+      const sasNotice = summary ? formatVerificationSasNotice(summary) : null;
+
+      const notices: string[] = [];
+      if (stageNotice) {
+        notices.push(stageNotice);
+      }
+      if (summary && sasNotice) {
+        const sasFingerprint = `${summary.id}:${JSON.stringify(summary.sas)}`;
+        if (trackBounded(routedVerificationSasFingerprints, sasFingerprint)) {
+          notices.push(sasNotice);
+        }
+      }
+      if (notices.length === 0) {
+        return;
+      }
+
+      for (const body of notices) {
+        await sendVerificationNotice({
+          client,
+          roomId,
+          body,
+          logVerboseMessage,
+        });
+      }
+    })().catch((err) => {
+      logVerboseMessage(`matrix: failed routing verification event: ${String(err)}`);
+    });
+
+    return true;
+  };
+
+  client.on("room.message", (roomId: string, event: MatrixRawEvent) => {
+    if (routeVerificationEvent(roomId, event)) {
+      return;
+    }
+    void onRoomMessage(roomId, event);
+  });
 
   client.on("room.encrypted_event", (roomId: string, event: MatrixRawEvent) => {
     const eventId = event?.event_id ?? "unknown";
@@ -265,54 +320,6 @@ export function registerMatrixMonitorEvents(params: {
       );
     }
 
-    const senderId = trimMaybeString(event?.sender);
-    if (!senderId) {
-      return;
-    }
-    const signal = readVerificationSignal(event);
-    if (!signal) {
-      return;
-    }
-
-    void (async () => {
-      const flowId = signal.flowId;
-      const sourceEventId = trimMaybeString(event?.event_id);
-      const sourceFingerprint = sourceEventId ?? `${senderId}:${eventType}:${flowId ?? "none"}`;
-      if (!trackBounded(routedVerificationEvents, sourceFingerprint)) {
-        return;
-      }
-
-      const stageNotice = formatVerificationStageNotice({ stage: signal.stage, senderId, event });
-      const summary = await resolveVerificationSummaryByFlowId(client, flowId).catch(() => null);
-      const sasNotice = summary ? formatVerificationSasNotice(summary) : null;
-
-      const notices: string[] = [];
-      if (stageNotice) {
-        notices.push(stageNotice);
-      }
-      if (summary && sasNotice) {
-        const sasFingerprint = `${summary.id}:${JSON.stringify(summary.sas)}`;
-        if (trackBounded(routedVerificationSasFingerprints, sasFingerprint)) {
-          notices.push(sasNotice);
-        }
-      }
-      if (notices.length === 0) {
-        return;
-      }
-
-      for (const body of notices) {
-        await onRoomMessage(
-          roomId,
-          createSyntheticVerificationMessage({
-            senderId,
-            sourceEventId,
-            body,
-            originServerTs: event.origin_server_ts,
-          }),
-        );
-      }
-    })().catch((err) => {
-      logVerboseMessage(`matrix: failed routing verification event: ${String(err)}`);
-    });
+    routeVerificationEvent(roomId, event);
   });
 }

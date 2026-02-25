@@ -165,7 +165,7 @@ describe("MatrixVerificationManager", () => {
     expect(sas.emoji?.length).toBe(3);
 
     await manager.confirmVerificationSas(tracked.id);
-    expect(confirm).toHaveBeenCalledTimes(1);
+    expect(confirm).toHaveBeenCalledTimes(2);
 
     manager.mismatchVerificationSas(tracked.id);
     expect(mismatch).toHaveBeenCalledTimes(1);
@@ -254,6 +254,69 @@ describe("MatrixVerificationManager", () => {
     expect(summary?.hasSas).toBe(true);
     expect(summary?.sas?.decimal).toEqual([1234, 5678, 9012]);
     expect(manager.getVerificationSas(tracked.id).decimal).toEqual([1234, 5678, 9012]);
+  });
+
+  it("auto-confirms inbound SAS when callbacks are available", async () => {
+    const confirm = vi.fn(async () => {});
+    const verifier = new MockVerifier(
+      {
+        sas: {
+          decimal: [6158, 1986, 3513],
+          emoji: [
+            ["gift", "Gift"],
+            ["globe", "Globe"],
+            ["horse", "Horse"],
+          ],
+        },
+        confirm,
+        mismatch: vi.fn(),
+        cancel: vi.fn(),
+      },
+      null,
+      async () => {},
+    );
+    const request = new MockVerificationRequest({
+      transactionId: "txn-auto-confirm",
+      initiatedByMe: false,
+      verifier,
+    });
+    const manager = new MatrixVerificationManager();
+    manager.trackVerificationRequest(request);
+
+    await vi.waitFor(() => {
+      expect(confirm).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("does not auto-confirm SAS for verifications initiated by this device", async () => {
+    const confirm = vi.fn(async () => {});
+    const verifier = new MockVerifier(
+      {
+        sas: {
+          decimal: [111, 222, 333],
+          emoji: [
+            ["cat", "Cat"],
+            ["dog", "Dog"],
+            ["fox", "Fox"],
+          ],
+        },
+        confirm,
+        mismatch: vi.fn(),
+        cancel: vi.fn(),
+      },
+      null,
+      async () => {},
+    );
+    const request = new MockVerificationRequest({
+      transactionId: "txn-no-auto-confirm",
+      initiatedByMe: true,
+      verifier,
+    });
+    const manager = new MatrixVerificationManager();
+    manager.trackVerificationRequest(request);
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(confirm).not.toHaveBeenCalled();
   });
 
   it("prunes stale terminal sessions during list operations", () => {
