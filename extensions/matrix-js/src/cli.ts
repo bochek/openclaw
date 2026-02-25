@@ -119,6 +119,32 @@ function printBackupSummary(backup: MatrixCliBackupStatus): void {
   }
 }
 
+function describeBackupIssue(backup: MatrixCliBackupStatus): string | null {
+  if (!backup.serverVersion) {
+    return "no room-key backup exists on the homeserver";
+  }
+  if (backup.matchesDecryptionKey === false) {
+    return "backup key mismatch (this device does not have the matching backup decryption key)";
+  }
+  if (backup.decryptionKeyCached === false) {
+    return "backup decryption key is not loaded on this device";
+  }
+  if (backup.trusted === false) {
+    return "backup signature chain is not trusted by this device";
+  }
+  if (!backup.activeVersion) {
+    return "backup exists but is not active on this device";
+  }
+  if (
+    backup.trusted === null ||
+    backup.matchesDecryptionKey === null ||
+    backup.decryptionKeyCached === null
+  ) {
+    return "backup trust state could not be fully determined";
+  }
+  return null;
+}
+
 function buildVerificationGuidance(status: MatrixCliVerificationStatus): string[] {
   const backup = resolveBackupStatus(status);
   const nextSteps = new Set<string>();
@@ -162,6 +188,10 @@ function printVerificationStatus(status: MatrixCliVerificationStatus, verbose = 
   const backup = resolveBackupStatus(status);
   console.log(`Verified: ${status.verified ? "yes" : "no"}`);
   printBackupSummary(backup);
+  const backupIssue = describeBackupIssue(backup);
+  if (backupIssue) {
+    console.log(`Backup issue: ${backupIssue}`);
+  }
   if (verbose) {
     console.log("Diagnostics:");
     console.log(`User: ${status.userId ?? "unknown"}`);

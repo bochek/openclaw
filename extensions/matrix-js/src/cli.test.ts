@@ -254,6 +254,33 @@ describe("matrix-js CLI verification commands", () => {
     expect(setMatrixSdkLogModeMock).toHaveBeenCalledWith("quiet");
   });
 
+  it("shows explicit backup issue in default status output", async () => {
+    getMatrixVerificationStatusMock.mockResolvedValue({
+      encryptionEnabled: true,
+      verified: true,
+      userId: "@bot:example.org",
+      deviceId: "DEVICE123",
+      backupVersion: "5256",
+      backup: {
+        serverVersion: "5256",
+        activeVersion: null,
+        trusted: true,
+        matchesDecryptionKey: false,
+        decryptionKeyCached: false,
+      },
+      recoveryKeyStored: true,
+      recoveryKeyCreatedAt: "2026-02-25T20:10:11.000Z",
+      pendingVerifications: 0,
+    });
+    const program = buildProgram();
+
+    await program.parseAsync(["matrix-js", "verify", "status"], { from: "user" });
+
+    expect(console.log).toHaveBeenCalledWith(
+      "Backup issue: backup key mismatch (this device does not have the matching backup decryption key)",
+    );
+  });
+
   it("prints backup health lines for verify backup status in verbose mode", async () => {
     getMatrixRoomKeyBackupStatusMock.mockResolvedValue({
       serverVersion: "2",
