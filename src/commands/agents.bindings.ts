@@ -8,6 +8,11 @@ import type { ChannelChoice } from "./onboard-types.js";
 
 function bindingMatchKey(match: AgentBinding["match"]) {
   const accountId = match.accountId?.trim() || DEFAULT_ACCOUNT_ID;
+  const identityKey = bindingMatchIdentityKey(match);
+  return [identityKey, accountId].join("|");
+}
+
+function bindingMatchIdentityKey(match: AgentBinding["match"]) {
   const roles = Array.isArray(match.roles)
     ? Array.from(
         new Set(
@@ -20,13 +25,32 @@ function bindingMatchKey(match: AgentBinding["match"]) {
     : [];
   return [
     match.channel,
-    accountId,
     match.peer?.kind ?? "",
     match.peer?.id ?? "",
     match.guildId ?? "",
     match.teamId ?? "",
     roles.join(","),
   ].join("|");
+}
+
+function canUpgradeBindingAccountScope(params: {
+  existing: AgentBinding;
+  incoming: AgentBinding;
+  normalizedIncomingAgentId: string;
+}): boolean {
+  if (!params.incoming.match.accountId?.trim()) {
+    return false;
+  }
+  if (params.existing.match.accountId?.trim()) {
+    return false;
+  }
+  if (normalizeAgentId(params.existing.agentId) !== params.normalizedIncomingAgentId) {
+    return false;
+  }
+  return (
+    bindingMatchIdentityKey(params.existing.match) ===
+    bindingMatchIdentityKey(params.incoming.match)
+  );
 }
 
 export function describeBinding(binding: AgentBinding) {
@@ -53,10 +77,11 @@ export function applyAgentBindings(
 ): {
   config: OpenClawConfig;
   added: AgentBinding[];
+  updated: AgentBinding[];
   skipped: AgentBinding[];
   conflicts: Array<{ binding: AgentBinding; existingAgentId: string }>;
 } {
-  const existing = cfg.bindings ?? [];
+  const existing = [...(cfg.bindings ?? [])];
   const existingMatchMap = new Map<string, string>();
   for (const binding of existing) {
     const key = bindingMatchKey(binding.match);
@@ -66,6 +91,7 @@ export function applyAgentBindings(
   }
 
   const added: AgentBinding[] = [];
+  const updated: AgentBinding[] = [];
   const skipped: AgentBinding[] = [];
   const conflicts: Array<{ binding: AgentBinding; existingAgentId: string }> = [];
 
@@ -81,12 +107,41 @@ export function applyAgentBindings(
       }
       continue;
     }
+
+    const upgradeIndex = existing.findIndex((candidate) =>
+      canUpgradeBindingAccountScope({
+        existing: candidate,
+        incoming: binding,
+        normalizedIncomingAgentId: agentId,
+      }),
+    );
+    if (upgradeIndex >= 0) {
+      const current = existing[upgradeIndex];
+      if (!current) {
+        continue;
+      }
+      const previousKey = bindingMatchKey(current.match);
+      const upgradedBinding: AgentBinding = {
+        ...current,
+        agentId,
+        match: {
+          ...current.match,
+          accountId: binding.match.accountId?.trim(),
+        },
+      };
+      existing[upgradeIndex] = upgradedBinding;
+      existingMatchMap.delete(previousKey);
+      existingMatchMap.set(bindingMatchKey(upgradedBinding.match), agentId);
+      updated.push(upgradedBinding);
+      continue;
+    }
+
     existingMatchMap.set(key, agentId);
     added.push({ ...binding, agentId });
   }
 
-  if (added.length === 0) {
-    return { config: cfg, added, skipped, conflicts };
+  if (added.length === 0 && updated.length === 0) {
+    return { config: cfg, added, updated, skipped, conflicts };
   }
 
   return {
@@ -95,6 +150,7 @@ export function applyAgentBindings(
       bindings: [...existing, ...added],
     },
     added,
+    updated,
     skipped,
     conflicts,
   };

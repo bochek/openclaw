@@ -58,6 +58,25 @@ describe("agents bind/unbind commands", () => {
     expect(runtime.exit).not.toHaveBeenCalled();
   });
 
+  it("upgrades existing channel-only binding when accountId is later provided", async () => {
+    readConfigFileSnapshotMock.mockResolvedValue({
+      ...baseConfigSnapshot,
+      config: {
+        bindings: [{ agentId: "main", match: { channel: "telegram" } }],
+      },
+    });
+
+    await agentsBindCommand({ bind: ["telegram:work"] }, runtime);
+
+    expect(writeConfigFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bindings: [{ agentId: "main", match: { channel: "telegram", accountId: "work" } }],
+      }),
+    );
+    expect(runtime.log).toHaveBeenCalledWith("Updated bindings:");
+    expect(runtime.exit).not.toHaveBeenCalled();
+  });
+
   it("unbinds all routes for an agent", async () => {
     readConfigFileSnapshotMock.mockResolvedValue({
       ...baseConfigSnapshot,

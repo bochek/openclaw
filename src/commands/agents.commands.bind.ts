@@ -150,7 +150,7 @@ export async function agentsBindCommand(
   }
 
   const result = applyAgentBindings(cfg, parsed.bindings);
-  if (result.added.length > 0) {
+  if (result.added.length > 0 || result.updated.length > 0) {
     await writeConfigFile(result.config);
     if (!opts.json) {
       logConfigUpdated(runtime);
@@ -160,6 +160,7 @@ export async function agentsBindCommand(
   const payload = {
     agentId,
     added: result.added.map(describeBinding),
+    updated: result.updated.map(describeBinding),
     skipped: result.skipped.map(describeBinding),
     conflicts: result.conflicts.map(
       (conflict) => `${describeBinding(conflict.binding)} (agent=${conflict.existingAgentId})`,
@@ -178,8 +179,15 @@ export async function agentsBindCommand(
     for (const binding of result.added) {
       runtime.log(`- ${describeBinding(binding)}`);
     }
-  } else {
+  } else if (result.updated.length === 0) {
     runtime.log("No new bindings added.");
+  }
+
+  if (result.updated.length > 0) {
+    runtime.log("Updated bindings:");
+    for (const binding of result.updated) {
+      runtime.log(`- ${describeBinding(binding)}`);
+    }
   }
 
   if (result.skipped.length > 0) {

@@ -112,6 +112,34 @@ describe("agents helpers", () => {
     expect(result.config.bindings).toHaveLength(2);
   });
 
+  it("applyAgentBindings upgrades channel-only binding to account-specific binding for same agent", () => {
+    const cfg: OpenClawConfig = {
+      bindings: [
+        {
+          agentId: "main",
+          match: { channel: "telegram" },
+        },
+      ],
+    };
+
+    const result = applyAgentBindings(cfg, [
+      {
+        agentId: "main",
+        match: { channel: "telegram", accountId: "work" },
+      },
+    ]);
+
+    expect(result.added).toHaveLength(0);
+    expect(result.updated).toHaveLength(1);
+    expect(result.conflicts).toHaveLength(0);
+    expect(result.config.bindings).toEqual([
+      {
+        agentId: "main",
+        match: { channel: "telegram", accountId: "work" },
+      },
+    ]);
+  });
+
   it("applyAgentBindings treats role-based bindings as distinct routes", () => {
     const cfg: OpenClawConfig = {
       bindings: [
