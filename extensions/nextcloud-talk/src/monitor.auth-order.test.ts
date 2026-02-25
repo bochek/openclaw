@@ -21,7 +21,6 @@ afterEach(async () => {
 async function startWebhookServer(params: {
   path: string;
   maxBodyBytes: number;
-  readBody?: (req: import("node:http").IncomingMessage, maxBodyBytes: number) => Promise<string>;
 }): Promise<WebhookHarness> {
   const { server, start } = createNextcloudTalkWebhookServer({
     port: 0,
@@ -29,7 +28,6 @@ async function startWebhookServer(params: {
     path: params.path,
     secret: "nextcloud-secret",
     maxBodyBytes: params.maxBodyBytes,
-    readBody: params.readBody,
     onMessage: vi.fn(),
   });
   await start();
@@ -47,14 +45,30 @@ async function startWebhookServer(params: {
 }
 
 describe("createNextcloudTalkWebhookServer auth order", () => {
-  it("rejects missing signature headers before reading request body", async () => {
-    const readBody = vi.fn(async () => {
-      throw new Error("should not be called for missing signature headers");
-    });
+  it("rejects missing signature headers before body-size checks", async () => {
     const harness = await startWebhookServer({
       path: "/nextcloud-auth-order",
-      maxBodyBytes: 128,
-      readBody,
+      maxBodyBytes: 16,
+    });
+    cleanupFns.push(harness.stop);
+
+    const largeBody = "x".repeat(1024);
+    const response = await fetch(harness.webhookUrl, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: largeBody,
+    });
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Missing signature headers" });
+  });
+
+  it("continues to signature verification when signature headers are present", async () => {
+    const harness = await startWebhookServer({
+      path: "/nextcloud-auth-order-signature-present",
+      maxBodyBytes: 16,
     });
     cleanupFns.push(harness.stop);
 
@@ -62,12 +76,14 @@ describe("createNextcloudTalkWebhookServer auth order", () => {
       method: "POST",
       headers: {
         "content-type": "application/json",
+        "x-nextcloud-talk-signature": "00",
+        "x-nextcloud-talk-random": "11",
+        "x-nextcloud-talk-backend": "https://nextcloud.example.com",
       },
       body: "{}",
     });
 
-    expect(response.status).toBe(400);
-    expect(await response.json()).toEqual({ error: "Missing signature headers" });
-    expect(readBody).not.toHaveBeenCalled();
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "Invalid signature" });
   });
 });

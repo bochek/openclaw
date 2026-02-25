@@ -92,7 +92,6 @@ export function createNextcloudTalkWebhookServer(opts: NextcloudTalkWebhookServe
     opts.maxBodyBytes > 0
       ? Math.floor(opts.maxBodyBytes)
       : DEFAULT_WEBHOOK_MAX_BODY_BYTES;
-  const readBody = opts.readBody ?? readNextcloudTalkWebhookBody;
 
   const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     if (req.url === HEALTH_PATH) {
@@ -117,7 +116,7 @@ export function createNextcloudTalkWebhookServer(opts: NextcloudTalkWebhookServe
         return;
       }
 
-      const body = await readBody(req, maxBodyBytes);
+      const body = await readNextcloudTalkWebhookBody(req, maxBodyBytes);
 
       const isValid = verifyNextcloudTalkSignature({
         signature: headers.signature,

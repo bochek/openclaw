@@ -10,6 +10,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Security/Nextcloud Talk: reject unauthenticated webhook requests before request-body reads so missing-signature traffic is denied without body parsing, with regression coverage for header-order auth handling. (#26118) Thanks @bmendonca3.
 - Agents/Model fallback: keep explicit text + image fallback chains reachable even when `agents.defaults.models` allowlists are present, prefer explicit run `agentId` over session-key parsing for followup fallback override resolution (with session-key fallback), treat agent-level fallback overrides as configured in embedded runner preflight, and classify `model_cooldown` / `cooling down` errors as `rate_limit` so failover continues. (#11972, #24137, #17231)
 
 ## 2026.2.24
