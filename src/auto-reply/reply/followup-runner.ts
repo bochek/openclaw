@@ -111,8 +111,12 @@ export function createFollowupRunner(params: {
           // handler and delivers to the correct destination.  For true
           // cross-channel routing (origin !== provider), falling back
           // would send to the wrong channel, so we drop the payload.
-          const provider = queued.run.messageProvider?.trim().toLowerCase();
-          const origin = originatingChannel?.trim().toLowerCase();
+          const provider = resolveOriginMessageProvider({
+            provider: queued.run.messageProvider,
+          });
+          const origin = resolveOriginMessageProvider({
+            originatingChannel,
+          });
           if (opts?.onBlockReply && origin && origin === provider) {
             await opts.onBlockReply(payload);
           }

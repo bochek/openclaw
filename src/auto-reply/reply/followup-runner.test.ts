@@ -45,7 +45,7 @@ beforeEach(() => {
   routeReplyMock.mockResolvedValue({ ok: true });
   isRoutableChannelMock.mockReset();
   isRoutableChannelMock.mockImplementation((ch: string | undefined) =>
-    Boolean(ch && ROUTABLE_TEST_CHANNELS.has(ch)),
+    Boolean(ch?.trim() && ROUTABLE_TEST_CHANNELS.has(ch.trim().toLowerCase())),
   );
 });
 
@@ -389,8 +389,8 @@ describe("createFollowupRunner messaging tool dedupe", () => {
     const runner = createMessagingDedupeRunner(onBlockReply);
 
     await runner({
-      ...baseQueuedRun("feishu"),
-      originatingChannel: "feishu",
+      ...baseQueuedRun(" Feishu "),
+      originatingChannel: "FEISHU",
       originatingTo: "ou_abc123",
     } as FollowupRun);
 
