@@ -126,7 +126,10 @@ export class MatrixRecoveryKeyStore {
     return this.getRecoveryKeySummary() ?? {};
   }
 
-  async bootstrapSecretStorageWithRecoveryKey(crypto: MatrixCryptoBootstrapApi): Promise<void> {
+  async bootstrapSecretStorageWithRecoveryKey(
+    crypto: MatrixCryptoBootstrapApi,
+    options: { setupNewKeyBackup?: boolean } = {},
+  ): Promise<void> {
     let status: MatrixSecretStorageStatus | null = null;
     if (typeof crypto.getSecretStorageStatus === "function") {
       try {
@@ -193,7 +196,7 @@ export class MatrixRecoveryKeyStore {
       setupNewSecretStorage?: boolean;
       setupNewKeyBackup?: boolean;
     } = {
-      setupNewKeyBackup: false,
+      setupNewKeyBackup: options.setupNewKeyBackup === true,
     };
 
     if (shouldRecreateSecretStorage) {

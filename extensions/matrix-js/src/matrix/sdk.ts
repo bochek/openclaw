@@ -723,6 +723,7 @@ export class MatrixClient {
         forceResetCrossSigning: params?.forceResetCrossSigning === true,
         strict: true,
       });
+      await this.ensureRoomKeyBackupEnabled(crypto);
     } catch (err) {
       bootstrapError = err instanceof Error ? err.message : String(err);
     }
@@ -753,6 +754,25 @@ export class MatrixClient {
     } catch {
       return null;
     }
+  }
+
+  private async ensureRoomKeyBackupEnabled(crypto: MatrixCryptoBootstrapApi): Promise<void> {
+    const existingVersion = await this.resolveRoomKeyBackupVersion();
+    if (existingVersion) {
+      return;
+    }
+    LogService.info(
+      "MatrixClientLite",
+      "No room key backup version found on server, creating one via secret storage bootstrap",
+    );
+    await this.recoveryKeyStore.bootstrapSecretStorageWithRecoveryKey(crypto, {
+      setupNewKeyBackup: true,
+    });
+    const createdVersion = await this.resolveRoomKeyBackupVersion();
+    if (!createdVersion) {
+      throw new Error("Matrix room key backup is still missing after bootstrap");
+    }
+    LogService.info("MatrixClientLite", `Room key backup enabled (version ${createdVersion})`);
   }
 
   private registerBridge(): void {

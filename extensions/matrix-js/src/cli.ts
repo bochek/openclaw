@@ -54,15 +54,13 @@ function printVerificationStatus(status: {
     console.log("Verified: yes");
     console.log(`User: ${status.userId ?? "unknown"}`);
     console.log(`Device: ${status.deviceId ?? "unknown"}`);
-    if (status.backupVersion) {
-      console.log(`Backup version: ${status.backupVersion}`);
-    }
   } else {
     console.log("Verified: no");
     console.log(`User: ${status.userId ?? "unknown"}`);
     console.log(`Device: ${status.deviceId ?? "unknown"}`);
     console.log("Run 'openclaw matrix-js verify device <key>' to verify this device.");
   }
+  console.log(`Backup version: ${status.backupVersion ?? "none"}`);
   console.log(`Recovery key stored: ${status.recoveryKeyStored ? "yes" : "no"}`);
   printTimestamp("Recovery key created at", status.recoveryKeyCreatedAt);
   console.log(`Pending verifications: ${status.pendingVerifications}`);
@@ -143,6 +141,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
           console.log(
             `Cross-signing published: ${result.crossSigning.published ? "yes" : "no"} (master=${result.crossSigning.masterKeyPublished ? "yes" : "no"}, self=${result.crossSigning.selfSigningKeyPublished ? "yes" : "no"}, user=${result.crossSigning.userSigningKeyPublished ? "yes" : "no"})`,
           );
+          console.log(`Backup version: ${result.verification.backupVersion ?? "none"}`);
           printTimestamp("Recovery key created at", result.verification.recoveryKeyCreatedAt);
           console.log(`Pending verifications: ${result.pendingVerifications}`);
           if (!result.success) {
@@ -179,9 +178,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
           console.log("Device verification completed successfully.");
           console.log(`User: ${result.userId ?? "unknown"}`);
           console.log(`Device: ${result.deviceId ?? "unknown"}`);
-          if (result.backupVersion) {
-            console.log(`Backup version: ${result.backupVersion}`);
-          }
+          console.log(`Backup version: ${result.backupVersion ?? "none"}`);
           printTimestamp("Recovery key created at", result.recoveryKeyCreatedAt);
           printTimestamp("Verified at", result.verifiedAt);
         } else {

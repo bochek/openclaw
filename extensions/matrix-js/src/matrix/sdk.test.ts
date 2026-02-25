@@ -948,6 +948,100 @@ describe("MatrixClient crypto bootstrapping", () => {
     expect(result.cryptoBootstrap).not.toBeNull();
   });
 
+  it("creates a key backup during bootstrap when none exists on the server", async () => {
+    matrixJsClient.getUserId = vi.fn(() => "@bot:example.org");
+    matrixJsClient.getDeviceId = vi.fn(() => "DEVICE123");
+    const bootstrapSecretStorage = vi.fn(async () => {});
+    matrixJsClient.getCrypto = vi.fn(() => ({
+      on: vi.fn(),
+      bootstrapCrossSigning: vi.fn(async () => {}),
+      bootstrapSecretStorage,
+      requestOwnUserVerification: vi.fn(async () => null),
+      isCrossSigningReady: vi.fn(async () => true),
+      userHasCrossSigningKeys: vi.fn(async () => true),
+      getDeviceVerificationStatus: vi.fn(async () => ({
+        isVerified: () => true,
+        localVerified: true,
+        crossSigningVerified: true,
+        signedByOwner: true,
+      })),
+    }));
+
+    const client = new MatrixClient("https://matrix.example.org", "token", undefined, undefined, {
+      encryption: true,
+    });
+    vi.spyOn(client, "getOwnCrossSigningPublicationStatus").mockResolvedValue({
+      userId: "@bot:example.org",
+      masterKeyPublished: true,
+      selfSigningKeyPublished: true,
+      userSigningKeyPublished: true,
+      published: true,
+    });
+    let backupChecks = 0;
+    vi.spyOn(client, "doRequest").mockImplementation(async (_method, endpoint) => {
+      if (String(endpoint).includes("/room_keys/version")) {
+        backupChecks += 1;
+        return backupChecks >= 2 ? { version: "7" } : {};
+      }
+      return {};
+    });
+
+    const result = await client.bootstrapOwnDeviceVerification();
+
+    expect(result.success).toBe(true);
+    expect(result.verification.backupVersion).toBe("7");
+    expect(bootstrapSecretStorage).toHaveBeenCalledWith(
+      expect.objectContaining({ setupNewKeyBackup: true }),
+    );
+  });
+
+  it("does not recreate key backup during bootstrap when one already exists", async () => {
+    matrixJsClient.getUserId = vi.fn(() => "@bot:example.org");
+    matrixJsClient.getDeviceId = vi.fn(() => "DEVICE123");
+    const bootstrapSecretStorage = vi.fn(async () => {});
+    matrixJsClient.getCrypto = vi.fn(() => ({
+      on: vi.fn(),
+      bootstrapCrossSigning: vi.fn(async () => {}),
+      bootstrapSecretStorage,
+      requestOwnUserVerification: vi.fn(async () => null),
+      isCrossSigningReady: vi.fn(async () => true),
+      userHasCrossSigningKeys: vi.fn(async () => true),
+      getDeviceVerificationStatus: vi.fn(async () => ({
+        isVerified: () => true,
+        localVerified: true,
+        crossSigningVerified: true,
+        signedByOwner: true,
+      })),
+    }));
+
+    const client = new MatrixClient("https://matrix.example.org", "token", undefined, undefined, {
+      encryption: true,
+    });
+    vi.spyOn(client, "getOwnCrossSigningPublicationStatus").mockResolvedValue({
+      userId: "@bot:example.org",
+      masterKeyPublished: true,
+      selfSigningKeyPublished: true,
+      userSigningKeyPublished: true,
+      published: true,
+    });
+    vi.spyOn(client, "doRequest").mockImplementation(async (_method, endpoint) => {
+      if (String(endpoint).includes("/room_keys/version")) {
+        return { version: "9" };
+      }
+      return {};
+    });
+
+    const result = await client.bootstrapOwnDeviceVerification();
+
+    expect(result.success).toBe(true);
+    expect(result.verification.backupVersion).toBe("9");
+    expect(
+      bootstrapSecretStorage.mock.calls.some(([opts]) =>
+        Boolean((opts as { setupNewKeyBackup?: boolean } | undefined)?.setupNewKeyBackup),
+      ),
+    ).toBe(false);
+  });
+
   it("does not report bootstrap errors when final verification state is healthy", async () => {
     matrixJsClient.getUserId = vi.fn(() => "@bot:example.org");
     matrixJsClient.getDeviceId = vi.fn(() => "DEVICE123");
