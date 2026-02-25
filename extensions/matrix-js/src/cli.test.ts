@@ -161,8 +161,6 @@ describe("matrix-js CLI verification commands", () => {
         "@ops:example.org",
         "--password",
         "secret",
-        "--register",
-        "on",
       ],
       { from: "user" },
     );
@@ -184,7 +182,6 @@ describe("matrix-js CLI verification commands", () => {
             accounts: {
               ops: expect.objectContaining({
                 homeserver: "https://matrix.example.org",
-                register: true,
               }),
             },
           },
@@ -192,7 +189,6 @@ describe("matrix-js CLI verification commands", () => {
       }),
     );
     expect(console.log).toHaveBeenCalledWith("Saved matrix-js account: ops");
-    expect(console.log).toHaveBeenCalledWith("Register mode: on");
     expect(console.log).toHaveBeenCalledWith(
       "Bind this account to an agent: openclaw agents bind --agent <id> --bind matrix-js:ops",
     );

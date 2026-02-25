@@ -4,7 +4,6 @@ export type MatrixResolvedConfig = {
   accessToken?: string;
   deviceId?: string;
   password?: string;
-  register?: boolean;
   deviceName?: string;
   initialSyncLimit?: number;
   encryption?: boolean;

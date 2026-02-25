@@ -76,64 +76,9 @@ function parseOptionalInt(value: string | undefined, fieldName: string): number 
   return parsed;
 }
 
-function parseToggle(value: string | undefined, fieldName: string): boolean | undefined {
-  const trimmed = value?.trim().toLowerCase();
-  if (!trimmed) {
-    return undefined;
-  }
-  if (["on", "true", "1", "yes"].includes(trimmed)) {
-    return true;
-  }
-  if (["off", "false", "0", "no"].includes(trimmed)) {
-    return false;
-  }
-  throw new Error(`${fieldName} must be on|off`);
-}
-
-function applyRegisterFlag(
-  cfg: CoreConfig,
-  accountId: string,
-  register: boolean | undefined,
-): CoreConfig {
-  if (typeof register !== "boolean") {
-    return cfg;
-  }
-  const matrix = cfg.channels?.["matrix-js"] ?? {};
-  if (accountId === DEFAULT_ACCOUNT_ID) {
-    return {
-      ...cfg,
-      channels: {
-        ...(cfg.channels ?? {}),
-        "matrix-js": {
-          ...matrix,
-          register,
-        },
-      },
-    };
-  }
-  const account = matrix.accounts?.[accountId] ?? {};
-  return {
-    ...cfg,
-    channels: {
-      ...(cfg.channels ?? {}),
-      "matrix-js": {
-        ...matrix,
-        accounts: {
-          ...matrix.accounts,
-          [accountId]: {
-            ...account,
-            register,
-          },
-        },
-      },
-    },
-  };
-}
-
 type MatrixCliAccountAddResult = {
   accountId: string;
   configPath: string;
-  registerMode: boolean | undefined;
   useEnv: boolean;
 };
 
@@ -147,12 +92,10 @@ async function addMatrixJsAccount(params: {
   deviceName?: string;
   initialSyncLimit?: string;
   useEnv?: boolean;
-  register?: string;
 }): Promise<MatrixCliAccountAddResult> {
   const runtime = getMatrixRuntime();
   const cfg = runtime.config.loadConfig() as CoreConfig;
   const accountId = normalizeAccountId(params.account);
-  const registerMode = parseToggle(params.register, "--register");
   const setup = matrixPlugin.setup;
   if (!setup?.applyAccountConfig) {
     throw new Error("Matrix-js account setup is unavailable.");
@@ -183,8 +126,7 @@ async function addMatrixJsAccount(params: {
     accountId,
     input,
   }) as CoreConfig;
-  const next = applyRegisterFlag(updated, accountId, registerMode);
-  await runtime.config.writeConfigFile(next as never);
+  await runtime.config.writeConfigFile(updated as never);
 
   return {
     accountId,
@@ -192,7 +134,6 @@ async function addMatrixJsAccount(params: {
       accountId === DEFAULT_ACCOUNT_ID
         ? "channels.matrix-js"
         : `channels.matrix-js.accounts.${accountId}`,
-    registerMode,
     useEnv: input.useEnv === true,
   };
 }
@@ -506,7 +447,6 @@ export function registerMatrixJsCli(params: { program: Command }): void {
     .option("--device-name <name>", "Matrix device display name")
     .option("--initial-sync-limit <n>", "Matrix initial sync limit")
     .option("--use-env", "Use MATRIX_* env vars (default account only)")
-    .option("--register <on|off>", "Enable/disable register mode for password auth")
     .option("--verbose", "Show setup details")
     .option("--json", "Output as JSON")
     .action(
@@ -520,7 +460,6 @@ export function registerMatrixJsCli(params: { program: Command }): void {
         deviceName?: string;
         initialSyncLimit?: string;
         useEnv?: boolean;
-        register?: string;
         verbose?: boolean;
         json?: boolean;
       }) => {
@@ -538,14 +477,10 @@ export function registerMatrixJsCli(params: { program: Command }): void {
               deviceName: options.deviceName,
               initialSyncLimit: options.initialSyncLimit,
               useEnv: options.useEnv === true,
-              register: options.register,
             }),
           onText: (result) => {
             console.log(`Saved matrix-js account: ${result.accountId}`);
             console.log(`Config path: ${result.configPath}`);
-            if (typeof result.registerMode === "boolean") {
-              console.log(`Register mode: ${result.registerMode ? "on" : "off"}`);
-            }
             console.log(
               `Credentials source: ${result.useEnv ? "MATRIX_* env vars" : "inline config"}`,
             );

@@ -58,8 +58,6 @@ export type MatrixConfig = {
   accessToken?: string;
   /** Matrix password (used only to fetch access token). */
   password?: string;
-  /** Auto-register account when password login fails (open registration homeservers). */
-  register?: boolean;
   /** Optional Matrix device id (recommended when using access tokens + E2EE). */
   deviceId?: string;
   /** Optional device name when logging in via password. */

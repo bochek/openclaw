@@ -70,7 +70,6 @@ function buildMatrixConfigUpdate(
     userId?: string;
     accessToken?: string;
     password?: string;
-    register?: boolean;
     deviceName?: string;
     initialSyncLimit?: number;
   },
@@ -93,7 +92,6 @@ function buildMatrixConfigUpdate(
               ...(input.userId ? { userId: input.userId } : {}),
               ...(input.accessToken ? { accessToken: input.accessToken } : {}),
               ...(input.password ? { password: input.password } : {}),
-              ...(typeof input.register === "boolean" ? { register: input.register } : {}),
               ...(input.deviceName ? { deviceName: input.deviceName } : {}),
               ...(typeof input.initialSyncLimit === "number"
                 ? { initialSyncLimit: input.initialSyncLimit }
@@ -115,7 +113,6 @@ function buildMatrixConfigUpdate(
         ...(input.userId ? { userId: input.userId } : {}),
         ...(input.accessToken ? { accessToken: input.accessToken } : {}),
         ...(input.password ? { password: input.password } : {}),
-        ...(typeof input.register === "boolean" ? { register: input.register } : {}),
         ...(input.deviceName ? { deviceName: input.deviceName } : {}),
         ...(typeof input.initialSyncLimit === "number"
           ? { initialSyncLimit: input.initialSyncLimit }
@@ -168,7 +165,6 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
           "userId",
           "accessToken",
           "password",
-          "register",
           "deviceName",
           "initialSyncLimit",
         ],

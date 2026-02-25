@@ -81,7 +81,6 @@ Environment variable equivalents (used when the config key is not set):
 - `MATRIX_PASSWORD`
 - `MATRIX_DEVICE_ID`
 - `MATRIX_DEVICE_NAME`
-- `MATRIX_REGISTER`
 
 ## Configuration example
 
@@ -271,7 +270,6 @@ See [Groups](/channels/groups) for mention-gating and allowlist behavior.
 - `userId`: full Matrix user ID, for example `@bot:example.org`.
 - `accessToken`: access token for token-based auth.
 - `password`: password for password-based login.
-- `register`: auto-register if login fails and homeserver allows registration.
 - `deviceId`: explicit Matrix device ID.
 - `deviceName`: device display name for password login.
 - `initialSyncLimit`: startup sync event limit.
