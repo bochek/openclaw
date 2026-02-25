@@ -94,6 +94,26 @@ function printBackupStatus(backup: MatrixCliBackupStatus): void {
   console.log(`Backup key cached locally: ${yesNoUnknown(backup.decryptionKeyCached)}`);
 }
 
+function summarizeBackupHealth(backup: MatrixCliBackupStatus): string {
+  if (!backup.serverVersion) {
+    return "missing on server";
+  }
+  if (backup.trusted === false || backup.matchesDecryptionKey === false) {
+    return "present but not trusted on this device";
+  }
+  if (!backup.activeVersion) {
+    return "present on server but inactive on this device";
+  }
+  return "active and trusted on this device";
+}
+
+function printBackupSummary(backup: MatrixCliBackupStatus): void {
+  console.log(`Backup: ${summarizeBackupHealth(backup)}`);
+  if (backup.serverVersion) {
+    console.log(`Backup version: ${backup.serverVersion}`);
+  }
+}
+
 function buildVerificationGuidance(status: MatrixCliVerificationStatus): string[] {
   const backup = resolveBackupStatus(status);
   const nextSteps = new Set<string>();
@@ -133,7 +153,8 @@ function printGuidance(lines: string[]): void {
   }
 }
 
-function printVerificationStatus(status: MatrixCliVerificationStatus): void {
+function printVerificationStatus(status: MatrixCliVerificationStatus, verbose = false): void {
+  const backup = resolveBackupStatus(status);
   if (status.verified) {
     console.log("Verified: yes");
     console.log(`User: ${status.userId ?? "unknown"}`);
@@ -143,10 +164,15 @@ function printVerificationStatus(status: MatrixCliVerificationStatus): void {
     console.log(`User: ${status.userId ?? "unknown"}`);
     console.log(`Device: ${status.deviceId ?? "unknown"}`);
   }
-  printBackupStatus(resolveBackupStatus(status));
+  printBackupSummary(backup);
+  if (verbose) {
+    printBackupStatus(backup);
+  }
   console.log(`Recovery key stored: ${status.recoveryKeyStored ? "yes" : "no"}`);
-  printTimestamp("Recovery key created at", status.recoveryKeyCreatedAt);
-  console.log(`Pending verifications: ${status.pendingVerifications}`);
+  if (verbose) {
+    printTimestamp("Recovery key created at", status.recoveryKeyCreatedAt);
+    console.log(`Pending verifications: ${status.pendingVerifications}`);
+  }
   printGuidance(buildVerificationGuidance(status));
 }
 
@@ -162,31 +188,39 @@ export function registerMatrixJsCli(params: { program: Command }): void {
     .command("status")
     .description("Check Matrix-js device verification status")
     .option("--account <id>", "Account ID (for multi-account setups)")
+    .option("--verbose", "Show detailed diagnostics")
     .option("--include-recovery-key", "Include stored recovery key in output")
     .option("--json", "Output as JSON")
-    .action(async (options: { account?: string; includeRecoveryKey?: boolean; json?: boolean }) => {
-      try {
-        const status = await getMatrixVerificationStatus({
-          accountId: options.account,
-          includeRecoveryKey: options.includeRecoveryKey === true,
-        });
-        if (options.json) {
-          console.log(JSON.stringify(status, null, 2));
-          return;
+    .action(
+      async (options: {
+        account?: string;
+        verbose?: boolean;
+        includeRecoveryKey?: boolean;
+        json?: boolean;
+      }) => {
+        try {
+          const status = await getMatrixVerificationStatus({
+            accountId: options.account,
+            includeRecoveryKey: options.includeRecoveryKey === true,
+          });
+          if (options.json) {
+            console.log(JSON.stringify(status, null, 2));
+            return;
+          }
+          printVerificationStatus(status, options.verbose === true);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (options.json) {
+            console.log(JSON.stringify({ error: message }, null, 2));
+          } else {
+            console.error(`Error: ${message}`);
+          }
+          markCliFailure();
+        } finally {
+          scheduleMatrixJsCliExit();
         }
-        printVerificationStatus(status);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (options.json) {
-          console.log(JSON.stringify({ error: message }, null, 2));
-        } else {
-          console.error(`Error: ${message}`);
-        }
-        markCliFailure();
-      } finally {
-        scheduleMatrixJsCliExit();
-      }
-    });
+      },
+    );
 
   const backup = verify.command("backup").description("Matrix room-key backup health and restore");
 
@@ -194,15 +228,19 @@ export function registerMatrixJsCli(params: { program: Command }): void {
     .command("status")
     .description("Show Matrix room-key backup status for this device")
     .option("--account <id>", "Account ID (for multi-account setups)")
+    .option("--verbose", "Show detailed diagnostics")
     .option("--json", "Output as JSON")
-    .action(async (options: { account?: string; json?: boolean }) => {
+    .action(async (options: { account?: string; verbose?: boolean; json?: boolean }) => {
       try {
         const status = await getMatrixRoomKeyBackupStatus({ accountId: options.account });
         if (options.json) {
           console.log(JSON.stringify(status, null, 2));
           return;
         }
-        printBackupStatus(status);
+        printBackupSummary(status);
+        if (options.verbose === true) {
+          printBackupStatus(status);
+        }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (options.json) {
@@ -221,46 +259,57 @@ export function registerMatrixJsCli(params: { program: Command }): void {
     .description("Restore encrypted room keys from server backup")
     .option("--account <id>", "Account ID (for multi-account setups)")
     .option("--recovery-key <key>", "Optional recovery key to load before restoring")
+    .option("--verbose", "Show detailed diagnostics")
     .option("--json", "Output as JSON")
-    .action(async (options: { account?: string; recoveryKey?: string; json?: boolean }) => {
-      try {
-        const result = await restoreMatrixRoomKeyBackup({
-          accountId: options.account,
-          recoveryKey: options.recoveryKey,
-        });
-        if (options.json) {
-          console.log(JSON.stringify(result, null, 2));
+    .action(
+      async (options: {
+        account?: string;
+        recoveryKey?: string;
+        verbose?: boolean;
+        json?: boolean;
+      }) => {
+        try {
+          const result = await restoreMatrixRoomKeyBackup({
+            accountId: options.account,
+            recoveryKey: options.recoveryKey,
+          });
+          if (options.json) {
+            console.log(JSON.stringify(result, null, 2));
+            if (!result.success) {
+              markCliFailure();
+            }
+            return;
+          }
+          console.log(`Restore success: ${result.success ? "yes" : "no"}`);
+          if (result.error) {
+            console.log(`Error: ${result.error}`);
+          }
+          console.log(`Backup version: ${result.backupVersion ?? "none"}`);
+          console.log(`Imported keys: ${result.imported}/${result.total}`);
+          printBackupSummary(result.backup);
+          if (options.verbose === true) {
+            console.log(
+              `Loaded key from secret storage: ${result.loadedFromSecretStorage ? "yes" : "no"}`,
+            );
+            printTimestamp("Restored at", result.restoredAt);
+            printBackupStatus(result.backup);
+          }
           if (!result.success) {
             markCliFailure();
           }
-          return;
-        }
-        console.log(`Restore success: ${result.success ? "yes" : "no"}`);
-        if (result.error) {
-          console.log(`Error: ${result.error}`);
-        }
-        console.log(`Backup version: ${result.backupVersion ?? "none"}`);
-        console.log(`Imported keys: ${result.imported}/${result.total}`);
-        console.log(
-          `Loaded key from secret storage: ${result.loadedFromSecretStorage ? "yes" : "no"}`,
-        );
-        printTimestamp("Restored at", result.restoredAt);
-        printBackupStatus(result.backup);
-        if (!result.success) {
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (options.json) {
+            console.log(JSON.stringify({ success: false, error: message }, null, 2));
+          } else {
+            console.error(`Backup restore failed: ${message}`);
+          }
           markCliFailure();
+        } finally {
+          scheduleMatrixJsCliExit();
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (options.json) {
-          console.log(JSON.stringify({ success: false, error: message }, null, 2));
-        } else {
-          console.error(`Backup restore failed: ${message}`);
-        }
-        markCliFailure();
-      } finally {
-        scheduleMatrixJsCliExit();
-      }
-    });
+      },
+    );
 
   verify
     .command("bootstrap")
@@ -268,12 +317,14 @@ export function registerMatrixJsCli(params: { program: Command }): void {
     .option("--account <id>", "Account ID (for multi-account setups)")
     .option("--recovery-key <key>", "Recovery key to apply before bootstrap")
     .option("--force-reset-cross-signing", "Force reset cross-signing identity before bootstrap")
+    .option("--verbose", "Show detailed diagnostics")
     .option("--json", "Output as JSON")
     .action(
       async (options: {
         account?: string;
         recoveryKey?: string;
         forceResetCrossSigning?: boolean;
+        verbose?: boolean;
         json?: boolean;
       }) => {
         try {
@@ -296,12 +347,17 @@ export function registerMatrixJsCli(params: { program: Command }): void {
           console.log(`Verified: ${result.verification.verified ? "yes" : "no"}`);
           console.log(`User: ${result.verification.userId ?? "unknown"}`);
           console.log(`Device: ${result.verification.deviceId ?? "unknown"}`);
-          console.log(
-            `Cross-signing published: ${result.crossSigning.published ? "yes" : "no"} (master=${result.crossSigning.masterKeyPublished ? "yes" : "no"}, self=${result.crossSigning.selfSigningKeyPublished ? "yes" : "no"}, user=${result.crossSigning.userSigningKeyPublished ? "yes" : "no"})`,
-          );
-          printBackupStatus(resolveBackupStatus(result.verification));
-          printTimestamp("Recovery key created at", result.verification.recoveryKeyCreatedAt);
-          console.log(`Pending verifications: ${result.pendingVerifications}`);
+          if (options.verbose === true) {
+            console.log(
+              `Cross-signing published: ${result.crossSigning.published ? "yes" : "no"} (master=${result.crossSigning.masterKeyPublished ? "yes" : "no"}, self=${result.crossSigning.selfSigningKeyPublished ? "yes" : "no"}, user=${result.crossSigning.userSigningKeyPublished ? "yes" : "no"})`,
+            );
+            printBackupStatus(resolveBackupStatus(result.verification));
+            printTimestamp("Recovery key created at", result.verification.recoveryKeyCreatedAt);
+            console.log(`Pending verifications: ${result.pendingVerifications}`);
+          } else {
+            console.log(`Cross-signing published: ${result.crossSigning.published ? "yes" : "no"}`);
+            printBackupSummary(resolveBackupStatus(result.verification));
+          }
           printGuidance(
             buildVerificationGuidance({
               ...result.verification,
@@ -329,42 +385,48 @@ export function registerMatrixJsCli(params: { program: Command }): void {
     .command("device <key>")
     .description("Verify device using a Matrix recovery key")
     .option("--account <id>", "Account ID (for multi-account setups)")
+    .option("--verbose", "Show detailed diagnostics")
     .option("--json", "Output as JSON")
-    .action(async (key: string, options: { account?: string; json?: boolean }) => {
-      try {
-        const result = await verifyMatrixRecoveryKey(key, { accountId: options.account });
-        if (options.json) {
-          console.log(JSON.stringify(result, null, 2));
-          if (!result.success) {
+    .action(
+      async (key: string, options: { account?: string; verbose?: boolean; json?: boolean }) => {
+        try {
+          const result = await verifyMatrixRecoveryKey(key, { accountId: options.account });
+          if (options.json) {
+            console.log(JSON.stringify(result, null, 2));
+            if (!result.success) {
+              markCliFailure();
+            }
+          } else if (result.success) {
+            console.log("Device verification completed successfully.");
+            console.log(`User: ${result.userId ?? "unknown"}`);
+            console.log(`Device: ${result.deviceId ?? "unknown"}`);
+            printBackupSummary(resolveBackupStatus(result));
+            if (options.verbose === true) {
+              printBackupStatus(resolveBackupStatus(result));
+              printTimestamp("Recovery key created at", result.recoveryKeyCreatedAt);
+              printTimestamp("Verified at", result.verifiedAt);
+            }
+            printGuidance(
+              buildVerificationGuidance({
+                ...result,
+                pendingVerifications: 0,
+              }),
+            );
+          } else {
+            console.error(`Verification failed: ${result.error ?? "unknown error"}`);
             markCliFailure();
           }
-        } else if (result.success) {
-          console.log("Device verification completed successfully.");
-          console.log(`User: ${result.userId ?? "unknown"}`);
-          console.log(`Device: ${result.deviceId ?? "unknown"}`);
-          printBackupStatus(resolveBackupStatus(result));
-          printTimestamp("Recovery key created at", result.recoveryKeyCreatedAt);
-          printTimestamp("Verified at", result.verifiedAt);
-          printGuidance(
-            buildVerificationGuidance({
-              ...result,
-              pendingVerifications: 0,
-            }),
-          );
-        } else {
-          console.error(`Verification failed: ${result.error ?? "unknown error"}`);
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (options.json) {
+            console.log(JSON.stringify({ success: false, error: message }, null, 2));
+          } else {
+            console.error(`Verification failed: ${message}`);
+          }
           markCliFailure();
+        } finally {
+          scheduleMatrixJsCliExit();
         }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        if (options.json) {
-          console.log(JSON.stringify({ success: false, error: message }, null, 2));
-        } else {
-          console.error(`Verification failed: ${message}`);
-        }
-        markCliFailure();
-      } finally {
-        scheduleMatrixJsCliExit();
-      }
-    });
+      },
+    );
 }

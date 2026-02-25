@@ -114,7 +114,7 @@ describe("matrix-js CLI verification commands", () => {
     expect(process.exitCode).toBe(0);
   });
 
-  it("prints local timezone timestamps for verify status output", async () => {
+  it("prints local timezone timestamps for verify status output in verbose mode", async () => {
     const recoveryCreatedAt = "2026-02-25T20:10:11.000Z";
     getMatrixVerificationStatusMock.mockResolvedValue({
       encryptionEnabled: true,
@@ -135,14 +135,14 @@ describe("matrix-js CLI verification commands", () => {
     });
     const program = buildProgram();
 
-    await program.parseAsync(["matrix-js", "verify", "status"], { from: "user" });
+    await program.parseAsync(["matrix-js", "verify", "status", "--verbose"], { from: "user" });
 
     expect(console.log).toHaveBeenCalledWith(
       `Recovery key created at: ${formatExpectedLocalTimestamp(recoveryCreatedAt)}`,
     );
   });
 
-  it("prints local timezone timestamps for verify bootstrap and device output", async () => {
+  it("prints local timezone timestamps for verify bootstrap and device output in verbose mode", async () => {
     const recoveryCreatedAt = "2026-02-25T20:10:11.000Z";
     const verifiedAt = "2026-02-25T20:14:00.000Z";
     bootstrapMatrixVerificationMock.mockResolvedValue({
@@ -200,8 +200,12 @@ describe("matrix-js CLI verification commands", () => {
     });
     const program = buildProgram();
 
-    await program.parseAsync(["matrix-js", "verify", "bootstrap"], { from: "user" });
-    await program.parseAsync(["matrix-js", "verify", "device", "valid-key"], { from: "user" });
+    await program.parseAsync(["matrix-js", "verify", "bootstrap", "--verbose"], {
+      from: "user",
+    });
+    await program.parseAsync(["matrix-js", "verify", "device", "valid-key", "--verbose"], {
+      from: "user",
+    });
 
     expect(console.log).toHaveBeenCalledWith(
       `Recovery key created at: ${formatExpectedLocalTimestamp(recoveryCreatedAt)}`,
@@ -211,7 +215,37 @@ describe("matrix-js CLI verification commands", () => {
     );
   });
 
-  it("prints backup health lines for verify backup status", async () => {
+  it("keeps default output concise when verbose is not provided", async () => {
+    const recoveryCreatedAt = "2026-02-25T20:10:11.000Z";
+    getMatrixVerificationStatusMock.mockResolvedValue({
+      encryptionEnabled: true,
+      verified: true,
+      userId: "@bot:example.org",
+      deviceId: "DEVICE123",
+      backupVersion: "1",
+      backup: {
+        serverVersion: "1",
+        activeVersion: "1",
+        trusted: true,
+        matchesDecryptionKey: true,
+        decryptionKeyCached: true,
+      },
+      recoveryKeyStored: true,
+      recoveryKeyCreatedAt: recoveryCreatedAt,
+      pendingVerifications: 0,
+    });
+    const program = buildProgram();
+
+    await program.parseAsync(["matrix-js", "verify", "status"], { from: "user" });
+
+    expect(console.log).not.toHaveBeenCalledWith(
+      `Recovery key created at: ${formatExpectedLocalTimestamp(recoveryCreatedAt)}`,
+    );
+    expect(console.log).not.toHaveBeenCalledWith("Pending verifications: 0");
+    expect(console.log).toHaveBeenCalledWith("Backup: active and trusted on this device");
+  });
+
+  it("prints backup health lines for verify backup status in verbose mode", async () => {
     getMatrixRoomKeyBackupStatusMock.mockResolvedValue({
       serverVersion: "2",
       activeVersion: null,
@@ -221,7 +255,7 @@ describe("matrix-js CLI verification commands", () => {
     });
     const program = buildProgram();
 
-    await program.parseAsync(["matrix-js", "verify", "backup", "status"], {
+    await program.parseAsync(["matrix-js", "verify", "backup", "status", "--verbose"], {
       from: "user",
     });
 

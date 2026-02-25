@@ -141,10 +141,22 @@ Check verification status:
 openclaw matrix-js verify status
 ```
 
+Verbose status (full diagnostics):
+
+```bash
+openclaw matrix-js verify status --verbose
+```
+
 Bootstrap cross-signing and verification state:
 
 ```bash
 openclaw matrix-js verify bootstrap
+```
+
+Verbose bootstrap diagnostics:
+
+```bash
+openclaw matrix-js verify bootstrap --verbose
 ```
 
 Verify this device with a recovery key:
@@ -153,7 +165,38 @@ Verify this device with a recovery key:
 openclaw matrix-js verify device "<your-recovery-key>"
 ```
 
-Use `openclaw matrix-js verify status --json` when scripting verification checks.
+Verbose device verification details:
+
+```bash
+openclaw matrix-js verify device "<your-recovery-key>" --verbose
+```
+
+Check room-key backup health:
+
+```bash
+openclaw matrix-js verify backup status
+```
+
+Verbose backup health diagnostics:
+
+```bash
+openclaw matrix-js verify backup status --verbose
+```
+
+Restore room keys from server backup:
+
+```bash
+openclaw matrix-js verify backup restore
+```
+
+Verbose restore diagnostics:
+
+```bash
+openclaw matrix-js verify backup restore --verbose
+```
+
+All `verify` commands are concise by default and show detailed diagnostics only with `--verbose`.
+Use `--json` for full machine-readable output when scripting.
 
 ## Automatic verification routing
 
