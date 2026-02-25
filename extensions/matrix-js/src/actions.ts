@@ -206,6 +206,8 @@ export const matrixMessageActions: ChannelMessageActionAdapter = {
         "verification-status": "verificationStatus",
         "verification-bootstrap": "verificationBootstrap",
         "verification-recovery-key": "verificationRecoveryKey",
+        "verification-backup-status": "verificationBackupStatus",
+        "verification-backup-restore": "verificationBackupRestore",
         "verification-list": "verificationList",
         "verification-request": "verificationRequest",
         "verification-accept": "verificationAccept",

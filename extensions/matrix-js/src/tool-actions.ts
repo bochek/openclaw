@@ -16,6 +16,7 @@ import {
   editMatrixMessage,
   generateMatrixVerificationQr,
   getMatrixEncryptionStatus,
+  getMatrixRoomKeyBackupStatus,
   getMatrixVerificationStatus,
   getMatrixMemberInfo,
   getMatrixRoomInfo,
@@ -27,6 +28,7 @@ import {
   pinMatrixMessage,
   readMatrixMessages,
   requestMatrixVerification,
+  restoreMatrixRoomKeyBackup,
   removeMatrixReactions,
   scanMatrixVerificationQr,
   sendMatrixMessage,
@@ -56,6 +58,8 @@ const verificationActions = new Set([
   "verificationStatus",
   "verificationBootstrap",
   "verificationRecoveryKey",
+  "verificationBackupStatus",
+  "verificationBackupRestore",
 ]);
 
 function readRoomId(params: Record<string, unknown>, required = true): string {
@@ -232,6 +236,20 @@ export async function handleMatrixAction(
         readStringParam({ recoveryKey }, "recoveryKey", { required: true, trim: false }),
         { accountId },
       );
+      return jsonResult({ ok: result.success, result });
+    }
+    if (action === "verificationBackupStatus") {
+      const status = await getMatrixRoomKeyBackupStatus({ accountId });
+      return jsonResult({ ok: true, status });
+    }
+    if (action === "verificationBackupRestore") {
+      const recoveryKey =
+        readStringParam(params, "recoveryKey", { trim: false }) ??
+        readStringParam(params, "key", { trim: false });
+      const result = await restoreMatrixRoomKeyBackup({
+        recoveryKey: recoveryKey ?? undefined,
+        accountId,
+      });
       return jsonResult({ ok: result.success, result });
     }
     if (action === "verificationList") {

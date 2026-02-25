@@ -3,12 +3,16 @@ import { formatZonedTimestamp } from "openclaw/plugin-sdk";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const bootstrapMatrixVerificationMock = vi.fn();
+const getMatrixRoomKeyBackupStatusMock = vi.fn();
 const getMatrixVerificationStatusMock = vi.fn();
+const restoreMatrixRoomKeyBackupMock = vi.fn();
 const verifyMatrixRecoveryKeyMock = vi.fn();
 
 vi.mock("./matrix/actions/verification.js", () => ({
   bootstrapMatrixVerification: (...args: unknown[]) => bootstrapMatrixVerificationMock(...args),
+  getMatrixRoomKeyBackupStatus: (...args: unknown[]) => getMatrixRoomKeyBackupStatusMock(...args),
   getMatrixVerificationStatus: (...args: unknown[]) => getMatrixVerificationStatusMock(...args),
+  restoreMatrixRoomKeyBackup: (...args: unknown[]) => restoreMatrixRoomKeyBackupMock(...args),
   verifyMatrixRecoveryKey: (...args: unknown[]) => verifyMatrixRecoveryKeyMock(...args),
 }));
 
@@ -69,6 +73,31 @@ describe("matrix-js CLI verification commands", () => {
     expect(process.exitCode).toBe(1);
   });
 
+  it("sets non-zero exit code for backup restore failures in JSON mode", async () => {
+    restoreMatrixRoomKeyBackupMock.mockResolvedValue({
+      success: false,
+      error: "missing backup key",
+      backupVersion: null,
+      imported: 0,
+      total: 0,
+      loadedFromSecretStorage: false,
+      backup: {
+        serverVersion: "1",
+        activeVersion: null,
+        trusted: true,
+        matchesDecryptionKey: false,
+        decryptionKeyCached: false,
+      },
+    });
+    const program = buildProgram();
+
+    await program.parseAsync(["matrix-js", "verify", "backup", "restore", "--json"], {
+      from: "user",
+    });
+
+    expect(process.exitCode).toBe(1);
+  });
+
   it("keeps zero exit code for successful bootstrap in JSON mode", async () => {
     process.exitCode = 0;
     bootstrapMatrixVerificationMock.mockResolvedValue({
@@ -88,10 +117,18 @@ describe("matrix-js CLI verification commands", () => {
   it("prints local timezone timestamps for verify status output", async () => {
     const recoveryCreatedAt = "2026-02-25T20:10:11.000Z";
     getMatrixVerificationStatusMock.mockResolvedValue({
+      encryptionEnabled: true,
       verified: true,
       userId: "@bot:example.org",
       deviceId: "DEVICE123",
       backupVersion: "1",
+      backup: {
+        serverVersion: "1",
+        activeVersion: "1",
+        trusted: true,
+        matchesDecryptionKey: true,
+        decryptionKeyCached: true,
+      },
       recoveryKeyStored: true,
       recoveryKeyCreatedAt: recoveryCreatedAt,
       pendingVerifications: 0,
@@ -111,10 +148,24 @@ describe("matrix-js CLI verification commands", () => {
     bootstrapMatrixVerificationMock.mockResolvedValue({
       success: true,
       verification: {
+        encryptionEnabled: true,
         verified: true,
         userId: "@bot:example.org",
         deviceId: "DEVICE123",
+        backupVersion: "1",
+        backup: {
+          serverVersion: "1",
+          activeVersion: "1",
+          trusted: true,
+          matchesDecryptionKey: true,
+          decryptionKeyCached: true,
+        },
+        recoveryKeyStored: true,
+        recoveryKeyId: "SSSS",
         recoveryKeyCreatedAt: recoveryCreatedAt,
+        localVerified: true,
+        crossSigningVerified: true,
+        signedByOwner: true,
       },
       crossSigning: {
         published: true,
@@ -127,9 +178,23 @@ describe("matrix-js CLI verification commands", () => {
     });
     verifyMatrixRecoveryKeyMock.mockResolvedValue({
       success: true,
+      encryptionEnabled: true,
       userId: "@bot:example.org",
       deviceId: "DEVICE123",
       backupVersion: "1",
+      backup: {
+        serverVersion: "1",
+        activeVersion: "1",
+        trusted: true,
+        matchesDecryptionKey: true,
+        decryptionKeyCached: true,
+      },
+      verified: true,
+      localVerified: true,
+      crossSigningVerified: true,
+      signedByOwner: true,
+      recoveryKeyStored: true,
+      recoveryKeyId: "SSSS",
       recoveryKeyCreatedAt: recoveryCreatedAt,
       verifiedAt,
     });
@@ -144,5 +209,24 @@ describe("matrix-js CLI verification commands", () => {
     expect(console.log).toHaveBeenCalledWith(
       `Verified at: ${formatExpectedLocalTimestamp(verifiedAt)}`,
     );
+  });
+
+  it("prints backup health lines for verify backup status", async () => {
+    getMatrixRoomKeyBackupStatusMock.mockResolvedValue({
+      serverVersion: "2",
+      activeVersion: null,
+      trusted: true,
+      matchesDecryptionKey: false,
+      decryptionKeyCached: false,
+    });
+    const program = buildProgram();
+
+    await program.parseAsync(["matrix-js", "verify", "backup", "status"], {
+      from: "user",
+    });
+
+    expect(console.log).toHaveBeenCalledWith("Backup server version: 2");
+    expect(console.log).toHaveBeenCalledWith("Backup active on this device: no");
+    expect(console.log).toHaveBeenCalledWith("Backup trusted by this device: yes");
   });
 });

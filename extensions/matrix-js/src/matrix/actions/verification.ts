@@ -246,6 +246,17 @@ export async function getMatrixVerificationStatus(
   }
 }
 
+export async function getMatrixRoomKeyBackupStatus(opts: MatrixActionClientOpts = {}) {
+  const { client, stopOnDone } = await resolveActionClient(opts);
+  try {
+    return await client.getRoomKeyBackupStatus();
+  } finally {
+    if (stopOnDone) {
+      client.stop();
+    }
+  }
+}
+
 export async function verifyMatrixRecoveryKey(
   recoveryKey: string,
   opts: MatrixActionClientOpts = {},
@@ -253,6 +264,23 @@ export async function verifyMatrixRecoveryKey(
   const { client, stopOnDone } = await resolveActionClient(opts);
   try {
     return await client.verifyWithRecoveryKey(recoveryKey);
+  } finally {
+    if (stopOnDone) {
+      client.stop();
+    }
+  }
+}
+
+export async function restoreMatrixRoomKeyBackup(
+  opts: MatrixActionClientOpts & {
+    recoveryKey?: string;
+  } = {},
+) {
+  const { client, stopOnDone } = await resolveActionClient(opts);
+  try {
+    return await client.restoreRoomKeyBackup({
+      recoveryKey: opts.recoveryKey?.trim() || undefined,
+    });
   } finally {
     if (stopOnDone) {
       client.stop();
