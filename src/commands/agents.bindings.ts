@@ -8,6 +8,16 @@ import type { ChannelChoice } from "./onboard-types.js";
 
 function bindingMatchKey(match: AgentBinding["match"]) {
   const accountId = match.accountId?.trim() || DEFAULT_ACCOUNT_ID;
+  const roles = Array.isArray(match.roles)
+    ? Array.from(
+        new Set(
+          match.roles
+            .map((role) => role.trim())
+            .filter(Boolean)
+            .toSorted(),
+        ),
+      )
+    : [];
   return [
     match.channel,
     accountId,
@@ -15,6 +25,7 @@ function bindingMatchKey(match: AgentBinding["match"]) {
     match.peer?.id ?? "",
     match.guildId ?? "",
     match.teamId ?? "",
+    roles.join(","),
   ].join("|");
 }
 

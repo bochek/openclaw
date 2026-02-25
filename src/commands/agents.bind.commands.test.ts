@@ -95,4 +95,47 @@ describe("agents bind/unbind commands", () => {
     expect(runtime.error).toHaveBeenCalledWith("Bindings are owned by another agent:");
     expect(runtime.exit).toHaveBeenCalledWith(1);
   });
+
+  it("keeps role-based bindings when removing channel-level discord binding", async () => {
+    readConfigFileSnapshotMock.mockResolvedValue({
+      ...baseConfigSnapshot,
+      config: {
+        bindings: [
+          {
+            agentId: "main",
+            match: {
+              channel: "discord",
+              accountId: "guild-a",
+              roles: ["111", "222"],
+            },
+          },
+          {
+            agentId: "main",
+            match: {
+              channel: "discord",
+              accountId: "guild-a",
+            },
+          },
+        ],
+      },
+    });
+
+    await agentsUnbindCommand({ bind: ["discord:guild-a"] }, runtime);
+
+    expect(writeConfigFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bindings: [
+          {
+            agentId: "main",
+            match: {
+              channel: "discord",
+              accountId: "guild-a",
+              roles: ["111", "222"],
+            },
+          },
+        ],
+      }),
+    );
+    expect(runtime.exit).not.toHaveBeenCalled();
+  });
 });
