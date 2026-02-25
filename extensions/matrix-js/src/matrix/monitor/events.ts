@@ -3,16 +3,24 @@ import type { MatrixAuth } from "../client.js";
 import type { MatrixClient } from "../sdk.js";
 import type { MatrixRawEvent } from "./types.js";
 import { EventType } from "./types.js";
+import {
+  isMatrixVerificationEventType,
+  isMatrixVerificationRequestMsgType,
+  matrixVerificationConstants,
+} from "./verification-utils.js";
 
-const VERIFICATION_EVENT_PREFIX = "m.key.verification.";
-const VERIFICATION_REQUEST_MSGTYPE = "m.key.verification.request";
 const MAX_TRACKED_VERIFICATION_EVENTS = 1024;
+
+type MatrixVerificationStage = "request" | "ready" | "start" | "cancel" | "done" | "other";
 
 type MatrixVerificationSummaryLike = {
   id: string;
   transactionId?: string;
+  roomId?: string;
   otherUserId: string;
   phaseName: string;
+  updatedAt?: string;
+  completed?: boolean;
   sas?: {
     decimal?: [number, number, number];
     emoji?: Array<[string, string]>;
@@ -28,25 +36,32 @@ function trimMaybeString(input: unknown): string | null {
 }
 
 function readVerificationSignal(event: MatrixRawEvent): {
-  stage: "request" | "start" | "cancel" | "done" | "other";
+  stage: MatrixVerificationStage;
   flowId: string | null;
 } | null {
   const type = trimMaybeString(event?.type) ?? "";
   const content = event?.content ?? {};
   const msgtype = trimMaybeString((content as { msgtype?: unknown }).msgtype) ?? "";
-  if (type === EventType.RoomMessage && msgtype === VERIFICATION_REQUEST_MSGTYPE) {
-    return {
-      stage: "request",
-      flowId: trimMaybeString(event.event_id),
-    };
-  }
-  if (!type.startsWith(VERIFICATION_EVENT_PREFIX)) {
-    return null;
-  }
-
-  const flowId = trimMaybeString(
+  const relatedEventId = trimMaybeString(
     (content as { "m.relates_to"?: { event_id?: unknown } })["m.relates_to"]?.event_id,
   );
+  const transactionId = trimMaybeString((content as { transaction_id?: unknown }).transaction_id);
+  if (type === EventType.RoomMessage && isMatrixVerificationRequestMsgType(msgtype)) {
+    return {
+      stage: "request",
+      flowId: trimMaybeString(event.event_id) ?? transactionId ?? relatedEventId,
+    };
+  }
+  if (!isMatrixVerificationEventType(type)) {
+    return null;
+  }
+  const flowId = transactionId ?? relatedEventId ?? trimMaybeString(event.event_id);
+  if (type === `${matrixVerificationConstants.eventPrefix}request`) {
+    return { stage: "request", flowId };
+  }
+  if (type === `${matrixVerificationConstants.eventPrefix}ready`) {
+    return { stage: "ready", flowId };
+  }
   if (type === "m.key.verification.start") {
     return { stage: "start", flowId };
   }
@@ -60,7 +75,7 @@ function readVerificationSignal(event: MatrixRawEvent): {
 }
 
 function formatVerificationStageNotice(params: {
-  stage: "request" | "start" | "cancel" | "done" | "other";
+  stage: MatrixVerificationStage;
   senderId: string;
   event: MatrixRawEvent;
 }): string | null {
@@ -68,7 +83,9 @@ function formatVerificationStageNotice(params: {
   const content = event.content as { code?: unknown; reason?: unknown };
   switch (stage) {
     case "request":
-      return `Matrix verification request received from ${senderId}.`;
+      return `Matrix verification request received from ${senderId}. Open "Verify by emoji" in your Matrix client to continue.`;
+    case "ready":
+      return `Matrix verification is ready with ${senderId}. Choose "Verify by emoji" to reveal the emoji sequence.`;
     case "start":
       return `Matrix verification started with ${senderId}.`;
     case "done":
@@ -120,16 +137,65 @@ function formatVerificationSasNotice(summary: MatrixVerificationSummaryLike): st
   return lines.join("\n");
 }
 
-async function resolveVerificationSummaryByFlowId(
+function resolveVerificationFlowCandidates(params: {
+  event: MatrixRawEvent;
+  flowId: string | null;
+}): string[] {
+  const { event, flowId } = params;
+  const content = event.content as {
+    transaction_id?: unknown;
+    "m.relates_to"?: { event_id?: unknown };
+  };
+  const candidates = new Set<string>();
+  const add = (value: unknown) => {
+    const normalized = trimMaybeString(value);
+    if (normalized) {
+      candidates.add(normalized);
+    }
+  };
+  add(flowId);
+  add(event.event_id);
+  add(content.transaction_id);
+  add(content["m.relates_to"]?.event_id);
+  return Array.from(candidates);
+}
+
+function resolveSummaryRecency(summary: MatrixVerificationSummaryLike): number {
+  const ts = Date.parse(summary.updatedAt ?? "");
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+async function resolveVerificationSummaryForSignal(
   client: MatrixClient,
-  flowId: string | null,
+  params: {
+    event: MatrixRawEvent;
+    senderId: string;
+    flowId: string | null;
+  },
 ): Promise<MatrixVerificationSummaryLike | null> {
-  if (!flowId || !client.crypto) {
+  if (!client.crypto) {
     return null;
   }
   const list = await client.crypto.listVerifications();
-  const summary = list.find((entry) => entry.transactionId === flowId);
-  return summary ?? null;
+  if (list.length === 0) {
+    return null;
+  }
+  const candidates = resolveVerificationFlowCandidates({
+    event: params.event,
+    flowId: params.flowId,
+  });
+  const byTransactionId = list.find((entry) =>
+    candidates.some((candidate) => entry.transactionId === candidate),
+  );
+  if (byTransactionId) {
+    return byTransactionId;
+  }
+
+  // Fallback for flows where transaction IDs do not match room event IDs consistently.
+  const byUser = list
+    .filter((entry) => entry.otherUserId === params.senderId && entry.completed !== true)
+    .sort((a, b) => resolveSummaryRecency(b) - resolveSummaryRecency(a))[0];
+  return byUser ?? null;
 }
 
 function trackBounded(set: Set<string>, value: string): boolean {
@@ -210,7 +276,11 @@ export function registerMatrixMonitorEvents(params: {
       }
 
       const stageNotice = formatVerificationStageNotice({ stage: signal.stage, senderId, event });
-      const summary = await resolveVerificationSummaryByFlowId(client, flowId).catch(() => null);
+      const summary = await resolveVerificationSummaryForSignal(client, {
+        event,
+        senderId,
+        flowId,
+      }).catch(() => null);
       const sasNotice = summary ? formatVerificationSasNotice(summary) : null;
 
       const notices: string[] = [];

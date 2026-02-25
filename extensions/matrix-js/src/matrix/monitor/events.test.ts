@@ -11,8 +11,11 @@ function createHarness(params?: {
   verifications?: Array<{
     id: string;
     transactionId?: string;
+    roomId?: string;
     otherUserId: string;
     phaseName: string;
+    updatedAt?: string;
+    completed?: boolean;
     sas?: {
       decimal?: [number, number, number];
       emoji?: Array<[string, string]>;
@@ -82,6 +85,27 @@ describe("registerMatrixMonitorEvents verification routing", () => {
     expect(onRoomMessage).not.toHaveBeenCalled();
     const body = (sendMessage.mock.calls[0]?.[1] as { body?: string } | undefined)?.body ?? "";
     expect(body).toContain("Matrix verification request received from @alice:example.org.");
+    expect(body).toContain('Open "Verify by emoji"');
+  });
+
+  it("posts ready-stage guidance for emoji verification", async () => {
+    const { sendMessage, roomEventListener } = createHarness();
+    roomEventListener("!room:example.org", {
+      event_id: "$ready-1",
+      sender: "@alice:example.org",
+      type: "m.key.verification.ready",
+      origin_server_ts: Date.now(),
+      content: {
+        "m.relates_to": { event_id: "$req-ready-1" },
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(sendMessage).toHaveBeenCalledTimes(1);
+    });
+    const body = (sendMessage.mock.calls[0]?.[1] as { body?: string } | undefined)?.body ?? "";
+    expect(body).toContain("Matrix verification is ready with @alice:example.org.");
+    expect(body).toContain('Choose "Verify by emoji"');
   });
 
   it("posts SAS emoji/decimal details when verification summaries expose them", async () => {
@@ -89,7 +113,8 @@ describe("registerMatrixMonitorEvents verification routing", () => {
       verifications: [
         {
           id: "verification-1",
-          transactionId: "$req2",
+          transactionId: "$different-flow-id",
+          updatedAt: new Date("2026-02-25T21:42:54.000Z").toISOString(),
           otherUserId: "@alice:example.org",
           phaseName: "started",
           sas: {

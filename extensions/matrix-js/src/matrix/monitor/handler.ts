@@ -34,6 +34,7 @@ import { resolveMatrixRoomConfig } from "./rooms.js";
 import { resolveMatrixThreadRootId, resolveMatrixThreadTarget } from "./threads.js";
 import type { MatrixRawEvent, RoomMessageEventContent } from "./types.js";
 import { EventType, RelationType } from "./types.js";
+import { isMatrixVerificationRoomMessage } from "./verification-utils.js";
 
 export type MatrixMonitorHandlerParams = {
   client: MatrixClient;
@@ -177,6 +178,17 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         } else {
           return;
         }
+      }
+
+      if (
+        eventType === EventType.RoomMessage &&
+        isMatrixVerificationRoomMessage({
+          msgtype: (content as { msgtype?: unknown }).msgtype,
+          body: content.body,
+        })
+      ) {
+        logVerboseMessage(`matrix: skip verification/system room message room=${roomId}`);
+        return;
       }
 
       const locationPayload: MatrixLocationPayload | null = resolveMatrixLocation({

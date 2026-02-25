@@ -204,11 +204,13 @@ Matrix-js now posts verification lifecycle notices directly into the Matrix room
 That includes:
 
 - verification request notices
+- verification ready notices (with explicit "Verify by emoji" guidance)
 - verification start and completion notices
 - SAS details (emoji and decimal) when available
 
 Inbound SAS requests are auto-confirmed by the bot device, so once the user confirms "They match"
 in their Matrix client, verification completes without requiring a manual OpenClaw tool step.
+Verification protocol/system notices are not forwarded to the agent chat pipeline, so they do not produce `NO_REPLY`.
 
 ## DM and room policy example
 
