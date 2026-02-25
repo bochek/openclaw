@@ -10,15 +10,14 @@ const finalizeMatrixRegisterConfigAfterSuccessMock = vi.fn(async () => false);
 
 vi.mock("./credentials.js", () => ({
   loadMatrixCredentials: vi.fn(() => null),
-  saveMatrixCredentials: (...args: unknown[]) => saveMatrixCredentialsMock(...args),
+  saveMatrixCredentials: saveMatrixCredentialsMock,
   credentialsMatchConfig: vi.fn(() => false),
   touchMatrixCredentials: vi.fn(),
 }));
 
 vi.mock("./client/register-mode.js", () => ({
-  prepareMatrixRegisterMode: (...args: unknown[]) => prepareMatrixRegisterModeMock(...args),
-  finalizeMatrixRegisterConfigAfterSuccess: (...args: unknown[]) =>
-    finalizeMatrixRegisterConfigAfterSuccessMock(...args),
+  prepareMatrixRegisterMode: prepareMatrixRegisterModeMock,
+  finalizeMatrixRegisterConfigAfterSuccess: finalizeMatrixRegisterConfigAfterSuccessMock,
   resetPreparedMatrixRegisterModesForTests: vi.fn(),
 }));
 

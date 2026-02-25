@@ -35,9 +35,11 @@ async function persistDirectRoom(
   userId: string,
   roomId: string,
 ): Promise<void> {
-  let directContent: MatrixDirectAccountData | null = null;
+  let directContent: MatrixDirectAccountData | undefined;
   try {
-    directContent = await client.getAccountData(EventType.Direct);
+    directContent = (await client.getAccountData(EventType.Direct)) as
+      | MatrixDirectAccountData
+      | undefined;
   } catch {
     // Ignore fetch errors and fall back to an empty map.
   }

@@ -1,4 +1,5 @@
-import type { MatrixClient, MatrixRawEvent, MessageEventContent } from "../sdk.js";
+import type { MatrixClient, MessageEventContent } from "../sdk.js";
+export type { MatrixRawEvent } from "../sdk.js";
 
 export const MsgType = {
   Text: "m.text",

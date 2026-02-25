@@ -10,19 +10,19 @@ const resolveMatrixAuthMock = vi.fn();
 vi.mock("../../runtime.js", () => ({
   getMatrixRuntime: () => ({
     config: {
-      loadConfig: (...args: unknown[]) => loadConfigMock(...args),
+      loadConfig: loadConfigMock,
     },
   }),
 }));
 
 vi.mock("../active-client.js", () => ({
-  getActiveMatrixClient: (...args: unknown[]) => getActiveMatrixClientMock(...args),
+  getActiveMatrixClient: getActiveMatrixClientMock,
 }));
 
 vi.mock("../client.js", () => ({
-  createMatrixClient: (...args: unknown[]) => createMatrixClientMock(...args),
+  createMatrixClient: createMatrixClientMock,
   isBunRuntime: () => isBunRuntimeMock(),
-  resolveMatrixAuth: (...args: unknown[]) => resolveMatrixAuthMock(...args),
+  resolveMatrixAuth: resolveMatrixAuthMock,
 }));
 
 let resolveActionClient: typeof import("./client.js").resolveActionClient;

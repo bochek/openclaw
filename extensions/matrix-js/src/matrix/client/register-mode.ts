@@ -112,7 +112,7 @@ export async function finalizeMatrixRegisterConfigAfterSuccess(params: {
     ...cfg,
     channels: {
       ...(cfg.channels ?? {}),
-      "matrix-js": nextMatrix as CoreConfig["channels"]["matrix-js"],
+      "matrix-js": nextMatrix as NonNullable<CoreConfig["channels"]>["matrix-js"],
     },
   };
 

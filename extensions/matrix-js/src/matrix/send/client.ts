@@ -1,8 +1,9 @@
+import { normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import { getMatrixRuntime } from "../../runtime.js";
+import type { CoreConfig } from "../../types.js";
 import { getActiveMatrixClient } from "../active-client.js";
 import { createMatrixClient, isBunRuntime, resolveMatrixAuth } from "../client.js";
 import type { MatrixClient } from "../sdk.js";
-import type { CoreConfig } from "../types.js";
 
 const getCore = () => getMatrixRuntime();
 
@@ -12,10 +13,20 @@ export function ensureNodeRuntime() {
   }
 }
 
-export function resolveMediaMaxBytes(): number | undefined {
+export function resolveMediaMaxBytes(accountId?: string | null): number | undefined {
   const cfg = getCore().config.loadConfig() as CoreConfig;
-  if (typeof cfg.channels?.["matrix-js"]?.mediaMaxMb === "number") {
-    return cfg.channels["matrix-js"].mediaMaxMb * 1024 * 1024;
+  const matrixCfg = cfg.channels?.["matrix-js"];
+  const accountCfg = accountId
+    ? (matrixCfg?.accounts?.[accountId] ?? matrixCfg?.accounts?.[normalizeAccountId(accountId)])
+    : undefined;
+  const mediaMaxMb =
+    typeof accountCfg?.mediaMaxMb === "number"
+      ? accountCfg.mediaMaxMb
+      : typeof matrixCfg?.mediaMaxMb === "number"
+        ? matrixCfg.mediaMaxMb
+        : undefined;
+  if (typeof mediaMaxMb === "number") {
+    return mediaMaxMb * 1024 * 1024;
   }
   return undefined;
 }

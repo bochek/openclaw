@@ -145,7 +145,7 @@ export class MatrixRecoveryKeyStore {
     );
     let generatedRecoveryKey = false;
     const storedRecovery = this.loadStoredRecoveryKey();
-    let recoveryKey = storedRecovery
+    let recoveryKey: MatrixGeneratedSecretStorageKey | null = storedRecovery
       ? {
           keyInfo: storedRecovery.keyInfo,
           privateKey: new Uint8Array(Buffer.from(storedRecovery.privateKeyBase64, "base64")),

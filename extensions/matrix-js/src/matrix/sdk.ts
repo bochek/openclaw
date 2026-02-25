@@ -38,6 +38,7 @@ export type {
 export type {
   EncryptedFile,
   LocationMessageEventContent,
+  MatrixRawEvent,
   MessageEventContent,
   TextualMessageEventContent,
 } from "./sdk/types.js";
@@ -187,7 +188,7 @@ export class MatrixClient {
       deviceId: opts.deviceId,
       logger: createMatrixJsSdkClientLogger("MatrixClient"),
       localTimeoutMs: this.localTimeoutMs,
-      cryptoCallbacks,
+      cryptoCallbacks: cryptoCallbacks as never,
       verificationMethods: [
         VerificationMethod.Sas,
         VerificationMethod.ShowQrCode,
@@ -421,7 +422,7 @@ export class MatrixClient {
   }
 
   async getAccountData(eventType: string): Promise<Record<string, unknown> | undefined> {
-    const event = this.client.getAccountData(eventType);
+    const event = this.client.getAccountData(eventType as never);
     return (event?.getContent() as Record<string, unknown> | undefined) ?? undefined;
   }
 
@@ -529,7 +530,7 @@ export class MatrixClient {
   }
 
   async uploadContent(file: Buffer, contentType?: string, filename?: string): Promise<string> {
-    const uploaded = await this.client.uploadContent(file, {
+    const uploaded = await this.client.uploadContent(new Uint8Array(file), {
       type: contentType || "application/octet-stream",
       name: filename,
       includeFilename: Boolean(filename),
@@ -1053,8 +1054,8 @@ export class MatrixClient {
       return;
     }
     const raw: MatrixRawEvent = {
+      event_id: `$membership-${roomId}-${Date.now()}`,
       type: "m.room.member",
-      room_id: roomId,
       sender: selfUserId,
       state_key: selfUserId,
       content: { membership },

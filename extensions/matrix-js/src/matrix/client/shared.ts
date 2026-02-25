@@ -1,6 +1,6 @@
+import type { CoreConfig } from "../../types.js";
 import type { MatrixClient } from "../sdk.js";
 import { LogService } from "../sdk/logger.js";
-import type { CoreConfig } from "../types.js";
 import { resolveMatrixAuth } from "./config.js";
 import { createMatrixClient } from "./create-client.js";
 import { DEFAULT_ACCOUNT_KEY } from "./storage.js";

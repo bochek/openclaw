@@ -2,14 +2,6 @@ import { readMatrixMessages } from "../src/matrix/actions.js";
 import { createMatrixClient, resolveMatrixAuth } from "../src/matrix/client.js";
 import { installLiveHarnessRuntime, resolveLiveHarnessConfig } from "./live-common.js";
 
-function toMessageText(msg: {
-  text: string | null;
-  body?: string | null;
-  fallbackBody?: string | null;
-}): string {
-  return msg.text ?? msg.body ?? msg.fallbackBody ?? "";
-}
-
 async function main() {
   const roomId = process.argv[2]?.trim();
   if (!roomId) {
@@ -34,10 +26,10 @@ async function main() {
   try {
     const result = await readMatrixMessages(roomId, { client, limit });
     const compact = result.messages.map((msg) => ({
-      id: msg.id,
+      id: msg.eventId,
       sender: msg.sender,
       ts: msg.timestamp,
-      text: toMessageText(msg),
+      text: msg.body ?? "",
     }));
 
     process.stdout.write(

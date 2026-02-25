@@ -135,15 +135,21 @@ describe("MatrixCryptoBootstrapper", () => {
 
     await bootstrapper.bootstrap(crypto);
 
-    const firstCall = bootstrapCrossSigning.mock.calls[0]?.[0] as {
-      authUploadDeviceSigningKeys?: <T>(
-        makeRequest: (authData: Record<string, unknown> | null) => Promise<T>,
-      ) => Promise<T>;
-    };
-    expect(firstCall.authUploadDeviceSigningKeys).toBeTypeOf("function");
+    const bootstrapCrossSigningCalls = bootstrapCrossSigning.mock.calls as Array<
+      [
+        {
+          authUploadDeviceSigningKeys?: <T>(
+            makeRequest: (authData: Record<string, unknown> | null) => Promise<T>,
+          ) => Promise<T>;
+        }?,
+      ]
+    >;
+    const authUploadDeviceSigningKeys =
+      bootstrapCrossSigningCalls[0]?.[0]?.authUploadDeviceSigningKeys;
+    expect(authUploadDeviceSigningKeys).toBeTypeOf("function");
 
     const seenAuthStages: Array<Record<string, unknown> | null> = [];
-    const result = await firstCall.authUploadDeviceSigningKeys?.(async (authData) => {
+    const result = await authUploadDeviceSigningKeys?.(async (authData) => {
       seenAuthStages.push(authData);
       if (authData === null) {
         throw new Error("need auth");

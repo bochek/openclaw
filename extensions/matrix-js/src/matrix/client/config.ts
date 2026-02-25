@@ -1,7 +1,7 @@
 import { normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import { getMatrixRuntime } from "../../runtime.js";
+import type { CoreConfig } from "../../types.js";
 import { MatrixClient } from "../sdk.js";
-import type { CoreConfig } from "../types.js";
 import { ensureMatrixSdkLoggingConfigured } from "./logging.js";
 import {
   finalizeMatrixRegisterConfigAfterSuccess,

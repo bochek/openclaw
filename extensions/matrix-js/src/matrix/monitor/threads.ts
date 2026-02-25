@@ -8,8 +8,6 @@ type MatrixRawEvent = {
 };
 
 type RoomMessageEventContent = {
-  msgtype: string;
-  body: string;
   "m.relates_to"?: {
     rel_type?: string;
     event_id?: string;

@@ -20,7 +20,7 @@ async function fetchMatrixMediaBuffer(params: {
   client: MatrixClient;
   mxcUrl: string;
   maxBytes: number;
-}): Promise<{ buffer: Buffer; headerType?: string } | null> {
+}): Promise<{ buffer: Buffer } | null> {
   // The client wrapper exposes mxcToHttp for Matrix media URIs.
   const url = params.client.mxcToHttp(params.mxcUrl);
   if (!url) {
@@ -29,14 +29,13 @@ async function fetchMatrixMediaBuffer(params: {
 
   // Use the client's download method which handles auth
   try {
-    const result = await params.client.downloadContent(params.mxcUrl);
-    const raw = result.data ?? result;
+    const raw = await params.client.downloadContent(params.mxcUrl);
     const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
 
     if (buffer.byteLength > params.maxBytes) {
       throw new Error("Matrix media exceeds configured size limit");
     }
-    return { buffer, headerType: result.contentType };
+    return { buffer };
   } catch (err) {
     throw new Error(`Matrix media download failed: ${String(err)}`, { cause: err });
   }
@@ -103,7 +102,7 @@ export async function downloadMatrixMedia(params: {
   if (!fetched) {
     return null;
   }
-  const headerType = fetched.headerType ?? params.contentType ?? undefined;
+  const headerType = params.contentType ?? undefined;
   const saved = await getMatrixRuntime().channel.media.saveMediaBuffer(
     fetched.buffer,
     headerType,

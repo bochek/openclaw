@@ -1,14 +1,12 @@
 import { getMatrixRuntime } from "../../runtime.js";
 
-// Type for room message content with mentions
 type MessageContentWithMentions = {
-  msgtype: string;
-  body: string;
   formatted_body?: string;
   "m.mentions"?: {
     user_ids?: string[];
     room?: boolean;
   };
+  [key: string]: unknown;
 };
 
 /**

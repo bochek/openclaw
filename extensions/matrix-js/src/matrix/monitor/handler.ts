@@ -5,9 +5,12 @@ import {
   logInboundDrop,
   logTypingFailure,
   resolveControlCommandGate,
+  type PluginRuntime,
+  type ReplyPayload,
   type RuntimeEnv,
+  type RuntimeLogger,
 } from "openclaw/plugin-sdk";
-import type { CoreConfig, ReplyToMode } from "../../types.js";
+import type { CoreConfig, MatrixRoomConfig, ReplyToMode } from "../../types.js";
 import {
   formatPollAsText,
   isPollStartType,
@@ -38,34 +41,14 @@ import { isMatrixVerificationRoomMessage } from "./verification-utils.js";
 
 export type MatrixMonitorHandlerParams = {
   client: MatrixClient;
-  core: {
-    logging: {
-      shouldLogVerbose: () => boolean;
-    };
-    channel: (typeof import("openclaw/plugin-sdk"))["channel"];
-    system: {
-      enqueueSystemEvent: (
-        text: string,
-        meta: { sessionKey?: string | null; contextKey?: string | null },
-      ) => void;
-    };
-  };
+  core: PluginRuntime;
   cfg: CoreConfig;
   runtime: RuntimeEnv;
-  logger: {
-    info: (message: string | Record<string, unknown>, ...meta: unknown[]) => void;
-    warn: (meta: Record<string, unknown>, message: string) => void;
-  };
+  logger: RuntimeLogger;
   logVerboseMessage: (message: string) => void;
   allowFrom: string[];
-  roomsConfig: CoreConfig["channels"] extends { matrix?: infer MatrixConfig }
-    ? MatrixConfig extends { groups?: infer Groups }
-      ? Groups
-      : Record<string, unknown> | undefined
-    : Record<string, unknown> | undefined;
-  mentionRegexes: ReturnType<
-    (typeof import("openclaw/plugin-sdk"))["channel"]["mentions"]["buildMentionRegexes"]
-  >;
+  roomsConfig?: Record<string, MatrixRoomConfig>;
+  mentionRegexes: ReturnType<PluginRuntime["channel"]["mentions"]["buildMentionRegexes"]>;
   groupPolicy: "open" | "allowlist" | "disabled";
   replyToMode: ReplyToMode;
   threadReplies: "off" | "inbound" | "always";
@@ -447,7 +430,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         hasControlCommandInMessage;
       const canDetectMention = mentionRegexes.length > 0 || hasExplicitMention;
       if (isRoom && shouldRequireMention && !wasMentioned && !shouldBypassMention) {
-        logger.info({ roomId, reason: "no-mention" }, "skipping room message");
+        logger.info("skipping room message", { roomId, reason: "no-mention" });
         return;
       }
 
@@ -465,7 +448,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         cfg,
         channel: "matrix-js",
         peer: {
-          kind: isDirectMessage ? "dm" : "channel",
+          kind: isDirectMessage ? "direct" : "channel",
           id: isDirectMessage ? senderId : roomId,
         },
       });
@@ -535,14 +518,11 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
             }
           : undefined,
         onRecordError: (err) => {
-          logger.warn(
-            {
-              error: String(err),
-              storePath,
-              sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
-            },
-            "failed updating session meta",
-          );
+          logger.warn("failed updating session meta", {
+            error: String(err),
+            storePath,
+            sessionKey: ctxPayload.SessionKey ?? route.sessionKey,
+          });
         },
       });
 
@@ -623,7 +603,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         core.channel.reply.createReplyDispatcherWithTyping({
           ...prefixOptions,
           humanDelay: core.channel.reply.resolveHumanDelayConfig(cfg, route.agentId),
-          deliver: async (payload) => {
+          deliver: async (payload: ReplyPayload) => {
             await deliverMatrixReplies({
               replies: [payload],
               roomId,
@@ -637,7 +617,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
             });
             didSendReply = true;
           },
-          onError: (err, info) => {
+          onError: (err: unknown, info: { kind: "tool" | "block" | "final" }) => {
             runtime.error?.(`matrix ${info.kind} reply failed: ${String(err)}`);
           },
           onReplyStart: typingCallbacks.onReplyStart,

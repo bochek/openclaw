@@ -91,7 +91,8 @@ describe("matrix register mode helpers", () => {
         }),
       }),
     );
-    const written = writeConfigFile.mock.calls[0]?.[0] as CoreConfig;
+    const firstCall = (writeConfigFile.mock.calls as unknown[][])[0];
+    const written = (firstCall?.[0] ?? {}) as CoreConfig;
     expect(written.channels?.["matrix-js"]?.accessToken).toBeUndefined();
   });
 });

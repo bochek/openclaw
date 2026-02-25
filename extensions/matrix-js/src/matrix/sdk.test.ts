@@ -549,11 +549,11 @@ describe("MatrixClient event bridge", () => {
       },
     });
 
-    let releaseRetry: (() => void) | null = null;
+    const releaseRetryRef: { current?: () => void } = {};
     matrixJsClient.decryptEventIfNeeded = vi.fn(
       async () =>
         await new Promise<void>((resolve) => {
-          releaseRetry = () => {
+          releaseRetryRef.current = () => {
             encrypted.emit("decrypted", decrypted);
             resolve();
           };
@@ -571,7 +571,7 @@ describe("MatrixClient event bridge", () => {
     await Promise.resolve();
 
     expect(matrixJsClient.decryptEventIfNeeded).toHaveBeenCalledTimes(1);
-    releaseRetry?.();
+    releaseRetryRef.current?.();
     await Promise.resolve();
     expect(delivered).toEqual(["m.room.message"]);
   });
@@ -1227,11 +1227,12 @@ describe("MatrixClient crypto bootstrapping", () => {
 
     expect(result.success).toBe(true);
     expect(result.verification.backupVersion).toBe("9");
-    expect(
-      bootstrapSecretStorage.mock.calls.some(([opts]) =>
-        Boolean((opts as { setupNewKeyBackup?: boolean } | undefined)?.setupNewKeyBackup),
-      ),
-    ).toBe(false);
+    const bootstrapSecretStorageCalls = bootstrapSecretStorage.mock.calls as Array<
+      [{ setupNewKeyBackup?: boolean }?]
+    >;
+    expect(bootstrapSecretStorageCalls.some((call) => Boolean(call[0]?.setupNewKeyBackup))).toBe(
+      false,
+    );
   });
 
   it("does not report bootstrap errors when final verification state is healthy", async () => {

@@ -1,4 +1,5 @@
-import type { EncryptedFile, MatrixRawEvent, MessageEventContent } from "../sdk.js";
+import type { EncryptedFile, MessageEventContent } from "../sdk.js";
+export type { MatrixRawEvent } from "../sdk.js";
 
 export const EventType = {
   RoomMessage: "m.room.message",
