@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { formatZonedTimestamp } from "openclaw/plugin-sdk";
 import {
   bootstrapMatrixVerification,
   getMatrixVerificationStatus,
@@ -20,6 +21,24 @@ function scheduleMatrixJsCliExit(): void {
 
 function markCliFailure(): void {
   process.exitCode = 1;
+}
+
+function formatLocalTimestamp(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = new Date(value);
+  if (!Number.isFinite(parsed.getTime())) {
+    return value;
+  }
+  return formatZonedTimestamp(parsed, { displaySeconds: true }) ?? value;
+}
+
+function printTimestamp(label: string, value: string | null | undefined): void {
+  const formatted = formatLocalTimestamp(value);
+  if (formatted) {
+    console.log(`${label}: ${formatted}`);
+  }
 }
 
 function printVerificationStatus(status: {
@@ -45,9 +64,7 @@ function printVerificationStatus(status: {
     console.log("Run 'openclaw matrix-js verify device <key>' to verify this device.");
   }
   console.log(`Recovery key stored: ${status.recoveryKeyStored ? "yes" : "no"}`);
-  if (status.recoveryKeyCreatedAt) {
-    console.log(`Recovery key created at: ${status.recoveryKeyCreatedAt}`);
-  }
+  printTimestamp("Recovery key created at", status.recoveryKeyCreatedAt);
   console.log(`Pending verifications: ${status.pendingVerifications}`);
 }
 
@@ -126,6 +143,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
           console.log(
             `Cross-signing published: ${result.crossSigning.published ? "yes" : "no"} (master=${result.crossSigning.masterKeyPublished ? "yes" : "no"}, self=${result.crossSigning.selfSigningKeyPublished ? "yes" : "no"}, user=${result.crossSigning.userSigningKeyPublished ? "yes" : "no"})`,
           );
+          printTimestamp("Recovery key created at", result.verification.recoveryKeyCreatedAt);
           console.log(`Pending verifications: ${result.pendingVerifications}`);
           if (!result.success) {
             markCliFailure();
@@ -164,6 +182,8 @@ export function registerMatrixJsCli(params: { program: Command }): void {
           if (result.backupVersion) {
             console.log(`Backup version: ${result.backupVersion}`);
           }
+          printTimestamp("Recovery key created at", result.recoveryKeyCreatedAt);
+          printTimestamp("Verified at", result.verifiedAt);
         } else {
           console.error(`Verification failed: ${result.error ?? "unknown error"}`);
           markCliFailure();
