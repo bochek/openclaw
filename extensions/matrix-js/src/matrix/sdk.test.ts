@@ -782,6 +782,17 @@ describe("MatrixClient crypto bootstrapping", () => {
     expect(Array.from(resolved?.[1] ?? [])).toEqual([1, 2, 3, 4]);
   });
 
+  it("provides a matrix-js-sdk logger to createClient", () => {
+    new MatrixClient("https://matrix.example.org", "token");
+    const logger = (lastCreateClientOpts?.logger ?? null) as {
+      debug?: (...args: unknown[]) => void;
+      getChild?: (namespace: string) => unknown;
+    } | null;
+    expect(logger).not.toBeNull();
+    expect(logger?.debug).toBeTypeOf("function");
+    expect(logger?.getChild).toBeTypeOf("function");
+  });
+
   it("schedules periodic crypto snapshot persistence with fake timers", async () => {
     vi.useFakeTimers();
     const databasesSpy = vi.spyOn(indexedDB, "databases").mockResolvedValue([]);

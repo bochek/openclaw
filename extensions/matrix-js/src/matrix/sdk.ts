@@ -8,6 +8,7 @@ import {
   type MatrixEvent,
 } from "matrix-js-sdk";
 import { VerificationMethod } from "matrix-js-sdk/lib/types.js";
+import { createMatrixJsSdkClientLogger } from "./client/logging.js";
 import { MatrixCryptoBootstrapper } from "./sdk/crypto-bootstrap.js";
 import type { MatrixCryptoBootstrapResult } from "./sdk/crypto-bootstrap.js";
 import { createMatrixCryptoFacade, type MatrixCryptoFacade } from "./sdk/crypto-facade.js";
@@ -181,6 +182,7 @@ export class MatrixClient {
       accessToken,
       userId: opts.userId,
       deviceId: opts.deviceId,
+      logger: createMatrixJsSdkClientLogger("MatrixClient"),
       localTimeoutMs: this.localTimeoutMs,
       cryptoCallbacks,
       verificationMethods: [
