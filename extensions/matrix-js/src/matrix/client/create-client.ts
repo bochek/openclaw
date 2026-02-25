@@ -17,6 +17,7 @@ export async function createMatrixClient(params: {
   localTimeoutMs?: number;
   initialSyncLimit?: number;
   accountId?: string | null;
+  autoBootstrapCrypto?: boolean;
 }): Promise<MatrixClient> {
   ensureMatrixSdkLoggingConfigured();
   const env = process.env;
@@ -52,5 +53,6 @@ export async function createMatrixClient(params: {
     recoveryKeyPath: storagePaths.recoveryKeyPath,
     idbSnapshotPath: storagePaths.idbSnapshotPath,
     cryptoDatabasePrefix,
+    autoBootstrapCrypto: params.autoBootstrapCrypto,
   });
 }

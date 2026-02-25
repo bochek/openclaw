@@ -109,6 +109,7 @@ export class MatrixClient {
   private readonly verificationManager = new MatrixVerificationManager();
   private readonly recoveryKeyStore: MatrixRecoveryKeyStore;
   private readonly cryptoBootstrapper: MatrixCryptoBootstrapper<MatrixRawEvent>;
+  private readonly autoBootstrapCrypto: boolean;
 
   readonly dms = {
     update: async (): Promise<void> => {
@@ -134,6 +135,7 @@ export class MatrixClient {
       recoveryKeyPath?: string;
       idbSnapshotPath?: string;
       cryptoDatabasePrefix?: string;
+      autoBootstrapCrypto?: boolean;
     } = {},
   ) {
     this.httpClient = new MatrixAuthedHttpClient(homeserver, accessToken);
@@ -144,6 +146,7 @@ export class MatrixClient {
     this.idbSnapshotPath = opts.idbSnapshotPath;
     this.cryptoDatabasePrefix = opts.cryptoDatabasePrefix;
     this.selfUserId = opts.userId?.trim() || null;
+    this.autoBootstrapCrypto = opts.autoBootstrapCrypto !== false;
     this.recoveryKeyStore = new MatrixRecoveryKeyStore(opts.recoveryKeyPath);
     const cryptoCallbacks = this.encryptionEnabled
       ? this.recoveryKeyStore.buildCryptoCallbacks()
@@ -229,10 +232,28 @@ export class MatrixClient {
     await this.client.startClient({
       initialSyncLimit: this.initialSyncLimit,
     });
-    await this.bootstrapCryptoIfNeeded();
+    if (this.autoBootstrapCrypto) {
+      await this.bootstrapCryptoIfNeeded();
+    }
     this.started = true;
     this.emitOutstandingInviteEvents();
     await this.refreshDmCache().catch(noop);
+  }
+
+  async prepareForOneOff(): Promise<void> {
+    if (!this.encryptionEnabled) {
+      return;
+    }
+    await this.initializeCryptoIfNeeded();
+    if (!this.crypto) {
+      return;
+    }
+    try {
+      const joinedRooms = await this.getJoinedRooms();
+      await this.crypto.prepare(joinedRooms);
+    } catch {
+      // One-off commands should continue even if crypto room prep is incomplete.
+    }
   }
 
   stop(): void {
@@ -709,11 +730,10 @@ export class MatrixClient {
     const verification = await this.getOwnDeviceVerificationStatus();
     const crossSigning = await this.getOwnCrossSigningPublicationStatus();
     const success = verification.verified && crossSigning.published;
-    const error =
-      bootstrapError ??
-      (success
-        ? undefined
-        : "Matrix verification bootstrap did not produce a verified device with published cross-signing keys");
+    const error = success
+      ? undefined
+      : (bootstrapError ??
+        "Matrix verification bootstrap did not produce a verified device with published cross-signing keys");
     return {
       success,
       error,

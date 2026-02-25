@@ -147,10 +147,10 @@ Bootstrap cross-signing and verification state:
 openclaw matrix-js verify bootstrap
 ```
 
-Verify with a recovery key:
+Verify this device with a recovery key:
 
 ```bash
-openclaw matrix-js verify recovery-key "<your-recovery-key>"
+openclaw matrix-js verify device "<your-recovery-key>"
 ```
 
 Use `openclaw matrix-js verify status --json` when scripting verification checks.

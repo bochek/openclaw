@@ -337,7 +337,7 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
         logger.info("matrix: device is verified and ready for encrypted rooms");
       } else {
         logger.info(
-          "matrix: device not verified — run 'openclaw matrix-js verify recovery-key <key>' to enable E2EE",
+          "matrix: device not verified — run 'openclaw matrix-js verify device <key>' to enable E2EE",
         );
       }
     } catch (err) {

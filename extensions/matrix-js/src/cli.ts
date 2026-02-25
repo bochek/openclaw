@@ -5,6 +5,23 @@ import {
   verifyMatrixRecoveryKey,
 } from "./matrix/actions/verification.js";
 
+let matrixJsCliExitScheduled = false;
+
+function scheduleMatrixJsCliExit(): void {
+  if (matrixJsCliExitScheduled || process.env.VITEST) {
+    return;
+  }
+  matrixJsCliExitScheduled = true;
+  // matrix-js-sdk rust crypto can leave background async work alive after command completion.
+  setTimeout(() => {
+    process.exit(process.exitCode ?? 0);
+  }, 0);
+}
+
+function markCliFailure(): void {
+  process.exitCode = 1;
+}
+
 function printVerificationStatus(status: {
   verified: boolean;
   userId: string | null;
@@ -25,7 +42,7 @@ function printVerificationStatus(status: {
     console.log("Verified: no");
     console.log(`User: ${status.userId ?? "unknown"}`);
     console.log(`Device: ${status.deviceId ?? "unknown"}`);
-    console.log("Run 'openclaw matrix-js verify recovery-key <key>' to verify this device.");
+    console.log("Run 'openclaw matrix-js verify device <key>' to verify this device.");
   }
   console.log(`Recovery key stored: ${status.recoveryKeyStored ? "yes" : "no"}`);
   if (status.recoveryKeyCreatedAt) {
@@ -66,7 +83,9 @@ export function registerMatrixJsCli(params: { program: Command }): void {
         } else {
           console.error(`Error: ${message}`);
         }
-        process.exitCode = 1;
+        markCliFailure();
+      } finally {
+        scheduleMatrixJsCliExit();
       }
     });
 
@@ -92,6 +111,9 @@ export function registerMatrixJsCli(params: { program: Command }): void {
           });
           if (options.json) {
             console.log(JSON.stringify(result, null, 2));
+            if (!result.success) {
+              markCliFailure();
+            }
             return;
           }
           console.log(`Bootstrap success: ${result.success ? "yes" : "no"}`);
@@ -106,7 +128,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
           );
           console.log(`Pending verifications: ${result.pendingVerifications}`);
           if (!result.success) {
-            process.exitCode = 1;
+            markCliFailure();
           }
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
@@ -115,13 +137,15 @@ export function registerMatrixJsCli(params: { program: Command }): void {
           } else {
             console.error(`Verification bootstrap failed: ${message}`);
           }
-          process.exitCode = 1;
+          markCliFailure();
+        } finally {
+          scheduleMatrixJsCliExit();
         }
       },
     );
 
   verify
-    .command("recovery-key <key>")
+    .command("device <key>")
     .description("Verify device using a Matrix recovery key")
     .option("--account <id>", "Account ID (for multi-account setups)")
     .option("--json", "Output as JSON")
@@ -130,6 +154,9 @@ export function registerMatrixJsCli(params: { program: Command }): void {
         const result = await verifyMatrixRecoveryKey(key, { accountId: options.account });
         if (options.json) {
           console.log(JSON.stringify(result, null, 2));
+          if (!result.success) {
+            markCliFailure();
+          }
         } else if (result.success) {
           console.log("Device verification completed successfully.");
           console.log(`User: ${result.userId ?? "unknown"}`);
@@ -139,7 +166,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
           }
         } else {
           console.error(`Verification failed: ${result.error ?? "unknown error"}`);
-          process.exitCode = 1;
+          markCliFailure();
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -148,7 +175,9 @@ export function registerMatrixJsCli(params: { program: Command }): void {
         } else {
           console.error(`Verification failed: ${message}`);
         }
-        process.exitCode = 1;
+        markCliFailure();
+      } finally {
+        scheduleMatrixJsCliExit();
       }
     });
 }

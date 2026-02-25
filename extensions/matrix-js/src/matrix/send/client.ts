@@ -1,11 +1,6 @@
 import { getMatrixRuntime } from "../../runtime.js";
 import { getActiveMatrixClient } from "../active-client.js";
-import {
-  createMatrixClient,
-  isBunRuntime,
-  resolveMatrixAuth,
-  resolveSharedMatrixClient,
-} from "../client.js";
+import { createMatrixClient, isBunRuntime, resolveMatrixAuth } from "../client.js";
 import type { MatrixClient } from "../sdk.js";
 import type { CoreConfig } from "../types.js";
 
@@ -38,14 +33,6 @@ export async function resolveMatrixClient(opts: {
   if (active) {
     return { client: active, stopOnDone: false };
   }
-  const shouldShareClient = Boolean(process.env.OPENCLAW_GATEWAY_PORT);
-  if (shouldShareClient) {
-    const client = await resolveSharedMatrixClient({
-      timeoutMs: opts.timeoutMs,
-      accountId: opts.accountId,
-    });
-    return { client, stopOnDone: false };
-  }
   const auth = await resolveMatrixAuth({ accountId: opts.accountId });
   const client = await createMatrixClient({
     homeserver: auth.homeserver,
@@ -56,15 +43,8 @@ export async function resolveMatrixClient(opts: {
     encryption: auth.encryption,
     localTimeoutMs: opts.timeoutMs,
     accountId: opts.accountId,
+    autoBootstrapCrypto: false,
   });
-  if (auth.encryption && client.crypto) {
-    try {
-      const joinedRooms = await client.getJoinedRooms();
-      await client.crypto.prepare(joinedRooms);
-    } catch {
-      // Ignore crypto prep failures for one-off sends; normal sync will retry.
-    }
-  }
-  await client.start();
+  await client.prepareForOneOff();
   return { client, stopOnDone: true };
 }
