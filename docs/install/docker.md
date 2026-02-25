@@ -40,7 +40,7 @@ From repo root:
 
 This script:
 
-- builds the gateway image
+- builds the gateway image (default), or pulls a prebuilt image when `OPENCLAW_IMAGE` is set to a non-local image
 - runs the onboarding wizard
 - prints optional provider setup hints
 - starts the gateway via Docker Compose
@@ -90,6 +90,21 @@ docker build -t openclaw:local -f Dockerfile .
 docker compose run --rm openclaw-cli onboard
 docker compose up -d openclaw-gateway
 ```
+
+### Use a prebuilt image (optional)
+
+To skip local builds and use a prebuilt image, set `OPENCLAW_IMAGE` to any image
+other than `openclaw:local` before running `docker-setup.sh`:
+
+```bash
+export OPENCLAW_IMAGE="ghcr.io/openclaw/openclaw:main"
+./docker-setup.sh
+```
+
+Notes:
+
+- `OPENCLAW_DOCKER_APT_PACKAGES` is build-only and cannot be combined with
+  non-local `OPENCLAW_IMAGE` values.
 
 Note: run `docker compose ...` from the repo root. If you enabled
 `OPENCLAW_EXTRA_MOUNTS` or `OPENCLAW_HOME_VOLUME`, the setup script writes
@@ -181,6 +196,7 @@ export OPENCLAW_DOCKER_APT_PACKAGES="ffmpeg build-essential"
 Notes:
 
 - This accepts a space-separated list of apt package names.
+- This only works when `OPENCLAW_IMAGE=openclaw:local`.
 - If you change `OPENCLAW_DOCKER_APT_PACKAGES`, rerun `docker-setup.sh` to rebuild
   the image.
 

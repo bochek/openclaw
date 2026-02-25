@@ -25,6 +25,13 @@ if [[ "\${1:-}" == "build" ]]; then
   echo "build $*" >>"$log"
   exit 0
 fi
+if [[ "\${1:-}" == "pull" ]]; then
+  echo "pull $*" >>"$log"
+  if [[ "\${DOCKER_STUB_FAIL_PULL:-0}" == "1" ]]; then
+    exit 1
+  fi
+  exit 0
+fi
 if [[ "\${1:-}" == "compose" ]]; then
   echo "compose $*" >>"$log"
   exit 0
@@ -103,6 +110,10 @@ function runDockerSetup(
   });
 }
 
+async function clearDockerLog(sandbox: DockerSetupSandbox) {
+  await writeFile(sandbox.logPath, "");
+}
+
 function resolveBashForCompatCheck(): string | null {
   for (const candidate of ["/bin/bash", "bash"]) {
     const probe = spawnSync(candidate, ["-c", "exit 0"], { encoding: "utf8" });
@@ -131,6 +142,7 @@ describe("docker-setup.sh", () => {
 
   it("handles env defaults, home-volume mounts, and apt build args", async () => {
     const activeSandbox = requireSandbox(sandbox);
+    await clearDockerLog(activeSandbox);
 
     const result = runDockerSetup(activeSandbox, {
       OPENCLAW_DOCKER_APT_PACKAGES: "ffmpeg build-essential",
@@ -155,6 +167,7 @@ describe("docker-setup.sh", () => {
 
   it("precreates config identity dir for CLI device auth writes", async () => {
     const activeSandbox = requireSandbox(sandbox);
+    await clearDockerLog(activeSandbox);
     const configDir = join(activeSandbox.rootDir, "config-identity");
     const workspaceDir = join(activeSandbox.rootDir, "workspace-identity");
 
@@ -170,6 +183,7 @@ describe("docker-setup.sh", () => {
 
   it("rejects injected multiline OPENCLAW_EXTRA_MOUNTS values", async () => {
     const activeSandbox = requireSandbox(sandbox);
+    await clearDockerLog(activeSandbox);
 
     const result = runDockerSetup(activeSandbox, {
       OPENCLAW_EXTRA_MOUNTS: "/tmp:/tmp\n  evil-service:\n    image: alpine",
@@ -181,6 +195,7 @@ describe("docker-setup.sh", () => {
 
   it("rejects invalid OPENCLAW_EXTRA_MOUNTS mount format", async () => {
     const activeSandbox = requireSandbox(sandbox);
+    await clearDockerLog(activeSandbox);
 
     const result = runDockerSetup(activeSandbox, {
       OPENCLAW_EXTRA_MOUNTS: "bad mount spec",
@@ -192,6 +207,7 @@ describe("docker-setup.sh", () => {
 
   it("rejects invalid OPENCLAW_HOME_VOLUME names", async () => {
     const activeSandbox = requireSandbox(sandbox);
+    await clearDockerLog(activeSandbox);
 
     const result = runDockerSetup(activeSandbox, {
       OPENCLAW_HOME_VOLUME: "bad name",
@@ -231,5 +247,45 @@ describe("docker-setup.sh", () => {
     const compose = await readFile(join(repoRoot, "docker-compose.yml"), "utf8");
     expect(compose).not.toContain("gateway-daemon");
     expect(compose).toContain('"gateway"');
+  });
+
+  it("pulls non-local OPENCLAW_IMAGE values instead of building locally", async () => {
+    const activeSandbox = requireSandbox(sandbox);
+    await clearDockerLog(activeSandbox);
+
+    const result = runDockerSetup(activeSandbox, {
+      OPENCLAW_IMAGE: "ghcr.io/openclaw/openclaw:main",
+    });
+
+    expect(result.status).toBe(0);
+    const log = await readFile(activeSandbox.logPath, "utf8");
+    expect(log).toContain("pull pull ghcr.io/openclaw/openclaw:main");
+    expect(log).not.toContain("build build");
+  });
+
+  it("fails fast when OPENCLAW_DOCKER_APT_PACKAGES is set with non-local OPENCLAW_IMAGE", async () => {
+    const activeSandbox = requireSandbox(sandbox);
+    await clearDockerLog(activeSandbox);
+
+    const result = runDockerSetup(activeSandbox, {
+      OPENCLAW_IMAGE: "ghcr.io/openclaw/openclaw:main",
+      OPENCLAW_DOCKER_APT_PACKAGES: "ffmpeg",
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("OPENCLAW_DOCKER_APT_PACKAGES is build-only");
+  });
+
+  it("fails fast when docker pull fails", async () => {
+    const activeSandbox = requireSandbox(sandbox);
+    await clearDockerLog(activeSandbox);
+
+    const result = runDockerSetup(activeSandbox, {
+      OPENCLAW_IMAGE: "ghcr.io/openclaw/openclaw:missing",
+      DOCKER_STUB_FAIL_PULL: "1",
+    });
+
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain("Failed to pull image ghcr.io/openclaw/openclaw:missing");
   });
 });

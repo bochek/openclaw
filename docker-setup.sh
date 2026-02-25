@@ -255,10 +255,12 @@ if [[ "$IMAGE_NAME" == "openclaw:local" ]]; then
     -f "$ROOT_DIR/Dockerfile" \
     "$ROOT_DIR"
 else
+  if [[ -n "$OPENCLAW_DOCKER_APT_PACKAGES" ]]; then
+    fail "OPENCLAW_DOCKER_APT_PACKAGES is build-only and cannot be used when OPENCLAW_IMAGE is not openclaw:local."
+  fi
   echo "==> Pulling Docker image: $IMAGE_NAME"
   if ! docker pull "$IMAGE_NAME"; then
-    echo "ERROR: Failed to pull image $IMAGE_NAME. Please check the image name and your access permissions." >&2
-    exit 1
+    fail "Failed to pull image $IMAGE_NAME. Check the image name and access permissions."
   fi
 fi
 
