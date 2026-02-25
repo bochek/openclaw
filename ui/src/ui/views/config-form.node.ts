@@ -440,6 +440,9 @@ export function renderNode(params: {
         });
       }
     }
+
+    // Complex union (e.g. array | object) — render as JSON textarea
+    return renderJsonTextarea({ schema, value, path, hints, disabled, showLabel, onPatch });
   }
 
   // Enum - use segmented for small, dropdown for large
@@ -698,6 +701,49 @@ function renderSelect(params: {
         `,
         )}
       </select>
+    </div>
+  `;
+}
+
+function renderJsonTextarea(params: {
+  schema: JsonSchema;
+  value: unknown;
+  path: Array<string | number>;
+  hints: ConfigUiHints;
+  disabled: boolean;
+  showLabel?: boolean;
+  onPatch: (path: Array<string | number>, value: unknown) => void;
+}): TemplateResult {
+  const { schema, value, path, hints, disabled, onPatch } = params;
+  const showLabel = params.showLabel ?? true;
+  const { label, help, tags } = resolveFieldMeta(path, schema, hints);
+  const fallback = jsonValue(value);
+
+  return html`
+    <div class="cfg-field">
+      ${showLabel ? html`<label class="cfg-field__label">${label}</label>` : nothing}
+      ${help ? html`<div class="cfg-field__help">${help}</div>` : nothing}
+      ${renderTags(tags)}
+      <textarea
+        class="cfg-textarea"
+        placeholder="JSON value"
+        rows="3"
+        .value=${fallback}
+        ?disabled=${disabled}
+        @change=${(e: Event) => {
+          const target = e.target as HTMLTextAreaElement;
+          const raw = target.value.trim();
+          if (!raw) {
+            onPatch(path, undefined);
+            return;
+          }
+          try {
+            onPatch(path, JSON.parse(raw));
+          } catch {
+            target.value = fallback;
+          }
+        }}
+      ></textarea>
     </div>
   `;
 }

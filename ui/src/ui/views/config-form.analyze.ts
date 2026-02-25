@@ -44,14 +44,21 @@ function normalizeSchemaNode(
     if (union) {
       return union;
     }
-    return { schema, unsupportedPaths: [pathLabel] };
+    // Complex union that can't be simplified — pass through to the
+    // renderer which will show a JSON textarea fallback.
+    return { schema, unsupportedPaths: [] };
   }
 
   const nullable = Array.isArray(schema.type) && schema.type.includes("null");
   const type =
     schemaType(schema) ?? (schema.properties || schema.additionalProperties ? "object" : undefined);
-  normalized.type = type ?? schema.type;
-  normalized.nullable = nullable || schema.nullable;
+  const resolvedType = type ?? schema.type;
+  if (resolvedType !== undefined) {
+    normalized.type = resolvedType;
+  }
+  if (nullable || schema.nullable) {
+    normalized.nullable = true;
+  }
 
   if (normalized.enum) {
     const { enumValues, nullable: enumNullable } = normalizeEnum(normalized.enum);
@@ -79,7 +86,10 @@ function normalizeSchemaNode(
     normalized.properties = normalizedProps;
 
     if (schema.additionalProperties === true) {
-      unsupported.add(pathLabel);
+      // `true` is semantically "any schema" — normalize to `{}` so the
+      // renderer can show a JSON-textarea map field instead of marking
+      // the entire object as unsupported.
+      normalized.additionalProperties = {};
     } else if (schema.additionalProperties === false) {
       normalized.additionalProperties = false;
     } else if (schema.additionalProperties && typeof schema.additionalProperties === "object") {
@@ -109,7 +119,13 @@ function normalizeSchemaNode(
     type !== "boolean" &&
     !normalized.enum
   ) {
-    unsupported.add(pathLabel);
+    if (isAnySchema(normalized)) {
+      // Typeless "any" schema (e.g. from z.string().transform()) —
+      // render as a string input rather than marking unsupported.
+      normalized.type = "string";
+    } else {
+      unsupported.add(pathLabel);
+    }
   }
 
   return {
@@ -123,7 +139,7 @@ function normalizeUnion(
   path: Array<string | number>,
 ): ConfigSchemaAnalysis | null {
   if (schema.allOf) {
-    return null;
+    return mergeAllOf(schema, path);
   }
   const union = schema.anyOf ?? schema.oneOf;
   if (!union) {
@@ -205,4 +221,38 @@ function normalizeUnion(
   }
 
   return null;
+}
+
+function mergeAllOf(schema: JsonSchema, path: Array<string | number>): ConfigSchemaAnalysis | null {
+  const allOf = schema.allOf;
+  if (!allOf || allOf.length === 0) {
+    return null;
+  }
+  // Try merging all branches into a single object schema.
+  let merged: JsonSchema = { type: "object" };
+  for (const branch of allOf) {
+    if (!branch || typeof branch !== "object") {
+      return null;
+    }
+    const branchType = schemaType(branch) ?? (branch.properties ? "object" : undefined);
+    if (branchType !== "object") {
+      return null;
+    }
+    merged = {
+      ...merged,
+      ...branch,
+      properties: { ...merged.properties, ...branch.properties },
+    };
+  }
+  // Copy over top-level metadata from the wrapper schema.
+  if (schema.title) {
+    merged.title = schema.title;
+  }
+  if (schema.description) {
+    merged.description = schema.description;
+  }
+  merged.allOf = undefined;
+  merged.anyOf = undefined;
+  merged.oneOf = undefined;
+  return normalizeSchemaNode(merged, path);
 }
