@@ -115,7 +115,7 @@ describe("registerMatrixMonitorEvents verification routing", () => {
   });
 
   it("posts SAS emoji/decimal details when verification summaries expose them", async () => {
-    const { sendMessage, roomEventListener } = createHarness({
+    const { sendMessage, roomEventListener, listVerifications } = createHarness({
       verifications: [
         {
           id: "verification-1",
@@ -155,7 +155,7 @@ describe("registerMatrixMonitorEvents verification routing", () => {
   });
 
   it("does not emit duplicate SAS notices for the same verification payload", async () => {
-    const { sendMessage, roomEventListener } = createHarness({
+    const { sendMessage, roomEventListener, listVerifications } = createHarness({
       verifications: [
         {
           id: "verification-3",
@@ -196,7 +196,9 @@ describe("registerMatrixMonitorEvents verification routing", () => {
         "m.relates_to": { event_id: "$req3" },
       },
     });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await vi.waitFor(() => {
+      expect(listVerifications).toHaveBeenCalledTimes(2);
+    });
 
     const sasBodies = sendMessage.mock.calls
       .map((call) => String(((call as unknown[])[1] as { body?: string } | undefined)?.body ?? ""))

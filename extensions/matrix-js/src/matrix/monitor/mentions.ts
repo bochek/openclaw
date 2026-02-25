@@ -1,13 +1,5 @@
 import { getMatrixRuntime } from "../../runtime.js";
-
-type MessageContentWithMentions = {
-  formatted_body?: string;
-  "m.mentions"?: {
-    user_ids?: string[];
-    room?: boolean;
-  };
-  [key: string]: unknown;
-};
+import type { RoomMessageEventContent } from "./types.js";
 
 /**
  * Check if the formatted_body contains a matrix.to mention link for the given user ID.
@@ -33,7 +25,7 @@ function checkFormattedBodyMention(formattedBody: string | undefined, userId: st
 }
 
 export function resolveMentions(params: {
-  content: MessageContentWithMentions;
+  content: RoomMessageEventContent;
   userId?: string | null;
   text?: string;
   mentionRegexes: RegExp[];
