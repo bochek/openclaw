@@ -99,7 +99,7 @@ export async function readMatrixMessages(
     const limit = resolveMatrixActionLimit(opts.limit, 20);
     const token = opts.before?.trim() || opts.after?.trim() || undefined;
     const dir = opts.after ? "f" : "b";
-    // Room history is queried via the low-level endpoint for compatibility.
+    // @vector-im/matrix-bot-sdk uses doRequest for room messages
     const res = (await client.doRequest(
       "GET",
       `/_matrix/client/v3/rooms/${encodeURIComponent(resolvedRoom)}/messages`,

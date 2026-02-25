@@ -39,9 +39,6 @@ export const matrixMessageActions: ChannelMessageActionAdapter = {
     if (gate("channelInfo")) {
       actions.add("channel-info");
     }
-    if (account.config.encryption === true && gate("verification")) {
-      actions.add("permissions");
-    }
     return Array.from(actions);
   },
   supportsAction: ({ action }) => action !== "poll",
@@ -190,45 +187,6 @@ export const matrixMessageActions: ChannelMessageActionAdapter = {
           roomId: resolveRoomId(),
         },
         cfg as CoreConfig,
-      );
-    }
-
-    if (action === "permissions") {
-      const operation = (
-        readStringParam(params, "operation") ??
-        readStringParam(params, "mode") ??
-        "verification-list"
-      )
-        .trim()
-        .toLowerCase();
-      const operationToAction: Record<string, string> = {
-        "encryption-status": "encryptionStatus",
-        "verification-list": "verificationList",
-        "verification-request": "verificationRequest",
-        "verification-accept": "verificationAccept",
-        "verification-cancel": "verificationCancel",
-        "verification-start": "verificationStart",
-        "verification-generate-qr": "verificationGenerateQr",
-        "verification-scan-qr": "verificationScanQr",
-        "verification-sas": "verificationSas",
-        "verification-confirm": "verificationConfirm",
-        "verification-mismatch": "verificationMismatch",
-        "verification-confirm-qr": "verificationConfirmQr",
-      };
-      const resolvedAction = operationToAction[operation];
-      if (!resolvedAction) {
-        throw new Error(
-          `Unsupported Matrix permissions operation: ${operation}. Supported values: ${Object.keys(
-            operationToAction,
-          ).join(", ")}`,
-        );
-      }
-      return await handleMatrixAction(
-        {
-          ...params,
-          action: resolvedAction,
-        },
-        cfg,
       );
     }
 

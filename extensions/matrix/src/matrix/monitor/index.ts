@@ -1,5 +1,5 @@
-import { format } from "node:util";
 import {
+  createLoggerBackedRuntime,
   GROUP_POLICY_BLOCKED_LABEL,
   mergeAllowlist,
   resolveAllowlistProviderRuntimeGroupPolicy,
@@ -48,18 +48,11 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
   }
 
   const logger = core.logging.getChildLogger({ module: "matrix-auto-reply" });
-  const formatRuntimeMessage = (...args: Parameters<RuntimeEnv["log"]>) => format(...args);
-  const runtime: RuntimeEnv = opts.runtime ?? {
-    log: (...args) => {
-      logger.info(formatRuntimeMessage(...args));
-    },
-    error: (...args) => {
-      logger.error(formatRuntimeMessage(...args));
-    },
-    exit: (code: number): never => {
-      throw new Error(`exit ${code}`);
-    },
-  };
+  const runtime: RuntimeEnv =
+    opts.runtime ??
+    createLoggerBackedRuntime({
+      logger,
+    });
   const logVerboseMessage = (message: string) => {
     if (!core.logging.shouldLogVerbose()) {
       return;
@@ -326,7 +319,7 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
   });
   logVerboseMessage("matrix: client started");
 
-  // Shared client is already started via resolveSharedMatrixClient.
+  // @vector-im/matrix-bot-sdk client is already started via resolveSharedMatrixClient
   logger.info(`matrix: logged in as ${auth.userId}`);
 
   // If E2EE is enabled, trigger device verification

@@ -12,18 +12,4 @@ export {
 export { listMatrixReactions, removeMatrixReactions } from "./actions/reactions.js";
 export { pinMatrixMessage, unpinMatrixMessage, listMatrixPins } from "./actions/pins.js";
 export { getMatrixMemberInfo, getMatrixRoomInfo } from "./actions/room.js";
-export {
-  acceptMatrixVerification,
-  cancelMatrixVerification,
-  confirmMatrixVerificationReciprocateQr,
-  confirmMatrixVerificationSas,
-  generateMatrixVerificationQr,
-  getMatrixEncryptionStatus,
-  getMatrixVerificationSas,
-  listMatrixVerifications,
-  mismatchMatrixVerificationSas,
-  requestMatrixVerification,
-  scanMatrixVerificationQr,
-  startMatrixVerification,
-} from "./actions/verification.js";
 export { reactMatrixMessage } from "./send.js";

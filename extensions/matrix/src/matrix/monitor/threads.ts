@@ -1,4 +1,4 @@
-// Type for raw Matrix event payload consumed by thread helpers.
+// Type for raw Matrix event from @vector-im/matrix-bot-sdk
 type MatrixRawEvent = {
   event_id: string;
   sender: string;

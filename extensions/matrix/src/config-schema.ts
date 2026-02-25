@@ -10,7 +10,6 @@ const matrixActionSchema = z
     pins: z.boolean().optional(),
     memberInfo: z.boolean().optional(),
     channelInfo: z.boolean().optional(),
-    verification: z.boolean().optional(),
   })
   .optional();
 
@@ -43,8 +42,6 @@ export const MatrixConfigSchema = z.object({
   userId: z.string().optional(),
   accessToken: z.string().optional(),
   password: z.string().optional(),
-  register: z.boolean().optional(),
-  deviceId: z.string().optional(),
   deviceName: z.string().optional(),
   initialSyncLimit: z.number().optional(),
   encryption: z.boolean().optional(),
