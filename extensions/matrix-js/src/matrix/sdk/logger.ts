@@ -1,3 +1,7 @@
+import { format } from "node:util";
+import type { RuntimeLogger } from "openclaw/plugin-sdk";
+import { getMatrixRuntime } from "../../runtime.js";
+
 export type Logger = {
   trace: (module: string, ...messageOrObject: unknown[]) => void;
   debug: (module: string, ...messageOrObject: unknown[]) => void;
@@ -10,25 +14,62 @@ export function noop(): void {
   // no-op
 }
 
+function resolveRuntimeLogger(module: string): RuntimeLogger | null {
+  try {
+    return getMatrixRuntime().logging.getChildLogger({ module: `matrix-js:${module}` });
+  } catch {
+    return null;
+  }
+}
+
+function formatMessage(module: string, messageOrObject: unknown[]): string {
+  if (messageOrObject.length === 0) {
+    return `[${module}]`;
+  }
+  return `[${module}] ${format(...messageOrObject)}`;
+}
+
 export class ConsoleLogger {
+  private emit(
+    level: "debug" | "info" | "warn" | "error",
+    module: string,
+    ...messageOrObject: unknown[]
+  ): void {
+    const runtimeLogger = resolveRuntimeLogger(module);
+    const message = formatMessage(module, messageOrObject);
+    if (runtimeLogger) {
+      if (level === "debug") {
+        runtimeLogger.debug?.(message);
+        return;
+      }
+      runtimeLogger[level](message);
+      return;
+    }
+    if (level === "debug") {
+      console.debug(message);
+      return;
+    }
+    console[level](message);
+  }
+
   trace(module: string, ...messageOrObject: unknown[]): void {
-    console.debug(`[${module}]`, ...messageOrObject);
+    this.emit("debug", module, ...messageOrObject);
   }
 
   debug(module: string, ...messageOrObject: unknown[]): void {
-    console.debug(`[${module}]`, ...messageOrObject);
+    this.emit("debug", module, ...messageOrObject);
   }
 
   info(module: string, ...messageOrObject: unknown[]): void {
-    console.info(`[${module}]`, ...messageOrObject);
+    this.emit("info", module, ...messageOrObject);
   }
 
   warn(module: string, ...messageOrObject: unknown[]): void {
-    console.warn(`[${module}]`, ...messageOrObject);
+    this.emit("warn", module, ...messageOrObject);
   }
 
   error(module: string, ...messageOrObject: unknown[]): void {
-    console.error(`[${module}]`, ...messageOrObject);
+    this.emit("error", module, ...messageOrObject);
   }
 }
 
