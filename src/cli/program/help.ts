@@ -106,6 +106,9 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     outputError: (str, write) => write(theme.error(str)),
   });
 
+  // Defense-in-depth: entry.ts already exits early for version flags before
+  // loading this module. This block handles the case where help is configured
+  // outside the normal entry path (e.g. tests, programmatic use).
   if (
     hasFlag(process.argv, "-V") ||
     hasFlag(process.argv, "--version") ||

@@ -23,9 +23,14 @@ export function resolveCliChannelOptions(): string[] {
   const catalog = listChannelPluginCatalogEntries().map((entry) => entry.id);
   const base = dedupe([...CHAT_CHANNEL_ORDER, ...catalog]);
   if (isTruthyEnvValue(process.env.OPENCLAW_EAGER_CHANNEL_OPTIONS)) {
-    // Reads plugin channel IDs from the registry if already populated.
-    // (ensurePluginRegistryLoaded is intentionally not called here to avoid
-    // loading jiti; plugins are loaded by the preaction hook for real commands.)
+    // CHANGED SEMANTIC: ensurePluginRegistryLoaded() is intentionally NOT called
+    // here to avoid pulling in plugins/loader.ts → jiti at startup (slow on
+    // low-powered devices). As a result, OPENCLAW_EAGER_CHANNEL_OPTIONS is
+    // effectively a no-op for its original purpose of force-loading all plugins
+    // into the option list before Commander parses args. Plugin IDs are only
+    // included here if the registry was already populated by some other means
+    // (e.g. the preaction hook for a real command). If this env var behaviour is
+    // needed, restore the ensurePluginRegistryLoaded() call explicitly.
     const pluginIds = listChannelPlugins().map((plugin) => plugin.id);
     return dedupe([...base, ...pluginIds]);
   }

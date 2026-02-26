@@ -8,6 +8,7 @@ import {
   getVerboseFlag,
   hasHelpOrVersion,
   hasFlag,
+  isRootVersionRequest,
   shouldMigrateState,
   shouldMigrateStateFromPath,
 } from "./argv.js";
@@ -283,5 +284,52 @@ describe("argv helpers", () => {
     { path: ["agents", "list"], expected: true },
   ])("reuses command path for migrate state decisions: $path", ({ path, expected }) => {
     expect(shouldMigrateStateFromPath(path)).toBe(expected);
+  });
+
+  // isRootVersionRequest: guards the entry.ts fast-path exit.
+  // Each case documents a semantic boundary that the fast path must respect.
+  it.each([
+    {
+      name: "--version flag",
+      argv: ["node", "openclaw", "--version"],
+      expected: true,
+    },
+    {
+      name: "-V flag",
+      argv: ["node", "openclaw", "-V"],
+      expected: true,
+    },
+    {
+      name: "-v root alias (no subcommand)",
+      argv: ["node", "openclaw", "-v"],
+      expected: true,
+    },
+    {
+      name: "-v root alias with a root-level flag before it",
+      argv: ["node", "openclaw", "--dev", "-v"],
+      expected: true,
+    },
+    {
+      name: "--version after -- terminator must NOT trigger (forwarded arg)",
+      argv: ["node", "openclaw", "nodes", "run", "--", "git", "--version"],
+      expected: false,
+    },
+    {
+      name: "-V after -- terminator must NOT trigger",
+      argv: ["node", "openclaw", "--", "-V"],
+      expected: false,
+    },
+    {
+      name: "-v with subcommand must NOT trigger (subcommand-scoped flag)",
+      argv: ["node", "openclaw", "acp", "-v"],
+      expected: false,
+    },
+    {
+      name: "normal command without version flag",
+      argv: ["node", "openclaw", "status"],
+      expected: false,
+    },
+  ])("isRootVersionRequest: $name", ({ argv, expected }) => {
+    expect(isRootVersionRequest(argv)).toBe(expected);
   });
 });

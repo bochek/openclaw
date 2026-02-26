@@ -2,6 +2,7 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import { isRootVersionRequest } from "./cli/argv.js";
 import { applyCliProfileEnv, parseCliProfileArgs } from "./cli/profile.js";
 import { shouldSkipRespawnForArgv } from "./cli/respawn-policy.js";
 import { normalizeWindowsArgv } from "./cli/windows-argv.js";
@@ -132,9 +133,12 @@ if (
     }
 
     // Fast path: print version and exit before loading heavy CLI modules.
-    // This avoids the full plugin/config startup on low-powered devices (e.g. Pi4b).
+    // isRootVersionRequest handles --version/-V (stops at -- terminator so forwarded
+    // args like `nodes run -- git --version` are excluded) and -v (only at root scope,
+    // not when a subcommand is present). Avoids the full plugin/config startup on
+    // low-powered devices (e.g. Pi4b).
     const argv = process.argv;
-    if (argv.includes("--version") || argv.includes("-V")) {
+    if (isRootVersionRequest(argv)) {
       console.log(VERSION);
       process.exit(0);
     }

@@ -13,6 +13,17 @@ export function hasHelpOrVersion(argv: string[]): boolean {
   );
 }
 
+/**
+ * Returns true only when the process is a root-level version request:
+ *  - `--version` or `-V` appear before any `--` terminator (so forwarded args like
+ *    `nodes run -- git --version` are excluded), and
+ *  - `-v` is only matched at root scope (no subcommand before it).
+ * Used by the entry.ts fast path to exit before loading heavy CLI modules.
+ */
+export function isRootVersionRequest(argv: string[]): boolean {
+  return hasFlag(argv, "--version") || hasFlag(argv, "-V") || hasRootVersionAlias(argv);
+}
+
 function isValueToken(arg: string | undefined): boolean {
   if (!arg) {
     return false;
