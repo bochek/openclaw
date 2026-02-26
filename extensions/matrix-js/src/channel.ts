@@ -13,6 +13,7 @@ import {
   type ChannelPlugin,
 } from "openclaw/plugin-sdk";
 import { matrixMessageActions } from "./actions.js";
+import { migrateMatrixLegacyCredentialsToDefaultAccount } from "./config-migration.js";
 import { MatrixConfigSchema } from "./config-schema.js";
 import { listMatrixDirectoryGroupsLive, listMatrixDirectoryPeersLive } from "./directory-live.js";
 import {
@@ -357,8 +358,9 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
       return null;
     },
     applyAccountConfig: ({ cfg, accountId, input }) => {
+      const migratedConfig = migrateMatrixLegacyCredentialsToDefaultAccount(cfg as CoreConfig);
       const namedConfig = applyAccountNameToChannelSection({
-        cfg: cfg as CoreConfig,
+        cfg: migratedConfig,
         channelKey: "matrix-js",
         accountId,
         name: input.name,

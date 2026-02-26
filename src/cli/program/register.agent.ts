@@ -126,7 +126,12 @@ ${theme.muted("Docs:")} ${formatDocsLink("/cli/agent", "docs.openclaw.ai/cli/age
     .command("bind")
     .description("Add routing bindings for an agent")
     .option("--agent <id>", "Agent id (defaults to current default agent)")
-    .option("--bind <channel[:accountId]>", "Binding to add (repeatable)", collectOption, [])
+    .option(
+      "--bind <channel[:accountId]>",
+      "Binding to add (repeatable). If omitted, accountId is resolved by channel defaults/hooks.",
+      collectOption,
+      [],
+    )
     .option("--json", "Output JSON summary", false)
     .action(async (opts) => {
       await runCommandWithRuntime(defaultRuntime, async () => {

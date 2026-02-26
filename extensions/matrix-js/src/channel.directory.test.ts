@@ -1,6 +1,7 @@
 import type { PluginRuntime, RuntimeEnv } from "openclaw/plugin-sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { matrixPlugin } from "./channel.js";
+import { migrateMatrixLegacyCredentialsToDefaultAccount } from "./config-migration.js";
 import { setMatrixRuntime } from "./runtime.js";
 import type { CoreConfig } from "./types.js";
 
@@ -153,7 +154,11 @@ describe("matrix directory", () => {
       },
     }) as CoreConfig;
 
-    expect(updated.channels?.["matrix-js"]?.accessToken).toBe("default-token");
+    expect(updated.channels?.["matrix-js"]?.accessToken).toBeUndefined();
+    expect(updated.channels?.["matrix-js"]?.accounts?.default).toMatchObject({
+      accessToken: "default-token",
+      homeserver: "https://default.example.org",
+    });
     expect(updated.channels?.["matrix-js"]?.accounts?.ops).toMatchObject({
       enabled: true,
       homeserver: "https://matrix.example.org",
@@ -182,12 +187,38 @@ describe("matrix directory", () => {
       },
     }) as CoreConfig;
 
-    expect(updated.channels?.["matrix-js"]?.homeserver).toBe("https://legacy.example.org");
+    expect(updated.channels?.["matrix-js"]?.homeserver).toBeUndefined();
     expect(updated.channels?.["matrix-js"]?.accounts?.default).toMatchObject({
       enabled: true,
       homeserver: "https://matrix.example.org",
       userId: "@bot:example.org",
       accessToken: "bot-token",
+    });
+  });
+
+  it("migrates legacy top-level matrix-js credentials into accounts.default", () => {
+    const cfg = {
+      channels: {
+        "matrix-js": {
+          homeserver: "https://legacy.example.org",
+          userId: "@legacy:example.org",
+          accessToken: "legacy-token",
+          deviceName: "Legacy Device",
+          encryption: true,
+        },
+      },
+    } as unknown as CoreConfig;
+
+    const updated = migrateMatrixLegacyCredentialsToDefaultAccount(cfg);
+    expect(updated.channels?.["matrix-js"]?.homeserver).toBeUndefined();
+    expect(updated.channels?.["matrix-js"]?.accessToken).toBeUndefined();
+    expect(updated.channels?.["matrix-js"]?.deviceName).toBeUndefined();
+    expect(updated.channels?.["matrix-js"]?.encryption).toBe(true);
+    expect(updated.channels?.["matrix-js"]?.accounts?.default).toMatchObject({
+      homeserver: "https://legacy.example.org",
+      userId: "@legacy:example.org",
+      accessToken: "legacy-token",
+      deviceName: "Legacy Device",
     });
   });
 

@@ -189,6 +189,15 @@ describe("registerAgentCommands", () => {
     );
   });
 
+  it("documents bind accountId resolution behavior in help text", () => {
+    const program = new Command();
+    registerAgentCommands(program, { agentChannelOptions: "last|telegram|discord" });
+    const agents = program.commands.find((command) => command.name() === "agents");
+    const bind = agents?.commands.find((command) => command.name() === "bind");
+    const help = bind?.helpInformation() ?? "";
+    expect(help).toContain("accountId is resolved by channel defaults/hooks");
+  });
+
   it("forwards agents unbind options", async () => {
     await runCli(["agents", "unbind", "--agent", "ops", "--all", "--json"]);
     expect(agentsUnbindCommandMock).toHaveBeenCalledWith(
