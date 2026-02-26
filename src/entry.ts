@@ -9,6 +9,7 @@ import { isTruthyEnvValue, normalizeEnv } from "./infra/env.js";
 import { isMainModule } from "./infra/is-main.js";
 import { installProcessWarningFilter } from "./infra/warning-filter.js";
 import { attachChildProcessBridge } from "./process/child-process-bridge.js";
+import { VERSION } from "./version.js";
 
 const ENTRY_WRAPPER_PAIRS = [
   { wrapperBasename: "openclaw.mjs", entryBasename: "entry.js" },
@@ -128,6 +129,14 @@ if (
       applyCliProfileEnv({ profile: parsed.profile });
       // Keep Commander and ad-hoc argv checks consistent.
       process.argv = parsed.argv;
+    }
+
+    // Fast path: print version and exit before loading heavy CLI modules.
+    // This avoids the full plugin/config startup on low-powered devices (e.g. Pi4b).
+    const argv = process.argv;
+    if (argv.includes("--version") || argv.includes("-V")) {
+      console.log(VERSION);
+      process.exit(0);
     }
 
     import("./cli/run-main.js")

@@ -9,11 +9,27 @@ export type ProgramContext = {
 };
 
 export function createProgramContext(): ProgramContext {
-  const channelOptions = resolveCliChannelOptions();
+  // Defer resolveCliChannelOptions() until a command actually needs channel option strings.
+  // This avoids the catalog discovery (discoverOpenClawPlugins) and module loading
+  // during --help, --version, and other fast-path invocations.
+  let _channelOptions: string[] | undefined;
+  function getChannelOptions(): string[] {
+    if (_channelOptions === undefined) {
+      _channelOptions = resolveCliChannelOptions();
+    }
+    return _channelOptions;
+  }
+
   return {
     programVersion: VERSION,
-    channelOptions,
-    messageChannelOptions: channelOptions.join("|"),
-    agentChannelOptions: ["last", ...channelOptions].join("|"),
+    get channelOptions() {
+      return getChannelOptions();
+    },
+    get messageChannelOptions() {
+      return getChannelOptions().join("|");
+    },
+    get agentChannelOptions() {
+      return ["last", ...getChannelOptions()].join("|");
+    },
   };
 }

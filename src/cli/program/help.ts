@@ -12,10 +12,6 @@ import { getSubCliCommandsWithSubcommands } from "./register.subclis.js";
 
 const CLI_NAME = resolveCliName();
 const CLI_NAME_PATTERN = escapeRegExp(CLI_NAME);
-const ROOT_COMMANDS_WITH_SUBCOMMANDS = new Set([
-  ...getCoreCliCommandsWithSubcommands(),
-  ...getSubCliCommandsWithSubcommands(),
-]);
 const ROOT_COMMANDS_HINT =
   "Hint: commands suffixed with * have subcommands. Run <command> --help for details.";
 
@@ -44,6 +40,12 @@ const EXAMPLES = [
 ] as const;
 
 export function configureProgramHelp(program: Command, ctx: ProgramContext) {
+  // Built here (not at module level) to defer the work until help is actually configured.
+  const rootCommandsWithSubcommands = new Set([
+    ...getCoreCliCommandsWithSubcommands(),
+    ...getSubCliCommandsWithSubcommands(),
+  ]);
+
   program
     .name(CLI_NAME)
     .description("")
@@ -73,7 +75,7 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     optionTerm: (option) => theme.option(option.flags),
     subcommandTerm: (cmd) => {
       const isRootCommand = cmd.parent === program;
-      const hasSubcommands = isRootCommand && ROOT_COMMANDS_WITH_SUBCOMMANDS.has(cmd.name());
+      const hasSubcommands = isRootCommand && rootCommandsWithSubcommands.has(cmd.name());
       return theme.command(hasSubcommands ? `${cmd.name()} *` : cmd.name());
     },
   });
