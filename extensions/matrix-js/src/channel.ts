@@ -27,7 +27,12 @@ import {
   resolveMatrixAccount,
   type ResolvedMatrixAccount,
 } from "./matrix/accounts.js";
-import { resolveMatrixAuth } from "./matrix/client.js";
+import {
+  getMatrixScopedEnvVarNames,
+  hasReadyMatrixEnvAuth,
+  resolveMatrixAuth,
+  resolveScopedMatrixEnvConfig,
+} from "./matrix/client.js";
 import { updateMatrixAccountConfig } from "./matrix/config-update.js";
 import { normalizeMatrixAllowList, normalizeMatrixUserId } from "./matrix/monitor/allowlist.js";
 import { probeMatrix } from "./matrix/probe.js";
@@ -292,10 +297,13 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         alwaysUseAccounts: true,
       }),
     validateInput: ({ accountId, input }) => {
-      if (input.useEnv && accountId !== DEFAULT_ACCOUNT_ID) {
-        return "MATRIX_* env vars can only be used for the default account.";
-      }
       if (input.useEnv) {
+        const scopedEnv = resolveScopedMatrixEnvConfig(accountId, process.env);
+        const scopedReady = hasReadyMatrixEnvAuth(scopedEnv);
+        if (accountId !== DEFAULT_ACCOUNT_ID && !scopedReady) {
+          const keys = getMatrixScopedEnvVarNames(accountId);
+          return `Set per-account env vars for "${accountId}" (for example ${keys.homeserver} + ${keys.accessToken} or ${keys.userId} + ${keys.password}).`;
+        }
         return null;
       }
       if (!input.homeserver?.trim()) {

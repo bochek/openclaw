@@ -222,13 +222,63 @@ describe("matrix directory", () => {
     });
   });
 
-  it("rejects useEnv for non-default matrix-js accounts", () => {
-    const error = matrixPlugin.setup!.validateInput?.({
-      cfg: {} as CoreConfig,
-      accountId: "ops",
-      input: { useEnv: true },
-    });
-    expect(error).toBe("MATRIX_* env vars can only be used for the default account.");
+  it("requires account-scoped env vars when --use-env is set for non-default accounts", () => {
+    const envKeys = [
+      "MATRIX_OPS_HOMESERVER",
+      "MATRIX_OPS_USER_ID",
+      "MATRIX_OPS_ACCESS_TOKEN",
+      "MATRIX_OPS_PASSWORD",
+    ] as const;
+    const previousEnv = Object.fromEntries(envKeys.map((key) => [key, process.env[key]])) as Record<
+      (typeof envKeys)[number],
+      string | undefined
+    >;
+    for (const key of envKeys) {
+      delete process.env[key];
+    }
+    try {
+      const error = matrixPlugin.setup!.validateInput?.({
+        cfg: {} as CoreConfig,
+        accountId: "ops",
+        input: { useEnv: true },
+      });
+      expect(error).toBe(
+        'Set per-account env vars for "ops" (for example MATRIX_OPS_HOMESERVER + MATRIX_OPS_ACCESS_TOKEN or MATRIX_OPS_USER_ID + MATRIX_OPS_PASSWORD).',
+      );
+    } finally {
+      for (const key of envKeys) {
+        if (previousEnv[key] === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = previousEnv[key];
+        }
+      }
+    }
+  });
+
+  it("accepts --use-env for non-default account when scoped env vars are present", () => {
+    const envKeys = {
+      MATRIX_OPS_HOMESERVER: process.env.MATRIX_OPS_HOMESERVER,
+      MATRIX_OPS_ACCESS_TOKEN: process.env.MATRIX_OPS_ACCESS_TOKEN,
+    };
+    process.env.MATRIX_OPS_HOMESERVER = "https://ops.example.org";
+    process.env.MATRIX_OPS_ACCESS_TOKEN = "ops-token";
+    try {
+      const error = matrixPlugin.setup!.validateInput?.({
+        cfg: {} as CoreConfig,
+        accountId: "ops",
+        input: { useEnv: true },
+      });
+      expect(error).toBeNull();
+    } finally {
+      for (const [key, value] of Object.entries(envKeys)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+    }
   });
 
   it("resolves account id from input name when explicit account id is missing", () => {

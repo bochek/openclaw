@@ -82,6 +82,20 @@ Environment variable equivalents (used when the config key is not set):
 - `MATRIX_DEVICE_ID`
 - `MATRIX_DEVICE_NAME`
 
+For non-default accounts, use account-scoped env vars:
+
+- `MATRIX_<ACCOUNT_ID>_HOMESERVER`
+- `MATRIX_<ACCOUNT_ID>_ACCESS_TOKEN`
+- `MATRIX_<ACCOUNT_ID>_USER_ID`
+- `MATRIX_<ACCOUNT_ID>_PASSWORD`
+- `MATRIX_<ACCOUNT_ID>_DEVICE_ID`
+- `MATRIX_<ACCOUNT_ID>_DEVICE_NAME`
+
+Example for account `ops`:
+
+- `MATRIX_OPS_HOMESERVER`
+- `MATRIX_OPS_ACCESS_TOKEN`
+
 ## Configuration example
 
 This is a practical baseline config with DM pairing, room allowlist, and E2EE enabled:

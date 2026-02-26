@@ -1,4 +1,4 @@
-import { normalizeAccountId } from "openclaw/plugin-sdk/account-id";
+import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import { getMatrixRuntime } from "../../runtime.js";
 import type { CoreConfig } from "../../types.js";
 import { MatrixClient } from "../sdk.js";
@@ -7,6 +7,80 @@ import type { MatrixAuth, MatrixResolvedConfig } from "./types.js";
 
 function clean(value?: string): string {
   return value?.trim() ?? "";
+}
+
+type MatrixEnvConfig = {
+  homeserver: string;
+  userId: string;
+  accessToken?: string;
+  password?: string;
+  deviceId?: string;
+  deviceName?: string;
+};
+
+function resolveGlobalMatrixEnvConfig(env: NodeJS.ProcessEnv): MatrixEnvConfig {
+  return {
+    homeserver: clean(env.MATRIX_HOMESERVER),
+    userId: clean(env.MATRIX_USER_ID),
+    accessToken: clean(env.MATRIX_ACCESS_TOKEN) || undefined,
+    password: clean(env.MATRIX_PASSWORD) || undefined,
+    deviceId: clean(env.MATRIX_DEVICE_ID) || undefined,
+    deviceName: clean(env.MATRIX_DEVICE_NAME) || undefined,
+  };
+}
+
+function resolveMatrixEnvAccountToken(accountId: string): string {
+  return normalizeAccountId(accountId)
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .toUpperCase();
+}
+
+export function getMatrixScopedEnvVarNames(accountId: string): {
+  homeserver: string;
+  userId: string;
+  accessToken: string;
+  password: string;
+  deviceId: string;
+  deviceName: string;
+} {
+  const token = resolveMatrixEnvAccountToken(accountId);
+  return {
+    homeserver: `MATRIX_${token}_HOMESERVER`,
+    userId: `MATRIX_${token}_USER_ID`,
+    accessToken: `MATRIX_${token}_ACCESS_TOKEN`,
+    password: `MATRIX_${token}_PASSWORD`,
+    deviceId: `MATRIX_${token}_DEVICE_ID`,
+    deviceName: `MATRIX_${token}_DEVICE_NAME`,
+  };
+}
+
+export function resolveScopedMatrixEnvConfig(
+  accountId: string,
+  env: NodeJS.ProcessEnv = process.env,
+): MatrixEnvConfig {
+  const keys = getMatrixScopedEnvVarNames(accountId);
+  return {
+    homeserver: clean(env[keys.homeserver]),
+    userId: clean(env[keys.userId]),
+    accessToken: clean(env[keys.accessToken]) || undefined,
+    password: clean(env[keys.password]) || undefined,
+    deviceId: clean(env[keys.deviceId]) || undefined,
+    deviceName: clean(env[keys.deviceName]) || undefined,
+  };
+}
+
+export function hasReadyMatrixEnvAuth(config: {
+  homeserver?: string;
+  userId?: string;
+  accessToken?: string;
+  password?: string;
+}): boolean {
+  const homeserver = clean(config.homeserver);
+  const userId = clean(config.userId);
+  const accessToken = clean(config.accessToken);
+  const password = clean(config.password);
+  return Boolean(homeserver && (accessToken || (userId && password)));
 }
 
 function findAccountConfig(cfg: CoreConfig, accountId: string): Record<string, unknown> {
@@ -35,12 +109,19 @@ export function resolveMatrixConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): MatrixResolvedConfig {
   const matrix = cfg.channels?.["matrix-js"] ?? {};
-  const homeserver = clean(matrix.homeserver) || clean(env.MATRIX_HOMESERVER);
-  const userId = clean(matrix.userId) || clean(env.MATRIX_USER_ID);
-  const accessToken = clean(matrix.accessToken) || clean(env.MATRIX_ACCESS_TOKEN) || undefined;
-  const password = clean(matrix.password) || clean(env.MATRIX_PASSWORD) || undefined;
-  const deviceId = clean(matrix.deviceId) || clean(env.MATRIX_DEVICE_ID) || undefined;
-  const deviceName = clean(matrix.deviceName) || clean(env.MATRIX_DEVICE_NAME) || undefined;
+  const defaultScopedEnv = resolveScopedMatrixEnvConfig(DEFAULT_ACCOUNT_ID, env);
+  const globalEnv = resolveGlobalMatrixEnvConfig(env);
+  const homeserver =
+    clean(matrix.homeserver) || defaultScopedEnv.homeserver || globalEnv.homeserver;
+  const userId = clean(matrix.userId) || defaultScopedEnv.userId || globalEnv.userId;
+  const accessToken =
+    clean(matrix.accessToken) || defaultScopedEnv.accessToken || globalEnv.accessToken || undefined;
+  const password =
+    clean(matrix.password) || defaultScopedEnv.password || globalEnv.password || undefined;
+  const deviceId =
+    clean(matrix.deviceId) || defaultScopedEnv.deviceId || globalEnv.deviceId || undefined;
+  const deviceName =
+    clean(matrix.deviceName) || defaultScopedEnv.deviceName || globalEnv.deviceName || undefined;
   const initialSyncLimit =
     typeof matrix.initialSyncLimit === "number"
       ? Math.max(0, Math.floor(matrix.initialSyncLimit))
@@ -65,6 +146,9 @@ export function resolveMatrixConfigForAccount(
 ): MatrixResolvedConfig {
   const matrix = cfg.channels?.["matrix-js"] ?? {};
   const account = findAccountConfig(cfg, accountId);
+  const normalizedAccountId = normalizeAccountId(accountId);
+  const scopedEnv = resolveScopedMatrixEnvConfig(normalizedAccountId, env);
+  const globalEnv = resolveGlobalMatrixEnvConfig(env);
 
   const accountHomeserver = clean(
     typeof account.homeserver === "string" ? account.homeserver : undefined,
@@ -83,16 +167,33 @@ export function resolveMatrixConfigForAccount(
     typeof account.deviceName === "string" ? account.deviceName : undefined,
   );
 
-  const homeserver = accountHomeserver || clean(matrix.homeserver) || clean(env.MATRIX_HOMESERVER);
-  const userId = accountUserId || clean(matrix.userId) || clean(env.MATRIX_USER_ID);
+  const homeserver =
+    accountHomeserver || scopedEnv.homeserver || clean(matrix.homeserver) || globalEnv.homeserver;
+  const userId = accountUserId || scopedEnv.userId || clean(matrix.userId) || globalEnv.userId;
   const accessToken =
-    accountAccessToken || clean(matrix.accessToken) || clean(env.MATRIX_ACCESS_TOKEN) || undefined;
+    accountAccessToken ||
+    scopedEnv.accessToken ||
+    clean(matrix.accessToken) ||
+    globalEnv.accessToken ||
+    undefined;
   const password =
-    accountPassword || clean(matrix.password) || clean(env.MATRIX_PASSWORD) || undefined;
+    accountPassword ||
+    scopedEnv.password ||
+    clean(matrix.password) ||
+    globalEnv.password ||
+    undefined;
   const deviceId =
-    accountDeviceId || clean(matrix.deviceId) || clean(env.MATRIX_DEVICE_ID) || undefined;
+    accountDeviceId ||
+    scopedEnv.deviceId ||
+    clean(matrix.deviceId) ||
+    globalEnv.deviceId ||
+    undefined;
   const deviceName =
-    accountDeviceName || clean(matrix.deviceName) || clean(env.MATRIX_DEVICE_NAME) || undefined;
+    accountDeviceName ||
+    scopedEnv.deviceName ||
+    clean(matrix.deviceName) ||
+    globalEnv.deviceName ||
+    undefined;
 
   const accountInitialSyncLimit =
     typeof account.initialSyncLimit === "number"

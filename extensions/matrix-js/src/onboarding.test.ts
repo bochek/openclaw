@@ -15,16 +15,21 @@ describe("matrix onboarding", () => {
     MATRIX_USER_ID: process.env.MATRIX_USER_ID,
     MATRIX_ACCESS_TOKEN: process.env.MATRIX_ACCESS_TOKEN,
     MATRIX_PASSWORD: process.env.MATRIX_PASSWORD,
+    MATRIX_OPS_HOMESERVER: process.env.MATRIX_OPS_HOMESERVER,
+    MATRIX_OPS_ACCESS_TOKEN: process.env.MATRIX_OPS_ACCESS_TOKEN,
   };
 
   afterEach(() => {
-    process.env.MATRIX_HOMESERVER = previousEnv.MATRIX_HOMESERVER;
-    process.env.MATRIX_USER_ID = previousEnv.MATRIX_USER_ID;
-    process.env.MATRIX_ACCESS_TOKEN = previousEnv.MATRIX_ACCESS_TOKEN;
-    process.env.MATRIX_PASSWORD = previousEnv.MATRIX_PASSWORD;
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   });
 
-  it("does not offer env shortcut when adding a non-default account", async () => {
+  it("offers env shortcut for non-default account when scoped env vars are present", async () => {
     setMatrixRuntime({
       state: {
         resolveStateDir: (_env: NodeJS.ProcessEnv, homeDir?: () => string) =>
@@ -39,6 +44,8 @@ describe("matrix onboarding", () => {
     process.env.MATRIX_USER_ID = "@env:example.org";
     process.env.MATRIX_PASSWORD = "env-password";
     process.env.MATRIX_ACCESS_TOKEN = "";
+    process.env.MATRIX_OPS_HOMESERVER = "https://matrix.ops.env.example.org";
+    process.env.MATRIX_OPS_ACCESS_TOKEN = "ops-env-token";
 
     const confirmMessages: string[] = [];
     const prompter = {
@@ -56,24 +63,12 @@ describe("matrix onboarding", () => {
         if (message === "Matrix account name") {
           return "ops";
         }
-        if (message === "Matrix homeserver URL") {
-          return "https://matrix.ops.example.org";
-        }
-        if (message === "Matrix access token") {
-          return "ops-token";
-        }
-        if (message === "Matrix device name (optional)") {
-          return "Ops Device";
-        }
         throw new Error(`unexpected text prompt: ${message}`);
       }),
       confirm: vi.fn(async ({ message }: { message: string }) => {
         confirmMessages.push(message);
-        if (message === "Enable end-to-end encryption (E2EE)?") {
-          return false;
-        }
-        if (message === "Configure Matrix rooms access?") {
-          return false;
+        if (message.startsWith("Matrix env vars detected")) {
+          return true;
         }
         return false;
       }),
@@ -106,10 +101,17 @@ describe("matrix onboarding", () => {
     if (result !== "skip") {
       expect(result.accountId).toBe("ops");
       expect(result.cfg.channels?.["matrix-js"]?.accounts?.ops).toMatchObject({
-        homeserver: "https://matrix.ops.example.org",
-        accessToken: "ops-token",
+        enabled: true,
       });
+      expect(result.cfg.channels?.["matrix-js"]?.accounts?.ops?.homeserver).toBeUndefined();
+      expect(result.cfg.channels?.["matrix-js"]?.accounts?.ops?.accessToken).toBeUndefined();
     }
-    expect(confirmMessages).not.toContain("Matrix env vars detected. Use env values?");
+    expect(
+      confirmMessages.some((message) =>
+        message.startsWith(
+          "Matrix env vars detected (MATRIX_OPS_HOMESERVER (+ auth vars)). Use env values?",
+        ),
+      ),
+    ).toBe(true);
   });
 });

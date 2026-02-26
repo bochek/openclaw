@@ -20,6 +20,11 @@ import {
   resolveMatrixAccount,
   resolveMatrixAccountConfig,
 } from "./matrix/accounts.js";
+import {
+  getMatrixScopedEnvVarNames,
+  hasReadyMatrixEnvAuth,
+  resolveScopedMatrixEnvConfig,
+} from "./matrix/client.js";
 import { updateMatrixAccountConfig } from "./matrix/config-update.js";
 import { ensureMatrixSdkInstalled, isMatrixSdkAvailable } from "./matrix/deps.js";
 import { resolveMatrixTargets } from "./resolve-targets.js";
@@ -55,6 +60,7 @@ async function noteMatrixAuthHelp(prompter: WizardPrompter): Promise<void> {
       "Use an access token (recommended) or password login to an existing account.",
       "With access token: user ID is fetched automatically.",
       "Env vars supported: MATRIX_HOMESERVER, MATRIX_USER_ID, MATRIX_ACCESS_TOKEN, MATRIX_PASSWORD.",
+      "Per-account env vars: MATRIX_<ACCOUNT_ID>_HOMESERVER, MATRIX_<ACCOUNT_ID>_USER_ID, MATRIX_<ACCOUNT_ID>_ACCESS_TOKEN, MATRIX_<ACCOUNT_ID>_PASSWORD.",
       `Docs: ${formatDocsLink("/channels/matrix-js", "channels/matrix-js")}`,
     ].join("\n"),
     "Matrix setup",
@@ -246,23 +252,42 @@ async function runMatrixConfigure(params: {
     await noteMatrixAuthHelp(params.prompter);
   }
 
-  const envHomeserver = process.env.MATRIX_HOMESERVER?.trim();
-  const envUserId = process.env.MATRIX_USER_ID?.trim();
-  const envAccessToken = process.env.MATRIX_ACCESS_TOKEN?.trim();
-  const envPassword = process.env.MATRIX_PASSWORD?.trim();
-  const envReady = Boolean(envHomeserver && (envAccessToken || (envUserId && envPassword)));
+  const scopedEnv = resolveScopedMatrixEnvConfig(accountId, process.env);
+  const defaultScopedEnv = resolveScopedMatrixEnvConfig(DEFAULT_ACCOUNT_ID, process.env);
+  const globalEnv = {
+    homeserver: process.env.MATRIX_HOMESERVER?.trim() ?? "",
+    userId: process.env.MATRIX_USER_ID?.trim() ?? "",
+    accessToken: process.env.MATRIX_ACCESS_TOKEN?.trim() || undefined,
+    password: process.env.MATRIX_PASSWORD?.trim() || undefined,
+  };
+  const scopedReady = hasReadyMatrixEnvAuth(scopedEnv);
+  const defaultScopedReady = hasReadyMatrixEnvAuth(defaultScopedEnv);
+  const globalReady = hasReadyMatrixEnvAuth(globalEnv);
+  const envReady =
+    scopedReady || (accountId === DEFAULT_ACCOUNT_ID && (defaultScopedReady || globalReady));
+  const envHomeserver =
+    scopedEnv.homeserver ||
+    (accountId === DEFAULT_ACCOUNT_ID
+      ? defaultScopedEnv.homeserver || globalEnv.homeserver
+      : undefined);
+  const envUserId =
+    scopedEnv.userId ||
+    (accountId === DEFAULT_ACCOUNT_ID ? defaultScopedEnv.userId || globalEnv.userId : undefined);
 
-  const canUseEnvShortcut = accountId === DEFAULT_ACCOUNT_ID;
   if (
-    canUseEnvShortcut &&
     envReady &&
     !existing.homeserver &&
     !existing.userId &&
     !existing.accessToken &&
     !existing.password
   ) {
+    const scopedEnvNames = getMatrixScopedEnvVarNames(accountId);
+    const envSourceHint =
+      accountId === DEFAULT_ACCOUNT_ID
+        ? "MATRIX_* or MATRIX_DEFAULT_*"
+        : `${scopedEnvNames.homeserver} (+ auth vars)`;
     const useEnv = await params.prompter.confirm({
-      message: "Matrix env vars detected. Use env values?",
+      message: `Matrix env vars detected (${envSourceHint}). Use env values?`,
       initialValue: true,
     });
     if (useEnv) {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CoreConfig } from "../types.js";
-import { resolveMatrixAuth, resolveMatrixConfig } from "./client.js";
+import { resolveMatrixAuth, resolveMatrixConfig, resolveMatrixConfigForAccount } from "./client.js";
 import * as credentialsModule from "./credentials.js";
 import * as sdkModule from "./sdk.js";
 
@@ -66,6 +66,28 @@ describe("resolveMatrixConfig", () => {
     expect(resolved.deviceName).toBe("EnvDevice");
     expect(resolved.initialSyncLimit).toBeUndefined();
     expect(resolved.encryption).toBe(false);
+  });
+
+  it("uses account-scoped env vars for non-default accounts before global env", () => {
+    const cfg = {
+      channels: {
+        "matrix-js": {
+          homeserver: "https://base.example.org",
+        },
+      },
+    } as CoreConfig;
+    const env = {
+      MATRIX_HOMESERVER: "https://global.example.org",
+      MATRIX_ACCESS_TOKEN: "global-token",
+      MATRIX_OPS_HOMESERVER: "https://ops.example.org",
+      MATRIX_OPS_ACCESS_TOKEN: "ops-token",
+      MATRIX_OPS_DEVICE_NAME: "Ops Device",
+    } as NodeJS.ProcessEnv;
+
+    const resolved = resolveMatrixConfigForAccount(cfg, "ops", env);
+    expect(resolved.homeserver).toBe("https://ops.example.org");
+    expect(resolved.accessToken).toBe("ops-token");
+    expect(resolved.deviceName).toBe("Ops Device");
   });
 });
 

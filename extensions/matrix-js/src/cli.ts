@@ -447,7 +447,10 @@ export function registerMatrixJsCli(params: { program: Command }): void {
     .option("--password <password>", "Matrix password")
     .option("--device-name <name>", "Matrix device display name")
     .option("--initial-sync-limit <n>", "Matrix initial sync limit")
-    .option("--use-env", "Use MATRIX_* env vars (default account only)")
+    .option(
+      "--use-env",
+      "Use MATRIX_* env vars (or MATRIX_<ACCOUNT_ID>_* for non-default accounts)",
+    )
     .option("--verbose", "Show setup details")
     .option("--json", "Output as JSON")
     .action(
@@ -483,7 +486,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
             console.log(`Saved matrix-js account: ${result.accountId}`);
             console.log(`Config path: ${result.configPath}`);
             console.log(
-              `Credentials source: ${result.useEnv ? "MATRIX_* env vars" : "inline config"}`,
+              `Credentials source: ${result.useEnv ? "MATRIX_* / MATRIX_<ACCOUNT_ID>_* env vars" : "inline config"}`,
             );
             const bindHint = `openclaw agents bind --agent <id> --bind matrix-js:${result.accountId}`;
             console.log(`Bind this account to an agent: ${bindHint}`);
