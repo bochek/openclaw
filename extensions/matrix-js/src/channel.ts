@@ -74,34 +74,8 @@ function buildMatrixConfigUpdate(
     initialSyncLimit?: number;
   },
 ): CoreConfig {
+  const normalizedAccountId = normalizeAccountId(accountId);
   const existing = cfg.channels?.["matrix-js"] ?? {};
-  if (accountId !== DEFAULT_ACCOUNT_ID) {
-    return {
-      ...cfg,
-      channels: {
-        ...cfg.channels,
-        "matrix-js": {
-          ...existing,
-          enabled: true,
-          accounts: {
-            ...existing.accounts,
-            [accountId]: {
-              ...existing.accounts?.[accountId],
-              enabled: true,
-              ...(input.homeserver ? { homeserver: input.homeserver } : {}),
-              ...(input.userId ? { userId: input.userId } : {}),
-              ...(input.accessToken ? { accessToken: input.accessToken } : {}),
-              ...(input.password ? { password: input.password } : {}),
-              ...(input.deviceName ? { deviceName: input.deviceName } : {}),
-              ...(typeof input.initialSyncLimit === "number"
-                ? { initialSyncLimit: input.initialSyncLimit }
-                : {}),
-            },
-          },
-        },
-      },
-    };
-  }
   return {
     ...cfg,
     channels: {
@@ -109,14 +83,21 @@ function buildMatrixConfigUpdate(
       "matrix-js": {
         ...existing,
         enabled: true,
-        ...(input.homeserver ? { homeserver: input.homeserver } : {}),
-        ...(input.userId ? { userId: input.userId } : {}),
-        ...(input.accessToken ? { accessToken: input.accessToken } : {}),
-        ...(input.password ? { password: input.password } : {}),
-        ...(input.deviceName ? { deviceName: input.deviceName } : {}),
-        ...(typeof input.initialSyncLimit === "number"
-          ? { initialSyncLimit: input.initialSyncLimit }
-          : {}),
+        accounts: {
+          ...existing.accounts,
+          [normalizedAccountId]: {
+            ...existing.accounts?.[normalizedAccountId],
+            enabled: true,
+            ...(input.homeserver ? { homeserver: input.homeserver } : {}),
+            ...(input.userId ? { userId: input.userId } : {}),
+            ...(input.accessToken ? { accessToken: input.accessToken } : {}),
+            ...(input.password ? { password: input.password } : {}),
+            ...(input.deviceName ? { deviceName: input.deviceName } : {}),
+            ...(typeof input.initialSyncLimit === "number"
+              ? { initialSyncLimit: input.initialSyncLimit }
+              : {}),
+          },
+        },
       },
     },
   };
@@ -152,7 +133,6 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         sectionKey: "matrix-js",
         accountId,
         enabled,
-        allowTopLevel: true,
       }),
     deleteAccount: ({ cfg, accountId }) =>
       deleteAccountFromConfigSection({
@@ -338,13 +318,17 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
   },
   actions: matrixMessageActions,
   setup: {
-    resolveAccountId: ({ accountId }) => normalizeAccountId(accountId),
+    resolveAccountId: ({ accountId, input }) =>
+      normalizeAccountId(accountId?.trim() || input?.name?.trim()),
+    resolveBindingAccountId: ({ agentId, accountId }) =>
+      normalizeAccountId(accountId?.trim() || agentId),
     applyAccountName: ({ cfg, accountId, name }) =>
       applyAccountNameToChannelSection({
         cfg: cfg as CoreConfig,
         channelKey: "matrix-js",
         accountId,
         name,
+        alwaysUseAccounts: true,
       }),
     validateInput: ({ accountId, input }) => {
       if (input.useEnv && accountId !== DEFAULT_ACCOUNT_ID) {
@@ -378,25 +362,19 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         channelKey: "matrix-js",
         accountId,
         name: input.name,
+        alwaysUseAccounts: true,
       });
-      const next =
-        accountId !== DEFAULT_ACCOUNT_ID
-          ? migrateBaseNameToDefaultAccount({
-              cfg: namedConfig,
-              channelKey: "matrix-js",
-            })
-          : namedConfig;
+      const next = migrateBaseNameToDefaultAccount({
+        cfg: namedConfig,
+        channelKey: "matrix-js",
+      });
       if (input.useEnv) {
-        return {
-          ...next,
-          channels: {
-            ...next.channels,
-            "matrix-js": {
-              ...next.channels?.["matrix-js"],
-              enabled: true,
-            },
-          },
-        } as CoreConfig;
+        return setAccountEnabledInConfigSection({
+          cfg: next as CoreConfig,
+          sectionKey: "matrix-js",
+          accountId,
+          enabled: true,
+        }) as CoreConfig;
       }
       return buildMatrixConfigUpdate(next as CoreConfig, accountId, {
         homeserver: input.homeserver?.trim(),

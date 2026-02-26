@@ -1,6 +1,5 @@
 import type { Command } from "commander";
 import {
-  DEFAULT_ACCOUNT_ID,
   formatZonedTimestamp,
   normalizeAccountId,
   type ChannelSetupInput,
@@ -95,7 +94,6 @@ async function addMatrixJsAccount(params: {
 }): Promise<MatrixCliAccountAddResult> {
   const runtime = getMatrixRuntime();
   const cfg = runtime.config.loadConfig() as CoreConfig;
-  const accountId = normalizeAccountId(params.account);
   const setup = matrixPlugin.setup;
   if (!setup?.applyAccountConfig) {
     throw new Error("Matrix-js account setup is unavailable.");
@@ -111,6 +109,12 @@ async function addMatrixJsAccount(params: {
     initialSyncLimit: parseOptionalInt(params.initialSyncLimit, "--initial-sync-limit"),
     useEnv: params.useEnv === true,
   };
+  const accountId =
+    setup.resolveAccountId?.({
+      cfg,
+      accountId: params.account,
+      input,
+    }) ?? normalizeAccountId(params.account?.trim() || params.name?.trim());
 
   const validationError = setup.validateInput?.({
     cfg,
@@ -130,10 +134,7 @@ async function addMatrixJsAccount(params: {
 
   return {
     accountId,
-    configPath:
-      accountId === DEFAULT_ACCOUNT_ID
-        ? "channels.matrix-js"
-        : `channels.matrix-js.accounts.${accountId}`,
+    configPath: `channels.matrix-js.accounts.${accountId}`,
     useEnv: input.useEnv === true,
   };
 }
@@ -438,7 +439,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
   account
     .command("add")
     .description("Add or update a matrix-js account (wrapper around channel setup)")
-    .option("--account <id>", "Account ID (default: default)")
+    .option("--account <id>", "Account ID (default: normalized --name, else default)")
     .option("--name <name>", "Optional display name for this account")
     .option("--homeserver <url>", "Matrix homeserver URL")
     .option("--user-id <id>", "Matrix user ID")
@@ -484,10 +485,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
             console.log(
               `Credentials source: ${result.useEnv ? "MATRIX_* env vars" : "inline config"}`,
             );
-            const bindHint =
-              result.accountId === DEFAULT_ACCOUNT_ID
-                ? "openclaw agents bind --agent <id> --bind matrix-js"
-                : `openclaw agents bind --agent <id> --bind matrix-js:${result.accountId}`;
+            const bindHint = `openclaw agents bind --agent <id> --bind matrix-js:${result.accountId}`;
             console.log(`Bind this account to an agent: ${bindHint}`);
           },
           errorPrefix: "Account setup failed",

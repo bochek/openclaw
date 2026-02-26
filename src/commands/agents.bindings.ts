@@ -230,6 +230,33 @@ function resolveDefaultAccountId(cfg: OpenClawConfig, provider: ChannelId): stri
   return resolveChannelDefaultAccountId({ plugin, cfg });
 }
 
+function resolveBindingAccountId(params: {
+  channel: ChannelId;
+  config: OpenClawConfig;
+  agentId: string;
+  explicitAccountId?: string;
+}): string | undefined {
+  const explicitAccountId = params.explicitAccountId?.trim();
+  if (explicitAccountId) {
+    return explicitAccountId;
+  }
+
+  const plugin = getChannelPlugin(params.channel);
+  const pluginAccountId = plugin?.setup?.resolveBindingAccountId?.({
+    cfg: params.config,
+    agentId: params.agentId,
+  });
+  if (pluginAccountId?.trim()) {
+    return pluginAccountId.trim();
+  }
+
+  if (plugin?.meta.forceAccountBinding) {
+    return resolveDefaultAccountId(params.config, params.channel);
+  }
+
+  return undefined;
+}
+
 export function buildChannelBindings(params: {
   agentId: string;
   selection: ChannelChoice[];
@@ -240,14 +267,14 @@ export function buildChannelBindings(params: {
   const agentId = normalizeAgentId(params.agentId);
   for (const channel of params.selection) {
     const match: AgentBinding["match"] = { channel };
-    const accountId = params.accountIds?.[channel]?.trim();
+    const accountId = resolveBindingAccountId({
+      channel,
+      config: params.config,
+      agentId,
+      explicitAccountId: params.accountIds?.[channel],
+    });
     if (accountId) {
       match.accountId = accountId;
-    } else {
-      const plugin = getChannelPlugin(channel);
-      if (plugin?.meta.forceAccountBinding) {
-        match.accountId = resolveDefaultAccountId(params.config, channel);
-      }
     }
     bindings.push({ agentId, match });
   }
@@ -274,17 +301,17 @@ export function parseBindingSpecs(params: {
       errors.push(`Unknown channel "${channelRaw}".`);
       continue;
     }
-    let accountId = accountRaw?.trim();
+    let accountId: string | undefined = accountRaw?.trim();
     if (accountRaw !== undefined && !accountId) {
       errors.push(`Invalid binding "${trimmed}" (empty account id).`);
       continue;
     }
-    if (!accountId) {
-      const plugin = getChannelPlugin(channel);
-      if (plugin?.meta.forceAccountBinding) {
-        accountId = resolveDefaultAccountId(params.config, channel);
-      }
-    }
+    accountId = resolveBindingAccountId({
+      channel,
+      config: params.config,
+      agentId,
+      explicitAccountId: accountId,
+    });
     const match: AgentBinding["match"] = { channel };
     if (accountId) {
       match.accountId = accountId;

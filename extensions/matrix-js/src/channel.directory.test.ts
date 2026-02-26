@@ -162,6 +162,35 @@ describe("matrix directory", () => {
     });
   });
 
+  it("writes default matrix-js account credentials under channels.matrix-js.accounts.default", () => {
+    const cfg = {
+      channels: {
+        "matrix-js": {
+          homeserver: "https://legacy.example.org",
+          accessToken: "legacy-token",
+        },
+      },
+    } as unknown as CoreConfig;
+
+    const updated = matrixPlugin.setup!.applyAccountConfig({
+      cfg,
+      accountId: "default",
+      input: {
+        homeserver: "https://matrix.example.org",
+        userId: "@bot:example.org",
+        accessToken: "bot-token",
+      },
+    }) as CoreConfig;
+
+    expect(updated.channels?.["matrix-js"]?.homeserver).toBe("https://legacy.example.org");
+    expect(updated.channels?.["matrix-js"]?.accounts?.default).toMatchObject({
+      enabled: true,
+      homeserver: "https://matrix.example.org",
+      userId: "@bot:example.org",
+      accessToken: "bot-token",
+    });
+  });
+
   it("rejects useEnv for non-default matrix-js accounts", () => {
     const error = matrixPlugin.setup!.validateInput?.({
       cfg: {} as CoreConfig,
@@ -169,5 +198,23 @@ describe("matrix directory", () => {
       input: { useEnv: true },
     });
     expect(error).toBe("MATRIX_* env vars can only be used for the default account.");
+  });
+
+  it("resolves account id from input name when explicit account id is missing", () => {
+    const accountId = matrixPlugin.setup!.resolveAccountId?.({
+      cfg: {} as CoreConfig,
+      accountId: undefined,
+      input: { name: "Main Bot" },
+    });
+    expect(accountId).toBe("main-bot");
+  });
+
+  it("resolves binding account id from agent id when omitted", () => {
+    const accountId = matrixPlugin.setup!.resolveBindingAccountId?.({
+      cfg: {} as CoreConfig,
+      agentId: "Ops",
+      accountId: undefined,
+    });
+    expect(accountId).toBe("ops");
   });
 });

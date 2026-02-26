@@ -194,6 +194,39 @@ describe("matrix-js CLI verification commands", () => {
     );
   });
 
+  it("uses --name as fallback account id and prints account-scoped config path", async () => {
+    matrixRuntimeLoadConfigMock.mockReturnValue({ channels: {} });
+    const program = buildProgram();
+
+    await program.parseAsync(
+      [
+        "matrix-js",
+        "account",
+        "add",
+        "--name",
+        "Main Bot",
+        "--homeserver",
+        "https://matrix.example.org",
+        "--user-id",
+        "@main:example.org",
+        "--password",
+        "secret",
+      ],
+      { from: "user" },
+    );
+
+    expect(matrixSetupValidateInputMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: "main-bot",
+      }),
+    );
+    expect(console.log).toHaveBeenCalledWith("Saved matrix-js account: main-bot");
+    expect(console.log).toHaveBeenCalledWith("Config path: channels.matrix-js.accounts.main-bot");
+    expect(console.log).toHaveBeenCalledWith(
+      "Bind this account to an agent: openclaw agents bind --agent <id> --bind matrix-js:main-bot",
+    );
+  });
+
   it("returns JSON errors for invalid account setup input", async () => {
     matrixSetupValidateInputMock.mockReturnValue("Matrix requires --homeserver");
     const program = buildProgram();

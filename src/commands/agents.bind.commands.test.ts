@@ -10,6 +10,30 @@ vi.mock("../config/config.js", async (importOriginal) => ({
   writeConfigFile: writeConfigFileMock,
 }));
 
+vi.mock("../channels/plugins/index.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../channels/plugins/index.js")>();
+  return {
+    ...actual,
+    getChannelPlugin: (channel: string) => {
+      if (channel === "matrix-js") {
+        return {
+          id: "matrix-js",
+          setup: {
+            resolveBindingAccountId: ({ agentId }: { agentId: string }) => agentId.toLowerCase(),
+          },
+        };
+      }
+      return actual.getChannelPlugin(channel);
+    },
+    normalizeChannelId: (channel: string) => {
+      if (channel.trim().toLowerCase() === "matrix-js") {
+        return "matrix-js";
+      }
+      return actual.normalizeChannelId(channel);
+    },
+  };
+});
+
 import { agentsBindCommand, agentsBindingsCommand, agentsUnbindCommand } from "./agents.js";
 
 const runtime = createTestRuntime();
@@ -53,6 +77,22 @@ describe("agents bind/unbind commands", () => {
     expect(writeConfigFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         bindings: [{ agentId: "main", match: { channel: "telegram" } }],
+      }),
+    );
+    expect(runtime.exit).not.toHaveBeenCalled();
+  });
+
+  it("defaults matrix-js accountId to the target agent id when omitted", async () => {
+    readConfigFileSnapshotMock.mockResolvedValue({
+      ...baseConfigSnapshot,
+      config: {},
+    });
+
+    await agentsBindCommand({ agent: "main", bind: ["matrix-js"] }, runtime);
+
+    expect(writeConfigFileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        bindings: [{ agentId: "main", match: { channel: "matrix-js", accountId: "main" } }],
       }),
     );
     expect(runtime.exit).not.toHaveBeenCalled();

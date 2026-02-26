@@ -153,9 +153,6 @@ export async function channelsAddCommand(
     runtime.exit(1);
     return;
   }
-  const accountId =
-    plugin.setup.resolveAccountId?.({ cfg: nextConfig, accountId: opts.account }) ??
-    normalizeAccountId(opts.account);
   const useEnv = opts.useEnv === true;
   const initialSyncLimit =
     typeof opts.initialSyncLimit === "number"
@@ -199,6 +196,12 @@ export async function channelsAddCommand(
     dmAllowlist,
     autoDiscoverChannels: opts.autoDiscoverChannels,
   };
+  const accountId =
+    plugin.setup.resolveAccountId?.({
+      cfg: nextConfig,
+      accountId: opts.account,
+      input,
+    }) ?? normalizeAccountId(opts.account);
 
   const validationError = plugin.setup.validateInput?.({
     cfg: nextConfig,
