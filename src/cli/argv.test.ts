@@ -8,6 +8,7 @@ import {
   getVerboseFlag,
   hasHelpOrVersion,
   hasFlag,
+  isRootHelpRequest,
   isRootVersionRequest,
   shouldMigrateState,
   shouldMigrateStateFromPath,
@@ -331,5 +332,56 @@ describe("argv helpers", () => {
     },
   ])("isRootVersionRequest: $name", ({ argv, expected }) => {
     expect(isRootVersionRequest(argv)).toBe(expected);
+  });
+
+  // isRootHelpRequest: guards the entry.ts fast-path help exit.
+  it.each([
+    {
+      name: "--help flag at root",
+      argv: ["node", "openclaw", "--help"],
+      expected: true,
+    },
+    {
+      name: "-h flag at root",
+      argv: ["node", "openclaw", "-h"],
+      expected: true,
+    },
+    {
+      name: "--help after a root boolean flag",
+      argv: ["node", "openclaw", "--dev", "--help"],
+      expected: true,
+    },
+    {
+      name: "--help after a root value flag",
+      argv: ["node", "openclaw", "--profile", "dev", "--help"],
+      expected: true,
+    },
+    {
+      name: "--help after -- terminator must NOT trigger (forwarded arg)",
+      argv: ["node", "openclaw", "nodes", "run", "--", "git", "--help"],
+      expected: false,
+    },
+    {
+      name: "-h after -- terminator must NOT trigger",
+      argv: ["node", "openclaw", "--", "-h"],
+      expected: false,
+    },
+    {
+      name: "--help with subcommand must NOT trigger (subcommand-scoped)",
+      argv: ["node", "openclaw", "status", "--help"],
+      expected: false,
+    },
+    {
+      name: "-h with subcommand must NOT trigger",
+      argv: ["node", "openclaw", "models", "-h"],
+      expected: false,
+    },
+    {
+      name: "normal command without help flag",
+      argv: ["node", "openclaw", "status"],
+      expected: false,
+    },
+  ])("isRootHelpRequest: $name", ({ argv, expected }) => {
+    expect(isRootHelpRequest(argv)).toBe(expected);
   });
 });

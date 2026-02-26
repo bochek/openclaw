@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { isRootVersionRequest } from "./cli/argv.js";
+import { isRootHelpRequest, isRootVersionRequest } from "./cli/argv.js";
 import { applyCliProfileEnv, parseCliProfileArgs } from "./cli/profile.js";
 import { shouldSkipRespawnForArgv } from "./cli/respawn-policy.js";
 import { normalizeWindowsArgv } from "./cli/windows-argv.js";
@@ -143,14 +143,33 @@ if (
       process.exit(0);
     }
 
-    import("./cli/run-main.js")
-      .then(({ runCli }) => runCli(process.argv))
-      .catch((error) => {
-        console.error(
-          "[openclaw] Failed to start CLI:",
-          error instanceof Error ? (error.stack ?? error.message) : error,
-        );
-        process.exitCode = 1;
-      });
+    // Fast path: display root help without loading run-main.js or route.ts.
+    // isRootHelpRequest stops at -- and requires no subcommand before -h/--help,
+    // so `openclaw status --help` still falls through to the full CLI path.
+    // Importing program.js directly avoids the route.ts static import in run-main.ts.
+    if (isRootHelpRequest(argv)) {
+      import("./cli/program.js")
+        .then(({ buildProgram }) => {
+          buildProgram().outputHelp();
+          process.exit(0);
+        })
+        .catch((error) => {
+          console.error(
+            "[openclaw] Failed to display help:",
+            error instanceof Error ? (error.stack ?? error.message) : error,
+          );
+          process.exit(1);
+        });
+    } else {
+      import("./cli/run-main.js")
+        .then(({ runCli }) => runCli(process.argv))
+        .catch((error) => {
+          console.error(
+            "[openclaw] Failed to start CLI:",
+            error instanceof Error ? (error.stack ?? error.message) : error,
+          );
+          process.exitCode = 1;
+        });
+    }
   }
 }

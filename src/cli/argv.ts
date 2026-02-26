@@ -7,6 +7,13 @@ const ROOT_BOOLEAN_FLAGS = new Set(["--dev", "--no-color"]);
 const ROOT_VALUE_FLAGS = new Set(["--profile", "--log-level"]);
 const FLAG_TERMINATOR = "--";
 
+/**
+ * Returns true if argv contains any help or version flag.
+ * NOTE: uses `argv.some()` without `--` terminator awareness, so forwarded args
+ * like `nodes run -- git --help` will produce a false positive. Use
+ * `isRootHelpRequest`/`isRootVersionRequest` for fast-path guards where
+ * correctness around forwarded args matters.
+ */
 export function hasHelpOrVersion(argv: string[]): boolean {
   return (
     argv.some((arg) => HELP_FLAGS.has(arg) || VERSION_FLAGS.has(arg)) || hasRootVersionAlias(argv)
@@ -22,6 +29,48 @@ export function hasHelpOrVersion(argv: string[]): boolean {
  */
 export function isRootVersionRequest(argv: string[]): boolean {
   return hasFlag(argv, "--version") || hasFlag(argv, "-V") || hasRootVersionAlias(argv);
+}
+
+/**
+ * Returns true only when the process is a root-level help request:
+ *  - `-h` or `--help` appears before any `--` terminator, and
+ *  - no subcommand (non-flag token) precedes the help flag.
+ * `openclaw status --help` returns false (subcommand-scoped); `openclaw --help` returns true.
+ * Used by the entry.ts fast path to display help without loading route.ts or run-main.js.
+ */
+export function isRootHelpRequest(argv: string[]): boolean {
+  const args = argv.slice(2);
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (!arg) {
+      continue;
+    }
+    if (arg === FLAG_TERMINATOR) {
+      break;
+    }
+    if (arg === "-h" || arg === "--help") {
+      return true;
+    }
+    if (ROOT_BOOLEAN_FLAGS.has(arg)) {
+      continue;
+    }
+    if (arg.startsWith("--profile=")) {
+      continue;
+    }
+    if (ROOT_VALUE_FLAGS.has(arg)) {
+      const next = args[i + 1];
+      if (isValueToken(next)) {
+        i += 1;
+      }
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      continue;
+    }
+    // Non-flag token is a subcommand — this is a subcommand-scoped help request.
+    return false;
+  }
+  return false;
 }
 
 function isValueToken(arg: string | undefined): boolean {
