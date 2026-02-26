@@ -117,6 +117,28 @@ describe("createTypingCallbacks", () => {
     }
   });
 
+  it("treats non-positive maxConsecutiveFailures as one failure", async () => {
+    vi.useFakeTimers();
+    try {
+      const start = vi.fn().mockRejectedValue(new Error("gone"));
+      const onStartError = vi.fn();
+      const callbacks = createTypingCallbacks({
+        start,
+        onStartError,
+        maxConsecutiveFailures: 0,
+      });
+
+      await callbacks.onReplyStart();
+      expect(start).toHaveBeenCalledTimes(1);
+
+      await vi.advanceTimersByTimeAsync(9_000);
+      expect(start).toHaveBeenCalledTimes(1);
+      expect(onStartError).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("resets failure counter after a successful keepalive tick", async () => {
     vi.useFakeTimers();
     try {
