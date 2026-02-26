@@ -8,6 +8,10 @@ const mocks = vi.hoisted(() => ({
       },
     },
   })),
+  dispatch: vi.fn<() => Promise<{ status: number; body: unknown }>>(async () => ({
+    status: 200,
+    body: { ok: true },
+  })),
 }));
 
 vi.mock("../config/config.js", async (importOriginal) => {
@@ -25,7 +29,7 @@ vi.mock("./control-service.js", () => ({
 
 vi.mock("./routes/dispatcher.js", () => ({
   createBrowserRouteDispatcher: vi.fn(() => ({
-    dispatch: vi.fn(async () => ({ status: 200, body: { ok: true } })),
+    dispatch: mocks.dispatch,
   })),
 }));
 
@@ -47,6 +51,8 @@ describe("fetchBrowserJson loopback auth", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     mocks.loadConfig.mockClear();
+    mocks.dispatch.mockClear();
+    mocks.dispatch.mockResolvedValue({ status: 200, body: { ok: true } });
     mocks.loadConfig.mockReturnValue({
       gateway: {
         auth: {
@@ -59,6 +65,15 @@ describe("fetchBrowserJson loopback auth", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
+
+  async function expectServiceError(promise: Promise<unknown>, expectedMessage: string) {
+    await expect(promise).rejects.toThrow(expectedMessage);
+    try {
+      await promise;
+    } catch (error) {
+      expect(String(error)).not.toContain("Can't reach the OpenClaw browser control service");
+    }
+  }
 
   it("adds bearer auth for loopback absolute HTTP URLs", async () => {
     const fetchMock = stubJsonFetchOk();
@@ -113,5 +128,30 @@ describe("fetchBrowserJson loopback auth", () => {
     const init = fetchMock.mock.calls[0]?.[1];
     const headers = new Headers(init?.headers);
     expect(headers.get("authorization")).toBe("Bearer loopback-token");
+  });
+
+  it("keeps absolute HTTP service errors unwrapped", async () => {
+    const fetchMock = vi.fn<(input: RequestInfo | URL, init?: RequestInit) => Promise<Response>>(
+      async () =>
+        new Response("browser route failed", {
+          status: 502,
+          headers: { "Content-Type": "text/plain" },
+        }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expectServiceError(
+      fetchBrowserJson<{ ok: boolean }>("http://example.com/"),
+      "browser route failed",
+    );
+  });
+
+  it("keeps local dispatcher service errors unwrapped", async () => {
+    mocks.dispatch.mockResolvedValueOnce({
+      status: 500,
+      body: { error: "target unavailable" },
+    });
+
+    await expectServiceError(fetchBrowserJson<{ ok: boolean }>("/json/list"), "target unavailable");
   });
 });
