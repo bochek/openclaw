@@ -9,7 +9,7 @@ type MatrixEventLike = {
 };
 
 async function main() {
-  const targetUserId = process.argv[2]?.trim() || "@gumadeiras:matrix.gumadeiras.com";
+  const targetUserId = process.argv[2]?.trim() || "@user:example.org";
   const useFullBootstrap = process.argv.includes("--full-bootstrap");
   const startupTimeoutMs = 45_000;
   const base = resolveLiveHarnessConfig();

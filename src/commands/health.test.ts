@@ -126,22 +126,22 @@ describe("healthCommand", () => {
         telegram: {
           accountId: "main",
           configured: true,
-          probe: { ok: true, elapsedMs: 196, bot: { username: "pinguini_ugi_bot" } },
+          probe: { ok: true, elapsedMs: 196, bot: { username: "bot-default_ugi_bot" } },
           accounts: {
             main: {
               accountId: "main",
               configured: true,
-              probe: { ok: true, elapsedMs: 196, bot: { username: "pinguini_ugi_bot" } },
+              probe: { ok: true, elapsedMs: 196, bot: { username: "bot-default_ugi_bot" } },
             },
             flurry: {
               accountId: "flurry",
               configured: true,
-              probe: { ok: true, elapsedMs: 190, bot: { username: "flurry_ugi_bot" } },
+              probe: { ok: true, elapsedMs: 190, bot: { username: "beta_bot" } },
             },
             poe: {
               accountId: "poe",
               configured: true,
-              probe: { ok: true, elapsedMs: 188, bot: { username: "poe_ugi_bot" } },
+              probe: { ok: true, elapsedMs: 188, bot: { username: "gamma_bot" } },
             },
           },
         },
@@ -152,7 +152,7 @@ describe("healthCommand", () => {
 
     const lines = formatHealthChannelLines(summary, { accountMode: "all" });
     expect(lines).toContain(
-      "Telegram: ok (@pinguini_ugi_bot:main:196ms, @flurry_ugi_bot:flurry:190ms, @poe_ugi_bot:poe:188ms)",
+      "Telegram: ok (@bot-default_ugi_bot:main:196ms, @beta_bot:flurry:190ms, @gamma_bot:poe:188ms)",
     );
   });
 });

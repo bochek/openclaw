@@ -15,7 +15,7 @@ type MatrixRawEvent = {
 
 async function main() {
   const roomId = process.argv[2]?.trim();
-  const targetUserId = process.argv[3]?.trim() || "@gumadeiras:matrix.gumadeiras.com";
+  const targetUserId = process.argv[3]?.trim() || "@user:example.org";
   const timeoutSecRaw = Number.parseInt(process.argv[4] ?? "120", 10);
   const timeoutMs =
     (Number.isFinite(timeoutSecRaw) && timeoutSecRaw > 0 ? timeoutSecRaw : 120) * 1000;

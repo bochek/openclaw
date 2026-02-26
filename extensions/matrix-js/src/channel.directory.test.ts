@@ -200,7 +200,7 @@ describe("matrix directory", () => {
     const cfg = {
       channels: {
         "matrix-js": {
-          name: "pinguini",
+          name: "bot-default",
           homeserver: "https://legacy.example.org",
           userId: "@legacy:example.org",
           accessToken: "legacy-token",
@@ -222,7 +222,7 @@ describe("matrix directory", () => {
     expect(updated.channels?.["matrix-js"]?.encryption).toBeUndefined();
     expect((updated.channels?.["matrix-js"] as Record<string, unknown>)?.register).toBeUndefined();
     expect(updated.channels?.["matrix-js"]?.accounts?.default).toMatchObject({
-      name: "pinguini",
+      name: "bot-default",
       homeserver: "https://legacy.example.org",
       userId: "@legacy:example.org",
       accessToken: "legacy-token",

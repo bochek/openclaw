@@ -16,7 +16,7 @@ async function main() {
     encryption: false,
   });
 
-  const targetUserId = process.argv[2]?.trim() || "@gumadeiras:matrix.gumadeiras.com";
+  const targetUserId = process.argv[2]?.trim() || "@user:example.org";
   const stamp = new Date().toISOString();
 
   try {
