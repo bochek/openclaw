@@ -20,6 +20,7 @@ import {
   resolveMatrixAccount,
   resolveMatrixAccountConfig,
 } from "./matrix/accounts.js";
+import { updateMatrixAccountConfig } from "./matrix/config-update.js";
 import { ensureMatrixSdkInstalled, isMatrixSdkAvailable } from "./matrix/deps.js";
 import { resolveMatrixTargets } from "./resolve-targets.js";
 import type { CoreConfig } from "./types.js";
@@ -179,50 +180,6 @@ function setMatrixGroupRooms(cfg: CoreConfig, roomKeys: string[]) {
   };
 }
 
-function upsertMatrixAccountConfig(
-  cfg: CoreConfig,
-  accountId: string,
-  patch: {
-    name?: string;
-    enabled?: boolean;
-    homeserver?: string;
-    userId?: string;
-    accessToken?: string;
-    password?: string;
-    deviceName?: string;
-    encryption?: boolean;
-  },
-): CoreConfig {
-  const matrix = cfg.channels?.["matrix-js"] ?? {};
-  const normalizedAccountId = normalizeAccountId(accountId);
-  return {
-    ...cfg,
-    channels: {
-      ...cfg.channels,
-      "matrix-js": {
-        ...matrix,
-        enabled: true,
-        accounts: {
-          ...matrix.accounts,
-          [normalizedAccountId]: {
-            ...matrix.accounts?.[normalizedAccountId],
-            ...(patch.name?.trim() ? { name: patch.name.trim() } : {}),
-            ...(typeof patch.enabled === "boolean"
-              ? { enabled: patch.enabled }
-              : { enabled: true }),
-            ...(patch.homeserver ? { homeserver: patch.homeserver } : {}),
-            ...(patch.userId ? { userId: patch.userId } : {}),
-            ...(patch.accessToken ? { accessToken: patch.accessToken } : {}),
-            ...(patch.password ? { password: patch.password } : {}),
-            ...(patch.deviceName ? { deviceName: patch.deviceName } : {}),
-            ...(typeof patch.encryption === "boolean" ? { encryption: patch.encryption } : {}),
-          },
-        },
-      },
-    },
-  };
-}
-
 const dmPolicy: ChannelOnboardingDmPolicy = {
   label: "Matrix",
   channel,
@@ -266,7 +223,7 @@ async function runMatrixConfigure(params: {
     if (enteredName !== accountId) {
       await params.prompter.note(`Account id will be "${accountId}".`, "Matrix account");
     }
-    next = upsertMatrixAccountConfig(next, accountId, { name: enteredName, enabled: true });
+    next = updateMatrixAccountConfig(next, accountId, { name: enteredName, enabled: true });
   } else {
     const override = params.accountOverrides?.[channel]?.trim();
     if (override) {
@@ -295,7 +252,9 @@ async function runMatrixConfigure(params: {
   const envPassword = process.env.MATRIX_PASSWORD?.trim();
   const envReady = Boolean(envHomeserver && (envAccessToken || (envUserId && envPassword)));
 
+  const canUseEnvShortcut = accountId === DEFAULT_ACCOUNT_ID;
   if (
+    canUseEnvShortcut &&
     envReady &&
     !existing.homeserver &&
     !existing.userId &&
@@ -307,7 +266,7 @@ async function runMatrixConfigure(params: {
       initialValue: true,
     });
     if (useEnv) {
-      next = upsertMatrixAccountConfig(next, accountId, { enabled: true });
+      next = updateMatrixAccountConfig(next, accountId, { enabled: true });
       if (params.forceAllowFrom) {
         next = await promptMatrixAllowFrom({ cfg: next, prompter: params.prompter });
       }
@@ -406,14 +365,14 @@ async function runMatrixConfigure(params: {
     initialValue: existing.encryption ?? false,
   });
 
-  next = upsertMatrixAccountConfig(next, accountId, {
+  next = updateMatrixAccountConfig(next, accountId, {
     enabled: true,
     homeserver,
-    userId: userId || undefined,
-    accessToken: accessToken || undefined,
-    password: password || undefined,
-    deviceName: deviceName || undefined,
-    encryption: enableEncryption || undefined,
+    userId: userId || null,
+    accessToken: accessToken || null,
+    password: password || null,
+    deviceName: deviceName || null,
+    encryption: enableEncryption,
   });
 
   if (params.forceAllowFrom) {

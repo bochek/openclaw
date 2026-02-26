@@ -28,6 +28,7 @@ import {
   type ResolvedMatrixAccount,
 } from "./matrix/accounts.js";
 import { resolveMatrixAuth } from "./matrix/client.js";
+import { updateMatrixAccountConfig } from "./matrix/config-update.js";
 import { normalizeMatrixAllowList, normalizeMatrixUserId } from "./matrix/monitor/allowlist.js";
 import { probeMatrix } from "./matrix/probe.js";
 import { sendMessageMatrix } from "./matrix/send.js";
@@ -61,47 +62,6 @@ function normalizeMatrixMessagingTarget(raw: string): string | undefined {
   }
   const stripped = normalized.replace(/^(room|channel|user):/i, "").trim();
   return stripped || undefined;
-}
-
-function buildMatrixConfigUpdate(
-  cfg: CoreConfig,
-  accountId: string,
-  input: {
-    homeserver?: string;
-    userId?: string;
-    accessToken?: string;
-    password?: string;
-    deviceName?: string;
-    initialSyncLimit?: number;
-  },
-): CoreConfig {
-  const normalizedAccountId = normalizeAccountId(accountId);
-  const existing = cfg.channels?.["matrix-js"] ?? {};
-  return {
-    ...cfg,
-    channels: {
-      ...cfg.channels,
-      "matrix-js": {
-        ...existing,
-        enabled: true,
-        accounts: {
-          ...existing.accounts,
-          [normalizedAccountId]: {
-            ...existing.accounts?.[normalizedAccountId],
-            enabled: true,
-            ...(input.homeserver ? { homeserver: input.homeserver } : {}),
-            ...(input.userId ? { userId: input.userId } : {}),
-            ...(input.accessToken ? { accessToken: input.accessToken } : {}),
-            ...(input.password ? { password: input.password } : {}),
-            ...(input.deviceName ? { deviceName: input.deviceName } : {}),
-            ...(typeof input.initialSyncLimit === "number"
-              ? { initialSyncLimit: input.initialSyncLimit }
-              : {}),
-          },
-        },
-      },
-    },
-  };
 }
 
 export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
@@ -378,11 +338,14 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
           enabled: true,
         }) as CoreConfig;
       }
-      return buildMatrixConfigUpdate(next as CoreConfig, accountId, {
+      const accessToken = input.accessToken?.trim();
+      const password = input.password?.trim();
+      const userId = input.userId?.trim();
+      return updateMatrixAccountConfig(next as CoreConfig, accountId, {
         homeserver: input.homeserver?.trim(),
-        userId: input.userId?.trim(),
-        accessToken: input.accessToken?.trim(),
-        password: input.password?.trim(),
+        userId: password && !userId ? null : userId,
+        accessToken: accessToken || (password ? null : undefined),
+        password: password || (accessToken ? null : undefined),
         deviceName: input.deviceName?.trim(),
         initialSyncLimit: input.initialSyncLimit,
       });

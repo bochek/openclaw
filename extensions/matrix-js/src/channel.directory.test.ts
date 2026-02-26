@@ -248,4 +248,60 @@ describe("matrix directory", () => {
     });
     expect(accountId).toBe("ops");
   });
+
+  it("clears stale access token when switching an account to password auth", () => {
+    const cfg = {
+      channels: {
+        "matrix-js": {
+          accounts: {
+            default: {
+              homeserver: "https://matrix.example.org",
+              accessToken: "old-token",
+            },
+          },
+        },
+      },
+    } as unknown as CoreConfig;
+
+    const updated = matrixPlugin.setup!.applyAccountConfig({
+      cfg,
+      accountId: "default",
+      input: {
+        homeserver: "https://matrix.example.org",
+        userId: "@bot:example.org",
+        password: "new-password",
+      },
+    }) as CoreConfig;
+
+    expect(updated.channels?.["matrix-js"]?.accounts?.default?.password).toBe("new-password");
+    expect(updated.channels?.["matrix-js"]?.accounts?.default?.accessToken).toBeUndefined();
+  });
+
+  it("clears stale password when switching an account to token auth", () => {
+    const cfg = {
+      channels: {
+        "matrix-js": {
+          accounts: {
+            default: {
+              homeserver: "https://matrix.example.org",
+              userId: "@bot:example.org",
+              password: "old-password",
+            },
+          },
+        },
+      },
+    } as unknown as CoreConfig;
+
+    const updated = matrixPlugin.setup!.applyAccountConfig({
+      cfg,
+      accountId: "default",
+      input: {
+        homeserver: "https://matrix.example.org",
+        accessToken: "new-token",
+      },
+    }) as CoreConfig;
+
+    expect(updated.channels?.["matrix-js"]?.accounts?.default?.accessToken).toBe("new-token");
+    expect(updated.channels?.["matrix-js"]?.accounts?.default?.password).toBeUndefined();
+  });
 });
