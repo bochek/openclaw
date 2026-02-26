@@ -45,6 +45,7 @@ vi.mock("../../commands/agent.js", () => ({
 
 vi.mock("../../config/config.js", () => ({
   loadConfig: () => mocks.loadConfigReturn,
+  STATE_DIR: "/tmp/openclaw-test-state",
 }));
 
 vi.mock("../../agents/agent-scope.js", () => ({

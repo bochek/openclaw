@@ -45,10 +45,8 @@ export function createTelegramRunnerOptions(cfg: OpenClawConfig): RunOptions<unk
       },
       // Suppress grammY getUpdates stack traces; we log concise errors ourselves.
       silent: true,
-      // Retry transient failures before surfacing errors. Use a generous
-      // window so the runner survives prolonged outages (e.g. scheduled
-      // internet downtime) without the outer loop needing to restart it.
-      maxRetryTime: 60 * 60 * 1000,
+      // Retry transient failures for a limited window before surfacing errors.
+      maxRetryTime: 5 * 60 * 1000,
       retryInterval: "exponential",
     },
   };
@@ -279,7 +277,7 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
       try {
         // runner.task() returns a promise that resolves when the runner stops
         await runner.task();
-        if (opts.abortSignal?.aborted) {
+        if ((!opts.abortSignal || opts.abortSignal.aborted) && !forceRestarted) {
           return;
         }
         // The runner stopped on its own. This can happen when grammY's

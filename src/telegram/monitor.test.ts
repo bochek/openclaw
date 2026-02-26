@@ -229,6 +229,30 @@ describe("monitorTelegramProvider (grammY)", () => {
     expect(runSpy).toHaveBeenCalledTimes(2);
   });
 
+  it("restarts polling when runner stops unexpectedly under active abort signal", async () => {
+    const abort = new AbortController();
+    runSpy
+      .mockImplementationOnce(() => ({
+        task: () => Promise.resolve(),
+        stop: vi.fn(),
+        isRunning: (): boolean => false,
+      }))
+      .mockImplementationOnce(() => ({
+        task: () => {
+          abort.abort();
+          return Promise.resolve();
+        },
+        stop: vi.fn(),
+        isRunning: (): boolean => false,
+      }));
+
+    await monitorTelegramProvider({ token: "tok", abortSignal: abort.signal });
+
+    expect(computeBackoff).toHaveBeenCalled();
+    expect(sleepWithAbort).toHaveBeenCalled();
+    expect(runSpy).toHaveBeenCalledTimes(2);
+  });
+
   it("deletes webhook before starting polling", async () => {
     const order: string[] = [];
     api.deleteWebhook.mockReset();
