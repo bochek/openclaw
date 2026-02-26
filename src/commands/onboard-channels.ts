@@ -514,6 +514,27 @@ export async function setupChannels(
   const handleConfiguredChannel = async (channel: ChannelChoice, label: string) => {
     const plugin = getChannelPlugin(channel);
     const adapter = getChannelOnboardingAdapter(channel);
+    if (adapter?.configureWhenConfigured) {
+      const custom = await adapter.configureWhenConfigured({
+        cfg: next,
+        runtime,
+        prompter,
+        options,
+        accountOverrides,
+        shouldPromptAccountIds,
+        forceAllowFrom: forceAllowFromChannels.has(channel),
+      });
+      if (custom === "skip") {
+        return;
+      }
+      next = custom.cfg;
+      if (custom.accountId) {
+        recordAccount(channel, custom.accountId);
+      }
+      addSelection(channel);
+      await refreshStatus(channel);
+      return;
+    }
     const supportsDisable = Boolean(
       options?.allowDisable && (plugin?.config.setAccountEnabled || adapter?.disable),
     );
@@ -615,9 +636,33 @@ export async function setupChannels(
     }
 
     const plugin = getChannelPlugin(channel);
+    const adapter = getChannelOnboardingAdapter(channel);
     const label = plugin?.meta.label ?? catalogEntry?.meta.label ?? channel;
     const status = statusByChannel.get(channel);
     const configured = status?.configured ?? false;
+    if (adapter?.configureInteractive) {
+      const custom = await adapter.configureInteractive({
+        cfg: next,
+        runtime,
+        prompter,
+        options,
+        accountOverrides,
+        shouldPromptAccountIds,
+        forceAllowFrom: forceAllowFromChannels.has(channel),
+        configured,
+        label,
+      });
+      if (custom === "skip") {
+        return;
+      }
+      next = custom.cfg;
+      if (custom.accountId) {
+        recordAccount(channel, custom.accountId);
+      }
+      addSelection(channel);
+      await refreshStatus(channel);
+      return;
+    }
     if (configured) {
       await handleConfiguredChannel(channel, label);
       return;

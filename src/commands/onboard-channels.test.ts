@@ -1,7 +1,11 @@
+import type { PluginRuntime } from "openclaw/plugin-sdk";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { matrixPlugin } from "../../extensions/matrix-js/src/channel.js";
+import { setMatrixRuntime } from "../../extensions/matrix-js/src/runtime.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
+import { createChannelTestPluginBase, createTestRegistry } from "../test-utils/channel-plugins.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import { setDefaultChannelPluginRegistryForTests } from "./channel-test-helpers.js";
 import { setupChannels } from "./onboard-channels.js";
@@ -248,5 +252,112 @@ describe("setupChannels", () => {
 
     expect(select).toHaveBeenCalledWith(expect.objectContaining({ message: "Select a channel" }));
     expect(multiselect).not.toHaveBeenCalled();
+  });
+
+  it("offers add-account action for configured matrix-js channels", async () => {
+    setMatrixRuntime({
+      state: {
+        resolveStateDir: (_env: NodeJS.ProcessEnv, homeDir?: () => string) =>
+          (homeDir ?? (() => "/tmp"))(),
+      },
+      config: {
+        loadConfig: () => ({}),
+      },
+    } as unknown as PluginRuntime);
+    setActivePluginRegistry(
+      createTestRegistry([{ pluginId: "matrix-js", plugin: matrixPlugin, source: "test" }]),
+    );
+    const select = vi.fn(
+      async ({ message, options }: { message: string; options?: Array<{ value?: string }> }) => {
+        if (message === "Select channel (QuickStart)") {
+          return "matrix-js";
+        }
+        if (message.includes("already configured")) {
+          expect(options?.some((option) => option.value === "add-account")).toBe(true);
+          return "skip";
+        }
+        return "__done__";
+      },
+    );
+    const prompter = createPrompter({
+      select: select as unknown as WizardPrompter["select"],
+      text: vi.fn(async () => "") as unknown as WizardPrompter["text"],
+      multiselect: vi.fn(async () => []) as unknown as WizardPrompter["multiselect"],
+    });
+
+    const runtime = createExitThrowingRuntime();
+
+    await setupChannels(
+      {
+        channels: {
+          "matrix-js": {
+            homeserver: "https://matrix.example.org",
+            accessToken: "token",
+          },
+        },
+      } as OpenClawConfig,
+      runtime,
+      prompter,
+      {
+        skipConfirm: true,
+        quickstartDefaults: true,
+        promptAccountIds: true,
+      },
+    );
+
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("already configured") }),
+    );
+  });
+
+  it("uses configureInteractive for first-time plugin onboarding", async () => {
+    const configureInteractive = vi.fn(async ({ cfg }: { cfg: OpenClawConfig }) => ({ cfg }));
+    const plugin = {
+      ...createChannelTestPluginBase({
+        id: "customchat",
+        label: "CustomChat",
+        docsPath: "/channels/customchat",
+      }),
+      onboarding: {
+        channel: "customchat",
+        getStatus: async () => ({
+          channel: "customchat",
+          configured: false,
+          statusLines: ["CustomChat: not configured"],
+        }),
+        configure: async () => {
+          throw new Error("configure should not be called");
+        },
+        configureInteractive,
+      },
+    };
+    setActivePluginRegistry(
+      createTestRegistry([{ pluginId: "customchat", plugin, source: "test" }]),
+    );
+
+    const select = vi.fn(async ({ message }: { message: string }) => {
+      if (message === "Select channel (QuickStart)") {
+        return "customchat";
+      }
+      return "__done__";
+    });
+    const prompter = createPrompter({
+      select: select as unknown as WizardPrompter["select"],
+      text: vi.fn(async () => "") as unknown as WizardPrompter["text"],
+      multiselect: vi.fn(async () => []) as unknown as WizardPrompter["multiselect"],
+    });
+    const runtime = createExitThrowingRuntime();
+
+    await setupChannels({} as OpenClawConfig, runtime, prompter, {
+      skipConfirm: true,
+      quickstartDefaults: true,
+    });
+
+    expect(configureInteractive).toHaveBeenCalledWith(
+      expect.objectContaining({
+        configured: false,
+        label: "CustomChat",
+      }),
+    );
   });
 });
