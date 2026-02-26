@@ -34,11 +34,11 @@ export function registerCronEditCommand(cron: Command) {
       .option("--disable", "Disable job", false)
       .option("--delete-after-run", "Delete one-shot job after it succeeds", false)
       .option("--keep-after-run", "Keep one-shot job after it succeeds", false)
-      .option("--session <target>", "Session target (main|isolated)")
+      .option("--session-target <target>", "Session target (main|isolated)")
       .option("--agent <id>", "Set agent id")
       .option("--clear-agent", "Unset agent and use default", false)
-      .option("--session-key <key>", "Set session key for job routing")
-      .option("--clear-session-key", "Unset session key", false)
+      .option("--session <key>", "Set session key for job routing")
+      .option("--clear-session", "Unset session key", false)
       .option("--wake <mode>", "Wake mode (now|next-heartbeat)")
       .option("--at <when>", "Set one-shot time (ISO) or duration like 20m")
       .option("--every <duration>", "Set interval duration like 10m")
@@ -63,14 +63,14 @@ export function registerCronEditCommand(cron: Command) {
       .option("--no-best-effort-deliver", "Fail job when delivery fails")
       .action(async (id, opts) => {
         try {
-          if (opts.session === "main" && opts.message) {
+          if (opts.sessionTarget === "main" && opts.message) {
             throw new Error(
-              "Main jobs cannot use --message; use --system-event or --session isolated.",
+              "Main jobs cannot use --message; use --system-event or --session-target isolated.",
             );
           }
-          if (opts.session === "isolated" && opts.systemEvent) {
+          if (opts.sessionTarget === "isolated" && opts.systemEvent) {
             throw new Error(
-              "Isolated jobs cannot use --system-event; use --message or --session main.",
+              "Isolated jobs cannot use --system-event; use --message or --session-target main.",
             );
           }
           if (opts.announce && typeof opts.deliver === "boolean") {
@@ -120,8 +120,8 @@ export function registerCronEditCommand(cron: Command) {
           if (opts.keepAfterRun) {
             patch.deleteAfterRun = false;
           }
-          if (typeof opts.session === "string") {
-            patch.sessionTarget = opts.session;
+          if (typeof opts.sessionTarget === "string") {
+            patch.sessionTarget = opts.sessionTarget;
           }
           if (typeof opts.wake === "string") {
             patch.wakeMode = opts.wake;
@@ -135,13 +135,13 @@ export function registerCronEditCommand(cron: Command) {
           if (opts.clearAgent) {
             patch.agentId = null;
           }
-          if (opts.sessionKey && opts.clearSessionKey) {
-            throw new Error("Use --session-key or --clear-session-key, not both");
+          if (opts.session && opts.clearSession) {
+            throw new Error("Use --session or --clear-session, not both");
           }
-          if (typeof opts.sessionKey === "string" && opts.sessionKey.trim()) {
-            patch.sessionKey = opts.sessionKey.trim();
+          if (typeof opts.session === "string" && opts.session.trim()) {
+            patch.sessionKey = opts.session.trim();
           }
-          if (opts.clearSessionKey) {
+          if (opts.clearSession) {
             patch.sessionKey = null;
           }
 

@@ -70,8 +70,8 @@ export function registerCronAddCommand(cron: Command) {
       .option("--delete-after-run", "Delete one-shot job after it succeeds", false)
       .option("--keep-after-run", "Keep one-shot job after it succeeds", false)
       .option("--agent <id>", "Agent id for this job")
-      .option("--session <target>", "Session target (main|isolated)")
-      .option("--session-key <key>", "Session key for job routing (e.g. agent:my-agent:my-session)")
+      .option("--session-target <target>", "Session target (main|isolated)")
+      .option("--session <key>", "Session key for job routing (e.g. agent:my-agent:my-session)")
       .option("--wake <mode>", "Wake mode (now|next-heartbeat)", "now")
       .option("--at <when>", "Run once at time (ISO) or +duration (e.g. 20m)")
       .option("--every <duration>", "Run every duration (e.g. 10m, 1h)")
@@ -195,13 +195,14 @@ export function registerCronAddCommand(cron: Command) {
             typeof cmd?.getOptionValueSource === "function"
               ? (name: string) => cmd.getOptionValueSource(name)
               : () => undefined;
-          const sessionSource = optionSource("session");
-          const sessionTargetRaw = typeof opts.session === "string" ? opts.session.trim() : "";
+          const sessionSource = optionSource("sessionTarget");
+          const sessionTargetRaw =
+            typeof opts.sessionTarget === "string" ? opts.sessionTarget.trim() : "";
           const inferredSessionTarget = payload.kind === "agentTurn" ? "isolated" : "main";
           const sessionTarget =
             sessionSource === "cli" ? sessionTargetRaw || "" : inferredSessionTarget;
           if (sessionTarget !== "main" && sessionTarget !== "isolated") {
-            throw new Error("--session must be main or isolated");
+            throw new Error("--session-target must be main or isolated");
           }
 
           if (opts.deleteAfterRun && opts.keepAfterRun) {
@@ -218,7 +219,7 @@ export function registerCronAddCommand(cron: Command) {
             (opts.announce || typeof opts.deliver === "boolean") &&
             (sessionTarget !== "isolated" || payload.kind !== "agentTurn")
           ) {
-            throw new Error("--announce/--no-deliver require --session isolated.");
+            throw new Error("--announce/--no-deliver require --session-target isolated.");
           }
 
           const deliveryMode =
@@ -242,8 +243,8 @@ export function registerCronAddCommand(cron: Command) {
               : undefined;
 
           const sessionKey =
-            typeof opts.sessionKey === "string" && opts.sessionKey.trim()
-              ? opts.sessionKey.trim()
+            typeof opts.session === "string" && opts.session.trim()
+              ? opts.session.trim()
               : undefined;
 
           const params = {

@@ -38,7 +38,7 @@ Create a one-shot reminder, verify it exists, and run it immediately:
 openclaw cron add \
   --name "Reminder" \
   --at "2026-02-01T16:00:00Z" \
-  --session main \
+  --session-target main \
   --system-event "Reminder: check the cron docs draft" \
   --wake now \
   --delete-after-run
@@ -55,7 +55,7 @@ openclaw cron add \
   --name "Morning brief" \
   --cron "0 7 * * *" \
   --tz "America/Los_Angeles" \
-  --session isolated \
+  --session-target isolated \
   --message "Summarize overnight updates." \
   --announce \
   --channel slack \
@@ -479,7 +479,7 @@ One-shot reminder (UTC ISO, auto-delete after success):
 openclaw cron add \
   --name "Send reminder" \
   --at "2026-01-12T18:00:00Z" \
-  --session main \
+  --session-target main \
   --system-event "Reminder: submit expense report." \
   --wake now \
   --delete-after-run
@@ -491,7 +491,7 @@ One-shot reminder (main session, wake immediately):
 openclaw cron add \
   --name "Calendar check" \
   --at "20m" \
-  --session main \
+  --session-target main \
   --system-event "Next heartbeat: check calendar." \
   --wake now
 ```
@@ -503,7 +503,7 @@ openclaw cron add \
   --name "Morning status" \
   --cron "0 7 * * *" \
   --tz "America/Los_Angeles" \
-  --session isolated \
+  --session-target isolated \
   --message "Summarize inbox + calendar for today." \
   --announce \
   --channel whatsapp \
@@ -518,7 +518,7 @@ openclaw cron add \
   --cron "0 * * * * *" \
   --tz "UTC" \
   --stagger 30s \
-  --session isolated \
+  --session-target isolated \
   --message "Run minute watcher checks." \
   --announce
 ```
@@ -530,7 +530,7 @@ openclaw cron add \
   --name "Nightly summary (topic)" \
   --cron "0 22 * * *" \
   --tz "America/Los_Angeles" \
-  --session isolated \
+  --session-target isolated \
   --message "Summarize today; send to the nightly topic." \
   --announce \
   --channel telegram \
@@ -544,7 +544,7 @@ openclaw cron add \
   --name "Deep analysis" \
   --cron "0 6 * * 1" \
   --tz "America/Los_Angeles" \
-  --session isolated \
+  --session-target isolated \
   --message "Weekly deep analysis of project progress." \
   --model "opus" \
   --thinking high \
@@ -557,7 +557,7 @@ Agent selection (multi-agent setups):
 
 ```bash
 # Pin a job to agent "ops" (falls back to default if that agent is missing)
-openclaw cron add --name "Ops sweep" --cron "0 6 * * *" --session isolated --message "Check ops queue" --agent ops
+openclaw cron add --name "Ops sweep" --cron "0 6 * * *" --session-target isolated --message "Check ops queue" --agent ops
 
 # Switch or clear the agent on an existing job
 openclaw cron edit <jobId> --agent ops

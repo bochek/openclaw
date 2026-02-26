@@ -106,7 +106,7 @@ openclaw cron add \
   --name "Morning briefing" \
   --cron "0 7 * * *" \
   --tz "America/New_York" \
-  --session isolated \
+  --session-target isolated \
   --message "Generate today's briefing: weather, calendar, top emails, news summary." \
   --model opus \
   --announce \
@@ -122,7 +122,7 @@ This runs at exactly 7:00 AM New York time, uses Opus for quality, and announces
 openclaw cron add \
   --name "Meeting reminder" \
   --at "20m" \
-  --session main \
+  --session-target main \
   --system-event "Reminder: standup meeting starts in 10 minutes." \
   --wake now \
   --delete-after-run
@@ -178,13 +178,13 @@ The most efficient setup uses **both**:
 
 ```bash
 # Daily morning briefing at 7am
-openclaw cron add --name "Morning brief" --cron "0 7 * * *" --session isolated --message "..." --announce
+openclaw cron add --name "Morning brief" --cron "0 7 * * *" --session-target isolated --message "..." --announce
 
 # Weekly project review on Mondays at 9am
-openclaw cron add --name "Weekly review" --cron "0 9 * * 1" --session isolated --message "..." --model opus
+openclaw cron add --name "Weekly review" --cron "0 9 * * 1" --session-target isolated --message "..." --model opus
 
 # One-shot reminder
-openclaw cron add --name "Call back" --at "2h" --session main --system-event "Call back the client" --wake now
+openclaw cron add --name "Call back" --at "2h" --session-target main --system-event "Call back the client" --wake now
 ```
 
 ## Lobster: Deterministic workflows with approvals
@@ -229,7 +229,7 @@ Both heartbeat and cron can interact with the main session, but differently:
 
 ### When to use main session cron
 
-Use `--session main` with `--system-event` when you want:
+Use `--session-target main` with `--system-event` when you want:
 
 - The reminder/event to appear in main session context
 - The agent to handle it during the next heartbeat with full context
@@ -239,14 +239,14 @@ Use `--session main` with `--system-event` when you want:
 openclaw cron add \
   --name "Check project" \
   --every "4h" \
-  --session main \
+  --session-target main \
   --system-event "Time for a project health check" \
   --wake now
 ```
 
 ### When to use isolated cron
 
-Use `--session isolated` when you want:
+Use `--session-target isolated` when you want:
 
 - A clean slate without prior context
 - Different model or thinking settings
@@ -257,7 +257,7 @@ Use `--session isolated` when you want:
 openclaw cron add \
   --name "Deep analysis" \
   --cron "0 6 * * 0" \
-  --session isolated \
+  --session-target isolated \
   --message "Weekly codebase analysis..." \
   --model opus \
   --thinking high \

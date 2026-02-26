@@ -42,6 +42,7 @@ type CronUpdatePatch = {
     schedule?: { kind?: string; expr?: string; tz?: string; staggerMs?: number };
     payload?: { message?: string; model?: string; thinking?: string };
     delivery?: { mode?: string; channel?: string; to?: string; bestEffort?: boolean };
+    sessionKey?: unknown;
   };
 };
 
@@ -51,6 +52,7 @@ type CronAddParams = {
   delivery?: { mode?: string };
   deleteAfterRun?: boolean;
   agentId?: string;
+  sessionKey?: string;
   sessionTarget?: string;
 };
 
@@ -153,7 +155,7 @@ describe("cron cli", () => {
       "Daily",
       "--cron",
       "* * * * *",
-      "--session",
+      "--session-target",
       "isolated",
       "--message",
       "hello",
@@ -180,7 +182,7 @@ describe("cron cli", () => {
       "Daily",
       "--cron",
       "* * * * *",
-      "--session",
+      "--session-target",
       "isolated",
       "--message",
       "hello",
@@ -192,7 +194,7 @@ describe("cron cli", () => {
     expect(params?.delivery?.mode).toBe("announce");
   });
 
-  it("infers sessionTarget from payload when --session is omitted", async () => {
+  it("infers sessionTarget from payload when --session-target is omitted", async () => {
     await runCronCommand([
       "cron",
       "add",
@@ -234,7 +236,7 @@ describe("cron cli", () => {
       "Keep me",
       "--at",
       "20m",
-      "--session",
+      "--session-target",
       "main",
       "--system-event",
       "hello",
@@ -262,7 +264,7 @@ describe("cron cli", () => {
       "Agent pinned",
       "--cron",
       "* * * * *",
-      "--session",
+      "--session-target",
       "isolated",
       "--message",
       "hi",
@@ -273,6 +275,27 @@ describe("cron cli", () => {
     const addCall = callGatewayFromCli.mock.calls.find((call) => call[0] === "cron.add");
     const params = addCall?.[2] as { agentId?: string };
     expect(params?.agentId).toBe("ops");
+  });
+
+  it("sends session key on cron add", async () => {
+    await runCronCommand([
+      "cron",
+      "add",
+      "--name",
+      "Session pinned",
+      "--cron",
+      "* * * * *",
+      "--session-target",
+      "isolated",
+      "--message",
+      "hi",
+      "--session",
+      " agent:project-lead:calculator ",
+    ]);
+
+    const addCall = callGatewayFromCli.mock.calls.find((call) => call[0] === "cron.add");
+    const params = addCall?.[2] as { sessionKey?: string };
+    expect(params?.sessionKey).toBe("agent:project-lead:calculator");
   });
 
   it.each([
@@ -303,6 +326,28 @@ describe("cron cli", () => {
     await runCronCommand(["cron", "edit", "job-2", "--clear-agent"]);
     const clearPatch = getGatewayCallParams<{ patch?: { agentId?: unknown } }>("cron.update");
     expect(clearPatch?.patch?.agentId).toBeNull();
+  });
+
+  it("sets and clears session key on cron edit", async () => {
+    await runCronCommand(["cron", "edit", "job-1", "--session", " agent:project-lead:dashboard "]);
+
+    const setPatch = getGatewayCallParams<{ patch?: { sessionKey?: unknown } }>("cron.update");
+    expect(setPatch?.patch?.sessionKey).toBe("agent:project-lead:dashboard");
+
+    await runCronCommand(["cron", "edit", "job-2", "--clear-session"]);
+    const clearPatch = getGatewayCallParams<{ patch?: { sessionKey?: unknown } }>("cron.update");
+    expect(clearPatch?.patch?.sessionKey).toBeNull();
+  });
+
+  it("rejects --session with --clear-session on cron edit", async () => {
+    await expectCronCommandExit([
+      "cron",
+      "edit",
+      "job-1",
+      "--session",
+      "agent:project-lead:dashboard",
+      "--clear-session",
+    ]);
   });
 
   it("allows model/thinking updates without --message", async () => {
@@ -418,7 +463,7 @@ describe("cron cli", () => {
       "0 * * * *",
       "--stagger",
       "45s",
-      "--session",
+      "--session-target",
       "main",
       "--system-event",
       "tick",
@@ -434,7 +479,7 @@ describe("cron cli", () => {
       "--cron",
       "0 * * * *",
       "--exact",
-      "--session",
+      "--session-target",
       "main",
       "--system-event",
       "tick",
@@ -454,7 +499,7 @@ describe("cron cli", () => {
       "--stagger",
       "1m",
       "--exact",
-      "--session",
+      "--session-target",
       "main",
       "--system-event",
       "tick",
@@ -471,7 +516,7 @@ describe("cron cli", () => {
       "10m",
       "--stagger",
       "30s",
-      "--session",
+      "--session-target",
       "main",
       "--system-event",
       "tick",
