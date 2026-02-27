@@ -219,7 +219,7 @@ If a macOS node is paired, the Gateway can invoke `system.run` on that node. Thi
 
 Community skills (installed from ClawHub) are subject to runtime security enforcement:
 
-- **Capabilities**: Skills declare what system access they need (`shell`, `filesystem`, `network`, `browser`, `sessions`, `messaging`, `scheduling`) in `metadata.openclaw.capabilities`. No capabilities = read-only. Community skills that use tools without declaring the matching capability are blocked at runtime.
+- **Capabilities**: Skills declare what system access they need (`shell`, `filesystem`, `network`, `browser`, `sessions`, `messaging`, `scheduling`) in `metadata.openclaw.capabilities`. No capabilities = read-only metadata declaration. Capability rollout is staged; declarations are currently used for visibility and policy checks.
 - **SKILL.md scanning**: Content is scanned for prompt injection patterns, capability inflation, and boundary spoofing before entering the system prompt. Skills with critical findings are blocked from loading.
 - **Trust tiers**: Skills are classified as `builtin`, `community`, or `local`. Only `community` skills (installed from ClawHub) are subject to enforcement — builtin and local skills are exempt. Author verification may be introduced in a future release to provide an additional trust signal.
 - **Command dispatch gating**: Community skills using `command-dispatch: tool` can't dispatch to dangerous tools without declaring the matching capability.
@@ -234,7 +234,7 @@ OpenClaw can refresh the skills list mid-session:
 - **Skills watcher**: changes to `SKILL.md` can update the skills snapshot on the next agent turn.
 - **Remote nodes**: connecting a macOS node can make macOS-only skills eligible (based on bin probing).
 
-Restrict who can modify skill folders. Community skills are subject to scanning and capability enforcement (see above), but local and workspace skills are treated as trusted — if someone can write to your skill folders, they can inject instructions into the system prompt.
+Restrict who can modify skill folders. Community skills are subject to scanning and phased capability-policy rollout (see above), but local and workspace skills are treated as trusted — if someone can write to your skill folders, they can inject instructions into the system prompt.
 
 ## The Threat Model
 
@@ -546,8 +546,9 @@ Set a token so **all** WS clients must authenticate:
 
 Doctor can generate one for you: `openclaw doctor --generate-gateway-token`.
 
-Note: `gateway.remote.token` is **only** for remote CLI calls; it does not
-protect local WS access.
+Note: in local mode, OpenClaw still accepts `gateway.remote.token` / `.password`
+as fallback credentials when `gateway.auth.*` is unset. Prefer setting
+`gateway.auth.token` (or password mode) explicitly so auth behavior is clear.
 Optional: pin remote TLS with `gateway.remote.tlsFingerprint` when using `wss://`.
 
 Local device pairing:
