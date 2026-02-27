@@ -29,6 +29,8 @@ export const TOOL_GROUPS: Record<string, string[]> = {
   ],
   // UI helpers
   "group:ui": ["browser", "canvas"],
+  // Browser automation only (excludes canvas output surface)
+  "group:browser": ["browser"],
   // Automation + infra
   "group:automation": ["cron", "gateway"],
   // Messaging surface
@@ -57,6 +59,7 @@ export const TOOL_GROUPS: Record<string, string[]> = {
     "web_search",
     "web_fetch",
     "image",
+    "tts",
   ],
 };
 
@@ -65,7 +68,7 @@ const TOOL_PROFILES: Record<ToolProfileId, ToolProfilePolicy> = {
     allow: ["session_status"],
   },
   coding: {
-    allow: ["group:fs", "group:runtime", "group:sessions", "group:memory", "image"],
+    allow: ["read", "group:fs", "group:runtime", "group:sessions", "group:memory", "image", "cron"],
   },
   messaging: {
     allow: [
