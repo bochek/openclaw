@@ -59,14 +59,14 @@ x blocked   evil-injector >_               Totally harmless skill               
 - disabled  old-skill                      Deprecated skill                     workspace
 ```
 
-With `-v` (verbose), two extra columns appear — **Scan** and **Missing**:
+With `-v` (verbose), the **Missing** column appears:
 
 ```
-Status      Skill              Description          Source              Scan        Missing
+Status      Skill              Description          Source              Missing
 + ready     git-autopush >_ 🌐 Automate git wor...  openclaw-managed
-x missing   summarize >_       Summarize with...    bundled                         bins: summarize
-x blocked   evil-injector >_   Totally harmless...  openclaw-managed    [blocked]
-+ ready     sketch-tool 🌐 >_  Generate sketches    openclaw-managed    [warn]
+x missing   summarize >_       Summarize with...    bundled             bins: summarize
+x blocked   evil-injector >_   Totally harmless...  openclaw-managed
++ ready     sketch-tool 🌐 >_  Generate sketches    openclaw-managed
 ```
 
 ### `openclaw skills info <name>`
