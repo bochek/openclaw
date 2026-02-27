@@ -386,6 +386,11 @@ Normalization behavior:
 - `requires.config` — list of `openclaw.json` paths that must be truthy.
 - `primaryEnv` — env var name associated with `skills.entries.<name>.apiKey`.
 - `install` — optional array of installer specs used by the macOS Skills UI (brew/node/go/uv/download).
+- `cliHelp` — optional CLI help output captured for richer skill details in registry/UI surfaces.
+- `envVars` — optional structured environment declarations (`name`, `required`, `description`).
+- `dependencies` — optional structured dependency declarations (`name`, `type`, optional version/url/repository).
+- `author` — optional author string for display/attribution.
+- `links` — optional link metadata (`homepage`, `repository`, `documentation`, `changelog`).
 
 Note on sandboxing:
 
