@@ -39,7 +39,8 @@ It warns when `gateway.auth.mode="none"` leaves Gateway HTTP APIs reachable with
 Community skills (installed from ClawHub) are subject to additional security enforcement:
 
 - **SKILL.md scanning**: content is scanned for prompt injection patterns, capability inflation, and boundary spoofing before entering the system prompt. Skills with critical findings are blocked from loading.
-- **Capability enforcement**: community skills must declare `capabilities` (e.g., `shell`, `network`) in frontmatter. Undeclared dangerous tool usage is blocked at runtime by the before-tool-call hook — a hard code gate that prompt injection cannot bypass.
+- **Capability declarations**: community skills should declare `capabilities` (e.g., `shell`, `network`) in frontmatter for visibility and policy checks.
+- **Current rollout scope**: command-dispatch safety checks and SKILL.md scanning are active in this phase; broader runtime capability gating is rolling out in stages.
 - **Command dispatch gating**: community skills using `command-dispatch: tool` can't dispatch to dangerous tools without the matching capability.
 - **Audit logging**: all security events are tagged with `category: "security"` and include session context for forensics. View in the web UI Logs tab using the Security filter.
 
@@ -60,7 +61,7 @@ Every tool falls into one of three tiers when community skills are loaded:
 
 | Capability   | Tools                                          | What it unlocks                         |
 | ------------ | ---------------------------------------------- | --------------------------------------- |
-| `shell`      | `exec`, `process`, `lobster`                   | Run shell commands and manage processes |
+| `shell`      | `exec`, `process`                              | Run shell commands and manage processes |
 | `filesystem` | `write`, `edit`, `apply_patch`                 | File mutations (read is always allowed) |
 | `network`    | `web_fetch`, `web_search`                      | Outbound HTTP requests                  |
 | `browser`    | `browser`                                      | Browser automation                      |
