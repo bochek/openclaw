@@ -68,9 +68,10 @@ that up as `<workspace>/skills` on the next session.
 
 ## Security notes
 
-- Treat third-party skills as **untrusted** until you have reviewed them. Runtime enforcement reduces blast radius but does not eliminate risk — read a skill's SKILL.md and declared capabilities before enabling it.
-- **Capabilities**: Community skills (from ClawHub) must declare `capabilities` in `metadata.openclaw` to describe what system access they need. Skills that don't declare capabilities are treated as read-only. Undeclared dangerous tool usage (e.g., `exec` without `shell` capability) is blocked at runtime for community skills. SKILL.md content is scanned for prompt injection before entering the system prompt.
-- Local and workspace skills are exempt from capability enforcement. If someone can write to your skill folders, they can inject instructions into the system prompt — restrict who can modify them.
+- Treat third-party skills as **untrusted** until you have reviewed them. Runtime safeguards reduce blast radius but do not eliminate risk — read a skill's SKILL.md and declared capabilities before enabling it.
+- **Capabilities**: Community skills (from ClawHub) should declare `capabilities` in `metadata.openclaw` to describe required system access. Skills without capabilities are treated as read-only metadata declarations. SKILL.md content is scanned for prompt injection before entering the system prompt.
+- **Current rollout scope**: capability declarations are used for visibility, review, and command-dispatch safety checks in this phase. Broader runtime per-tool capability gating is being rolled out in stages.
+- Local and workspace skills are treated as trusted by default. If someone can write to your skill folders, they can inject instructions into the system prompt — restrict who can modify them.
 - Prefer sandboxed runs for untrusted inputs and risky tools. See [Sandboxing](/gateway/sandboxing).
 - `skills.entries.*.env` and `skills.entries.*.apiKey` inject secrets into the **host** process
   for that agent turn (not the sandbox). Keep secrets out of prompts and logs.
@@ -78,20 +79,20 @@ that up as `<workspace>/skills` on the next session.
 
 ### Tool enforcement matrix
 
-When community skills are loaded, every tool falls into one of three tiers. Enforcement is applied by a hard code gate in the before-tool-call hook — prompt injection cannot bypass it.
+Capability declarations map to three policy tiers below. This matrix is the enforcement model and migration target for staged rollout.
 
 **Always denied** — blocked unconditionally when community skills are loaded, regardless of capability declarations:
 
 | Tool      | Reason                                                          |
 | --------- | --------------------------------------------------------------- |
 | `gateway` | Control-plane reconfiguration (restart, shutdown, auth changes) |
-| `nodes`   | Cluster node management (add/remove devices, redirect traffic)  |
+| `nodes`   | Cluster node management (add/remove compute, redirect traffic)  |
 
-**Capability-gated** — blocked by default, allowed when the skill declares the matching capability in `metadata.openclaw.capabilities`:
+**Capability-gated** — tools intended to be governed by capability declarations in `metadata.openclaw.capabilities`:
 
 | Capability   | Tools                                          | What it unlocks                           |
 | ------------ | ---------------------------------------------- | ----------------------------------------- |
-| `shell`      | `exec`, `process`, `lobster`                   | Run shell commands and manage processes   |
+| `shell`      | `exec`, `process`                              | Run shell commands and manage processes   |
 | `filesystem` | `write`, `edit`, `apply_patch`                 | File mutations (`read` is always allowed) |
 | `network`    | `web_fetch`, `web_search`                      | Outbound HTTP requests                    |
 | `browser`    | `browser`                                      | Browser automation                        |
@@ -115,7 +116,7 @@ A community skill with no capabilities declared gets access only to the always-a
 
 ### Example: correct capability declaration
 
-This skill runs shell commands and makes HTTP requests. It declares both capabilities, so OpenClaw allows the tool calls:
+This skill runs shell commands and makes HTTP requests. It declares both capabilities, so operators and tooling can clearly see intended access:
 
 ```markdown
 ---
@@ -154,7 +155,7 @@ git-autopush + Ready
 
 ### Example: missing capability declaration
 
-This skill runs shell commands but doesn't declare `shell`. OpenClaw blocks the `exec` calls at runtime:
+This skill runs shell commands but doesn't declare `shell`:
 
 ```markdown
 ---
@@ -168,7 +169,7 @@ metadata: { "openclaw": { "requires": { "bins": ["rsync"] } } }
 When the user asks to deploy, run `rsync -avz ./dist/ user@host:/var/www/` via the exec tool.
 ```
 
-This skill has no `capabilities` declared, so it's treated as read-only. When the model tries to call `exec` on behalf of this skill's instructions, OpenClaw denies it. `openclaw skills info deploy-helper` shows:
+This skill has no `capabilities` declared, so it's flagged as incomplete capability metadata. `openclaw skills info deploy-helper` shows:
 
 ```
 deploy-helper + Ready
@@ -326,7 +327,7 @@ Fields under `metadata.openclaw`:
   - `messaging` — send messages to configured channels (maps to `message`)
   - `scheduling` — schedule recurring jobs (maps to `cron`)
 
-  No capabilities declared = read-only, model-only skill. Community skills with undeclared capabilities that attempt to use dangerous tools will be blocked at runtime. See [Tool enforcement matrix](#tool-enforcement-matrix) below and [Security](/gateway/security) for full details.
+  No capabilities declared = read-only, model-only skill metadata. See [Tool enforcement matrix](#tool-enforcement-matrix) below and [Security](/gateway/security) for rollout and hardening details.
 
 ### Capability shape and normalization
 
