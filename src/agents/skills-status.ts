@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { OpenClawConfig } from "../config/config.js";
-import { evaluateEntryRequirementsForCurrentPlatform } from "../shared/entry-status.js";
+import { evaluateEntryMetadataRequirementsForCurrentPlatform } from "../shared/entry-status.js";
 import type { RequirementConfigCheck, Requirements } from "../shared/requirements.js";
 import { CONFIG_DIR } from "../utils.js";
 import {
@@ -17,6 +17,7 @@ import {
   type SkillsInstallPreferences,
 } from "./skills.js";
 import { resolveBundledSkillsContext } from "./skills/bundled-context.js";
+import type { SkillCapability, SkillScanResult } from "./skills/types.js";
 
 export type SkillStatusConfigCheck = RequirementConfigCheck;
 
@@ -46,6 +47,8 @@ export type SkillStatusEntry = {
   missing: Requirements;
   configChecks: SkillStatusConfigCheck[];
   install: SkillInstallOption[];
+  capabilities: SkillCapability[];
+  scanResult?: SkillScanResult;
 };
 
 export type SkillStatusReport = {
@@ -191,16 +194,19 @@ function buildSkillStatus(
       ? bundledNames.has(entry.skill.name)
       : entry.skill.source === "openclaw-bundled";
 
+  const requirementStatus = evaluateEntryMetadataRequirementsForCurrentPlatform({
+    always,
+    metadata: entry.metadata,
+    frontmatter: entry.frontmatter,
+    hasLocalBin: hasBinary,
+    remote: eligibility?.remote,
+    isEnvSatisfied,
+    isConfigSatisfied,
+  });
   const { emoji, homepage, required, missing, requirementsSatisfied, configChecks } =
-    evaluateEntryRequirementsForCurrentPlatform({
-      always,
-      entry,
-      hasLocalBin: hasBinary,
-      remote: eligibility?.remote,
-      isEnvSatisfied,
-      isConfigSatisfied,
-    });
-  const eligible = !disabled && !blockedByAllowlist && requirementsSatisfied;
+    requirementStatus;
+  const blockedByScan = entry.scanResult?.severity === "critical";
+  const eligible = !disabled && !blockedByAllowlist && !blockedByScan && requirementsSatisfied;
 
   return {
     name: entry.skill.name,
@@ -221,6 +227,8 @@ function buildSkillStatus(
     missing,
     configChecks,
     install: normalizeInstallOptions(entry, prefs ?? resolveSkillsInstallPreferences(config)),
+    capabilities: entry.metadata?.capabilities ?? [],
+    scanResult: entry.scanResult,
   };
 }
 
