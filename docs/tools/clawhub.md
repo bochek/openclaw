@@ -113,9 +113,9 @@ legitimate contributors.
 
 Skills declare `capabilities` in their SKILL.md frontmatter to describe what
 system access they need. ClawHub displays these to users before install.
-OpenClaw enforces them at runtime — community skills that attempt to use tools
-without the matching declared capability are blocked. Skills with no capabilities
-are treated as read-only (model-only instructions, no tool access).
+OpenClaw uses these declarations for visibility and policy checks as capability
+enforcement rolls out in stages. Skills with no capabilities are treated as
+read-only metadata declarations.
 
 Available capabilities: `shell`, `filesystem`, `network`, `browser`, `sessions`, `messaging`, `scheduling`.
 
