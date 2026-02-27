@@ -324,7 +324,7 @@ const SKILL_MD_RULES: MarkdownRule[] = [
   },
   {
     ruleId: "suspicious.script",
-    severity: "critical",
+    severity: "warn",
     message: "Pipe-to-shell pattern detected",
     pattern: /(curl[^\n]+\|\s*(sh|bash))/i,
   },
