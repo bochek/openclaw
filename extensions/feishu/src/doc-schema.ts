@@ -56,8 +56,8 @@ export const FeishuDocSchema = Type.Union([
     parent_block_id: Type.Optional(
       Type.String({ description: "Parent block ID (default: document root)" }),
     ),
-    row_size: Type.Number({ description: "Table row count", minimum: 1 }),
-    column_size: Type.Number({ description: "Table column count", minimum: 1 }),
+    row_size: Type.Integer({ description: "Table row count", minimum: 1 }),
+    column_size: Type.Integer({ description: "Table column count", minimum: 1 }),
     column_width: Type.Optional(
       Type.Array(Type.Number({ minimum: 1 }), {
         description: "Column widths in px (length should match column_size)",
@@ -79,8 +79,8 @@ export const FeishuDocSchema = Type.Union([
     parent_block_id: Type.Optional(
       Type.String({ description: "Parent block ID (default: document root)" }),
     ),
-    row_size: Type.Number({ description: "Table row count", minimum: 1 }),
-    column_size: Type.Number({ description: "Table column count", minimum: 1 }),
+    row_size: Type.Integer({ description: "Table row count", minimum: 1 }),
+    column_size: Type.Integer({ description: "Table column count", minimum: 1 }),
     column_width: Type.Optional(
       Type.Array(Type.Number({ minimum: 1 }), {
         description: "Column widths in px (length should match column_size)",
@@ -101,7 +101,8 @@ export const FeishuDocSchema = Type.Union([
     ),
     filename: Type.Optional(Type.String({ description: "Optional filename override" })),
     index: Type.Optional(
-      Type.Number({
+      Type.Integer({
+        minimum: 0,
         description: "Insert position (0-based index among siblings). Omit to append.",
       }),
     ),

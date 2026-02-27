@@ -248,6 +248,40 @@ describe("feishu_doc image fetch hardening", () => {
     expect(result.details.owner_permission_added).toBeUndefined();
   });
 
+  it("returns an error when create response omits document_id", async () => {
+    documentCreateMock.mockResolvedValueOnce({
+      code: 0,
+      data: { document: { title: "Created Doc" } },
+    });
+
+    const registerTool = vi.fn();
+    registerFeishuDocTools({
+      config: {
+        channels: {
+          feishu: {
+            appId: "app_id",
+            appSecret: "app_secret",
+          },
+        },
+      } as any,
+      logger: { debug: vi.fn(), info: vi.fn() } as any,
+      registerTool,
+    } as any);
+
+    const feishuDocTool = registerTool.mock.calls
+      .map((call) => call[0])
+      .map((tool) => (typeof tool === "function" ? tool({}) : tool))
+      .find((tool) => tool.name === "feishu_doc");
+    expect(feishuDocTool).toBeDefined();
+
+    const result = await feishuDocTool.execute("tool-call", {
+      action: "create",
+      title: "Demo",
+    });
+
+    expect(result.details.error).toContain("no document_id");
+  });
+
   it("uploads local file to doc via upload_file action", async () => {
     blockChildrenCreateMock.mockResolvedValueOnce({
       code: 0,
@@ -301,5 +335,56 @@ describe("feishu_doc image fetch hardening", () => {
     );
 
     await fs.unlink(localPath);
+  });
+
+  it("returns an error when upload_file cannot list placeholder siblings", async () => {
+    blockChildrenCreateMock.mockResolvedValueOnce({
+      code: 0,
+      data: {
+        children: [{ block_type: 23, block_id: "file_block_1" }],
+      },
+    });
+    blockChildrenGetMock.mockResolvedValueOnce({
+      code: 999,
+      msg: "list failed",
+      data: { items: [] },
+    });
+
+    const localPath = join(tmpdir(), `feishu-docx-upload-fail-${Date.now()}.txt`);
+    await fs.writeFile(localPath, "hello from local file", "utf8");
+
+    try {
+      const registerTool = vi.fn();
+      registerFeishuDocTools({
+        config: {
+          channels: {
+            feishu: {
+              appId: "app_id",
+              appSecret: "app_secret",
+            },
+          },
+        } as any,
+        logger: { debug: vi.fn(), info: vi.fn() } as any,
+        registerTool,
+      } as any);
+
+      const feishuDocTool = registerTool.mock.calls
+        .map((call) => call[0])
+        .map((tool) => (typeof tool === "function" ? tool({}) : tool))
+        .find((tool) => tool.name === "feishu_doc");
+      expect(feishuDocTool).toBeDefined();
+
+      const result = await feishuDocTool.execute("tool-call", {
+        action: "upload_file",
+        doc_token: "doc_1",
+        file_path: localPath,
+        filename: "test-local.txt",
+      });
+
+      expect(result.details.error).toBe("list failed");
+      expect(driveUploadAllMock).not.toHaveBeenCalled();
+    } finally {
+      await fs.unlink(localPath);
+    }
   });
 });

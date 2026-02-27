@@ -349,16 +349,22 @@ async function uploadFileBlock(
   const childrenRes = await client.docx.documentBlockChildren.get({
     path: { document_id: docToken, block_id: parentId },
   });
+  if (childrenRes.code !== 0) {
+    throw new Error(childrenRes.msg);
+  }
   const items = childrenRes.data?.items ?? [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SDK block type
   const placeholderIdx = items.findIndex(
     (item: any) => item.block_id === placeholderBlock.block_id,
   );
   if (placeholderIdx >= 0) {
-    await client.docx.documentBlockChildren.batchDelete({
+    const deleteRes = await client.docx.documentBlockChildren.batchDelete({
       path: { document_id: docToken, block_id: parentId },
       data: { start_index: placeholderIdx, end_index: placeholderIdx + 1 },
     });
+    if (deleteRes.code !== 0) {
+      throw new Error(deleteRes.msg);
+    }
   }
 
   // Upload file to Feishu drive
@@ -446,6 +452,9 @@ async function createDoc(
   }
   const doc = res.data?.document;
   const docToken = doc?.document_id;
+  if (!docToken) {
+    throw new Error("Document creation succeeded but no document_id was returned");
+  }
   let ownerPermissionAdded = false;
 
   // Auto add owner permission if ownerOpenId is provided
