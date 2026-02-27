@@ -13,6 +13,8 @@ export const DEFAULT_GATEWAY_HTTP_TOOL_DENY = [
   "sessions_send",
   // Gateway control plane — prevents gateway reconfiguration via HTTP
   "gateway",
+  // Scheduler control — avoid remote cron mutation over HTTP invoke surface
+  "cron",
   // Interactive setup — requires terminal QR scan, hangs on HTTP
   "whatsapp_login",
 ] as const;
@@ -48,7 +50,9 @@ export const CAPABILITY_TOOL_GROUP_MAP: Record<string, string> = {
   shell: "group:runtime", // exec, process
   filesystem: "group:fs", // read, write, edit, apply_patch
   network: "group:web", // web_search, web_fetch
-  browser: "group:ui", // browser, canvas
+  // Browser capability intentionally covers browser automation only.
+  // `canvas` is an output/UI surface and remains unrestricted in Phase 1.
+  browser: "group:browser", // browser
   sessions: "group:sessions", // sessions_spawn, sessions_send, subagents, etc.
   messaging: "group:messaging", // message
   scheduling: "group:scheduling", // cron
@@ -75,7 +79,6 @@ export const DANGEROUS_COMMUNITY_SKILL_TOOLS = [
   // shell capability
   "exec",
   "process",
-  "lobster",
   // filesystem capability (mutations only — read is safe and always allowed)
   "write",
   "edit",
