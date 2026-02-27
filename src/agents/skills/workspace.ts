@@ -32,6 +32,7 @@ import type {
   SkillEligibilityContext,
   SkillCommandSpec,
   SkillEntry,
+  SkillScanResult,
   SkillSnapshot,
 } from "./types.js";
 
