@@ -11,7 +11,7 @@ title: "ClawHub"
 
 ClawHub is the **public skill registry for OpenClaw**. It is a free service: all skills are public, open, and visible to everyone for sharing and reuse. A skill is just a folder with a `SKILL.md` file (plus supporting text files). You can browse skills in the web app or use the CLI to search, install, update, and publish skills.
 
-Site: [clawhub.ai](https://clawhub.ai)
+Site: [clawhub.com](https://clawhub.com)
 
 ## What ClawHub is
 
