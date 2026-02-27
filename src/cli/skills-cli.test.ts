@@ -24,6 +24,7 @@ function createMockSkill(overrides: Partial<SkillStatusEntry> = {}): SkillStatus
     disabled: false,
     blockedByAllowlist: false,
     eligible: true,
+    capabilities: [],
     ...createEmptyInstallChecks(),
     ...overrides,
   };
