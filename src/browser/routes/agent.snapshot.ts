@@ -54,26 +54,35 @@ export async function resolveTargetIdAfterNavigate(opts: {
   navigatedUrl: string;
   listTabs: () => Promise<Array<{ targetId: string; url: string }>>;
 }): Promise<string> {
+  const pickUrlMatch = (tabs: Array<{ targetId: string; url: string }>) => {
+    const byUrl = tabs.filter((t) => t.url === opts.navigatedUrl);
+    const nonOld = byUrl.filter((t) => t.targetId !== opts.oldTargetId);
+    if (nonOld.length === 1) {
+      return { targetId: nonOld[0]?.targetId, ambiguous: false };
+    }
+    if (byUrl.length > 1) {
+      return { targetId: undefined, ambiguous: true };
+    }
+    return { targetId: byUrl[0]?.targetId, ambiguous: false };
+  };
+
   let currentTargetId = opts.oldTargetId;
   try {
     const refreshed = await opts.listTabs();
     if (!refreshed.some((t) => t.targetId === opts.oldTargetId)) {
       // Renderer swap: old target gone, resolve the replacement.
-      // Prefer a URL match whose targetId differs from the old one
-      // to avoid picking a pre-existing tab when multiple share the URL.
-      const byUrl = refreshed.filter((t) => t.url === opts.navigatedUrl);
-      const replaced = byUrl.find((t) => t.targetId !== opts.oldTargetId) ?? byUrl[0];
-      if (replaced) {
-        currentTargetId = replaced.targetId;
+      const firstAttempt = pickUrlMatch(refreshed);
+      if (firstAttempt.targetId) {
+        currentTargetId = firstAttempt.targetId;
       } else {
         await new Promise((r) => setTimeout(r, 800));
         const retried = await opts.listTabs();
-        const match =
-          retried.find((t) => t.url === opts.navigatedUrl && t.targetId !== opts.oldTargetId) ??
-          retried.find((t) => t.url === opts.navigatedUrl) ??
-          (retried.length === 1 ? retried[0] : null);
-        if (match) {
-          currentTargetId = match.targetId;
+        const secondAttempt = pickUrlMatch(retried);
+        if (secondAttempt.targetId) {
+          currentTargetId = secondAttempt.targetId;
+        } else if (!firstAttempt.ambiguous && !secondAttempt.ambiguous && retried.length === 1) {
+          // Extension relay can briefly expose a single tab without the final URL set yet.
+          currentTargetId = retried[0].targetId;
         }
       }
     }
