@@ -397,6 +397,7 @@ async function resolveUploadInput(
   explicitFileName?: string,
   imageInput?: string, // data URI, plain base64, or local path
 ): Promise<{ buffer: Buffer; fileName: string }> {
+  // Enforce mutual exclusivity: exactly one input source must be provided.
   const inputSources = (
     [url ? "url" : null, filePath ? "file_path" : null, imageInput ? "image" : null] as (
       | string
@@ -450,6 +451,8 @@ async function resolveUploadInput(
   // plain base64 string (standard base64 alphabet includes '+', '/', '=')
   if (imageInput) {
     const trimmed = imageInput.trim();
+    // Node's Buffer.from is permissive and silently ignores out-of-alphabet chars,
+    // which would decode malformed strings into arbitrary bytes. Reject early.
     if (trimmed.length === 0 || !/^[A-Za-z0-9+/]+=*$/.test(trimmed)) {
       throw new Error(
         `Invalid base64: image input contains characters outside the standard base64 alphabet. ` +
