@@ -29,17 +29,57 @@ describe("resolveTargetIdAfterNavigate", () => {
     expect(result).toBe("new-456");
   });
 
-  it("prefers non-stale targetId when multiple tabs share the URL", async () => {
-    const result = await resolveTargetIdAfterNavigate({
+  it("falls back to original targetId when same-URL matches stay ambiguous", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+
+    const result$ = resolveTargetIdAfterNavigate({
       oldTargetId: "old-123",
       navigatedUrl: "https://example.com",
-      listTabs: staticListTabs([
-        { targetId: "preexisting-000", url: "https://example.com" },
-        { targetId: "fresh-777", url: "https://example.com" },
-      ]),
+      listTabs: async () => {
+        calls++;
+        return [
+          { targetId: "preexisting-000", url: "https://example.com" },
+          { targetId: "fresh-777", url: "https://example.com" },
+        ];
+      },
     });
-    // Both differ from old targetId; the first non-stale match wins.
-    expect(result).toBe("preexisting-000");
+
+    await vi.advanceTimersByTimeAsync(800);
+    const result = await result$;
+
+    expect(result).toBe("old-123");
+    expect(calls).toBe(2);
+
+    vi.useRealTimers();
+  });
+
+  it("resolves targetId when retry disambiguates same-URL matches", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+
+    const result$ = resolveTargetIdAfterNavigate({
+      oldTargetId: "old-123",
+      navigatedUrl: "https://example.com",
+      listTabs: async () => {
+        calls++;
+        if (calls === 1) {
+          return [
+            { targetId: "preexisting-000", url: "https://example.com" },
+            { targetId: "fresh-777", url: "https://example.com" },
+          ];
+        }
+        return [{ targetId: "fresh-777", url: "https://example.com" }];
+      },
+    });
+
+    await vi.advanceTimersByTimeAsync(800);
+    const result = await result$;
+
+    expect(result).toBe("fresh-777");
+    expect(calls).toBe(2);
+
+    vi.useRealTimers();
   });
 
   it("retries and resolves targetId when first listTabs has no URL match", async () => {
