@@ -55,7 +55,10 @@ interface Segment {
  */
 export function parseColorMarkup(content: string): Segment[] {
   const segments: Segment[] = [];
-  // Match [tag]...[/tag] or plain text between tags
+  // Match [tag]...[/tag] or plain text between tags.
+  // The closing tag name is intentionally not validated against the opening tag:
+  // mismatched tags like [red]text[/green] are treated as [red]text[/red] —
+  // the opening tag's style is applied and the closing tag is consumed.
   const tagPattern = /\[([^\]]+)\](.*?)\[\/(?:[^\]]+)\]|([^[]+)/gs;
   let match;
 
