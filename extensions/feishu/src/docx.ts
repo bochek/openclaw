@@ -413,10 +413,15 @@ async function resolveUploadInput(
     const [header, data] = imageInput.split(",");
     const mimeMatch = header.match(/data:([^;]+)/);
     const ext = mimeMatch?.[1]?.split("/")[1] ?? "png";
-    const buffer = Buffer.from(data, "base64");
-    if (buffer.length > maxBytes) {
-      throw new Error(`Image data URI exceeds limit: ${buffer.length} bytes > ${maxBytes} bytes`);
+    // Estimate decoded byte count from base64 length BEFORE allocating the
+    // full buffer to avoid spiking memory on oversized payloads.
+    const estimatedBytes = Math.ceil((data.length * 3) / 4);
+    if (estimatedBytes > maxBytes) {
+      throw new Error(
+        `Image data URI exceeds limit: estimated ${estimatedBytes} bytes > ${maxBytes} bytes`,
+      );
     }
+    const buffer = Buffer.from(data, "base64");
     return { buffer, fileName: explicitFileName ?? `image.${ext}` };
   }
 
@@ -459,12 +464,17 @@ async function resolveUploadInput(
           `Use a data URI (data:image/png;base64,...) or a local file path instead.`,
       );
     }
+    // Estimate decoded byte count from base64 length BEFORE allocating the
+    // full buffer to avoid spiking memory on oversized payloads.
+    const estimatedBytes = Math.ceil((trimmed.length * 3) / 4);
+    if (estimatedBytes > maxBytes) {
+      throw new Error(
+        `Base64 image exceeds limit: estimated ${estimatedBytes} bytes > ${maxBytes} bytes`,
+      );
+    }
     const buffer = Buffer.from(trimmed, "base64");
     if (buffer.length === 0) {
       throw new Error("Base64 image decoded to empty buffer; check the input.");
-    }
-    if (buffer.length > maxBytes) {
-      throw new Error(`Base64 image exceeds limit: ${buffer.length} bytes > ${maxBytes} bytes`);
     }
     return { buffer, fileName: explicitFileName ?? "image.png" };
   }

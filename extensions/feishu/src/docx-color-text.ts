@@ -55,13 +55,22 @@ interface Segment {
  */
 export function parseColorMarkup(content: string): Segment[] {
   const segments: Segment[] = [];
-  // Match [tag]...[/tag], plain text, or a bare '[' that is not part of a
-  // complete tag pair.  Without the trailing `|\[` fallback, a '[' that has no
-  // matching '[/...]' closer (e.g. "[Q1]" with no "[/...]") would be silently
-  // dropped, corrupting the surrounding text.  The closing tag name is not
-  // validated against the opening tag: [red]text[/green] is treated as
-  // [red]text[/red] — opening tag style applies, closing tag is consumed.
-  const tagPattern = /\[([^\]]+)\](.*?)\[\/(?:[^\]]+)\]|([^[]+|\[)/gs;
+  // Only [known_tag]...[/...] pairs are treated as markup.  Using an open
+  // pattern like \[([^\]]+)\] would match any bracket token — e.g. [Q1] —
+  // and cause it to consume a later real closing tag ([/red]), silently
+  // corrupting the surrounding styled spans.  Restricting the opening tag to
+  // the set of recognised colour/style names prevents that: [Q1] does not
+  // match the tag alternative and each of its characters falls through to the
+  // plain-text alternatives instead.
+  //
+  // Closing tag name is still not validated against the opening tag:
+  // [red]text[/green] is treated as [red]text[/red] — opening style applies
+  // and the closing tag is consumed regardless of its name.
+  const KNOWN = "(?:bg:[a-z]+|bold|red|orange|yellow|green|blue|purple|gr[ae]y)";
+  const tagPattern = new RegExp(
+    `\\[(${KNOWN}(?:\\s+${KNOWN})*)\\](.*?)\\[\\/(?:[^\\]]+)\\]|([^[]+|\\[)`,
+    "gis",
+  );
   let match;
 
   while ((match = tagPattern.exec(content)) !== null) {
