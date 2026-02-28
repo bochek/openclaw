@@ -1,7 +1,7 @@
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { loadDotEnv } from "../infra/dotenv.js";
-import { normalizeEnv } from "../infra/env.js";
+import { isTruthyEnvValue, normalizeEnv } from "../infra/env.js";
 import { formatUncaughtError } from "../infra/errors.js";
 import { isMainModule } from "../infra/is-main.js";
 import { ensureOpenClawCliOnPath } from "../infra/path-env.js";
@@ -9,7 +9,6 @@ import { assertSupportedRuntime } from "../infra/runtime-guard.js";
 import { installUnhandledRejectionHandler } from "../infra/unhandled-rejections.js";
 import { enableConsoleCapture } from "../logging.js";
 import { getCommandPath, getPrimaryCommand, hasHelpOrVersion } from "./argv.js";
-import { tryRouteCli } from "./route.js";
 import { normalizeWindowsArgv } from "./windows-argv.js";
 
 export function rewriteUpdateFlagArgv(argv: string[]): string[] {
@@ -31,14 +30,21 @@ export function shouldSkipPluginCommandRegistration(params: {
   argv: string[];
   primary: string | null;
   hasBuiltinPrimary: boolean;
+  forcePluginRegistration?: boolean;
 }): boolean {
+  if (params.forcePluginRegistration) {
+    return false;
+  }
   if (params.hasBuiltinPrimary) {
     return true;
   }
   if (!params.primary) {
-    return hasHelpOrVersion(params.argv);
+    // No primary command can never map to a plugin top-level command.
+    return true;
   }
-  return false;
+  // Unknown primary commands fast-fail without loading plugins/config.
+  // Set OPENCLAW_FORCE_PLUGIN_COMMAND_REGISTRATION=1 to preserve legacy behavior.
+  return true;
 }
 
 export function shouldEnsureCliPath(argv: string[]): boolean {
@@ -61,6 +67,13 @@ export function shouldEnsureCliPath(argv: string[]): boolean {
   return true;
 }
 
+const ROUTE_FIRST_COMMANDS = new Set(["status", "health", "sessions"]);
+
+export function shouldTryRouteFirst(argv: string[]): boolean {
+  const primary = getPrimaryCommand(argv);
+  return primary !== null && ROUTE_FIRST_COMMANDS.has(primary);
+}
+
 export async function runCli(argv: string[] = process.argv) {
   const normalizedArgv = normalizeWindowsArgv(argv);
   loadDotEnv({ quiet: true });
@@ -72,8 +85,11 @@ export async function runCli(argv: string[] = process.argv) {
   // Enforce the minimum supported runtime before doing any work.
   assertSupportedRuntime();
 
-  if (await tryRouteCli(normalizedArgv)) {
-    return;
+  if (shouldTryRouteFirst(normalizedArgv)) {
+    const { tryRouteCli } = await import("./route.js");
+    if (await tryRouteCli(normalizedArgv)) {
+      return;
+    }
   }
 
   // Capture all console output into structured logs while keeping stdout/stderr behavior.
@@ -108,10 +124,14 @@ export async function runCli(argv: string[] = process.argv) {
 
   const hasBuiltinPrimary =
     primary !== null && program.commands.some((command) => command.name() === primary);
+  const forcePluginRegistration = isTruthyEnvValue(
+    process.env.OPENCLAW_FORCE_PLUGIN_COMMAND_REGISTRATION,
+  );
   const shouldSkipPluginRegistration = shouldSkipPluginCommandRegistration({
     argv: parseArgv,
     primary,
     hasBuiltinPrimary,
+    forcePluginRegistration,
   });
   if (!shouldSkipPluginRegistration) {
     // Register plugin CLI commands before parsing
