@@ -55,11 +55,13 @@ interface Segment {
  */
 export function parseColorMarkup(content: string): Segment[] {
   const segments: Segment[] = [];
-  // Match [tag]...[/tag] or plain text between tags.
-  // The closing tag name is intentionally not validated against the opening tag:
-  // mismatched tags like [red]text[/green] are treated as [red]text[/red] —
-  // the opening tag's style is applied and the closing tag is consumed.
-  const tagPattern = /\[([^\]]+)\](.*?)\[\/(?:[^\]]+)\]|([^[]+)/gs;
+  // Match [tag]...[/tag], plain text, or a bare '[' that is not part of a
+  // complete tag pair.  Without the trailing `|\[` fallback, a '[' that has no
+  // matching '[/...]' closer (e.g. "[Q1]" with no "[/...]") would be silently
+  // dropped, corrupting the surrounding text.  The closing tag name is not
+  // validated against the opening tag: [red]text[/green] is treated as
+  // [red]text[/red] — opening tag style applies, closing tag is consumed.
+  const tagPattern = /\[([^\]]+)\](.*?)\[\/(?:[^\]]+)\]|([^[]+|\[)/gs;
   let match;
 
   while ((match = tagPattern.exec(content)) !== null) {

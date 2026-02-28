@@ -128,6 +128,16 @@ export async function insertBlocksInBatches(
     const descendants = collectDescendants(blocks, [firstLevelId]);
     const newBlocks = descendants.filter((b) => !usedBlockIds.has(b.block_id));
 
+    // A single block whose subtree exceeds the API limit cannot be split
+    // (a table or other compound block must be inserted atomically).
+    if (newBlocks.length > BATCH_SIZE) {
+      throw new Error(
+        `Block "${firstLevelId}" has ${newBlocks.length} descendants, which exceeds the ` +
+          `Feishu API limit of ${BATCH_SIZE} blocks per request. ` +
+          `Please split the content into smaller sections.`,
+      );
+    }
+
     // If adding this first-level block would exceed limit, start new batch
     if (
       currentBatch.blocks.length + newBlocks.length > BATCH_SIZE &&
