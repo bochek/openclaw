@@ -410,18 +410,38 @@ async function resolveUploadInput(
 
   // data URI: data:image/png;base64,xxxx
   if (imageInput?.startsWith("data:")) {
-    const [header, data] = imageInput.split(",");
+    const commaIdx = imageInput.indexOf(",");
+    if (commaIdx === -1) {
+      throw new Error("Invalid data URI: missing comma separator.");
+    }
+    const header = imageInput.slice(0, commaIdx);
+    const data = imageInput.slice(commaIdx + 1);
+    // Only base64-encoded data URIs are supported; reject plain/URL-encoded ones.
+    if (!header.includes(";base64")) {
+      throw new Error(
+        `Invalid data URI: missing ';base64' marker. ` +
+          `Expected format: data:image/png;base64,<base64data>`,
+      );
+    }
+    // Validate the payload is actually base64 before decoding; Node's decoder
+    // is permissive and would silently accept garbage bytes otherwise.
+    const trimmedData = data.trim();
+    if (trimmedData.length === 0 || !/^[A-Za-z0-9+/]+=*$/.test(trimmedData)) {
+      throw new Error(
+        `Invalid data URI: base64 payload contains characters outside the standard alphabet.`,
+      );
+    }
     const mimeMatch = header.match(/data:([^;]+)/);
     const ext = mimeMatch?.[1]?.split("/")[1] ?? "png";
     // Estimate decoded byte count from base64 length BEFORE allocating the
     // full buffer to avoid spiking memory on oversized payloads.
-    const estimatedBytes = Math.ceil((data.length * 3) / 4);
+    const estimatedBytes = Math.ceil((trimmedData.length * 3) / 4);
     if (estimatedBytes > maxBytes) {
       throw new Error(
         `Image data URI exceeds limit: estimated ${estimatedBytes} bytes > ${maxBytes} bytes`,
       );
     }
-    const buffer = Buffer.from(data, "base64");
+    const buffer = Buffer.from(trimmedData, "base64");
     return { buffer, fileName: explicitFileName ?? `image.${ext}` };
   }
 

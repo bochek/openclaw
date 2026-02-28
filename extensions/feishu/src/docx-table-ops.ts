@@ -105,10 +105,15 @@ export function calculateAdaptiveColumnWidths(
     }
   }
 
-  // Handle empty table
+  // Handle empty table: distribute width equally, clamped to [MIN, MAX] so
+  // wide tables (e.g. 15+ columns) don't produce sub-50 widths that Feishu
+  // rejects as invalid column_width values.
   const totalLength = maxLengths.reduce((a, b) => a + b, 0);
   if (totalLength === 0) {
-    const equalWidth = Math.floor(totalWidth / column_size);
+    const equalWidth = Math.max(
+      MIN_COLUMN_WIDTH,
+      Math.min(MAX_COLUMN_WIDTH, Math.floor(totalWidth / column_size)),
+    );
     return new Array(column_size).fill(equalWidth);
   }
 
