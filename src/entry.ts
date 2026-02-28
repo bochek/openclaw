@@ -2,7 +2,7 @@
 import { spawn } from "node:child_process";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { isRootHelpRequest, isRootVersionRequest } from "./cli/argv.js";
+import { isRootHelpRequest, isRootNoCommandRequest, isRootVersionRequest } from "./cli/argv.js";
 import { applyCliProfileEnv, parseCliProfileArgs } from "./cli/profile.js";
 import { shouldSkipRespawnForArgv } from "./cli/respawn-policy.js";
 import { normalizeWindowsArgv } from "./cli/windows-argv.js";
@@ -147,7 +147,7 @@ if (
     // isRootHelpRequest stops at -- and requires no subcommand before -h/--help,
     // so `openclaw status --help` still falls through to the full CLI path.
     // Importing program.js directly avoids the route.ts static import in run-main.ts.
-    if (isRootHelpRequest(argv)) {
+    if (isRootHelpRequest(argv) || isRootNoCommandRequest(argv)) {
       import("./cli/program.js")
         .then(({ buildProgram }) => {
           buildProgram().outputHelp();
