@@ -29,6 +29,7 @@ describe("feishu_doc image fetch hardening", () => {
   const blockChildrenCreateMock = vi.hoisted(() => vi.fn());
   const blockChildrenGetMock = vi.hoisted(() => vi.fn());
   const blockChildrenBatchDeleteMock = vi.hoisted(() => vi.fn());
+  const blockDescendantCreateMock = vi.hoisted(() => vi.fn());
   const driveUploadAllMock = vi.hoisted(() => vi.fn());
   const permissionMemberCreateMock = vi.hoisted(() => vi.fn());
   const blockPatchMock = vi.hoisted(() => vi.fn());
@@ -51,6 +52,9 @@ describe("feishu_doc image fetch hardening", () => {
           create: blockChildrenCreateMock,
           get: blockChildrenGetMock,
           batchDelete: blockChildrenBatchDeleteMock,
+        },
+        documentBlockDescendant: {
+          create: blockDescendantCreateMock,
         },
       },
       drive: {
@@ -95,6 +99,11 @@ describe("feishu_doc image fetch hardening", () => {
       data: { items: [{ block_id: "placeholder_block_1" }] },
     });
     blockChildrenBatchDeleteMock.mockResolvedValue({ code: 0 });
+    // write/append use Descendant API; return image block so processImages runs
+    blockDescendantCreateMock.mockResolvedValue({
+      code: 0,
+      data: { children: [{ block_type: 27, block_id: "img_block_1" }] },
+    });
     driveUploadAllMock.mockResolvedValue({ file_token: "token_1" });
     documentCreateMock.mockResolvedValue({
       code: 0,
