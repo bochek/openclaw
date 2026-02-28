@@ -73,6 +73,42 @@ export function isRootHelpRequest(argv: string[]): boolean {
   return false;
 }
 
+/**
+ * Returns true when argv contains no primary subcommand token.
+ * Root flags are ignored; scanning stops at `--`.
+ * Used by entry.ts to render root help without loading the full CLI path.
+ */
+export function isRootNoCommandRequest(argv: string[]): boolean {
+  const args = argv.slice(2);
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
+    if (!arg) {
+      continue;
+    }
+    if (arg === FLAG_TERMINATOR) {
+      break;
+    }
+    if (ROOT_BOOLEAN_FLAGS.has(arg)) {
+      continue;
+    }
+    if (arg.startsWith("--profile=") || arg.startsWith("--log-level=")) {
+      continue;
+    }
+    if (ROOT_VALUE_FLAGS.has(arg)) {
+      const next = args[i + 1];
+      if (isValueToken(next)) {
+        i += 1;
+      }
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
 function isValueToken(arg: string | undefined): boolean {
   if (!arg) {
     return false;
