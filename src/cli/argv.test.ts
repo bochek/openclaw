@@ -9,6 +9,7 @@ import {
   hasHelpOrVersion,
   hasFlag,
   isRootHelpRequest,
+  isRootNoCommandRequest,
   isRootVersionRequest,
   shouldMigrateState,
   shouldMigrateStateFromPath,
@@ -383,5 +384,30 @@ describe("argv helpers", () => {
     },
   ])("isRootHelpRequest: $name", ({ argv, expected }) => {
     expect(isRootHelpRequest(argv)).toBe(expected);
+  });
+
+  it.each([
+    {
+      name: "no args",
+      argv: ["node", "openclaw"],
+      expected: true,
+    },
+    {
+      name: "only root flags",
+      argv: ["node", "openclaw", "--dev", "--profile", "work"],
+      expected: true,
+    },
+    {
+      name: "subcommand present",
+      argv: ["node", "openclaw", "status"],
+      expected: false,
+    },
+    {
+      name: "non-flag token after terminator is ignored",
+      argv: ["node", "openclaw", "--", "status"],
+      expected: true,
+    },
+  ])("isRootNoCommandRequest: $name", ({ argv, expected }) => {
+    expect(isRootNoCommandRequest(argv)).toBe(expected);
   });
 });
