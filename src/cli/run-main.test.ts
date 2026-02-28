@@ -4,6 +4,7 @@ import {
   shouldEnsureCliPath,
   shouldRegisterPrimarySubcommand,
   shouldSkipPluginCommandRegistration,
+  shouldTryRouteFirst,
 } from "./run-main.js";
 
 describe("rewriteUpdateFlagArgv", () => {
@@ -54,7 +55,7 @@ describe("shouldRegisterPrimarySubcommand", () => {
 });
 
 describe("shouldSkipPluginCommandRegistration", () => {
-  it("skips plugin registration for root help/version", () => {
+  it("skips plugin registration when no primary command is present", () => {
     expect(
       shouldSkipPluginCommandRegistration({
         argv: ["node", "openclaw", "--help"],
@@ -84,22 +85,43 @@ describe("shouldSkipPluginCommandRegistration", () => {
     ).toBe(true);
   });
 
-  it("keeps plugin registration for non-builtin help", () => {
+  it("skips plugin registration for non-builtin help by default", () => {
     expect(
       shouldSkipPluginCommandRegistration({
         argv: ["node", "openclaw", "voicecall", "--help"],
         primary: "voicecall",
         hasBuiltinPrimary: false,
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("keeps plugin registration for non-builtin command runs", () => {
+  it("skips plugin registration for non-builtin command runs by default", () => {
     expect(
       shouldSkipPluginCommandRegistration({
         argv: ["node", "openclaw", "voicecall", "status"],
         primary: "voicecall",
         hasBuiltinPrimary: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("skips plugin registration for unknown commands", () => {
+    expect(
+      shouldSkipPluginCommandRegistration({
+        argv: ["node", "openclaw", "definitely-not-a-command"],
+        primary: "definitely-not-a-command",
+        hasBuiltinPrimary: false,
+      }),
+    ).toBe(true);
+  });
+
+  it("can force plugin registration via env guard", () => {
+    expect(
+      shouldSkipPluginCommandRegistration({
+        argv: ["node", "openclaw", "unknown-cmd"],
+        primary: "unknown-cmd",
+        hasBuiltinPrimary: false,
+        forcePluginRegistration: true,
       }),
     ).toBe(false);
   });
@@ -123,5 +145,16 @@ describe("shouldEnsureCliPath", () => {
     expect(shouldEnsureCliPath(["node", "openclaw", "message", "send"])).toBe(true);
     expect(shouldEnsureCliPath(["node", "openclaw", "voicecall", "status"])).toBe(true);
     expect(shouldEnsureCliPath(["node", "openclaw", "acp", "-v"])).toBe(true);
+  });
+});
+
+describe("shouldTryRouteFirst", () => {
+  it("enables route-first only for routed commands", () => {
+    expect(shouldTryRouteFirst(["node", "openclaw", "status"])).toBe(true);
+    expect(shouldTryRouteFirst(["node", "openclaw", "health"])).toBe(true);
+    expect(shouldTryRouteFirst(["node", "openclaw", "sessions"])).toBe(true);
+    expect(shouldTryRouteFirst(["node", "openclaw", "models", "status"])).toBe(false);
+    expect(shouldTryRouteFirst(["node", "openclaw", "definitely-not-a-command"])).toBe(false);
+    expect(shouldTryRouteFirst(["node", "openclaw"])).toBe(false);
   });
 });
