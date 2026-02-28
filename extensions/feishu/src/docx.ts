@@ -420,22 +420,28 @@ async function resolveUploadInput(
   }
 
   // local path: ~, ./ and ../ are unambiguous (not in base64 alphabet).
-  // Absolute paths (/...) are supported but must exist on disk.
+  // Absolute paths (/...) are supported but must exist on disk. If an absolute
+  // path does not exist we throw immediately rather than falling through to
+  // base64 decoding, which would silently upload garbage bytes.
+  // Note: JPEG base64 starts with "/9j/" — pass as data:image/jpeg;base64,...
+  // to avoid ambiguity with absolute paths.
   if (imageInput) {
-    const resolved = imageInput.startsWith("~") ? imageInput.replace(/^~/, homedir()) : imageInput;
+    const candidate = imageInput.startsWith("~") ? imageInput.replace(/^~/, homedir()) : imageInput;
     const unambiguousPath =
       imageInput.startsWith("~") || imageInput.startsWith("./") || imageInput.startsWith("../");
     const absolutePath = isAbsolute(imageInput);
-    if (unambiguousPath || (absolutePath && existsSync(resolved))) {
-      const buffer = await fs.readFile(resolved);
+
+    if (unambiguousPath || (absolutePath && existsSync(candidate))) {
+      const buffer = await fs.readFile(candidate);
       if (buffer.length > maxBytes) {
         throw new Error(`Local file exceeds limit: ${buffer.length} bytes > ${maxBytes} bytes`);
       }
-      return { buffer, fileName: explicitFileName ?? basename(resolved) };
+      return { buffer, fileName: explicitFileName ?? basename(candidate) };
     }
-    if (absolutePath && !existsSync(resolved)) {
+
+    if (absolutePath && !existsSync(candidate)) {
       throw new Error(
-        `File not found: "${resolved}". ` +
+        `File not found: "${candidate}". ` +
           `If you intended to pass image binary data, use a data URI instead: data:image/jpeg;base64,...`,
       );
     }
@@ -836,8 +842,9 @@ async function insertDoc(
 
   const parentId = blockInfo.data?.block?.parent_id ?? docToken;
 
-  // documentBlockChildren.get pages at 200 entries; scan all pages so insert
-  // works when parent has lots of children.
+  // Paginate through all children to reliably locate after_block_id.
+  // documentBlockChildren.get returns up to 200 children per page; large
+  // parents require multiple requests.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- SDK block type
   const items: any[] = [];
   let pageToken: string | undefined;
