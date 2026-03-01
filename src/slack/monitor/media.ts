@@ -1,7 +1,6 @@
 import type { WebClient as SlackWebClient } from "@slack/web-api";
 import { normalizeHostname } from "../../infra/net/hostname.js";
 import type { FetchLike } from "../../media/fetch.js";
-import { logWarn } from "../../logger.js";
 import { fetchRemoteMedia } from "../../media/fetch.js";
 import { saveMediaBuffer } from "../../media/store.js";
 import type { SlackAttachment, SlackFile } from "../types.js";
@@ -70,11 +69,6 @@ function createSlackMediaFetch(token: string): FetchLike {
   };
 }
 
-function looksLikeHtmlBuffer(buffer: Buffer): boolean {
-  const head = buffer.subarray(0, 512).toString("utf-8").replace(/^\s+/, "").toLowerCase();
-  return head.startsWith("<!doctype html") || head.startsWith("<html");
-}
-
 /**
  * Fetches a URL with Authorization header, handling cross-origin redirects.
  * Node.js fetch strips Authorization headers on cross-origin redirects for security.
@@ -129,6 +123,11 @@ function resolveSlackMediaMimetype(
     return mime.replace("video/", "audio/");
   }
   return mime;
+}
+
+function looksLikeHtmlBuffer(buffer: Buffer): boolean {
+  const head = buffer.subarray(0, 512).toString("utf-8").replace(/^\s+/, "").toLowerCase();
+  return head.startsWith("<!doctype html") || head.startsWith("<html");
 }
 
 export type SlackMediaResult = {
@@ -233,10 +232,6 @@ export async function resolveSlackMedia(params: {
         if (!isExpectedHtml) {
           const detectedMime = fetched.contentType?.split(";")[0]?.trim().toLowerCase();
           if (detectedMime === "text/html" || looksLikeHtmlBuffer(fetched.buffer)) {
-            const fileId = file.name ?? file.id ?? "unknown";
-            logWarn(
-              `slack: received HTML instead of media for file ${fileId}; possible auth failure or expired URL`,
-            );
             return null;
           }
         }
