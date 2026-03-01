@@ -266,7 +266,7 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
-  it("fails when announce delivery reports false and best-effort is disabled", async () => {
+  it("returns ok when announce delivery reports false and best-effort is disabled", async () => {
     await withTempCronHome(async (home) => {
       const storePath = await writeSessionStore(home, { lastProvider: "webchat", lastTo: "" });
       const deps = createCliDeps();
@@ -285,8 +285,11 @@ describe("runCronIsolatedAgentTurn", () => {
         },
       });
 
-      expect(res.status).toBe("error");
-      expect(res.error).toContain("cron announce delivery failed");
+      // Announce delivery failure should not mark a successful agent execution
+      // as error. The execution succeeded; only delivery failed.
+      expect(res.status).toBe("ok");
+      expect(res.delivered).not.toBe(true);
+      expect(res.deliveryAttempted).toBe(true);
       expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
     });
   });
@@ -314,6 +317,36 @@ describe("runCronIsolatedAgentTurn", () => {
       expect(res.delivered).toBe(false);
       expect(res.deliveryAttempted).toBe(true);
       expect(runSubagentAnnounceFlow).toHaveBeenCalledTimes(1);
+      expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
+    });
+  });
+
+  it("returns ok when announce flow throws and best-effort is disabled", async () => {
+    await withTempCronHome(async (home) => {
+      const storePath = await writeSessionStore(home, { lastProvider: "webchat", lastTo: "" });
+      const deps = createCliDeps();
+      mockAgentPayloads([{ text: "hello from cron" }]);
+      vi.mocked(runSubagentAnnounceFlow).mockRejectedValueOnce(
+        new Error("gateway closed (1008): pairing required"),
+      );
+
+      const res = await runTelegramAnnounceTurn({
+        home,
+        storePath,
+        deps,
+        delivery: {
+          mode: "announce",
+          channel: "telegram",
+          to: "123",
+          bestEffort: false,
+        },
+      });
+
+      // Even when announce throws (e.g. "pairing required"), the agent
+      // execution succeeded so the job status should be ok.
+      expect(res.status).toBe("ok");
+      expect(res.delivered).not.toBe(true);
+      expect(res.deliveryAttempted).toBe(true);
       expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
     });
   });
