@@ -258,6 +258,21 @@ function normalizeToolCallNameForDispatch(rawName: string, allowedToolNames?: Se
   return caseInsensitiveMatch ?? trimmed;
 }
 
+export function resolveOllamaBaseUrlForRun(params: {
+  modelBaseUrl?: string;
+  providerBaseUrl?: string;
+}): string {
+  const providerBaseUrl = params.providerBaseUrl?.trim() ?? "";
+  if (providerBaseUrl) {
+    return providerBaseUrl;
+  }
+  const modelBaseUrl = params.modelBaseUrl?.trim() ?? "";
+  if (modelBaseUrl) {
+    return modelBaseUrl;
+  }
+  return OLLAMA_NATIVE_BASE_URL;
+}
+
 function trimWhitespaceFromToolCallNamesInMessage(
   message: unknown,
   allowedToolNames?: Set<string>,
@@ -905,10 +920,13 @@ export async function runEmbeddedAttempt(
         // Use the resolved model baseUrl first so custom provider aliases work.
         const providerConfig = params.config?.models?.providers?.[params.model.provider];
         const modelBaseUrl =
-          typeof params.model.baseUrl === "string" ? params.model.baseUrl.trim() : "";
+          typeof params.model.baseUrl === "string" ? params.model.baseUrl : undefined;
         const providerBaseUrl =
-          typeof providerConfig?.baseUrl === "string" ? providerConfig.baseUrl.trim() : "";
-        const ollamaBaseUrl = modelBaseUrl || providerBaseUrl || OLLAMA_NATIVE_BASE_URL;
+          typeof providerConfig?.baseUrl === "string" ? providerConfig.baseUrl : undefined;
+        const ollamaBaseUrl = resolveOllamaBaseUrlForRun({
+          modelBaseUrl,
+          providerBaseUrl,
+        });
         activeSession.agent.streamFn = createOllamaStreamFn(ollamaBaseUrl);
       } else if (params.model.api === "openai-responses" && params.provider === "openai") {
         const wsApiKey = await params.authStorage.getApiKey(params.provider);
