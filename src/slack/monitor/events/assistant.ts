@@ -12,10 +12,10 @@
  * @see https://docs.slack.dev/ai/developing-ai-apps
  */
 
-import type { SlackMonitorContext } from "../context.js";
 import { danger, logVerbose } from "../../../globals.js";
 import { setAssistantSuggestedPrompts, type AssistantSuggestedPrompt } from "../../assistant.js";
 import { saveThreadContext, type AssistantThreadContext } from "../assistant-context.js";
+import type { SlackMonitorContext } from "../context.js";
 
 /**
  * Shape of the `assistant_thread_started` event payload.
