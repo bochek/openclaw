@@ -74,6 +74,8 @@ function buildSandboxBrowserResolvedConfig(params: {
     enabled: true,
     evaluateEnabled: params.evaluateEnabled,
     controlPort: params.controlPort,
+    cdpPortRangeStart: params.cdpPort,
+    cdpPortRangeEnd: params.cdpPort,
     cdpProtocol: "http",
     cdpHost,
     cdpIsLoopback: true,
