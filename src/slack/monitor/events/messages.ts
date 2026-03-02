@@ -1,4 +1,3 @@
-import type { SlackEventMiddlewareArgs } from "@slack/bolt";
 import { danger } from "../../../globals.js";
 import { enqueueSystemEvent } from "../../../infra/system-events.js";
 import type { SlackAppMentionEvent, SlackMessageEvent } from "../../types.js";
@@ -27,7 +26,7 @@ export function registerSlackMessageEvents(params: {
   const resolveThreadBroadcastSenderId = (thread: SlackThreadBroadcastEvent): string | undefined =>
     thread.user ?? thread.message?.user ?? thread.message?.bot_id;
 
-  ctx.app.event("message", async ({ event, body }: SlackEventMiddlewareArgs<"message">) => {
+  ctx.app.event("message", async ({ event, body }) => {
     try {
       if (ctx.shouldDropMismatchedSlackEvent(body)) {
         return;
@@ -97,7 +96,7 @@ export function registerSlackMessageEvents(params: {
     }
   });
 
-  ctx.app.event("app_mention", async ({ event, body }: SlackEventMiddlewareArgs<"app_mention">) => {
+  ctx.app.event("app_mention", async ({ event, body }) => {
     try {
       if (ctx.shouldDropMismatchedSlackEvent(body)) {
         return;
