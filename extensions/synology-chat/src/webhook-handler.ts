@@ -331,8 +331,6 @@ export function createWebhookHandler(deps: WebhookHandlerDeps) {
 
     // ACK immediately so Synology Chat won't remain in "Processing..."
     respondNoContent(res);
-    // ACK immediately so Synology Chat won't remain in "Processing..."
-    respondNoContent(res);
 
     // Default to webhook user_id; may be replaced with Chat API user_id below.
     let replyUserId = payload.user_id;

@@ -22,8 +22,13 @@ interface ChatUser {
   nickname: string;
 }
 
-let chatUserCache: ChatUser[] | null = null;
-let chatUserCacheTime = 0;
+type ChatUserCacheEntry = {
+  users: ChatUser[];
+  cachedAt: number;
+};
+
+// Cache user lists per bot endpoint to avoid cross-account bleed.
+const chatUserCache = new Map<string, ChatUserCacheEntry>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
@@ -122,11 +127,11 @@ export async function fetchChatUsers(
   log?: { warn: (...args: unknown[]) => void },
 ): Promise<ChatUser[]> {
   const now = Date.now();
-  if (chatUserCache && now - chatUserCacheTime < CACHE_TTL_MS) {
-    return chatUserCache;
-  }
-
   const listUrl = incomingUrl.replace(/method=\w+/, "method=user_list");
+  const cached = chatUserCache.get(listUrl);
+  if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
+    return cached.users;
+  }
 
   return new Promise((resolve) => {
     let parsedUrl: URL;
@@ -134,7 +139,7 @@ export async function fetchChatUsers(
       parsedUrl = new URL(listUrl);
     } catch {
       log?.warn("fetchChatUsers: invalid user_list URL, using cached data");
-      resolve(chatUserCache ?? []);
+      resolve(cached?.users ?? []);
       return;
     }
     const transport = parsedUrl.protocol === "https:" ? https : http;
@@ -149,28 +154,31 @@ export async function fetchChatUsers(
           try {
             const result = JSON.parse(data);
             if (result.success && result.data?.users) {
-              chatUserCache = result.data.users.map((u: any) => ({
+              const users = result.data.users.map((u: any) => ({
                 user_id: u.user_id,
                 username: u.username || "",
                 nickname: u.nickname || "",
               }));
-              chatUserCacheTime = now;
-              resolve(chatUserCache!);
+              chatUserCache.set(listUrl, {
+                users,
+                cachedAt: now,
+              });
+              resolve(users);
             } else {
               log?.warn(
                 `fetchChatUsers: API returned success=${result.success}, using cached data`,
               );
-              resolve(chatUserCache ?? []);
+              resolve(cached?.users ?? []);
             }
           } catch {
             log?.warn("fetchChatUsers: failed to parse user_list response");
-            resolve(chatUserCache ?? []);
+            resolve(cached?.users ?? []);
           }
         });
       })
       .on("error", (err) => {
         log?.warn(`fetchChatUsers: HTTP error — ${err instanceof Error ? err.message : err}`);
-        resolve(chatUserCache ?? []);
+        resolve(cached?.users ?? []);
       });
   });
 }

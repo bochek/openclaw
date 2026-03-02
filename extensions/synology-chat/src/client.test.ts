@@ -133,9 +133,29 @@ function mockUserListResponse(
   });
 }
 
+function mockUserListResponseOnce(
+  users: Array<{ user_id: number; username: string; nickname: string }>,
+) {
+  const httpsGet = vi.mocked((https as any).get);
+  httpsGet.mockImplementationOnce((_url: any, _opts: any, callback: any) => {
+    const res = new EventEmitter() as any;
+    res.statusCode = 200;
+    process.nextTick(() => {
+      callback(res);
+      res.emit("data", Buffer.from(JSON.stringify({ success: true, data: { users } })));
+      res.emit("end");
+    });
+    const req = new EventEmitter() as any;
+    req.destroy = vi.fn();
+    return req;
+  });
+}
+
 describe("resolveChatUserId", () => {
   const baseUrl =
     "https://nas.example.com/webapi/entry.cgi?api=SYNO.Chat.External&method=chatbot&version=2&token=%22test%22";
+  const baseUrl2 =
+    "https://nas2.example.com/webapi/entry.cgi?api=SYNO.Chat.External&method=chatbot&version=2&token=%22test-2%22";
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -197,5 +217,18 @@ describe("resolveChatUserId", () => {
       expect.any(Object),
       expect.any(Function),
     );
+  });
+
+  it("keeps user cache scoped per incoming URL", async () => {
+    mockUserListResponseOnce([{ user_id: 4, username: "jmn67", nickname: "jmn" }]);
+    mockUserListResponseOnce([{ user_id: 9, username: "jmn67", nickname: "jmn" }]);
+
+    const result1 = await resolveChatUserId(baseUrl, "jmn");
+    const result2 = await resolveChatUserId(baseUrl2, "jmn");
+
+    expect(result1).toBe(4);
+    expect(result2).toBe(9);
+    const httpsGet = vi.mocked((https as any).get);
+    expect(httpsGet).toHaveBeenCalledTimes(2);
   });
 });
