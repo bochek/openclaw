@@ -35,6 +35,18 @@ describe("config issue format", () => {
     ).toEqual(["× <root>: first", "× channels.signal.dmPolicy: second"]);
   });
 
+  it("sanitizes control characters and ANSI sequences in formatted lines", () => {
+    expect(
+      formatConfigIssueLine(
+        {
+          path: "gateway.\nbind\x1b[31m",
+          message: "bad\r\n\tvalue\x1b[0m\u0007",
+        },
+        "-",
+      ),
+    ).toBe("- gateway.\\nbind: bad\\r\\n\\tvalue");
+  });
+
   it("normalizes issue metadata for machine output", () => {
     expect(
       normalizeConfigIssue({

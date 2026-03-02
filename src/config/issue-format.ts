@@ -1,3 +1,4 @@
+import { sanitizeTerminalText } from "../terminal/safe-text.js";
 import type { ConfigValidationIssue } from "./types.js";
 
 type ConfigIssueLineInput = {
@@ -52,7 +53,9 @@ export function formatConfigIssueLine(
   opts?: ConfigIssueFormatOptions,
 ): string {
   const prefix = marker ? `${marker} ` : "";
-  return `${prefix}${resolveIssuePathForLine(issue.path, opts)}: ${issue.message}`;
+  const path = sanitizeTerminalText(resolveIssuePathForLine(issue.path, opts));
+  const message = sanitizeTerminalText(issue.message);
+  return `${prefix}${path}: ${message}`;
 }
 
 export function formatConfigIssueLines(

@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import type { ErrorObject, ValidateFunction } from "ajv";
 import { appendAllowedValuesHint, summarizeAllowedValues } from "../config/allowed-values.js";
+import { sanitizeTerminalText } from "../terminal/safe-text.js";
 
 const require = createRequire(import.meta.url);
 type AjvLike = {
@@ -113,10 +114,12 @@ function formatAjvErrors(errors: ErrorObject[] | null | undefined): JsonSchemaVa
     const message = allowedValuesSummary
       ? appendAllowedValuesHint(baseMessage, allowedValuesSummary)
       : baseMessage;
+    const safePath = sanitizeTerminalText(path);
+    const safeMessage = sanitizeTerminalText(message);
     return {
       path,
       message,
-      text: `${path}: ${message}`,
+      text: `${safePath}: ${safeMessage}`,
       ...(allowedValuesSummary
         ? {
             allowedValues: allowedValuesSummary.values,

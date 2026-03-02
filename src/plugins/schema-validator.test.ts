@@ -182,4 +182,30 @@ describe("schema validator", () => {
       expect(issue?.message).toContain("... (+");
     }
   });
+
+  it("sanitizes terminal text while preserving structured fields", () => {
+    const maliciousProperty = "evil\nkey\t\x1b[31mred\x1b[0m";
+    const res = validateJsonSchemaValue({
+      cacheKey: "schema-validator.test.terminal-sanitize",
+      schema: {
+        type: "object",
+        properties: {},
+        required: [maliciousProperty],
+      },
+      value: {},
+    });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      const issue = res.errors[0];
+      expect(issue).toBeDefined();
+      expect(issue?.path).toContain("\n");
+      expect(issue?.message).toContain("\n");
+      expect(issue?.text).toContain("\\n");
+      expect(issue?.text).toContain("\\t");
+      expect(issue?.text).not.toContain("\n");
+      expect(issue?.text).not.toContain("\t");
+      expect(issue?.text).not.toContain("\x1b");
+    }
+  });
 });
