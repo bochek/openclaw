@@ -181,6 +181,11 @@ describe("argv helpers", () => {
       argv: ["node", "openclaw"],
       expected: null,
     },
+    {
+      name: "skips known root option values",
+      argv: ["node", "openclaw", "--log-level", "debug", "status"],
+      expected: "status",
+    },
   ])("returns primary command: $name", ({ argv, expected }) => {
     expect(getPrimaryCommand(argv)).toBe(expected);
   });

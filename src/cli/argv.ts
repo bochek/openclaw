@@ -219,7 +219,7 @@ function getCommandPathInternal(
 }
 
 export function getPrimaryCommand(argv: string[]): string | null {
-  const [primary] = getCommandPath(argv, 1);
+  const [primary] = getCommandPathWithRootOptions(argv, 1);
   return primary ?? null;
 }
 
