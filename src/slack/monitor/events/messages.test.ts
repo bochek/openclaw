@@ -192,4 +192,22 @@ describe("registerSlackMessageEvents", () => {
     expect(handleSlackMessage).toHaveBeenCalledTimes(2);
     expect(messageQueueMock).not.toHaveBeenCalled();
   });
+
+  it("applies subtype system-event handling for message.channels events", async () => {
+    messageQueueMock.mockClear();
+    messageAllowMock.mockReset().mockResolvedValue([]);
+    const { channelHandler, handleSlackMessage } = createMessageHandlers({
+      dmPolicy: "open",
+      channelType: "channel",
+    });
+    expect(channelHandler).toBeTruthy();
+
+    await channelHandler!({
+      event: makeChangedEvent({ channel: "C1", user: "U1" }),
+      body: {},
+    });
+
+    expect(messageQueueMock).toHaveBeenCalledTimes(1);
+    expect(handleSlackMessage).not.toHaveBeenCalled();
+  });
 });
