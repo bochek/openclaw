@@ -13,10 +13,6 @@ function encodeMountInfoPath(value: string): string {
     .replace(/ /g, "\\040");
 }
 
-function resolved(value: string): string {
-  return path.resolve(value);
-}
-
 describe("detectLinuxSdBackedStateDir", () => {
   it("detects state dir on mmc-backed mount", () => {
     const mountInfo = [
@@ -30,8 +26,8 @@ describe("detectLinuxSdBackedStateDir", () => {
     });
 
     expect(result).toEqual({
-      path: resolved("/home/pi/.openclaw"),
-      mountPoint: resolved("/"),
+      path: "/home/pi/.openclaw",
+      mountPoint: "/",
       fsType: "ext4",
       source: "/dev/mmcblk0p2",
     });
@@ -63,8 +59,8 @@ describe("detectLinuxSdBackedStateDir", () => {
     });
 
     expect(result).toEqual({
-      path: resolved("/home/user/.openclaw"),
-      mountPoint: resolved("/"),
+      path: "/home/user/.openclaw",
+      mountPoint: "/",
       fsType: "ext4",
       source: "/dev/disk/by-uuid/abcd-1234",
     });
@@ -83,8 +79,8 @@ describe("detectLinuxSdBackedStateDir", () => {
     });
 
     expect(result).toEqual({
-      path: resolved("/mnt/slow/openclaw/.openclaw"),
-      mountPoint: resolved("/mnt/slow"),
+      path: "/mnt/slow/openclaw/.openclaw",
+      mountPoint: "/mnt/slow",
       fsType: "ext4",
       source: "/dev/mmcblk1p1",
     });
@@ -122,7 +118,7 @@ describe("detectLinuxSdBackedStateDir", () => {
     expect(result).not.toBeNull();
     const warning = formatLinuxSdBackedStateDirWarning(stateDir, result!);
     expect(warning).toContain("device /dev/disk/by-uuid/mmc\\nsource");
-    expect(warning).toContain(`mount ${resolved("/home/pi/mnt\nspoofed").replace(/\n/g, "\\n")}`);
+    expect(warning).toContain("mount /home/pi/mnt\\nspoofed");
     expect(warning).not.toContain("device /dev/disk/by-uuid/mmc\nsource");
     expect(warning).not.toContain("mount /home/pi/mnt\nspoofed");
   });
