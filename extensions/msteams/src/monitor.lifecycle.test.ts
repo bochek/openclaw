@@ -6,6 +6,10 @@ import type { MSTeamsPollStore } from "./polls.js";
 
 type FakeServer = EventEmitter & {
   close: (callback?: (err?: Error | null) => void) => void;
+  setTimeout: (msecs: number, callback?: () => void) => FakeServer;
+  timeout: number;
+  requestTimeout: number;
+  headersTimeout: number;
 };
 
 const expressControl = vi.hoisted(() => ({
@@ -31,6 +35,13 @@ vi.mock("express", () => {
     post: vi.fn(),
     listen: vi.fn((_port: number) => {
       const server = new EventEmitter() as FakeServer;
+      server.timeout = 0;
+      server.requestTimeout = 0;
+      server.headersTimeout = 0;
+      server.setTimeout = vi.fn((msecs: number) => {
+        server.timeout = msecs;
+        return server;
+      });
       server.close = (callback?: (err?: Error | null) => void) => {
         queueMicrotask(() => {
           server.emit("close");

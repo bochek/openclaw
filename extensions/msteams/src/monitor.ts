@@ -268,6 +268,7 @@ export async function monitorMSTeamsProvider(
 
   // Create Express server
   const expressApp = express.default();
+  expressApp.use(authorizeJWT(authConfig));
   expressApp.use(express.json({ limit: MSTEAMS_WEBHOOK_MAX_BODY_BYTES }));
   expressApp.use((err: unknown, _req: Request, res: Response, next: (err?: unknown) => void) => {
     if (err && typeof err === "object" && "status" in err && err.status === 413) {
@@ -276,7 +277,6 @@ export async function monitorMSTeamsProvider(
     }
     next(err);
   });
-  expressApp.use(authorizeJWT(authConfig));
 
   // Set up the messages endpoint - use configured path and /api/messages as fallback
   const configuredPath = msteamsCfg.webhook?.path ?? "/api/messages";
@@ -301,9 +301,9 @@ export async function monitorMSTeamsProvider(
 
   // Start listening and fail fast if bind/listen fails.
   const httpServer = expressApp.listen(port);
+  applyMSTeamsWebhookTimeouts(httpServer);
   await new Promise<void>((resolve, reject) => {
     const onListening = () => {
-      httpServer.off("error", onError);
       log.info(`msteams provider started on port ${port}`);
       resolve();
     };
@@ -315,8 +315,6 @@ export async function monitorMSTeamsProvider(
     httpServer.once("listening", onListening);
     httpServer.once("error", onError);
   });
-  applyMSTeamsWebhookTimeouts(httpServer);
-
   httpServer.on("error", (err) => {
     log.error("msteams server error", { error: String(err) });
   });
@@ -333,24 +331,30 @@ export async function monitorMSTeamsProvider(
     });
   };
 
-  // Handle abort signal
-  const onAbort = () => {
-    void shutdown();
-  };
-  if (opts.abortSignal) {
-    if (opts.abortSignal.aborted) {
-      onAbort();
-    } else {
-      opts.abortSignal.addEventListener("abort", onAbort, { once: true });
-    }
+  // Some direct callers may invoke monitor without lifecycle wiring.
+  // Return immediately so they can call shutdown explicitly.
+  if (!opts.abortSignal) {
+    return { app: expressApp, shutdown };
   }
 
-  // Keep this task alive until shutdown/close so gateway runtime does not treat startup as exit.
-  await new Promise<void>((resolve) => {
+  const closePromise = new Promise<void>((resolve) => {
     httpServer.once("close", () => {
       resolve();
     });
   });
+
+  // Handle abort signal
+  const onAbort = () => {
+    void shutdown();
+  };
+  if (opts.abortSignal.aborted) {
+    onAbort();
+  } else {
+    opts.abortSignal.addEventListener("abort", onAbort, { once: true });
+  }
+
+  // Keep this task alive until shutdown/close so gateway runtime does not treat startup as exit.
+  await closePromise;
   opts.abortSignal?.removeEventListener("abort", onAbort);
 
   return { app: expressApp, shutdown };

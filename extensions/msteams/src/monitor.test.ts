@@ -37,7 +37,7 @@ async function waitForSlowBodySocketClose(port: number, timeoutMs: number): Prom
 }
 
 describe("msteams monitor webhook hardening", () => {
-  it("applies explicit webhook timeout values", async () => {
+  it("applies timeout values and clamps headersTimeout to requestTimeout", async () => {
     const app = express();
     const server = app.listen(0, "127.0.0.1");
     await once(server, "listening");
