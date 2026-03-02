@@ -21,6 +21,9 @@ const sourceRoots = [
 
 // Temporary allowlist for legacy callsites. New raw fetch callsites in channel/plugin runtime
 // code should be rejected and migrated to fetchWithSsrFGuard/shared channel helpers.
+// Supports:
+// - exact callsite: "path/to/file.ts:42"
+// - file scope: "path/to/file.ts" or "path/to/file.ts:*"
 const allowedRawFetchCallsites = new Set([
   "extensions/bluebubbles/src/types.ts:131",
   "extensions/feishu/src/streaming-card.ts:31",
@@ -32,10 +35,6 @@ const allowedRawFetchCallsites = new Set([
   "extensions/google-gemini-cli-auth/oauth.ts:447",
   "extensions/google-gemini-cli-auth/oauth.ts:507",
   "extensions/google-gemini-cli-auth/oauth.ts:575",
-  "extensions/googlechat/src/api.ts:22",
-  "extensions/googlechat/src/api.ts:43",
-  "extensions/googlechat/src/api.ts:63",
-  "extensions/googlechat/src/api.ts:184",
   "extensions/googlechat/src/auth.ts:82",
   "extensions/matrix/src/directory-live.ts:41",
   "extensions/matrix/src/matrix/client/config.ts:171",
@@ -64,6 +63,20 @@ const allowedRawFetchCallsites = new Set([
   "src/slack/monitor/media.ts:82",
   "src/slack/monitor/media.ts:108",
 ]);
+
+function isAllowlistedRawFetchCallsite(callsite) {
+  if (allowedRawFetchCallsites.has(callsite)) {
+    return true;
+  }
+  const [filePath] = callsite.split(":");
+  if (!filePath) {
+    return false;
+  }
+  if (allowedRawFetchCallsites.has(filePath)) {
+    return true;
+  }
+  return allowedRawFetchCallsites.has(`${filePath}:*`);
+}
 
 function isTestLikeFile(filePath) {
   return (
@@ -177,7 +190,7 @@ export async function main() {
     const relPath = path.relative(repoRoot, filePath).replaceAll(path.sep, "/");
     for (const line of findRawFetchCallLines(content, filePath)) {
       const callsite = `${relPath}:${line}`;
-      if (allowedRawFetchCallsites.has(callsite)) {
+      if (isAllowlistedRawFetchCallsite(callsite)) {
         continue;
       }
       violations.push(callsite);

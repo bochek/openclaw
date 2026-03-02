@@ -1,10 +1,12 @@
 import crypto from "node:crypto";
+import { fetchWithSsrFGuard } from "openclaw/plugin-sdk";
 import type { ResolvedGoogleChatAccount } from "./accounts.js";
 import { getGoogleChatAccessToken } from "./auth.js";
 import type { GoogleChatReaction } from "./types.js";
 
 const CHAT_API_BASE = "https://chat.googleapis.com/v1";
 const CHAT_UPLOAD_BASE = "https://chat.googleapis.com/upload/v1";
+const GOOGLE_CHAT_ALLOWED_HOSTNAMES = ["chat.googleapis.com"];
 
 const headersToObject = (headers?: HeadersInit): Record<string, string> =>
   headers instanceof Headers
@@ -19,19 +21,49 @@ async function fetchJson<T>(
   init: RequestInit,
 ): Promise<T> {
   const token = await getGoogleChatAccessToken(account);
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      ...headersToObject(init.headers),
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+  const { response, release } = await fetchWithSsrFGuard({
+    url,
+    init: {
+      ...init,
+      headers: {
+        ...headersToObject(init.headers),
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
     },
+    policy: { allowedHostnames: GOOGLE_CHAT_ALLOWED_HOSTNAMES },
+    auditContext: "googlechat.api.json",
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Google Chat API ${res.status}: ${text || res.statusText}`);
+  try {
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Google Chat API ${response.status}: ${text || response.statusText}`);
+    }
+    return (await response.json()) as T;
+  } finally {
+    await release();
   }
-  return (await res.json()) as T;
+}
+
+async function fetchAuthorized(
+  account: ResolvedGoogleChatAccount,
+  url: string,
+  init: RequestInit,
+  auditContext: string,
+): Promise<{ response: Response; release: () => Promise<void> }> {
+  const token = await getGoogleChatAccessToken(account);
+  return await fetchWithSsrFGuard({
+    url,
+    init: {
+      ...init,
+      headers: {
+        ...headersToObject(init.headers),
+        Authorization: `Bearer ${token}`,
+      },
+    },
+    policy: { allowedHostnames: GOOGLE_CHAT_ALLOWED_HOSTNAMES },
+    auditContext,
+  });
 }
 
 async function fetchOk(
@@ -39,17 +71,14 @@ async function fetchOk(
   url: string,
   init: RequestInit,
 ): Promise<void> {
-  const token = await getGoogleChatAccessToken(account);
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      ...headersToObject(init.headers),
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Google Chat API ${res.status}: ${text || res.statusText}`);
+  const { response, release } = await fetchAuthorized(account, url, init, "googlechat.api.ok");
+  try {
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Google Chat API ${response.status}: ${text || response.statusText}`);
+    }
+  } finally {
+    await release();
   }
 }
 
@@ -59,52 +88,54 @@ async function fetchBuffer(
   init?: RequestInit,
   options?: { maxBytes?: number },
 ): Promise<{ buffer: Buffer; contentType?: string }> {
-  const token = await getGoogleChatAccessToken(account);
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      ...headersToObject(init?.headers),
-      Authorization: `Bearer ${token}`,
-    },
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Google Chat API ${res.status}: ${text || res.statusText}`);
-  }
-  const maxBytes = options?.maxBytes;
-  const lengthHeader = res.headers.get("content-length");
-  if (maxBytes && lengthHeader) {
-    const length = Number(lengthHeader);
-    if (Number.isFinite(length) && length > maxBytes) {
-      throw new Error(`Google Chat media exceeds max bytes (${maxBytes})`);
+  const { response, release } = await fetchAuthorized(
+    account,
+    url,
+    init ?? {},
+    "googlechat.api.buffer",
+  );
+  try {
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Google Chat API ${response.status}: ${text || response.statusText}`);
     }
-  }
-  if (!maxBytes || !res.body) {
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const contentType = res.headers.get("content-type") ?? undefined;
+    const maxBytes = options?.maxBytes;
+    const lengthHeader = response.headers.get("content-length");
+    if (maxBytes && lengthHeader) {
+      const length = Number(lengthHeader);
+      if (Number.isFinite(length) && length > maxBytes) {
+        throw new Error(`Google Chat media exceeds max bytes (${maxBytes})`);
+      }
+    }
+    if (!maxBytes || !response.body) {
+      const buffer = Buffer.from(await response.arrayBuffer());
+      const contentType = response.headers.get("content-type") ?? undefined;
+      return { buffer, contentType };
+    }
+    const reader = response.body.getReader();
+    const chunks: Buffer[] = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (!value) {
+        continue;
+      }
+      total += value.length;
+      if (total > maxBytes) {
+        await reader.cancel();
+        throw new Error(`Google Chat media exceeds max bytes (${maxBytes})`);
+      }
+      chunks.push(Buffer.from(value));
+    }
+    const buffer = Buffer.concat(chunks, total);
+    const contentType = response.headers.get("content-type") ?? undefined;
     return { buffer, contentType };
+  } finally {
+    await release();
   }
-  const reader = res.body.getReader();
-  const chunks: Buffer[] = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    if (!value) {
-      continue;
-    }
-    total += value.length;
-    if (total > maxBytes) {
-      await reader.cancel();
-      throw new Error(`Google Chat media exceeds max bytes (${maxBytes})`);
-    }
-    chunks.push(Buffer.from(value));
-  }
-  const buffer = Buffer.concat(chunks, total);
-  const contentType = res.headers.get("content-type") ?? undefined;
-  return { buffer, contentType };
 }
 
 export async function sendGoogleChatMessage(params: {
@@ -183,26 +214,33 @@ export async function uploadGoogleChatAttachment(params: {
     Buffer.from(footer, "utf8"),
   ]);
 
-  const token = await getGoogleChatAccessToken(account);
   const url = `${CHAT_UPLOAD_BASE}/${space}/attachments:upload?uploadType=multipart`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": `multipart/related; boundary=${boundary}`,
+  const { response, release } = await fetchAuthorized(
+    account,
+    url,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": `multipart/related; boundary=${boundary}`,
+      },
+      body,
     },
-    body,
-  });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`Google Chat upload ${res.status}: ${text || res.statusText}`);
+    "googlechat.api.upload",
+  );
+  try {
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Google Chat upload ${response.status}: ${text || response.statusText}`);
+    }
+    const payload = (await response.json()) as {
+      attachmentDataRef?: { attachmentUploadToken?: string };
+    };
+    return {
+      attachmentUploadToken: payload.attachmentDataRef?.attachmentUploadToken,
+    };
+  } finally {
+    await release();
   }
-  const payload = (await res.json()) as {
-    attachmentDataRef?: { attachmentUploadToken?: string };
-  };
-  return {
-    attachmentUploadToken: payload.attachmentDataRef?.attachmentUploadToken,
-  };
 }
 
 export async function downloadGoogleChatMedia(params: {
