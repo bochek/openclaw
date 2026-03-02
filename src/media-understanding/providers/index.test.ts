@@ -10,6 +10,14 @@ describe("media-understanding provider registry", () => {
     expect(provider?.capabilities).toEqual(["audio"]);
   });
 
+  it("registers OpenAI audio + image capabilities", () => {
+    const registry = buildMediaUnderstandingRegistry();
+    const provider = getMediaUnderstandingProvider("openai", registry);
+
+    expect(provider?.id).toBe("openai");
+    expect(provider?.capabilities).toEqual(["image", "audio"]);
+  });
+
   it("keeps provider id normalization behavior", () => {
     const registry = buildMediaUnderstandingRegistry();
     const provider = getMediaUnderstandingProvider("gemini", registry);
