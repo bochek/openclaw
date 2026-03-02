@@ -75,4 +75,26 @@ describe("pw-tools-core.snapshot navigate guard", () => {
     expect(goto).toHaveBeenCalledTimes(2);
     expect(result.url).toBe("https://example.com/recovered");
   });
+
+  it("does not reconnect for non-retryable navigation failures", async () => {
+    const goto = vi
+      .fn<(...args: unknown[]) => Promise<void>>()
+      .mockRejectedValueOnce(new Error("net::ERR_ABORTED"));
+    setPwToolsCoreCurrentPage({
+      goto,
+      url: vi.fn(() => "https://example.com/aborted"),
+    });
+
+    await expect(
+      mod.navigateViaPlaywright({
+        cdpUrl: "http://127.0.0.1:18792",
+        targetId: "tab-1",
+        url: "https://example.com/aborted",
+        ssrfPolicy: { allowPrivateNetwork: true },
+      }),
+    ).rejects.toThrow("net::ERR_ABORTED");
+
+    expect(getPwToolsCoreSessionMocks().forceDisconnectPlaywrightForTarget).not.toHaveBeenCalled();
+    expect(getPwToolsCoreSessionMocks().getPageForTargetId).toHaveBeenCalledTimes(1);
+  });
 });
