@@ -47,6 +47,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Plugin SDK/release guard: add explicit `openclaw/plugin-sdk` export verification in tests and release checks to prevent missing runtime exports from shipping and breaking channel extensions. (#28575) Thanks @Glucksberg.
 - Synology Chat/webhook compatibility: accept JSON and alias payload fields, allow token resolution from body/query/header sources, and ACK webhook requests with `204` to avoid persistent `Processing...` states in Synology Chat clients. (#26635) Thanks @memphislee09-source.
 - OpenAI Codex OAuth/TLS prerequisites: add an OAuth TLS cert-chain preflight with actionable remediation for cert trust failures, and gate doctor TLS prerequisite probing to OpenAI Codex OAuth-configured installs (or explicit `doctor --deep`) to avoid unconditional outbound probe latency. (#32051) Thanks @alexfilatov.
 - Synology Chat/webhook ingress hardening: enforce bounded body reads (size + timeout) via shared request-body guards to prevent unauthenticated slow-body hangs before token validation. (#25831) Thanks @bmendonca3.
