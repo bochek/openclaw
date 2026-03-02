@@ -562,4 +562,45 @@ describe("browser tool act stale target recovery", () => {
     );
     expect(result?.details).toMatchObject({ ok: true });
   });
+
+  it("does not retry when targetId is missing after trim", async () => {
+    browserActionsMocks.browserAct.mockRejectedValueOnce(new Error("404: tab not found"));
+    browserClientMocks.browserTabs.mockResolvedValueOnce([
+      { targetId: "new-tab", title: "New Tab", url: "https://example.com" },
+    ]);
+
+    const tool = createBrowserTool();
+    await expect(
+      tool.execute?.("call-2", {
+        action: "act",
+        profile: "chrome",
+        request: {
+          action: "click",
+          targetId: "   ",
+          ref: "btn-1",
+        },
+      }),
+    ).rejects.toThrow("stale targetId");
+
+    expect(browserActionsMocks.browserAct).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not apply stale-tab retry for non-chrome profiles", async () => {
+    browserActionsMocks.browserAct.mockRejectedValueOnce(new Error("404: tab not found"));
+
+    const tool = createBrowserTool();
+    await expect(
+      tool.execute?.("call-3", {
+        action: "act",
+        profile: "openclaw",
+        request: {
+          action: "click",
+          targetId: "stale-tab",
+          ref: "btn-1",
+        },
+      }),
+    ).rejects.toThrow("404: tab not found");
+
+    expect(browserActionsMocks.browserAct).toHaveBeenCalledTimes(1);
+  });
 });
