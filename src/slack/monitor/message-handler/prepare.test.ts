@@ -522,6 +522,75 @@ describe("slack prepareSlackMessage inbound contract", () => {
     );
   });
 
+  it("filters inherited parent files from thread replies (no ghost file placeholder)", async () => {
+    const replies = vi.fn().mockResolvedValue({
+      messages: [
+        {
+          text: "starter",
+          user: "U2",
+          ts: "900.000",
+          files: [{ id: "F_PARENT", name: "parent.png" }],
+        },
+      ],
+      response_metadata: { next_cursor: "" },
+    });
+    const slackCtx = createThreadSlackCtx({
+      cfg: {
+        channels: { slack: { enabled: true, replyToMode: "all", groupPolicy: "open" } },
+      } as OpenClawConfig,
+      replies,
+    });
+    slackCtx.resolveUserName = async () => ({ name: "Alice" });
+    slackCtx.resolveChannelName = async () => ({ name: "general", type: "channel" });
+
+    const prepared = await prepareThreadMessage(slackCtx, {
+      text: "thread reply text only",
+      ts: "101.000",
+      thread_ts: "900.000",
+      files: [{ id: "F_PARENT", name: "parent.png" }],
+    });
+
+    expect(prepared).toBeTruthy();
+    expect(prepared!.ctxPayload.RawBody).toContain("thread reply text only");
+    expect(prepared!.ctxPayload.RawBody).not.toContain("[Slack file:");
+  });
+
+  it("keeps reply-owned files when parent and reply file IDs differ", async () => {
+    const replies = vi.fn().mockResolvedValue({
+      messages: [
+        {
+          text: "starter",
+          user: "U2",
+          ts: "901.000",
+          files: [{ id: "F_PARENT", name: "parent.png" }],
+        },
+      ],
+      response_metadata: { next_cursor: "" },
+    });
+    const slackCtx = createThreadSlackCtx({
+      cfg: {
+        channels: { slack: { enabled: true, replyToMode: "all", groupPolicy: "open" } },
+      } as OpenClawConfig,
+      replies,
+    });
+    slackCtx.resolveUserName = async () => ({ name: "Alice" });
+    slackCtx.resolveChannelName = async () => ({ name: "general", type: "channel" });
+
+    const prepared = await prepareThreadMessage(slackCtx, {
+      text: "",
+      ts: "101.000",
+      thread_ts: "901.000",
+      files: [
+        { id: "F_PARENT", name: "parent.png" },
+        { id: "F_REPLY", name: "reply.png" },
+      ],
+    });
+
+    expect(prepared).toBeTruthy();
+    expect(prepared!.ctxPayload.RawBody).toContain("[Slack file: reply.png]");
+    expect(prepared!.ctxPayload.RawBody).not.toContain("parent.png");
+  });
+
   it("excludes thread_ts from top-level messages", async () => {
     const message = createSlackMessage({ text: "hello" });
 

@@ -564,9 +564,9 @@ export async function prepareSlackMessage(params: {
   // placeholder so the message is still delivered to the agent instead of
   // being silently dropped (#25064).
   const fileOnlyFallback =
-    !mediaPlaceholder && (message.files?.length ?? 0) > 0
-      ? message
-          .files!.slice(0, MAX_SLACK_MEDIA_FILES)
+    !mediaPlaceholder && (ownFiles?.length ?? 0) > 0
+      ? ownFiles
+          .slice(0, MAX_SLACK_MEDIA_FILES)
           .map((f) => f.name?.trim() || "file")
           .join(", ")
       : undefined;

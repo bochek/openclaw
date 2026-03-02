@@ -403,7 +403,8 @@ export async function resolveSlackThreadStarter(params: {
     })) as { messages?: Array<{ text?: string; user?: string; ts?: string; files?: SlackFile[] }> };
     const message = response?.messages?.[0];
     const text = (message?.text ?? "").trim();
-    if (!message || !text) {
+    const hasFiles = (message?.files?.length ?? 0) > 0;
+    if (!message || (!text && !hasFiles)) {
       return null;
     }
     const starter: SlackThreadStarter = {
