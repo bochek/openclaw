@@ -164,7 +164,13 @@ const IMAGE_ATTACHMENT = { contentType: CONTENT_TYPE_IMAGE_PNG, contentUrl: TEST
 const PNG_BUFFER = Buffer.from("png");
 const PNG_BASE64 = PNG_BUFFER.toString("base64");
 const PDF_BUFFER = Buffer.from("pdf");
-const createTokenProvider = () => ({ getAccessToken: vi.fn(async () => "token") });
+const createTokenProvider = (
+  tokenOrResolver: string | ((scope: string) => string | Promise<string>) = "token",
+) => ({
+  getAccessToken: vi.fn(async (scope: string) =>
+    typeof tokenOrResolver === "function" ? await tokenOrResolver(scope) : tokenOrResolver,
+  ),
+});
 const asSingleItemArray = <T>(value: T) => [value];
 const withLabel = <T extends object>(label: string, fields: T): T & LabeledCase => ({
   label,
@@ -740,6 +746,31 @@ describe("msteams attachments", () => {
       expectAttachmentMediaLength(media, 1);
       expect(tokenProvider.getAccessToken).toHaveBeenCalledOnce();
       expect(fetchMock.mock.calls.map(([calledUrl]) => String(calledUrl))).toContain(redirectedUrl);
+    });
+
+    it("continues scope fallback after non-auth failure and succeeds on later scope", async () => {
+      let authAttempt = 0;
+      const tokenProvider = createTokenProvider((scope) => `token:${scope}`);
+      const fetchMock = vi.fn(async (_url: string, opts?: RequestInit) => {
+        const auth = new Headers(opts?.headers).get("Authorization");
+        if (!auth) {
+          return createTextResponse("unauthorized", 401);
+        }
+        authAttempt += 1;
+        if (authAttempt === 1) {
+          return createTextResponse("upstream transient", 500);
+        }
+        return createBufferResponse(PNG_BUFFER, CONTENT_TYPE_IMAGE_PNG);
+      });
+
+      const media = await downloadAttachmentsWithFetch(
+        createImageAttachments(TEST_URL_IMAGE),
+        fetchMock,
+        { tokenProvider, authAllowHosts: [TEST_HOST] },
+      );
+
+      expectAttachmentMediaLength(media, 1);
+      expect(tokenProvider.getAccessToken).toHaveBeenCalledTimes(2);
     });
 
     it("skips urls outside the allowlist", async () => {
