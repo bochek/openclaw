@@ -26,6 +26,7 @@ Docs: https://docs.openclaw.ai
 ### Fixes
 
 - macOS/LaunchAgent security defaults: write `Umask=63` (octal `077`) into generated gateway launchd plists so post-update service reinstalls keep owner-only file permissions by default instead of falling back to system `022`. (#32022) Fixes #31905. Thanks @liuxiaopai-ai.
+- Daemon/macOS TLS trust defaults: set `NODE_USE_SYSTEM_CA=1` by default in gateway/node supervised service environments on macOS (while preserving explicit env overrides), so launchd-managed installs trust enterprise system keychains without manual shell env wiring. (#32205) Thanks @magos-minor.
 - Plugin SDK/runtime hardening: add package export verification in CI/release checks to catch missing runtime exports before publish-time regressions. (#28575) Thanks @Glucksberg.
 - Media understanding/provider HTTP proxy routing: pass a proxy-aware fetch function from `HTTPS_PROXY`/`HTTP_PROXY` env vars into audio/video provider calls (with graceful malformed-proxy fallback) so transcription/video requests honor configured outbound proxies. (#27093) Thanks @mcaxtr.
 - Media understanding/malformed attachment guards: harden attachment selection and decision summary formatting against non-array or malformed attachment payloads to prevent runtime crashes on invalid inbound metadata shapes. (#28024) Thanks @claw9267.
