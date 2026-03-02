@@ -40,6 +40,43 @@ export type JsonSchemaValidationError = {
   allowedValuesHiddenCount?: number;
 };
 
+function normalizeAjvPath(instancePath: string | undefined): string {
+  const path = instancePath?.replace(/^\//, "").replace(/\//g, ".");
+  return path && path.length > 0 ? path : "<root>";
+}
+
+function appendPathSegment(path: string, segment: string): string {
+  const trimmed = segment.trim();
+  if (!trimmed) {
+    return path;
+  }
+  if (path === "<root>") {
+    return trimmed;
+  }
+  return `${path}.${trimmed}`;
+}
+
+function resolveMissingProperty(error: ErrorObject): string | null {
+  if (
+    error.keyword !== "required" &&
+    error.keyword !== "dependentRequired" &&
+    error.keyword !== "dependencies"
+  ) {
+    return null;
+  }
+  const missingProperty = (error.params as { missingProperty?: unknown }).missingProperty;
+  return typeof missingProperty === "string" && missingProperty.trim() ? missingProperty : null;
+}
+
+function resolveAjvErrorPath(error: ErrorObject): string {
+  const basePath = normalizeAjvPath(error.instancePath);
+  const missingProperty = resolveMissingProperty(error);
+  if (!missingProperty) {
+    return basePath;
+  }
+  return appendPathSegment(basePath, missingProperty);
+}
+
 function extractAllowedValues(error: ErrorObject): unknown[] | null {
   if (error.keyword === "enum") {
     const allowedValues = (error.params as { allowedValues?: unknown }).allowedValues;
@@ -70,7 +107,7 @@ function formatAjvErrors(errors: ErrorObject[] | null | undefined): JsonSchemaVa
     return [{ path: "<root>", message: "invalid config", text: "<root>: invalid config" }];
   }
   return errors.map((error) => {
-    const path = error.instancePath?.replace(/^\//, "").replace(/\//g, ".") || "<root>";
+    const path = resolveAjvErrorPath(error);
     const baseMessage = error.message ?? "invalid";
     const allowedValuesSummary = getAjvAllowedValuesSummary(error);
     const message = allowedValuesSummary

@@ -292,6 +292,14 @@ function validateConfigObjectWithPluginsBase(
   const hasExplicitPluginsConfig =
     isRecord(raw) && Object.prototype.hasOwnProperty.call(raw, "plugins");
 
+  const resolvePluginConfigIssuePath = (pluginId: string, errorPath: string): string => {
+    const base = `plugins.entries.${pluginId}.config`;
+    if (!errorPath || errorPath === "<root>") {
+      return base;
+    }
+    return `${base}.${errorPath}`;
+  };
+
   type RegistryInfo = {
     registry: ReturnType<typeof loadPluginManifestRegistry>;
     knownIds: Set<string>;
@@ -521,8 +529,8 @@ function validateConfigObjectWithPluginsBase(
         if (!res.ok) {
           for (const error of res.errors) {
             issues.push({
-              path: `plugins.entries.${pluginId}.config`,
-              message: `invalid config: ${error.text}`,
+              path: resolvePluginConfigIssuePath(pluginId, error.path),
+              message: `invalid config: ${error.message}`,
               allowedValues: error.allowedValues,
               allowedValuesHiddenCount: error.allowedValuesHiddenCount,
             });

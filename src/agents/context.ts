@@ -67,17 +67,72 @@ export function applyConfiguredContextWindows(params: {
 
 const MODEL_CACHE = new Map<string, number>();
 let loadPromise: Promise<void> | null = null;
+let configuredWindowsPrimed = false;
+
+function getCommandPathFromArgv(argv: string[]): string[] {
+  const tokens: string[] = [];
+  let skipNextAsRootValue = false;
+  for (const arg of argv.slice(2)) {
+    if (!arg || arg === "--") {
+      break;
+    }
+    if (skipNextAsRootValue) {
+      skipNextAsRootValue = false;
+      continue;
+    }
+    if (arg === "--profile" || arg === "--log-level") {
+      skipNextAsRootValue = true;
+      continue;
+    }
+    if (
+      arg === "--dev" ||
+      arg === "--no-color" ||
+      arg.startsWith("--profile=") ||
+      arg.startsWith("--log-level=")
+    ) {
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      continue;
+    }
+    tokens.push(arg);
+    if (tokens.length >= 2) {
+      break;
+    }
+  }
+  return tokens;
+}
+
+function shouldSkipEagerContextWindowWarmup(argv: string[] = process.argv): boolean {
+  const [primary, secondary] = getCommandPathFromArgv(argv);
+  return primary === "config" && secondary === "validate";
+}
+
+function primeConfiguredContextWindows(): OpenClawConfig | undefined {
+  if (configuredWindowsPrimed) {
+    return undefined;
+  }
+  configuredWindowsPrimed = true;
+  try {
+    const cfg = loadConfig();
+    applyConfiguredContextWindows({
+      cache: MODEL_CACHE,
+      modelsConfig: cfg.models as ModelsConfig | undefined,
+    });
+    return cfg;
+  } catch {
+    // If config can't be loaded, leave cache empty.
+    return undefined;
+  }
+}
 
 function ensureContextWindowCacheLoaded(): Promise<void> {
+  const cfg = primeConfiguredContextWindows();
   if (loadPromise) {
     return loadPromise;
   }
   loadPromise = (async () => {
-    let cfg: ReturnType<typeof loadConfig> | undefined;
-    try {
-      cfg = loadConfig();
-    } catch {
-      // If config can't be loaded, leave cache empty.
+    if (!cfg) {
       return;
     }
 
@@ -121,6 +176,12 @@ export function lookupContextTokens(modelId?: string): number | undefined {
   // Best-effort: kick off loading, but don't block.
   void ensureContextWindowCacheLoaded();
   return MODEL_CACHE.get(modelId);
+}
+
+if (!shouldSkipEagerContextWindowWarmup()) {
+  // Keep prior behavior where model limits begin loading during startup.
+  // This avoids a cold-start miss on the first context token lookup.
+  void ensureContextWindowCacheLoaded();
 }
 
 function resolveConfiguredModelParams(

@@ -193,7 +193,7 @@ describe("config plugin validation", () => {
     if (!res.ok) {
       const hasIssue = res.issues.some(
         (issue) =>
-          issue.path === "plugins.entries.bad-plugin.config" &&
+          issue.path.startsWith("plugins.entries.bad-plugin.config") &&
           issue.message.includes("invalid config"),
       );
       expect(hasIssue).toBe(true);
@@ -211,7 +211,9 @@ describe("config plugin validation", () => {
     });
     expect(res.ok).toBe(false);
     if (!res.ok) {
-      const issue = res.issues.find((entry) => entry.path === "plugins.entries.enum-plugin.config");
+      const issue = res.issues.find(
+        (entry) => entry.path === "plugins.entries.enum-plugin.config.fileFormat",
+      );
       expect(issue).toBeDefined();
       expect(issue?.message).toContain('allowed: "markdown", "html"');
       expect(issue?.allowedValues).toEqual(["markdown", "html"]);

@@ -35,9 +35,20 @@ function toAllowedValueLabel(value: unknown): string {
 
 function toAllowedValueValue(value: unknown): string {
   if (typeof value === "string") {
-    return truncateHintText(value, MAX_ALLOWED_VALUE_CHARS);
+    return value;
   }
-  return truncateHintText(safeStringify(value), MAX_ALLOWED_VALUE_CHARS);
+  return safeStringify(value);
+}
+
+function toAllowedValueDedupKey(value: unknown): string {
+  if (value === null) {
+    return "null:null";
+  }
+  const kind = typeof value;
+  if (kind === "string") {
+    return `string:${value as string}`;
+  }
+  return `${kind}:${safeStringify(value)}`;
 }
 
 export function summarizeAllowedValues(
@@ -50,13 +61,13 @@ export function summarizeAllowedValues(
   const deduped: Array<{ value: string; label: string }> = [];
   const seenValues = new Set<string>();
   for (const item of values) {
-    const normalizedValue = toAllowedValueValue(item);
-    if (seenValues.has(normalizedValue)) {
+    const dedupeKey = toAllowedValueDedupKey(item);
+    if (seenValues.has(dedupeKey)) {
       continue;
     }
-    seenValues.add(normalizedValue);
+    seenValues.add(dedupeKey);
     deduped.push({
-      value: normalizedValue,
+      value: toAllowedValueValue(item),
       label: toAllowedValueLabel(item),
     });
   }

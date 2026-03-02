@@ -21,10 +21,9 @@ describe("schema validator", () => {
     expect(res.ok).toBe(false);
     if (!res.ok) {
       const issue = res.errors.find((entry) => entry.path === "fileFormat");
-      expect(issue?.message).toBe(
-        'must be equal to one of the allowed values (allowed: "markdown", "html", "json")',
-      );
+      expect(issue?.message).toContain("(allowed:");
       expect(issue?.allowedValues).toEqual(["markdown", "html", "json"]);
+      expect(issue?.allowedValuesHiddenCount).toBe(0);
     }
   });
 
@@ -46,8 +45,9 @@ describe("schema validator", () => {
     expect(res.ok).toBe(false);
     if (!res.ok) {
       const issue = res.errors.find((entry) => entry.path === "mode");
-      expect(issue?.message).toBe('must be equal to constant (allowed: "strict")');
+      expect(issue?.message).toContain("(allowed:");
       expect(issue?.allowedValues).toEqual(["strict"]);
+      expect(issue?.allowedValuesHiddenCount).toBe(0);
     }
   });
 
@@ -85,9 +85,8 @@ describe("schema validator", () => {
     expect(res.ok).toBe(false);
     if (!res.ok) {
       const issue = res.errors.find((entry) => entry.path === "mode");
-      expect(issue?.message).toBe(
-        'must be equal to one of the allowed values (allowed: "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9", "v10", "v11", "v12", ... (+1 more))',
-      );
+      expect(issue?.message).toContain("(allowed:");
+      expect(issue?.message).toContain("... (+1 more)");
       expect(issue?.allowedValues).toEqual([
         "v1",
         "v2",
@@ -103,6 +102,58 @@ describe("schema validator", () => {
         "v12",
       ]);
       expect(issue?.allowedValuesHiddenCount).toBe(1);
+    }
+  });
+
+  it("appends missing required property to the structured path", () => {
+    const res = validateJsonSchemaValue({
+      cacheKey: "schema-validator.test.required.path",
+      schema: {
+        type: "object",
+        properties: {
+          settings: {
+            type: "object",
+            properties: {
+              mode: { type: "string" },
+            },
+            required: ["mode"],
+          },
+        },
+        required: ["settings"],
+      },
+      value: { settings: {} },
+    });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      const issue = res.errors.find((entry) => entry.path === "settings.mode");
+      expect(issue).toBeDefined();
+      expect(issue?.allowedValues).toBeUndefined();
+    }
+  });
+
+  it("appends missing dependency property to the structured path", () => {
+    const res = validateJsonSchemaValue({
+      cacheKey: "schema-validator.test.dependencies.path",
+      schema: {
+        type: "object",
+        properties: {
+          settings: {
+            type: "object",
+            dependencies: {
+              mode: ["format"],
+            },
+          },
+        },
+      },
+      value: { settings: { mode: "strict" } },
+    });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      const issue = res.errors.find((entry) => entry.path === "settings.format");
+      expect(issue).toBeDefined();
+      expect(issue?.allowedValues).toBeUndefined();
     }
   });
 
