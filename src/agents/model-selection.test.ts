@@ -492,7 +492,14 @@ describe("model-selection", () => {
           cfg,
           provider: "anthropic",
           model: "claude-opus-4-6",
-          catalog: [{ provider: "anthropic", id: "claude-opus-4-6", reasoning: true }],
+          catalog: [
+            {
+              provider: "anthropic",
+              id: "claude-opus-4-6",
+              name: "Claude Opus 4.6",
+              reasoning: true,
+            },
+          ],
         }),
       ).toBe("high");
     });
