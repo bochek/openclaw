@@ -30,17 +30,15 @@ export function patchChannelOnboardingAdapter(
   if (!adapter) {
     throw new Error(`missing onboarding adapter for ${channel}`);
   }
-  const keys = Object.keys(patch);
-  const adapterRecord = adapter as unknown as Record<string, unknown>;
-  const patchRecord = patch as Record<string, unknown>;
-  const previous = new Map<string, unknown>();
+  const keys = Object.keys(patch) as Array<keyof ChannelOnboardingAdapter>;
+  const previous: Partial<ChannelOnboardingAdapter> = {};
   for (const key of keys) {
-    previous.set(key, adapterRecord[key]);
-    adapterRecord[key] = patchRecord[key];
+    previous[key] = adapter[key];
+    adapter[key] = patch[key] as ChannelOnboardingAdapter[typeof key];
   }
   return () => {
     for (const key of keys) {
-      adapterRecord[key] = previous.get(key);
+      adapter[key] = previous[key] as ChannelOnboardingAdapter[typeof key];
     }
   };
 }

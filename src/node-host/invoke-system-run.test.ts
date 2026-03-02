@@ -4,11 +4,8 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { saveExecApprovals } from "../infra/exec-approvals.js";
 import type { ExecHostResponse } from "../infra/exec-host.js";
-import {
-  handleSystemRunInvoke,
-  formatSystemRunAllowlistMissMessage,
-  type HandleSystemRunInvokeOptions,
-} from "./invoke-system-run.js";
+import { handleSystemRunInvoke, formatSystemRunAllowlistMissMessage } from "./invoke-system-run.js";
+import type { HandleSystemRunInvokeOptions } from "./invoke-system-run.js";
 
 describe("formatSystemRunAllowlistMissMessage", () => {
   it("returns legacy allowlist miss message by default", () => {
@@ -150,23 +147,30 @@ describe("handleSystemRunInvoke mac app exec host routing", () => {
     security?: "full" | "allowlist";
     ask?: "off" | "on-miss" | "always";
     approved?: boolean;
-    runCommand?: ReturnType<typeof vi.fn>;
-    runViaMacAppExecHost?: ReturnType<typeof vi.fn>;
-    sendInvokeResult?: ReturnType<typeof vi.fn>;
-    sendExecFinishedEvent?: ReturnType<typeof vi.fn>;
-    sendNodeEvent?: ReturnType<typeof vi.fn>;
+    runCommand?: HandleSystemRunInvokeOptions["runCommand"];
+    runViaMacAppExecHost?: HandleSystemRunInvokeOptions["runViaMacAppExecHost"];
+    sendInvokeResult?: HandleSystemRunInvokeOptions["sendInvokeResult"];
+    sendExecFinishedEvent?: HandleSystemRunInvokeOptions["sendExecFinishedEvent"];
+    sendNodeEvent?: HandleSystemRunInvokeOptions["sendNodeEvent"];
     skillBinsCurrent?: () => Promise<Array<{ name: string; resolvedPath: string }>>;
   }) {
     const runCommand =
       params.runCommand ??
-      vi.fn(async (_command: string[], _cwd?: string, _env?: Record<string, string>) =>
+      (vi.fn(async (_command: string[], _cwd?: string, _env?: Record<string, string>) =>
         createLocalRunResult(),
-      );
+      ) as HandleSystemRunInvokeOptions["runCommand"]);
     const runViaMacAppExecHost =
-      params.runViaMacAppExecHost ?? vi.fn(async () => params.runViaResponse ?? null);
-    const sendInvokeResult = params.sendInvokeResult ?? vi.fn(async () => {});
-    const sendExecFinishedEvent = params.sendExecFinishedEvent ?? vi.fn(async () => {});
-    const sendNodeEvent = params.sendNodeEvent ?? vi.fn(async () => {});
+      params.runViaMacAppExecHost ??
+      (vi.fn(async () => params.runViaResponse ?? null) as HandleSystemRunInvokeOptions["runViaMacAppExecHost"]);
+    const sendInvokeResult =
+      params.sendInvokeResult ??
+      (vi.fn(async () => {}) as HandleSystemRunInvokeOptions["sendInvokeResult"]);
+    const sendExecFinishedEvent =
+      params.sendExecFinishedEvent ??
+      (vi.fn(async () => {}) as HandleSystemRunInvokeOptions["sendExecFinishedEvent"]);
+    const sendNodeEvent =
+      params.sendNodeEvent ??
+      (vi.fn(async () => {}) as HandleSystemRunInvokeOptions["sendNodeEvent"]);
 
     await handleSystemRunInvoke({
       client: {} as never,
@@ -185,14 +189,12 @@ describe("handleSystemRunInvoke mac app exec host routing", () => {
       resolveExecAsk: () => params.ask ?? "off",
       isCmdExeInvocation: () => false,
       sanitizeEnv: () => undefined,
-      runCommand: runCommand as HandleSystemRunInvokeOptions["runCommand"],
-      runViaMacAppExecHost:
-        runViaMacAppExecHost as HandleSystemRunInvokeOptions["runViaMacAppExecHost"],
-      sendNodeEvent: sendNodeEvent as HandleSystemRunInvokeOptions["sendNodeEvent"],
+      runCommand,
+      runViaMacAppExecHost,
+      sendNodeEvent,
       buildExecEventPayload: (payload) => payload,
-      sendInvokeResult: sendInvokeResult as HandleSystemRunInvokeOptions["sendInvokeResult"],
-      sendExecFinishedEvent:
-        sendExecFinishedEvent as HandleSystemRunInvokeOptions["sendExecFinishedEvent"],
+      sendInvokeResult,
+      sendExecFinishedEvent,
       preferMacAppExecHost: params.preferMacAppExecHost,
     });
 
