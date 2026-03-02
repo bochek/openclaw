@@ -38,6 +38,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Browser/Extension startup: stop failing browser startup when relay is reachable but no tab is attached yet; tab attachment is now required only when a tab action actually runs. (#28855) Thanks @Sid-Qin.
 - Browser/Remote CDP ownership checks: skip local-process ownership errors for non-loopback remote CDP profiles when HTTP is reachable but the websocket handshake fails, and surface the remote websocket attach/retry path instead. (#15582) Landed from contributor (#28780) Thanks @stubbi, @bsormagec, @unblockedgamesstudio and @vincentkoc.
 - Docker/Image health checks: add Dockerfile `HEALTHCHECK` that probes gateway `GET /healthz` so container runtimes can mark unhealthy instances without requiring auth credentials in the probe command. (#11478) Thanks @U-C4N and @vincentkoc.
 - Daemon/systemd checks in containers: treat missing `systemctl` invocations (including `spawn systemctl ENOENT`/`EACCES`) as unavailable service state during `is-enabled` checks, preventing container flows from failing with `Gateway service check failed` before install/status handling can continue. (#26089) Thanks @sahilsatralkar and @vincentkoc.

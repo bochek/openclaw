@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { withFetchPreconnect } from "../test-utils/fetch-mock.js";
+import * as chromeModule from "./chrome.js";
+import * as extensionRelayModule from "./extension-relay.js";
 import type { BrowserServerState } from "./server-context.js";
 import "./server-context.chrome-test-harness.js";
 import { createBrowserRouteContext } from "./server-context.js";
@@ -119,5 +121,22 @@ describe("browser server-context ensureTabAvailable", () => {
     const ctx = createBrowserRouteContext({ getState: () => state });
     const chrome = ctx.forProfile("chrome");
     await expect(chrome.ensureTabAvailable()).rejects.toThrow(/no attached Chrome tabs/i);
+  });
+
+  it("starts relay without requiring an attached tab during browser availability checks", async () => {
+    const isChromeReachableMock = vi.mocked(chromeModule.isChromeReachable);
+    const ensureRelaySpy = vi
+      .spyOn(extensionRelayModule, "ensureChromeExtensionRelayServer")
+      .mockResolvedValue(undefined as never);
+    isChromeReachableMock.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    const state = makeBrowserState();
+    const ctx = createBrowserRouteContext({ getState: () => state });
+    const chrome = ctx.forProfile("chrome");
+
+    await expect(chrome.ensureBrowserAvailable()).resolves.toBeUndefined();
+    expect(ensureRelaySpy).toHaveBeenCalledWith({ cdpUrl: "http://127.0.0.1:18792" });
+
+    ensureRelaySpy.mockRestore();
   });
 });
