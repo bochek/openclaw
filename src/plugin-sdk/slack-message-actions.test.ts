@@ -63,4 +63,26 @@ describe("handleSlackMessageAction", () => {
       expect.any(Object),
     );
   });
+
+  it("requires a target channel for download-file", async () => {
+    const invoke = vi.fn(async (action: Record<string, unknown>) => ({
+      ok: true,
+      content: action,
+    }));
+
+    await expect(
+      handleSlackMessageAction({
+        providerId: "slack",
+        ctx: {
+          action: "download-file",
+          cfg: {},
+          params: {
+            fileId: "F-no-target",
+          },
+        } as never,
+        invoke: invoke as never,
+      }),
+    ).rejects.toThrow(/to/i);
+    expect(invoke).not.toHaveBeenCalled();
+  });
 });

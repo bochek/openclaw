@@ -290,8 +290,9 @@ export async function handleSlackAction(
       }
       case "downloadFile": {
         const fileId = readStringParam(params, "fileId", { required: true });
-        const channelTarget = readStringParam(params, "channelId") ?? readStringParam(params, "to");
-        const channelId = channelTarget ? resolveSlackChannelId(channelTarget) : undefined;
+        const channelTarget =
+          readStringParam(params, "channelId") ?? readStringParam(params, "to", { required: true });
+        const channelId = resolveSlackChannelId(channelTarget);
         const threadId = readStringParam(params, "threadId") ?? readStringParam(params, "replyTo");
         const maxBytes = account.config?.mediaMaxMb
           ? account.config.mediaMaxMb * 1024 * 1024

@@ -202,12 +202,13 @@ describe("handleSlackAction", () => {
       {
         action: "downloadFile",
         fileId: "F123",
+        channelId: "C1",
       },
       slackConfig(),
     );
     expect(downloadSlackFile).toHaveBeenCalledWith(
       "F123",
-      expect.objectContaining({ maxBytes: 20 * 1024 * 1024 }),
+      expect.objectContaining({ channelId: "C1", maxBytes: 20 * 1024 * 1024 }),
     );
     expect(result).toEqual(
       expect.objectContaining({
@@ -241,6 +242,18 @@ describe("handleSlackAction", () => {
         details: expect.objectContaining({ ok: false }),
       }),
     );
+  });
+
+  it("requires a channel target for downloadFile", async () => {
+    await expect(
+      handleSlackAction(
+        {
+          action: "downloadFile",
+          fileId: "F123",
+        },
+        slackConfig(),
+      ),
+    ).rejects.toThrow(/to/i);
   });
 
   it.each([

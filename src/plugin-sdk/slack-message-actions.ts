@@ -178,15 +178,14 @@ export async function handleSlackMessageAction(params: {
 
   if (action === "download-file") {
     const fileId = readStringParam(actionParams, "fileId", { required: true });
-    const channelId =
-      readStringParam(actionParams, "channelId") ?? readStringParam(actionParams, "to");
+    const channelId = resolveChannelId();
     const threadId =
       readStringParam(actionParams, "threadId") ?? readStringParam(actionParams, "replyTo");
     return await invoke(
       {
         action: "downloadFile",
         fileId,
-        channelId: channelId ?? undefined,
+        channelId,
         threadId: threadId ?? undefined,
         accountId,
       },

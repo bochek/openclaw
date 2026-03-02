@@ -372,12 +372,12 @@ function collectSlackThreadShares(
 
 function hasSlackScopeMismatch(params: {
   file: SlackFileInfoSummary;
-  channelId?: string;
+  channelId: string;
   threadId?: string;
 }): boolean {
   const channelId = normalizeSlackScopeValue(params.channelId);
   if (!channelId) {
-    return false;
+    return true;
   }
   const threadId = normalizeSlackScopeValue(params.threadId);
 
@@ -410,7 +410,7 @@ function hasSlackScopeMismatch(params: {
  */
 export async function downloadSlackFile(
   fileId: string,
-  opts: SlackActionClientOpts & { maxBytes: number; channelId?: string; threadId?: string },
+  opts: SlackActionClientOpts & { maxBytes: number; channelId: string; threadId?: string },
 ): Promise<SlackMediaResult | null> {
   const token = resolveToken(opts.token, opts.accountId);
   const client = await getClient(opts);

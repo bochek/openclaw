@@ -39,6 +39,7 @@ describe("downloadSlackFile", () => {
       client,
       token: "xoxb-test",
       maxBytes: 1024,
+      channelId: "C123",
     });
 
     expect(result).toBeNull();
@@ -67,6 +68,7 @@ describe("downloadSlackFile", () => {
       client,
       token: "xoxb-test",
       maxBytes: 1024,
+      channelId: "C123",
     });
 
     expect(client.files.info).toHaveBeenCalledWith({ file: "F123" });
