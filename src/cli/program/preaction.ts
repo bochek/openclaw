@@ -3,7 +3,12 @@ import { setVerbose } from "../../globals.js";
 import { isTruthyEnvValue } from "../../infra/env.js";
 import type { LogLevel } from "../../logging/levels.js";
 import { defaultRuntime } from "../../runtime.js";
-import { getCommandPath, getVerboseFlag, hasFlag, hasHelpOrVersion } from "../argv.js";
+import {
+  getCommandPathWithRootOptions,
+  getVerboseFlag,
+  hasFlag,
+  hasHelpOrVersion,
+} from "../argv.js";
 import { emitCliBanner } from "../banner.js";
 import { resolveCliName } from "../cli-name.js";
 
@@ -98,7 +103,7 @@ export function registerPreActionHooks(program: Command, programVersion: string)
     if (hasHelpOrVersion(argv)) {
       return;
     }
-    const commandPath = getCommandPath(argv, 2);
+    const commandPath = getCommandPathWithRootOptions(argv, 2);
     const hideBanner =
       isTruthyEnvValue(process.env.OPENCLAW_HIDE_BANNER) ||
       commandPath[0] === "update" ||

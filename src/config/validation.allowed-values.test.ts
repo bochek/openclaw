@@ -32,4 +32,46 @@ describe("config validation allowed-values metadata", () => {
       expect(issue?.allowedValuesHiddenCount).toBe(0);
     }
   });
+
+  it("includes boolean variants for boolean-or-enum unions", () => {
+    const result = validateConfigObjectRaw({
+      channels: {
+        telegram: {
+          botToken: "x",
+          allowFrom: ["*"],
+          dmPolicy: "allowlist",
+          streaming: "maybe",
+        },
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const issue = result.issues.find((entry) => entry.path === "channels.telegram.streaming");
+      expect(issue).toBeDefined();
+      expect(issue?.allowedValues).toEqual([
+        "true",
+        "false",
+        "off",
+        "partial",
+        "block",
+        "progress",
+      ]);
+    }
+  });
+
+  it("skips allowed-values hints for unions with open-ended branches", () => {
+    const result = validateConfigObjectRaw({
+      cron: { sessionRetention: true },
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      const issue = result.issues.find((entry) => entry.path === "cron.sessionRetention");
+      expect(issue).toBeDefined();
+      expect(issue?.allowedValues).toBeUndefined();
+      expect(issue?.allowedValuesHiddenCount).toBeUndefined();
+      expect(issue?.message).not.toContain("(allowed:");
+    }
+  });
 });

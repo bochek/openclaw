@@ -217,6 +217,15 @@ describe("registerPreActionHooks", () => {
     expect(ensureConfigReadyMock).not.toHaveBeenCalled();
   });
 
+  it("bypasses config guard for config validate when root option values are present", async () => {
+    await runPreAction({
+      parseArgv: ["config", "validate"],
+      processArgv: ["node", "openclaw", "--profile", "work", "config", "validate"],
+    });
+
+    expect(ensureConfigReadyMock).not.toHaveBeenCalled();
+  });
+
   beforeAll(() => {
     program = buildProgram();
     const hooks = (

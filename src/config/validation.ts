@@ -27,6 +27,11 @@ import { OpenClawSchema } from "./zod-schema.js";
 const LEGACY_REMOVED_PLUGIN_IDS = new Set(["google-antigravity-auth"]);
 
 type UnknownIssueRecord = Record<string, unknown>;
+type AllowedValuesCollection = {
+  values: unknown[];
+  incomplete: boolean;
+  hasValues: boolean;
+};
 
 function toIssueRecord(value: unknown): UnknownIssueRecord | null {
   if (!value || typeof value !== "object") {
@@ -35,37 +40,78 @@ function toIssueRecord(value: unknown): UnknownIssueRecord | null {
   return value as UnknownIssueRecord;
 }
 
-function collectAllowedValuesFromUnknownIssue(issue: unknown): unknown[] {
+function collectAllowedValuesFromIssue(issue: unknown): AllowedValuesCollection {
   const record = toIssueRecord(issue);
   if (!record) {
-    return [];
+    return { values: [], incomplete: false, hasValues: false };
   }
   const code = typeof record.code === "string" ? record.code : "";
 
   if (code === "invalid_value") {
     const values = record.values;
-    return Array.isArray(values) ? values : [];
+    if (!Array.isArray(values)) {
+      return { values: [], incomplete: true, hasValues: false };
+    }
+    return { values, incomplete: false, hasValues: values.length > 0 };
+  }
+
+  if (code === "invalid_type") {
+    const expected = typeof record.expected === "string" ? record.expected : "";
+    if (expected === "boolean") {
+      return { values: [true, false], incomplete: false, hasValues: true };
+    }
+    return { values: [], incomplete: true, hasValues: false };
   }
 
   if (code !== "invalid_union") {
-    return [];
+    return { values: [], incomplete: false, hasValues: false };
   }
 
   const nested = record.errors;
-  if (!Array.isArray(nested)) {
-    return [];
+  if (!Array.isArray(nested) || nested.length === 0) {
+    return { values: [], incomplete: true, hasValues: false };
   }
 
   const collected: unknown[] = [];
   for (const branch of nested) {
-    if (!Array.isArray(branch)) {
+    if (!Array.isArray(branch) || branch.length === 0) {
+      return { values: [], incomplete: true, hasValues: false };
+    }
+    const branchCollected = collectAllowedValuesFromIssueList(branch);
+    if (branchCollected.incomplete || !branchCollected.hasValues) {
+      return { values: [], incomplete: true, hasValues: false };
+    }
+    collected.push(...branchCollected.values);
+  }
+
+  return { values: collected, incomplete: false, hasValues: collected.length > 0 };
+}
+
+function collectAllowedValuesFromIssueList(
+  issues: ReadonlyArray<unknown>,
+): AllowedValuesCollection {
+  const collected: unknown[] = [];
+  let hasValues = false;
+  for (const issue of issues) {
+    const branch = collectAllowedValuesFromIssue(issue);
+    if (branch.incomplete) {
+      return { values: [], incomplete: true, hasValues: false };
+    }
+    if (!branch.hasValues) {
       continue;
     }
-    for (const nestedIssue of branch) {
-      collected.push(...collectAllowedValuesFromUnknownIssue(nestedIssue));
-    }
+    hasValues = true;
+    collected.push(...branch.values);
   }
-  return collected;
+  return { values: collected, incomplete: false, hasValues };
+}
+
+function collectAllowedValuesFromUnknownIssue(issue: unknown): unknown[] {
+  const collection = collectAllowedValuesFromIssue(issue);
+  if (collection.incomplete || !collection.hasValues) {
+    return [];
+  }
+  return collection.values;
 }
 
 function mapZodIssueToConfigIssue(issue: unknown): ConfigValidationIssue {

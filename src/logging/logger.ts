@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { Logger as TsLogger } from "tslog";
+import { getCommandPathWithRootOptions } from "../cli/argv.js";
 import type { OpenClawConfig } from "../config/types.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { readLoggingConfig } from "./config.js";
@@ -42,42 +43,8 @@ export type LogTransport = (logObj: LogTransportRecord) => void;
 
 const externalTransports = new Set<LogTransport>();
 
-function getCommandPathFromArgv(argv: string[]): string[] {
-  const tokens: string[] = [];
-  let skipNextAsRootValue = false;
-  for (const arg of argv.slice(2)) {
-    if (!arg || arg === "--") {
-      break;
-    }
-    if (skipNextAsRootValue) {
-      skipNextAsRootValue = false;
-      continue;
-    }
-    if (arg === "--profile" || arg === "--log-level") {
-      skipNextAsRootValue = true;
-      continue;
-    }
-    if (
-      arg === "--dev" ||
-      arg === "--no-color" ||
-      arg.startsWith("--profile=") ||
-      arg.startsWith("--log-level=")
-    ) {
-      continue;
-    }
-    if (arg.startsWith("-")) {
-      continue;
-    }
-    tokens.push(arg);
-    if (tokens.length >= 2) {
-      break;
-    }
-  }
-  return tokens;
-}
-
 function shouldSkipLoadConfigFallback(argv: string[] = process.argv): boolean {
-  const [primary, secondary] = getCommandPathFromArgv(argv);
+  const [primary, secondary] = getCommandPathWithRootOptions(argv, 2);
   return primary === "config" && secondary === "validate";
 }
 

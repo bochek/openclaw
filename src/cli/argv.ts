@@ -170,6 +170,18 @@ export function getPositiveIntFlagValue(argv: string[], name: string): number | 
 }
 
 export function getCommandPath(argv: string[], depth = 2): string[] {
+  return getCommandPathInternal(argv, depth, { skipRootOptions: false });
+}
+
+export function getCommandPathWithRootOptions(argv: string[], depth = 2): string[] {
+  return getCommandPathInternal(argv, depth, { skipRootOptions: true });
+}
+
+function getCommandPathInternal(
+  argv: string[],
+  depth: number,
+  opts: { skipRootOptions: boolean },
+): string[] {
   const args = argv.slice(2);
   const path: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
@@ -179,6 +191,21 @@ export function getCommandPath(argv: string[], depth = 2): string[] {
     }
     if (arg === "--") {
       break;
+    }
+    if (opts.skipRootOptions) {
+      if (arg.startsWith("--profile=") || arg.startsWith("--log-level=")) {
+        continue;
+      }
+      if (ROOT_BOOLEAN_FLAGS.has(arg)) {
+        continue;
+      }
+      if (ROOT_VALUE_FLAGS.has(arg)) {
+        const next = args[i + 1];
+        if (isValueToken(next)) {
+          i += 1;
+        }
+        continue;
+      }
     }
     if (arg.startsWith("-")) {
       continue;

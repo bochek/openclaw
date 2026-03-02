@@ -3,6 +3,7 @@ import {
   buildParseArgv,
   getFlagValue,
   getCommandPath,
+  getCommandPathWithRootOptions,
   getPrimaryCommand,
   getPositiveIntFlagValue,
   getVerboseFlag,
@@ -158,6 +159,15 @@ describe("argv helpers", () => {
     },
   ])("extracts command path: $name", ({ argv, expected }) => {
     expect(getCommandPath(argv, 2)).toEqual(expected);
+  });
+
+  it("extracts command path while skipping known root option values", () => {
+    expect(
+      getCommandPathWithRootOptions(
+        ["node", "openclaw", "--profile", "work", "--no-color", "config", "validate"],
+        2,
+      ),
+    ).toEqual(["config", "validate"]);
   });
 
   it.each([
