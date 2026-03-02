@@ -326,6 +326,19 @@ export async function dispatchCronDelivery(
       if (didAnnounce) {
         delivered = true;
       } else {
+        // Announce can report false when direct completion routing falls back to
+        // queue/steer or when the requester session cannot process the injected
+        // announce turn immediately. For cron jobs we still have a concrete
+        // delivery target, so retry once through direct outbound delivery using
+        // the finalized payload text.
+        const directFallbackResult = await deliverViaDirect(delivery);
+        if (directFallbackResult) {
+          return directFallbackResult;
+        }
+        if (delivered) {
+          return null;
+        }
+
         const message = "cron announce delivery failed";
         if (!params.deliveryBestEffort) {
           return params.withRunSession({

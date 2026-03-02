@@ -266,10 +266,15 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
-  it("fails when announce delivery reports false and best-effort is disabled", async () => {
+  it("falls back to direct delivery when announce returns false and best-effort is disabled", async () => {
     await withTempCronHome(async (home) => {
       const storePath = await writeSessionStore(home, { lastProvider: "webchat", lastTo: "" });
-      const deps = createCliDeps();
+      const deps = createCliDeps({
+        sendMessageTelegram: vi.fn().mockResolvedValue({
+          messageId: "tg-1",
+          chatId: "123",
+        }),
+      });
       mockAgentPayloads([{ text: "hello from cron" }]);
       vi.mocked(runSubagentAnnounceFlow).mockResolvedValueOnce(false);
 
@@ -285,16 +290,28 @@ describe("runCronIsolatedAgentTurn", () => {
         },
       });
 
-      expect(res.status).toBe("error");
-      expect(res.error).toContain("cron announce delivery failed");
-      expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
+      expect(res.status).toBe("ok");
+      expect(res.delivered).toBe(true);
+      expect(res.deliveryAttempted).toBe(true);
+      expect(runSubagentAnnounceFlow).toHaveBeenCalledTimes(1);
+      expect(deps.sendMessageTelegram).toHaveBeenCalledTimes(1);
+      expect(deps.sendMessageTelegram).toHaveBeenCalledWith(
+        "123",
+        "hello from cron",
+        expect.objectContaining({ accountId: undefined }),
+      );
     });
   });
 
-  it("marks attempted when announce delivery reports false and best-effort is enabled", async () => {
+  it("falls back to direct delivery when announce returns false and best-effort is enabled", async () => {
     await withTempCronHome(async (home) => {
       const storePath = await writeSessionStore(home, { lastProvider: "webchat", lastTo: "" });
-      const deps = createCliDeps();
+      const deps = createCliDeps({
+        sendMessageTelegram: vi.fn().mockResolvedValue({
+          messageId: "tg-2",
+          chatId: "123",
+        }),
+      });
       mockAgentPayloads([{ text: "hello from cron" }]);
       vi.mocked(runSubagentAnnounceFlow).mockResolvedValueOnce(false);
 
@@ -311,10 +328,10 @@ describe("runCronIsolatedAgentTurn", () => {
       });
 
       expect(res.status).toBe("ok");
-      expect(res.delivered).toBe(false);
+      expect(res.delivered).toBe(true);
       expect(res.deliveryAttempted).toBe(true);
       expect(runSubagentAnnounceFlow).toHaveBeenCalledTimes(1);
-      expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
+      expect(deps.sendMessageTelegram).toHaveBeenCalledTimes(1);
     });
   });
 
