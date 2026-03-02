@@ -17,6 +17,7 @@ vi.mock("../../../pairing/pairing-store.js", () => ({
 }));
 
 type MessageHandler = (args: { event: Record<string, unknown>; body: unknown }) => Promise<void>;
+type MentionHandler = (args: { event: Record<string, unknown>; body: unknown }) => Promise<void>;
 
 type MessageCase = {
   overrides?: SlackSystemEventTestOverrides;
@@ -33,6 +34,7 @@ function createMessageHandlers(overrides?: SlackSystemEventTestOverrides) {
   });
   return {
     handler: harness.getHandler("message") as MessageHandler | null,
+    mentionHandler: harness.getHandler("app_mention") as MentionHandler | null,
     handleSlackMessage,
   };
 }
@@ -213,5 +215,74 @@ describe("registerSlackMessageEvents", () => {
 
     expect(handleSlackMessage).not.toHaveBeenCalled();
     expect(messageQueueMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips app_mention events for D-prefixed DMs even with missing or wrong channel_type", async () => {
+    messageQueueMock.mockClear();
+    messageAllowMock.mockReset().mockResolvedValue([]);
+    const { mentionHandler, handleSlackMessage } = createMessageHandlers({ dmPolicy: "open" });
+    expect(mentionHandler).toBeTruthy();
+
+    await mentionHandler!({
+      event: {
+        type: "app_mention",
+        channel: "D1",
+        channel_type: undefined,
+        user: "U1",
+        text: "<@B1> hi",
+        ts: "123.300",
+      },
+      body: {},
+    });
+
+    await mentionHandler!({
+      event: {
+        type: "app_mention",
+        channel: "D1",
+        channel_type: "channel",
+        user: "U1",
+        text: "<@B1> hi again",
+        ts: "123.301",
+      },
+      body: {},
+    });
+
+    expect(handleSlackMessage).not.toHaveBeenCalled();
+    expect(messageQueueMock).not.toHaveBeenCalled();
+  });
+
+  it("routes channel app_mention events to the message handler", async () => {
+    messageQueueMock.mockClear();
+    messageAllowMock.mockReset().mockResolvedValue([]);
+    const { mentionHandler, handleSlackMessage } = createMessageHandlers({
+      dmPolicy: "open",
+      channelType: "channel",
+    });
+    expect(mentionHandler).toBeTruthy();
+
+    await mentionHandler!({
+      event: {
+        type: "app_mention",
+        channel: "C1",
+        channel_type: "channel",
+        user: "U1",
+        text: "<@B1> hello channel",
+        ts: "123.400",
+      },
+      body: {},
+    });
+
+    expect(handleSlackMessage).toHaveBeenCalledTimes(1);
+    expect(handleSlackMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "app_mention",
+        channel: "C1",
+      }),
+      expect.objectContaining({
+        source: "app_mention",
+        wasMentioned: true,
+      }),
+    );
+    expect(messageQueueMock).not.toHaveBeenCalled();
   });
 });
