@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import { resetLogger, setLoggerOverride } from "../logging/logger.js";
+import { makeModelCatalogEntry } from "./model-catalog.test-helpers.js";
 import {
   buildAllowedModelSet,
   inferUniqueProviderFromConfiguredModels,
@@ -11,6 +12,8 @@ import {
   modelKey,
   resolveAllowedModelRef,
   resolveConfiguredModelRef,
+  resolveModelThinkingDefault,
+  supportsReasoningModel,
   resolveThinkingDefault,
   resolveModelRefFromString,
 } from "./model-selection.js";
@@ -257,8 +260,16 @@ describe("model-selection", () => {
       } as OpenClawConfig;
 
       const catalog = [
-        { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
-        { provider: "openai", id: "gpt-5.2", name: "gpt-5.2" },
+        makeModelCatalogEntry({
+          provider: "anthropic",
+          id: "claude-sonnet-4-5",
+          name: "Claude Sonnet 4.5",
+        }),
+        makeModelCatalogEntry({
+          provider: "openai",
+          id: "gpt-5.2",
+          name: "gpt-5.2",
+        }),
       ];
 
       const result = buildAllowedModelSet({
@@ -270,7 +281,11 @@ describe("model-selection", () => {
       expect(result.allowAny).toBe(false);
       expect(result.allowedKeys.has("anthropic/claude-sonnet-4-6")).toBe(true);
       expect(result.allowedCatalog).toEqual([
-        { provider: "anthropic", id: "claude-sonnet-4-6", name: "claude-sonnet-4-6" },
+        makeModelCatalogEntry({
+          provider: "anthropic",
+          id: "claude-sonnet-4-6",
+          name: "claude-sonnet-4-6",
+        }),
       ]);
     });
   });
@@ -289,8 +304,16 @@ describe("model-selection", () => {
       } as OpenClawConfig;
 
       const catalog = [
-        { provider: "anthropic", id: "claude-sonnet-4-5", name: "Claude Sonnet 4.5" },
-        { provider: "openai", id: "gpt-5.2", name: "gpt-5.2" },
+        makeModelCatalogEntry({
+          provider: "anthropic",
+          id: "claude-sonnet-4-5",
+          name: "Claude Sonnet 4.5",
+        }),
+        makeModelCatalogEntry({
+          provider: "openai",
+          id: "gpt-5.2",
+          name: "gpt-5.2",
+        }),
       ];
 
       const result = resolveAllowedModelRef({
@@ -502,6 +525,75 @@ describe("model-selection", () => {
           ],
         }),
       ).toBe("high");
+    });
+  });
+
+  describe("supportsReasoningModel", () => {
+    it("detects reasoning support from provider/model catalog entry", () => {
+      expect(
+        supportsReasoningModel({
+          provider: "openrouter",
+          model: "x-ai/grok-4.1-fast",
+          catalog: [
+            {
+              provider: "openrouter",
+              id: "x-ai/grok-4.1-fast",
+              name: "Grok 4.1 Fast",
+              reasoning: true,
+            },
+          ],
+        }),
+      ).toBe(true);
+    });
+
+    it("returns false when model is missing from catalog", () => {
+      expect(
+        supportsReasoningModel({
+          provider: "openrouter",
+          model: "x-ai/grok-4.1-fast",
+          catalog: [],
+        }),
+      ).toBe(false);
+    });
+  });
+
+  describe("resolveModelThinkingDefault", () => {
+    it("returns model-derived low thinking when reasoning is supported", () => {
+      const cfg = {} as OpenClawConfig;
+      expect(
+        resolveModelThinkingDefault({
+          cfg,
+          provider: "openrouter",
+          model: "x-ai/grok-4.1-fast",
+          catalog: [
+            {
+              provider: "openrouter",
+              id: "x-ai/grok-4.1-fast",
+              name: "Grok 4.1 Fast",
+              reasoning: true,
+            },
+          ],
+        }),
+      ).toBe("low");
+    });
+
+    it("returns undefined when no model-level default applies", () => {
+      const cfg = { agents: { defaults: { thinkingDefault: "high" } } } as OpenClawConfig;
+      expect(
+        resolveModelThinkingDefault({
+          cfg,
+          provider: "openai",
+          model: "gpt-4o-mini",
+          catalog: [
+            {
+              provider: "openai",
+              id: "gpt-4o-mini",
+              name: "GPT-4o mini",
+              reasoning: false,
+            },
+          ],
+        }),
+      ).toBeUndefined();
     });
   });
 });

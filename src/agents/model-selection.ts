@@ -525,6 +525,24 @@ export function resolveThinkingDefault(params: {
   model: string;
   catalog?: ModelCatalogEntry[];
 }): ThinkLevel {
+  return (
+    resolveModelThinkingDefault({
+      cfg: params.cfg,
+      provider: params.provider,
+      model: params.model,
+      catalog: params.catalog,
+    }) ??
+    params.cfg.agents?.defaults?.thinkingDefault ??
+    "off"
+  );
+}
+
+export function resolveModelThinkingDefault(params: {
+  cfg: OpenClawConfig;
+  provider: string;
+  model: string;
+  catalog?: ModelCatalogEntry[];
+}): ThinkLevel | undefined {
   const perModelThinking =
     params.cfg.agents?.defaults?.models?.[modelKey(params.provider, params.model)]?.params
       ?.thinking;
@@ -538,17 +556,30 @@ export function resolveThinkingDefault(params: {
   ) {
     return perModelThinking;
   }
-  const configured = params.cfg.agents?.defaults?.thinkingDefault;
-  if (configured) {
-    return configured;
-  }
-  const candidate = params.catalog?.find(
-    (entry) => entry.provider === params.provider && entry.id === params.model,
-  );
-  if (candidate?.reasoning) {
+  if (
+    supportsReasoningModel({
+      provider: params.provider,
+      model: params.model,
+      catalog: params.catalog,
+    })
+  ) {
     return "low";
   }
-  return "off";
+  return undefined;
+}
+
+export function supportsReasoningModel(params: {
+  provider: string;
+  model: string;
+  catalog?: ModelCatalogEntry[];
+}): boolean {
+  const key = modelKey(params.provider, params.model);
+  const candidate = params.catalog?.find(
+    (entry) =>
+      (entry.provider === params.provider && entry.id === params.model) ||
+      (entry.provider === key && entry.id === params.model),
+  );
+  return candidate?.reasoning === true;
 }
 
 /** Default reasoning level when session/directive do not set it: "on" if model supports reasoning, else "off". */
@@ -557,13 +588,7 @@ export function resolveReasoningDefault(params: {
   model: string;
   catalog?: ModelCatalogEntry[];
 }): "on" | "off" {
-  const key = modelKey(params.provider, params.model);
-  const candidate = params.catalog?.find(
-    (entry) =>
-      (entry.provider === params.provider && entry.id === params.model) ||
-      (entry.provider === key && entry.id === params.model),
-  );
-  return candidate?.reasoning === true ? "on" : "off";
+  return supportsReasoningModel(params) ? "on" : "off";
 }
 
 /**

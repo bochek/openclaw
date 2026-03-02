@@ -30,7 +30,7 @@ import {
   normalizeProviderId,
   resolveConfiguredModelRef,
   resolveDefaultModelForAgent,
-  resolveThinkingDefault,
+  resolveModelThinkingDefault,
 } from "../agents/model-selection.js";
 import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
 import { buildWorkspaceSkillSnapshot } from "../agents/skills.js";
@@ -72,6 +72,7 @@ import { defaultRuntime, type RuntimeEnv } from "../runtime.js";
 import { applyVerboseOverride } from "../sessions/level-overrides.js";
 import { applyModelOverrideToSessionEntry } from "../sessions/model-overrides.js";
 import { resolveSendPolicy } from "../sessions/send-policy.js";
+import { resolveThinkingLevelByPrecedence } from "../sessions/thinking-level.js";
 import { resolveMessageChannel } from "../utils/message-channel.js";
 import { deliverAgentCommandResult } from "./agent/delivery.js";
 import { resolveAgentRunContext } from "./agent/run-context.js";
@@ -588,7 +589,7 @@ export async function agentCommand(
       });
     }
 
-    let resolvedThinkLevel = thinkOnce ?? thinkOverride ?? persistedThinking;
+    const commandThinkLevel = thinkOnce ?? thinkOverride;
     const resolvedVerboseLevel =
       verboseOverride ?? persistedVerbose ?? (agentCfg?.verboseDefault as VerboseLevel | undefined);
 
@@ -744,21 +745,28 @@ export async function agentCommand(
       }
     }
 
-    if (!resolvedThinkLevel) {
-      let catalogForThinking = modelCatalog ?? allowedModelCatalog;
-      if (!catalogForThinking || catalogForThinking.length === 0) {
-        modelCatalog = await loadModelCatalog({ config: cfg });
-        catalogForThinking = modelCatalog;
-      }
-      resolvedThinkLevel = resolveThinkingDefault({
-        cfg,
-        provider,
-        model,
-        catalog: catalogForThinking,
-      });
-    }
+    let resolvedThinkLevel = (
+      await resolveThinkingLevelByPrecedence({
+        commandThinkLevel,
+        sessionThinkLevel: persistedThinking,
+        resolveModelDefaultThinkingLevel: async () => {
+          let catalogForThinking = modelCatalog ?? allowedModelCatalog;
+          if (!catalogForThinking || catalogForThinking.length === 0) {
+            modelCatalog = await loadModelCatalog({ config: cfg });
+            catalogForThinking = modelCatalog;
+          }
+          return resolveModelThinkingDefault({
+            cfg,
+            provider,
+            model,
+            catalog: catalogForThinking,
+          });
+        },
+        globalDefaultThinkLevel: cfg.agents?.defaults?.thinkingDefault as ThinkLevel | undefined,
+      })
+    ).level;
     if (resolvedThinkLevel === "xhigh" && !supportsXHighThinking(provider, model)) {
-      const explicitThink = Boolean(thinkOnce || thinkOverride);
+      const explicitThink = Boolean(commandThinkLevel);
       if (explicitThink) {
         throw new Error(`Thinking level "xhigh" is only supported for ${formatXHighModelHint()}.`);
       }

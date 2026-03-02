@@ -1,14 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
+import { makeModelCatalogEntry } from "../../agents/model-catalog.test-helpers.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { createModelSelectionState } from "./model-selection.js";
 
 vi.mock("../../agents/model-catalog.js", () => ({
   loadModelCatalog: vi.fn(async () => [
-    { provider: "anthropic", id: "claude-opus-4-5", name: "Claude Opus 4.5" },
-    { provider: "inferencer", id: "deepseek-v3-4bit-mlx", name: "DeepSeek V3" },
-    { provider: "kimi-coding", id: "k2p5", name: "Kimi K2.5" },
-    { provider: "openai", id: "gpt-4o-mini", name: "GPT-4o mini" },
-    { provider: "openai", id: "gpt-4o", name: "GPT-4o" },
+    makeModelCatalogEntry({
+      provider: "anthropic",
+      id: "claude-opus-4-5",
+      name: "Claude Opus 4.5",
+    }),
+    makeModelCatalogEntry({
+      provider: "inferencer",
+      id: "deepseek-v3-4bit-mlx",
+      name: "DeepSeek V3",
+    }),
+    makeModelCatalogEntry({ provider: "kimi-coding", id: "k2p5", name: "Kimi K2.5" }),
+    makeModelCatalogEntry({ provider: "openai", id: "gpt-4o-mini", name: "GPT-4o mini" }),
+    makeModelCatalogEntry({ provider: "openai", id: "gpt-4o", name: "GPT-4o" }),
   ]),
 }));
 
@@ -269,7 +278,10 @@ describe("createModelSelectionState resolveDefaultReasoningLevel", () => {
   it("returns on when catalog model has reasoning true", async () => {
     const { loadModelCatalog } = await import("../../agents/model-catalog.js");
     vi.mocked(loadModelCatalog).mockResolvedValueOnce([
-      { provider: "openrouter", id: "x-ai/grok-4.1-fast", name: "Grok", reasoning: true },
+      makeModelCatalogEntry(
+        { provider: "openrouter", id: "x-ai/grok-4.1-fast", name: "Grok" },
+        { reasoning: true },
+      ),
     ]);
     const state = await createModelSelectionState({
       cfg: {} as OpenClawConfig,

@@ -7,9 +7,9 @@ import {
   type ModelAliasIndex,
   modelKey,
   normalizeProviderId,
+  resolveModelThinkingDefault,
   resolveModelRefFromString,
   resolveReasoningDefault,
-  resolveThinkingDefault,
 } from "../../agents/model-selection.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { type SessionEntry, updateSessionStore } from "../../config/sessions.js";
@@ -32,6 +32,7 @@ type ModelSelectionState = {
   allowedModelKeys: Set<string>;
   allowedModelCatalog: ModelCatalog;
   resetModelOverride: boolean;
+  resolveModelDefaultThinkingLevel: () => Promise<ThinkLevel | undefined>;
   resolveDefaultThinkingLevel: () => Promise<ThinkLevel>;
   /** Default reasoning level from model capability: "on" if model has reasoning, else "off". */
   resolveDefaultReasoningLevel: () => Promise<"on" | "off">;
@@ -379,25 +380,30 @@ export async function createModelSelectionState(params: {
     }
   }
 
-  let defaultThinkingLevel: ThinkLevel | undefined;
-  const resolveDefaultThinkingLevel = async () => {
-    if (defaultThinkingLevel) {
-      return defaultThinkingLevel;
+  let modelDefaultThinkingLevel: ThinkLevel | undefined;
+  let hasResolvedModelDefaultThinkingLevel = false;
+  const resolveModelDefaultThinkingLevel = async (): Promise<ThinkLevel | undefined> => {
+    if (hasResolvedModelDefaultThinkingLevel) {
+      return modelDefaultThinkingLevel;
     }
     let catalogForThinking = modelCatalog ?? allowedModelCatalog;
     if (!catalogForThinking || catalogForThinking.length === 0) {
       modelCatalog = await loadModelCatalog({ config: cfg });
       catalogForThinking = modelCatalog;
     }
-    const resolved = resolveThinkingDefault({
+    modelDefaultThinkingLevel = resolveModelThinkingDefault({
       cfg,
       provider,
       model,
       catalog: catalogForThinking,
     });
-    defaultThinkingLevel =
-      resolved ?? (agentCfg?.thinkingDefault as ThinkLevel | undefined) ?? "off";
-    return defaultThinkingLevel;
+    hasResolvedModelDefaultThinkingLevel = true;
+    return modelDefaultThinkingLevel;
+  };
+
+  const resolveDefaultThinkingLevel = async () => {
+    const modelDefault = await resolveModelDefaultThinkingLevel();
+    return modelDefault ?? (agentCfg?.thinkingDefault as ThinkLevel | undefined) ?? "off";
   };
 
   const resolveDefaultReasoningLevel = async (): Promise<"on" | "off"> => {
@@ -419,6 +425,7 @@ export async function createModelSelectionState(params: {
     allowedModelKeys,
     allowedModelCatalog,
     resetModelOverride,
+    resolveModelDefaultThinkingLevel,
     resolveDefaultThinkingLevel,
     resolveDefaultReasoningLevel,
     needsModelCatalog,

@@ -4,6 +4,7 @@ import { resolveSandboxRuntimeStatus } from "../../agents/sandbox.js";
 import type { SkillCommandSpec } from "../../agents/skills.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { SessionEntry } from "../../config/sessions.js";
+import { resolveThinkingLevelByPrecedence } from "../../sessions/thinking-level.js";
 import { listChatCommands, shouldHandleTextCommands } from "../commands-registry.js";
 import { listSkillCommandsForWorkspace } from "../skill-commands.js";
 import type { MsgContext, TemplateContext } from "../templating.js";
@@ -338,9 +339,6 @@ export async function resolveReplyDirectives(params: {
     groupResolution,
   });
   const defaultActivation = defaultGroupActivation(requireMention);
-  const resolvedThinkLevel =
-    directives.thinkLevel ?? (sessionEntry?.thinkingLevel as ThinkLevel | undefined);
-
   const resolvedVerboseLevel =
     directives.verboseLevel ??
     (sessionEntry?.verboseLevel as VerboseLevel | undefined) ??
@@ -388,10 +386,14 @@ export async function resolveReplyDirectives(params: {
   });
   provider = modelState.provider;
   model = modelState.model;
-  const resolvedThinkLevelWithDefault =
-    resolvedThinkLevel ??
-    (await modelState.resolveDefaultThinkingLevel()) ??
-    (agentCfg?.thinkingDefault as ThinkLevel | undefined);
+  const resolvedThinkLevelWithDefault = (
+    await resolveThinkingLevelByPrecedence({
+      commandThinkLevel: directives.thinkLevel,
+      sessionThinkLevel: sessionEntry?.thinkingLevel as ThinkLevel | undefined,
+      resolveModelDefaultThinkingLevel: () => modelState.resolveModelDefaultThinkingLevel(),
+      globalDefaultThinkLevel: agentCfg?.thinkingDefault as ThinkLevel | undefined,
+    })
+  ).level;
 
   // When neither directive nor session set reasoning, default to model capability
   // (e.g. OpenRouter with reasoning: true). Skip auto-enabling when thinking is

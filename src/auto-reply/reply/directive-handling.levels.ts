@@ -1,3 +1,4 @@
+import { resolveThinkingLevelByPrecedence } from "../../sessions/thinking-level.js";
 import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "../thinking.js";
 
 export async function resolveCurrentDirectiveLevels(params: {
@@ -14,16 +15,18 @@ export async function resolveCurrentDirectiveLevels(params: {
   };
   resolveDefaultThinkingLevel: () => Promise<ThinkLevel | undefined>;
 }): Promise<{
-  currentThinkLevel: ThinkLevel | undefined;
+  currentThinkLevel: ThinkLevel;
   currentVerboseLevel: VerboseLevel | undefined;
   currentReasoningLevel: ReasoningLevel;
   currentElevatedLevel: ElevatedLevel | undefined;
 }> {
-  const resolvedDefaultThinkLevel =
-    (params.sessionEntry?.thinkingLevel as ThinkLevel | undefined) ??
-    (await params.resolveDefaultThinkingLevel()) ??
-    (params.agentCfg?.thinkingDefault as ThinkLevel | undefined);
-  const currentThinkLevel = resolvedDefaultThinkLevel;
+  const currentThinkLevel = (
+    await resolveThinkingLevelByPrecedence({
+      sessionThinkLevel: params.sessionEntry?.thinkingLevel as ThinkLevel | undefined,
+      resolveModelDefaultThinkingLevel: params.resolveDefaultThinkingLevel,
+      globalDefaultThinkLevel: params.agentCfg?.thinkingDefault as ThinkLevel | undefined,
+    })
+  ).level;
   const currentVerboseLevel =
     (params.sessionEntry?.verboseLevel as VerboseLevel | undefined) ??
     (params.agentCfg?.verboseDefault as VerboseLevel | undefined);
