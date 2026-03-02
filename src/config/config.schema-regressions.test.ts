@@ -184,4 +184,14 @@ describe("config schema regressions", () => {
 
     expect(res.ok).toBe(false);
   });
+
+  it("rejects browser.extraArgs entries that are not strings", () => {
+    const res = validateConfigObject({
+      browser: {
+        extraArgs: ["--incognito", 123] as unknown as string[],
+      },
+    });
+
+    expect(res.ok).toBe(false);
+  });
 });
