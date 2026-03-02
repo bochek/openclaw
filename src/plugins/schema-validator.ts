@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import type { ErrorObject, ValidateFunction } from "ajv";
+import { appendAllowedValuesHint, summarizeAllowedValues } from "../config/allowed-values.js";
 
 const require = createRequire(import.meta.url);
 type AjvLike = {
@@ -31,14 +32,61 @@ type CachedValidator = {
 
 const schemaCache = new Map<string, CachedValidator>();
 
-function formatAjvErrors(errors: ErrorObject[] | null | undefined): string[] {
+export type JsonSchemaValidationError = {
+  path: string;
+  message: string;
+  text: string;
+  allowedValues?: string[];
+  allowedValuesHiddenCount?: number;
+};
+
+function extractAllowedValues(error: ErrorObject): unknown[] | null {
+  if (error.keyword === "enum") {
+    const allowedValues = (error.params as { allowedValues?: unknown }).allowedValues;
+    return Array.isArray(allowedValues) ? allowedValues : null;
+  }
+
+  if (error.keyword === "const") {
+    const params = error.params as { allowedValue?: unknown };
+    if (!Object.prototype.hasOwnProperty.call(params, "allowedValue")) {
+      return null;
+    }
+    return [params.allowedValue];
+  }
+
+  return null;
+}
+
+function getAjvAllowedValuesSummary(error: ErrorObject): ReturnType<typeof summarizeAllowedValues> {
+  const allowedValues = extractAllowedValues(error);
+  if (!allowedValues) {
+    return null;
+  }
+  return summarizeAllowedValues(allowedValues);
+}
+
+function formatAjvErrors(errors: ErrorObject[] | null | undefined): JsonSchemaValidationError[] {
   if (!errors || errors.length === 0) {
-    return ["invalid config"];
+    return [{ path: "<root>", message: "invalid config", text: "<root>: invalid config" }];
   }
   return errors.map((error) => {
     const path = error.instancePath?.replace(/^\//, "").replace(/\//g, ".") || "<root>";
-    const message = error.message ?? "invalid";
-    return `${path}: ${message}`;
+    const baseMessage = error.message ?? "invalid";
+    const allowedValuesSummary = getAjvAllowedValuesSummary(error);
+    const message = allowedValuesSummary
+      ? appendAllowedValuesHint(baseMessage, allowedValuesSummary)
+      : baseMessage;
+    return {
+      path,
+      message,
+      text: `${path}: ${message}`,
+      ...(allowedValuesSummary
+        ? {
+            allowedValues: allowedValuesSummary.values,
+            allowedValuesHiddenCount: allowedValuesSummary.hiddenCount,
+          }
+        : {}),
+    };
   });
 }
 
@@ -46,7 +94,7 @@ export function validateJsonSchemaValue(params: {
   schema: Record<string, unknown>;
   cacheKey: string;
   value: unknown;
-}): { ok: true } | { ok: false; errors: string[] } {
+}): { ok: true } | { ok: false; errors: JsonSchemaValidationError[] } {
   let cached = schemaCache.get(params.cacheKey);
   if (!cached || cached.schema !== params.schema) {
     const validate = getAjv().compile(params.schema);

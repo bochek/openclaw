@@ -18,12 +18,80 @@ import {
 import { isCanonicalDottedDecimalIPv4, isLoopbackIpAddress } from "../shared/net/ip.js";
 import { isRecord } from "../utils.js";
 import { findDuplicateAgentDirs, formatDuplicateAgentDirError } from "./agent-dirs.js";
+import { appendAllowedValuesHint, summarizeAllowedValues } from "./allowed-values.js";
 import { applyAgentDefaults, applyModelDefaults, applySessionDefaults } from "./defaults.js";
 import { findLegacyConfigIssues } from "./legacy.js";
 import type { OpenClawConfig, ConfigValidationIssue } from "./types.js";
 import { OpenClawSchema } from "./zod-schema.js";
 
 const LEGACY_REMOVED_PLUGIN_IDS = new Set(["google-antigravity-auth"]);
+
+type UnknownIssueRecord = Record<string, unknown>;
+
+function toIssueRecord(value: unknown): UnknownIssueRecord | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  return value as UnknownIssueRecord;
+}
+
+function collectAllowedValuesFromUnknownIssue(issue: unknown): unknown[] {
+  const record = toIssueRecord(issue);
+  if (!record) {
+    return [];
+  }
+  const code = typeof record.code === "string" ? record.code : "";
+
+  if (code === "invalid_value") {
+    const values = record.values;
+    return Array.isArray(values) ? values : [];
+  }
+
+  if (code !== "invalid_union") {
+    return [];
+  }
+
+  const nested = record.errors;
+  if (!Array.isArray(nested)) {
+    return [];
+  }
+
+  const collected: unknown[] = [];
+  for (const branch of nested) {
+    if (!Array.isArray(branch)) {
+      continue;
+    }
+    for (const nestedIssue of branch) {
+      collected.push(...collectAllowedValuesFromUnknownIssue(nestedIssue));
+    }
+  }
+  return collected;
+}
+
+function mapZodIssueToConfigIssue(issue: unknown): ConfigValidationIssue {
+  const record = toIssueRecord(issue);
+  const path = Array.isArray(record?.path)
+    ? record.path
+        .filter((segment): segment is string | number => {
+          const segmentType = typeof segment;
+          return segmentType === "string" || segmentType === "number";
+        })
+        .join(".")
+    : "";
+  const message = typeof record?.message === "string" ? record.message : "Invalid input";
+  const allowedValuesSummary = summarizeAllowedValues(collectAllowedValuesFromUnknownIssue(issue));
+
+  if (!allowedValuesSummary) {
+    return { path, message };
+  }
+
+  return {
+    path,
+    message: appendAllowedValuesHint(message, allowedValuesSummary),
+    allowedValues: allowedValuesSummary.values,
+    allowedValuesHiddenCount: allowedValuesSummary.hiddenCount,
+  };
+}
 
 function isWorkspaceAvatarPath(value: string, workspaceDir: string): boolean {
   const workspaceRoot = path.resolve(workspaceDir);
@@ -129,10 +197,7 @@ export function validateConfigObjectRaw(
   if (!validated.success) {
     return {
       ok: false,
-      issues: validated.error.issues.map((iss) => ({
-        path: iss.path.join("."),
-        message: iss.message,
-      })),
+      issues: validated.error.issues.map((issue) => mapZodIssueToConfigIssue(issue)),
     };
   }
   const duplicates = findDuplicateAgentDirs(validated.data as OpenClawConfig);
@@ -457,7 +522,9 @@ function validateConfigObjectWithPluginsBase(
           for (const error of res.errors) {
             issues.push({
               path: `plugins.entries.${pluginId}.config`,
-              message: `invalid config: ${error}`,
+              message: `invalid config: ${error.text}`,
+              allowedValues: error.allowedValues,
+              allowedValuesHiddenCount: error.allowedValuesHiddenCount,
             });
           }
         }

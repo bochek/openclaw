@@ -42,6 +42,45 @@ export type LogTransport = (logObj: LogTransportRecord) => void;
 
 const externalTransports = new Set<LogTransport>();
 
+function getCommandPathFromArgv(argv: string[]): string[] {
+  const tokens: string[] = [];
+  let skipNextAsRootValue = false;
+  for (const arg of argv.slice(2)) {
+    if (!arg || arg === "--") {
+      break;
+    }
+    if (skipNextAsRootValue) {
+      skipNextAsRootValue = false;
+      continue;
+    }
+    if (arg === "--profile" || arg === "--log-level") {
+      skipNextAsRootValue = true;
+      continue;
+    }
+    if (
+      arg === "--dev" ||
+      arg === "--no-color" ||
+      arg.startsWith("--profile=") ||
+      arg.startsWith("--log-level=")
+    ) {
+      continue;
+    }
+    if (arg.startsWith("-")) {
+      continue;
+    }
+    tokens.push(arg);
+    if (tokens.length >= 2) {
+      break;
+    }
+  }
+  return tokens;
+}
+
+function shouldSkipLoadConfigFallback(argv: string[] = process.argv): boolean {
+  const [primary, secondary] = getCommandPathFromArgv(argv);
+  return primary === "config" && secondary === "validate";
+}
+
 function attachExternalTransport(logger: TsLogger<LogObj>, transport: LogTransport): void {
   logger.attachTransport((logObj: LogObj) => {
     if (!externalTransports.has(transport)) {
@@ -78,7 +117,7 @@ function resolveSettings(): ResolvedSettings {
 
   let cfg: OpenClawConfig["logging"] | undefined =
     (loggingState.overrideSettings as LoggerSettings | null) ?? readLoggingConfig();
-  if (!cfg) {
+  if (!cfg && !shouldSkipLoadConfigFallback()) {
     try {
       const loaded = requireConfig?.("../config/config.js") as
         | {
@@ -288,6 +327,10 @@ export function registerLogTransport(transport: LogTransport): () => void {
     externalTransports.delete(transport);
   };
 }
+
+export const __test__ = {
+  shouldSkipLoadConfigFallback,
+};
 
 function formatLocalDate(date: Date): string {
   const year = date.getFullYear();
