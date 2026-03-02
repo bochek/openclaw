@@ -214,6 +214,29 @@ describe("sanitizeSessionHistory", () => {
     );
   });
 
+  it("sanitizes tool call ids for openai-compatible openai-completions APIs", async () => {
+    setNonGoogleModelApi();
+
+    await sanitizeSessionHistory({
+      messages: mockMessages,
+      modelApi: "openai-completions",
+      provider: "openrouter",
+      modelId: "openai/gpt-4.1",
+      sessionManager: mockSessionManager,
+      sessionId: TEST_SESSION_ID,
+    });
+
+    expect(helpers.sanitizeSessionMessagesImages).toHaveBeenCalledWith(
+      mockMessages,
+      "session:history",
+      expect.objectContaining({
+        sanitizeMode: "images-only",
+        sanitizeToolCallIds: true,
+        toolCallIdMode: "strict",
+      }),
+    );
+  });
+
   it("annotates inter-session user messages before context sanitization", async () => {
     setNonGoogleModelApi();
 
