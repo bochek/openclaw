@@ -2214,36 +2214,24 @@ extension TalkModeManager {
         textChars: Int
     ) -> AsyncThrowingStream<Data, Error>
     {
-        AsyncThrowingStream { continuation in
-            let relay = Task {
-                var sawFirstChunk = false
-                do {
-                    for try await chunk in stream {
-                        if !sawFirstChunk {
-                            sawFirstChunk = true
-                            await MainActor.run { [weak self] in
-                                self?.markLatencyAnchorIfNeeded(
-                                    \.firstTTSChunkAt,
-                                    stage: "tts.chunk.first",
-                                    fields: [
-                                        "mode=\(mode)",
-                                        "bytes=\(chunk.count)",
-                                        "textChars=\(textChars)",
-                                    ])
-                            }
-                        }
-                        continuation.yield(chunk)
-                    }
-                    continuation.finish()
-                } catch is CancellationError {
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
+        var iterator = stream.makeAsyncIterator()
+        var sawFirstChunk = false
+        return AsyncThrowingStream {
+            guard let chunk = try await iterator.next() else { return nil }
+            if !sawFirstChunk {
+                sawFirstChunk = true
+                await MainActor.run { [weak self] in
+                    self?.markLatencyAnchorIfNeeded(
+                        \.firstTTSChunkAt,
+                        stage: "tts.chunk.first",
+                        fields: [
+                            "mode=\(mode)",
+                            "bytes=\(chunk.count)",
+                            "textChars=\(textChars)",
+                        ])
                 }
             }
-            continuation.onTermination = { _ in
-                relay.cancel()
-            }
+            return chunk
         }
     }
 

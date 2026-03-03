@@ -83,8 +83,13 @@ public final class TalkSystemSpeechSynthesizer: NSObject {
         }
     }
 
-    private func handleFinish(error: Error?) {
-        guard self.currentUtterance != nil else { return }
+    private func matchesCurrentUtterance(_ utteranceID: ObjectIdentifier) -> Bool {
+        guard let currentUtterance = self.currentUtterance else { return false }
+        return ObjectIdentifier(currentUtterance) == utteranceID
+    }
+
+    private func handleFinish(utteranceID: ObjectIdentifier, error: Error?) {
+        guard self.matchesCurrentUtterance(utteranceID) else { return }
         self.watchdog?.cancel()
         self.watchdog = nil
         self.finishCurrent(with: error)
@@ -108,7 +113,9 @@ extension TalkSystemSpeechSynthesizer: AVSpeechSynthesizerDelegate {
         _ synthesizer: AVSpeechSynthesizer,
         didStart utterance: AVSpeechUtterance)
     {
+        let utteranceID = ObjectIdentifier(utterance)
         Task { @MainActor in
+            guard self.matchesCurrentUtterance(utteranceID) else { return }
             let callback = self.didStartCallback
             self.didStartCallback = nil
             callback?()
@@ -119,8 +126,9 @@ extension TalkSystemSpeechSynthesizer: AVSpeechSynthesizerDelegate {
         _ synthesizer: AVSpeechSynthesizer,
         didFinish utterance: AVSpeechUtterance)
     {
+        let utteranceID = ObjectIdentifier(utterance)
         Task { @MainActor in
-            self.handleFinish(error: nil)
+            self.handleFinish(utteranceID: utteranceID, error: nil)
         }
     }
 
@@ -128,8 +136,9 @@ extension TalkSystemSpeechSynthesizer: AVSpeechSynthesizerDelegate {
         _ synthesizer: AVSpeechSynthesizer,
         didCancel utterance: AVSpeechUtterance)
     {
+        let utteranceID = ObjectIdentifier(utterance)
         Task { @MainActor in
-            self.handleFinish(error: SpeakError.canceled)
+            self.handleFinish(utteranceID: utteranceID, error: SpeakError.canceled)
         }
     }
 }
