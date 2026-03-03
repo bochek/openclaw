@@ -312,14 +312,14 @@ async function processMessage(
 
   const peer = isGroup
     ? { kind: "group" as const, id: chatId }
-    : { kind: "group" as const, id: senderId };
+    : { kind: "direct" as const, id: senderId };
 
   const route = core.channel.routing.resolveAgentRoute({
     cfg: config,
     channel: "zalouser",
     accountId: account.accountId,
     peer: {
-      // Use "group" kind to avoid dmScope=main collapsing all DMs into the main session.
+      // Keep DM peer kind as "direct" so session keys follow dmScope and UI labels stay DM-shaped.
       kind: peer.kind,
       id: peer.id,
     },

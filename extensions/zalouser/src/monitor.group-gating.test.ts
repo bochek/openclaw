@@ -59,6 +59,16 @@ function installRuntime(params: { commandAuthorized: boolean }) {
     await dispatcherOptions.typingCallbacks?.onReplyStart?.();
     return { queuedFinal: false, counts: { tool: 0, block: 0, final: 0 }, ctx };
   });
+  const resolveAgentRoute = vi.fn((input: { peer?: { kind?: string; id?: string } }) => {
+    const peerKind = input.peer?.kind === "direct" ? "direct" : "group";
+    const peerId = input.peer?.id ?? "1";
+    return {
+      agentId: "main",
+      sessionKey: `agent:main:zalouser:${peerKind}:${peerId}`,
+      accountId: "default",
+      mainSessionKey: "agent:main:main",
+    };
+  });
 
   setZalouserRuntime({
     logging: {
@@ -98,12 +108,7 @@ function installRuntime(params: { commandAuthorized: boolean }) {
         }),
       },
       routing: {
-        resolveAgentRoute: vi.fn(() => ({
-          agentId: "main",
-          sessionKey: "agent:main:zalouser:group:1",
-          accountId: "default",
-          mainSessionKey: "agent:main:main",
-        })),
+        resolveAgentRoute,
       },
       session: {
         resolveStorePath: vi.fn(() => "/tmp"),
@@ -125,7 +130,7 @@ function installRuntime(params: { commandAuthorized: boolean }) {
     },
   } as unknown as PluginRuntime);
 
-  return { dispatchReplyWithBufferedBlockDispatcher };
+  return { dispatchReplyWithBufferedBlockDispatcher, resolveAgentRoute };
 }
 
 function createGroupMessage(overrides: Partial<ZaloInboundMessage> = {}): ZaloInboundMessage {
@@ -142,6 +147,21 @@ function createGroupMessage(overrides: Partial<ZaloInboundMessage> = {}): ZaloIn
     wasExplicitlyMentioned: false,
     canResolveExplicitMention: true,
     implicitMention: false,
+    raw: { source: "test" },
+    ...overrides,
+  };
+}
+
+function createDmMessage(overrides: Partial<ZaloInboundMessage> = {}): ZaloInboundMessage {
+  return {
+    threadId: "u-1",
+    isGroup: false,
+    senderId: "321",
+    senderName: "Bob",
+    groupName: undefined,
+    content: "hello",
+    timestampMs: Date.now(),
+    msgId: "dm-1",
     raw: { source: "test" },
     ...overrides,
   };
@@ -231,5 +251,32 @@ describe("zalouser monitor group mention gating", () => {
     expect(dispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalledTimes(1);
     const callArg = dispatchReplyWithBufferedBlockDispatcher.mock.calls[0]?.[0];
     expect(callArg?.ctx?.WasMentioned).toBe(true);
+  });
+
+  it("routes DM messages with direct peer kind", async () => {
+    const { dispatchReplyWithBufferedBlockDispatcher, resolveAgentRoute } = installRuntime({
+      commandAuthorized: false,
+    });
+    const account = createAccount();
+    await __testing.processMessage({
+      message: createDmMessage(),
+      account: {
+        ...account,
+        config: {
+          ...account.config,
+          dmPolicy: "open",
+        },
+      },
+      config: createConfig(),
+      runtime: createRuntimeEnv(),
+    });
+
+    expect(resolveAgentRoute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        peer: { kind: "direct", id: "321" },
+      }),
+    );
+    const callArg = dispatchReplyWithBufferedBlockDispatcher.mock.calls[0]?.[0];
+    expect(callArg?.ctx?.SessionKey).toBe("agent:main:zalouser:direct:321");
   });
 });
