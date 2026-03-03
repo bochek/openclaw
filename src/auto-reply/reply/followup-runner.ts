@@ -9,6 +9,7 @@ import type { TypingMode } from "../../config/types.js";
 import { logVerbose } from "../../globals.js";
 import { registerAgentRunContext } from "../../infra/agent-events.js";
 import { defaultRuntime } from "../../runtime.js";
+import { normalizeMessageChannel } from "../../utils/message-channel.js";
 import { stripHeartbeatToken } from "../heartbeat.js";
 import type { OriginatingChannelType } from "../templating.js";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../tokens.js";
@@ -158,7 +159,7 @@ export function createFollowupRunner(params: {
               sessionKey: queued.run.sessionKey,
               agentId: queued.run.agentId,
               trigger: "user",
-              messageChannel: queued.originatingChannel ?? undefined,
+              messageChannel: normalizeMessageChannel(queued.originatingChannel),
               messageProvider: queued.run.messageProvider,
               agentAccountId: queued.run.agentAccountId,
               messageTo: queued.originatingTo,
