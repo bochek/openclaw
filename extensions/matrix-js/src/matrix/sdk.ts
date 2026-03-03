@@ -506,6 +506,14 @@ export class MatrixClient {
     return await this.client.getProfileInfo(userId);
   }
 
+  async setDisplayName(displayName: string): Promise<void> {
+    await this.client.setDisplayName(displayName);
+  }
+
+  async setAvatarUrl(avatarUrl: string): Promise<void> {
+    await this.client.setAvatarUrl(avatarUrl);
+  }
+
   async joinRoom(roomId: string): Promise<void> {
     await this.client.joinRoom(roomId);
   }

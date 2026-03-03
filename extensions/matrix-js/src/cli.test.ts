@@ -11,6 +11,7 @@ const matrixRuntimeLoadConfigMock = vi.fn();
 const matrixRuntimeWriteConfigFileMock = vi.fn();
 const restoreMatrixRoomKeyBackupMock = vi.fn();
 const setMatrixSdkLogModeMock = vi.fn();
+const updateMatrixOwnProfileMock = vi.fn();
 const verifyMatrixRecoveryKeyMock = vi.fn();
 
 vi.mock("./matrix/actions/verification.js", () => ({
@@ -23,6 +24,10 @@ vi.mock("./matrix/actions/verification.js", () => ({
 
 vi.mock("./matrix/client/logging.js", () => ({
   setMatrixSdkLogMode: (...args: unknown[]) => setMatrixSdkLogModeMock(...args),
+}));
+
+vi.mock("./matrix/actions/profile.js", () => ({
+  updateMatrixOwnProfile: (...args: unknown[]) => updateMatrixOwnProfileMock(...args),
 }));
 
 vi.mock("./channel.js", () => ({
@@ -67,6 +72,13 @@ describe("matrix-js CLI verification commands", () => {
     matrixSetupApplyAccountConfigMock.mockImplementation(({ cfg }: { cfg: unknown }) => cfg);
     matrixRuntimeLoadConfigMock.mockReturnValue({});
     matrixRuntimeWriteConfigFileMock.mockResolvedValue(undefined);
+    updateMatrixOwnProfileMock.mockResolvedValue({
+      skipped: false,
+      displayNameUpdated: true,
+      avatarUpdated: false,
+      resolvedAvatarUrl: null,
+      convertedAvatarFromHttp: false,
+    });
   });
 
   afterEach(() => {
@@ -222,9 +234,45 @@ describe("matrix-js CLI verification commands", () => {
     );
     expect(console.log).toHaveBeenCalledWith("Saved matrix-js account: main-bot");
     expect(console.log).toHaveBeenCalledWith("Config path: channels.matrix-js.accounts.main-bot");
+    expect(updateMatrixOwnProfileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: "main-bot",
+        displayName: "Main Bot",
+      }),
+    );
     expect(console.log).toHaveBeenCalledWith(
       "Bind this account to an agent: openclaw agents bind --agent <id> --bind matrix-js:main-bot",
     );
+  });
+
+  it("sets profile name and avatar via profile set command", async () => {
+    const program = buildProgram();
+
+    await program.parseAsync(
+      [
+        "matrix-js",
+        "profile",
+        "set",
+        "--account",
+        "alerts",
+        "--name",
+        "Alerts Bot",
+        "--avatar-url",
+        "mxc://example/avatar",
+      ],
+      { from: "user" },
+    );
+
+    expect(updateMatrixOwnProfileMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: "alerts",
+        displayName: "Alerts Bot",
+        avatarUrl: "mxc://example/avatar",
+      }),
+    );
+    expect(matrixRuntimeWriteConfigFileMock).toHaveBeenCalled();
+    expect(console.log).toHaveBeenCalledWith("Account: alerts");
+    expect(console.log).toHaveBeenCalledWith("Config path: channels.matrix-js.accounts.alerts");
   });
 
   it("returns JSON errors for invalid account setup input", async () => {

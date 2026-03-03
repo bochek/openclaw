@@ -10,6 +10,7 @@ import {
   resolveAllowlistProviderRuntimeGroupPolicy,
   resolveDefaultGroupPolicy,
   setAccountEnabledInConfigSection,
+  type ChannelSetupInput,
   type ChannelPlugin,
 } from "openclaw/plugin-sdk";
 import { matrixMessageActions } from "./actions.js";
@@ -36,6 +37,7 @@ import {
 import { updateMatrixAccountConfig } from "./matrix/config-update.js";
 import { normalizeMatrixAllowList, normalizeMatrixUserId } from "./matrix/monitor/allowlist.js";
 import { probeMatrix } from "./matrix/probe.js";
+import { isSupportedMatrixAvatarSource } from "./matrix/profile.js";
 import { sendMessageMatrix } from "./matrix/send.js";
 import { matrixOnboardingAdapter } from "./onboarding.js";
 import { matrixOutbound } from "./outbound.js";
@@ -67,6 +69,12 @@ function normalizeMatrixMessagingTarget(raw: string): string | undefined {
   }
   const stripped = normalized.replace(/^(room|channel|user):/i, "").trim();
   return stripped || undefined;
+}
+
+function resolveAvatarInput(input: ChannelSetupInput): string | undefined {
+  const avatarUrl = (input as ChannelSetupInput & { avatarUrl?: string }).avatarUrl;
+  const trimmed = avatarUrl?.trim();
+  return trimmed ? trimmed : undefined;
 }
 
 export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
@@ -112,6 +120,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
           "accessToken",
           "password",
           "deviceName",
+          "avatarUrl",
           "initialSyncLimit",
         ],
       }),
@@ -297,6 +306,10 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         alwaysUseAccounts: true,
       }),
     validateInput: ({ accountId, input }) => {
+      const avatarUrl = resolveAvatarInput(input);
+      if (avatarUrl && !isSupportedMatrixAvatarSource(avatarUrl)) {
+        return "Matrix avatar URL must be an mxc:// URI or an http(s) URL";
+      }
       if (input.useEnv) {
         const scopedEnv = resolveScopedMatrixEnvConfig(accountId, process.env);
         const scopedReady = hasReadyMatrixEnvAuth(scopedEnv);
@@ -355,6 +368,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount> = {
         accessToken: accessToken || (password ? null : undefined),
         password: password || (accessToken ? null : undefined),
         deviceName: input.deviceName?.trim(),
+        avatarUrl: resolveAvatarInput(input),
         initialSyncLimit: input.initialSyncLimit,
       });
     },

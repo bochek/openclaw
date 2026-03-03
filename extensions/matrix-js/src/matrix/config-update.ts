@@ -9,6 +9,7 @@ export type MatrixAccountPatch = {
   accessToken?: string | null;
   password?: string | null;
   deviceName?: string | null;
+  avatarUrl?: string | null;
   encryption?: boolean | null;
   initialSyncLimit?: number | null;
 };
@@ -66,6 +67,7 @@ export function updateMatrixAccountConfig(
   applyNullableStringField(nextAccount, "accessToken", patch.accessToken);
   applyNullableStringField(nextAccount, "password", patch.password);
   applyNullableStringField(nextAccount, "deviceName", patch.deviceName);
+  applyNullableStringField(nextAccount, "avatarUrl", patch.avatarUrl);
 
   if (patch.initialSyncLimit !== undefined) {
     if (patch.initialSyncLimit === null) {

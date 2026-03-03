@@ -19,6 +19,8 @@ import {
   resolveSharedMatrixClient,
   stopSharedClientForAccount,
 } from "../client.js";
+import { updateMatrixAccountConfig } from "../config-update.js";
+import { syncMatrixOwnProfile } from "../profile.js";
 import { normalizeMatrixUserId } from "./allowlist.js";
 import { registerMatrixAutoJoin } from "./auto-join.js";
 import { createDirectRoomTracker } from "./direct.js";
@@ -328,6 +330,38 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
 
   // Shared client is already started via resolveSharedMatrixClient.
   logger.info(`matrix: logged in as ${auth.userId}`);
+
+  try {
+    const profileSync = await syncMatrixOwnProfile({
+      client,
+      userId: auth.userId,
+      displayName: accountConfig.name,
+      avatarUrl: accountConfig.avatarUrl,
+      loadAvatarFromUrl: async (url, maxBytes) => await core.media.loadWebMedia(url, maxBytes),
+    });
+    if (profileSync.displayNameUpdated) {
+      logger.info(`matrix: profile display name updated for ${auth.userId}`);
+    }
+    if (profileSync.avatarUpdated) {
+      logger.info(`matrix: profile avatar updated for ${auth.userId}`);
+    }
+    if (
+      profileSync.convertedAvatarFromHttp &&
+      profileSync.resolvedAvatarUrl &&
+      accountConfig.avatarUrl !== profileSync.resolvedAvatarUrl
+    ) {
+      const latestCfg = core.config.loadConfig() as CoreConfig;
+      const updatedCfg = updateMatrixAccountConfig(latestCfg, account.accountId, {
+        avatarUrl: profileSync.resolvedAvatarUrl,
+      });
+      await core.config.writeConfigFile(updatedCfg as never);
+      logVerboseMessage(
+        `matrix: persisted converted avatar URL for account ${account.accountId} (${profileSync.resolvedAvatarUrl})`,
+      );
+    }
+  } catch (err) {
+    logger.warn("matrix: failed to sync profile from config", { error: String(err) });
+  }
 
   // If E2EE is enabled, report device verification status and guidance.
   if (auth.encryption && client.crypto) {

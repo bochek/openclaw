@@ -12,6 +12,7 @@ export {
 export { listMatrixReactions, removeMatrixReactions } from "./actions/reactions.js";
 export { pinMatrixMessage, unpinMatrixMessage, listMatrixPins } from "./actions/pins.js";
 export { getMatrixMemberInfo, getMatrixRoomInfo } from "./actions/room.js";
+export { updateMatrixOwnProfile } from "./actions/profile.js";
 export {
   bootstrapMatrixVerification,
   acceptMatrixVerification,

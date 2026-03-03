@@ -5,6 +5,7 @@ import {
   type ChannelSetupInput,
 } from "openclaw/plugin-sdk";
 import { matrixPlugin } from "./channel.js";
+import { updateMatrixOwnProfile } from "./matrix/actions/profile.js";
 import {
   bootstrapMatrixVerification,
   getMatrixRoomKeyBackupStatus,
@@ -13,6 +14,7 @@ import {
   verifyMatrixRecoveryKey,
 } from "./matrix/actions/verification.js";
 import { setMatrixSdkLogMode } from "./matrix/client/logging.js";
+import { updateMatrixAccountConfig } from "./matrix/config-update.js";
 import { getMatrixRuntime } from "./runtime.js";
 import type { CoreConfig } from "./types.js";
 
@@ -83,11 +85,20 @@ type MatrixCliAccountAddResult = {
   accountId: string;
   configPath: string;
   useEnv: boolean;
+  profile: {
+    attempted: boolean;
+    displayNameUpdated: boolean;
+    avatarUpdated: boolean;
+    resolvedAvatarUrl: string | null;
+    convertedAvatarFromHttp: boolean;
+    error?: string;
+  };
 };
 
 async function addMatrixJsAccount(params: {
   account?: string;
   name?: string;
+  avatarUrl?: string;
   homeserver?: string;
   userId?: string;
   accessToken?: string;
@@ -103,8 +114,9 @@ async function addMatrixJsAccount(params: {
     throw new Error("Matrix-js account setup is unavailable.");
   }
 
-  const input: ChannelSetupInput = {
+  const input: ChannelSetupInput & { avatarUrl?: string } = {
     name: params.name,
+    avatarUrl: params.avatarUrl,
     homeserver: params.homeserver,
     userId: params.userId,
     accessToken: params.accessToken,
@@ -136,10 +148,111 @@ async function addMatrixJsAccount(params: {
   }) as CoreConfig;
   await runtime.config.writeConfigFile(updated as never);
 
+  const desiredDisplayName = input.name?.trim();
+  const desiredAvatarUrl = input.avatarUrl?.trim();
+  let profile: MatrixCliAccountAddResult["profile"] = {
+    attempted: false,
+    displayNameUpdated: false,
+    avatarUpdated: false,
+    resolvedAvatarUrl: null,
+    convertedAvatarFromHttp: false,
+  };
+  if (desiredDisplayName || desiredAvatarUrl) {
+    try {
+      const synced = await updateMatrixOwnProfile({
+        accountId,
+        displayName: desiredDisplayName,
+        avatarUrl: desiredAvatarUrl,
+      });
+      let resolvedAvatarUrl = synced.resolvedAvatarUrl;
+      if (synced.convertedAvatarFromHttp && synced.resolvedAvatarUrl) {
+        const latestCfg = runtime.config.loadConfig() as CoreConfig;
+        const withAvatar = updateMatrixAccountConfig(latestCfg, accountId, {
+          avatarUrl: synced.resolvedAvatarUrl,
+        });
+        await runtime.config.writeConfigFile(withAvatar as never);
+        resolvedAvatarUrl = synced.resolvedAvatarUrl;
+      }
+      profile = {
+        attempted: true,
+        displayNameUpdated: synced.displayNameUpdated,
+        avatarUpdated: synced.avatarUpdated,
+        resolvedAvatarUrl,
+        convertedAvatarFromHttp: synced.convertedAvatarFromHttp,
+      };
+    } catch (err) {
+      profile = {
+        attempted: true,
+        displayNameUpdated: false,
+        avatarUpdated: false,
+        resolvedAvatarUrl: null,
+        convertedAvatarFromHttp: false,
+        error: toErrorMessage(err),
+      };
+    }
+  }
+
   return {
     accountId,
     configPath: `channels.matrix-js.accounts.${accountId}`,
     useEnv: input.useEnv === true,
+    profile,
+  };
+}
+
+type MatrixCliProfileSetResult = {
+  accountId: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  profile: {
+    displayNameUpdated: boolean;
+    avatarUpdated: boolean;
+    resolvedAvatarUrl: string | null;
+    convertedAvatarFromHttp: boolean;
+  };
+  configPath: string;
+};
+
+async function setMatrixJsProfile(params: {
+  account?: string;
+  name?: string;
+  avatarUrl?: string;
+}): Promise<MatrixCliProfileSetResult> {
+  const runtime = getMatrixRuntime();
+  const cfg = runtime.config.loadConfig() as CoreConfig;
+  const accountId = normalizeAccountId(params.account);
+  const displayName = params.name?.trim() || null;
+  const avatarUrl = params.avatarUrl?.trim() || null;
+  if (!displayName && !avatarUrl) {
+    throw new Error("Provide --name and/or --avatar-url.");
+  }
+
+  const synced = await updateMatrixOwnProfile({
+    accountId,
+    displayName: displayName ?? undefined,
+    avatarUrl: avatarUrl ?? undefined,
+  });
+  const persistedAvatarUrl =
+    synced.convertedAvatarFromHttp && synced.resolvedAvatarUrl
+      ? synced.resolvedAvatarUrl
+      : avatarUrl;
+  const updated = updateMatrixAccountConfig(cfg, accountId, {
+    name: displayName ?? undefined,
+    avatarUrl: persistedAvatarUrl ?? undefined,
+  });
+  await runtime.config.writeConfigFile(updated as never);
+
+  return {
+    accountId,
+    displayName,
+    avatarUrl: persistedAvatarUrl ?? null,
+    profile: {
+      displayNameUpdated: synced.displayNameUpdated,
+      avatarUpdated: synced.avatarUpdated,
+      resolvedAvatarUrl: synced.resolvedAvatarUrl,
+      convertedAvatarFromHttp: synced.convertedAvatarFromHttp,
+    },
+    configPath: `channels.matrix-js.accounts.${accountId}`,
   };
 }
 
@@ -445,6 +558,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
     .description("Add or update a matrix-js account (wrapper around channel setup)")
     .option("--account <id>", "Account ID (default: normalized --name, else default)")
     .option("--name <name>", "Optional display name for this account")
+    .option("--avatar-url <url>", "Optional Matrix avatar URL (mxc:// or http(s) URL)")
     .option("--homeserver <url>", "Matrix homeserver URL")
     .option("--user-id <id>", "Matrix user ID")
     .option("--access-token <token>", "Matrix access token")
@@ -461,6 +575,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
       async (options: {
         account?: string;
         name?: string;
+        avatarUrl?: string;
         homeserver?: string;
         userId?: string;
         accessToken?: string;
@@ -478,6 +593,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
             await addMatrixJsAccount({
               account: options.account,
               name: options.name,
+              avatarUrl: options.avatarUrl,
               homeserver: options.homeserver,
               userId: options.userId,
               accessToken: options.accessToken,
@@ -492,10 +608,64 @@ export function registerMatrixJsCli(params: { program: Command }): void {
             console.log(
               `Credentials source: ${result.useEnv ? "MATRIX_* / MATRIX_<ACCOUNT_ID>_* env vars" : "inline config"}`,
             );
+            if (result.profile.attempted) {
+              if (result.profile.error) {
+                console.error(`Profile sync warning: ${result.profile.error}`);
+              } else {
+                console.log(
+                  `Profile sync: name ${result.profile.displayNameUpdated ? "updated" : "unchanged"}, avatar ${result.profile.avatarUpdated ? "updated" : "unchanged"}`,
+                );
+                if (result.profile.convertedAvatarFromHttp && result.profile.resolvedAvatarUrl) {
+                  console.log(`Avatar converted and saved as: ${result.profile.resolvedAvatarUrl}`);
+                }
+              }
+            }
             const bindHint = `openclaw agents bind --agent <id> --bind matrix-js:${result.accountId}`;
             console.log(`Bind this account to an agent: ${bindHint}`);
           },
           errorPrefix: "Account setup failed",
+        });
+      },
+    );
+
+  const profile = root.command("profile").description("Manage Matrix-js bot profile");
+
+  profile
+    .command("set")
+    .description("Update Matrix profile display name and/or avatar")
+    .option("--account <id>", "Account ID (for multi-account setups)")
+    .option("--name <name>", "Profile display name")
+    .option("--avatar-url <url>", "Profile avatar URL (mxc:// or http(s) URL)")
+    .option("--verbose", "Show detailed diagnostics")
+    .option("--json", "Output as JSON")
+    .action(
+      async (options: {
+        account?: string;
+        name?: string;
+        avatarUrl?: string;
+        verbose?: boolean;
+        json?: boolean;
+      }) => {
+        await runMatrixCliCommand({
+          verbose: options.verbose === true,
+          json: options.json === true,
+          run: async () =>
+            await setMatrixJsProfile({
+              account: options.account,
+              name: options.name,
+              avatarUrl: options.avatarUrl,
+            }),
+          onText: (result) => {
+            printAccountLabel(result.accountId);
+            console.log(`Config path: ${result.configPath}`);
+            console.log(
+              `Profile update: name ${result.profile.displayNameUpdated ? "updated" : "unchanged"}, avatar ${result.profile.avatarUpdated ? "updated" : "unchanged"}`,
+            );
+            if (result.profile.convertedAvatarFromHttp && result.avatarUrl) {
+              console.log(`Avatar converted and saved as: ${result.avatarUrl}`);
+            }
+          },
+          errorPrefix: "Profile update failed",
         });
       },
     );

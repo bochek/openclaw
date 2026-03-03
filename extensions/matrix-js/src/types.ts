@@ -62,6 +62,8 @@ export type MatrixConfig = {
   deviceId?: string;
   /** Optional device name when logging in via password. */
   deviceName?: string;
+  /** Optional desired Matrix avatar source (mxc:// or http(s) URL). */
+  avatarUrl?: string;
   /** Initial sync limit for startup (defaults to matrix-js-sdk behavior). */
   initialSyncLimit?: number;
   /** Enable end-to-end encryption (E2EE). Default: false. */

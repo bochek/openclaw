@@ -45,6 +45,7 @@ export const MatrixConfigSchema = z.object({
   password: z.string().optional(),
   deviceId: z.string().optional(),
   deviceName: z.string().optional(),
+  avatarUrl: z.string().optional(),
   initialSyncLimit: z.number().optional(),
   encryption: z.boolean().optional(),
   allowlistOnly: z.boolean().optional(),
