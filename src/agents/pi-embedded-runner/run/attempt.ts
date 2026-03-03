@@ -1466,13 +1466,7 @@ export async function runEmbeddedAttempt(
                   historyMessages: activeSession.messages,
                   imagesCount: imageResult.images.length,
                 },
-                {
-                  agentId: hookAgentId,
-                  sessionKey: params.sessionKey,
-                  sessionId: params.sessionId,
-                  workspaceDir: params.workspaceDir,
-                  messageProvider: params.messageProvider ?? undefined,
-                },
+                hookCtx,
               )
               .catch((err) => {
                 log.warn(`llm_input hook failed: ${String(err)}`);
