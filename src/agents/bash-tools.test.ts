@@ -457,10 +457,9 @@ describe("exec tool backgrounding", () => {
       backgroundMs: 10,
       allowBackground: false,
     });
-    await expect(executeExecCommand(customBash, longDelayCmd)).rejects.toThrow(/timed out/i);
-    await expect(executeExecCommand(customBash, longDelayCmd)).rejects.toThrow(
-      /re-run with a higher timeout/i,
-    );
+    const timeoutResult = executeExecCommand(customBash, longDelayCmd);
+    await expect(timeoutResult).rejects.toThrow(/timed out/i);
+    await expect(timeoutResult).rejects.toThrow(/re-run with a higher timeout/i);
   });
 
   it.each<DisallowedElevationCase>(DISALLOWED_ELEVATION_CASES)(
