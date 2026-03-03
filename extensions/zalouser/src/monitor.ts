@@ -390,13 +390,15 @@ async function processMessage(
     body: rawBody,
   });
 
+  const normalizedTo = isGroup ? `zalouser:group:${chatId}` : `zalouser:${chatId}`;
+
   const ctxPayload = core.channel.reply.finalizeInboundContext({
     Body: body,
     BodyForAgent: rawBody,
     RawBody: rawBody,
     CommandBody: rawBody,
     From: isGroup ? `zalouser:group:${chatId}` : `zalouser:${senderId}`,
-    To: `zalouser:${chatId}`,
+    To: normalizedTo,
     SessionKey: route.sessionKey,
     AccountId: route.accountId,
     ChatType: isGroup ? "group" : "direct",
@@ -420,7 +422,7 @@ async function processMessage(
       cliMsgId: message.cliMsgId,
     }),
     OriginatingChannel: "zalouser",
-    OriginatingTo: `zalouser:${chatId}`,
+    OriginatingTo: normalizedTo,
   });
 
   await core.channel.session.recordInboundSession({

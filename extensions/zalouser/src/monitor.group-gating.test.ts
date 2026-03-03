@@ -227,6 +227,8 @@ describe("zalouser monitor group mention gating", () => {
     expect(dispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalledTimes(1);
     const callArg = dispatchReplyWithBufferedBlockDispatcher.mock.calls[0]?.[0];
     expect(callArg?.ctx?.WasMentioned).toBe(true);
+    expect(callArg?.ctx?.To).toBe("zalouser:group:g-1");
+    expect(callArg?.ctx?.OriginatingTo).toBe("zalouser:group:g-1");
     expect(sendTypingZalouserMock).toHaveBeenCalledWith("g-1", {
       profile: "default",
       isGroup: true,

@@ -112,6 +112,8 @@ function parseZalouserOutboundTarget(raw: string): {
     }
     return { threadId, isGroup: false };
   }
+  // Backward-compatible fallback for bare IDs.
+  // Group sends should use explicit `group:<id>` targets.
   return { threadId: normalized, isGroup: false };
 }
 
@@ -453,7 +455,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount> = {
         }
         return /^\d{3,}$/.test(normalized);
       },
-      hint: "<threadId|user:id|group:id>",
+      hint: "<user:id|group:id>",
     },
   },
   directory: {
@@ -488,7 +490,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount> = {
       const groups = await listZaloGroupsMatching(account.profile, query);
       const rows = groups.map((group) =>
         mapGroup({
-          id: String(group.groupId),
+          id: `group:${String(group.groupId)}`,
           name: group.name ?? null,
           raw: group,
         }),

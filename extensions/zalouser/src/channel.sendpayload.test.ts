@@ -24,7 +24,7 @@ vi.mock("./accounts.js", async (importOriginal) => {
 function baseCtx(payload: ReplyPayload) {
   return {
     cfg: {},
-    to: "987654321",
+    to: "user:987654321",
     text: "",
     payload,
   };
@@ -78,6 +78,22 @@ describe("zalouserPlugin outbound sendPayload", () => {
       expect.objectContaining({ mediaUrl: "https://example.com/a.jpg" }),
     );
     expect(result).toMatchObject({ channel: "zalouser" });
+  });
+
+  it("treats bare numeric targets as direct chats for backward compatibility", async () => {
+    mockedSend.mockResolvedValue({ ok: true, messageId: "zlu-d1" });
+
+    const result = await zalouserPlugin.outbound!.sendPayload!({
+      ...baseCtx({ text: "hello" }),
+      to: "987654321",
+    });
+
+    expect(mockedSend).toHaveBeenCalledWith(
+      "987654321",
+      "hello",
+      expect.objectContaining({ isGroup: false }),
+    );
+    expect(result).toMatchObject({ channel: "zalouser", messageId: "zlu-d1" });
   });
 
   it("multi-media iterates URLs with caption on first", async () => {

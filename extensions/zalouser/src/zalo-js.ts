@@ -254,9 +254,14 @@ function extractSendMessageId(result: unknown): string | undefined {
     return undefined;
   }
   const payload = result as {
+    msgId?: string | number;
     message?: { msgId?: string | number } | null;
     attachment?: Array<{ msgId?: string | number }>;
   };
+  const direct = payload.msgId;
+  if (direct !== undefined && direct !== null) {
+    return String(direct);
+  }
   const primary = payload.message?.msgId;
   if (primary !== undefined && primary !== null) {
     return String(primary);
@@ -313,6 +318,35 @@ function resolveMediaFileName(params: {
                         : "bin";
 
   return `upload.${ext}`;
+}
+
+function resolveUploadedVoiceAsset(
+  uploaded: Array<{
+    fileType?: string;
+    fileUrl?: string;
+    fileName?: string;
+  }>,
+): { fileUrl: string; fileName?: string } | undefined {
+  for (const item of uploaded) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const fileType = item.fileType?.toLowerCase();
+    const fileUrl = item.fileUrl?.trim();
+    if (!fileUrl) {
+      continue;
+    }
+    if (fileType === "others" || fileType === "video") {
+      return { fileUrl, fileName: item.fileName?.trim() || undefined };
+    }
+  }
+  return undefined;
+}
+
+function buildZaloVoicePlaybackUrl(asset: { fileUrl: string; fileName?: string }): string {
+  // zca-js uses uploadAttachment(...).fileUrl directly for sendVoice.
+  // Appending filename can produce URLs that play only in the local session.
+  return asset.fileUrl.trim();
 }
 
 function mapFriend(friend: User): ZcaFriend {
@@ -854,6 +888,40 @@ export async function sendZaloTextMessage(
         kind: media.kind,
       });
       const payloadText = (text || options.caption || "").slice(0, 2000);
+
+      if (media.kind === "audio") {
+        let textMessageId: string | undefined;
+        if (payloadText) {
+          const textResponse = await api.sendMessage(payloadText, trimmedThreadId, type);
+          textMessageId = extractSendMessageId(textResponse);
+        }
+
+        const attachmentFileName = fileName.includes(".") ? fileName : `${fileName}.bin`;
+        const uploaded = await api.uploadAttachment(
+          [
+            {
+              data: media.buffer,
+              filename: attachmentFileName as `${string}.${string}`,
+              metadata: {
+                totalSize: media.buffer.length,
+              },
+            },
+          ],
+          trimmedThreadId,
+          type,
+        );
+        const voiceAsset = resolveUploadedVoiceAsset(uploaded);
+        if (!voiceAsset) {
+          throw new Error("Failed to resolve uploaded audio URL for voice message");
+        }
+        const voiceUrl = buildZaloVoicePlaybackUrl(voiceAsset);
+        const response = await api.sendVoice({ voiceUrl }, trimmedThreadId, type);
+        return {
+          ok: true,
+          messageId: extractSendMessageId(response) ?? textMessageId,
+        };
+      }
+
       const response = await api.sendMessage(
         {
           msg: payloadText,
