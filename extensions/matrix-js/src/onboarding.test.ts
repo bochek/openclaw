@@ -15,6 +15,8 @@ describe("matrix onboarding", () => {
     MATRIX_USER_ID: process.env.MATRIX_USER_ID,
     MATRIX_ACCESS_TOKEN: process.env.MATRIX_ACCESS_TOKEN,
     MATRIX_PASSWORD: process.env.MATRIX_PASSWORD,
+    MATRIX_DEVICE_ID: process.env.MATRIX_DEVICE_ID,
+    MATRIX_DEVICE_NAME: process.env.MATRIX_DEVICE_NAME,
     MATRIX_OPS_HOMESERVER: process.env.MATRIX_OPS_HOMESERVER,
     MATRIX_OPS_ACCESS_TOKEN: process.env.MATRIX_OPS_ACCESS_TOKEN,
   };
@@ -113,5 +115,49 @@ describe("matrix onboarding", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("includes device env var names in auth help text", async () => {
+    setMatrixRuntime({
+      state: {
+        resolveStateDir: (_env: NodeJS.ProcessEnv, homeDir?: () => string) =>
+          (homeDir ?? (() => "/tmp"))(),
+      },
+      config: {
+        loadConfig: () => ({}),
+      },
+    } as never);
+
+    const notes: string[] = [];
+    const prompter = {
+      note: vi.fn(async (message: unknown) => {
+        notes.push(String(message));
+      }),
+      text: vi.fn(async () => {
+        throw new Error("stop-after-help");
+      }),
+      confirm: vi.fn(async () => false),
+      select: vi.fn(async () => "token"),
+    } as unknown as WizardPrompter;
+
+    await expect(
+      matrixOnboardingAdapter.configureInteractive!({
+        cfg: { channels: {} } as CoreConfig,
+        runtime: { log: vi.fn(), error: vi.fn(), exit: vi.fn() } as unknown as RuntimeEnv,
+        prompter,
+        options: undefined,
+        accountOverrides: {},
+        shouldPromptAccountIds: false,
+        forceAllowFrom: false,
+        configured: false,
+        label: "Matrix-js",
+      }),
+    ).rejects.toThrow("stop-after-help");
+
+    const noteText = notes.join("\n");
+    expect(noteText).toContain("MATRIX_DEVICE_ID");
+    expect(noteText).toContain("MATRIX_DEVICE_NAME");
+    expect(noteText).toContain("MATRIX_<ACCOUNT_ID>_DEVICE_ID");
+    expect(noteText).toContain("MATRIX_<ACCOUNT_ID>_DEVICE_NAME");
   });
 });

@@ -1,5 +1,10 @@
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import type { CoreConfig, MatrixConfig } from "../types.js";
+import {
+  findMatrixAccountConfig,
+  resolveMatrixAccountsMap,
+  resolveMatrixBaseConfig,
+} from "./account-config.js";
 import { resolveMatrixConfigForAccount } from "./client.js";
 import { credentialsMatchConfig, loadMatrixCredentials } from "./credentials.js";
 
@@ -30,8 +35,8 @@ export type ResolvedMatrixAccount = {
 };
 
 function listConfiguredAccountIds(cfg: CoreConfig): string[] {
-  const accounts = cfg.channels?.["matrix-js"]?.accounts;
-  if (!accounts || typeof accounts !== "object") {
+  const accounts = resolveMatrixAccountsMap(cfg);
+  if (Object.keys(accounts).length === 0) {
     return [];
   }
   // Normalize and de-duplicate keys so listing and resolution use the same semantics
@@ -62,22 +67,7 @@ export function resolveDefaultMatrixAccountId(cfg: CoreConfig): string {
 }
 
 function resolveAccountConfig(cfg: CoreConfig, accountId: string): MatrixConfig | undefined {
-  const accounts = cfg.channels?.["matrix-js"]?.accounts;
-  if (!accounts || typeof accounts !== "object") {
-    return undefined;
-  }
-  // Direct lookup first (fast path for already-normalized keys)
-  if (accounts[accountId]) {
-    return accounts[accountId] as MatrixConfig;
-  }
-  // Fall back to case-insensitive match (user may have mixed-case keys in config)
-  const normalized = normalizeAccountId(accountId);
-  for (const key of Object.keys(accounts)) {
-    if (normalizeAccountId(key) === normalized) {
-      return accounts[key] as MatrixConfig;
-    }
-  }
-  return undefined;
+  return findMatrixAccountConfig(cfg, accountId);
 }
 
 export function resolveMatrixAccount(params: {
@@ -85,7 +75,7 @@ export function resolveMatrixAccount(params: {
   accountId?: string | null;
 }): ResolvedMatrixAccount {
   const accountId = normalizeAccountId(params.accountId);
-  const matrixBase = params.cfg.channels?.["matrix-js"] ?? {};
+  const matrixBase = resolveMatrixBaseConfig(params.cfg);
   const base = resolveMatrixAccountConfig({ cfg: params.cfg, accountId });
   const enabled = base.enabled !== false && matrixBase.enabled !== false;
 
@@ -120,7 +110,7 @@ export function resolveMatrixAccountConfig(params: {
   accountId?: string | null;
 }): MatrixConfig {
   const accountId = normalizeAccountId(params.accountId);
-  const matrixBase = params.cfg.channels?.["matrix-js"] ?? {};
+  const matrixBase = resolveMatrixBaseConfig(params.cfg);
   const accountConfig = resolveAccountConfig(params.cfg, accountId);
   if (!accountConfig) {
     return matrixBase;

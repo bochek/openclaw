@@ -1,13 +1,12 @@
 import { resolveMatrixRoomId } from "../send.js";
-import { resolveActionClient } from "./client.js";
+import { withResolvedActionClient } from "./client.js";
 import { EventType, type MatrixActionClientOpts } from "./types.js";
 
 export async function getMatrixMemberInfo(
   userId: string,
   opts: MatrixActionClientOpts & { roomId?: string } = {},
 ) {
-  const { client, stopOnDone } = await resolveActionClient(opts);
-  try {
+  return await withResolvedActionClient(opts, async (client) => {
     const roomId = opts.roomId ? await resolveMatrixRoomId(client, opts.roomId) : undefined;
     const profile = await client.getUserProfile(userId);
     // Membership and power levels are not included in profile calls; fetch state separately if needed.
@@ -22,16 +21,11 @@ export async function getMatrixMemberInfo(
       displayName: profile?.displayname ?? null,
       roomId: roomId ?? null,
     };
-  } finally {
-    if (stopOnDone) {
-      client.stop();
-    }
-  }
+  });
 }
 
 export async function getMatrixRoomInfo(roomId: string, opts: MatrixActionClientOpts = {}) {
-  const { client, stopOnDone } = await resolveActionClient(opts);
-  try {
+  return await withResolvedActionClient(opts, async (client) => {
     const resolvedRoom = await resolveMatrixRoomId(client, roomId);
     let name: string | null = null;
     let topic: string | null = null;
@@ -74,9 +68,5 @@ export async function getMatrixRoomInfo(roomId: string, opts: MatrixActionClient
       altAliases: [], // Would need separate query
       memberCount,
     };
-  } finally {
-    if (stopOnDone) {
-      client.stop();
-    }
-  }
+  });
 }

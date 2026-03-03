@@ -59,6 +59,10 @@ function printTimestamp(label: string, value: string | null | undefined): void {
   }
 }
 
+function printAccountLabel(accountId?: string): void {
+  console.log(`Account: ${normalizeAccountId(accountId)}`);
+}
+
 function configureCliLogMode(verbose: boolean): void {
   setMatrixSdkLogMode(verbose ? "default" : "quiet");
 }
@@ -521,6 +525,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
               includeRecoveryKey: options.includeRecoveryKey === true,
             }),
           onText: (status, verbose) => {
+            printAccountLabel(options.account);
             printVerificationStatus(status, verbose);
           },
           errorPrefix: "Error",
@@ -542,6 +547,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
         json: options.json === true,
         run: async () => await getMatrixRoomKeyBackupStatus({ accountId: options.account }),
         onText: (status, verbose) => {
+          printAccountLabel(options.account);
           printBackupSummary(status);
           if (verbose) {
             printBackupStatus(status);
@@ -574,6 +580,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
               recoveryKey: options.recoveryKey,
             }),
           onText: (result, verbose) => {
+            printAccountLabel(options.account);
             console.log(`Restore success: ${result.success ? "yes" : "no"}`);
             if (result.error) {
               console.log(`Error: ${result.error}`);
@@ -622,6 +629,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
               forceResetCrossSigning: options.forceResetCrossSigning === true,
             }),
           onText: (result, verbose) => {
+            printAccountLabel(options.account);
             console.log(`Bootstrap success: ${result.success ? "yes" : "no"}`);
             if (result.error) {
               console.log(`Error: ${result.error}`);
@@ -666,6 +674,7 @@ export function registerMatrixJsCli(params: { program: Command }): void {
           json: options.json === true,
           run: async () => await verifyMatrixRecoveryKey(key, { accountId: options.account }),
           onText: (result, verbose) => {
+            printAccountLabel(options.account);
             if (!result.success) {
               console.error(`Verification failed: ${result.error ?? "unknown error"}`);
               return;

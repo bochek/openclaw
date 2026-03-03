@@ -59,8 +59,8 @@ async function noteMatrixAuthHelp(prompter: WizardPrompter): Promise<void> {
       "Matrix requires a homeserver URL.",
       "Use an access token (recommended) or password login to an existing account.",
       "With access token: user ID is fetched automatically.",
-      "Env vars supported: MATRIX_HOMESERVER, MATRIX_USER_ID, MATRIX_ACCESS_TOKEN, MATRIX_PASSWORD.",
-      "Per-account env vars: MATRIX_<ACCOUNT_ID>_HOMESERVER, MATRIX_<ACCOUNT_ID>_USER_ID, MATRIX_<ACCOUNT_ID>_ACCESS_TOKEN, MATRIX_<ACCOUNT_ID>_PASSWORD.",
+      "Env vars supported: MATRIX_HOMESERVER, MATRIX_USER_ID, MATRIX_ACCESS_TOKEN, MATRIX_PASSWORD, MATRIX_DEVICE_ID, MATRIX_DEVICE_NAME.",
+      "Per-account env vars: MATRIX_<ACCOUNT_ID>_HOMESERVER, MATRIX_<ACCOUNT_ID>_USER_ID, MATRIX_<ACCOUNT_ID>_ACCESS_TOKEN, MATRIX_<ACCOUNT_ID>_PASSWORD, MATRIX_<ACCOUNT_ID>_DEVICE_ID, MATRIX_<ACCOUNT_ID>_DEVICE_NAME.",
       `Docs: ${formatDocsLink("/channels/matrix-js", "channels/matrix-js")}`,
     ].join("\n"),
     "Matrix setup",
@@ -70,6 +70,7 @@ async function noteMatrixAuthHelp(prompter: WizardPrompter): Promise<void> {
 async function promptMatrixAllowFrom(params: {
   cfg: CoreConfig;
   prompter: WizardPrompter;
+  accountId?: string;
 }): Promise<CoreConfig> {
   const { cfg, prompter } = params;
   const existingAllowFrom = cfg.channels?.["matrix-js"]?.dm?.allowFrom ?? [];

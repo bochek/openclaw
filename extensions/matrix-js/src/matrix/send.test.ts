@@ -54,7 +54,14 @@ describe("sendMessageMatrix media", () => {
   });
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    loadWebMediaMock.mockReset().mockResolvedValue({
+      buffer: Buffer.from("media"),
+      fileName: "photo.png",
+      contentType: "image/png",
+      kind: "image",
+    });
+    getImageMetadataMock.mockReset().mockResolvedValue(null);
+    resizeToJpegMock.mockReset();
     setMatrixRuntime(runtimeStub);
   });
 
@@ -116,6 +123,72 @@ describe("sendMessageMatrix media", () => {
     };
     expect(content.url).toBeUndefined();
     expect(content.file?.url).toBe("mxc://example/file");
+  });
+
+  it("does not upload plaintext thumbnails for encrypted image sends", async () => {
+    const { client, uploadContent } = makeClient();
+    (client as { crypto?: object }).crypto = {
+      isRoomEncrypted: vi.fn().mockResolvedValue(true),
+      encryptMedia: vi.fn().mockResolvedValue({
+        buffer: Buffer.from("encrypted"),
+        file: {
+          key: {
+            kty: "oct",
+            key_ops: ["encrypt", "decrypt"],
+            alg: "A256CTR",
+            k: "secret",
+            ext: true,
+          },
+          iv: "iv",
+          hashes: { sha256: "hash" },
+          v: "v2",
+        },
+      }),
+    };
+    getImageMetadataMock
+      .mockResolvedValueOnce({ width: 1600, height: 1200 })
+      .mockResolvedValueOnce({ width: 800, height: 600 });
+    resizeToJpegMock.mockResolvedValueOnce(Buffer.from("thumb"));
+
+    await sendMessageMatrix("room:!room:example", "caption", {
+      client,
+      mediaUrl: "file:///tmp/photo.png",
+    });
+
+    expect(uploadContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("uploads thumbnail metadata for unencrypted large images", async () => {
+    const { client, sendMessage, uploadContent } = makeClient();
+    getImageMetadataMock
+      .mockResolvedValueOnce({ width: 1600, height: 1200 })
+      .mockResolvedValueOnce({ width: 800, height: 600 });
+    resizeToJpegMock.mockResolvedValueOnce(Buffer.from("thumb"));
+
+    await sendMessageMatrix("room:!room:example", "caption", {
+      client,
+      mediaUrl: "file:///tmp/photo.png",
+    });
+
+    expect(uploadContent).toHaveBeenCalledTimes(2);
+    const content = sendMessage.mock.calls[0]?.[1] as {
+      info?: {
+        thumbnail_url?: string;
+        thumbnail_info?: {
+          w?: number;
+          h?: number;
+          mimetype?: string;
+          size?: number;
+        };
+      };
+    };
+    expect(content.info?.thumbnail_url).toBe("mxc://example/file");
+    expect(content.info?.thumbnail_info).toMatchObject({
+      w: 800,
+      h: 600,
+      mimetype: "image/jpeg",
+      size: Buffer.from("thumb").byteLength,
+    });
   });
 });
 

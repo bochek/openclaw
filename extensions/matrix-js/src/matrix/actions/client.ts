@@ -39,3 +39,32 @@ export async function resolveActionClient(
   await client.prepareForOneOff();
   return { client, stopOnDone: true };
 }
+
+export type MatrixActionClientStopMode = "stop" | "persist";
+
+export async function stopActionClient(
+  resolved: MatrixActionClient,
+  mode: MatrixActionClientStopMode = "stop",
+): Promise<void> {
+  if (!resolved.stopOnDone) {
+    return;
+  }
+  if (mode === "persist") {
+    await resolved.client.stopAndPersist();
+    return;
+  }
+  resolved.client.stop();
+}
+
+export async function withResolvedActionClient<T>(
+  opts: MatrixActionClientOpts,
+  run: (client: MatrixActionClient["client"]) => Promise<T>,
+  mode: MatrixActionClientStopMode = "stop",
+): Promise<T> {
+  const resolved = await resolveActionClient(opts);
+  try {
+    return await run(resolved.client);
+  } finally {
+    await stopActionClient(resolved, mode);
+  }
+}

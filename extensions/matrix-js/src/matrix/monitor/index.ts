@@ -286,7 +286,7 @@ export async function monitorMatrixProvider(opts: MonitorMatrixOpts = {}): Promi
     client,
     core,
     cfg,
-    accountId: opts.accountId ?? undefined,
+    accountId: account.accountId,
     runtime,
     logger,
     logVerboseMessage,

@@ -1,6 +1,7 @@
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import { getMatrixRuntime } from "../../runtime.js";
 import type { CoreConfig } from "../../types.js";
+import { findMatrixAccountConfig, resolveMatrixBaseConfig } from "../account-config.js";
 import { MatrixClient } from "../sdk.js";
 import { ensureMatrixSdkLoggingConfigured } from "./logging.js";
 import type { MatrixAuth, MatrixResolvedConfig } from "./types.js";
@@ -83,32 +84,11 @@ export function hasReadyMatrixEnvAuth(config: {
   return Boolean(homeserver && (accessToken || (userId && password)));
 }
 
-function findAccountConfig(cfg: CoreConfig, accountId: string): Record<string, unknown> {
-  const accounts = cfg.channels?.["matrix-js"]?.accounts;
-  if (!accounts || typeof accounts !== "object") {
-    return {};
-  }
-  if (accounts[accountId] && typeof accounts[accountId] === "object") {
-    return accounts[accountId] as Record<string, unknown>;
-  }
-  const normalized = normalizeAccountId(accountId);
-  for (const key of Object.keys(accounts)) {
-    if (normalizeAccountId(key) === normalized) {
-      const candidate = accounts[key];
-      if (candidate && typeof candidate === "object") {
-        return candidate as Record<string, unknown>;
-      }
-      return {};
-    }
-  }
-  return {};
-}
-
 export function resolveMatrixConfig(
   cfg: CoreConfig = getMatrixRuntime().config.loadConfig() as CoreConfig,
   env: NodeJS.ProcessEnv = process.env,
 ): MatrixResolvedConfig {
-  const matrix = cfg.channels?.["matrix-js"] ?? {};
+  const matrix = resolveMatrixBaseConfig(cfg);
   const defaultScopedEnv = resolveScopedMatrixEnvConfig(DEFAULT_ACCOUNT_ID, env);
   const globalEnv = resolveGlobalMatrixEnvConfig(env);
   const homeserver =
@@ -144,8 +124,8 @@ export function resolveMatrixConfigForAccount(
   accountId: string,
   env: NodeJS.ProcessEnv = process.env,
 ): MatrixResolvedConfig {
-  const matrix = cfg.channels?.["matrix-js"] ?? {};
-  const account = findAccountConfig(cfg, accountId);
+  const matrix = resolveMatrixBaseConfig(cfg);
+  const account = findMatrixAccountConfig(cfg, accountId) ?? {};
   const normalizedAccountId = normalizeAccountId(accountId);
   const scopedEnv = resolveScopedMatrixEnvConfig(normalizedAccountId, env);
   const globalEnv = resolveGlobalMatrixEnvConfig(env);
@@ -285,7 +265,7 @@ export async function resolveMatrixAuth(params?: {
       cachedCredentials.userId !== userId ||
       (cachedCredentials.deviceId || undefined) !== knownDeviceId;
     if (shouldRefreshCachedCredentials) {
-      saveMatrixCredentials(
+      await saveMatrixCredentials(
         {
           homeserver: resolved.homeserver,
           userId,
@@ -296,7 +276,7 @@ export async function resolveMatrixAuth(params?: {
         accountId,
       );
     } else if (hasMatchingCachedToken) {
-      touchMatrixCredentials(env, accountId);
+      await touchMatrixCredentials(env, accountId);
     }
     return {
       homeserver: resolved.homeserver,
@@ -311,7 +291,7 @@ export async function resolveMatrixAuth(params?: {
   }
 
   if (cachedCredentials) {
-    touchMatrixCredentials(env, accountId);
+    await touchMatrixCredentials(env, accountId);
     return {
       homeserver: cachedCredentials.homeserver,
       userId: cachedCredentials.userId,
@@ -367,7 +347,7 @@ export async function resolveMatrixAuth(params?: {
     encryption: resolved.encryption,
   };
 
-  saveMatrixCredentials(
+  await saveMatrixCredentials(
     {
       homeserver: auth.homeserver,
       userId: auth.userId,

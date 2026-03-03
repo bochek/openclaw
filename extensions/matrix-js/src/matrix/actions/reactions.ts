@@ -1,5 +1,5 @@
 import { resolveMatrixRoomId } from "../send.js";
-import { resolveActionClient } from "./client.js";
+import { withResolvedActionClient } from "./client.js";
 import {
   EventType,
   RelationType,
@@ -14,8 +14,7 @@ export async function listMatrixReactions(
   messageId: string,
   opts: MatrixActionClientOpts & { limit?: number } = {},
 ): Promise<MatrixReactionSummary[]> {
-  const { client, stopOnDone } = await resolveActionClient(opts);
-  try {
+  return await withResolvedActionClient(opts, async (client) => {
     const resolvedRoom = await resolveMatrixRoomId(client, roomId);
     const limit =
       typeof opts.limit === "number" && Number.isFinite(opts.limit)
@@ -47,11 +46,7 @@ export async function listMatrixReactions(
       summaries.set(key, entry);
     }
     return Array.from(summaries.values());
-  } finally {
-    if (stopOnDone) {
-      client.stop();
-    }
-  }
+  });
 }
 
 export async function removeMatrixReactions(
@@ -59,8 +54,7 @@ export async function removeMatrixReactions(
   messageId: string,
   opts: MatrixActionClientOpts & { emoji?: string } = {},
 ): Promise<{ removed: number }> {
-  const { client, stopOnDone } = await resolveActionClient(opts);
-  try {
+  return await withResolvedActionClient(opts, async (client) => {
     const resolvedRoom = await resolveMatrixRoomId(client, roomId);
     const res = (await client.doRequest(
       "GET",
@@ -88,9 +82,5 @@ export async function removeMatrixReactions(
     }
     await Promise.all(toRemove.map((id) => client.redactEvent(resolvedRoom, id)));
     return { removed: toRemove.length };
-  } finally {
-    if (stopOnDone) {
-      client.stop();
-    }
-  }
+  });
 }

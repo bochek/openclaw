@@ -72,6 +72,37 @@ export async function resolveMatrixTargets(params: {
   runtime?: RuntimeEnv;
 }): Promise<ChannelResolveResult[]> {
   const results: ChannelResolveResult[] = [];
+  const userLookupCache = new Map<string, ChannelDirectoryEntry[]>();
+  const groupLookupCache = new Map<string, ChannelDirectoryEntry[]>();
+
+  const readUserMatches = async (query: string): Promise<ChannelDirectoryEntry[]> => {
+    const cached = userLookupCache.get(query);
+    if (cached) {
+      return cached;
+    }
+    const matches = await listMatrixDirectoryPeersLive({
+      cfg: params.cfg,
+      query,
+      limit: 5,
+    });
+    userLookupCache.set(query, matches);
+    return matches;
+  };
+
+  const readGroupMatches = async (query: string): Promise<ChannelDirectoryEntry[]> => {
+    const cached = groupLookupCache.get(query);
+    if (cached) {
+      return cached;
+    }
+    const matches = await listMatrixDirectoryGroupsLive({
+      cfg: params.cfg,
+      query,
+      limit: 5,
+    });
+    groupLookupCache.set(query, matches);
+    return matches;
+  };
+
   for (const input of params.inputs) {
     const trimmed = input.trim();
     if (!trimmed) {
@@ -84,11 +115,7 @@ export async function resolveMatrixTargets(params: {
         continue;
       }
       try {
-        const matches = await listMatrixDirectoryPeersLive({
-          cfg: params.cfg,
-          query: trimmed,
-          limit: 5,
-        });
+        const matches = await readUserMatches(trimmed);
         const best = pickBestUserMatch(matches, trimmed);
         results.push({
           input,
@@ -104,11 +131,7 @@ export async function resolveMatrixTargets(params: {
       continue;
     }
     try {
-      const matches = await listMatrixDirectoryGroupsLive({
-        cfg: params.cfg,
-        query: trimmed,
-        limit: 5,
-      });
+      const matches = await readGroupMatches(trimmed);
       const best = pickBestGroupMatch(matches, trimmed);
       results.push({
         input,

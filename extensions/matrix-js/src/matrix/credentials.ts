@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { writeJsonFileAtomically } from "openclaw/plugin-sdk";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "openclaw/plugin-sdk/account-id";
 import { getMatrixRuntime } from "../runtime.js";
 
@@ -63,14 +64,11 @@ export function loadMatrixCredentials(
   }
 }
 
-export function saveMatrixCredentials(
+export async function saveMatrixCredentials(
   credentials: Omit<MatrixStoredCredentials, "createdAt" | "lastUsedAt">,
   env: NodeJS.ProcessEnv = process.env,
   accountId?: string | null,
-): void {
-  const dir = resolveMatrixCredentialsDir(env);
-  fs.mkdirSync(dir, { recursive: true });
-
+): Promise<void> {
   const credPath = resolveMatrixCredentialsPath(env, accountId);
 
   const existing = loadMatrixCredentials(env, accountId);
@@ -82,13 +80,13 @@ export function saveMatrixCredentials(
     lastUsedAt: now,
   };
 
-  fs.writeFileSync(credPath, JSON.stringify(toSave, null, 2), "utf-8");
+  await writeJsonFileAtomically(credPath, toSave);
 }
 
-export function touchMatrixCredentials(
+export async function touchMatrixCredentials(
   env: NodeJS.ProcessEnv = process.env,
   accountId?: string | null,
-): void {
+): Promise<void> {
   const existing = loadMatrixCredentials(env, accountId);
   if (!existing) {
     return;
@@ -96,7 +94,7 @@ export function touchMatrixCredentials(
 
   existing.lastUsedAt = new Date().toISOString();
   const credPath = resolveMatrixCredentialsPath(env, accountId);
-  fs.writeFileSync(credPath, JSON.stringify(existing, null, 2), "utf-8");
+  await writeJsonFileAtomically(credPath, existing);
 }
 
 export function clearMatrixCredentials(

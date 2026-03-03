@@ -39,11 +39,15 @@ import type { MatrixRawEvent, RoomMessageEventContent } from "./types.js";
 import { EventType, RelationType } from "./types.js";
 import { isMatrixVerificationRoomMessage } from "./verification-utils.js";
 
+const ALLOW_FROM_STORE_CACHE_TTL_MS = 30_000;
+const PAIRING_REPLY_COOLDOWN_MS = 5 * 60_000;
+const MAX_TRACKED_PAIRING_REPLY_SENDERS = 512;
+
 export type MatrixMonitorHandlerParams = {
   client: MatrixClient;
   core: PluginRuntime;
   cfg: CoreConfig;
-  accountId?: string;
+  accountId: string;
   runtime: RuntimeEnv;
   logger: RuntimeLogger;
   logVerboseMessage: (message: string) => void;
@@ -97,6 +101,50 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
     getRoomInfo,
     getMemberDisplayName,
   } = params;
+  let cachedStoreAllowFrom: {
+    value: string[];
+    expiresAtMs: number;
+  } | null = null;
+  const pairingReplySentAtMsBySender = new Map<string, number>();
+
+  const readStoreAllowFrom = async (): Promise<string[]> => {
+    const now = Date.now();
+    if (cachedStoreAllowFrom && now < cachedStoreAllowFrom.expiresAtMs) {
+      return cachedStoreAllowFrom.value;
+    }
+    const value = await core.channel.pairing
+      .readAllowFromStore({
+        channel: "matrix-js",
+        env: process.env,
+        accountId,
+      })
+      .catch(() => []);
+    cachedStoreAllowFrom = {
+      value,
+      expiresAtMs: now + ALLOW_FROM_STORE_CACHE_TTL_MS,
+    };
+    return value;
+  };
+
+  const shouldSendPairingReply = (senderId: string, created: boolean): boolean => {
+    const now = Date.now();
+    if (created) {
+      pairingReplySentAtMsBySender.set(senderId, now);
+      return true;
+    }
+    const lastSentAtMs = pairingReplySentAtMsBySender.get(senderId);
+    if (typeof lastSentAtMs === "number" && now - lastSentAtMs < PAIRING_REPLY_COOLDOWN_MS) {
+      return false;
+    }
+    pairingReplySentAtMsBySender.set(senderId, now);
+    if (pairingReplySentAtMsBySender.size > MAX_TRACKED_PAIRING_REPLY_SENDERS) {
+      const oldestSender = pairingReplySentAtMsBySender.keys().next().value;
+      if (typeof oldestSender === "string") {
+        pairingReplySentAtMsBySender.delete(oldestSender);
+      }
+    }
+    return true;
+  };
 
   return async (roomId: string, event: MatrixRawEvent) => {
     try {
@@ -230,9 +278,7 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
       }
 
       const senderName = await getMemberDisplayName(roomId, senderId);
-      const storeAllowFrom = await core.channel.pairing
-        .readAllowFromStore("matrix-js", process.env, accountId)
-        .catch(() => []);
+      const storeAllowFrom = await readStoreAllowFrom();
       const effectiveAllowFrom = normalizeMatrixAllowList([...allowFrom, ...storeAllowFrom]);
       const groupAllowFrom = cfg.channels?.["matrix-js"]?.groupAllowFrom ?? [];
       const effectiveGroupAllowFrom = normalizeMatrixAllowList(groupAllowFrom);
@@ -256,23 +302,32 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
                 accountId,
                 meta: { name: senderName },
               });
-              if (created) {
+              if (shouldSendPairingReply(senderId, created)) {
+                const pairingReply = core.channel.pairing.buildPairingReply({
+                  channel: "matrix-js",
+                  idLine: `Your Matrix user id: ${senderId}`,
+                  code,
+                });
                 logVerboseMessage(
-                  `matrix pairing request sender=${senderId} name=${senderName ?? "unknown"} (${allowMatchMeta})`,
+                  created
+                    ? `matrix pairing request sender=${senderId} name=${senderName ?? "unknown"} (${allowMatchMeta})`
+                    : `matrix pairing reminder sender=${senderId} name=${senderName ?? "unknown"} (${allowMatchMeta})`,
                 );
                 try {
                   await sendMessageMatrix(
                     `room:${roomId}`,
-                    core.channel.pairing.buildPairingReply({
-                      channel: "matrix-js",
-                      idLine: `Your Matrix user id: ${senderId}`,
-                      code,
-                    }),
+                    created
+                      ? pairingReply
+                      : `${pairingReply}\n\nPairing request is still pending approval. Reusing existing code.`,
                     { client },
                   );
                 } catch (err) {
                   logVerboseMessage(`matrix pairing reply failed for ${senderId}: ${String(err)}`);
                 }
+              } else {
+                logVerboseMessage(
+                  `matrix pairing reminder suppressed sender=${senderId} (cooldown)`,
+                );
               }
             }
             if (dmPolicy !== "pairing") {

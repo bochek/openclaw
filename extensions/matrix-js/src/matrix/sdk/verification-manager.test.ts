@@ -289,6 +289,7 @@ describe("MatrixVerificationManager", () => {
   });
 
   it("does not auto-confirm SAS for verifications initiated by this device", async () => {
+    vi.useFakeTimers();
     const confirm = vi.fn(async () => {});
     const verifier = new MockVerifier(
       {
@@ -312,11 +313,15 @@ describe("MatrixVerificationManager", () => {
       initiatedByMe: true,
       verifier,
     });
-    const manager = new MatrixVerificationManager();
-    manager.trackVerificationRequest(request);
+    try {
+      const manager = new MatrixVerificationManager();
+      manager.trackVerificationRequest(request);
 
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(confirm).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(20);
+      expect(confirm).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("prunes stale terminal sessions during list operations", () => {

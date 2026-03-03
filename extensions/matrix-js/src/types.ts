@@ -113,7 +113,7 @@ export type CoreConfig = {
   };
   messages?: {
     ackReaction?: string;
-    ackReactionScope?: "group-mentions" | "group-all" | "direct" | "all";
+    ackReactionScope?: "group-mentions" | "group-all" | "direct" | "all" | "none" | "off";
   };
   [key: string]: unknown;
 };
