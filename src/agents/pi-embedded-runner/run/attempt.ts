@@ -1595,13 +1595,7 @@ export async function runEmbeddedAttempt(
                 error: promptError ? describeUnknownError(promptError) : undefined,
                 durationMs: Date.now() - promptStartedAt,
               },
-              {
-                agentId: hookAgentId,
-                sessionKey: params.sessionKey,
-                sessionId: params.sessionId,
-                workspaceDir: params.workspaceDir,
-                messageProvider: params.messageProvider ?? undefined,
-              },
+              hookCtx,
             )
             .catch((err) => {
               log.warn(`agent_end hook failed: ${err}`);
@@ -1655,13 +1649,7 @@ export async function runEmbeddedAttempt(
               lastAssistant,
               usage: getUsageTotals(),
             },
-            {
-              agentId: hookAgentId,
-              sessionKey: params.sessionKey,
-              sessionId: params.sessionId,
-              workspaceDir: params.workspaceDir,
-              messageProvider: params.messageProvider ?? undefined,
-            },
+            hookCtx,
           )
           .catch((err) => {
             log.warn(`llm_output hook failed: ${String(err)}`);
