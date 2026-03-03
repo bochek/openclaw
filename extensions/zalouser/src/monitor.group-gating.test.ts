@@ -458,4 +458,64 @@ describe("zalouser monitor group mention gating", () => {
 
     expect(readAllowFromStore).not.toHaveBeenCalled();
   });
+
+  it("includes skipped group messages as InboundHistory on the next processed message", async () => {
+    const { dispatchReplyWithBufferedBlockDispatcher } = installRuntime({
+      commandAuthorized: false,
+    });
+    const historyState = {
+      historyLimit: 5,
+      groupHistories: new Map<
+        string,
+        Array<{ sender: string; body: string; timestamp?: number; messageId?: string }>
+      >(),
+    };
+    const account = createAccount();
+    const config = createConfig();
+    await __testing.processMessage({
+      message: createGroupMessage({
+        content: "first unmentioned line",
+        hasAnyMention: false,
+        wasExplicitlyMentioned: false,
+      }),
+      account,
+      config,
+      runtime: createRuntimeEnv(),
+      historyState,
+    });
+    expect(dispatchReplyWithBufferedBlockDispatcher).not.toHaveBeenCalled();
+
+    await __testing.processMessage({
+      message: createGroupMessage({
+        content: "second line @bot",
+        hasAnyMention: true,
+        wasExplicitlyMentioned: true,
+      }),
+      account,
+      config,
+      runtime: createRuntimeEnv(),
+      historyState,
+    });
+    expect(dispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalledTimes(1);
+    const firstDispatch = dispatchReplyWithBufferedBlockDispatcher.mock.calls[0]?.[0];
+    expect(firstDispatch?.ctx?.InboundHistory).toEqual([
+      expect.objectContaining({ sender: "Alice", body: "first unmentioned line" }),
+    ]);
+    expect(String(firstDispatch?.ctx?.Body ?? "")).toContain("first unmentioned line");
+
+    await __testing.processMessage({
+      message: createGroupMessage({
+        content: "third line @bot",
+        hasAnyMention: true,
+        wasExplicitlyMentioned: true,
+      }),
+      account,
+      config,
+      runtime: createRuntimeEnv(),
+      historyState,
+    });
+    expect(dispatchReplyWithBufferedBlockDispatcher).toHaveBeenCalledTimes(2);
+    const secondDispatch = dispatchReplyWithBufferedBlockDispatcher.mock.calls[1]?.[0];
+    expect(secondDispatch?.ctx?.InboundHistory).toEqual([]);
+  });
 });

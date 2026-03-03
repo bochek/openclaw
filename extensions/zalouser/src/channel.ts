@@ -342,6 +342,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount> = {
           "name",
           "dmPolicy",
           "allowFrom",
+          "historyLimit",
           "groupAllowFrom",
           "groupPolicy",
           "groups",

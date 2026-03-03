@@ -93,6 +93,7 @@ type ZalouserSharedConfig = {
   profile?: string;
   dmPolicy?: "pairing" | "allowlist" | "open" | "disabled";
   allowFrom?: Array<string | number>;
+  historyLimit?: number;
   groupAllowFrom?: Array<string | number>;
   groupPolicy?: "open" | "allowlist" | "disabled";
   groups?: Record<string, ZalouserGroupConfig>;

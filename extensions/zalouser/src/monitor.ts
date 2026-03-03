@@ -6,11 +6,16 @@ import type {
 } from "openclaw/plugin-sdk";
 import {
   DM_GROUP_ACCESS_REASON,
+  DEFAULT_GROUP_HISTORY_LIMIT,
+  type HistoryEntry,
+  buildPendingHistoryContextFromMap,
+  clearHistoryEntriesIfEnabled,
   createTypingCallbacks,
   createScopedPairingAccess,
   createReplyPrefixOptions,
   resolveOutboundMediaUrls,
   mergeAllowlist,
+  recordPendingHistoryEntryIfEnabled,
   resolveDmGroupAccessWithLists,
   resolveMentionGatingWithBypass,
   resolveOpenProviderRuntimeGroupPolicy,
@@ -74,6 +79,11 @@ function buildNameIndex<T>(items: T[], nameFn: (item: T) => string | undefined):
 }
 
 type ZalouserCoreRuntime = ReturnType<typeof getZalouserRuntime>;
+
+type ZalouserGroupHistoryState = {
+  historyLimit: number;
+  groupHistories: Map<string, HistoryEntry[]>;
+};
 
 function logVerbose(core: ZalouserCoreRuntime, runtime: RuntimeEnv, message: string): void {
   if (core.logging.shouldLogVerbose()) {
@@ -161,6 +171,7 @@ async function processMessage(
   config: OpenClawConfig,
   core: ZalouserCoreRuntime,
   runtime: RuntimeEnv,
+  historyState: ZalouserGroupHistoryState,
   statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void,
 ): Promise<void> {
   const pairing = createScopedPairingAccess({
@@ -352,6 +363,7 @@ async function processMessage(
       id: peer.id,
     },
   });
+  const historyKey = isGroup ? route.sessionKey : undefined;
 
   const requireMention = isGroup
     ? resolveGroupRequireMention({
@@ -396,6 +408,24 @@ async function processMessage(
     return;
   }
   if (isGroup && mentionGate.shouldSkip) {
+    recordPendingHistoryEntryIfEnabled({
+      historyMap: historyState.groupHistories,
+      historyKey: historyKey ?? "",
+      limit: historyState.historyLimit,
+      entry:
+        historyKey && rawBody
+          ? {
+              sender: senderName || senderId,
+              body: rawBody,
+              timestamp: message.timestampMs,
+              messageId: resolveZalouserMessageSid({
+                msgId: message.msgId,
+                cliMsgId: message.cliMsgId,
+                fallback: `${message.timestampMs}`,
+              }),
+            }
+          : null,
+    });
     logVerbose(core, runtime, `zalouser: skip group ${chatId} (mention required, not mentioned)`);
     return;
   }
@@ -417,12 +447,40 @@ async function processMessage(
     envelope: envelopeOptions,
     body: rawBody,
   });
+  const combinedBody =
+    isGroup && historyKey
+      ? buildPendingHistoryContextFromMap({
+          historyMap: historyState.groupHistories,
+          historyKey,
+          limit: historyState.historyLimit,
+          currentMessage: body,
+          formatEntry: (entry) =>
+            core.channel.reply.formatAgentEnvelope({
+              channel: "Zalo Personal",
+              from: fromLabel,
+              timestamp: entry.timestamp,
+              envelope: envelopeOptions,
+              body: `${entry.sender}: ${entry.body}${
+                entry.messageId ? ` [id:${entry.messageId}]` : ""
+              }`,
+            }),
+        })
+      : body;
+  const inboundHistory =
+    isGroup && historyKey && historyState.historyLimit > 0
+      ? (historyState.groupHistories.get(historyKey) ?? []).map((entry) => ({
+          sender: entry.sender,
+          body: entry.body,
+          timestamp: entry.timestamp,
+        }))
+      : undefined;
 
   const normalizedTo = isGroup ? `zalouser:group:${chatId}` : `zalouser:${chatId}`;
 
   const ctxPayload = core.channel.reply.finalizeInboundContext({
-    Body: body,
+    Body: combinedBody,
     BodyForAgent: rawBody,
+    InboundHistory: inboundHistory,
     RawBody: rawBody,
     CommandBody: commandBody,
     BodyForCommands: commandBody,
@@ -516,6 +574,13 @@ async function processMessage(
       onModelSelected,
     },
   });
+  if (isGroup && historyKey) {
+    clearHistoryEntriesIfEnabled({
+      historyMap: historyState.groupHistories,
+      historyKey,
+      limit: historyState.historyLimit,
+    });
+  }
 }
 
 async function deliverZalouserReply(params: {
@@ -581,6 +646,13 @@ export async function monitorZalouserProvider(
   const { abortSignal, statusSink, runtime } = options;
 
   const core = getZalouserRuntime();
+  const historyLimit = Math.max(
+    0,
+    account.config.historyLimit ??
+      config.messages?.groupChat?.historyLimit ??
+      DEFAULT_GROUP_HISTORY_LIMIT,
+  );
+  const groupHistories = new Map<string, HistoryEntry[]>();
 
   try {
     const profile = account.profile;
@@ -716,7 +788,15 @@ export async function monitorZalouserProvider(
         }
         logVerbose(core, runtime, `[${account.accountId}] inbound message`);
         statusSink?.({ lastInboundAt: Date.now() });
-        processMessage(msg, account, config, core, runtime, statusSink).catch((err) => {
+        processMessage(
+          msg,
+          account,
+          config,
+          core,
+          runtime,
+          { historyLimit, groupHistories },
+          statusSink,
+        ).catch((err) => {
           runtime.error(`[${account.accountId}] Failed to process message: ${String(err)}`);
         });
       },
@@ -758,14 +838,27 @@ export const __testing = {
     account: ResolvedZalouserAccount;
     config: OpenClawConfig;
     runtime: RuntimeEnv;
+    historyState?: {
+      historyLimit?: number;
+      groupHistories?: Map<string, HistoryEntry[]>;
+    };
     statusSink?: (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
   }) => {
+    const historyLimit = Math.max(
+      0,
+      params.historyState?.historyLimit ??
+        params.account.config.historyLimit ??
+        params.config.messages?.groupChat?.historyLimit ??
+        DEFAULT_GROUP_HISTORY_LIMIT,
+    );
+    const groupHistories = params.historyState?.groupHistories ?? new Map<string, HistoryEntry[]>();
     await processMessage(
       params.message,
       params.account,
       params.config,
       getZalouserRuntime(),
       params.runtime,
+      { historyLimit, groupHistories },
       params.statusSink,
     );
   },
