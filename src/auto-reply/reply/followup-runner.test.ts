@@ -513,4 +513,22 @@ describe("createFollowupRunner agentDir forwarding", () => {
     const call = runEmbeddedPiAgentMock.mock.calls.at(-1)?.[0] as { agentDir?: string };
     expect(call?.agentDir).toBe(agentDir);
   });
+
+  it("normalizes originatingChannel before forwarding messageChannel", async () => {
+    runEmbeddedPiAgentMock.mockClear();
+    runEmbeddedPiAgentMock.mockResolvedValueOnce({
+      payloads: [{ text: "hello world!" }],
+      meta: {},
+    });
+    const runner = createFollowupRunner({
+      opts: { onBlockReply: createAsyncReplySpy() },
+      typing: createMockTypingController(),
+      typingMode: "instant",
+      defaultModel: "anthropic/claude-opus-4-5",
+    });
+    await runner(createQueuedRun({ originatingChannel: " FEISHU " }));
+
+    const call = runEmbeddedPiAgentMock.mock.calls.at(-1)?.[0] as { messageChannel?: string };
+    expect(call?.messageChannel).toBe("feishu");
+  });
 });
