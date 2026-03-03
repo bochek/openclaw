@@ -6,7 +6,7 @@ import { resolveBrowserConfig, resolveProfile } from "../browser/config.js";
 import { resolveBrowserControlAuth } from "../browser/control-auth.js";
 import { listChannelPlugins } from "../channels/plugins/index.js";
 import { formatCliCommand } from "../cli/command-format.js";
-import type { OpenClawConfig } from "../config/config.js";
+import type { ConfigFileSnapshot, OpenClawConfig } from "../config/config.js";
 import { resolveConfigPath, resolveStateDir } from "../config/paths.js";
 import { resolveGatewayAuth } from "../gateway/auth.js";
 import { buildGatewayConnectionDetails } from "../gateway/call.js";
@@ -40,6 +40,7 @@ import {
   collectPluginsCodeSafetyFindings,
   collectStateDeepFilesystemFindings,
   collectSyncedFolderFindings,
+  collectWorkspaceSkillSymlinkEscapeFindings,
   readConfigSnapshotForAudit,
 } from "./audit-extra.js";
 import {
@@ -103,6 +104,10 @@ export type SecurityAuditOptions = {
   execIcacls?: ExecFn;
   /** Dependency injection for tests (Docker label checks). */
   execDockerRawFn?: typeof execDockerRaw;
+  /** Optional preloaded config snapshot to skip audit-time config file reads. */
+  configSnapshot?: ConfigFileSnapshot | null;
+  /** Optional cache for code-safety summaries across repeated deep audits. */
+  codeSafetySummaryCache?: Map<string, Promise<unknown>>;
 };
 
 function countBySeverity(findings: SecurityAuditFinding[]): SecurityAuditSummary {
@@ -1032,10 +1037,14 @@ export async function runSecurityAudit(opts: SecurityAuditOptions): Promise<Secu
 
   const configSnapshot =
     opts.includeFilesystem !== false
-      ? await readConfigSnapshotForAudit({ env, configPath }).catch(() => null)
+      ? opts.configSnapshot !== undefined
+        ? opts.configSnapshot
+        : await readConfigSnapshotForAudit({ env, configPath }).catch(() => null)
       : null;
 
   if (opts.includeFilesystem !== false) {
+    const codeSafetySummaryCache =
+      opts.codeSafetySummaryCache ?? new Map<string, Promise<unknown>>();
     findings.push(
       ...(await collectFilesystemFindings({
         stateDir,
@@ -1053,6 +1062,7 @@ export async function runSecurityAudit(opts: SecurityAuditOptions): Promise<Secu
     findings.push(
       ...(await collectStateDeepFilesystemFindings({ cfg, env, stateDir, platform, execIcacls })),
     );
+    findings.push(...(await collectWorkspaceSkillSymlinkEscapeFindings({ cfg })));
     findings.push(
       ...(await collectSandboxBrowserHashLabelFindings({
         execDockerRawFn: opts.execDockerRawFn,
@@ -1060,8 +1070,19 @@ export async function runSecurityAudit(opts: SecurityAuditOptions): Promise<Secu
     );
     findings.push(...(await collectPluginsTrustFindings({ cfg, stateDir })));
     if (opts.deep === true) {
-      findings.push(...(await collectPluginsCodeSafetyFindings({ stateDir })));
-      findings.push(...(await collectInstalledSkillsCodeSafetyFindings({ cfg, stateDir })));
+      findings.push(
+        ...(await collectPluginsCodeSafetyFindings({
+          stateDir,
+          summaryCache: codeSafetySummaryCache,
+        })),
+      );
+      findings.push(
+        ...(await collectInstalledSkillsCodeSafetyFindings({
+          cfg,
+          stateDir,
+          summaryCache: codeSafetySummaryCache,
+        })),
+      );
     }
   }
 
