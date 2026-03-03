@@ -69,10 +69,22 @@ const MODEL_CACHE = new Map<string, number>();
 let loadPromise: Promise<void> | null = null;
 let configuredWindowsPrimed = false;
 
+function isValueToken(arg: string | undefined): boolean {
+  if (!arg || arg === "--") {
+    return false;
+  }
+  if (!arg.startsWith("-")) {
+    return true;
+  }
+  return /^-\d+(?:\.\d+)?$/.test(arg);
+}
+
 function getCommandPathFromArgv(argv: string[]): string[] {
+  const args = argv.slice(2);
   const tokens: string[] = [];
   let skipNextAsRootValue = false;
-  for (const arg of argv.slice(2)) {
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i];
     if (!arg || arg === "--") {
       break;
     }
@@ -81,7 +93,8 @@ function getCommandPathFromArgv(argv: string[]): string[] {
       continue;
     }
     if (arg === "--profile" || arg === "--log-level") {
-      skipNextAsRootValue = true;
+      const next = args[i + 1];
+      skipNextAsRootValue = isValueToken(next);
       continue;
     }
     if (
