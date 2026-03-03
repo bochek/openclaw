@@ -217,6 +217,112 @@ function extractMentionIds(rawMentions: unknown): string[] {
   return Array.from(sink);
 }
 
+type MentionSpan = {
+  start: number;
+  end: number;
+};
+
+function toNonNegativeInteger(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const normalized = Math.trunc(value);
+    return normalized >= 0 ? normalized : null;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number.parseInt(value.trim(), 10);
+    if (Number.isFinite(parsed)) {
+      return parsed >= 0 ? parsed : null;
+    }
+  }
+  return null;
+}
+
+function extractOwnMentionSpans(
+  rawMentions: unknown,
+  ownUserId: string,
+  contentLength: number,
+): MentionSpan[] {
+  if (!Array.isArray(rawMentions) || !ownUserId || contentLength <= 0) {
+    return [];
+  }
+  const spans: MentionSpan[] = [];
+  for (const entry of rawMentions) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const record = entry as {
+      uid?: unknown;
+      pos?: unknown;
+      start?: unknown;
+      offset?: unknown;
+      len?: unknown;
+      length?: unknown;
+    };
+    const uid = toNumberId(record.uid);
+    if (!uid || uid !== ownUserId) {
+      continue;
+    }
+    const startRaw = toNonNegativeInteger(record.pos ?? record.start ?? record.offset);
+    const lengthRaw = toNonNegativeInteger(record.len ?? record.length);
+    if (startRaw === null || lengthRaw === null || lengthRaw <= 0) {
+      continue;
+    }
+    const start = Math.min(startRaw, contentLength);
+    const end = Math.min(start + lengthRaw, contentLength);
+    if (end <= start) {
+      continue;
+    }
+    spans.push({ start, end });
+  }
+  if (spans.length <= 1) {
+    return spans;
+  }
+  spans.sort((a, b) => a.start - b.start);
+  const merged: MentionSpan[] = [];
+  for (const span of spans) {
+    const last = merged[merged.length - 1];
+    if (!last || span.start > last.end) {
+      merged.push({ ...span });
+      continue;
+    }
+    last.end = Math.max(last.end, span.end);
+  }
+  return merged;
+}
+
+function stripOwnMentionsForCommandBody(
+  content: string,
+  rawMentions: unknown,
+  ownUserId: string,
+): string {
+  if (!content || !ownUserId) {
+    return content;
+  }
+  const spans = extractOwnMentionSpans(rawMentions, ownUserId, content.length);
+  if (spans.length === 0) {
+    return stripLeadingAtMentionForCommand(content);
+  }
+  let cursor = 0;
+  let output = "";
+  for (const span of spans) {
+    if (span.start > cursor) {
+      output += content.slice(cursor, span.start);
+    }
+    cursor = Math.max(cursor, span.end);
+  }
+  if (cursor < content.length) {
+    output += content.slice(cursor);
+  }
+  return output.replace(/\s+/g, " ").trim();
+}
+
+function stripLeadingAtMentionForCommand(content: string): string {
+  const fallbackMatch = content.match(/^\s*@[^\s]+(?:\s+|[:,-]\s*)([/!][\s\S]*)$/);
+  if (!fallbackMatch) {
+    return content;
+  }
+  return fallbackMatch[1].trim();
+}
+
 function resolveGroupNameFromMessageData(data: Record<string, unknown>): string | undefined {
   const candidates = [data.groupName, data.gName, data.idToName, data.threadName, data.roomName];
   for (const candidate of candidates) {
@@ -640,6 +746,11 @@ function toInboundMessage(message: Message, ownUserId?: string): ZaloInboundMess
   const wasExplicitlyMentioned = Boolean(
     normalizedOwnUserId && mentionIds.some((id) => id === normalizedOwnUserId),
   );
+  const commandContent = wasExplicitlyMentioned
+    ? stripOwnMentionsForCommandBody(content, data.mentions, normalizedOwnUserId)
+    : hasAnyMention && !canResolveExplicitMention
+      ? stripLeadingAtMentionForCommand(content)
+      : content;
   const implicitMention = Boolean(
     normalizedOwnUserId && quoteOwnerId && quoteOwnerId === normalizedOwnUserId,
   );
@@ -651,6 +762,7 @@ function toInboundMessage(message: Message, ownUserId?: string): ZaloInboundMess
     senderName: typeof data.dName === "string" ? data.dName.trim() || undefined : undefined,
     groupName: isGroup ? resolveGroupNameFromMessageData(data) : undefined,
     content,
+    commandContent,
     timestampMs: resolveInboundTimestamp(data.ts),
     msgId: typeof data.msgId === "string" ? data.msgId : undefined,
     cliMsgId: typeof data.cliMsgId === "string" ? data.cliMsgId : undefined,
@@ -1371,6 +1483,8 @@ export async function startZaloListener(params: {
       return;
     }
     const wrapped = error instanceof Error ? error : new Error(String(error));
+    cleanup();
+    invalidateApi(profile);
     params.onError(wrapped);
   };
 
@@ -1378,6 +1492,8 @@ export async function startZaloListener(params: {
     if (stopped || params.abortSignal.aborted) {
       return;
     }
+    cleanup();
+    invalidateApi(profile);
     params.onError(new Error(`Zalo listener closed (${code}): ${reason || "no reason"}`));
   };
 
