@@ -19,13 +19,14 @@ export function normalizeConfigIssuePath(path: string | null | undefined): strin
 }
 
 export function normalizeConfigIssue(issue: ConfigValidationIssue): ConfigValidationIssue {
+  const hasAllowedValues = Array.isArray(issue.allowedValues) && issue.allowedValues.length > 0;
   return {
     path: normalizeConfigIssuePath(issue.path),
     message: issue.message,
-    ...(issue.allowedValues && issue.allowedValues.length > 0
-      ? { allowedValues: issue.allowedValues }
-      : {}),
-    ...(typeof issue.allowedValuesHiddenCount === "number" && issue.allowedValuesHiddenCount > 0
+    ...(hasAllowedValues ? { allowedValues: issue.allowedValues } : {}),
+    ...(hasAllowedValues &&
+    typeof issue.allowedValuesHiddenCount === "number" &&
+    issue.allowedValuesHiddenCount > 0
       ? { allowedValuesHiddenCount: issue.allowedValuesHiddenCount }
       : {}),
   };

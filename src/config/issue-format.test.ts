@@ -74,8 +74,21 @@ describe("config issue format", () => {
       {
         path: "update.channel",
         message: "invalid",
-        allowedValuesHiddenCount: 2,
       },
     ]);
+
+    expect(
+      normalizeConfigIssue({
+        path: "update.channel",
+        message: "invalid",
+        allowedValues: ["stable"],
+        allowedValuesHiddenCount: 2,
+      }),
+    ).toEqual({
+      path: "update.channel",
+      message: "invalid",
+      allowedValues: ["stable"],
+      allowedValuesHiddenCount: 2,
+    });
   });
 });
