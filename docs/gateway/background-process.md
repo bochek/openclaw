@@ -54,6 +54,7 @@ Config (preferred):
 Actions:
 
 - `list`: running + finished sessions
+- `attach`: read current session output with interactive recovery hints
 - `poll`: drain new output for a session (also reports exit status)
 - `log`: read the aggregated output (supports `offset` + `limit`)
 - `write`: send stdin (`data`, optional `eof`)
@@ -71,6 +72,9 @@ Notes:
 - `process log` uses line-based `offset`/`limit`.
 - When both `offset` and `limit` are omitted, it returns the last 200 lines and includes a paging hint.
 - When `offset` is provided and `limit` is omitted, it returns from `offset` to the end (not capped to 200).
+- Running session details now include `stdinWritable`, `lastOutputAt`, `idleMs`, and `waitingForInput`.
+- `process list` appends `[input-wait]` when a session has been idle long enough and stdin is writable.
+- `process poll`/`attach` include an interactive recovery hint when `waitingForInput=true`.
 
 ## Examples
 
