@@ -13,6 +13,7 @@ import {
   createTypingCallbacks,
   createScopedPairingAccess,
   createReplyPrefixOptions,
+  KeyedAsyncQueue,
   resolveOutboundMediaUrls,
   mergeAllowlist,
   recordPendingHistoryEntryIfEnabled,
@@ -84,6 +85,25 @@ type ZalouserGroupHistoryState = {
   historyLimit: number;
   groupHistories: Map<string, HistoryEntry[]>;
 };
+
+function resolveInboundQueueKey(message: ZaloInboundMessage): string {
+  const threadId = message.threadId?.trim() || "unknown";
+  if (message.isGroup) {
+    return `group:${threadId}`;
+  }
+  const senderId = message.senderId?.trim();
+  return `direct:${senderId || threadId}`;
+}
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 function logVerbose(core: ZalouserCoreRuntime, runtime: RuntimeEnv, message: string): void {
   if (core.logging.shouldLogVerbose()) {
@@ -646,6 +666,7 @@ export async function monitorZalouserProvider(
   const { abortSignal, statusSink, runtime } = options;
 
   const core = getZalouserRuntime();
+  const inboundQueue = new KeyedAsyncQueue();
   const historyLimit = Math.max(
     0,
     account.config.historyLimit ??
@@ -747,11 +768,7 @@ export async function monitorZalouserProvider(
   };
 
   let settled = false;
-  const {
-    promise: waitForExit,
-    resolve: resolveRun,
-    reject: rejectRun,
-  } = Promise.withResolvers<void>();
+  const { promise: waitForExit, resolve: resolveRun, reject: rejectRun } = createDeferred<void>();
 
   const settleSuccess = () => {
     if (settled) {
@@ -788,17 +805,25 @@ export async function monitorZalouserProvider(
         }
         logVerbose(core, runtime, `[${account.accountId}] inbound message`);
         statusSink?.({ lastInboundAt: Date.now() });
-        processMessage(
-          msg,
-          account,
-          config,
-          core,
-          runtime,
-          { historyLimit, groupHistories },
-          statusSink,
-        ).catch((err) => {
-          runtime.error(`[${account.accountId}] Failed to process message: ${String(err)}`);
-        });
+        const queueKey = resolveInboundQueueKey(msg);
+        void inboundQueue
+          .enqueue(queueKey, async () => {
+            if (stopped || abortSignal.aborted) {
+              return;
+            }
+            await processMessage(
+              msg,
+              account,
+              config,
+              core,
+              runtime,
+              { historyLimit, groupHistories },
+              statusSink,
+            );
+          })
+          .catch((err) => {
+            runtime.error(`[${account.accountId}] Failed to process message: ${String(err)}`);
+          });
       },
       onError: (err) => {
         if (stopped || abortSignal.aborted) {

@@ -1,3 +1,4 @@
+import type { RuntimeEnv } from "openclaw/plugin-sdk";
 import { describe, expect, it, vi } from "vitest";
 
 const listZaloGroupMembersMock = vi.hoisted(() => vi.fn(async () => []));
@@ -27,13 +28,21 @@ vi.mock("./accounts.js", async (importOriginal) => {
 
 import { zalouserPlugin } from "./channel.js";
 
+const runtimeStub: RuntimeEnv = {
+  log: vi.fn(),
+  error: vi.fn(),
+  exit: ((code: number): never => {
+    throw new Error(`exit ${code}`);
+  }) as RuntimeEnv["exit"],
+};
+
 describe("zalouser directory group members", () => {
   it("accepts prefixed group ids from directory groups list output", async () => {
     await zalouserPlugin.directory!.listGroupMembers!({
       cfg: {},
       accountId: "default",
       groupId: "group:1471383327500481391",
-      runtime: undefined,
+      runtime: runtimeStub,
     });
 
     expect(listZaloGroupMembersMock).toHaveBeenCalledWith("default", "1471383327500481391");
@@ -44,7 +53,7 @@ describe("zalouser directory group members", () => {
       cfg: {},
       accountId: "default",
       groupId: "1471383327500481391",
-      runtime: undefined,
+      runtime: runtimeStub,
     });
 
     expect(listZaloGroupMembersMock).toHaveBeenCalledWith("default", "1471383327500481391");
