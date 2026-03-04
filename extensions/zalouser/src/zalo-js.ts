@@ -37,6 +37,8 @@ const DEFAULT_QR_WAIT_TIMEOUT_MS = 120_000;
 const GROUP_INFO_CHUNK_SIZE = 80;
 const GROUP_CONTEXT_CACHE_TTL_MS = 5 * 60_000;
 const GROUP_CONTEXT_CACHE_MAX_ENTRIES = 500;
+const LISTENER_WATCHDOG_INTERVAL_MS = 30_000;
+const LISTENER_WATCHDOG_MAX_GAP_MS = 35_000;
 
 const apiByProfile = new Map<string, API>();
 const apiInitByProfile = new Map<string, Promise<API>>();
@@ -1446,12 +1448,18 @@ export async function startZaloListener(params: {
   const api = await ensureApi(profile);
   const ownUserId = await resolveOwnUserId(api);
   let stopped = false;
+  let watchdogTimer: ReturnType<typeof setInterval> | null = null;
+  let lastWatchdogTickAt = Date.now();
 
   const cleanup = () => {
     if (stopped) {
       return;
     }
     stopped = true;
+    if (watchdogTimer) {
+      clearInterval(watchdogTimer);
+      watchdogTimer = null;
+    }
     try {
       api.listener.off("message", onMessage);
       api.listener.off("error", onError);
@@ -1478,23 +1486,22 @@ export async function startZaloListener(params: {
     params.onMessage(normalized);
   };
 
-  const onError = (error: unknown) => {
+  const failListener = (error: Error) => {
     if (stopped || params.abortSignal.aborted) {
       return;
     }
-    const wrapped = error instanceof Error ? error : new Error(String(error));
     cleanup();
     invalidateApi(profile);
-    params.onError(wrapped);
+    params.onError(error);
+  };
+
+  const onError = (error: unknown) => {
+    const wrapped = error instanceof Error ? error : new Error(String(error));
+    failListener(wrapped);
   };
 
   const onClosed = (code: number, reason: string) => {
-    if (stopped || params.abortSignal.aborted) {
-      return;
-    }
-    cleanup();
-    invalidateApi(profile);
-    params.onError(new Error(`Zalo listener closed (${code}): ${reason || "no reason"}`));
+    failListener(new Error(`Zalo listener closed (${code}): ${reason || "no reason"}`));
   };
 
   api.listener.on("message", onMessage);
@@ -1502,11 +1509,29 @@ export async function startZaloListener(params: {
   api.listener.on("closed", onClosed);
 
   try {
-    api.listener.start({ retryOnClose: true });
+    api.listener.start({ retryOnClose: false });
   } catch (error) {
     cleanup();
     throw error;
   }
+
+  watchdogTimer = setInterval(() => {
+    if (stopped || params.abortSignal.aborted) {
+      return;
+    }
+    const now = Date.now();
+    const gapMs = now - lastWatchdogTickAt;
+    lastWatchdogTickAt = now;
+    if (gapMs <= LISTENER_WATCHDOG_MAX_GAP_MS) {
+      return;
+    }
+    failListener(
+      new Error(
+        `Zalo listener watchdog gap detected (${Math.round(gapMs / 1000)}s): forcing reconnect`,
+      ),
+    );
+  }, LISTENER_WATCHDOG_INTERVAL_MS);
+  watchdogTimer.unref?.();
 
   params.abortSignal.addEventListener(
     "abort",
