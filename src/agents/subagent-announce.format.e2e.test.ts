@@ -438,7 +438,7 @@ describe("subagent announce formatting", () => {
     expect(msg).not.toContain("✅ Subagent");
   });
 
-  it("keeps direct completion announce delivery when only the announcing run itself is pending", async () => {
+  it("keeps direct completion announce delivery immediate even when sibling counters are non-zero", async () => {
     sessionStore = {
       "agent:main:subagent:test": {
         sessionId: "child-session-self-pending",
@@ -451,11 +451,11 @@ describe("subagent announce formatting", () => {
       messages: [{ role: "assistant", content: [{ type: "text", text: "final answer: done" }] }],
     });
     subagentRegistryMock.countPendingDescendantRuns.mockImplementation((sessionKey: string) =>
-      sessionKey === "agent:main:main" ? 1 : 0,
+      sessionKey === "agent:main:main" ? 2 : 0,
     );
     subagentRegistryMock.countPendingDescendantRunsExcludingRun.mockImplementation(
       (sessionKey: string, runId: string) =>
-        sessionKey === "agent:main:main" && runId === "run-direct-self-pending" ? 0 : 1,
+        sessionKey === "agent:main:main" && runId === "run-direct-self-pending" ? 1 : 2,
     );
 
     const didAnnounce = await runSubagentAnnounceFlow({
@@ -469,12 +469,12 @@ describe("subagent announce formatting", () => {
     });
 
     expect(didAnnounce).toBe(true);
-    expect(subagentRegistryMock.countPendingDescendantRunsExcludingRun).toHaveBeenCalledWith(
-      "agent:main:main",
-      "run-direct-self-pending",
-    );
     expect(sendSpy).not.toHaveBeenCalled();
     expect(agentSpy).toHaveBeenCalledTimes(1);
+    const call = agentSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
+    expect(call?.params?.deliver).toBe(true);
+    expect(call?.params?.channel).toBe("discord");
+    expect(call?.params?.to).toBe("channel:12345");
   });
 
   it("suppresses completion delivery when subagent reply is ANNOUNCE_SKIP", async () => {
@@ -590,7 +590,7 @@ describe("subagent announce formatting", () => {
     expect(sendSpy).not.toHaveBeenCalled();
   });
 
-  it("keeps completion-mode delivery coordinated when sibling runs are still active", async () => {
+  it("delivers completion-mode announces immediately even when sibling runs are still active", async () => {
     sessionStore = {
       "agent:main:subagent:test": {
         sessionId: "child-session-coordinated",
@@ -622,13 +622,11 @@ describe("subagent announce formatting", () => {
     const call = agentSpy.mock.calls[0]?.[0] as { params?: Record<string, unknown> };
     const rawMessage = call?.params?.message;
     const msg = typeof rawMessage === "string" ? rawMessage : "";
-    expect(call?.params?.deliver).toBe(false);
-    expect(call?.params?.channel).toBeUndefined();
-    expect(call?.params?.to).toBeUndefined();
-    expect(msg).toContain("There are still 1 active subagent run for this session.");
-    expect(msg).toContain(
-      "If they are part of the same workflow, wait for the remaining results before sending a user update.",
-    );
+    expect(call?.params?.deliver).toBe(true);
+    expect(call?.params?.channel).toBe("discord");
+    expect(call?.params?.to).toBe("channel:12345");
+    expect(msg).not.toContain("There are still");
+    expect(msg).not.toContain("wait for the remaining results");
   });
 
   it("keeps session-mode completion delivery on the bound destination when sibling runs are active", async () => {
@@ -1660,7 +1658,7 @@ describe("subagent announce formatting", () => {
     expect(call?.expectFinal).toBe(true);
   });
 
-  it("injects direct announce into requester subagent session instead of chat channel", async () => {
+  it("injects direct announce into requester subagent session as a user-turn agent call", async () => {
     embeddedRunMock.isEmbeddedPiRunActive.mockReturnValue(false);
     embeddedRunMock.isEmbeddedPiRunStreaming.mockReturnValue(false);
 
@@ -1679,6 +1677,7 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.deliver).toBe(false);
     expect(call?.params?.channel).toBeUndefined();
     expect(call?.params?.to).toBeUndefined();
+    expect((call?.params as { role?: unknown } | undefined)?.role).toBeUndefined();
     expect(call?.params?.inputProvenance).toMatchObject({
       kind: "inter_session",
       sourceSessionKey: "agent:main:subagent:worker",
@@ -1753,7 +1752,7 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.message).not.toContain("(no output)");
   });
 
-  it("uses advisory guidance when sibling subagents are still active", async () => {
+  it("does not include batching guidance when sibling subagents are still active", async () => {
     subagentRegistryMock.countActiveDescendantRuns.mockImplementation((sessionKey: string) =>
       sessionKey === "agent:main:main" ? 2 : 0,
     );
@@ -1768,11 +1767,46 @@ describe("subagent announce formatting", () => {
 
     const call = agentSpy.mock.calls[0]?.[0] as { params?: { message?: string } };
     const msg = call?.params?.message as string;
-    expect(msg).toContain("There are still 2 active subagent runs for this session.");
-    expect(msg).toContain(
-      "If they are part of the same workflow, wait for the remaining results before sending a user update.",
+    expect(msg).not.toContain("There are still");
+    expect(msg).not.toContain("wait for the remaining results");
+    expect(msg).not.toContain(
+      "If they are unrelated, respond normally using only the result above.",
     );
-    expect(msg).toContain("If they are unrelated, respond normally using only the result above.");
+  });
+
+  it("defers nested parent announce when active descendants exist even if pending snapshot is stale", async () => {
+    subagentRegistryMock.countPendingDescendantRuns.mockReturnValue(0);
+    subagentRegistryMock.countActiveDescendantRuns.mockImplementation((sessionKey: string) =>
+      sessionKey === "agent:main:subagent:parent" ? 1 : 0,
+    );
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:parent",
+      childRunId: "run-parent-active-descendant",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+    });
+
+    expect(didAnnounce).toBe(false);
+    expect(agentSpy).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps single subagent announces self contained without batching hints", async () => {
+    await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:test",
+      childRunId: "run-self-contained",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      ...defaultOutcomeAnnounce,
+    });
+
+    const call = agentSpy.mock.calls[0]?.[0] as { params?: { message?: string } };
+    const msg = call?.params?.message as string;
+    expect(msg).not.toContain("There are still");
+    expect(msg).not.toContain("wait for the remaining results");
   });
 
   it("defers announce while finished runs still have active descendants", async () => {

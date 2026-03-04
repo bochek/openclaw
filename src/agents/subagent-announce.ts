@@ -770,38 +770,6 @@ async function sendSubagentAnnounceDirectly(params: {
       !params.requesterIsSubagent &&
       (!params.expectsCompletionMessage || hasDeliverableDirectTarget);
 
-    if (params.expectsCompletionMessage && hasDeliverableDirectTarget) {
-      const forceBoundSessionDirectDelivery =
-        params.spawnMode === "session" &&
-        (params.completionRouteMode === "bound" || params.completionRouteMode === "hook");
-      if (!forceBoundSessionDirectDelivery) {
-        let pendingDescendantRuns = 0;
-        try {
-          const { countPendingDescendantRuns, countPendingDescendantRunsExcludingRun } =
-            await loadSubagentRegistryRuntime();
-          if (params.currentRunId) {
-            pendingDescendantRuns = Math.max(
-              0,
-              countPendingDescendantRunsExcludingRun(
-                canonicalRequesterSessionKey,
-                params.currentRunId,
-              ),
-            );
-          } else {
-            pendingDescendantRuns = Math.max(
-              0,
-              countPendingDescendantRuns(canonicalRequesterSessionKey),
-            );
-          }
-        } catch {
-          // Best-effort only; default to immediate delivery when registry runtime is unavailable.
-        }
-        if (pendingDescendantRuns > 0) {
-          shouldDeliverExternally = false;
-        }
-      }
-    }
-
     const threadId =
       effectiveDirectOrigin?.threadId != null && effectiveDirectOrigin.threadId !== ""
         ? String(effectiveDirectOrigin.threadId)
@@ -1044,15 +1012,10 @@ export type SubagentRunOutcome = {
 export type SubagentAnnounceType = "subagent task" | "cron job";
 
 function buildAnnounceReplyInstruction(params: {
-  remainingActiveSubagentRuns: number;
   requesterIsSubagent: boolean;
   announceType: SubagentAnnounceType;
   expectsCompletionMessage?: boolean;
 }): string {
-  if (params.remainingActiveSubagentRuns > 0) {
-    const activeRunsLabel = params.remainingActiveSubagentRuns === 1 ? "run" : "runs";
-    return `There are still ${params.remainingActiveSubagentRuns} active subagent ${activeRunsLabel} for this session. If they are part of the same workflow, wait for the remaining results before sending a user update. If they are unrelated, respond normally using only the result above.`;
-  }
   if (params.requesterIsSubagent) {
     return `Convert this completion into a concise internal orchestration update for your parent agent in your own words. Keep this internal context private (don't mention system/log/stats/session details or announce type). If this result is duplicate or no update is needed, reply ONLY: ${SILENT_REPLY_TOKEN}.`;
   }
@@ -1193,8 +1156,11 @@ export async function runSubagentAnnounceFlow(params: {
 
     let pendingChildDescendantRuns = 0;
     try {
-      const { countPendingDescendantRuns } = await loadSubagentRegistryRuntime();
-      pendingChildDescendantRuns = Math.max(0, countPendingDescendantRuns(params.childSessionKey));
+      const { countPendingDescendantRuns, countActiveDescendantRuns } =
+        await loadSubagentRegistryRuntime();
+      const pending = Math.max(0, countPendingDescendantRuns(params.childSessionKey));
+      const active = Math.max(0, countActiveDescendantRuns(params.childSessionKey));
+      pendingChildDescendantRuns = Math.max(pending, active);
     } catch {
       // Best-effort only; fall back to direct announce behavior when unavailable.
     }
@@ -1279,18 +1245,7 @@ export async function runSubagentAnnounceFlow(params: {
       }
     }
 
-    let remainingActiveSubagentRuns = 0;
-    try {
-      const { countActiveDescendantRuns } = await loadSubagentRegistryRuntime();
-      remainingActiveSubagentRuns = Math.max(
-        0,
-        countActiveDescendantRuns(targetRequesterSessionKey),
-      );
-    } catch {
-      // Best-effort only; fall back to default announce instructions when unavailable.
-    }
     const replyInstruction = buildAnnounceReplyInstruction({
-      remainingActiveSubagentRuns,
       requesterIsSubagent,
       announceType,
       expectsCompletionMessage,
