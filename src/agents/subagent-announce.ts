@@ -315,6 +315,19 @@ async function readLatestSubagentOutputWithRetry(params: {
   return result;
 }
 
+export async function captureSubagentCompletionReply(
+  sessionKey: string,
+): Promise<string | undefined> {
+  const immediate = await readLatestSubagentOutput(sessionKey);
+  if (immediate?.trim()) {
+    return immediate;
+  }
+  return await readLatestSubagentOutputWithRetry({
+    sessionKey,
+    maxWaitMs: FAST_TEST_MODE ? 50 : 1_500,
+  });
+}
+
 async function waitForSubagentOutputChange(params: {
   sessionKey: string;
   baselineReply: string;
@@ -979,6 +992,10 @@ export function buildSubagentSystemPrompt(params: {
       "Use the `subagents` tool to steer, kill, or do an on-demand status check for your spawned sub-agents.",
       "Your sub-agents will announce their results back to you automatically (not to the main agent).",
       "Default workflow: spawn work, continue orchestrating, and wait for auto-announced completions.",
+      "Auto-announce is push-based. After spawning children, do NOT call sessions_list, sessions_history, exec sleep, or any polling tool.",
+      "Wait for completion events to arrive as user messages.",
+      "Track expected child session keys and only send your final answer after completion events for ALL expected children arrive.",
+      "If a child completion event arrives AFTER you already sent your final answer, reply ONLY with NO_REPLY.",
       "Do NOT repeatedly poll `subagents list` in a loop unless you are actively debugging or intervening.",
       "Coordinate their work and synthesize results before reporting back.",
       ...(acpEnabled
@@ -1224,9 +1241,15 @@ export async function runSubagentAnnounceFlow(params: {
     // run ended. A parent waiting for child results has no active run but should
     // still receive the announce — injecting will start a new agent turn.
     if (requesterIsSubagent) {
-      const { isSubagentSessionRunActive, resolveRequesterForChildSession } =
-        await loadSubagentRegistryRuntime();
+      const {
+        isSubagentSessionRunActive,
+        resolveRequesterForChildSession,
+        shouldIgnorePostCompletionAnnounceForSession,
+      } = await loadSubagentRegistryRuntime();
       if (!isSubagentSessionRunActive(targetRequesterSessionKey)) {
+        if (shouldIgnorePostCompletionAnnounceForSession(targetRequesterSessionKey)) {
+          return true;
+        }
         // Parent run has ended. Check if parent SESSION still exists.
         // If it does, the parent may be waiting for child results — inject there.
         const parentSessionEntry = loadSessionEntryByKey(targetRequesterSessionKey);

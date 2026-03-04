@@ -12,7 +12,11 @@ import { onAgentEvent } from "../infra/agent-events.js";
 import { defaultRuntime } from "../runtime.js";
 import { type DeliveryContext, normalizeDeliveryContext } from "../utils/delivery-context.js";
 import { resetAnnounceQueuesForTests } from "./subagent-announce-queue.js";
-import { runSubagentAnnounceFlow, type SubagentRunOutcome } from "./subagent-announce.js";
+import {
+  captureSubagentCompletionReply,
+  runSubagentAnnounceFlow,
+  type SubagentRunOutcome,
+} from "./subagent-announce.js";
 import {
   SUBAGENT_ENDED_OUTCOME_KILLED,
   SUBAGENT_ENDED_REASON_COMPLETE,
@@ -38,6 +42,7 @@ import {
   listDescendantRunsForRequesterFromRuns,
   listRunsForRequesterFromRuns,
   resolveRequesterForChildSessionFromRuns,
+  shouldIgnorePostCompletionAnnounceForSessionFromRuns,
 } from "./subagent-registry-queries.js";
 import {
   getSubagentRunsSnapshotForRead,
@@ -322,6 +327,20 @@ async function emitSubagentEndedHookForRun(params: {
   });
 }
 
+async function freezeRunResultAtCompletion(entry: SubagentRunRecord): Promise<boolean> {
+  if (entry.frozenResultText !== undefined) {
+    return false;
+  }
+  try {
+    const captured = await captureSubagentCompletionReply(entry.childSessionKey);
+    entry.frozenResultText = captured?.trim() ? captured : null;
+  } catch {
+    entry.frozenResultText = null;
+  }
+  entry.frozenResultCapturedAt = Date.now();
+  return true;
+}
+
 async function completeSubagentRun(params: {
   runId: string;
   endedAt?: number;
@@ -349,6 +368,10 @@ async function completeSubagentRun(params: {
   }
   if (entry.endedReason !== params.reason) {
     entry.endedReason = params.reason;
+    mutated = true;
+  }
+
+  if (await freezeRunResultAtCompletion(entry)) {
     mutated = true;
   }
 
@@ -400,6 +423,7 @@ function startSubagentAnnounceCleanupFlow(runId: string, entry: SubagentRunRecor
     task: entry.task,
     timeoutMs: SUBAGENT_ANNOUNCE_TIMEOUT_MS,
     cleanup: entry.cleanup,
+    roundOneReply: entry.frozenResultText ?? undefined,
     waitForCompletion: false,
     startedAt: entry.startedAt,
     endedAt: entry.endedAt,
@@ -941,6 +965,8 @@ export function replaceSubagentRunAfterSteer(params: {
     endedReason: undefined,
     endedHookEmittedAt: undefined,
     outcome: undefined,
+    frozenResultText: undefined,
+    frozenResultCapturedAt: undefined,
     cleanupCompletedAt: undefined,
     cleanupHandled: false,
     suppressAnnounceReason: undefined,
@@ -1149,6 +1175,13 @@ export function isSubagentSessionRunActive(childSessionKey: string): boolean {
     }
   }
   return false;
+}
+
+export function shouldIgnorePostCompletionAnnounceForSession(childSessionKey: string): boolean {
+  return shouldIgnorePostCompletionAnnounceForSessionFromRuns(
+    getSubagentRunsSnapshotForRead(subagentRuns),
+    childSessionKey,
+  );
 }
 
 export function markSubagentRunTerminated(params: {

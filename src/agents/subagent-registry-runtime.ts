@@ -4,4 +4,5 @@ export {
   countPendingDescendantRunsExcludingRun,
   isSubagentSessionRunActive,
   resolveRequesterForChildSession,
+  shouldIgnorePostCompletionAnnounceForSession,
 } from "./subagent-registry.js";

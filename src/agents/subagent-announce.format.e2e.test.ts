@@ -33,6 +33,7 @@ const embeddedRunMock = {
 };
 const subagentRegistryMock = {
   isSubagentSessionRunActive: vi.fn(() => true),
+  shouldIgnorePostCompletionAnnounceForSession: vi.fn((_sessionKey: string) => false),
   countActiveDescendantRuns: vi.fn((_sessionKey: string) => 0),
   countPendingDescendantRuns: vi.fn((_sessionKey: string) => 0),
   countPendingDescendantRunsExcludingRun: vi.fn((_sessionKey: string, _runId: string) => 0),
@@ -183,6 +184,9 @@ describe("subagent announce formatting", () => {
     embeddedRunMock.queueEmbeddedPiMessage.mockClear().mockReturnValue(false);
     embeddedRunMock.waitForEmbeddedPiRunEnd.mockClear().mockResolvedValue(true);
     subagentRegistryMock.isSubagentSessionRunActive.mockClear().mockReturnValue(true);
+    subagentRegistryMock.shouldIgnorePostCompletionAnnounceForSession
+      .mockClear()
+      .mockReturnValue(false);
     subagentRegistryMock.countActiveDescendantRuns.mockClear().mockReturnValue(0);
     subagentRegistryMock.countPendingDescendantRuns
       .mockClear()
@@ -1834,6 +1838,29 @@ describe("subagent announce formatting", () => {
     const msg = call?.params?.message ?? "";
     expect(msg).toContain("Final synthesized answer.");
     expect(msg).not.toContain("Waiting for child output...");
+  });
+
+  it("ignores post-completion announce traffic for completed run-mode requester sessions", async () => {
+    subagentRegistryMock.isSubagentSessionRunActive.mockReturnValue(false);
+    subagentRegistryMock.shouldIgnorePostCompletionAnnounceForSession.mockReturnValue(true);
+    sessionStore = {
+      "agent:main:subagent:orchestrator": {
+        sessionId: "orchestrator-session-id",
+      },
+    };
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:leaf",
+      childRunId: "run-leaf-late",
+      requesterSessionKey: "agent:main:subagent:orchestrator",
+      requesterDisplayKey: "agent:main:subagent:orchestrator",
+      ...defaultOutcomeAnnounce,
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(agentSpy).not.toHaveBeenCalled();
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(subagentRegistryMock.resolveRequesterForChildSession).not.toHaveBeenCalled();
   });
 
   it("bubbles child announce to parent requester when requester subagent already ended", async () => {

@@ -58,6 +58,35 @@ export function resolveRequesterForChildSessionFromRuns(
   };
 }
 
+export function shouldIgnorePostCompletionAnnounceForSessionFromRuns(
+  runs: Map<string, SubagentRunRecord>,
+  childSessionKey: string,
+): boolean {
+  const key = childSessionKey.trim();
+  if (!key) {
+    return false;
+  }
+  let latest: SubagentRunRecord | undefined;
+  for (const entry of runs.values()) {
+    if (entry.childSessionKey !== key) {
+      continue;
+    }
+    if (!latest || entry.createdAt > latest.createdAt) {
+      latest = entry;
+    }
+  }
+  if (!latest) {
+    return false;
+  }
+  // Session-mode subagents remain available for follow-up turns.
+  if (latest.spawnMode === "session") {
+    return false;
+  }
+  // Run-mode subagent sessions should not process new descendant completion
+  // traffic after their own run has already ended.
+  return typeof latest.endedAt === "number";
+}
+
 export function countActiveRunsForSessionFromRuns(
   runs: Map<string, SubagentRunRecord>,
   requesterSessionKey: string,
