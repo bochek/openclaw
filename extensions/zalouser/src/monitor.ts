@@ -1,3 +1,13 @@
+import {
+  DM_GROUP_ACCESS_REASON,
+  DEFAULT_GROUP_HISTORY_LIMIT,
+  type HistoryEntry,
+  KeyedAsyncQueue,
+  buildPendingHistoryContextFromMap,
+  clearHistoryEntriesIfEnabled,
+  recordPendingHistoryEntryIfEnabled,
+  resolveDmGroupAccessWithLists,
+} from "openclaw/plugin-sdk/compat";
 import type {
   MarkdownTableMode,
   OpenClawConfig,
@@ -5,19 +15,11 @@ import type {
   RuntimeEnv,
 } from "openclaw/plugin-sdk/zalouser";
 import {
-  DM_GROUP_ACCESS_REASON,
-  DEFAULT_GROUP_HISTORY_LIMIT,
-  type HistoryEntry,
-  buildPendingHistoryContextFromMap,
-  clearHistoryEntriesIfEnabled,
   createTypingCallbacks,
   createScopedPairingAccess,
   createReplyPrefixOptions,
-  KeyedAsyncQueue,
   resolveOutboundMediaUrls,
   mergeAllowlist,
-  recordPendingHistoryEntryIfEnabled,
-  resolveDmGroupAccessWithLists,
   resolveMentionGatingWithBypass,
   resolveOpenProviderRuntimeGroupPolicy,
   resolveDefaultGroupPolicy,
