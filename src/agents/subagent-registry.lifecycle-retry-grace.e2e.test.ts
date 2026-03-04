@@ -163,6 +163,7 @@ describe("subagent registry lifecycle error grace", () => {
   });
 
   it("freezes completion result at run termination across deferred announce retries", async () => {
+    // Regression guard: late lifecycle noise must never overwrite the frozen completion reply.
     registerCompletionRun("run-freeze", "freeze", "freeze test");
     captureCompletionReplySpy.mockResolvedValueOnce("Final answer X");
     announceSpy.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
@@ -193,6 +194,7 @@ describe("subagent registry lifecycle error grace", () => {
   });
 
   it("keeps parallel child completion results frozen even when late traffic arrives", async () => {
+    // Regression guard: fan-out retries must preserve each child's first frozen result text.
     registerCompletionRun("run-parallel-a", "parallel-a", "parallel a");
     registerCompletionRun("run-parallel-b", "parallel-b", "parallel b");
     captureCompletionReplySpy
