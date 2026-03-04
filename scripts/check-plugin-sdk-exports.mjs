@@ -41,6 +41,18 @@ const exportedNames = exportMatch[1]
 
 const exportSet = new Set(exportedNames);
 
+const requiredSubpathEntries = [
+  "core",
+  "telegram",
+  "discord",
+  "slack",
+  "signal",
+  "imessage",
+  "whatsapp",
+  "line",
+  "account-id",
+];
+
 // Critical functions that channel extension plugins import from openclaw/plugin-sdk.
 // If any of these are missing, plugins will fail at runtime with:
 //   TypeError: (0 , _pluginSdk.<name>) is not a function
@@ -72,6 +84,19 @@ let missing = 0;
 for (const name of requiredExports) {
   if (!exportSet.has(name)) {
     console.error(`MISSING EXPORT: ${name}`);
+    missing += 1;
+  }
+}
+
+for (const entry of requiredSubpathEntries) {
+  const jsPath = resolve(__dirname, "..", "dist", "plugin-sdk", `${entry}.js`);
+  const dtsPath = resolve(__dirname, "..", "dist", "plugin-sdk", `${entry}.d.ts`);
+  if (!existsSync(jsPath)) {
+    console.error(`MISSING SUBPATH JS: dist/plugin-sdk/${entry}.js`);
+    missing += 1;
+  }
+  if (!existsSync(dtsPath)) {
+    console.error(`MISSING SUBPATH DTS: dist/plugin-sdk/${entry}.d.ts`);
     missing += 1;
   }
 }
