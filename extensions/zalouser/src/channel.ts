@@ -117,6 +117,25 @@ function parseZalouserOutboundTarget(raw: string): {
   return { threadId: normalized, isGroup: false };
 }
 
+function parseZalouserDirectoryGroupId(raw: string): string {
+  const normalized = normalizePrefixedTarget(raw);
+  if (!normalized) {
+    throw new Error("Zalouser group target is required");
+  }
+  const lowered = normalized.toLowerCase();
+  if (lowered.startsWith("group:")) {
+    const groupId = normalized.slice("group:".length).trim();
+    if (!groupId) {
+      throw new Error("Zalouser group target is missing group id");
+    }
+    return groupId;
+  }
+  if (lowered.startsWith("user:")) {
+    throw new Error("Zalouser group members lookup requires a group target (group:<id>)");
+  }
+  return normalized;
+}
+
 function resolveZalouserQrProfile(accountId?: string | null): string {
   const normalized = normalizeAccountId(accountId);
   if (!normalized || normalized === DEFAULT_ACCOUNT_ID) {
@@ -501,7 +520,8 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount> = {
     },
     listGroupMembers: async ({ cfg, accountId, groupId, limit }) => {
       const account = resolveZalouserAccountSync({ cfg: cfg, accountId });
-      const members = await listZaloGroupMembers(account.profile, groupId);
+      const normalizedGroupId = parseZalouserDirectoryGroupId(groupId);
+      const members = await listZaloGroupMembers(account.profile, normalizedGroupId);
       const rows = members.map((member) =>
         mapUser({
           id: member.userId,
