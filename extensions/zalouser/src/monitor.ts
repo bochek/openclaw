@@ -3,7 +3,7 @@ import type {
   OpenClawConfig,
   OutboundReplyPayload,
   RuntimeEnv,
-} from "openclaw/plugin-sdk";
+} from "openclaw/plugin-sdk/zalouser";
 import {
   DM_GROUP_ACCESS_REASON,
   DEFAULT_GROUP_HISTORY_LIMIT,
@@ -25,7 +25,7 @@ import {
   sendMediaWithLeadingCaption,
   summarizeMapping,
   warnMissingProviderGroupPolicyFallbackOnce,
-} from "openclaw/plugin-sdk";
+} from "openclaw/plugin-sdk/zalouser";
 import {
   buildZalouserGroupCandidates,
   findZalouserGroupEntry,

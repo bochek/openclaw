@@ -1,4 +1,4 @@
-import type { ClawdbotConfig, PluginRuntime, RuntimeEnv } from "openclaw/plugin-sdk";
+import type { ClawdbotConfig, PluginRuntime, RuntimeEnv } from "openclaw/plugin-sdk/feishu";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPluginRuntimeMock } from "../../test-utils/plugin-runtime-mock.js";
 import type { FeishuMessageEvent } from "./bot.js";
@@ -1684,8 +1684,10 @@ describe("broadcast dispatch", () => {
     vi.clearAllMocks();
     mockResolveAgentRoute.mockReturnValue({
       agentId: "main",
+      channel: "feishu",
       accountId: "default",
       sessionKey: "agent:main:feishu:group:oc-broadcast-group",
+      mainSessionKey: "agent:main:main",
       matchedBy: "default",
     });
     mockCreateFeishuClient.mockReturnValue({
