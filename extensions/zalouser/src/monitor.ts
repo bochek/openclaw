@@ -79,6 +79,35 @@ function buildNameIndex<T>(items: T[], nameFn: (item: T) => string | undefined):
   return index;
 }
 
+function resolveUserAllowlistEntries(
+  entries: string[],
+  byName: Map<string, Array<{ userId: string }>>,
+): {
+  additions: string[];
+  mapping: string[];
+  unresolved: string[];
+} {
+  const additions: string[] = [];
+  const mapping: string[] = [];
+  const unresolved: string[] = [];
+  for (const entry of entries) {
+    if (/^\d+$/.test(entry)) {
+      additions.push(entry);
+      continue;
+    }
+    const matches = byName.get(entry.toLowerCase()) ?? [];
+    const match = matches[0];
+    const id = match?.userId ? String(match.userId) : undefined;
+    if (id) {
+      additions.push(id);
+      mapping.push(`${entry}->${id}`);
+    } else {
+      unresolved.push(entry);
+    }
+  }
+  return { additions, mapping, unresolved };
+}
+
 type ZalouserCoreRuntime = ReturnType<typeof getZalouserRuntime>;
 
 type ZalouserGroupHistoryState = {
@@ -680,37 +709,46 @@ export async function monitorZalouserProvider(
     const allowFromEntries = (account.config.allowFrom ?? [])
       .map((entry) => normalizeZalouserEntry(String(entry)))
       .filter((entry) => entry && entry !== "*");
+    const groupAllowFromEntries = (account.config.groupAllowFrom ?? [])
+      .map((entry) => normalizeZalouserEntry(String(entry)))
+      .filter((entry) => entry && entry !== "*");
 
-    if (allowFromEntries.length > 0) {
+    if (allowFromEntries.length > 0 || groupAllowFromEntries.length > 0) {
       const friends = await listZaloFriends(profile);
       const byName = buildNameIndex(friends, (friend) => friend.displayName);
-      const additions: string[] = [];
-      const mapping: string[] = [];
-      const unresolved: string[] = [];
-      for (const entry of allowFromEntries) {
-        if (/^\d+$/.test(entry)) {
-          additions.push(entry);
-          continue;
-        }
-        const matches = byName.get(entry.toLowerCase()) ?? [];
-        const match = matches[0];
-        const id = match?.userId ? String(match.userId) : undefined;
-        if (id) {
-          additions.push(id);
-          mapping.push(`${entry}→${id}`);
-        } else {
-          unresolved.push(entry);
-        }
+      if (allowFromEntries.length > 0) {
+        const { additions, mapping, unresolved } = resolveUserAllowlistEntries(
+          allowFromEntries,
+          byName,
+        );
+        const allowFrom = mergeAllowlist({ existing: account.config.allowFrom, additions });
+        account = {
+          ...account,
+          config: {
+            ...account.config,
+            allowFrom,
+          },
+        };
+        summarizeMapping("zalouser users", mapping, unresolved, runtime);
       }
-      const allowFrom = mergeAllowlist({ existing: account.config.allowFrom, additions });
-      account = {
-        ...account,
-        config: {
-          ...account.config,
-          allowFrom,
-        },
-      };
-      summarizeMapping("zalouser users", mapping, unresolved, runtime);
+      if (groupAllowFromEntries.length > 0) {
+        const { additions, mapping, unresolved } = resolveUserAllowlistEntries(
+          groupAllowFromEntries,
+          byName,
+        );
+        const groupAllowFrom = mergeAllowlist({
+          existing: account.config.groupAllowFrom,
+          additions,
+        });
+        account = {
+          ...account,
+          config: {
+            ...account.config,
+            groupAllowFrom,
+          },
+        };
+        summarizeMapping("zalouser group users", mapping, unresolved, runtime);
+      }
     }
 
     const groupsConfig = account.config.groups ?? {};
