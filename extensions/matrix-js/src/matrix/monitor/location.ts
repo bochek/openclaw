@@ -2,7 +2,7 @@ import {
   formatLocationText,
   toLocationContext,
   type NormalizedLocation,
-} from "openclaw/plugin-sdk";
+} from "openclaw/plugin-sdk/matrix-js";
 import type { LocationMessageEventContent } from "../sdk.js";
 import { EventType } from "./types.js";
 

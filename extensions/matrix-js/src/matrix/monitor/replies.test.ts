@@ -1,4 +1,4 @@
-import type { PluginRuntime, RuntimeEnv } from "openclaw/plugin-sdk";
+import type { PluginRuntime, RuntimeEnv } from "openclaw/plugin-sdk/matrix-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MatrixClient } from "../sdk.js";
 

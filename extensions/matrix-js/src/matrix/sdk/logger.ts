@@ -1,5 +1,5 @@
 import { format } from "node:util";
-import type { RuntimeLogger } from "openclaw/plugin-sdk";
+import type { RuntimeLogger } from "openclaw/plugin-sdk/matrix-js";
 import { getMatrixRuntime } from "../../runtime.js";
 
 export type Logger = {

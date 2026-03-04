@@ -55,22 +55,22 @@ describe("resolveSharedMatrixClient", () => {
 
   it("keeps account clients isolated when resolves are interleaved", async () => {
     const mainAuth = authFor("main");
-    const poeAuth = authFor("poe");
+    const poeAuth = authFor("ops");
     const mainClient = createMockClient("main");
-    const poeClient = createMockClient("poe");
+    const poeClient = createMockClient("ops");
 
     resolveMatrixAuthMock.mockImplementation(async ({ accountId }: { accountId?: string }) =>
-      accountId === "poe" ? poeAuth : mainAuth,
+      accountId === "ops" ? poeAuth : mainAuth,
     );
     createMatrixClientMock.mockImplementation(async ({ accountId }: { accountId?: string }) => {
-      if (accountId === "poe") {
+      if (accountId === "ops") {
         return poeClient;
       }
       return mainClient;
     });
 
     const firstMain = await resolveSharedMatrixClient({ accountId: "main", startClient: false });
-    const firstPoe = await resolveSharedMatrixClient({ accountId: "poe", startClient: false });
+    const firstPoe = await resolveSharedMatrixClient({ accountId: "ops", startClient: false });
     const secondMain = await resolveSharedMatrixClient({ accountId: "main" });
 
     expect(firstMain).toBe(mainClient);
@@ -83,22 +83,22 @@ describe("resolveSharedMatrixClient", () => {
 
   it("stops only the targeted account client", async () => {
     const mainAuth = authFor("main");
-    const poeAuth = authFor("poe");
+    const poeAuth = authFor("ops");
     const mainClient = createMockClient("main");
-    const poeClient = createMockClient("poe");
+    const poeClient = createMockClient("ops");
 
     resolveMatrixAuthMock.mockImplementation(async ({ accountId }: { accountId?: string }) =>
-      accountId === "poe" ? poeAuth : mainAuth,
+      accountId === "ops" ? poeAuth : mainAuth,
     );
     createMatrixClientMock.mockImplementation(async ({ accountId }: { accountId?: string }) => {
-      if (accountId === "poe") {
+      if (accountId === "ops") {
         return poeClient;
       }
       return mainClient;
     });
 
     await resolveSharedMatrixClient({ accountId: "main", startClient: false });
-    await resolveSharedMatrixClient({ accountId: "poe", startClient: false });
+    await resolveSharedMatrixClient({ accountId: "ops", startClient: false });
 
     stopSharedClientForAccount(mainAuth, "main");
 

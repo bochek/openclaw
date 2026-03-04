@@ -12,7 +12,7 @@ import {
   setAccountEnabledInConfigSection,
   type ChannelSetupInput,
   type ChannelPlugin,
-} from "openclaw/plugin-sdk";
+} from "openclaw/plugin-sdk/matrix-js";
 import { matrixMessageActions } from "./actions.js";
 import { migrateMatrixLegacyCredentialsToDefaultAccount } from "./config-migration.js";
 import { MatrixConfigSchema } from "./config-schema.js";

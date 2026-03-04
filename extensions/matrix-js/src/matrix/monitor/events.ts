@@ -1,4 +1,4 @@
-import type { PluginRuntime, RuntimeLogger } from "openclaw/plugin-sdk";
+import type { PluginRuntime, RuntimeLogger } from "openclaw/plugin-sdk/matrix-js";
 import type { MatrixAuth } from "../client.js";
 import type { MatrixClient } from "../sdk.js";
 import type { MatrixRawEvent } from "./types.js";

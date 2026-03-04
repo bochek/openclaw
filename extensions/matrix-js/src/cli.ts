@@ -3,7 +3,7 @@ import {
   formatZonedTimestamp,
   normalizeAccountId,
   type ChannelSetupInput,
-} from "openclaw/plugin-sdk";
+} from "openclaw/plugin-sdk/matrix-js";
 import { matrixPlugin } from "./channel.js";
 import { updateMatrixOwnProfile } from "./matrix/actions/profile.js";
 import {

@@ -1,4 +1,4 @@
-import { normalizeAccountId } from "openclaw/plugin-sdk";
+import { normalizeAccountId } from "openclaw/plugin-sdk/matrix-js";
 import type { CoreConfig, MatrixConfig } from "../types.js";
 
 export type MatrixAccountPatch = {

@@ -1,4 +1,5 @@
-import type { DmPolicy } from "openclaw/plugin-sdk";
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/account-id";
+import type { DmPolicy } from "openclaw/plugin-sdk/matrix-js";
 import {
   addWildcardAllowFrom,
   formatDocsLink,
@@ -10,8 +11,7 @@ import {
   type ChannelOnboardingAdapter,
   type ChannelOnboardingDmPolicy,
   type WizardPrompter,
-} from "openclaw/plugin-sdk";
-import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/account-id";
+} from "openclaw/plugin-sdk/matrix-js";
 import { migrateMatrixLegacyCredentialsToDefaultAccount } from "./config-migration.js";
 import { listMatrixDirectoryGroupsLive } from "./directory-live.js";
 import {

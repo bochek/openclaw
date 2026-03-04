@@ -1,4 +1,4 @@
-import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk";
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/matrix-js";
 import type { CoreConfig, MatrixAccountConfig, MatrixConfig } from "./types.js";
 
 type LegacyAccountField =

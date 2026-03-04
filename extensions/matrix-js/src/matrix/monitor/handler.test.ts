@@ -33,7 +33,7 @@ describe("matrix monitor handler pairing account scope", () => {
         },
       } as never,
       cfg: {} as never,
-      accountId: "poe",
+      accountId: "ops",
       runtime: {} as never,
       logger: {
         info: () => {},
@@ -107,7 +107,7 @@ describe("matrix monitor handler pairing account scope", () => {
           },
         } as never,
         cfg: {} as never,
-        accountId: "poe",
+        accountId: "ops",
         runtime: {} as never,
         logger: {
           info: () => {},
@@ -177,7 +177,7 @@ describe("matrix monitor handler pairing account scope", () => {
         },
       } as never,
       cfg: {} as never,
-      accountId: "poe",
+      accountId: "ops",
       runtime: {} as never,
       logger: {
         info: () => {},
@@ -217,23 +217,23 @@ describe("matrix monitor handler pairing account scope", () => {
     expect(readAllowFromStore).toHaveBeenCalledWith({
       channel: "matrix-js",
       env: process.env,
-      accountId: "poe",
+      accountId: "ops",
     });
     expect(upsertPairingRequest).toHaveBeenCalledWith({
       channel: "matrix-js",
       id: "@user:example.org",
-      accountId: "poe",
+      accountId: "ops",
       meta: { name: "sender" },
     });
   });
 
   it("passes accountId into route resolution for inbound dm messages", async () => {
     const resolveAgentRoute = vi.fn(() => ({
-      agentId: "poe",
+      agentId: "ops",
       channel: "matrix-js",
-      accountId: "poe",
-      sessionKey: "agent:poe:main",
-      mainSessionKey: "agent:poe:main",
+      accountId: "ops",
+      sessionKey: "agent:ops:main",
+      mainSessionKey: "agent:ops:main",
       matchedBy: "binding.account",
     }));
 
@@ -259,7 +259,7 @@ describe("matrix monitor handler pairing account scope", () => {
         },
       } as never,
       cfg: {} as never,
-      accountId: "poe",
+      accountId: "ops",
       runtime: {
         error: () => {},
       } as never,
@@ -301,7 +301,7 @@ describe("matrix monitor handler pairing account scope", () => {
     expect(resolveAgentRoute).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "matrix-js",
-        accountId: "poe",
+        accountId: "ops",
       }),
     );
   });

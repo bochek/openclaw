@@ -1,4 +1,4 @@
-import type { MarkdownTableMode, ReplyPayload, RuntimeEnv } from "openclaw/plugin-sdk";
+import type { MarkdownTableMode, ReplyPayload, RuntimeEnv } from "openclaw/plugin-sdk/matrix-js";
 import { getMatrixRuntime } from "../../runtime.js";
 import type { MatrixClient } from "../sdk.js";
 import { sendMessageMatrix } from "../send.js";

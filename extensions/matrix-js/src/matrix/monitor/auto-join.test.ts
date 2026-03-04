@@ -1,4 +1,4 @@
-import type { PluginRuntime } from "openclaw/plugin-sdk";
+import type { PluginRuntime } from "openclaw/plugin-sdk/matrix-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setMatrixRuntime } from "../../runtime.js";
 import type { CoreConfig } from "../../types.js";
@@ -53,7 +53,7 @@ describe("registerMatrixAutoJoin", () => {
       runtime: {
         log: vi.fn(),
         error: vi.fn(),
-      } as unknown as import("openclaw/plugin-sdk").RuntimeEnv,
+      } as unknown as import("openclaw/plugin-sdk/matrix-js").RuntimeEnv,
     });
 
     const inviteHandler = getInviteHandler();
@@ -84,7 +84,7 @@ describe("registerMatrixAutoJoin", () => {
       runtime: {
         log: vi.fn(),
         error: vi.fn(),
-      } as unknown as import("openclaw/plugin-sdk").RuntimeEnv,
+      } as unknown as import("openclaw/plugin-sdk/matrix-js").RuntimeEnv,
     });
 
     const inviteHandler = getInviteHandler();
@@ -115,7 +115,7 @@ describe("registerMatrixAutoJoin", () => {
       runtime: {
         log: vi.fn(),
         error: vi.fn(),
-      } as unknown as import("openclaw/plugin-sdk").RuntimeEnv,
+      } as unknown as import("openclaw/plugin-sdk/matrix-js").RuntimeEnv,
     });
 
     const inviteHandler = getInviteHandler();

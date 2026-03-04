@@ -9,7 +9,7 @@ import {
   type ReplyPayload,
   type RuntimeEnv,
   type RuntimeLogger,
-} from "openclaw/plugin-sdk";
+} from "openclaw/plugin-sdk/matrix-js";
 import type { CoreConfig, MatrixRoomConfig, ReplyToMode } from "../../types.js";
 import {
   formatPollAsText,

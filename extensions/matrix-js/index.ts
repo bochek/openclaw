@@ -1,5 +1,8 @@
-import type { GatewayRequestHandlerOptions, OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { emptyPluginConfigSchema } from "openclaw/plugin-sdk";
+import type {
+  GatewayRequestHandlerOptions,
+  OpenClawPluginApi,
+} from "openclaw/plugin-sdk/matrix-js";
+import { emptyPluginConfigSchema } from "openclaw/plugin-sdk/matrix-js";
 import { matrixPlugin } from "./src/channel.js";
 import { registerMatrixJsCli } from "./src/cli.js";
 import {
