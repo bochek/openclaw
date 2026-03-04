@@ -1,0 +1,1 @@
+- Feishu/reply mechanism: forward `replyToId` through outbound adapter `sendText`/`sendMedia` to enable reply-to-message via the `message` tool; fix group reply targeting to use the triggering message in normal groups while preserving topic-root replies for topic-mode groups (#32980, #32958). Thanks @guoqunabc.
