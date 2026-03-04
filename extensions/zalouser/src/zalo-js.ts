@@ -65,6 +65,8 @@ type ActiveZaloListener = {
 const activeListeners = new Map<string, ActiveZaloListener>();
 const groupContextCache = new Map<string, { value: ZaloGroupContext; expiresAt: number }>();
 
+type AccountInfoResponse = Awaited<ReturnType<API["fetchAccountInfo"]>>;
+
 type ApiTypingCapability = {
   sendTypingEvent: (
     threadId: string,
@@ -155,6 +157,20 @@ function toStringValue(value: unknown): string {
     return String(Math.trunc(value));
   }
   return "";
+}
+
+function normalizeAccountInfoUser(info: AccountInfoResponse): User | null {
+  if (!info || typeof info !== "object") {
+    return null;
+  }
+  if ("profile" in info) {
+    const profile = (info as { profile?: unknown }).profile;
+    if (profile && typeof profile === "object") {
+      return profile as User;
+    }
+    return null;
+  }
+  return info as User;
 }
 
 function toInteger(value: unknown, fallback = 0): number {
@@ -801,7 +817,7 @@ export async function getZaloUserInfo(profileInput?: string | null): Promise<Zca
   const profile = normalizeProfile(profileInput);
   const api = await ensureApi(profile);
   const info = await api.fetchAccountInfo();
-  const user = info.profile as User;
+  const user = normalizeAccountInfoUser(info);
   if (!user?.userId) {
     return null;
   }
@@ -1083,7 +1099,7 @@ export async function sendZaloTypingEvent(
 async function resolveOwnUserId(api: API): Promise<string> {
   try {
     const info = await api.fetchAccountInfo();
-    const resolved = toNumberId(info.profile?.userId);
+    const resolved = toNumberId(normalizeAccountInfoUser(info)?.userId);
     if (resolved) {
       return resolved;
     }
