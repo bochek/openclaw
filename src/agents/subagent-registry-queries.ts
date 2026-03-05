@@ -82,9 +82,13 @@ export function shouldIgnorePostCompletionAnnounceForSessionFromRuns(
   if (latest.spawnMode === "session") {
     return false;
   }
-  // Run-mode subagent sessions should not process new descendant completion
-  // traffic after their own run has already ended.
-  return typeof latest.endedAt === "number";
+  // Run-mode sessions should only ignore late descendant completion traffic
+  // once the run has fully completed its own cleanup/announce flow.
+  return (
+    typeof latest.endedAt === "number" &&
+    typeof latest.cleanupCompletedAt === "number" &&
+    latest.cleanupCompletedAt >= latest.endedAt
+  );
 }
 
 export function countActiveRunsForSessionFromRuns(

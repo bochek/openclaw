@@ -914,8 +914,9 @@ describe("sessions tools", () => {
     const result = await tool.execute("call-subagents-list-orchestrator", { action: "list" });
     const details = result.details as {
       status?: string;
-      active?: Array<{ runId?: string; status?: string }>;
+      active?: Array<{ runId?: string; status?: string; pendingDescendants?: number }>;
       recent?: Array<{ runId?: string }>;
+      text?: string;
     };
 
     expect(details.status).toBe("ok");
@@ -923,11 +924,13 @@ describe("sessions tools", () => {
       expect.arrayContaining([
         expect.objectContaining({
           runId: "run-orchestrator-ended",
-          status: "active",
+          status: "active (waiting on 1 child)",
+          pendingDescendants: 1,
         }),
       ]),
     );
     expect(details.recent?.find((entry) => entry.runId === "run-orchestrator-ended")).toBeFalsy();
+    expect(details.text).toContain("active (waiting on 1 child)");
   });
 
   it("subagents list usage separates io tokens from prompt/cache", async () => {

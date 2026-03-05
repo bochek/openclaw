@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   countPendingDescendantRunsExcludingRunFromRuns,
   countPendingDescendantRunsFromRuns,
+  resolveRequesterForChildSessionFromRuns,
   shouldIgnorePostCompletionAnnounceForSessionFromRuns,
 } from "./subagent-registry-queries.js";
 import type { SubagentRunRecord } from "./subagent-registry.types.js";
@@ -139,8 +140,9 @@ describe("subagent registry query regressions", () => {
     ).toBe(1);
   });
 
-  it("regression post-completion gating, run-mode sessions ignore late announces once the latest run is ended", () => {
-    // Regression guard: late descendant announces must not reopen completed run-mode sessions.
+  it("regression post-completion gating, run-mode sessions ignore late announces after cleanup completes", () => {
+    // Regression guard: late descendant announces must not reopen run-mode sessions
+    // once their own completion cleanup has fully finished.
     const childSessionKey = "agent:main:subagent:orchestrator";
     const runs = toRunMap([
       makeRun({
@@ -149,6 +151,7 @@ describe("subagent registry query regressions", () => {
         requesterSessionKey: "agent:main:main",
         createdAt: 1,
         endedAt: 10,
+        cleanupCompletedAt: 11,
         spawnMode: "run",
       }),
       makeRun({
@@ -157,11 +160,124 @@ describe("subagent registry query regressions", () => {
         requesterSessionKey: "agent:main:main",
         createdAt: 2,
         endedAt: 20,
+        cleanupCompletedAt: 21,
         spawnMode: "run",
       }),
     ]);
 
     expect(shouldIgnorePostCompletionAnnounceForSessionFromRuns(runs, childSessionKey)).toBe(true);
+  });
+
+  it("keeps run-mode orchestrators announce-eligible while waiting on child completions", () => {
+    const parentSessionKey = "agent:main:subagent:orchestrator";
+    const childOneSessionKey = `${parentSessionKey}:subagent:child-one`;
+    const childTwoSessionKey = `${parentSessionKey}:subagent:child-two`;
+
+    const runs = toRunMap([
+      makeRun({
+        runId: "run-parent",
+        childSessionKey: parentSessionKey,
+        requesterSessionKey: "agent:main:main",
+        createdAt: 1,
+        endedAt: 100,
+        cleanupCompletedAt: undefined,
+        spawnMode: "run",
+      }),
+      makeRun({
+        runId: "run-child-one",
+        childSessionKey: childOneSessionKey,
+        requesterSessionKey: parentSessionKey,
+        createdAt: 2,
+        endedAt: 110,
+        cleanupCompletedAt: undefined,
+      }),
+      makeRun({
+        runId: "run-child-two",
+        childSessionKey: childTwoSessionKey,
+        requesterSessionKey: parentSessionKey,
+        createdAt: 3,
+        endedAt: 111,
+        cleanupCompletedAt: undefined,
+      }),
+    ]);
+
+    expect(resolveRequesterForChildSessionFromRuns(runs, childOneSessionKey)).toMatchObject({
+      requesterSessionKey: parentSessionKey,
+    });
+    expect(resolveRequesterForChildSessionFromRuns(runs, childTwoSessionKey)).toMatchObject({
+      requesterSessionKey: parentSessionKey,
+    });
+    expect(shouldIgnorePostCompletionAnnounceForSessionFromRuns(runs, parentSessionKey)).toBe(
+      false,
+    );
+
+    runs.set(
+      "run-child-one",
+      makeRun({
+        runId: "run-child-one",
+        childSessionKey: childOneSessionKey,
+        requesterSessionKey: parentSessionKey,
+        createdAt: 2,
+        endedAt: 110,
+        cleanupCompletedAt: 120,
+      }),
+    );
+    runs.set(
+      "run-child-two",
+      makeRun({
+        runId: "run-child-two",
+        childSessionKey: childTwoSessionKey,
+        requesterSessionKey: parentSessionKey,
+        createdAt: 3,
+        endedAt: 111,
+        cleanupCompletedAt: 121,
+      }),
+    );
+
+    const childThreeSessionKey = `${parentSessionKey}:subagent:child-three`;
+    runs.set(
+      "run-child-three",
+      makeRun({
+        runId: "run-child-three",
+        childSessionKey: childThreeSessionKey,
+        requesterSessionKey: parentSessionKey,
+        createdAt: 4,
+      }),
+    );
+
+    expect(resolveRequesterForChildSessionFromRuns(runs, childThreeSessionKey)).toMatchObject({
+      requesterSessionKey: parentSessionKey,
+    });
+    expect(shouldIgnorePostCompletionAnnounceForSessionFromRuns(runs, parentSessionKey)).toBe(
+      false,
+    );
+
+    runs.set(
+      "run-child-three",
+      makeRun({
+        runId: "run-child-three",
+        childSessionKey: childThreeSessionKey,
+        requesterSessionKey: parentSessionKey,
+        createdAt: 4,
+        endedAt: 122,
+        cleanupCompletedAt: 123,
+      }),
+    );
+
+    runs.set(
+      "run-parent",
+      makeRun({
+        runId: "run-parent",
+        childSessionKey: parentSessionKey,
+        requesterSessionKey: "agent:main:main",
+        createdAt: 1,
+        endedAt: 100,
+        cleanupCompletedAt: 130,
+        spawnMode: "run",
+      }),
+    );
+
+    expect(shouldIgnorePostCompletionAnnounceForSessionFromRuns(runs, parentSessionKey)).toBe(true);
   });
 
   it("regression post-completion gating, session-mode sessions keep accepting follow-up announces", () => {

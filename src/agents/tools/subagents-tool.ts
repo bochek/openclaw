@@ -71,9 +71,11 @@ type ResolvedRequesterKey = {
   callerIsSubagent: boolean;
 };
 
-function resolveRunStatus(entry: SubagentRunRecord, options?: { hasPendingDescendants?: boolean }) {
-  if (options?.hasPendingDescendants) {
-    return "active";
+function resolveRunStatus(entry: SubagentRunRecord, options?: { pendingDescendants?: number }) {
+  const pendingDescendants = Math.max(0, options?.pendingDescendants ?? 0);
+  if (pendingDescendants > 0) {
+    const childLabel = pendingDescendants === 1 ? "child" : "children";
+    return `active (waiting on ${pendingDescendants} ${childLabel})`;
   }
   if (!entry.endedAt) {
     return "running";
@@ -369,14 +371,14 @@ export function createSubagentsTool(opts?: { agentSessionKey?: string }): AnyAge
         const recentCutoff = now - recentMinutes * 60_000;
         const cache = new Map<string, Record<string, SessionEntry>>();
 
-        const pendingDescendantCache = new Map<string, boolean>();
-        const hasPendingDescendants = (sessionKey: string) => {
+        const pendingDescendantCache = new Map<string, number>();
+        const pendingDescendantCount = (sessionKey: string) => {
           if (pendingDescendantCache.has(sessionKey)) {
-            return pendingDescendantCache.get(sessionKey) === true;
+            return pendingDescendantCache.get(sessionKey) ?? 0;
           }
-          const hasPending = countPendingDescendantRuns(sessionKey) > 0;
-          pendingDescendantCache.set(sessionKey, hasPending);
-          return hasPending;
+          const pending = Math.max(0, countPendingDescendantRuns(sessionKey));
+          pendingDescendantCache.set(sessionKey, pending);
+          return pending;
         };
 
         let index = 1;
@@ -388,8 +390,9 @@ export function createSubagentsTool(opts?: { agentSessionKey?: string }): AnyAge
           }).entry;
           const totalTokens = resolveTotalTokens(sessionEntry);
           const usageText = formatTokenUsageDisplay(sessionEntry);
+          const pendingDescendants = pendingDescendantCount(entry.childSessionKey);
           const status = resolveRunStatus(entry, {
-            hasPendingDescendants: hasPendingDescendants(entry.childSessionKey),
+            pendingDescendants,
           });
           const runtime = formatDurationCompact(runtimeMs);
           const label = truncateLine(resolveSubagentLabel(entry), 48);
@@ -402,6 +405,7 @@ export function createSubagentsTool(opts?: { agentSessionKey?: string }): AnyAge
             label,
             task,
             status,
+            pendingDescendants,
             runtime,
             runtimeMs,
             model: resolveModelRef(sessionEntry) || entry.model,
@@ -412,13 +416,13 @@ export function createSubagentsTool(opts?: { agentSessionKey?: string }): AnyAge
           return { line, view: entry.endedAt ? { ...baseView, endedAt: entry.endedAt } : baseView };
         };
         const active = runs
-          .filter((entry) => !entry.endedAt || hasPendingDescendants(entry.childSessionKey))
+          .filter((entry) => !entry.endedAt || pendingDescendantCount(entry.childSessionKey) > 0)
           .map((entry) => buildListEntry(entry, now - (entry.startedAt ?? entry.createdAt)));
         const recent = runs
           .filter(
             (entry) =>
               !!entry.endedAt &&
-              !hasPendingDescendants(entry.childSessionKey) &&
+              pendingDescendantCount(entry.childSessionKey) === 0 &&
               (entry.endedAt ?? 0) >= recentCutoff,
           )
           .map((entry) =>
