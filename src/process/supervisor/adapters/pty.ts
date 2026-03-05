@@ -65,6 +65,7 @@ export async function createPtyAdapter(params: {
   let waitPromise: Promise<{ code: number | null; signal: NodeJS.Signals | number | null }> | null =
     null;
   let forceKillWaitFallbackTimer: NodeJS.Timeout | null = null;
+  let stdinDestroyed = false;
 
   const clearForceKillWaitFallback = () => {
     if (!forceKillWaitFallbackTimer) {
@@ -104,8 +105,14 @@ export async function createPtyAdapter(params: {
     }) ?? null;
 
   const stdin: ManagedRunStdin = {
-    destroyed: false,
+    get destroyed() {
+      return stdinDestroyed;
+    },
     write: (data, cb) => {
+      if (stdinDestroyed) {
+        cb?.(new Error("stdin is not writable"));
+        return;
+      }
       try {
         pty.write(data);
         cb?.(null);
@@ -114,7 +121,11 @@ export async function createPtyAdapter(params: {
       }
     },
     end: () => {
+      if (stdinDestroyed) {
+        return;
+      }
       try {
+        stdinDestroyed = true;
         const eof = process.platform === "win32" ? "\x1a" : "\x04";
         pty.write(eof);
       } catch {
@@ -183,6 +194,7 @@ export async function createPtyAdapter(params: {
       // ignore disposal errors
     }
     clearForceKillWaitFallback();
+    stdinDestroyed = true;
     dataListener = null;
     exitListener = null;
     settleWait({ code: null, signal: null });
