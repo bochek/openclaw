@@ -323,10 +323,24 @@ function buildMergedSchemaCacheKey(params: {
       configUiHints: channel.configUiHints ?? null,
     }))
     .toSorted((a, b) => a.id.localeCompare(b.id));
-  // Hash the serialized key to avoid RangeError with many plugins/channels
-  // (JSON.stringify can exceed V8 string limits with 16+ channel schemas).
-  const raw = JSON.stringify({ plugins, channels });
-  return crypto.createHash("sha256").update(raw).digest("hex");
+  // Build the hash incrementally so we never materialize one giant JSON string.
+  const hash = crypto.createHash("sha256");
+  hash.update('{"plugins":[');
+  plugins.forEach((plugin, index) => {
+    if (index > 0) {
+      hash.update(",");
+    }
+    hash.update(JSON.stringify(plugin));
+  });
+  hash.update('],"channels":[');
+  channels.forEach((channel, index) => {
+    if (index > 0) {
+      hash.update(",");
+    }
+    hash.update(JSON.stringify(channel));
+  });
+  hash.update("]}");
+  return hash.digest("hex");
 }
 
 function setMergedSchemaCache(key: string, value: ConfigSchemaResponse): void {
