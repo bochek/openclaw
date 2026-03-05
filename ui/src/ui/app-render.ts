@@ -998,8 +998,12 @@ export function renderApp(state: AppViewState) {
                 onConfigSave: () => saveConfig(state),
                 onChannelsRefresh: () => loadChannels(state, false),
                 onCronRefresh: () => state.loadCron(),
-                onCronRunNow: (_jobId) => {
-                  // Stub: backend support pending
+                onCronRunNow: (jobId) => {
+                  const job = state.cronJobs.find((entry) => entry.id === jobId);
+                  if (!job) {
+                    return;
+                  }
+                  void runCronJob(state, job, "force");
                 },
                 onSkillsFilterChange: (next) => (state.skillsFilter = next),
                 onSkillsRefresh: () => {

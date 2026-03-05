@@ -3,6 +3,7 @@
  * Calls gateway RPC methods and returns formatted results.
  */
 
+import { isSubagentSessionKey, parseAgentSessionKey } from "../../../../src/routing/session-key.js";
 import type { GatewayBrowserClient } from "../gateway.ts";
 import type {
   AgentsListResult,
@@ -64,7 +65,7 @@ export async function executeSlashCommand(
     case "agents":
       return await executeAgents(client);
     case "kill":
-      return await executeKill(client, args);
+      return await executeKill(client, sessionKey, args);
     default:
       return { content: `Unknown command: \`/${commandName}\`` };
   }
@@ -275,6 +276,7 @@ async function executeAgents(client: GatewayBrowserClient): Promise<SlashCommand
 
 async function executeKill(
   client: GatewayBrowserClient,
+  sessionKey: string,
   args: string,
 ): Promise<SlashCommandResult> {
   const target = args.trim();
@@ -282,13 +284,79 @@ async function executeKill(
     return { content: "Usage: `/kill <id|all>`" };
   }
   try {
-    await client.request("chat.abort", target === "all" ? {} : { agentId: target });
+    const sessions = await client.request<SessionsListResult>("sessions.list", {});
+    const matched = resolveKillTargets(sessions?.sessions ?? [], sessionKey, target);
+    if (matched.length === 0) {
+      return {
+        content:
+          target.toLowerCase() === "all"
+            ? "No active sub-agent sessions found."
+            : `No matching sub-agent sessions found for \`${target}\`.`,
+      };
+    }
+
+    const results = await Promise.allSettled(
+      matched.map((key) => client.request("chat.abort", { sessionKey: key })),
+    );
+    const successCount = results.filter((entry) => entry.status === "fulfilled").length;
+    if (successCount === 0) {
+      const firstFailure = results.find((entry) => entry.status === "rejected");
+      throw firstFailure?.reason ?? new Error("abort failed");
+    }
+
+    if (target.toLowerCase() === "all") {
+      return {
+        content:
+          successCount === matched.length
+            ? `Aborted ${successCount} sub-agent session${successCount === 1 ? "" : "s"}.`
+            : `Aborted ${successCount} of ${matched.length} sub-agent sessions.`,
+      };
+    }
+
     return {
-      content: target === "all" ? "All agents aborted." : `Agent \`${target}\` aborted.`,
+      content:
+        successCount === matched.length
+          ? `Aborted ${successCount} matching sub-agent session${successCount === 1 ? "" : "s"} for \`${target}\`.`
+          : `Aborted ${successCount} of ${matched.length} matching sub-agent sessions for \`${target}\`.`,
     };
   } catch (err) {
     return { content: `Failed to abort: ${String(err)}` };
   }
+}
+
+function resolveKillTargets(
+  sessions: GatewaySessionRow[],
+  currentSessionKey: string,
+  target: string,
+): string[] {
+  const normalizedTarget = target.trim().toLowerCase();
+  if (!normalizedTarget) {
+    return [];
+  }
+
+  const keys = new Set<string>();
+  const currentParsed = parseAgentSessionKey(currentSessionKey);
+  for (const session of sessions) {
+    const key = session?.key?.trim();
+    if (!key || !isSubagentSessionKey(key)) {
+      continue;
+    }
+    const normalizedKey = key.toLowerCase();
+    const parsed = parseAgentSessionKey(normalizedKey);
+    const isMatch =
+      normalizedTarget === "all" ||
+      normalizedKey === normalizedTarget ||
+      (parsed?.agentId ?? "") === normalizedTarget ||
+      normalizedKey.endsWith(`:subagent:${normalizedTarget}`) ||
+      normalizedKey === `subagent:${normalizedTarget}` ||
+      (currentParsed?.agentId != null &&
+        parsed?.agentId === currentParsed.agentId &&
+        normalizedKey.endsWith(`:subagent:${normalizedTarget}`));
+    if (isMatch) {
+      keys.add(key);
+    }
+  }
+  return [...keys];
 }
 
 function fmtTokens(n: number): string {
