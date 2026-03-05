@@ -2093,6 +2093,65 @@ describe("subagent announce formatting", () => {
     });
   });
 
+  it("does not re-wake an already woken run id", async () => {
+    sessionStore = {
+      "agent:main:subagent:parent": {
+        sessionId: "session-parent",
+      },
+    };
+
+    subagentRegistryMock.countPendingDescendantRuns.mockReturnValue(0);
+    subagentRegistryMock.listSubagentRunsForRequester.mockImplementation(
+      (sessionKey: string, scope?: { requesterRunId?: string }) => {
+        if (sessionKey !== "agent:main:subagent:parent") {
+          return [];
+        }
+        if (scope?.requesterRunId !== "run-parent-phase-2:wake") {
+          return [];
+        }
+        return [
+          {
+            runId: "run-child-a",
+            childSessionKey: "agent:main:subagent:parent:subagent:a",
+            requesterSessionKey: "agent:main:subagent:parent",
+            requesterDisplayKey: "parent",
+            task: "child task a",
+            label: "child-a",
+            cleanup: "keep",
+            createdAt: 10,
+            endedAt: 20,
+            cleanupCompletedAt: 21,
+            frozenResultText: "result from child a",
+            outcome: { status: "ok" },
+          },
+        ];
+      },
+    );
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:parent",
+      childRunId: "run-parent-phase-2:wake",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      ...defaultOutcomeAnnounce,
+      expectsCompletionMessage: true,
+      wakeOnDescendantSettle: true,
+      roundOneReply: "waiting for children",
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(subagentRegistryMock.replaceSubagentRunAfterSteer).not.toHaveBeenCalled();
+    expect(agentSpy).toHaveBeenCalledTimes(1);
+    const call = agentSpy.mock.calls[0]?.[0] as {
+      params?: { sessionKey?: string; message?: string };
+    };
+    expect(call?.params?.sessionKey).toBe("agent:main:main");
+    const message = call?.params?.message ?? "";
+    expect(message).toContain("Child completion results:");
+    expect(message).toContain("result from child a");
+    expect(message).not.toContain("All pending descendants for that run have now settled");
+  });
+
   it("nested completion chains re-check child then parent deterministically", async () => {
     const parentSessionKey = "agent:main:subagent:parent";
     const childSessionKey = "agent:main:subagent:parent:subagent:child";

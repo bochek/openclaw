@@ -206,7 +206,9 @@ export function resolveRequesterSessionKey(
 ): string | undefined {
   const commandTarget = params.ctx.CommandTargetSessionKey?.trim();
   const commandSession = params.sessionKey?.trim();
-  const raw = opts?.preferCommandTarget
+  const shouldPreferCommandTarget =
+    opts?.preferCommandTarget ?? params.ctx.CommandSource === "native";
+  const raw = shouldPreferCommandTarget
     ? commandTarget || commandSession
     : commandSession || commandTarget;
   if (!raw) {

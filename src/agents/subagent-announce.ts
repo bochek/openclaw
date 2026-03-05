@@ -1098,6 +1098,24 @@ function buildDescendantWakeMessage(params: { findings: string; taskLabel: strin
   ].join("\n");
 }
 
+const WAKE_RUN_SUFFIX = ":wake";
+
+function stripWakeRunSuffixes(runId: string): string {
+  let next = runId.trim();
+  while (next.endsWith(WAKE_RUN_SUFFIX)) {
+    next = next.slice(0, -WAKE_RUN_SUFFIX.length);
+  }
+  return next || runId.trim();
+}
+
+function isWakeContinuationRun(runId: string): boolean {
+  const trimmed = runId.trim();
+  if (!trimmed) {
+    return false;
+  }
+  return stripWakeRunSuffixes(trimmed) !== trimmed;
+}
+
 async function wakeSubagentRunAfterDescendants(params: {
   runId: string;
   childSessionKey: string;
@@ -1311,13 +1329,22 @@ export async function runSubagentAnnounceFlow(params: {
       childRunId: params.childRunId,
     });
 
-    if (params.wakeOnDescendantSettle === true && childCompletionFindings?.trim()) {
+    const childRunAlreadyWoken = isWakeContinuationRun(params.childRunId);
+    if (
+      params.wakeOnDescendantSettle === true &&
+      childCompletionFindings?.trim() &&
+      !childRunAlreadyWoken
+    ) {
+      const wakeAnnounceId = buildAnnounceIdFromChildRun({
+        childSessionKey: params.childSessionKey,
+        childRunId: stripWakeRunSuffixes(params.childRunId),
+      });
       const woke = await wakeSubagentRunAfterDescendants({
         runId: params.childRunId,
         childSessionKey: params.childSessionKey,
         taskLabel: params.label || params.task || "task",
         findings: childCompletionFindings,
-        announceId,
+        announceId: wakeAnnounceId,
         signal: params.signal,
       });
       if (woke) {
