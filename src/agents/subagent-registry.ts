@@ -431,6 +431,7 @@ function startSubagentAnnounceCleanupFlow(runId: string, entry: SubagentRunRecor
     outcome: entry.outcome,
     spawnMode: entry.spawnMode,
     expectsCompletionMessage: entry.expectsCompletionMessage,
+    wakeOnDescendantSettle: entry.wakeOnDescendantSettle === true,
   })
     .then((didAnnounce) => {
       void finalizeSubagentCleanup(runId, entry.cleanup, didAnnounce);
@@ -725,6 +726,7 @@ async function finalizeSubagentCleanup(
     return;
   }
   if (didAnnounce) {
+    entry.wakeOnDescendantSettle = undefined;
     const completionReason = resolveCleanupCompletionReason(entry);
     await emitCompletionEndedHookIfNeeded(entry, completionReason);
     // Clean up attachments before the run record is removed.
@@ -756,6 +758,7 @@ async function finalizeSubagentCleanup(
 
   if (deferredDecision.kind === "defer-descendants") {
     entry.lastAnnounceRetryAt = now;
+    entry.wakeOnDescendantSettle = true;
     entry.cleanupHandled = false;
     resumedRuns.delete(runId);
     persistSubagentRuns();
@@ -771,6 +774,7 @@ async function finalizeSubagentCleanup(
   }
 
   if (deferredDecision.kind === "give-up") {
+    entry.wakeOnDescendantSettle = undefined;
     const shouldDeleteAttachments = cleanup === "delete" || !entry.retainAttachmentsOnKeep;
     if (shouldDeleteAttachments) {
       await safeRemoveAttachmentsDir(entry);
@@ -964,6 +968,7 @@ export function replaceSubagentRunAfterSteer(params: {
     endedAt: undefined,
     endedReason: undefined,
     endedHookEmittedAt: undefined,
+    wakeOnDescendantSettle: undefined,
     outcome: undefined,
     frozenResultText: undefined,
     frozenResultCapturedAt: undefined,
@@ -1030,6 +1035,7 @@ export function registerSubagentRun(params: {
     startedAt: now,
     archiveAtMs,
     cleanupHandled: false,
+    wakeOnDescendantSettle: undefined,
     attachmentsDir: params.attachmentsDir,
     attachmentsRootDir: params.attachmentsRootDir,
     retainAttachmentsOnKeep: params.retainAttachmentsOnKeep,

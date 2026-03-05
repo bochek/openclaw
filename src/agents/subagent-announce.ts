@@ -1066,6 +1066,92 @@ function buildAnnounceSteerMessage(events: AgentInternalEvent[]): string {
   return rendered;
 }
 
+function hasUsableSessionEntry(entry: unknown): boolean {
+  if (!entry || typeof entry !== "object") {
+    return false;
+  }
+  const sessionId = (entry as { sessionId?: unknown }).sessionId;
+  if (typeof sessionId === "string" && sessionId.trim() === "") {
+    return false;
+  }
+  return true;
+}
+
+function buildDescendantWakeMessage(params: { findings: string; taskLabel: string }): string {
+  return [
+    "[Subagent Context] Your prior run ended while waiting for descendant subagent completions.",
+    "[Subagent Context] All pending descendants for that run have now settled.",
+    "[Subagent Context] Continue your workflow using these results. Spawn more subagents if needed, otherwise send your final answer.",
+    "",
+    `Task: ${params.taskLabel}`,
+    "",
+    params.findings,
+  ].join("\n");
+}
+
+async function wakeSubagentRunAfterDescendants(params: {
+  runId: string;
+  childSessionKey: string;
+  taskLabel: string;
+  findings: string;
+  announceId: string;
+  signal?: AbortSignal;
+}): Promise<boolean> {
+  if (params.signal?.aborted) {
+    return false;
+  }
+
+  const childEntry = loadSessionEntryByKey(params.childSessionKey);
+  if (!hasUsableSessionEntry(childEntry)) {
+    return false;
+  }
+
+  const cfg = loadConfig();
+  const announceTimeoutMs = resolveSubagentAnnounceTimeoutMs(cfg);
+  const wakeMessage = buildDescendantWakeMessage({
+    findings: params.findings,
+    taskLabel: params.taskLabel,
+  });
+
+  let wakeRunId = "";
+  try {
+    const wakeResponse = await runAnnounceDeliveryWithRetry<{ runId?: string }>({
+      operation: "descendant wake agent call",
+      signal: params.signal,
+      run: async () =>
+        await callGateway({
+          method: "agent",
+          params: {
+            sessionKey: params.childSessionKey,
+            message: wakeMessage,
+            deliver: false,
+            inputProvenance: {
+              kind: "inter_session",
+              sourceSessionKey: params.childSessionKey,
+              sourceChannel: INTERNAL_MESSAGE_CHANNEL,
+              sourceTool: "subagent_announce",
+            },
+            idempotencyKey: buildAnnounceIdempotencyKey(`${params.announceId}:wake`),
+          },
+          timeoutMs: announceTimeoutMs,
+        }),
+    });
+    wakeRunId = typeof wakeResponse?.runId === "string" ? wakeResponse.runId.trim() : "";
+  } catch {
+    return false;
+  }
+
+  if (!wakeRunId) {
+    return false;
+  }
+
+  const { replaceSubagentRunAfterSteer } = await loadSubagentRegistryRuntime();
+  return replaceSubagentRunAfterSteer({
+    previousRunId: params.runId,
+    nextRunId: wakeRunId,
+  });
+}
+
 export async function runSubagentAnnounceFlow(params: {
   childSessionKey: string;
   childRunId: string;
@@ -1084,6 +1170,7 @@ export async function runSubagentAnnounceFlow(params: {
   announceType?: SubagentAnnounceType;
   expectsCompletionMessage?: boolean;
   spawnMode?: SpawnSubagentMode;
+  wakeOnDescendantSettle?: boolean;
   signal?: AbortSignal;
   bestEffortDeliver?: boolean;
 }): Promise<boolean> {
@@ -1193,6 +1280,26 @@ export async function runSubagentAnnounceFlow(params: {
       // Best-effort only; fall back to current-run reply extraction.
     }
 
+    const announceId = buildAnnounceIdFromChildRun({
+      childSessionKey: params.childSessionKey,
+      childRunId: params.childRunId,
+    });
+
+    if (params.wakeOnDescendantSettle === true && childCompletionFindings?.trim()) {
+      const woke = await wakeSubagentRunAfterDescendants({
+        runId: params.childRunId,
+        childSessionKey: params.childSessionKey,
+        taskLabel: params.label || params.task || "task",
+        findings: childCompletionFindings,
+        announceId,
+        signal: params.signal,
+      });
+      if (woke) {
+        shouldDeleteChildSession = false;
+        return true;
+      }
+    }
+
     if (!childCompletionFindings) {
       if (!reply) {
         reply = await readLatestSubagentOutput(params.childSessionKey);
@@ -1262,11 +1369,7 @@ export async function runSubagentAnnounceFlow(params: {
         // Parent run has ended. Check if parent SESSION still exists.
         // If it does, the parent may be waiting for child results — inject there.
         const parentSessionEntry = loadSessionEntryByKey(targetRequesterSessionKey);
-        const parentSessionId =
-          typeof parentSessionEntry?.sessionId === "string"
-            ? parentSessionEntry.sessionId.trim()
-            : "";
-        const parentSessionAlive = Boolean(parentSessionId);
+        const parentSessionAlive = hasUsableSessionEntry(parentSessionEntry);
 
         if (!parentSessionAlive) {
           // Parent session is truly gone — fallback to grandparent
@@ -1317,10 +1420,6 @@ export async function runSubagentAnnounceFlow(params: {
     triggerMessage = buildAnnounceSteerMessage(internalEvents);
     steerMessage = triggerMessage;
 
-    const announceId = buildAnnounceIdFromChildRun({
-      childSessionKey: params.childSessionKey,
-      childRunId: params.childRunId,
-    });
     // Send to the requester session. For nested subagents this is an internal
     // follow-up injection (deliver=false) so the orchestrator receives it.
     let directOrigin = targetRequesterOrigin;
