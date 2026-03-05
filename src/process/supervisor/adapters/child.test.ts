@@ -34,6 +34,7 @@ async function createAdapterHarness(params?: {
   pid?: number;
   argv?: string[];
   env?: NodeJS.ProcessEnv;
+  stdinMode?: "inherit" | "pipe-open" | "pipe-closed";
 }) {
   const { child, killMock } = createStubChild(params?.pid);
   spawnWithFallbackMock.mockResolvedValue({
@@ -43,7 +44,7 @@ async function createAdapterHarness(params?: {
   const adapter = await createChildAdapter({
     argv: params?.argv ?? ["node", "-e", "setTimeout(() => {}, 1000)"],
     env: params?.env,
-    stdinMode: "pipe-open",
+    stdinMode: params?.stdinMode ?? "pipe-open",
   });
   return { adapter, killMock };
 }
@@ -113,5 +114,21 @@ describe("createChildAdapter", () => {
       options?: { env?: Record<string, string> };
     };
     expect(spawnArgs.options?.env).toEqual({ FOO: "bar", COUNT: "12" });
+  });
+
+  it("marks stdin as destroyed when launched with pipe-closed", async () => {
+    const { adapter } = await createAdapterHarness({
+      pid: 7777,
+      argv: ["node", "-e", "setTimeout(() => {}, 1000)"],
+      stdinMode: "pipe-closed",
+    });
+
+    expect(adapter.stdin?.destroyed).toBe(true);
+    await new Promise<void>((resolve) => {
+      adapter.stdin?.write("input", (err) => {
+        expect(err).toBeTruthy();
+        resolve();
+      });
+    });
   });
 });
