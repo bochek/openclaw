@@ -68,19 +68,31 @@ export async function createChildAdapter(params: {
   });
 
   const child = spawned.child as ChildProcessWithoutNullStreams;
+  let stdinDestroyed = params.input !== undefined || stdinMode === "pipe-closed";
   if (child.stdin) {
     if (params.input !== undefined) {
       child.stdin.write(params.input);
       child.stdin.end();
+      stdinDestroyed = true;
     } else if (stdinMode === "pipe-closed") {
       child.stdin.end();
+      stdinDestroyed = true;
     }
+    child.stdin.on("close", () => {
+      stdinDestroyed = true;
+    });
   }
 
   const stdin: ManagedRunStdin | undefined = child.stdin
     ? {
-        destroyed: false,
+        get destroyed() {
+          return stdinDestroyed;
+        },
         write: (data: string, cb?: (err?: Error | null) => void) => {
+          if (stdinDestroyed) {
+            cb?.(new Error("stdin is not writable"));
+            return;
+          }
           try {
             child.stdin.write(data, cb);
           } catch (err) {
@@ -88,14 +100,22 @@ export async function createChildAdapter(params: {
           }
         },
         end: () => {
+          if (stdinDestroyed) {
+            return;
+          }
           try {
+            stdinDestroyed = true;
             child.stdin.end();
           } catch {
             // ignore close errors
           }
         },
         destroy: () => {
+          if (stdinDestroyed) {
+            return;
+          }
           try {
+            stdinDestroyed = true;
             child.stdin.destroy();
           } catch {
             // ignore destroy errors
