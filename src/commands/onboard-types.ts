@@ -1,5 +1,8 @@
 import type { ChannelId } from "../channels/plugins/types.js";
+import type { ToolProfileId } from "../config/types.tools.js";
 import type { GatewayDaemonRuntime } from "./daemon-runtime.js";
+
+export type { ToolProfileId } from "../config/types.tools.js";
 
 export type OnboardMode = "local" | "remote";
 export type AuthChoice =
@@ -100,6 +103,7 @@ export type OnboardOptions = {
   reset?: boolean;
   resetScope?: ResetScope;
   authChoice?: AuthChoice;
+  toolsProfile?: ToolProfileId;
   /** Used when `authChoice=token` in non-interactive mode. */
   tokenProvider?: string;
   /** Used when `authChoice=token` in non-interactive mode. */

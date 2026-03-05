@@ -50,7 +50,7 @@ The wizard starts with **QuickStart** (defaults) vs **Advanced** (full control).
     - Workspace default (or existing workspace)
     - Gateway port **18789**
     - Gateway auth **Token** (auto‑generated, even on loopback)
-    - Tool policy default for new local setups: `tools.profile: "messaging"` (existing explicit profile is preserved)
+    - Tool profile prompt (`Messaging`, `Coding`, `Full`, `Minimal`); defaults to `messaging` when unset and preserves existing explicit profiles.
     - DM isolation default: local onboarding writes `session.dmScope: "per-channel-peer"` when unset. Details: [CLI Onboarding Reference](/start/wizard-cli-reference#outputs-and-internals)
     - Tailscale exposure **Off**
     - Telegram + WhatsApp DMs default to **allowlist** (you'll be prompted for your phone number)

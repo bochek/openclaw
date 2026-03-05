@@ -139,6 +139,16 @@ describe("registerOnboardCommand", () => {
     );
   });
 
+  it("forwards --tools-profile", async () => {
+    await runCli(["onboard", "--tools-profile", "coding"]);
+    expect(onboardCommandMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolsProfile: "coding",
+      }),
+      runtime,
+    );
+  });
+
   it("reports errors via runtime on onboard command failures", async () => {
     onboardCommandMock.mockRejectedValueOnce(new Error("onboard failed"));
 

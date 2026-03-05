@@ -49,4 +49,17 @@ describe("applyOnboardingLocalWorkspaceConfig", () => {
 
     expect(result.tools?.profile).toBe("full");
   });
+
+  it("applies explicit tools.profile override when provided", () => {
+    const baseConfig: OpenClawConfig = {
+      tools: {
+        profile: "messaging",
+      },
+    };
+    const result = applyOnboardingLocalWorkspaceConfig(baseConfig, "/tmp/workspace", {
+      toolsProfile: "coding",
+    });
+
+    expect(result.tools?.profile).toBe("coding");
+  });
 });

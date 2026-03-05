@@ -8,7 +8,10 @@ export const ONBOARDING_DEFAULT_TOOLS_PROFILE: ToolProfileId = "messaging";
 export function applyOnboardingLocalWorkspaceConfig(
   baseConfig: OpenClawConfig,
   workspaceDir: string,
+  params?: { toolsProfile?: ToolProfileId },
 ): OpenClawConfig {
+  const toolsProfile =
+    params?.toolsProfile ?? baseConfig.tools?.profile ?? ONBOARDING_DEFAULT_TOOLS_PROFILE;
   return {
     ...baseConfig,
     agents: {
@@ -28,7 +31,7 @@ export function applyOnboardingLocalWorkspaceConfig(
     },
     tools: {
       ...baseConfig.tools,
-      profile: baseConfig.tools?.profile ?? ONBOARDING_DEFAULT_TOOLS_PROFILE,
+      profile: toolsProfile,
     },
   };
 }

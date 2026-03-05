@@ -138,4 +138,22 @@ describe("onboardCommand", () => {
     expect(mocks.runInteractiveOnboarding).not.toHaveBeenCalled();
     expect(mocks.runNonInteractiveOnboarding).not.toHaveBeenCalled();
   });
+
+  it("fails fast for invalid --tools-profile", async () => {
+    const runtime = makeRuntime();
+
+    await onboardCommand(
+      {
+        toolsProfile: "invalid" as never,
+      },
+      runtime,
+    );
+
+    expect(runtime.error).toHaveBeenCalledWith(
+      'Invalid --tools-profile. Use "minimal", "coding", "messaging", or "full".',
+    );
+    expect(runtime.exit).toHaveBeenCalledWith(1);
+    expect(mocks.runInteractiveOnboarding).not.toHaveBeenCalled();
+    expect(mocks.runNonInteractiveOnboarding).not.toHaveBeenCalled();
+  });
 });

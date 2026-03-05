@@ -276,9 +276,12 @@ describe("runOnboardingWizard", () => {
   });
 
   it("skips prompts and setup steps when flags are set", async () => {
-    const select = vi.fn(
-      async (_params: WizardSelectParams<unknown>) => "quickstart",
-    ) as unknown as WizardPrompter["select"];
+    const select = vi.fn(async (params: WizardSelectParams<unknown>) => {
+      if (params.message === "Tool access profile") {
+        return "messaging";
+      }
+      return "quickstart";
+    }) as unknown as WizardPrompter["select"];
     const multiselect: WizardPrompter["multiselect"] = vi.fn(async () => []);
     const prompter = buildWizardPrompter({ select, multiselect });
     const runtime = createRuntime({ throwsOnExit: true });
@@ -298,7 +301,12 @@ describe("runOnboardingWizard", () => {
       prompter,
     );
 
-    expect(select).not.toHaveBeenCalled();
+    expect(select).toHaveBeenCalledTimes(1);
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Tool access profile",
+      }),
+    );
     expect(setupChannels).not.toHaveBeenCalled();
     expect(setupSkills).not.toHaveBeenCalled();
     expect(healthCommand).not.toHaveBeenCalled();
@@ -319,6 +327,9 @@ describe("runOnboardingWizard", () => {
     const select = vi.fn(async (opts: WizardSelectParams<unknown>) => {
       if (opts.message === "How do you want to hatch your bot?") {
         return "tui";
+      }
+      if (opts.message === "Tool access profile") {
+        return "messaging";
       }
       return "quickstart";
     }) as unknown as WizardPrompter["select"];
@@ -364,7 +375,13 @@ describe("runOnboardingWizard", () => {
 
     try {
       const note: WizardPrompter["note"] = vi.fn(async () => {});
-      const prompter = buildWizardPrompter({ note });
+      const select = vi.fn(async (params: WizardSelectParams<unknown>) => {
+        if (params.message === "Tool access profile") {
+          return "messaging";
+        }
+        return "quickstart";
+      }) as unknown as WizardPrompter["select"];
+      const prompter = buildWizardPrompter({ note, select });
       const runtime = createRuntime();
 
       await runOnboardingWizard(
@@ -425,6 +442,9 @@ describe("runOnboardingWizard", () => {
       if (opts.message === "Config handling") {
         return "keep";
       }
+      if (opts.message === "Tool access profile") {
+        return "messaging";
+      }
       return "quickstart";
     }) as unknown as WizardPrompter["select"];
     const prompter = buildWizardPrompter({ select });
@@ -464,7 +484,13 @@ describe("runOnboardingWizard", () => {
 
   it("passes secretInputMode through to local gateway config step", async () => {
     configureGatewayForOnboarding.mockClear();
-    const prompter = buildWizardPrompter({});
+    const select = vi.fn(async (params: WizardSelectParams<unknown>) => {
+      if (params.message === "Tool access profile") {
+        return "messaging";
+      }
+      return "quickstart";
+    }) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ select });
     const runtime = createRuntime();
 
     await runOnboardingWizard(
@@ -487,6 +513,89 @@ describe("runOnboardingWizard", () => {
     expect(configureGatewayForOnboarding).toHaveBeenCalledWith(
       expect.objectContaining({
         secretInputMode: "ref",
+      }),
+    );
+  });
+
+  it("writes selected tool profile from onboarding prompt", async () => {
+    writeConfigFile.mockClear();
+    const select = vi.fn(async (params: WizardSelectParams<unknown>) => {
+      if (params.message === "Tool access profile") {
+        return "coding";
+      }
+      return "quickstart";
+    }) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ select });
+
+    await runOnboardingWizard(
+      {
+        acceptRisk: true,
+        flow: "quickstart",
+        mode: "local",
+        authChoice: "skip",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      createRuntime(),
+      prompter,
+    );
+
+    const firstWrite = writeConfigFile.mock.calls[0]?.[0] as { tools?: { profile?: string } };
+    expect(firstWrite?.tools?.profile).toBe("coding");
+  });
+
+  it("preselects existing tools.profile in the onboarding prompt", async () => {
+    readConfigFileSnapshot.mockResolvedValueOnce({
+      path: "/tmp/.openclaw/openclaw.json",
+      exists: true,
+      raw: "{}",
+      parsed: {},
+      resolved: {},
+      valid: true,
+      config: {
+        tools: {
+          profile: "coding",
+        },
+      },
+      issues: [],
+      warnings: [],
+      legacyIssues: [],
+    });
+
+    const select = vi.fn(async (params: WizardSelectParams<unknown>) => {
+      if (params.message === "Config handling") {
+        return "keep";
+      }
+      if (params.message === "Tool access profile") {
+        return "coding";
+      }
+      return "quickstart";
+    }) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ select });
+
+    await runOnboardingWizard(
+      {
+        acceptRisk: true,
+        flow: "quickstart",
+        mode: "local",
+        authChoice: "skip",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      createRuntime(),
+      prompter,
+    );
+
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Tool access profile",
+        initialValue: "coding",
       }),
     );
   });

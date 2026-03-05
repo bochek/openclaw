@@ -10,6 +10,7 @@ import type {
   ResetScope,
   SecretInputMode,
   TailscaleMode,
+  ToolProfileId,
 } from "../../commands/onboard-types.js";
 import { onboardCommand } from "../../commands/onboard.js";
 import { defaultRuntime } from "../../runtime.js";
@@ -69,6 +70,7 @@ export function registerOnboardCommand(program: Command) {
     )
     .option("--flow <flow>", "Wizard flow: quickstart|advanced|manual")
     .option("--mode <mode>", "Wizard mode: local|remote")
+    .option("--tools-profile <profile>", "Tool profile: minimal|coding|messaging|full")
     .option("--auth-choice <choice>", `Auth: ${AUTH_CHOICE_HELP}`)
     .option(
       "--token-provider <id>",
@@ -138,6 +140,7 @@ export function registerOnboardCommand(program: Command) {
           acceptRisk: Boolean(opts.acceptRisk),
           flow: opts.flow as "quickstart" | "advanced" | "manual" | undefined,
           mode: opts.mode as "local" | "remote" | undefined,
+          toolsProfile: opts.toolsProfile as ToolProfileId | undefined,
           authChoice: opts.authChoice as AuthChoice | undefined,
           tokenProvider: opts.tokenProvider as string | undefined,
           token: opts.token as string | undefined,

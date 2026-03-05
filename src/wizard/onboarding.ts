@@ -4,6 +4,7 @@ import type {
   OnboardMode,
   OnboardOptions,
   ResetScope,
+  ToolProfileId,
 } from "../commands/onboard-types.js";
 import type { OpenClawConfig } from "../config/config.js";
 import {
@@ -69,6 +70,31 @@ async function requireRiskAcknowledgement(params: {
     throw new WizardCancelledError("risk not accepted");
   }
 }
+
+const VALID_TOOLS_PROFILES = new Set<ToolProfileId>(["minimal", "coding", "messaging", "full"]);
+
+const TOOL_PROFILE_CHOICES: Array<{ value: ToolProfileId; label: string; hint: string }> = [
+  {
+    value: "messaging",
+    label: "Messaging",
+    hint: "Chat-focused: send messages + use session history; no files, shell, or browser automation.",
+  },
+  {
+    value: "coding",
+    label: "Coding",
+    hint: "Builder mode: read/edit files, run shell, use coding tools + sessions; no direct channel messaging.",
+  },
+  {
+    value: "full",
+    label: "Full",
+    hint: "Unrestricted built-in tool profile, including higher-risk capabilities.",
+  },
+  {
+    value: "minimal",
+    label: "Minimal",
+    hint: "Status-only: check session status; no file access, shell commands, browsing, or messaging.",
+  },
+];
 
 export async function runOnboardingWizard(
   opts: OnboardOptions,
@@ -406,8 +432,24 @@ export async function runOnboardingWizard(
 
   const workspaceDir = resolveUserPath(workspaceInput.trim() || onboardHelpers.DEFAULT_WORKSPACE);
 
+  const existingToolsProfile = baseConfig.tools?.profile;
+  const resolvedExistingToolsProfile = existingToolsProfile
+    ? VALID_TOOLS_PROFILES.has(existingToolsProfile)
+      ? existingToolsProfile
+      : undefined
+    : undefined;
+  const toolsProfile =
+    opts.toolsProfile ??
+    (await prompter.select({
+      message: "Tool access profile",
+      options: TOOL_PROFILE_CHOICES,
+      initialValue: resolvedExistingToolsProfile ?? "messaging",
+    }));
+
   const { applyOnboardingLocalWorkspaceConfig } = await import("../commands/onboard-config.js");
-  let nextConfig: OpenClawConfig = applyOnboardingLocalWorkspaceConfig(baseConfig, workspaceDir);
+  let nextConfig: OpenClawConfig = applyOnboardingLocalWorkspaceConfig(baseConfig, workspaceDir, {
+    toolsProfile,
+  });
 
   const { ensureAuthProfileStore } = await import("../agents/auth-profiles.js");
   const { promptAuthChoiceGrouped } = await import("../commands/auth-choice-prompt.js");

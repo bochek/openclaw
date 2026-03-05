@@ -11,6 +11,7 @@ import { runNonInteractiveOnboarding } from "./onboard-non-interactive.js";
 import type { OnboardOptions, ResetScope } from "./onboard-types.js";
 
 const VALID_RESET_SCOPES = new Set<ResetScope>(["config", "config+creds+sessions", "full"]);
+const VALID_TOOLS_PROFILES = new Set(["minimal", "coding", "messaging", "full"]);
 
 export async function onboardCommand(opts: OnboardOptions, runtime: RuntimeEnv = defaultRuntime) {
   assertSupportedRuntime(runtime);
@@ -43,6 +44,11 @@ export async function onboardCommand(opts: OnboardOptions, runtime: RuntimeEnv =
     normalizedOpts.secretInputMode !== "ref"
   ) {
     runtime.error('Invalid --secret-input-mode. Use "plaintext" or "ref".');
+    runtime.exit(1);
+    return;
+  }
+  if (normalizedOpts.toolsProfile && !VALID_TOOLS_PROFILES.has(normalizedOpts.toolsProfile)) {
+    runtime.error('Invalid --tools-profile. Use "minimal", "coding", "messaging", or "full".');
     runtime.exit(1);
     return;
   }

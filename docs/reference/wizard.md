@@ -270,7 +270,7 @@ Typical fields in `~/.openclaw/openclaw.json`:
 
 - `agents.defaults.workspace`
 - `agents.defaults.model` / `models.providers` (if Minimax chosen)
-- `tools.profile` (local onboarding defaults to `"messaging"` when unset; existing explicit values are preserved)
+- `tools.profile` (local onboarding prompts for a tool profile; when unset in non-interactive runs, defaults to `"messaging"` and preserves existing explicit values)
 - `gateway.*` (mode, bind, auth, tailscale)
 - `session.dmScope` (behavior details: [CLI Onboarding Reference](/start/wizard-cli-reference#outputs-and-internals))
 - `channels.telegram.botToken`, `channels.discord.token`, `channels.signal.*`, `channels.imessage.*`
