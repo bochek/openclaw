@@ -88,6 +88,20 @@ describe("subagent registry lifecycle error grace", () => {
     await Promise.resolve();
   };
 
+  const waitForCleanupHandledFalse = async (runId: string) => {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const run = mod
+        .listSubagentRunsForRequester(MAIN_REQUESTER_SESSION_KEY)
+        .find((candidate) => candidate.runId === runId);
+      if (run?.cleanupHandled === false) {
+        return;
+      }
+      await vi.advanceTimersByTimeAsync(1);
+      await flushAsync();
+    }
+    throw new Error(`run ${runId} did not reach cleanupHandled=false in time`);
+  };
+
   function registerCompletionRun(runId: string, childSuffix: string, task: string) {
     mod.registerSubagentRun({
       runId,
@@ -176,12 +190,7 @@ describe("subagent registry lifecycle error grace", () => {
     const firstCall = announceSpy.mock.calls[0]?.[0] as { roundOneReply?: string } | undefined;
     expect(firstCall?.roundOneReply).toBe("Final answer X");
 
-    await vi.waitFor(() => {
-      const run = mod
-        .listSubagentRunsForRequester(MAIN_REQUESTER_SESSION_KEY)
-        .find((candidate) => candidate.runId === "run-freeze");
-      expect(run?.cleanupHandled).toBe(false);
-    });
+    await waitForCleanupHandledFalse("run-freeze");
 
     captureCompletionReplySpy.mockResolvedValueOnce("Late reply Y");
     emitLifecycleEvent("run-freeze", { phase: "end", endedAt: endedAt + 100 });
@@ -212,13 +221,8 @@ describe("subagent registry lifecycle error grace", () => {
     await flushAsync();
 
     expect(announceSpy).toHaveBeenCalledTimes(2);
-    await vi.waitFor(() => {
-      const runs = mod.listSubagentRunsForRequester(MAIN_REQUESTER_SESSION_KEY);
-      const runA = runs.find((candidate) => candidate.runId === "run-parallel-a");
-      const runB = runs.find((candidate) => candidate.runId === "run-parallel-b");
-      expect(runA?.cleanupHandled).toBe(false);
-      expect(runB?.cleanupHandled).toBe(false);
-    });
+    await waitForCleanupHandledFalse("run-parallel-a");
+    await waitForCleanupHandledFalse("run-parallel-b");
 
     captureCompletionReplySpy.mockResolvedValue("Late overwrite");
 

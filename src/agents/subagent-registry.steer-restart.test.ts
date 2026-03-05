@@ -384,6 +384,34 @@ describe("subagent registry steer restarts", () => {
     );
   });
 
+  it("clears frozen completion fields when replacing after steer restart", () => {
+    registerRun({
+      runId: "run-frozen-old",
+      childSessionKey: "agent:main:subagent:frozen",
+      task: "frozen result reset",
+    });
+
+    const previous = listMainRuns()[0];
+    expect(previous?.runId).toBe("run-frozen-old");
+    if (previous) {
+      previous.frozenResultText = "stale frozen completion";
+      previous.frozenResultCapturedAt = Date.now();
+      previous.cleanupCompletedAt = Date.now();
+      previous.cleanupHandled = true;
+    }
+
+    const run = replaceRunAfterSteer({
+      previousRunId: "run-frozen-old",
+      nextRunId: "run-frozen-new",
+      fallback: previous,
+    });
+
+    expect(run.frozenResultText).toBeUndefined();
+    expect(run.frozenResultCapturedAt).toBeUndefined();
+    expect(run.cleanupCompletedAt).toBeUndefined();
+    expect(run.cleanupHandled).toBe(false);
+  });
+
   it("restores announce for a finished run when steer replacement dispatch fails", async () => {
     registerRun({
       runId: "run-failed-restart",

@@ -37,7 +37,9 @@ const subagentRegistryMock = {
   countActiveDescendantRuns: vi.fn((_sessionKey: string) => 0),
   countPendingDescendantRuns: vi.fn((_sessionKey: string) => 0),
   countPendingDescendantRunsExcludingRun: vi.fn((_sessionKey: string, _runId: string) => 0),
-  listSubagentRunsForRequester: vi.fn((_sessionKey: string) => []),
+  listSubagentRunsForRequester: vi.fn(
+    (_sessionKey: string, _scope?: { requesterRunId?: string }) => [],
+  ),
   resolveRequesterForChildSession: vi.fn((_sessionKey: string): RequesterResolution => null),
 };
 const subagentDeliveryTargetHookMock = vi.fn(
@@ -1908,39 +1910,60 @@ describe("subagent announce formatting", () => {
 
   it("announces with direct child completion outputs once all descendants are settled", async () => {
     subagentRegistryMock.countPendingDescendantRuns.mockReturnValue(0);
-    subagentRegistryMock.listSubagentRunsForRequester.mockImplementation((sessionKey: string) =>
-      sessionKey === "agent:main:subagent:parent"
-        ? [
+    subagentRegistryMock.listSubagentRunsForRequester.mockImplementation(
+      (sessionKey: string, scope?: { requesterRunId?: string }) => {
+        if (sessionKey !== "agent:main:subagent:parent") {
+          return [];
+        }
+        if (scope?.requesterRunId !== "run-parent-settled") {
+          return [
             {
-              runId: "run-child-a",
-              childSessionKey: "agent:main:subagent:parent:subagent:a",
+              runId: "run-child-stale",
+              childSessionKey: "agent:main:subagent:parent:subagent:stale",
               requesterSessionKey: "agent:main:subagent:parent",
               requesterDisplayKey: "parent",
-              task: "child task a",
-              label: "child-a",
+              task: "stale child task",
+              label: "child-stale",
               cleanup: "keep",
-              createdAt: 10,
-              endedAt: 20,
-              cleanupCompletedAt: 21,
-              frozenResultText: "result from child a",
+              createdAt: 1,
+              endedAt: 2,
+              cleanupCompletedAt: 3,
+              frozenResultText: "stale result that should be filtered",
               outcome: { status: "ok" },
             },
-            {
-              runId: "run-child-b",
-              childSessionKey: "agent:main:subagent:parent:subagent:b",
-              requesterSessionKey: "agent:main:subagent:parent",
-              requesterDisplayKey: "parent",
-              task: "child task b",
-              label: "child-b",
-              cleanup: "keep",
-              createdAt: 11,
-              endedAt: 21,
-              cleanupCompletedAt: 22,
-              frozenResultText: "result from child b",
-              outcome: { status: "ok" },
-            },
-          ]
-        : [],
+          ];
+        }
+        return [
+          {
+            runId: "run-child-a",
+            childSessionKey: "agent:main:subagent:parent:subagent:a",
+            requesterSessionKey: "agent:main:subagent:parent",
+            requesterDisplayKey: "parent",
+            task: "child task a",
+            label: "child-a",
+            cleanup: "keep",
+            createdAt: 10,
+            endedAt: 20,
+            cleanupCompletedAt: 21,
+            frozenResultText: "result from child a",
+            outcome: { status: "ok" },
+          },
+          {
+            runId: "run-child-b",
+            childSessionKey: "agent:main:subagent:parent:subagent:b",
+            requesterSessionKey: "agent:main:subagent:parent",
+            requesterDisplayKey: "parent",
+            task: "child task b",
+            label: "child-b",
+            cleanup: "keep",
+            createdAt: 11,
+            endedAt: 21,
+            cleanupCompletedAt: 22,
+            frozenResultText: "result from child b",
+            outcome: { status: "ok" },
+          },
+        ];
+      },
     );
 
     const didAnnounce = await runSubagentAnnounceFlow({
@@ -1954,12 +1977,17 @@ describe("subagent announce formatting", () => {
     });
 
     expect(didAnnounce).toBe(true);
+    expect(subagentRegistryMock.listSubagentRunsForRequester).toHaveBeenCalledWith(
+      "agent:main:subagent:parent",
+      { requesterRunId: "run-parent-settled" },
+    );
     expect(agentSpy).toHaveBeenCalledTimes(1);
     const call = agentSpy.mock.calls[0]?.[0] as { params?: { message?: string } };
     const msg = call?.params?.message ?? "";
     expect(msg).toContain("Child completion results:");
     expect(msg).toContain("result from child a");
     expect(msg).toContain("result from child b");
+    expect(msg).not.toContain("stale result that should be filtered");
     expect(msg).not.toContain("placeholder waiting text that should be ignored");
   });
 
@@ -2078,12 +2106,15 @@ describe("subagent announce formatting", () => {
     expect(subagentRegistryMock.resolveRequesterForChildSession).not.toHaveBeenCalled();
   });
 
-  it("bubbles child announce to parent requester when requester subagent already ended", async () => {
+  it("bubbles child announce to parent requester when requester subagent session is missing", async () => {
     subagentRegistryMock.isSubagentSessionRunActive.mockReturnValue(false);
     subagentRegistryMock.resolveRequesterForChildSession.mockReturnValue({
       requesterSessionKey: "agent:main:main",
       requesterOrigin: { channel: "whatsapp", to: "+1555", accountId: "acct-main" },
     });
+    sessionStore = {
+      "agent:main:subagent:orchestrator": undefined as unknown as Record<string, unknown>,
+    };
 
     const didAnnounce = await runSubagentAnnounceFlow({
       childSessionKey: "agent:main:subagent:leaf",
@@ -2102,9 +2133,12 @@ describe("subagent announce formatting", () => {
     expect(call?.params?.accountId).toBe("acct-main");
   });
 
-  it("keeps announce retryable when ended requester subagent has no fallback requester", async () => {
+  it("keeps announce retryable when missing requester subagent session has no fallback requester", async () => {
     subagentRegistryMock.isSubagentSessionRunActive.mockReturnValue(false);
     subagentRegistryMock.resolveRequesterForChildSession.mockReturnValue(null);
+    sessionStore = {
+      "agent:main:subagent:orchestrator": undefined as unknown as Record<string, unknown>,
+    };
 
     const didAnnounce = await runSubagentAnnounceFlow({
       childSessionKey: "agent:main:subagent:leaf",
@@ -2226,6 +2260,7 @@ describe("subagent announce formatting", () => {
         requesterSessionKey: "agent:main:subagent:newton",
         requesterDisplayKey: "subagent:newton",
         sessionStoreFixture: {
+          "agent:main:subagent:newton": undefined as unknown as Record<string, unknown>,
           "agent:main:subagent:birdie": {
             sessionId: "birdie-session-id",
             inputTokens: 20,

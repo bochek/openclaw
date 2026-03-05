@@ -1172,7 +1172,9 @@ export async function runSubagentAnnounceFlow(params: {
       }
 
       if (typeof listSubagentRunsForRequester === "function") {
-        const directChildren = listSubagentRunsForRequester(params.childSessionKey);
+        const directChildren = listSubagentRunsForRequester(params.childSessionKey, {
+          requesterRunId: params.childRunId,
+        });
         if (Array.isArray(directChildren) && directChildren.length > 0) {
           childCompletionFindings = buildChildCompletionFindings(
             directChildren.map((child) => ({
@@ -1260,7 +1262,11 @@ export async function runSubagentAnnounceFlow(params: {
         // Parent run has ended. Check if parent SESSION still exists.
         // If it does, the parent may be waiting for child results — inject there.
         const parentSessionEntry = loadSessionEntryByKey(targetRequesterSessionKey);
-        const parentSessionAlive = Boolean(parentSessionEntry);
+        const parentSessionId =
+          typeof parentSessionEntry?.sessionId === "string"
+            ? parentSessionEntry.sessionId.trim()
+            : "";
+        const parentSessionAlive = Boolean(parentSessionId);
 
         if (!parentSessionAlive) {
           // Parent session is truly gone — fallback to grandparent

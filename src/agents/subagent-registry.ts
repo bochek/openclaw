@@ -1245,8 +1245,11 @@ export function markSubagentRunTerminated(params: {
   return updated;
 }
 
-export function listSubagentRunsForRequester(requesterSessionKey: string): SubagentRunRecord[] {
-  return listRunsForRequesterFromRuns(subagentRuns, requesterSessionKey);
+export function listSubagentRunsForRequester(
+  requesterSessionKey: string,
+  options?: { requesterRunId?: string },
+): SubagentRunRecord[] {
+  return listRunsForRequesterFromRuns(subagentRuns, requesterSessionKey, options);
 }
 
 export function countActiveRunsForSession(requesterSessionKey: string): number {

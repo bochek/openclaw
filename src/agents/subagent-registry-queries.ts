@@ -21,12 +21,34 @@ export function findRunIdsByChildSessionKeyFromRuns(
 export function listRunsForRequesterFromRuns(
   runs: Map<string, SubagentRunRecord>,
   requesterSessionKey: string,
+  options?: {
+    requesterRunId?: string;
+  },
 ): SubagentRunRecord[] {
   const key = requesterSessionKey.trim();
   if (!key) {
     return [];
   }
-  return [...runs.values()].filter((entry) => entry.requesterSessionKey === key);
+
+  const requesterRunId = options?.requesterRunId?.trim();
+  const requesterRun = requesterRunId ? runs.get(requesterRunId) : undefined;
+  const requesterRunMatchesScope =
+    requesterRun && requesterRun.childSessionKey === key ? requesterRun : undefined;
+  const lowerBound = requesterRunMatchesScope?.startedAt ?? requesterRunMatchesScope?.createdAt;
+  const upperBound = requesterRunMatchesScope?.endedAt;
+
+  return [...runs.values()].filter((entry) => {
+    if (entry.requesterSessionKey !== key) {
+      return false;
+    }
+    if (typeof lowerBound === "number" && entry.createdAt < lowerBound) {
+      return false;
+    }
+    if (typeof upperBound === "number" && entry.createdAt > upperBound) {
+      return false;
+    }
+    return true;
+  });
 }
 
 export function resolveRequesterForChildSessionFromRuns(

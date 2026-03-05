@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   countPendingDescendantRunsExcludingRunFromRuns,
   countPendingDescendantRunsFromRuns,
+  listRunsForRequesterFromRuns,
   resolveRequesterForChildSessionFromRuns,
   shouldIgnorePostCompletionAnnounceForSessionFromRuns,
 } from "./subagent-registry-queries.js";
@@ -138,6 +139,59 @@ describe("subagent registry query regressions", () => {
     expect(
       countPendingDescendantRunsExcludingRunFromRuns(runs, "agent:main:main", "run-sibling"),
     ).toBe(1);
+  });
+
+  it("scopes direct child listings to the requester run window when requesterRunId is provided", () => {
+    const requesterSessionKey = "agent:main:subagent:orchestrator";
+    const runs = toRunMap([
+      makeRun({
+        runId: "run-parent-old",
+        childSessionKey: requesterSessionKey,
+        requesterSessionKey: "agent:main:main",
+        createdAt: 100,
+        startedAt: 100,
+        endedAt: 150,
+      }),
+      makeRun({
+        runId: "run-parent-current",
+        childSessionKey: requesterSessionKey,
+        requesterSessionKey: "agent:main:main",
+        createdAt: 200,
+        startedAt: 200,
+        endedAt: 260,
+      }),
+      makeRun({
+        runId: "run-child-stale",
+        childSessionKey: `${requesterSessionKey}:subagent:stale`,
+        requesterSessionKey,
+        createdAt: 130,
+      }),
+      makeRun({
+        runId: "run-child-current-a",
+        childSessionKey: `${requesterSessionKey}:subagent:current-a`,
+        requesterSessionKey,
+        createdAt: 210,
+      }),
+      makeRun({
+        runId: "run-child-current-b",
+        childSessionKey: `${requesterSessionKey}:subagent:current-b`,
+        requesterSessionKey,
+        createdAt: 220,
+      }),
+      makeRun({
+        runId: "run-child-future",
+        childSessionKey: `${requesterSessionKey}:subagent:future`,
+        requesterSessionKey,
+        createdAt: 270,
+      }),
+    ]);
+
+    const scoped = listRunsForRequesterFromRuns(runs, requesterSessionKey, {
+      requesterRunId: "run-parent-current",
+    });
+    const scopedRunIds = scoped.map((entry) => entry.runId).toSorted();
+
+    expect(scopedRunIds).toEqual(["run-child-current-a", "run-child-current-b"]);
   });
 
   it("regression post-completion gating, run-mode sessions ignore late announces after cleanup completes", () => {
