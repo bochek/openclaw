@@ -1,10 +1,11 @@
 import { formatCliCommand } from "../cli/command-format.js";
-import type {
-  GatewayAuthChoice,
-  OnboardMode,
-  OnboardOptions,
-  ResetScope,
-  ToolProfileId,
+import {
+  VALID_TOOLS_PROFILES,
+  type GatewayAuthChoice,
+  type OnboardMode,
+  type OnboardOptions,
+  type ResetScope,
+  type ToolProfileId,
 } from "../commands/onboard-types.js";
 import type { OpenClawConfig } from "../config/config.js";
 import {
@@ -70,8 +71,6 @@ async function requireRiskAcknowledgement(params: {
     throw new WizardCancelledError("risk not accepted");
   }
 }
-
-const VALID_TOOLS_PROFILES = new Set<ToolProfileId>(["minimal", "coding", "messaging", "full"]);
 
 const TOOL_PROFILE_CHOICES: Array<{ value: ToolProfileId; label: string; hint: string }> = [
   {
@@ -438,8 +437,12 @@ export async function runOnboardingWizard(
       ? existingToolsProfile
       : undefined
     : undefined;
+  const explicitToolsProfile =
+    typeof opts.toolsProfile === "string" && VALID_TOOLS_PROFILES.has(opts.toolsProfile)
+      ? opts.toolsProfile
+      : undefined;
   const toolsProfile =
-    opts.toolsProfile ??
+    explicitToolsProfile ??
     (await prompter.select({
       message: "Tool access profile",
       options: TOOL_PROFILE_CHOICES,

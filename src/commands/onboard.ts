@@ -8,10 +8,9 @@ import { isDeprecatedAuthChoice, normalizeLegacyOnboardAuthChoice } from "./auth
 import { DEFAULT_WORKSPACE, handleReset } from "./onboard-helpers.js";
 import { runInteractiveOnboarding } from "./onboard-interactive.js";
 import { runNonInteractiveOnboarding } from "./onboard-non-interactive.js";
-import type { OnboardOptions, ResetScope } from "./onboard-types.js";
+import { VALID_TOOLS_PROFILES, type OnboardOptions, type ResetScope } from "./onboard-types.js";
 
 const VALID_RESET_SCOPES = new Set<ResetScope>(["config", "config+creds+sessions", "full"]);
-const VALID_TOOLS_PROFILES = new Set(["minimal", "coding", "messaging", "full"]);
 
 export async function onboardCommand(opts: OnboardOptions, runtime: RuntimeEnv = defaultRuntime) {
   assertSupportedRuntime(runtime);

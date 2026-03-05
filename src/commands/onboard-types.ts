@@ -4,6 +4,13 @@ import type { GatewayDaemonRuntime } from "./daemon-runtime.js";
 
 export type { ToolProfileId } from "../config/types.tools.js";
 
+export const VALID_TOOLS_PROFILES = new Set<ToolProfileId>([
+  "minimal",
+  "coding",
+  "messaging",
+  "full",
+]);
+
 export type OnboardMode = "local" | "remote";
 export type AuthChoice =
   // Legacy alias for `setup-token` (kept for backwards CLI compatibility).

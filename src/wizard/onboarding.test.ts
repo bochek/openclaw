@@ -275,7 +275,7 @@ describe("runOnboardingWizard", () => {
     expect(prompter.outro).toHaveBeenCalled();
   });
 
-  it("skips prompts and setup steps when flags are set", async () => {
+  it("skips channel/skill/health setup but still prompts for tool profile", async () => {
     const select = vi.fn(async (params: WizardSelectParams<unknown>) => {
       if (params.message === "Tool access profile") {
         return "messaging";
@@ -598,5 +598,41 @@ describe("runOnboardingWizard", () => {
         initialValue: "coding",
       }),
     );
+  });
+
+  it("ignores invalid toolsProfile option and still prompts for a valid profile", async () => {
+    writeConfigFile.mockClear();
+    const select = vi.fn(async (params: WizardSelectParams<unknown>) => {
+      if (params.message === "Tool access profile") {
+        return "messaging";
+      }
+      return "quickstart";
+    }) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ select });
+
+    await runOnboardingWizard(
+      {
+        acceptRisk: true,
+        flow: "quickstart",
+        mode: "local",
+        toolsProfile: "invalid" as never,
+        authChoice: "skip",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      createRuntime(),
+      prompter,
+    );
+
+    expect(select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Tool access profile",
+      }),
+    );
+    const firstWrite = writeConfigFile.mock.calls[0]?.[0] as { tools?: { profile?: string } };
+    expect(firstWrite?.tools?.profile).toBe("messaging");
   });
 });
