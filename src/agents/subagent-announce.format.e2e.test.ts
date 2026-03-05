@@ -516,6 +516,40 @@ describe("subagent announce formatting", () => {
     expect(msg).not.toContain("There are still 1 active subagent run for this session.");
   });
 
+  it("keeps cron child session when descendants are still pending", async () => {
+    sessionStore = {
+      "agent:main:subagent:test": {
+        sessionId: "child-session-cron-pending-descendants",
+      },
+      "agent:main:main": {
+        sessionId: "requester-session-cron-pending-descendants",
+      },
+    };
+    readLatestAssistantReplyMock.mockResolvedValue("");
+    chatHistoryMock.mockResolvedValueOnce({
+      messages: [{ role: "assistant", content: [{ type: "text", text: "final answer: cron" }] }],
+    });
+    subagentRegistryMock.countPendingDescendantRuns.mockImplementation((sessionKey: string) =>
+      sessionKey === "agent:main:subagent:test" ? 1 : 0,
+    );
+
+    const didAnnounce = await runSubagentAnnounceFlow({
+      childSessionKey: "agent:main:subagent:test",
+      childRunId: "run-direct-cron-pending-descendants",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      requesterOrigin: { channel: "discord", to: "channel:12345", accountId: "acct-1" },
+      announceType: "cron job",
+      ...defaultOutcomeAnnounce,
+      cleanup: "delete",
+      expectsCompletionMessage: true,
+    });
+
+    expect(didAnnounce).toBe(true);
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sessionsDeleteSpy).not.toHaveBeenCalled();
+  });
+
   it("suppresses completion delivery when subagent reply is ANNOUNCE_SKIP", async () => {
     const didAnnounce = await runSubagentAnnounceFlow({
       childSessionKey: "agent:main:subagent:test",

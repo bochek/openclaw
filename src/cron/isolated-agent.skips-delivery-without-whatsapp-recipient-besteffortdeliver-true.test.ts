@@ -421,6 +421,38 @@ describe("runCronIsolatedAgentTurn", () => {
     });
   });
 
+  it("keeps cron run status ok when announce and direct fallback both fail", async () => {
+    await withTelegramAnnounceFixture(
+      async ({ home, storePath, deps }) => {
+        mockAgentPayloads([{ text: "hello from cron" }]);
+        vi.mocked(runSubagentAnnounceFlow).mockResolvedValueOnce(false);
+
+        const res = await runTelegramAnnounceTurn({
+          home,
+          storePath,
+          deps,
+          delivery: {
+            mode: "announce",
+            channel: "telegram",
+            to: "123",
+            bestEffort: false,
+          },
+        });
+
+        expect(res.status).toBe("ok");
+        expect(res.delivered).toBe(false);
+        expect(res.deliveryAttempted).toBe(true);
+        expect(res.error).toContain("cron announce delivery failed");
+        expect(deps.sendMessageTelegram).toHaveBeenCalledTimes(1);
+      },
+      {
+        deps: {
+          sendMessageTelegram: vi.fn().mockRejectedValue(new Error("direct fallback failed")),
+        },
+      },
+    );
+  });
+
   it("marks attempted when announce delivery reports false and best-effort is enabled", async () => {
     const { res, deps } = await runAnnounceFlowResult(true);
     expect(res.status).toBe("ok");

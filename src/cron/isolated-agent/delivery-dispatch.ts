@@ -475,15 +475,14 @@ export async function dispatchCronDelivery(
         if (announceDeliveryWasAttempted && !delivered && !params.isAborted()) {
           const directFallback = await deliverViaDirect(params.resolvedDelivery);
           if (directFallback) {
-            return {
-              result: directFallback,
-              delivered,
-              deliveryAttempted,
-              summary,
-              outputText,
-              synthesizedText,
-              deliveryPayloads,
-            };
+            // Preserve announce-mode semantics: announce failure should not
+            // downgrade an otherwise successful cron execution to hard error.
+            // Keep announceResult and only use direct fallback on success.
+            logWarn(
+              `[cron:${params.job.id}] direct fallback after announce failure also failed: ${
+                directFallback.error ?? "unknown error"
+              }`,
+            );
           }
           // If direct delivery succeeded (returned null without error),
           // `delivered` has been set to true by deliverViaDirect.

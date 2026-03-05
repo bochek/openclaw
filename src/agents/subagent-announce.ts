@@ -1238,12 +1238,14 @@ export async function runSubagentAnnounceFlow(params: {
       // Best-effort only; fall back to direct announce behavior when unavailable.
     }
     const isCronAnnounce = params.announceType === "cron job";
-    if (pendingChildDescendantRuns > 0 && !isCronAnnounce) {
-      // The finished run still has pending descendant subagents (either active,
-      // or ended but still finishing their own announce and cleanup flow). Defer
-      // announcing this run until descendants fully settle.
+    if (pendingChildDescendantRuns > 0) {
+      // Descendants are still pending cleanup/announce work. Keep the child
+      // session alive so descendant routing and retry paths are not orphaned.
       shouldDeleteChildSession = false;
-      return false;
+      if (!isCronAnnounce) {
+        // Non-cron announce flows still defer while descendants settle.
+        return false;
+      }
     }
 
     if (requesterDepth >= 1 && reply?.trim()) {
