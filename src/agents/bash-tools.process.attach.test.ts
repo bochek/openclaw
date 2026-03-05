@@ -46,6 +46,7 @@ test("process attach surfaces input-wait hints for idle interactive sessions", a
     expect(details.idleMs).toBeGreaterThanOrEqual(2_000);
     expect(text).toContain("Enter 2FA code:");
     expect(text).toContain("may be waiting for input");
+    expect(text).not.toContain("Use process attach");
     expect(text).toContain("process write");
   } finally {
     vi.useRealTimers();
@@ -121,6 +122,61 @@ test("process list marks idle interactive sessions as input-wait", async () => {
     expect(listed?.waitingForInput).toBe(true);
     expect(listed?.stdinWritable).toBe(true);
     expect(text).toContain("[input-wait]");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+test("ended stdin is reported as non-writable and avoids input-wait hints", async () => {
+  vi.useFakeTimers();
+  try {
+    const now = new Date("2026-01-01T00:00:00.000Z").getTime();
+    vi.setSystemTime(now);
+
+    const processTool = createProcessTool({ inputWaitIdleMs: 2_000 });
+    const session = createProcessSessionFixture({
+      id: "sess-ended-stdin",
+      command: "sleep 60",
+      backgrounded: true,
+      startedAt: now - 10_000,
+    });
+    session.stdin = {
+      write: () => {},
+      end: () => {},
+      destroyed: false,
+      writableEnded: true,
+    };
+    addSession(session);
+
+    const attach = await processTool.execute("toolcall", {
+      action: "attach",
+      sessionId: session.id,
+    });
+    const attachDetails = attach.details as {
+      waitingForInput?: boolean;
+      stdinWritable?: boolean;
+    };
+    const attachText = readText(attach);
+    expect(attachDetails.waitingForInput).toBe(false);
+    expect(attachDetails.stdinWritable).toBe(false);
+    expect(attachText).not.toContain("may be waiting for input");
+    expect(attachText).not.toContain("process write");
+
+    const poll = await processTool.execute("toolcall", {
+      action: "poll",
+      sessionId: session.id,
+    });
+    const pollDetails = poll.details as {
+      waitingForInput?: boolean;
+      stdinWritable?: boolean;
+      status?: string;
+    };
+    const pollText = readText(poll);
+    expect(pollDetails.status).toBe("running");
+    expect(pollDetails.waitingForInput).toBe(false);
+    expect(pollDetails.stdinWritable).toBe(false);
+    expect(pollText).toContain("Process still running.");
+    expect(pollText).not.toContain("may be waiting for input");
   } finally {
     vi.useRealTimers();
   }
