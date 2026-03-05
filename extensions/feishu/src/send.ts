@@ -44,7 +44,7 @@ type FeishuCreateMessageClient = {
   im: {
     message: {
       create: (opts: {
-        params: { receive_id_type: string };
+        params: { receive_id_type: "chat_id" | "email" | "open_id" | "union_id" | "user_id" };
         data: { receive_id: string; content: string; msg_type: string };
       }) => Promise<{ code?: number; msg?: string; data?: { message_id?: string } }>;
     };
@@ -54,7 +54,12 @@ type FeishuCreateMessageClient = {
 /** Send a direct message as a fallback when a reply target is unavailable. */
 async function sendFallbackDirect(
   client: FeishuCreateMessageClient,
-  params: { receiveId: string; receiveIdType: string; content: string; msgType: string },
+  params: {
+    receiveId: string;
+    receiveIdType: "chat_id" | "email" | "open_id" | "union_id" | "user_id";
+    content: string;
+    msgType: string;
+  },
   errorPrefix: string,
 ): Promise<FeishuSendResult> {
   const response = await client.im.message.create({
