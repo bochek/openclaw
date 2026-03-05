@@ -86,6 +86,36 @@ type SubagentRunOrphanReason = "missing-session-entry" | "missing-session-id";
  * subsequent lifecycle `start` / `end` can cancel premature failure announces.
  */
 const LIFECYCLE_ERROR_RETRY_GRACE_MS = 15_000;
+const FROZEN_RESULT_TEXT_MAX_BYTES = 100 * 1024;
+
+function capFrozenResultText(resultText: string): string {
+  const trimmed = resultText.trim();
+  if (!trimmed) {
+    return "";
+  }
+  const totalBytes = Buffer.byteLength(trimmed, "utf8");
+  if (totalBytes <= FROZEN_RESULT_TEXT_MAX_BYTES) {
+    return trimmed;
+  }
+  const notice = `\n\n[truncated: frozen completion output exceeded ${Math.round(FROZEN_RESULT_TEXT_MAX_BYTES / 1024)}KB (${Math.round(totalBytes / 1024)}KB)]`;
+  const maxPayloadBytes = Math.max(
+    0,
+    FROZEN_RESULT_TEXT_MAX_BYTES - Buffer.byteLength(notice, "utf8"),
+  );
+  const payload = Buffer.from(trimmed, "utf8").subarray(0, maxPayloadBytes).toString("utf8");
+  return `${payload}${notice}`;
+}
+
+function clearFrozenRunResult(entry: SubagentRunRecord): boolean {
+  const hadFrozenResult = entry.frozenResultText !== undefined;
+  const hadCapturedAt = entry.frozenResultCapturedAt !== undefined;
+  if (!hadFrozenResult && !hadCapturedAt) {
+    return false;
+  }
+  entry.frozenResultText = undefined;
+  entry.frozenResultCapturedAt = undefined;
+  return true;
+}
 
 function resolveAnnounceRetryDelayMs(retryCount: number) {
   const boundedRetryCount = Math.max(0, Math.min(retryCount, 10));
@@ -333,7 +363,7 @@ async function freezeRunResultAtCompletion(entry: SubagentRunRecord): Promise<bo
   }
   try {
     const captured = await captureSubagentCompletionReply(entry.childSessionKey);
-    entry.frozenResultText = captured?.trim() ? captured : null;
+    entry.frozenResultText = captured?.trim() ? capFrozenResultText(captured) : null;
   } catch {
     entry.frozenResultText = null;
   }
@@ -734,6 +764,7 @@ async function finalizeSubagentCleanup(
     if (shouldDeleteAttachments) {
       await safeRemoveAttachmentsDir(entry);
     }
+    clearFrozenRunResult(entry);
     completeCleanupBookkeeping({
       runId,
       entry,
