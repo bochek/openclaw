@@ -95,6 +95,22 @@ describe("cron run log", () => {
     });
   });
 
+  it("writes run log files with secure permissions", async () => {
+    await withRunLogDir("openclaw-cron-log-perms-", async (dir) => {
+      const logPath = path.join(dir, "runs", "job-1.jsonl");
+
+      await appendCronRunLog(logPath, {
+        ts: 1,
+        jobId: "job-1",
+        action: "finished",
+        status: "ok",
+      });
+
+      const mode = (await fs.stat(logPath)).mode & 0o777;
+      expect(mode).toBe(0o600);
+    });
+  });
+
   it("reads newest entries and filters by jobId", async () => {
     await withRunLogDir("openclaw-cron-log-read-", async (dir) => {
       const logPathA = path.join(dir, "runs", "a.jsonl");

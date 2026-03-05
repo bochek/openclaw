@@ -79,6 +79,21 @@ describe("cron store", () => {
     expect(JSON.parse(currentRaw)).toEqual(second);
     expect(JSON.parse(backupRaw)).toEqual(first);
   });
+
+  it("writes store and backup files with secure permissions", async () => {
+    const store = await makeStorePath();
+    const first = makeStore("job-1", true);
+    const second = makeStore("job-2", false);
+
+    await saveCronStore(store.storePath, first);
+    await saveCronStore(store.storePath, second);
+
+    const storeMode = (await fs.stat(store.storePath)).mode & 0o777;
+    const backupMode = (await fs.stat(`${store.storePath}.bak`)).mode & 0o777;
+
+    expect(storeMode).toBe(0o600);
+    expect(backupMode).toBe(0o600);
+  });
 });
 
 describe("saveCronStore", () => {
