@@ -3,7 +3,14 @@ import { icons } from "../icons.ts";
 import type { ThemeTransitionContext } from "../theme-transition.ts";
 import type { ThemeMode, ThemeName } from "../theme.ts";
 import type { ConfigUiHints } from "../types.ts";
-import { humanize, schemaType, type JsonSchema } from "./config-form.shared.ts";
+import {
+  countSensitiveConfigValues,
+  humanize,
+  pathKey,
+  REDACTED_PLACEHOLDER,
+  schemaType,
+  type JsonSchema,
+} from "./config-form.shared.ts";
 import { analyzeConfigSchema, renderConfigForm, SECTION_META } from "./config-form.ts";
 
 export type ConfigProps = {
@@ -494,42 +501,6 @@ function truncateValue(value: unknown, maxLen = 40): string {
   return str.slice(0, maxLen - 3) + "...";
 }
 
-const SENSITIVE_KEY_RE = /token|password|secret|api.?key/i;
-const SENSITIVE_KEY_WHITELIST_RE =
-  /maxtokens|maxoutputtokens|maxinputtokens|maxcompletiontokens|contexttokens|totaltokens|tokencount|tokenlimit|tokenbudget|passwordfile/i;
-
-function countSensitiveValues(formValue: Record<string, unknown> | null): number {
-  if (!formValue) {
-    return 0;
-  }
-  let count = 0;
-  function walk(obj: unknown, key?: string) {
-    if (obj == null) {
-      return;
-    }
-    if (typeof obj === "object" && !Array.isArray(obj)) {
-      for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
-        walk(v, k);
-      }
-    } else if (Array.isArray(obj)) {
-      for (const item of obj) {
-        walk(item);
-      }
-    } else if (
-      key &&
-      typeof obj === "string" &&
-      SENSITIVE_KEY_RE.test(key) &&
-      !SENSITIVE_KEY_WHITELIST_RE.test(key)
-    ) {
-      if (obj.trim() && !/^\$\{[^}]*\}$/.test(obj.trim())) {
-        count++;
-      }
-    }
-  }
-  walk(formValue);
-  return count;
-}
-
 type ThemeOption = { id: ThemeName; label: string; description: string; icon: TemplateResult };
 const THEME_OPTIONS: ThemeOption[] = [
   { id: "claw", label: "Claw", description: "Chroma family", icon: icons.zap },
@@ -644,7 +615,33 @@ function renderAppearanceSection(props: ConfigProps) {
 }
 
 let rawRevealed = false;
+let envRevealed = false;
 let validityDismissed = false;
+const revealedSensitivePaths = new Set<string>();
+
+function isSensitivePathRevealed(path: Array<string | number>): boolean {
+  const key = pathKey(path);
+  return key ? revealedSensitivePaths.has(key) : false;
+}
+
+function toggleSensitivePathReveal(path: Array<string | number>) {
+  const key = pathKey(path);
+  if (!key) {
+    return;
+  }
+  if (revealedSensitivePaths.has(key)) {
+    revealedSensitivePaths.delete(key);
+  } else {
+    revealedSensitivePaths.add(key);
+  }
+}
+
+export function resetConfigViewStateForTests() {
+  rawRevealed = false;
+  envRevealed = false;
+  validityDismissed = false;
+  revealedSensitivePaths.clear();
+}
 
 export function renderConfig(props: ConfigProps) {
   const showModeToggle = props.showModeToggle ?? false;
@@ -659,6 +656,7 @@ export function renderConfig(props: ConfigProps) {
     unsupportedPaths: scopeUnsupportedPaths(rawAnalysis.unsupportedPaths, { include, exclude }),
   };
   const formUnsafe = analysis.schema ? analysis.unsupportedPaths.length > 0 : false;
+  const envSensitiveVisible = !props.streamMode && envRevealed;
 
   // Build categorised nav from schema — only include sections that exist in the schema
   const schemaProps = analysis.schema?.properties ?? {};
@@ -949,17 +947,21 @@ export function renderConfig(props: ConfigProps) {
                   props.activeSection === "env"
                     ? html`
                       <button
-                        class="config-env-peek-btn"
-                        title="Toggle value visibility"
-                        @click=${(e: Event) => {
-                          const btn = e.currentTarget as HTMLElement;
-                          const content = btn
-                            .closest(".config-main")
-                            ?.querySelector(".config-content");
-                          if (content) {
-                            content.classList.toggle("config-env-values--visible");
+                        class="config-env-peek-btn ${envSensitiveVisible ? "config-env-peek-btn--active" : ""}"
+                        title=${
+                          props.streamMode
+                            ? "Disable stream mode to reveal env values"
+                            : envSensitiveVisible
+                              ? "Hide env values"
+                              : "Reveal env values"
+                        }
+                        ?disabled=${props.streamMode}
+                        @click=${() => {
+                          if (props.streamMode) {
+                            return;
                           }
-                          btn.classList.toggle("config-env-peek-btn--active");
+                          envRevealed = !envRevealed;
+                          props.onRawChange(props.raw);
                         }}
                       >
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
@@ -976,7 +978,7 @@ export function renderConfig(props: ConfigProps) {
               : nothing
           }
         <!-- Form content -->
-        <div class="config-content ${props.activeSection === "env" ? "config-env-values--blurred" : ""}">
+        <div class="config-content">
           ${
             props.activeSection === "__appearance__"
               ? includeVirtualSections
@@ -1003,6 +1005,14 @@ export function renderConfig(props: ConfigProps) {
                         searchQuery: props.searchQuery,
                         activeSection: props.activeSection,
                         activeSubsection: effectiveSubsection,
+                        streamMode: props.streamMode,
+                        revealSensitive:
+                          props.activeSection === "env" ? envSensitiveVisible : false,
+                        isSensitivePathRevealed,
+                        onToggleSensitivePath: (path) => {
+                          toggleSensitivePathReveal(path);
+                          props.onRawChange(props.raw);
+                        },
                       })
                 }
                 ${
@@ -1016,8 +1026,13 @@ export function renderConfig(props: ConfigProps) {
                 }
               `
                 : (() => {
-                    const sensitiveCount = countSensitiveValues(props.formValue);
+                    const sensitiveCount = countSensitiveConfigValues(
+                      props.formValue,
+                      [],
+                      props.uiHints,
+                    );
                     const blurred = sensitiveCount > 0 && (props.streamMode || !rawRevealed);
+                    const canReveal = sensitiveCount > 0 && !props.streamMode;
                     return html`
                     <label class="field config-raw-field">
                       <span style="display:flex;align-items:center;gap:8px;">
@@ -1029,10 +1044,20 @@ export function renderConfig(props: ConfigProps) {
                               <button
                                 class="btn btn--icon ${blurred ? "" : "active"}"
                                 style="width:28px;height:28px;padding:0;"
-                                title=${blurred ? "Reveal sensitive values" : "Hide sensitive values"}
+                                title=${
+                                  canReveal
+                                    ? blurred
+                                      ? "Reveal sensitive values"
+                                      : "Hide sensitive values"
+                                    : "Disable stream mode to reveal sensitive values"
+                                }
                                 aria-label="Toggle raw config redaction"
                                 aria-pressed=${!blurred}
+                                ?disabled=${!canReveal}
                                 @click=${() => {
+                                  if (!canReveal) {
+                                    return;
+                                  }
                                   rawRevealed = !rawRevealed;
                                   props.onRawChange(props.raw);
                                 }}
@@ -1045,9 +1070,15 @@ export function renderConfig(props: ConfigProps) {
                       </span>
                       <textarea
                         class="${blurred ? "config-raw-redacted" : ""}"
-                        .value=${props.raw}
-                        @input=${(e: Event) =>
-                          props.onRawChange((e.target as HTMLTextAreaElement).value)}
+                        placeholder=${blurred ? REDACTED_PLACEHOLDER : "Raw JSON5 config"}
+                        .value=${blurred ? "" : props.raw}
+                        ?readonly=${blurred}
+                        @input=${(e: Event) => {
+                          if (blurred) {
+                            return;
+                          }
+                          props.onRawChange((e.target as HTMLTextAreaElement).value);
+                        }}
                       ></textarea>
                     </label>
                   `;

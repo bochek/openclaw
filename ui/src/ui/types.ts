@@ -6,7 +6,7 @@ import type {
   SessionsListResultBase,
   SessionsPatchResultBase,
 } from "../../../src/shared/session-types.js";
-export type { ConfigUiHints } from "../../../src/shared/config-ui-hints-types.js";
+export type { ConfigUiHint, ConfigUiHints } from "../../../src/shared/config-ui-hints-types.js";
 
 export type ChannelsStatusSnapshot = {
   ts: number;
