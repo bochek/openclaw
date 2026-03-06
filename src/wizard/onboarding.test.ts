@@ -543,8 +543,13 @@ describe("runOnboardingWizard", () => {
       prompter,
     );
 
-    const firstWrite = writeConfigFile.mock.calls[0]?.[0] as { tools?: { profile?: string } };
-    expect(firstWrite?.tools?.profile).toBe("coding");
+    expect(writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.objectContaining({
+          profile: "coding",
+        }),
+      }),
+    );
   });
 
   it("preselects existing tools.profile in the onboarding prompt", async () => {
@@ -632,7 +637,12 @@ describe("runOnboardingWizard", () => {
         message: "Tool access profile",
       }),
     );
-    const firstWrite = writeConfigFile.mock.calls[0]?.[0] as { tools?: { profile?: string } };
-    expect(firstWrite?.tools?.profile).toBe("messaging");
+    expect(writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.objectContaining({
+          profile: "messaging",
+        }),
+      }),
+    );
   });
 });
