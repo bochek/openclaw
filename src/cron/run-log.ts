@@ -145,7 +145,9 @@ export async function appendCronRunLog(
   const next = prev
     .catch(() => undefined)
     .then(async () => {
-      await fs.mkdir(path.dirname(resolved), { recursive: true, mode: 0o700 });
+      const runDir = path.dirname(resolved);
+      await fs.mkdir(runDir, { recursive: true, mode: 0o700 });
+      await fs.chmod(runDir, 0o700).catch(() => undefined);
       await fs.appendFile(resolved, `${JSON.stringify(entry)}\n`, {
         encoding: "utf-8",
         mode: 0o600,

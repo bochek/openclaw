@@ -65,7 +65,9 @@ export async function saveCronStore(
   store: CronStoreFile,
   opts?: SaveCronStoreOptions,
 ) {
-  await fs.promises.mkdir(path.dirname(storePath), { recursive: true, mode: 0o700 });
+  const storeDir = path.dirname(storePath);
+  await fs.promises.mkdir(storeDir, { recursive: true, mode: 0o700 });
+  await fs.promises.chmod(storeDir, 0o700).catch(() => undefined);
   const json = JSON.stringify(store, null, 2);
   const cached = serializedStoreCache.get(storePath);
   if (cached === json) {
