@@ -1,5 +1,4 @@
 import { html, nothing } from "lit";
-import { ConnectErrorDetailCodes } from "../../../../src/gateway/protocol/connect-error-details.js";
 import { t, i18n, SUPPORTED_LOCALES, type Locale } from "../../i18n/index.ts";
 import type { EventLogEntry } from "../app-events.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../external-link.ts";
@@ -18,7 +17,12 @@ import type {
 import { renderOverviewAttention } from "./overview-attention.ts";
 import { renderOverviewCards } from "./overview-cards.ts";
 import { renderOverviewEventLog } from "./overview-event-log.ts";
-import { shouldShowPairingHint } from "./overview-hints.ts";
+import {
+  shouldShowAuthHint,
+  shouldShowAuthRequiredHint,
+  shouldShowInsecureContextHint,
+  shouldShowPairingHint,
+} from "./overview-hints.ts";
 import { renderOverviewLogTail } from "./overview-log-tail.ts";
 
 export type OverviewProps = {
@@ -27,6 +31,7 @@ export type OverviewProps = {
   settings: UiSettings;
   password: string;
   lastError: string | null;
+  lastErrorCode: string | null;
   presenceCount: number;
   sessionsCount: number | null;
   cronEnabled: boolean | null;
@@ -72,7 +77,7 @@ export function renderOverview(props: OverviewProps) {
   const isTrustedProxy = authMode === "trusted-proxy";
 
   const pairingHint = (() => {
-    if (!shouldShowPairingHint(props.connected, props.lastError)) {
+    if (!shouldShowPairingHint(props.connected, props.lastError, props.lastErrorCode)) {
       return null;
     }
     return html`
@@ -103,14 +108,12 @@ export function renderOverview(props: OverviewProps) {
     if (props.connected || !props.lastError) {
       return null;
     }
-    const lower = props.lastError.toLowerCase();
-    const authFailed = lower.includes("unauthorized") || lower.includes("connect failed");
-    if (!authFailed) {
+    if (!shouldShowAuthHint(props.connected, props.lastError, props.lastErrorCode)) {
       return null;
     }
     const hasToken = Boolean(props.settings.token.trim());
     const hasPassword = Boolean(props.password.trim());
-    if (!hasToken && !hasPassword) {
+    if (shouldShowAuthRequiredHint(hasToken, hasPassword, props.lastErrorCode)) {
       return html`
         <div class="muted" style="margin-top: 8px">
           ${t("overview.auth.required")}
@@ -156,8 +159,7 @@ export function renderOverview(props: OverviewProps) {
     if (isSecureContext) {
       return null;
     }
-    const lower = props.lastError.toLowerCase();
-    if (!lower.includes("secure context") && !lower.includes("device identity required")) {
+    if (!shouldShowInsecureContextHint(props.connected, props.lastError, props.lastErrorCode)) {
       return null;
     }
     return html`

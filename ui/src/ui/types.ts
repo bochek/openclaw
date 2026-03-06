@@ -413,7 +413,7 @@ export type {
 export type CronSchedule =
   | { kind: "at"; at: string }
   | { kind: "every"; everyMs: number; anchorMs?: number }
-  | { kind: "cron"; expr: string; tz?: string };
+  | { kind: "cron"; expr: string; tz?: string; staggerMs?: number };
 
 export type CronSessionTarget = "main" | "isolated";
 export type CronWakeMode = "next-heartbeat" | "now";
@@ -423,6 +423,7 @@ export type CronPayload =
   | {
       kind: "agentTurn";
       message: string;
+      model?: string;
       thinking?: string;
       timeoutSeconds?: number;
       lightContext?: boolean;

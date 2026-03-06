@@ -28,7 +28,11 @@ import {
 import { loadHealthState } from "./controllers/health.ts";
 import { loadNodes } from "./controllers/nodes.ts";
 import { loadSessions } from "./controllers/sessions.ts";
-import type { GatewayEventFrame, GatewayHelloOk } from "./gateway.ts";
+import {
+  resolveGatewayErrorDetailCode,
+  type GatewayEventFrame,
+  type GatewayHelloOk,
+} from "./gateway.ts";
 import { GatewayBrowserClient } from "./gateway.ts";
 import type { Tab } from "./navigation.ts";
 import type { UiSettings } from "./storage.ts";
@@ -43,10 +47,12 @@ import type {
 type GatewayHost = {
   settings: UiSettings;
   password: string;
+  clientInstanceId: string;
   client: GatewayBrowserClient | null;
   connected: boolean;
   hello: GatewayHelloOk | null;
   lastError: string | null;
+  lastErrorCode: string | null;
   onboarding?: boolean;
   eventLogBuffer: EventLogEntry[];
   eventLog: EventLogEntry[];
@@ -161,6 +167,7 @@ function applySessionDefaults(host: GatewayHost, defaults?: SessionDefaultsSnaps
 
 export function connectGateway(host: GatewayHost) {
   host.lastError = null;
+  host.lastErrorCode = null;
   host.hello = null;
   host.connected = false;
   host.execApprovalQueue = [];
@@ -178,12 +185,14 @@ export function connectGateway(host: GatewayHost) {
     clientName: "openclaw-control-ui",
     clientVersion,
     mode: "webchat",
+    instanceId: host.clientInstanceId,
     onHello: (hello) => {
       if (host.client !== client) {
         return;
       }
       host.connected = true;
       host.lastError = null;
+      host.lastErrorCode = null;
       host.hello = hello;
       applySnapshot(host, hello);
       // Reset orphaned chat run state from before disconnect.
@@ -199,14 +208,24 @@ export function connectGateway(host: GatewayHost) {
       void loadDevices(host as unknown as OpenClawApp, { quiet: true });
       void refreshActiveTab(host as unknown as Parameters<typeof refreshActiveTab>[0]);
     },
-    onClose: ({ code, reason }) => {
+    onClose: ({ code, reason, error }) => {
       if (host.client !== client) {
         return;
       }
       host.connected = false;
       // Code 1012 = Service Restart (expected during config saves, don't show as error)
+      host.lastErrorCode =
+        resolveGatewayErrorDetailCode(error) ??
+        (typeof error?.code === "string" ? error.code : null);
       if (code !== 1012) {
+        if (error?.message) {
+          host.lastError = error.message;
+          return;
+        }
         host.lastError = `disconnected (${code}): ${reason || "no reason"}`;
+      } else {
+        host.lastError = null;
+        host.lastErrorCode = null;
       }
     },
     onEvent: (evt) => {
@@ -220,6 +239,7 @@ export function connectGateway(host: GatewayHost) {
         return;
       }
       host.lastError = `event gap detected (expected seq ${expected}, got ${received}); refresh recommended`;
+      host.lastErrorCode = null;
     },
   });
   host.client = client;

@@ -51,6 +51,7 @@ export type AppViewState = {
   themeOrder: ThemeName[];
   hello: GatewayHelloOk | null;
   lastError: string | null;
+  lastErrorCode: string | null;
   eventLog: EventLogEntry[];
   assistantName: string;
   assistantAvatar: string | null;

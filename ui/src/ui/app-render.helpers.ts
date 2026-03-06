@@ -452,12 +452,13 @@ type SessionOptionGroup = {
   options: SessionOptionEntry[];
 };
 
-function resolveSessionOptionGroups(
+export function resolveSessionOptionGroups(
   state: AppViewState,
   sessionKey: string,
   sessions: SessionsListResult | null,
 ): SessionOptionGroup[] {
   const rows = sessions?.sessions ?? [];
+  const hideCron = state.sessionsHideCron ?? true;
   const byKey = new Map<string, SessionsListResult["sessions"][number]>();
   for (const row of rows) {
     byKey.set(row.key, row);
@@ -501,6 +502,9 @@ function resolveSessionOptionGroups(
   };
 
   for (const row of rows) {
+    if (hideCron && row.key !== sessionKey && isCronSessionKey(row.key)) {
+      continue;
+    }
     addOption(row.key);
   }
   addOption(sessionKey);

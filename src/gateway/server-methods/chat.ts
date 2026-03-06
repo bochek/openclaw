@@ -180,6 +180,8 @@ function sanitizeChatHistoryMessage(message: unknown): { message: unknown; chang
     changed = true;
   }
 
+  // Keep usage/cost so the chat UI can render per-message token and cost badges.
+
   if (typeof entry.content === "string") {
     const stripped = stripInlineDirectiveTagsForDisplay(entry.content);
     const res = truncateChatHistoryText(stripped.text);
