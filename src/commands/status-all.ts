@@ -266,6 +266,18 @@ export async function statusAllCommand(
     ).length;
 
     const overviewRows = [
+      (() => {
+        const operatorPolicy = snap?.policy;
+        if (!operatorPolicy?.exists) {
+          return { Item: "Operator policy", Value: "not configured" };
+        }
+        return {
+          Item: "Operator policy",
+          Value: operatorPolicy.valid
+            ? `${operatorPolicy.path} · ${operatorPolicy.lockedPaths.length} locked path${operatorPolicy.lockedPaths.length === 1 ? "" : "s"}`
+            : `${operatorPolicy.path} · invalid`,
+        };
+      })(),
       { Item: "Version", Value: VERSION },
       { Item: "OS", Value: osSummary.label },
       { Item: "Node", Value: process.versions.node },
