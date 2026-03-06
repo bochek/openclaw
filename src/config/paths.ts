@@ -21,6 +21,7 @@ export const isNixMode = resolveIsNixMode();
 const LEGACY_STATE_DIRNAMES = [".clawdbot", ".moldbot", ".moltbot"] as const;
 const NEW_STATE_DIRNAME = ".openclaw";
 const CONFIG_FILENAME = "openclaw.json";
+const OPERATOR_POLICY_FILENAME = "operator-policy.json5";
 const LEGACY_CONFIG_FILENAMES = ["clawdbot.json", "moldbot.json", "moltbot.json"] as const;
 
 function resolveDefaultHomeDir(): string {
@@ -192,6 +193,22 @@ export function resolveConfigPath(
 }
 
 export const CONFIG_PATH = resolveConfigPathCandidate();
+
+/**
+ * Immutable operator policy overlay file (JSON5 subset of OpenClawConfig).
+ * Can be overridden via OPENCLAW_OPERATOR_POLICY_PATH.
+ * Default: ~/.openclaw/operator-policy.json5 (or $OPENCLAW_STATE_DIR/operator-policy.json5)
+ */
+export function resolveOperatorPolicyPath(
+  env: NodeJS.ProcessEnv = process.env,
+  stateDir: string = resolveStateDir(env, envHomedir(env)),
+): string {
+  const override = env.OPENCLAW_OPERATOR_POLICY_PATH?.trim();
+  if (override) {
+    return resolveUserPath(override, env, envHomedir(env));
+  }
+  return path.join(stateDir, OPERATOR_POLICY_FILENAME);
+}
 
 /**
  * Resolve default config path candidates across default locations.
