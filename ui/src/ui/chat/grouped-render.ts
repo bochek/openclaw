@@ -502,11 +502,24 @@ function renderCollapsedToolCards(
 }
 
 /**
+ * Max characters for auto-detecting and pretty-printing JSON.
+ * Prevents DoS from large JSON payloads in assistant/tool messages.
+ */
+const MAX_JSON_AUTOPARSE_CHARS = 20_000;
+
+/**
  * Detect whether a trimmed string is a JSON object or array.
  * Must start with `{`/`[` and end with `}`/`]` and parse successfully.
+ * Size-capped to prevent render-loop DoS from large JSON messages.
  */
 function detectJson(text: string): { parsed: unknown; pretty: string } | null {
   const t = text.trim();
+
+  // Enforce size cap to prevent UI freeze from multi-MB JSON payloads
+  if (t.length > MAX_JSON_AUTOPARSE_CHARS) {
+    return null;
+  }
+
   if ((t.startsWith("{") && t.endsWith("}")) || (t.startsWith("[") && t.endsWith("]"))) {
     try {
       const parsed = JSON.parse(t);

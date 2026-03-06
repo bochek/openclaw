@@ -34,6 +34,7 @@ import {
 import { saveSettings, type UiSettings } from "./storage.ts";
 import { startThemeTransition, type ThemeTransitionContext } from "./theme-transition.ts";
 import { resolveTheme, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
+import { cleanupChatModuleState } from "./views/chat.ts";
 
 let systemThemeCleanup: (() => void) | null = null;
 import type { AgentsListResult, AttentionItem } from "./types.ts";
@@ -365,9 +366,16 @@ function applyTabSelection(
   next: Tab,
   options: { refreshPolicy: "always" | "connected"; syncUrl?: boolean },
 ) {
+  const prev = host.tab;
   if (host.tab !== next) {
     host.tab = next;
   }
+
+  // Cleanup chat module state when navigating away from chat
+  if (prev === "chat" && next !== "chat") {
+    cleanupChatModuleState();
+  }
+
   if (next === "chat") {
     host.chatHasAutoScrolled = false;
   }

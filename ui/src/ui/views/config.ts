@@ -6,6 +6,7 @@ import type { ConfigUiHints } from "../types.ts";
 import {
   countSensitiveConfigValues,
   humanize,
+  isSensitiveConfigPath,
   pathKey,
   REDACTED_PLACEHOLDER,
   schemaType,
@@ -501,6 +502,26 @@ function truncateValue(value: unknown, maxLen = 40): string {
   return str.slice(0, maxLen - 3) + "...";
 }
 
+/**
+ * Render diff value with redaction when in stream mode or path is sensitive.
+ * Prevents secrets from appearing in diff panel during screen sharing.
+ */
+function renderDiffValue(
+  path: string,
+  value: unknown,
+  streamMode: boolean,
+  uiHints: ConfigUiHints,
+): string {
+  const hint = uiHints[path];
+  const sensitive = hint?.sensitive ?? isSensitiveConfigPath(path);
+
+  if (streamMode && sensitive) {
+    return REDACTED_PLACEHOLDER;
+  }
+
+  return truncateValue(value);
+}
+
 type ThemeOption = { id: ThemeName; label: string; description: string; icon: TemplateResult };
 const THEME_OPTIONS: ThemeOption[] = [
   { id: "claw", label: "Claw", description: "Chroma family", icon: icons.zap },
@@ -909,11 +930,11 @@ export function renderConfig(props: ConfigProps) {
                         <div class="config-diff__path">${change.path}</div>
                         <div class="config-diff__values">
                           <span class="config-diff__from"
-                            >${truncateValue(change.from)}</span
+                            >${renderDiffValue(change.path, change.from, props.streamMode, props.uiHints)}</span
                           >
                           <span class="config-diff__arrow">→</span>
                           <span class="config-diff__to"
-                            >${truncateValue(change.to)}</span
+                            >${renderDiffValue(change.path, change.to, props.streamMode, props.uiHints)}</span
                           >
                         </div>
                       </div>

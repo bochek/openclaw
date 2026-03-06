@@ -147,6 +147,28 @@ let searchOpen = false;
 let searchQuery = "";
 let pinnedExpanded = false;
 
+/**
+ * Cleanup module-level state when navigating away from chat view.
+ * Prevents STT recording from continuing after tab switch (which would
+ * send transcripts to the wrong session) and resets ephemeral UI state.
+ */
+export function cleanupChatModuleState() {
+  if (sttRecording) {
+    stopStt();
+    sttRecording = false;
+    sttInterimText = "";
+  }
+  slashMenuOpen = false;
+  slashMenuItems = [];
+  slashMenuIndex = 0;
+  slashMenuMode = "command";
+  slashMenuCommand = null;
+  slashMenuArgItems = [];
+  searchOpen = false;
+  searchQuery = "";
+  pinnedExpanded = false;
+}
+
 function adjustTextareaHeight(el: HTMLTextAreaElement) {
   el.style.height = "auto";
   el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
