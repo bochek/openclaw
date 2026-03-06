@@ -25,6 +25,7 @@ Docs: https://docs.openclaw.ai
 - Hooks/Compaction lifecycle: emit `session:compact:before` and `session:compact:after` internal events plus plugin compaction callbacks with session/count metadata, so automations can react to compaction runs consistently. (#16788) thanks @vincentkoc.
 - Agents/context engine plugin interface: add `ContextEngine` plugin slot with full lifecycle hooks (`bootstrap`, `ingest`, `assemble`, `compact`, `afterTurn`, `prepareSubagentSpawn`, `onSubagentEnded`), slot-based registry with config-driven resolution, `LegacyContextEngine` wrapper preserving existing compaction behavior, scoped subagent runtime for plugin runtimes via `AsyncLocalStorage`, and `sessions.get` gateway method. Enables plugins like `lossless-claw` to provide alternative context management strategies without modifying core compaction logic. Zero behavior change when no context engine plugin is configured. (#22201) thanks @jalehman.
 - CLI: make read-only SecretRef status flows degrade safely (#37023) thanks @joshavant.
+- Skills/nano-banana-pro: add `--aspect-ratio` / `-a` to `generate_image.py` with common portrait, landscape, and square options while preserving model-chosen sizing when omitted. (#28159) Thanks @BrennerSpear and @vincentkoc.
 
 ### Breaking
 
@@ -196,6 +197,9 @@ Docs: https://docs.openclaw.ai
 - Agents/gateway config guidance: stop exposing `config.schema` through the agent `gateway` tool, remove prompt/docs guidance that told agents to call it, and keep agents on `config.get` plus `config.patch`/`config.apply` for config changes. (#7382) thanks @kakuteki.
 - Agents/failover: classify periodic provider limit exhaustion text (for example `Weekly/Monthly Limit Exhausted`) as `rate_limit` while keeping explicit `402 Payment Required` variants in billing, so failover continues without misclassifying billing-wrapped quota errors. (#33813) thanks @zhouhe-xydt.
 - Mattermost/interactive button callbacks: allow external callback base URLs and stop requiring loopback-origin requests so button clicks work when Mattermost reaches the gateway over Tailscale, LAN, or a reverse proxy. (#37543) thanks @mukhtharcm.
+- Control UI/original delivery target visibility: preserve source-channel delivery targets when Control UI chat and agent events are emitted so iMessage-origin runs keep their original routing and visibility instead of being pulled into Control UI. (#36030) Thanks @Octane0411.
+- Sessions/direct WebChat routing: keep direct per-channel-peer sessions on WebChat for internal replies instead of inheriting persisted external delivery routes, while preserving existing external-route behavior for group sessions and non-direct routing. (#37135) Thanks @frankekn.
+- Sessions/WebChat direct-route matching: restrict WebChat direct-session override logic to canonical direct-session key shapes, including legacy `:dm:` keys and direct thread/topic descendants, so malformed keys cannot overwrite persisted external delivery routes. (#37867) Thanks @vincentkoc.
 
 ## 2026.3.2
 
