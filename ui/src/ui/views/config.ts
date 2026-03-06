@@ -522,6 +522,20 @@ function renderDiffValue(
   return truncateValue(value);
 }
 
+/**
+ * Lightweight scan for sensitive keywords in raw config text.
+ * Used when stream mode is on and formValue hasn't been parsed yet.
+ */
+function containsSensitiveKeywords(raw: string): boolean {
+  // Match key patterns from SENSITIVE_PATTERNS in config-form.shared.ts
+  return (
+    /["']?\w*token["']?\s*:/i.test(raw) ||
+    /["']?\w*password["']?\s*:/i.test(raw) ||
+    /["']?\w*secret["']?\s*:/i.test(raw) ||
+    /["']?\w*api.?key["']?\s*:/i.test(raw)
+  );
+}
+
 type ThemeOption = { id: ThemeName; label: string; description: string; icon: TemplateResult };
 const THEME_OPTIONS: ThemeOption[] = [
   { id: "claw", label: "Claw", description: "Chroma family", icon: icons.zap },
@@ -610,7 +624,7 @@ function renderAppearanceSection(props: ConfigProps) {
         <div class="settings-info-grid">
           <div class="settings-info-row">
             <span class="settings-info-row__label">Gateway</span>
-            <span class="settings-info-row__value mono">${props.gatewayUrl || "—"}</span>
+            <span class="settings-info-row__value mono">${props.gatewayUrl || "-"}</span>
           </div>
           <div class="settings-info-row">
             <span class="settings-info-row__label">Status</span>
@@ -679,7 +693,7 @@ export function renderConfig(props: ConfigProps) {
   const formUnsafe = analysis.schema ? analysis.unsupportedPaths.length > 0 : false;
   const envSensitiveVisible = !props.streamMode && envRevealed;
 
-  // Build categorised nav from schema — only include sections that exist in the schema
+  // Build categorised nav from schema - only include sections that exist in the schema
   const schemaProps = analysis.schema?.properties ?? {};
 
   const VIRTUAL_SECTIONS = new Set(["__appearance__"]);
@@ -1052,8 +1066,15 @@ export function renderConfig(props: ConfigProps) {
                       [],
                       props.uiHints,
                     );
-                    const blurred = sensitiveCount > 0 && (props.streamMode || !rawRevealed);
-                    const canReveal = sensitiveCount > 0 && !props.streamMode;
+                    // In stream mode, also check raw content for sensitive keywords
+                    // to prevent newly-entered secrets from being visible before parse
+                    const rawHasSensitiveKeywords =
+                      props.streamMode && containsSensitiveKeywords(props.raw);
+                    const blurred =
+                      (sensitiveCount > 0 || rawHasSensitiveKeywords) &&
+                      (props.streamMode || !rawRevealed);
+                    const canReveal =
+                      (sensitiveCount > 0 || rawHasSensitiveKeywords) && !props.streamMode;
                     return html`
                     <label class="field config-raw-field">
                       <span style="display:flex;align-items:center;gap:8px;">

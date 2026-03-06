@@ -36,7 +36,11 @@ import { startThemeTransition, type ThemeTransitionContext } from "./theme-trans
 import { resolveTheme, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
 import { cleanupChatModuleState } from "./views/chat.ts";
 
-let systemThemeCleanup: (() => void) | null = null;
+/**
+ * Per-host theme listener cleanup functions.
+ * Prevents stale closures after component remount by keying cleanup by host instance.
+ */
+const systemThemeCleanupMap = new WeakMap<SettingsHost, () => void>();
 import type { AgentsListResult, AttentionItem } from "./types.ts";
 
 type SettingsHost = {
@@ -282,10 +286,11 @@ export function attachThemeListener(host: SettingsHost) {
   syncSystemThemeListener(host);
 }
 
-export function detachThemeListener(_host: SettingsHost) {
-  if (systemThemeCleanup) {
-    systemThemeCleanup();
-    systemThemeCleanup = null;
+export function detachThemeListener(host: SettingsHost) {
+  const cleanup = systemThemeCleanupMap.get(host);
+  if (cleanup) {
+    cleanup();
+    systemThemeCleanupMap.delete(host);
   }
 }
 
@@ -300,16 +305,21 @@ export function applyResolvedTheme(host: SettingsHost, resolved: ResolvedTheme) 
 }
 
 function syncSystemThemeListener(host: SettingsHost) {
+  // Clean up existing listener if mode is not "system"
   if (host.themeMode !== "system") {
-    if (systemThemeCleanup) {
-      systemThemeCleanup();
-      systemThemeCleanup = null;
+    const cleanup = systemThemeCleanupMap.get(host);
+    if (cleanup) {
+      cleanup();
+      systemThemeCleanupMap.delete(host);
     }
     return;
   }
-  if (systemThemeCleanup) {
+
+  // Skip if listener already attached for this host
+  if (systemThemeCleanupMap.has(host)) {
     return;
   }
+
   if (typeof globalThis.matchMedia !== "function") {
     return;
   }
@@ -322,7 +332,7 @@ function syncSystemThemeListener(host: SettingsHost) {
     applyResolvedTheme(host, resolveTheme(host.theme, "system"));
   };
   mql.addEventListener("change", onChange);
-  systemThemeCleanup = () => mql.removeEventListener("change", onChange);
+  systemThemeCleanupMap.set(host, () => mql.removeEventListener("change", onChange));
 }
 
 export function syncTabWithLocation(host: SettingsHost, replace: boolean) {

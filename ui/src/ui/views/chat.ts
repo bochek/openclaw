@@ -1,6 +1,7 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { repeat } from "lit/directives/repeat.js";
+import { exportChatMarkdown } from "../chat-export.ts";
 import { DeletedMessages } from "../chat/deleted-messages.ts";
 import {
   renderMessageGroup,
@@ -533,26 +534,11 @@ function tokenEstimate(draft: string): string | null {
   return `~${Math.ceil(draft.length / 4)} tokens`;
 }
 
+/**
+ * Export chat markdown - delegates to shared utility.
+ */
 function exportMarkdown(props: ChatProps): void {
-  const history = Array.isArray(props.messages) ? props.messages : [];
-  if (history.length === 0) {
-    return;
-  }
-  const lines: string[] = [`# Chat with ${props.assistantName}`, ""];
-  for (const msg of history) {
-    const m = msg as Record<string, unknown>;
-    const role = m.role === "user" ? "You" : m.role === "assistant" ? props.assistantName : "Tool";
-    const content = typeof m.content === "string" ? m.content : "";
-    const ts = typeof m.timestamp === "number" ? new Date(m.timestamp).toISOString() : "";
-    lines.push(`## ${role}${ts ? ` (${ts})` : ""}`, "", content, "");
-  }
-  const blob = new Blob([lines.join("\n")], { type: "text/markdown" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `chat-${props.assistantName}-${Date.now()}.md`;
-  a.click();
-  URL.revokeObjectURL(url);
+  exportChatMarkdown(props.messages, props.assistantName);
 }
 
 const WELCOME_SUGGESTIONS = [
