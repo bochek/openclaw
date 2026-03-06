@@ -106,6 +106,7 @@ export async function doctorCommand(
   const sourceConfigValid = configResult.sourceConfigValid ?? true;
 
   const configPath = configResult.path ?? CONFIG_PATH;
+  const configSnapshot = await readConfigFileSnapshot().catch(() => null);
   if (!cfg.gateway?.mode) {
     const lines = [
       "gateway.mode is unset; gateway start will be blocked.",
@@ -191,6 +192,23 @@ export async function doctorCommand(
   }
 
   await noteStateIntegrity(cfg, prompter, configResult.path ?? CONFIG_PATH);
+  const operatorPolicy = configSnapshot?.policy;
+  if (operatorPolicy?.exists) {
+    const lines = operatorPolicy.valid
+      ? [
+          `- Active: ${shortenHomePath(operatorPolicy.path)}`,
+          `- Locked paths: ${operatorPolicy.lockedPaths.length}`,
+          `- Config edits cannot weaken values enforced by this file.`,
+        ]
+      : [
+          `- Invalid operator policy: ${shortenHomePath(operatorPolicy.path)}`,
+          ...operatorPolicy.issues.map((issue) => {
+            const pathLabel = issue.path || "<root>";
+            return `- ${pathLabel}: ${issue.message}`;
+          }),
+        ];
+    note(lines.join("\n"), "Operator policy");
+  }
   await noteSessionLockHealth({ shouldRepair: prompter.shouldRepair });
 
   cfg = await maybeRepairSandboxImages(cfg, runtime, prompter);
