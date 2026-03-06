@@ -192,7 +192,8 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 beforeEach(() => {
   fsState.entries.clear();
   fsState.nowMs = 0;
-  fsState.fixtureCount = 0;
+  // Keep fixture paths monotonic across tests so late async writes from a
+  // previous CronService instance cannot collide with a recycled fake store.
   ensureDir(fixturesRoot);
 });
 
@@ -540,18 +541,14 @@ describe("CronService", () => {
     const job = await addWakeModeNowMainSystemEventJob(cron, { name: "wakeMode now waits" });
 
     const runPromise = cron.run(job.id, "force");
-    // `cron.run()` now persists the running marker before executing the job.
-    // Allow more microtask turns so the post-lock execution can start.
-    for (let i = 0; i < 500; i++) {
-      if (runHeartbeatOnce.mock.calls.length > 0) {
-        break;
-      }
-      // Let the locked() chain progress.
-      await Promise.resolve();
-    }
+    // `cron.run()` executes after releasing the persistence lock, so wait for
+    // the heartbeat runner to observe the started job instead of hand-spinning
+    // microtasks. This keeps the assertion stable across runtimes.
+    await vi.waitFor(() => {
+      expect(runHeartbeatOnce).toHaveBeenCalledTimes(1);
+      expect(requestHeartbeatNow).not.toHaveBeenCalled();
+    });
 
-    expect(runHeartbeatOnce).toHaveBeenCalledTimes(1);
-    expect(requestHeartbeatNow).not.toHaveBeenCalled();
     expectMainSystemEventPosted(enqueueSystemEvent, "hello");
     expect(job.state.runningAtMs).toBeTypeOf("number");
 
