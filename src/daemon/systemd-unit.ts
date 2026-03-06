@@ -57,7 +57,7 @@ export function buildSystemdUnit({
     "",
     "[Service]",
     `ExecStart=${execStart}`,
-    "Restart=always",
+    "Restart=on-failure",
     "RestartSec=5",
     // Keep service children in the same lifecycle so restarts do not leave
     // orphan ACP/runtime workers behind.
