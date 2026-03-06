@@ -51,6 +51,13 @@ describe("failover-error", () => {
         message: "insufficient credits — please top up your account",
       }),
     ).toBe("billing");
+    // Ambiguous "quota exceeded" + billing signal → billing wins
+    expect(
+      resolveFailoverReasonFromError({
+        status: 402,
+        message: "HTTP 402: You have exceeded your current quota. Please add more credits.",
+      }),
+    ).toBe("billing");
     expect(resolveFailoverReasonFromError({ statusCode: "429" })).toBe("rate_limit");
     expect(resolveFailoverReasonFromError({ status: 403 })).toBe("auth");
     expect(resolveFailoverReasonFromError({ status: 408 })).toBe("timeout");
