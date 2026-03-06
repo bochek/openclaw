@@ -251,7 +251,6 @@ describe("resolveModel", () => {
     expect(result.model?.contextWindow).toBe(262144);
     expect(result.model?.maxTokens).toBe(32768);
   });
-
   it("propagates reasoning from matching configured fallback model", () => {
     const cfg = {
       models: {
