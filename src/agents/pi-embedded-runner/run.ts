@@ -42,7 +42,6 @@ import {
   isLikelyContextOverflowError,
   isFailoverAssistantError,
   isFailoverErrorMessage,
-  isOverloadedErrorMessage,
   parseImageSizeError,
   parseImageDimensionError,
   isRateLimitAssistantError,
@@ -740,16 +739,9 @@ export async function runEmbeddedPiAgent(
         });
       };
       const resolveAuthProfileFailureReason = (
-        errorText: string,
         failoverReason: FailoverReason | null,
       ): AuthProfileFailureReason | null => {
-        if (!failoverReason || failoverReason === "timeout") {
-          return null;
-        }
-        // Overloaded provider responses currently stay on the rate_limit failover lane
-        // so existing retry/failover behavior keeps working, but they should not
-        // be recorded as auth-profile failures.
-        if (failoverReason === "rate_limit" && isOverloadedErrorMessage(errorText)) {
+        if (!failoverReason || failoverReason === "timeout" || failoverReason === "overloaded") {
           return null;
         }
         return failoverReason;
@@ -1162,10 +1154,8 @@ export async function runEmbeddedPiAgent(
               };
             }
             const promptFailoverReason = classifyFailoverReason(errorText);
-            const promptProfileFailureReason = resolveAuthProfileFailureReason(
-              errorText,
-              promptFailoverReason,
-            );
+            const promptProfileFailureReason =
+              resolveAuthProfileFailureReason(promptFailoverReason);
             await maybeMarkAuthProfileFailure({
               profileId: lastProfileId,
               reason: promptProfileFailureReason,
@@ -1219,10 +1209,8 @@ export async function runEmbeddedPiAgent(
           const billingFailure = isBillingAssistantError(lastAssistant);
           const failoverFailure = isFailoverAssistantError(lastAssistant);
           const assistantFailoverReason = classifyFailoverReason(lastAssistant?.errorMessage ?? "");
-          const assistantProfileFailureReason = resolveAuthProfileFailureReason(
-            lastAssistant?.errorMessage ?? "",
-            assistantFailoverReason,
-          );
+          const assistantProfileFailureReason =
+            resolveAuthProfileFailureReason(assistantFailoverReason);
           const cloudCodeAssistFormatError = attempt.cloudCodeAssistFormatError;
           const imageDimensionError = parseImageDimensionError(lastAssistant?.errorMessage ?? "");
 
