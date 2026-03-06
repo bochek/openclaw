@@ -178,6 +178,26 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
     });
   }, 60_000);
 
+  it("rejects --tools-profile in remote mode", async () => {
+    await withStateDir("state-tools-profile-remote-", async (_stateDir) => {
+      await expect(
+        runNonInteractiveOnboarding(
+          {
+            nonInteractive: true,
+            mode: "remote",
+            remoteUrl: "wss://gateway.example.test",
+            toolsProfile: "coding",
+            authChoice: "skip",
+            skipSkills: true,
+            skipHealth: true,
+            installDaemon: false,
+          },
+          runtime,
+        ),
+      ).rejects.toThrow('--tools-profile is only supported when --mode is "local".');
+    });
+  }, 60_000);
+
   it("uses OPENCLAW_GATEWAY_TOKEN when --gateway-token is omitted", async () => {
     await withStateDir("state-env-token-", async (stateDir) => {
       const envToken = "tok_env_fallback_123";

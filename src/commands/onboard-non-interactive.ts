@@ -27,6 +27,11 @@ export async function runNonInteractiveOnboarding(
     runtime.exit(1);
     return;
   }
+  if (mode === "remote" && opts.toolsProfile !== undefined) {
+    runtime.error('--tools-profile is only supported when --mode is "local".');
+    runtime.exit(1);
+    return;
+  }
 
   if (mode === "remote") {
     await runNonInteractiveOnboardingRemote({ opts, runtime, baseConfig });
