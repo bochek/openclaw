@@ -47,6 +47,13 @@ describe("config io write", () => {
     return { configPath, io, snapshot };
   }
 
+  async function writeOperatorPolicy(params: { home: string; policy: Record<string, unknown> }) {
+    const policyPath = path.join(params.home, ".openclaw", "operator-policy.json5");
+    await fs.mkdir(path.dirname(policyPath), { recursive: true });
+    await fs.writeFile(policyPath, JSON.stringify(params.policy, null, 2), "utf-8");
+    return policyPath;
+  }
+
   async function writeTokenAuthAndReadConfig(params: {
     io: { writeConfigFile: (config: Record<string, unknown>) => Promise<void> };
     snapshot: { config: Record<string, unknown> };
@@ -139,6 +146,86 @@ describe("config io write", () => {
       expect(persisted).not.toHaveProperty("agents.defaults");
       expect(persisted).not.toHaveProperty("messages.ackReaction");
       expect(persisted).not.toHaveProperty("sessions.persistence");
+    });
+  });
+
+  it("applies immutable operator policy to the effective config snapshot", async () => {
+    await withSuiteHome(async (home) => {
+      await writeOperatorPolicy({
+        home,
+        policy: {
+          tools: { profile: "messaging" },
+          approvals: { exec: { enabled: false } },
+        },
+      });
+      const { io, snapshot } = await writeConfigAndCreateIo({
+        home,
+        initialConfig: { gateway: { mode: "local" } },
+      });
+
+      const reloaded = await io.readConfigFileSnapshot();
+      expect(reloaded.valid).toBe(true);
+      expect(reloaded.config.gateway?.mode).toBe("local");
+      expect(reloaded.config.tools?.profile).toBe("messaging");
+      expect(reloaded.config.approvals?.exec?.enabled).toBe(false);
+      expect(reloaded.resolved.tools?.profile).toBeUndefined();
+      expect(reloaded.policy?.exists).toBe(true);
+      expect(reloaded.policy?.valid).toBe(true);
+      expect(reloaded.policy?.lockedPaths).toEqual(
+        expect.arrayContaining(["tools.profile", "approvals.exec.enabled"]),
+      );
+      expect(snapshot.policy?.lockedPaths).toEqual(reloaded.policy?.lockedPaths);
+    });
+  });
+
+  it("rejects writes that conflict with locked operator policy paths", async () => {
+    await withSuiteHome(async (home) => {
+      await writeOperatorPolicy({
+        home,
+        policy: {
+          tools: { profile: "messaging" },
+        },
+      });
+      const { io, snapshot } = await writeConfigAndCreateIo({
+        home,
+        initialConfig: { gateway: { mode: "local" } },
+      });
+
+      const next = structuredClone(snapshot.config);
+      next.tools = {
+        ...next.tools,
+        profile: "full",
+      };
+
+      await expect(io.writeConfigFile(next)).rejects.toThrow(
+        "Config path locked by operator policy: tools.profile",
+      );
+    });
+  });
+
+  it("keeps locked operator policy paths out of the mutable config file", async () => {
+    await withSuiteHome(async (home) => {
+      await writeOperatorPolicy({
+        home,
+        policy: {
+          tools: { profile: "messaging" },
+        },
+      });
+      const { configPath, io, snapshot } = await writeConfigAndCreateIo({
+        home,
+        initialConfig: { gateway: { mode: "local" } },
+      });
+
+      const next = structuredClone(snapshot.config);
+      next.gateway = { mode: "remote" };
+      await io.writeConfigFile(next);
+
+      const persisted = JSON.parse(await fs.readFile(configPath, "utf-8")) as {
+        gateway?: { mode?: string };
+        tools?: { profile?: string };
+      };
+      expect(persisted.gateway?.mode).toBe("remote");
+      expect(persisted.tools?.profile).toBeUndefined();
     });
   });
 
