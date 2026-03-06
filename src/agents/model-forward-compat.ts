@@ -14,6 +14,7 @@ const OPENAI_GPT_54_PRO_TEMPLATE_MODEL_IDS = ["gpt-5.2-pro", "gpt-5.2"] as const
 const OPENAI_CODEX_GPT_54_MODEL_ID = "gpt-5.4";
 const OPENAI_CODEX_GPT_54_TEMPLATE_MODEL_IDS = ["gpt-5.3-codex", "gpt-5.2-codex"] as const;
 const OPENAI_CODEX_GPT_53_MODEL_ID = "gpt-5.3-codex";
+const OPENAI_CODEX_GPT_53_SPARK_MODEL_ID = "gpt-5.3-codex-spark";
 const OPENAI_CODEX_TEMPLATE_MODEL_IDS = ["gpt-5.2-codex"] as const;
 
 const ANTHROPIC_OPUS_46_MODEL_ID = "claude-opus-4-6";
@@ -107,6 +108,172 @@ function cloneFirstTemplateModel(params: {
     } as Model<Api>);
   }
   return undefined;
+}
+
+function cloneSyntheticTemplateModel(params: {
+  models: Model<Api>[];
+  normalizedProvider: string;
+  trimmedModelId: string;
+  templateIds: readonly string[];
+  patch?: Partial<Model<Api>>;
+}): Model<Api> | undefined {
+  const { models, normalizedProvider, trimmedModelId, templateIds, patch } = params;
+  for (const templateId of [...new Set(templateIds)].filter(Boolean)) {
+    const template =
+      models.find(
+        (model) =>
+          normalizeProviderId(model.provider) === normalizedProvider &&
+          model.id.trim().toLowerCase() === templateId.toLowerCase(),
+      ) ?? null;
+    if (!template) {
+      continue;
+    }
+    return normalizeModelCompat({
+      ...template,
+      id: trimmedModelId,
+      name: trimmedModelId,
+      ...patch,
+    } as Model<Api>);
+  }
+  return undefined;
+}
+
+export function augmentKnownForwardCompatModels(models: Model<Api>[]): Model<Api>[] {
+  const next = [...models];
+  const existing = new Set(
+    next.map((model) => `${normalizeProviderId(model.provider)}::${model.id.trim().toLowerCase()}`),
+  );
+  const hasProvider = (provider: string) =>
+    next.some((model) => normalizeProviderId(model.provider) === provider);
+  const pushIfMissing = (provider: string, id: string, model: Model<Api> | undefined) => {
+    const key = `${normalizeProviderId(provider)}::${id.trim().toLowerCase()}`;
+    if (existing.has(key) || !model) {
+      return;
+    }
+    next.push(model);
+    existing.add(key);
+  };
+
+  if (hasProvider("openai")) {
+    pushIfMissing(
+      "openai",
+      OPENAI_GPT_54_MODEL_ID,
+      cloneSyntheticTemplateModel({
+        models: next,
+        normalizedProvider: "openai",
+        trimmedModelId: OPENAI_GPT_54_MODEL_ID,
+        templateIds: OPENAI_GPT_54_TEMPLATE_MODEL_IDS,
+        patch: {
+          api: "openai-responses",
+          provider: "openai",
+          baseUrl: "https://api.openai.com/v1",
+          reasoning: true,
+          input: ["text", "image"],
+          contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
+          maxTokens: OPENAI_GPT_54_MAX_TOKENS,
+        },
+      }) ??
+        normalizeModelCompat({
+          id: OPENAI_GPT_54_MODEL_ID,
+          name: OPENAI_GPT_54_MODEL_ID,
+          api: "openai-responses",
+          provider: "openai",
+          baseUrl: "https://api.openai.com/v1",
+          reasoning: true,
+          input: ["text", "image"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
+          maxTokens: OPENAI_GPT_54_MAX_TOKENS,
+        } as Model<Api>),
+    );
+    pushIfMissing(
+      "openai",
+      OPENAI_GPT_54_PRO_MODEL_ID,
+      cloneSyntheticTemplateModel({
+        models: next,
+        normalizedProvider: "openai",
+        trimmedModelId: OPENAI_GPT_54_PRO_MODEL_ID,
+        templateIds: OPENAI_GPT_54_PRO_TEMPLATE_MODEL_IDS,
+        patch: {
+          api: "openai-responses",
+          provider: "openai",
+          baseUrl: "https://api.openai.com/v1",
+          reasoning: true,
+          input: ["text", "image"],
+          contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
+          maxTokens: OPENAI_GPT_54_MAX_TOKENS,
+        },
+      }) ??
+        normalizeModelCompat({
+          id: OPENAI_GPT_54_PRO_MODEL_ID,
+          name: OPENAI_GPT_54_PRO_MODEL_ID,
+          api: "openai-responses",
+          provider: "openai",
+          baseUrl: "https://api.openai.com/v1",
+          reasoning: true,
+          input: ["text", "image"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
+          maxTokens: OPENAI_GPT_54_MAX_TOKENS,
+        } as Model<Api>),
+    );
+  }
+
+  if (hasProvider("openai-codex")) {
+    pushIfMissing(
+      "openai-codex",
+      OPENAI_CODEX_GPT_54_MODEL_ID,
+      cloneSyntheticTemplateModel({
+        models: next,
+        normalizedProvider: "openai-codex",
+        trimmedModelId: OPENAI_CODEX_GPT_54_MODEL_ID,
+        templateIds: OPENAI_CODEX_GPT_54_TEMPLATE_MODEL_IDS,
+      }) ??
+        normalizeModelCompat({
+          id: OPENAI_CODEX_GPT_54_MODEL_ID,
+          name: OPENAI_CODEX_GPT_54_MODEL_ID,
+          api: "openai-codex-responses",
+          provider: "openai-codex",
+          baseUrl: "https://chatgpt.com/backend-api",
+          reasoning: true,
+          input: ["text", "image"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: DEFAULT_CONTEXT_TOKENS,
+          maxTokens: DEFAULT_CONTEXT_TOKENS,
+        } as Model<Api>),
+    );
+    pushIfMissing(
+      "openai-codex",
+      OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
+      cloneSyntheticTemplateModel({
+        models: next,
+        normalizedProvider: "openai-codex",
+        trimmedModelId: OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
+        templateIds: [OPENAI_CODEX_GPT_53_MODEL_ID, ...OPENAI_CODEX_TEMPLATE_MODEL_IDS],
+        patch: {
+          api: "openai-codex-responses",
+          provider: "openai-codex",
+          baseUrl: "https://chatgpt.com/backend-api",
+          reasoning: true,
+          input: ["text", "image"],
+        },
+      }) ??
+        normalizeModelCompat({
+          id: OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
+          name: OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
+          api: "openai-codex-responses",
+          provider: "openai-codex",
+          baseUrl: "https://chatgpt.com/backend-api",
+          reasoning: true,
+          input: ["text", "image"],
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+          contextWindow: DEFAULT_CONTEXT_TOKENS,
+          maxTokens: DEFAULT_CONTEXT_TOKENS,
+        } as Model<Api>),
+    );
+  }
+
+  return next;
 }
 
 const CODEX_GPT54_ELIGIBLE_PROVIDERS = new Set(["openai-codex"]);
