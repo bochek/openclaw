@@ -97,6 +97,21 @@ describe("cron store", () => {
       expect(backupMode).toBe(0o600);
     },
   );
+
+  it.skipIf(process.platform === "win32")(
+    "hardens an existing cron store directory to owner-only permissions",
+    async () => {
+      const store = await makeStorePath();
+      const storeDir = path.dirname(store.storePath);
+      await fs.mkdir(storeDir, { recursive: true, mode: 0o755 });
+      await fs.chmod(storeDir, 0o755);
+
+      await saveCronStore(store.storePath, makeStore("job-1", true));
+
+      const storeDirMode = (await fs.stat(storeDir)).mode & 0o777;
+      expect(storeDirMode).toBe(0o700);
+    },
+  );
 });
 
 describe("saveCronStore", () => {
