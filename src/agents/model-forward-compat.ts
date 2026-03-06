@@ -10,6 +10,9 @@ const OPENAI_GPT_54_CONTEXT_TOKENS = 1_050_000;
 const OPENAI_GPT_54_MAX_TOKENS = 128_000;
 const OPENAI_GPT_54_TEMPLATE_MODEL_IDS = ["gpt-5.2"] as const;
 const OPENAI_GPT_54_PRO_TEMPLATE_MODEL_IDS = ["gpt-5.2-pro", "gpt-5.2"] as const;
+const OPENAI_GPT_54_COST = { input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 0 } as const;
+// OpenAI currently publishes no cached-input price for GPT-5.4 Pro.
+const OPENAI_GPT_54_PRO_COST = { input: 30, output: 180, cacheRead: 0, cacheWrite: 0 } as const;
 
 const OPENAI_CODEX_GPT_54_MODEL_ID = "gpt-5.4";
 const OPENAI_CODEX_GPT_54_TEMPLATE_MODEL_IDS = ["gpt-5.3-codex", "gpt-5.2-codex"] as const;
@@ -56,35 +59,23 @@ function resolveOpenAIGpt54ForwardCompatModel(
     return undefined;
   }
 
-  return (
-    cloneFirstTemplateModel({
-      normalizedProvider,
-      trimmedModelId,
-      templateIds: [...templateIds],
-      modelRegistry,
-      patch: {
-        api: "openai-responses",
-        provider: normalizedProvider,
-        baseUrl: "https://api.openai.com/v1",
-        reasoning: true,
-        input: ["text", "image"],
-        contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
-        maxTokens: OPENAI_GPT_54_MAX_TOKENS,
-      },
-    }) ??
-    normalizeModelCompat({
-      id: trimmedModelId,
-      name: trimmedModelId,
+  const template = cloneFirstTemplateModel({
+    normalizedProvider,
+    trimmedModelId,
+    templateIds: [...templateIds],
+    modelRegistry,
+    patch: {
       api: "openai-responses",
       provider: normalizedProvider,
       baseUrl: "https://api.openai.com/v1",
       reasoning: true,
       input: ["text", "image"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
       maxTokens: OPENAI_GPT_54_MAX_TOKENS,
-    } as Model<Api>)
-  );
+    },
+  });
+
+  return buildOpenAIGpt54FallbackModel(trimmedModelId, template);
 }
 
 function cloneFirstTemplateModel(params: {
@@ -138,6 +129,41 @@ function cloneSyntheticTemplateModel(params: {
   return undefined;
 }
 
+function buildOpenAIGpt54FallbackModel(modelId: string, template?: Model<Api> | null): Model<Api> {
+  return normalizeModelCompat({
+    ...template,
+    id: modelId,
+    name: modelId,
+    api: "openai-responses",
+    provider: "openai",
+    baseUrl: "https://api.openai.com/v1",
+    reasoning: true,
+    input: ["text", "image"],
+    cost:
+      modelId.toLowerCase() === OPENAI_GPT_54_PRO_MODEL_ID
+        ? OPENAI_GPT_54_PRO_COST
+        : OPENAI_GPT_54_COST,
+    contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
+    maxTokens: OPENAI_GPT_54_MAX_TOKENS,
+  } as Model<Api>);
+}
+
+function buildOpenAICodexSparkFallbackModel(template?: Model<Api> | null): Model<Api> {
+  return normalizeModelCompat({
+    ...template,
+    id: OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
+    name: OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
+    api: "openai-codex-responses",
+    provider: "openai-codex",
+    baseUrl: "https://chatgpt.com/backend-api",
+    reasoning: true,
+    input: ["text", "image"],
+    cost: template?.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: template?.contextWindow ?? DEFAULT_CONTEXT_TOKENS,
+    maxTokens: template?.maxTokens ?? DEFAULT_CONTEXT_TOKENS,
+  } as Model<Api>);
+}
+
 export function augmentKnownForwardCompatModels(models: Model<Api>[]): Model<Api>[] {
   const next = [...models];
   const existing = new Set(
@@ -158,64 +184,46 @@ export function augmentKnownForwardCompatModels(models: Model<Api>[]): Model<Api
     pushIfMissing(
       "openai",
       OPENAI_GPT_54_MODEL_ID,
-      cloneSyntheticTemplateModel({
-        models: next,
-        normalizedProvider: "openai",
-        trimmedModelId: OPENAI_GPT_54_MODEL_ID,
-        templateIds: OPENAI_GPT_54_TEMPLATE_MODEL_IDS,
-        patch: {
-          api: "openai-responses",
-          provider: "openai",
-          baseUrl: "https://api.openai.com/v1",
-          reasoning: true,
-          input: ["text", "image"],
-          contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
-          maxTokens: OPENAI_GPT_54_MAX_TOKENS,
-        },
-      }) ??
-        normalizeModelCompat({
-          id: OPENAI_GPT_54_MODEL_ID,
-          name: OPENAI_GPT_54_MODEL_ID,
-          api: "openai-responses",
-          provider: "openai",
-          baseUrl: "https://api.openai.com/v1",
-          reasoning: true,
-          input: ["text", "image"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
-          maxTokens: OPENAI_GPT_54_MAX_TOKENS,
-        } as Model<Api>),
+      buildOpenAIGpt54FallbackModel(
+        OPENAI_GPT_54_MODEL_ID,
+        cloneSyntheticTemplateModel({
+          models: next,
+          normalizedProvider: "openai",
+          trimmedModelId: OPENAI_GPT_54_MODEL_ID,
+          templateIds: OPENAI_GPT_54_TEMPLATE_MODEL_IDS,
+          patch: {
+            api: "openai-responses",
+            provider: "openai",
+            baseUrl: "https://api.openai.com/v1",
+            reasoning: true,
+            input: ["text", "image"],
+            contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
+            maxTokens: OPENAI_GPT_54_MAX_TOKENS,
+          },
+        }),
+      ),
     );
     pushIfMissing(
       "openai",
       OPENAI_GPT_54_PRO_MODEL_ID,
-      cloneSyntheticTemplateModel({
-        models: next,
-        normalizedProvider: "openai",
-        trimmedModelId: OPENAI_GPT_54_PRO_MODEL_ID,
-        templateIds: OPENAI_GPT_54_PRO_TEMPLATE_MODEL_IDS,
-        patch: {
-          api: "openai-responses",
-          provider: "openai",
-          baseUrl: "https://api.openai.com/v1",
-          reasoning: true,
-          input: ["text", "image"],
-          contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
-          maxTokens: OPENAI_GPT_54_MAX_TOKENS,
-        },
-      }) ??
-        normalizeModelCompat({
-          id: OPENAI_GPT_54_PRO_MODEL_ID,
-          name: OPENAI_GPT_54_PRO_MODEL_ID,
-          api: "openai-responses",
-          provider: "openai",
-          baseUrl: "https://api.openai.com/v1",
-          reasoning: true,
-          input: ["text", "image"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
-          maxTokens: OPENAI_GPT_54_MAX_TOKENS,
-        } as Model<Api>),
+      buildOpenAIGpt54FallbackModel(
+        OPENAI_GPT_54_PRO_MODEL_ID,
+        cloneSyntheticTemplateModel({
+          models: next,
+          normalizedProvider: "openai",
+          trimmedModelId: OPENAI_GPT_54_PRO_MODEL_ID,
+          templateIds: OPENAI_GPT_54_PRO_TEMPLATE_MODEL_IDS,
+          patch: {
+            api: "openai-responses",
+            provider: "openai",
+            baseUrl: "https://api.openai.com/v1",
+            reasoning: true,
+            input: ["text", "image"],
+            contextWindow: OPENAI_GPT_54_CONTEXT_TOKENS,
+            maxTokens: OPENAI_GPT_54_MAX_TOKENS,
+          },
+        }),
+      ),
     );
   }
 
@@ -245,31 +253,21 @@ export function augmentKnownForwardCompatModels(models: Model<Api>[]): Model<Api
     pushIfMissing(
       "openai-codex",
       OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
-      cloneSyntheticTemplateModel({
-        models: next,
-        normalizedProvider: "openai-codex",
-        trimmedModelId: OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
-        templateIds: [OPENAI_CODEX_GPT_53_MODEL_ID, ...OPENAI_CODEX_TEMPLATE_MODEL_IDS],
-        patch: {
-          api: "openai-codex-responses",
-          provider: "openai-codex",
-          baseUrl: "https://chatgpt.com/backend-api",
-          reasoning: true,
-          input: ["text", "image"],
-        },
-      }) ??
-        normalizeModelCompat({
-          id: OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
-          name: OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
-          api: "openai-codex-responses",
-          provider: "openai-codex",
-          baseUrl: "https://chatgpt.com/backend-api",
-          reasoning: true,
-          input: ["text", "image"],
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-          contextWindow: DEFAULT_CONTEXT_TOKENS,
-          maxTokens: DEFAULT_CONTEXT_TOKENS,
-        } as Model<Api>),
+      buildOpenAICodexSparkFallbackModel(
+        cloneSyntheticTemplateModel({
+          models: next,
+          normalizedProvider: "openai-codex",
+          trimmedModelId: OPENAI_CODEX_GPT_53_SPARK_MODEL_ID,
+          templateIds: [OPENAI_CODEX_GPT_53_MODEL_ID, ...OPENAI_CODEX_TEMPLATE_MODEL_IDS],
+          patch: {
+            api: "openai-codex-responses",
+            provider: "openai-codex",
+            baseUrl: "https://chatgpt.com/backend-api",
+            reasoning: true,
+            input: ["text", "image"],
+          },
+        }),
+      ),
     );
   }
 
