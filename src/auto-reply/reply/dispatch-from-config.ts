@@ -217,7 +217,8 @@ export async function dispatchReplyFromConfig(params: {
   const currentSurface = providerChannel ?? surfaceChannel;
   const isInternalWebchatTurn =
     currentSurface === INTERNAL_MESSAGE_CHANNEL &&
-    (surfaceChannel === INTERNAL_MESSAGE_CHANNEL || !surfaceChannel);
+    (surfaceChannel === INTERNAL_MESSAGE_CHANNEL || !surfaceChannel) &&
+    ctx.ExplicitDeliverRoute !== true;
   const shouldRouteToOriginating = Boolean(
     !isInternalWebchatTurn &&
     isRoutableChannel(originatingChannel) &&
