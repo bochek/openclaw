@@ -15,6 +15,7 @@ Docs: https://docs.openclaw.ai
 - Slack/DM typing feedback: add `channels.slack.typingReaction` so Socket Mode DMs can show reaction-based processing status even when Slack native assistant typing is unavailable. (#19816) Thanks @dalefrieswthat.
 - Exec/process interactive recovery: add `process attach` plus input-wait metadata/hints (`waitingForInput`, `idleMs`, `stdinWritable`) so long-running interactive sessions can be observed and resumed without losing context. Fixes #33957. Thanks @westoque.
 - Skills/nano-banana-pro: accept public `http(s)` input images for edit/composition while keeping local path support, and return explicit errors for redirects, `file://`, and private-network URLs. Fixes #33960. Thanks @westoque and @vincentkoc.
+- Config/operator policy: add an immutable `operator-policy.json5` overlay that locks configured paths above mutable config, rejects conflicting `config set/patch/apply` writes, and surfaces the active policy in `status --all` and `openclaw doctor`. Fixes #33958. Thanks @vincentkoc.
 
 ### Fixes
 
