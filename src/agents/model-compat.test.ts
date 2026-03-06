@@ -340,7 +340,7 @@ describe("resolveForwardCompatModel", () => {
     expect(model?.reasoning).toBe(true);
     expect(model?.contextWindow).toBe(1_050_000);
     expect(model?.maxTokens).toBe(128_000);
-    expect(model?.cost).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 });
+    expect(model?.cost).toEqual({ input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 0 });
   });
 
   it("resolves openai gpt-5.4-pro via template fallback", () => {
@@ -353,6 +353,7 @@ describe("resolveForwardCompatModel", () => {
     expect(model?.baseUrl).toBe("https://api.openai.com/v1");
     expect(model?.contextWindow).toBe(1_050_000);
     expect(model?.maxTokens).toBe(128_000);
+    expect(model?.cost).toEqual({ input: 30, output: 180, cacheRead: 0, cacheWrite: 0 });
   });
 
   it("resolves openai-codex gpt-5.4 via codex template fallback", () => {
