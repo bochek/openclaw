@@ -446,6 +446,30 @@ describe("resolveModel", () => {
     });
   });
 
+  it("uses GPT-5.4 Pro pricing when cloning an older openai template", () => {
+    mockDiscoveredModel({
+      provider: "openai",
+      modelId: "gpt-5.2",
+      templateModel: buildForwardCompatTemplate({
+        id: "gpt-5.2",
+        name: "GPT-5.2",
+        provider: "openai",
+        api: "openai-responses",
+        baseUrl: "https://api.openai.com/v1",
+      }),
+    });
+
+    const result = resolveModel("openai", "gpt-5.4-pro", "/tmp/agent");
+
+    expect(result.error).toBeUndefined();
+    expect(result.model?.cost).toEqual({
+      input: 30,
+      output: 180,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
+  });
+
   it("builds an anthropic forward-compat fallback for claude-opus-4-6", () => {
     mockDiscoveredModel({
       provider: "anthropic",
