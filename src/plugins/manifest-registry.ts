@@ -233,8 +233,22 @@ export function loadPluginManifestRegistry(params: {
         level: "warn",
         pluginId: manifest.id,
         source: candidate.source,
-        message: `duplicate plugin id detected; later plugin may be overridden (${candidate.source})`,
+        message: `duplicate plugin id detected; skipping duplicate from ${candidate.source}`,
       });
+      // Genuine duplicate from a different physical path: apply the same
+      // precedence logic as same-path duplicates to avoid registering two
+      // records with the same plugin id (which causes Gateway instability).
+      if (PLUGIN_ORIGIN_RANK[candidate.origin] < PLUGIN_ORIGIN_RANK[existing.candidate.origin]) {
+        records[existing.recordIndex] = buildRecord({
+          manifest,
+          candidate,
+          manifestPath: manifestRes.manifestPath,
+          schemaCacheKey,
+          configSchema,
+        });
+        seenIds.set(manifest.id, { candidate, recordIndex: existing.recordIndex });
+      }
+      continue;
     } else {
       seenIds.set(manifest.id, { candidate, recordIndex: records.length });
     }
