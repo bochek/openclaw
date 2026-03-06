@@ -180,8 +180,9 @@ describe("loadPluginManifestRegistry", () => {
     const registry = loadRegistry(candidates);
     expect(countDuplicateWarnings(registry)).toBe(1);
     expect(registry.plugins.filter((p) => p.id === "feishu-dup")).toHaveLength(1);
-    // Global has higher precedence than bundled (config > workspace > global > bundled)
-    expect(registry.plugins[0]?.origin).toBe("global");
+    // Bundled has higher precedence than global for genuine duplicates
+    // (bundled ships with the binary and is the known-good version)
+    expect(registry.plugins[0]?.origin).toBe("bundled");
   });
 
   it("keeps existing record when genuine duplicate has lower precedence", () => {
