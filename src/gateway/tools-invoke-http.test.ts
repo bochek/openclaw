@@ -118,9 +118,19 @@ vi.mock("../agents/openclaw-tools.js", () => {
           throw toolAuthorizationError("mode forbidden");
         }
         if (mode === "zod") {
-          const err = new Error("invalid tool payload") as Error & { issues?: unknown[] };
+          const err = new Error("invalid tool payload") as Error & {
+            issues?: unknown[];
+            toolInputError?: boolean;
+          };
           err.name = "ZodError";
           err.issues = [{ path: ["amount"], message: "Required", code: "invalid_type" }];
+          err.toolInputError = true;
+          throw err;
+        }
+        if (mode === "zod-internal") {
+          const err = new Error("schema mismatch") as Error & { issues?: unknown[] };
+          err.name = "ZodError";
+          err.issues = [{ path: ["result"], message: "Invalid", code: "invalid_type" }];
           throw err;
         }
         if (mode === "crash") {
@@ -546,7 +556,7 @@ describe("POST /tools/invoke", () => {
     expect(resMain.status).toBe(200);
   });
 
-  it("maps tool input/auth/schema errors to 400/403 and unexpected execution errors to 500", async () => {
+  it("maps tool input/auth errors and explicit schema-input errors to 400/403", async () => {
     cfg = {
       ...cfg,
       agents: {
@@ -586,6 +596,17 @@ describe("POST /tools/invoke", () => {
     expect(zodBody.ok).toBe(false);
     expect(zodBody.error?.type).toBe("tool_error");
     expect(zodBody.error?.message).toBe("invalid tool payload");
+
+    const internalZodRes = await invokeToolAuthed({
+      tool: "tools_invoke_test",
+      args: { mode: "zod-internal" },
+      sessionKey: "main",
+    });
+    expect(internalZodRes.status).toBe(500);
+    const internalZodBody = await internalZodRes.json();
+    expect(internalZodBody.ok).toBe(false);
+    expect(internalZodBody.error?.type).toBe("tool_error");
+    expect(internalZodBody.error?.message).toBe("tool execution failed");
 
     const crashRes = await invokeToolAuthed({
       tool: "tools_invoke_test",

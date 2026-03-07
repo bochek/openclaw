@@ -118,10 +118,14 @@ function resolveToolInputErrorStatus(err: unknown): number | null {
     return typeof status === "number" ? status : 400;
   }
   // Some tool implementations throw raw ZodError objects on malformed model/tool payloads.
-  // Treat these as user-input validation failures (400), not internal server failures (500).
+  // Only map to 400 when explicitly marked as tool-input validation; otherwise preserve 500.
   if (typeof err === "object" && err !== null) {
-    const record = err as { name?: unknown; issues?: unknown };
-    if (record.name === "ZodError" && Array.isArray(record.issues)) {
+    const record = err as { name?: unknown; issues?: unknown; toolInputError?: unknown };
+    if (
+      record.name === "ZodError" &&
+      Array.isArray(record.issues) &&
+      record.toolInputError === true
+    ) {
       return 400;
     }
   }
