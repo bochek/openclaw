@@ -46,4 +46,24 @@ describe("readLatestAssistantReply", () => {
 
     expect(result).toBe("older output");
   });
+
+  it("normalizes reasoning tags when reading from transcript history", async () => {
+    callGatewayMock.mockResolvedValue({
+      messages: [
+        {
+          role: "assistant",
+          content: [
+            {
+              type: "text",
+              text: "<think>private reasoning</think><final>Clean answer</final>",
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await readLatestAssistantReply({ sessionKey: "agent:main:child" });
+
+    expect(result).toBe("Clean answer");
+  });
 });

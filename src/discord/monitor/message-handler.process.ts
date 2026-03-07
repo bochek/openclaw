@@ -592,6 +592,17 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
     await draftStream.flush();
   };
 
+  const sanitizeVisibleReplyText = (text?: string) => {
+    if (typeof text !== "string") {
+      return text;
+    }
+    const cleaned = stripReasoningTagsFromText(text, { mode: "strict", trim: "both" });
+    if (cleaned.startsWith("Reasoning:\n")) {
+      return "";
+    }
+    return cleaned;
+  };
+
   // When draft streaming is active, suppress block streaming to avoid double-streaming.
   const disableBlockStreamingForDraft = draftStream ? true : undefined;
 
@@ -609,10 +620,15 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
           // Reasoning/thinking payloads should not be delivered to Discord.
           return;
         }
+        const visiblePayload =
+          typeof payload.text === "string"
+            ? { ...payload, text: sanitizeVisibleReplyText(payload.text) }
+            : payload;
         if (draftStream && isFinal) {
           await flushDraft();
-          const hasMedia = Boolean(payload.mediaUrl) || (payload.mediaUrls?.length ?? 0) > 0;
-          const finalText = payload.text;
+          const hasMedia =
+            Boolean(visiblePayload.mediaUrl) || (visiblePayload.mediaUrls?.length ?? 0) > 0;
+          const finalText = visiblePayload.text;
           const previewFinalText = resolvePreviewFinalText(finalText);
           const previewMessageId = draftStream.messageId();
 
@@ -622,7 +638,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
             !hasMedia &&
             typeof previewFinalText === "string" &&
             typeof previewMessageId === "string" &&
-            !payload.isError;
+            !visiblePayload.isError;
 
           if (canFinalizeViaPreviewEdit) {
             await draftStream.stop();
@@ -657,7 +673,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
               typeof messageIdAfterStop === "string" &&
               typeof previewFinalText === "string" &&
               !hasMedia &&
-              !payload.isError
+              !visiblePayload.isError
             ) {
               try {
                 await editMessageDiscord(
@@ -688,7 +704,7 @@ export async function processDiscordMessage(ctx: DiscordMessagePreflightContext)
 
         const replyToId = replyReference.use();
         await deliverDiscordReply({
-          replies: [payload],
+          replies: [visiblePayload],
           target: deliverTarget,
           token,
           accountId,

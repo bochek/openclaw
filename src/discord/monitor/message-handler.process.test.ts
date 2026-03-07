@@ -527,6 +527,24 @@ describe("processDiscordMessage draft streaming", () => {
     expect(editMessageDiscord).not.toHaveBeenCalled();
   });
 
+  it("strips reasoning tags from final payload delivery", async () => {
+    dispatchInboundMessage.mockImplementationOnce(async (params?: DispatchInboundParams) => {
+      await params?.dispatcher.sendFinalReply({
+        text: "<think>internal chain of thought</think><final>Visible answer</final>",
+      });
+      return { queuedFinal: true, counts: { final: 1, tool: 0, block: 0 } };
+    });
+
+    await processStreamOffDiscordMessage();
+
+    expect(deliverDiscordReply).toHaveBeenCalledTimes(1);
+    expect(deliverDiscordReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replies: [expect.objectContaining({ text: "Visible answer" })],
+      }),
+    );
+  });
+
   it("delivers non-reasoning block payloads to Discord", async () => {
     mockDispatchSingleBlockReply({ text: "hello from block stream" });
     await processStreamOffDiscordMessage();
