@@ -645,4 +645,42 @@ describe("runOnboardingWizard", () => {
       }),
     );
   });
+
+  it("prompts for tool access profile before workspace in local advanced flow", async () => {
+    const promptOrder: string[] = [];
+    const select = vi.fn(async (params: WizardSelectParams<unknown>) => {
+      promptOrder.push(`select:${params.message}`);
+      if (params.message === "Tool access profile") {
+        return "coding";
+      }
+      return "quickstart";
+    }) as unknown as WizardPrompter["select"];
+    const text = vi.fn(async (params: { message: string }) => {
+      promptOrder.push(`text:${params.message}`);
+      return "/tmp/openclaw-advanced-workspace";
+    }) as unknown as WizardPrompter["text"];
+    const prompter = buildWizardPrompter({ select, text });
+
+    await runOnboardingWizard(
+      {
+        acceptRisk: true,
+        flow: "advanced",
+        mode: "local",
+        authChoice: "skip",
+        installDaemon: false,
+        skipProviders: true,
+        skipSkills: true,
+        skipHealth: true,
+        skipUi: true,
+      },
+      createRuntime(),
+      prompter,
+    );
+
+    expect(promptOrder).toContain("select:Tool access profile");
+    expect(promptOrder).toContain("text:Workspace directory");
+    expect(promptOrder.indexOf("select:Tool access profile")).toBeLessThan(
+      promptOrder.indexOf("text:Workspace directory"),
+    );
+  });
 });

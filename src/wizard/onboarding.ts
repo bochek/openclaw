@@ -76,22 +76,22 @@ const TOOL_PROFILE_CHOICES: Array<{ value: ToolProfileId; label: string; hint: s
   {
     value: "messaging",
     label: "Messaging",
-    hint: "Chat-focused: send messages + use session history; no files, shell, or browser automation.",
+    hint: "[chat + memory] Chat-focused: send messages + use session history; no files, shell, or browser automation.",
   },
   {
     value: "coding",
     label: "Coding",
-    hint: "Builder mode: read/edit files, run shell, use coding tools + sessions; no direct channel messaging.",
+    hint: "[files + shell] Builder mode: read/edit files, run shell, use coding tools + sessions; no direct channel messaging.",
   },
   {
     value: "full",
     label: "Full",
-    hint: "Unrestricted built-in tool profile, including higher-risk capabilities.",
+    hint: "[all built-ins] Unrestricted built-in tool profile, including higher-risk capabilities.",
   },
   {
     value: "minimal",
     label: "Minimal",
-    hint: "Status-only: check session status; no file access, shell commands, browsing, or messaging.",
+    hint: "[status only] Status-only: check session status; no file access, shell commands, browsing, or messaging.",
   },
 ];
 
@@ -420,17 +420,6 @@ export async function runOnboardingWizard(
     return;
   }
 
-  const workspaceInput =
-    opts.workspace ??
-    (flow === "quickstart"
-      ? (baseConfig.agents?.defaults?.workspace ?? onboardHelpers.DEFAULT_WORKSPACE)
-      : await prompter.text({
-          message: "Workspace directory",
-          initialValue: baseConfig.agents?.defaults?.workspace ?? onboardHelpers.DEFAULT_WORKSPACE,
-        }));
-
-  const workspaceDir = resolveUserPath(workspaceInput.trim() || onboardHelpers.DEFAULT_WORKSPACE);
-
   const existingToolsProfile = baseConfig.tools?.profile;
   const resolvedExistingToolsProfile = existingToolsProfile
     ? VALID_TOOLS_PROFILES.has(existingToolsProfile)
@@ -448,6 +437,17 @@ export async function runOnboardingWizard(
       options: TOOL_PROFILE_CHOICES,
       initialValue: resolvedExistingToolsProfile ?? "messaging",
     }));
+
+  const workspaceInput =
+    opts.workspace ??
+    (flow === "quickstart"
+      ? (baseConfig.agents?.defaults?.workspace ?? onboardHelpers.DEFAULT_WORKSPACE)
+      : await prompter.text({
+          message: "Workspace directory",
+          initialValue: baseConfig.agents?.defaults?.workspace ?? onboardHelpers.DEFAULT_WORKSPACE,
+        }));
+
+  const workspaceDir = resolveUserPath(workspaceInput.trim() || onboardHelpers.DEFAULT_WORKSPACE);
 
   const { applyOnboardingLocalWorkspaceConfig } = await import("../commands/onboard-config.js");
   let nextConfig: OpenClawConfig = applyOnboardingLocalWorkspaceConfig(baseConfig, workspaceDir, {

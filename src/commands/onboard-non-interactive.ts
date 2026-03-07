@@ -5,7 +5,7 @@ import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
 import { runNonInteractiveOnboardingLocal } from "./onboard-non-interactive/local.js";
 import { runNonInteractiveOnboardingRemote } from "./onboard-non-interactive/remote.js";
-import type { OnboardOptions } from "./onboard-types.js";
+import { VALID_TOOLS_PROFILES, type OnboardOptions } from "./onboard-types.js";
 
 export async function runNonInteractiveOnboarding(
   opts: OnboardOptions,
@@ -29,6 +29,11 @@ export async function runNonInteractiveOnboarding(
   }
   if (mode === "remote" && opts.toolsProfile !== undefined) {
     runtime.error('--tools-profile is only supported when --mode is "local".');
+    runtime.exit(1);
+    return;
+  }
+  if (opts.toolsProfile !== undefined && !VALID_TOOLS_PROFILES.has(opts.toolsProfile)) {
+    runtime.error('Invalid --tools-profile. Use "minimal", "coding", "messaging", or "full".');
     runtime.exit(1);
     return;
   }

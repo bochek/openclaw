@@ -198,6 +198,30 @@ describe("onboard (non-interactive): gateway and remote auth", () => {
     });
   }, 60_000);
 
+  it("rejects invalid --tools-profile in local mode", async () => {
+    await withStateDir("state-tools-profile-invalid-", async (stateDir) => {
+      const workspace = path.join(stateDir, "openclaw");
+
+      await expect(
+        runNonInteractiveOnboarding(
+          {
+            nonInteractive: true,
+            mode: "local",
+            workspace,
+            toolsProfile: "invalid" as never,
+            authChoice: "skip",
+            skipSkills: true,
+            skipHealth: true,
+            installDaemon: false,
+          },
+          runtime,
+        ),
+      ).rejects.toThrow(
+        'Invalid --tools-profile. Use "minimal", "coding", "messaging", or "full".',
+      );
+    });
+  }, 60_000);
+
   it("uses OPENCLAW_GATEWAY_TOKEN when --gateway-token is omitted", async () => {
     await withStateDir("state-env-token-", async (stateDir) => {
       const envToken = "tok_env_fallback_123";

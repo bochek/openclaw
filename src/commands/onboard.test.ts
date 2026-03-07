@@ -193,4 +193,23 @@ describe("onboardCommand", () => {
     expect(mocks.runInteractiveOnboarding).not.toHaveBeenCalled();
     expect(mocks.runNonInteractiveOnboarding).not.toHaveBeenCalled();
   });
+
+  it("prefers the remote-mode error when --tools-profile is invalid in remote mode", async () => {
+    const runtime = makeRuntime();
+
+    await onboardCommand(
+      {
+        mode: "remote",
+        toolsProfile: "invalid" as never,
+      },
+      runtime,
+    );
+
+    expect(runtime.error).toHaveBeenCalledWith(
+      '--tools-profile is only supported when --mode is "local".',
+    );
+    expect(runtime.exit).toHaveBeenCalledWith(1);
+    expect(mocks.runInteractiveOnboarding).not.toHaveBeenCalled();
+    expect(mocks.runNonInteractiveOnboarding).not.toHaveBeenCalled();
+  });
 });

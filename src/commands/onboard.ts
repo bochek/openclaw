@@ -46,16 +46,16 @@ export async function onboardCommand(opts: OnboardOptions, runtime: RuntimeEnv =
     runtime.exit(1);
     return;
   }
+  if (normalizedOpts.mode === "remote" && normalizedOpts.toolsProfile !== undefined) {
+    runtime.error('--tools-profile is only supported when --mode is "local".');
+    runtime.exit(1);
+    return;
+  }
   if (
     normalizedOpts.toolsProfile !== undefined &&
     !VALID_TOOLS_PROFILES.has(normalizedOpts.toolsProfile)
   ) {
     runtime.error('Invalid --tools-profile. Use "minimal", "coding", "messaging", or "full".');
-    runtime.exit(1);
-    return;
-  }
-  if (normalizedOpts.mode === "remote" && normalizedOpts.toolsProfile !== undefined) {
-    runtime.error('--tools-profile is only supported when --mode is "local".');
     runtime.exit(1);
     return;
   }
