@@ -102,4 +102,48 @@ describe("config io warning/error logging", () => {
       expect(logger.error).toHaveBeenCalledTimes(2);
     });
   });
+
+  it("sanitizes config validation details before logging", async () => {
+    vi.resetModules();
+    vi.doMock("./validation.js", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("./validation.js")>();
+      return {
+        ...actual,
+        validateConfigObjectWithPlugins: vi.fn(() => ({
+          ok: false as const,
+          issues: [
+            {
+              path: "plugins.entries.bad\nkey\u001b[31m",
+              message: "invalid\tvalue\r\n\u001b[2J",
+            },
+          ],
+        })),
+      };
+    });
+
+    const { createConfigIO: createConfigIOWithMock } = await import("./io.js");
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-config-log-sanitize-"));
+    const configDir = path.join(home, ".openclaw");
+    const configPath = path.join(configDir, "openclaw.json");
+    await fs.mkdir(configDir, { recursive: true });
+    await fs.writeFile(configPath, JSON.stringify({ gateway: { port: 18789 } }, null, 2));
+    const logger = { warn: vi.fn(), error: vi.fn() };
+    const io = createConfigIOWithMock({
+      env: {} as NodeJS.ProcessEnv,
+      homedir: () => home,
+      logger,
+    });
+
+    try {
+      expect(io.loadConfig()).toEqual({});
+      const logged = logger.error.mock.calls[0]?.[0] ?? "";
+      expect(logged).toContain("plugins.entries.bad\\nkey");
+      expect(logged).toContain("invalid\\tvalue\\r\\n");
+      expect(logged).not.toContain("\u001b");
+    } finally {
+      vi.doUnmock("./validation.js");
+      vi.resetModules();
+      await fs.rm(home, { recursive: true, force: true });
+    }
+  });
 });

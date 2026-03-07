@@ -13,6 +13,7 @@ import {
   shouldDeferShellEnvFallback,
   shouldEnableShellEnvFallback,
 } from "../infra/shell-env.js";
+import { sanitizeTerminalText } from "../terminal/safe-text.js";
 import { VERSION } from "../version.js";
 import { DuplicateAgentDirError, findDuplicateAgentDirs } from "./agent-dirs.js";
 import { maintainConfigBackups } from "./backup-rotation.js";
@@ -591,6 +592,16 @@ function clearConfigMessageFingerprint(
   }
 }
 
+function formatConfigIssueDetails(issues: Array<{ path: string; message: string }>): string {
+  return issues
+    .map((iss) => {
+      const safePath = sanitizeTerminalText(iss.path || "<root>");
+      const safeMessage = sanitizeTerminalText(iss.message);
+      return `- ${safePath}: ${safeMessage}`;
+    })
+    .join("\n");
+}
+
 function getConfigMiskeyWarnings(raw: unknown): string[] {
   const warnings: string[] = [];
   if (!raw || typeof raw !== "object") {
@@ -765,26 +776,24 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
       }
       const validated = validateConfigObjectWithPlugins(resolvedConfig);
       if (!validated.ok) {
-        const details = validated.issues
-          .map((iss) => `- ${iss.path || "<root>"}: ${iss.message}`)
-          .join("\n");
+        const details = formatConfigIssueDetails(validated.issues);
         clearConfigMessageFingerprint(configPath, "warnings");
         logConfigMessageOnce({
           configPath,
           kind: "invalid",
-          message: `Invalid config at ${configPath}:\\n${details}`,
+          message: `Invalid config at ${sanitizeTerminalText(configPath)}:\\n${details}`,
           logger: deps.logger,
         });
-        const error = new Error(`Invalid config at ${configPath}:\n${details}`);
+        const error = new Error(
+          `Invalid config at ${sanitizeTerminalText(configPath)}:\n${details}`,
+        );
         (error as { code?: string; details?: string }).code = "INVALID_CONFIG";
         (error as { code?: string; details?: string }).details = details;
         throw error;
       }
       clearConfigMessageFingerprint(configPath, "invalid");
       if (validated.warnings.length > 0) {
-        const details = validated.warnings
-          .map((iss) => `- ${iss.path || "<root>"}: ${iss.message}`)
-          .join("\n");
+        const details = formatConfigIssueDetails(validated.warnings);
         warningMessages.push(`Config warnings:\\n${details}`);
       }
       const futureVersionWarning = getFutureVersionWarning(validated.config);
