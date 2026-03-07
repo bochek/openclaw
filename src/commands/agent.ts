@@ -38,6 +38,7 @@ import { buildWorkspaceSkillSnapshot } from "../agents/skills.js";
 import { getSkillsSnapshotVersion } from "../agents/skills/refresh.js";
 import { resolveAgentTimeoutMs } from "../agents/timeout.js";
 import { ensureAgentWorkspace } from "../agents/workspace.js";
+import { normalizeReplyPayload } from "../auto-reply/reply/normalize-reply.js";
 import {
   formatThinkingLevels,
   formatXHighModelHint,
@@ -47,6 +48,11 @@ import {
   type ThinkLevel,
   type VerboseLevel,
 } from "../auto-reply/thinking.js";
+import {
+  isSilentReplyPrefixText,
+  isSilentReplyText,
+  SILENT_REPLY_TOKEN,
+} from "../auto-reply/tokens.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import { resolveCommandSecretRefsViaGateway } from "../cli/command-secret-gateway.js";
 import { getAgentRuntimeCommandSecretTargetIds } from "../cli/command-secret-targets.js";
@@ -146,6 +152,76 @@ function prependInternalEventContext(
     return body;
   }
   return [renderedEvents, body].filter(Boolean).join("\n\n");
+}
+
+function appendUniqueSuffix(base: string, suffix: string): { text: string; delta: string } {
+  if (!suffix) {
+    return { text: base, delta: "" };
+  }
+  if (!base) {
+    return { text: suffix, delta: suffix };
+  }
+  if (base.endsWith(suffix)) {
+    return { text: base, delta: "" };
+  }
+  const maxOverlap = Math.min(base.length, suffix.length);
+  for (let overlap = maxOverlap; overlap > 0; overlap -= 1) {
+    if (base.slice(-overlap) === suffix.slice(0, overlap)) {
+      const delta = suffix.slice(overlap);
+      return {
+        text: `${base}${delta}`,
+        delta,
+      };
+    }
+  }
+  return {
+    text: `${base}${suffix}`,
+    delta: suffix,
+  };
+}
+
+function createAcpVisibleTextAccumulator() {
+  let pendingSilentPrefix = "";
+  let visibleText = "";
+
+  return {
+    consume(chunk: string): { text: string; delta: string } | null {
+      if (!chunk) {
+        return null;
+      }
+
+      if (!visibleText) {
+        const leadCandidate = appendUniqueSuffix(pendingSilentPrefix, chunk);
+        const trimmedLeadCandidate = leadCandidate.text.trim();
+        if (
+          isSilentReplyText(trimmedLeadCandidate, SILENT_REPLY_TOKEN) ||
+          isSilentReplyPrefixText(trimmedLeadCandidate, SILENT_REPLY_TOKEN)
+        ) {
+          pendingSilentPrefix = leadCandidate.text;
+          return null;
+        }
+        if (pendingSilentPrefix) {
+          const visibleDelta = leadCandidate.text.startsWith(pendingSilentPrefix)
+            ? leadCandidate.text.slice(pendingSilentPrefix.length)
+            : chunk;
+          pendingSilentPrefix = "";
+          if (!visibleDelta) {
+            return null;
+          }
+          const nextVisible = appendUniqueSuffix(visibleText, visibleDelta);
+          visibleText = nextVisible.text;
+          return nextVisible.delta ? nextVisible : null;
+        }
+      }
+
+      const nextVisible = appendUniqueSuffix(visibleText, chunk);
+      visibleText = nextVisible.text;
+      return nextVisible.delta ? nextVisible : null;
+    },
+    finalize(): string {
+      return visibleText.trim();
+    },
+  };
 }
 
 function runAgentAttempt(params: {
@@ -492,7 +568,7 @@ async function agentCommandInternal(
         },
       });
 
-      let streamedText = "";
+      const visibleTextAccumulator = createAcpVisibleTextAccumulator();
       let stopReason: string | undefined;
       try {
         const dispatchPolicyError = resolveAcpDispatchPolicyError(cfg);
@@ -528,13 +604,16 @@ async function agentCommandInternal(
             if (!event.text) {
               return;
             }
-            streamedText += event.text;
+            const visibleUpdate = visibleTextAccumulator.consume(event.text);
+            if (!visibleUpdate) {
+              return;
+            }
             emitAgentEvent({
               runId,
               stream: "assistant",
               data: {
-                text: streamedText,
-                delta: event.text,
+                text: visibleUpdate.text,
+                delta: visibleUpdate.delta,
               },
             });
           },
@@ -566,14 +645,10 @@ async function agentCommandInternal(
         },
       });
 
-      const finalText = streamedText.trim();
-      const payloads = finalText
-        ? [
-            {
-              text: finalText,
-            },
-          ]
-        : [];
+      const normalizedFinalPayload = normalizeReplyPayload({
+        text: visibleTextAccumulator.finalize(),
+      });
+      const payloads = normalizedFinalPayload ? [normalizedFinalPayload] : [];
       const result = {
         payloads,
         meta: {
