@@ -646,6 +646,39 @@ describe("runOnboardingWizard", () => {
     );
   });
 
+  it("fails when interactive mode selection resolves to remote with --tools-profile set", async () => {
+    const select = vi.fn(async (params: WizardSelectParams<unknown>) => {
+      if (params.message === "What do you want to set up?") {
+        return "remote";
+      }
+      return "advanced";
+    }) as unknown as WizardPrompter["select"];
+    const prompter = buildWizardPrompter({ select });
+    const runtime = createRuntime({ throwsOnExit: true });
+
+    await expect(
+      runOnboardingWizard(
+        {
+          acceptRisk: true,
+          flow: "advanced",
+          toolsProfile: "coding",
+          authChoice: "skip",
+          installDaemon: false,
+          skipProviders: true,
+          skipSkills: true,
+          skipHealth: true,
+          skipUi: true,
+        },
+        runtime,
+        prompter,
+      ),
+    ).rejects.toThrow("exit:1");
+
+    expect(runtime.error).toHaveBeenCalledWith(
+      '--tools-profile is only supported when --mode is "local".',
+    );
+  });
+
   it("prompts for tool access profile before workspace in local advanced flow", async () => {
     const promptOrder: string[] = [];
     const select = vi.fn(async (params: WizardSelectParams<unknown>) => {

@@ -407,6 +407,12 @@ export async function runOnboardingWizard(
           ],
         })) as OnboardMode));
 
+  if (mode === "remote" && opts.toolsProfile !== undefined) {
+    runtime.error('--tools-profile is only supported when --mode is "local".');
+    runtime.exit(1);
+    return;
+  }
+
   if (mode === "remote") {
     const { promptRemoteGatewayConfig } = await import("../commands/onboard-remote.js");
     const { logConfigUpdated } = await import("../config/logging.js");
