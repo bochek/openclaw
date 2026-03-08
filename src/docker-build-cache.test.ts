@@ -106,6 +106,14 @@ describe("docker build cache layout", () => {
       dockerfile.indexOf("COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./"),
     ).toBeLessThan(installIndex);
     expect(dockerfile.indexOf("COPY ui/package.json ./ui/package.json")).toBeLessThan(installIndex);
+    expect(dockerfile).toContain(
+      "This image only exercises the root qrcode-terminal dependency path.",
+    );
+    expect(
+      dockerfile.indexOf(
+        "COPY extensions/memory-core/package.json ./extensions/memory-core/package.json",
+      ),
+    ).toBe(-1);
     expect(dockerfile.indexOf("COPY . .")).toBeGreaterThan(installIndex);
   });
 });
