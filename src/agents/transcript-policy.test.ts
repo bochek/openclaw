@@ -131,6 +131,15 @@ describe("resolveTranscriptPolicy", () => {
     expect(policy.preserveSignatures).toBe(false);
   });
 
+  it("does not preserve signatures for kimi-code alias (#39798)", () => {
+    const policy = resolveTranscriptPolicy({
+      provider: "kimi-code",
+      modelId: "k2p5",
+      modelApi: "anthropic-messages",
+    });
+    expect(policy.preserveSignatures).toBe(false);
+  });
+
   it("enables turn-ordering and assistant-merge for strict OpenAI-compatible providers (#38962)", () => {
     const policy = resolveTranscriptPolicy({
       provider: "vllm",
