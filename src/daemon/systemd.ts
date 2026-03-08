@@ -210,6 +210,15 @@ function isGenericSystemctlIsEnabledFailure(detail: string): boolean {
   );
 }
 
+export function isNonFatalSystemdInstallProbeError(error: unknown): boolean {
+  const detail = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (!detail) {
+    return false;
+  }
+  const normalized = detail.toLowerCase();
+  return isSystemctlBusUnavailable(normalized) || isGenericSystemctlIsEnabledFailure(normalized);
+}
+
 function resolveSystemctlDirectUserScopeArgs(): string[] {
   return ["--user"];
 }
@@ -470,12 +479,7 @@ export async function isSystemdServiceEnabled(args: GatewayServiceEnvArgs): Prom
     return true;
   }
   const detail = readSystemctlDetail(res);
-  if (
-    isSystemctlMissing(detail) ||
-    isSystemdUnitNotEnabled(detail) ||
-    isSystemctlBusUnavailable(detail) ||
-    isGenericSystemctlIsEnabledFailure(detail)
-  ) {
+  if (isSystemctlMissing(detail) || isSystemdUnitNotEnabled(detail)) {
     return false;
   }
   throw new Error(`systemctl is-enabled unavailable: ${detail || "unknown error"}`.trim());
