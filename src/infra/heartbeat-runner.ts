@@ -560,7 +560,15 @@ type HeartbeatPromptResolution = {
   hasCronEvents: boolean;
 };
 
-function appendHeartbeatWorkspacePathHint(prompt: string, workspaceDir: string): string {
+function appendHeartbeatWorkspacePathHint(params: {
+  prompt: string;
+  workspaceDir: string;
+  shouldAppend: boolean;
+}): string {
+  const { prompt, workspaceDir, shouldAppend } = params;
+  if (!shouldAppend) {
+    return prompt;
+  }
   if (!/heartbeat\.md/i.test(prompt)) {
     return prompt;
   }
@@ -597,7 +605,16 @@ function resolveHeartbeatRunPrompt(params: {
     : hasCronEvents
       ? buildCronEventPrompt(cronEvents, { deliverToUser: params.canRelayToUser })
       : resolveHeartbeatPrompt(params.cfg, params.heartbeat);
-  const prompt = appendHeartbeatWorkspacePathHint(basePrompt, params.workspaceDir);
+  const hasExplicitPrompt = Boolean(
+    params.heartbeat?.prompt?.trim() || params.cfg.agents?.defaults?.heartbeat?.prompt?.trim(),
+  );
+  const prompt = appendHeartbeatWorkspacePathHint({
+    prompt: basePrompt,
+    workspaceDir: params.workspaceDir,
+    // Only append the hint when using the built-in default heartbeat prompt.
+    // If the user configured a custom prompt, do not mutate it.
+    shouldAppend: !hasExplicitPrompt && !hasExecCompletion && !hasCronEvents,
+  });
 
   return { prompt, hasExecCompletion, hasCronEvents };
 }
