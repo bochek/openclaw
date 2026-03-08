@@ -516,6 +516,9 @@ export const registerTelegramNativeCommands = ({
   const buildCommandDeliveryBaseOptions = (params: {
     chatId: string | number;
     accountId: string;
+    sessionKeyForInternalHooks?: string;
+    mirrorIsGroup?: boolean;
+    mirrorGroupId?: string;
     mediaLocalRoots?: readonly string[];
     threadSpec: ReturnType<typeof resolveTelegramThreadSpec>;
     tableMode: ReturnType<typeof resolveMarkdownTableMode>;
@@ -523,6 +526,9 @@ export const registerTelegramNativeCommands = ({
   }) => ({
     chatId: String(params.chatId),
     accountId: params.accountId,
+    sessionKeyForInternalHooks: params.sessionKeyForInternalHooks,
+    mirrorIsGroup: params.mirrorIsGroup,
+    mirrorGroupId: params.mirrorGroupId,
     token: opts.token,
     runtime,
     bot,
@@ -592,6 +598,9 @@ export const registerTelegramNativeCommands = ({
           const deliveryBaseOptions = buildCommandDeliveryBaseOptions({
             chatId,
             accountId: route.accountId,
+            sessionKeyForInternalHooks: route.sessionKey,
+            mirrorIsGroup: isGroup,
+            mirrorGroupId: isGroup ? String(chatId) : undefined,
             mediaLocalRoots,
             threadSpec,
             tableMode,
@@ -827,6 +836,9 @@ export const registerTelegramNativeCommands = ({
           const deliveryBaseOptions = buildCommandDeliveryBaseOptions({
             chatId,
             accountId: route.accountId,
+            sessionKeyForInternalHooks: route.sessionKey,
+            mirrorIsGroup: isGroup,
+            mirrorGroupId: isGroup ? String(chatId) : undefined,
             mediaLocalRoots,
             threadSpec,
             tableMode,
