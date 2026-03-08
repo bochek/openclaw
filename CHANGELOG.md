@@ -14,6 +14,7 @@ Docs: https://docs.openclaw.ai
 - Mattermost replies: keep `root_id` pinned to the existing thread root when an agent replies inside a thread, while still using reply-target threading for top-level posts. (#27744) thanks @hnykda.
 - Agents/failover: detect Amazon Bedrock `Too many tokens per day` quota errors as rate limits across fallback, cron retry, and memory embeddings while keeping context-window `too many tokens per request` errors out of the rate-limit lane. (#39377) Thanks @gambletan.
 - Android/Play distribution: remove self-update, background location, `screen.record`, and background mic capture from the Android app, narrow the foreground service to `dataSync` only, and clean up the legacy `location.enabledMode=always` preference migration. (#39660) Thanks @obviyus.
+- Agents/openai-codex model resolution: fall through from inline `openai-codex` model entries without an `api` so GPT-5.4 keeps the codex transport and still preserves configured `baseUrl` and headers. (#39753) Thanks @justinhuangcode.
 
 ## 2026.3.7
 
