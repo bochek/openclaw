@@ -47,6 +47,17 @@ function countDuplicateWarnings(registry: ReturnType<typeof loadPluginManifestRe
   ).length;
 }
 
+function getDuplicateWarningMessages(
+  registry: ReturnType<typeof loadPluginManifestRegistry>,
+): string[] {
+  return registry.diagnostics
+    .filter(
+      (diagnostic) =>
+        diagnostic.level === "warn" && diagnostic.message?.includes("duplicate plugin id"),
+    )
+    .map((diagnostic) => diagnostic.message);
+}
+
 function prepareLinkedManifestFixture(params: { id: string; mode: "symlink" | "hardlink" }): {
   rootDir: string;
   linked: boolean;
@@ -183,6 +194,9 @@ describe("loadPluginManifestRegistry", () => {
     // Bundled has higher precedence than global for genuine duplicates
     // (bundled ships with the binary and is the known-good version)
     expect(registry.plugins[0]?.origin).toBe("bundled");
+    expect(getDuplicateWarningMessages(registry)).toContain(
+      `duplicate plugin id detected; skipping duplicate from ${candidates[1].source}`,
+    );
   });
 
   it("keeps existing record when genuine duplicate has lower precedence", () => {
@@ -210,6 +224,38 @@ describe("loadPluginManifestRegistry", () => {
     expect(registry.plugins.filter((p) => p.id === "lower-prec")).toHaveLength(1);
     // Config has higher precedence, should be kept
     expect(registry.plugins[0]?.origin).toBe("config");
+    expect(getDuplicateWarningMessages(registry)).toContain(
+      `duplicate plugin id detected; skipping duplicate from ${candidates[1].source}`,
+    );
+  });
+
+  it("warns with existing source when higher-precedence duplicate replaces it", () => {
+    const globalDir = makeTempDir();
+    const bundledDir = makeTempDir();
+    const manifest = { id: "replace-prec", configSchema: { type: "object" } };
+    writeManifest(globalDir, manifest);
+    writeManifest(bundledDir, manifest);
+
+    const candidates: PluginCandidate[] = [
+      createPluginCandidate({
+        idHint: "replace-prec",
+        rootDir: globalDir,
+        origin: "global",
+      }),
+      createPluginCandidate({
+        idHint: "replace-prec",
+        rootDir: bundledDir,
+        origin: "bundled",
+      }),
+    ];
+
+    const registry = loadRegistry(candidates);
+    expect(countDuplicateWarnings(registry)).toBe(1);
+    expect(registry.plugins.filter((p) => p.id === "replace-prec")).toHaveLength(1);
+    expect(registry.plugins[0]?.origin).toBe("bundled");
+    expect(getDuplicateWarningMessages(registry)).toContain(
+      `duplicate plugin id detected; skipping duplicate from ${candidates[0].source}`,
+    );
   });
 
   it("suppresses duplicate warning when candidates share the same physical directory via symlink", () => {

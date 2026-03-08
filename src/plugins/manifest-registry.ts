@@ -241,18 +241,19 @@ export function loadPluginManifestRegistry(params: {
         }
         continue;
       }
+      const candidateWins =
+        GENUINE_DUPLICATE_RANK[candidate.origin] < GENUINE_DUPLICATE_RANK[existing.candidate.origin];
+      const skippedCandidate = candidateWins ? existing.candidate : candidate;
       diagnostics.push({
         level: "warn",
         pluginId: manifest.id,
-        source: candidate.source,
-        message: `duplicate plugin id detected; skipping duplicate from ${candidate.source}`,
+        source: skippedCandidate.source,
+        message: `duplicate plugin id detected; skipping duplicate from ${skippedCandidate.source}`,
       });
       // Genuine duplicate from a different physical path: apply
       // bundled-first precedence to avoid registering two records with
       // the same plugin id (which causes Gateway instability).
-      if (
-        GENUINE_DUPLICATE_RANK[candidate.origin] < GENUINE_DUPLICATE_RANK[existing.candidate.origin]
-      ) {
+      if (candidateWins) {
         records[existing.recordIndex] = buildRecord({
           manifest,
           candidate,
