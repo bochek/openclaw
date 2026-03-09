@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import { getAcpSessionManager } from "../../acp/control-plane/manager.js";
-import { resolveDefaultAgentId } from "../../agents/agent-scope.js";
+import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
 import { clearBootstrapSnapshot } from "../../agents/bootstrap-cache.js";
 import { abortEmbeddedPiRun, waitForEmbeddedPiRunEnd } from "../../agents/pi-embedded.js";
 import { stopSubagentsForRequester } from "../../auto-reply/reply/abort.js";
 import { clearSessionQueues } from "../../auto-reply/reply/queue.js";
+import { emitBeforeResetPluginHook } from "../../auto-reply/reply/reset-hooks.js";
 import { closeTrackedBrowserTabsForSessions } from "../../browser/session-tab-registry.js";
 import { loadConfig } from "../../config/config.js";
 import {
@@ -489,6 +490,12 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       },
     );
     await triggerInternalHook(hookEvent);
+    emitBeforeResetPluginHook({
+      sessionKey: target.canonicalKey ?? key,
+      previousSessionEntry: entry,
+      workspaceDir: resolveAgentWorkspaceDir(cfg, target.agentId),
+      reason: commandReason,
+    });
     const mutationCleanupError = await cleanupSessionBeforeMutation({
       cfg,
       key,

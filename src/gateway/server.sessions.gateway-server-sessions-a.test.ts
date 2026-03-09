@@ -37,6 +37,11 @@ const subagentLifecycleHookMocks = vi.hoisted(() => ({
 
 const subagentLifecycleHookState = vi.hoisted(() => ({
   hasSubagentEndedHook: true,
+  hasBeforeResetHook: false,
+}));
+
+const beforeResetHookMocks = vi.hoisted(() => ({
+  runBeforeReset: vi.fn(async () => {}),
 }));
 
 const threadBindingMocks = vi.hoisted(() => ({
@@ -96,8 +101,10 @@ vi.mock("../plugins/hook-runner-global.js", async (importOriginal) => {
     ...actual,
     getGlobalHookRunner: vi.fn(() => ({
       hasHooks: (hookName: string) =>
-        hookName === "subagent_ended" && subagentLifecycleHookState.hasSubagentEndedHook,
+        (hookName === "subagent_ended" && subagentLifecycleHookState.hasSubagentEndedHook) ||
+        (hookName === "before_reset" && subagentLifecycleHookState.hasBeforeResetHook),
       runSubagentEnded: subagentLifecycleHookMocks.runSubagentEnded,
+      runBeforeReset: beforeResetHookMocks.runBeforeReset,
     })),
   };
 });
@@ -220,6 +227,8 @@ describe("gateway server sessions", () => {
     sessionHookMocks.triggerInternalHook.mockClear();
     subagentLifecycleHookMocks.runSubagentEnded.mockClear();
     subagentLifecycleHookState.hasSubagentEndedHook = true;
+    subagentLifecycleHookState.hasBeforeResetHook = false;
+    beforeResetHookMocks.runBeforeReset.mockClear();
     threadBindingMocks.unbindThreadBindingsBySessionKey.mockClear();
     acpRuntimeMocks.cancel.mockClear();
     acpRuntimeMocks.close.mockClear();
@@ -1176,6 +1185,44 @@ describe("gateway server sessions", () => {
       },
     });
     expect(event.context?.previousSessionEntry).toMatchObject({ sessionId: "sess-main" });
+    ws.close();
+  });
+
+  test("sessions.reset runs before_reset plugin hooks with gateway session context", async () => {
+    const { dir } = await createSessionStoreDir();
+    await writeSingleLineSession(dir, "sess-main", "hello");
+
+    await writeSessionStore({
+      entries: {
+        main: {
+          sessionId: "sess-main",
+          sessionFile: path.join(dir, "sess-main.jsonl"),
+          updatedAt: Date.now(),
+        },
+      },
+    });
+    subagentLifecycleHookState.hasBeforeResetHook = true;
+
+    const { ws } = await openClient();
+    const reset = await rpcReq<{ ok: true; key: string }>(ws, "sessions.reset", {
+      key: "main",
+      reason: "new",
+    });
+    expect(reset.ok).toBe(true);
+
+    await vi.waitFor(() => expect(beforeResetHookMocks.runBeforeReset).toHaveBeenCalledTimes(1));
+    expect(beforeResetHookMocks.runBeforeReset).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionFile: path.join(dir, "sess-main.jsonl"),
+        reason: "new",
+      }),
+      expect.objectContaining({
+        agentId: "main",
+        sessionKey: "agent:main:main",
+        sessionId: "sess-main",
+      }),
+    );
+
     ws.close();
   });
 
