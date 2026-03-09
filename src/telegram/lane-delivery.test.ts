@@ -39,19 +39,12 @@ function createHarness(params?: {
     await lane.stream?.stop();
   });
   const editPreview = vi.fn().mockResolvedValue(undefined);
-  const deletePreviewMessage = vi.fn().mockResolvedValue(undefined);
   const log = vi.fn();
   const markDelivered = vi.fn();
   const finalizedPreviewByLane: Record<LaneName, boolean> = { answer: false, reasoning: false };
-  const archivedAnswerPreviews: Array<{
-    messageId: number;
-    textSnapshot: string;
-    deleteIfUnused?: boolean;
-  }> = [];
 
   const deliverLaneText = createLaneTextDeliverer({
     lanes,
-    archivedAnswerPreviews,
     finalizedPreviewByLane,
     draftMaxChars: params?.draftMaxChars ?? 4_096,
     applyTextToPayload: (payload: ReplyPayload, text: string) => ({ ...payload, text }),
@@ -59,7 +52,6 @@ function createHarness(params?: {
     flushDraftLane,
     stopDraftLane,
     editPreview,
-    deletePreviewMessage,
     log,
     markDelivered,
   });
@@ -75,10 +67,8 @@ function createHarness(params?: {
     flushDraftLane,
     stopDraftLane,
     editPreview,
-    deletePreviewMessage,
     log,
     markDelivered,
-    archivedAnswerPreviews,
   };
 }
 
@@ -143,7 +133,7 @@ describe("createLaneTextDeliverer", () => {
     expect(result).toBe("preview-finalized");
     expect(harness.editPreview).toHaveBeenCalledTimes(1);
     expect(harness.sendPayload).not.toHaveBeenCalled();
-    expect(harness.log).toHaveBeenCalledWith(expect.stringContaining("treating as delivered"));
+    expect(harness.log).toHaveBeenCalledWith(expect.stringContaining("keeping existing preview"));
   });
 
   it("treats 'message is not modified' preview edit errors as delivered", async () => {
@@ -170,7 +160,7 @@ describe("createLaneTextDeliverer", () => {
     );
   });
 
-  it("falls back to normal delivery when editing an existing preview fails", async () => {
+  it("keeps existing preview when editing an existing preview fails", async () => {
     const harness = createHarness({ answerMessageId: 999 });
     harness.editPreview.mockRejectedValue(new Error("500: preview edit failed"));
 
@@ -181,11 +171,10 @@ describe("createLaneTextDeliverer", () => {
       infoKind: "final",
     });
 
-    expect(result).toBe("sent");
+    expect(result).toBe("preview-finalized");
     expect(harness.editPreview).toHaveBeenCalledTimes(1);
-    expect(harness.sendPayload).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "Hello final" }),
-    );
+    expect(harness.sendPayload).not.toHaveBeenCalled();
+    expect(harness.log).toHaveBeenCalledWith(expect.stringContaining("keeping existing preview"));
   });
 
   it("falls back to normal delivery when stop-created preview has no message id", async () => {
@@ -360,27 +349,5 @@ describe("createLaneTextDeliverer", () => {
       expect.objectContaining({ text: "Choose one" }),
     );
     expect(harness.markDelivered).not.toHaveBeenCalled();
-  });
-
-  it("deletes consumed boundary previews after fallback final send", async () => {
-    const harness = createHarness();
-    harness.archivedAnswerPreviews.push({
-      messageId: 4444,
-      textSnapshot: "Boundary preview",
-      deleteIfUnused: false,
-    });
-
-    const result = await harness.deliverLaneText({
-      laneName: "answer",
-      text: "Final with media",
-      payload: { text: "Final with media", mediaUrl: "file:///tmp/example.png" },
-      infoKind: "final",
-    });
-
-    expect(result).toBe("sent");
-    expect(harness.sendPayload).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "Final with media", mediaUrl: "file:///tmp/example.png" }),
-    );
-    expect(harness.deletePreviewMessage).toHaveBeenCalledWith(4444);
   });
 });
