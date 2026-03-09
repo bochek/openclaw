@@ -1,3 +1,4 @@
+import { mergeAlsoAllowIntoAllowlist } from "./tool-policy-also-allow.js";
 import {
   expandToolGroups,
   normalizeToolList,
@@ -198,8 +199,12 @@ export function mergeAlsoAllowPolicy<TPolicy extends { allow?: string[] }>(
   policy: TPolicy | undefined,
   alsoAllow?: string[],
 ): TPolicy | undefined {
-  if (!policy?.allow || !Array.isArray(alsoAllow) || alsoAllow.length === 0) {
+  const allow = mergeAlsoAllowIntoAllowlist({
+    allow: policy?.allow,
+    alsoAllow,
+  });
+  if (allow === policy?.allow) {
     return policy;
   }
-  return { ...policy, allow: Array.from(new Set([...policy.allow, ...alsoAllow])) };
+  return { ...policy, allow } as TPolicy;
 }

@@ -350,6 +350,7 @@ describe("POST /tools/invoke", () => {
     expect(resProfile.status).toBe(200);
     const profileBody = await resProfile.json();
     expect(profileBody.ok).toBe(true);
+    expect(lastCreateOpenClawToolsContext?.pluginToolAllowlist).toContain("agents_list");
 
     cfg = {
       ...cfg,
@@ -360,6 +361,7 @@ describe("POST /tools/invoke", () => {
     expect(resImplicit.status).toBe(200);
     const implicitBody = await resImplicit.json();
     expect(implicitBody.ok).toBe(true);
+    expect(lastCreateOpenClawToolsContext?.pluginToolAllowlist).toContain("agents_list");
   });
 
   it("routes tools invoke before plugin HTTP handlers", async () => {

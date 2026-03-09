@@ -187,7 +187,7 @@ describe("resolveEffectiveToolPolicy", () => {
       },
     } as OpenClawConfig;
     const result = resolveEffectiveToolPolicy({ config: cfg });
-    expect(result.profileAlsoAllow).toEqual(["exec", "process"]);
+    expect(result.profiles.primary.alsoAllow).toEqual(["exec", "process"]);
   });
 
   it("implicitly re-exposes read, write, and edit when tools.fs is configured", () => {
@@ -198,7 +198,7 @@ describe("resolveEffectiveToolPolicy", () => {
       },
     } as OpenClawConfig;
     const result = resolveEffectiveToolPolicy({ config: cfg });
-    expect(result.profileAlsoAllow).toEqual(["read", "write", "edit"]);
+    expect(result.profiles.primary.alsoAllow).toEqual(["read", "write", "edit"]);
   });
 
   it("merges explicit alsoAllow with implicit tool-section exposure", () => {
@@ -210,7 +210,7 @@ describe("resolveEffectiveToolPolicy", () => {
       },
     } as OpenClawConfig;
     const result = resolveEffectiveToolPolicy({ config: cfg });
-    expect(result.profileAlsoAllow).toEqual(["web_search", "exec", "process"]);
+    expect(result.profiles.primary.alsoAllow).toEqual(["web_search", "exec", "process"]);
   });
 
   it("uses agent tool sections when resolving implicit exposure", () => {
@@ -230,6 +230,6 @@ describe("resolveEffectiveToolPolicy", () => {
       },
     } as OpenClawConfig;
     const result = resolveEffectiveToolPolicy({ config: cfg, agentId: "coder" });
-    expect(result.profileAlsoAllow).toEqual(["read", "write", "edit"]);
+    expect(result.profiles.primary.alsoAllow).toEqual(["read", "write", "edit"]);
   });
 });

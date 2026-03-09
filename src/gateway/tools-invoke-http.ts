@@ -216,24 +216,15 @@ export async function handleToolsInvokeHttpRequest(
   const agentTo = getHeader(req, "x-openclaw-message-to")?.trim() || undefined;
   const agentThreadId = getHeader(req, "x-openclaw-thread-id")?.trim() || undefined;
 
-  const {
-    agentId,
-    globalPolicy,
-    globalProviderPolicy,
-    agentPolicy,
-    agentProviderPolicy,
-    profile,
-    providerProfile,
-    profileAlsoAllow,
-    providerProfileAlsoAllow,
-  } = resolveEffectiveToolPolicy({ config: cfg, sessionKey });
-  const profilePolicy = resolveToolProfilePolicy(profile);
-  const providerProfilePolicy = resolveToolProfilePolicy(providerProfile);
-
-  const profilePolicyWithAlsoAllow = mergeAlsoAllowPolicy(profilePolicy, profileAlsoAllow);
+  const policyContext = resolveEffectiveToolPolicy({ config: cfg, sessionKey });
+  const { agentId } = policyContext;
+  const profilePolicyWithAlsoAllow = mergeAlsoAllowPolicy(
+    resolveToolProfilePolicy(policyContext.profiles.primary.id),
+    policyContext.profiles.primary.alsoAllow,
+  );
   const providerProfilePolicyWithAlsoAllow = mergeAlsoAllowPolicy(
-    providerProfilePolicy,
-    providerProfileAlsoAllow,
+    resolveToolProfilePolicy(policyContext.profiles.provider.id),
+    policyContext.profiles.provider.alsoAllow,
   );
   const groupPolicy = resolveGroupToolPolicy({
     config: cfg,
@@ -256,12 +247,12 @@ export async function handleToolsInvokeHttpRequest(
     allowMediaInvokeCommands: true,
     config: cfg,
     pluginToolAllowlist: collectExplicitAllowlist([
-      profilePolicy,
-      providerProfilePolicy,
-      globalPolicy,
-      globalProviderPolicy,
-      agentPolicy,
-      agentProviderPolicy,
+      profilePolicyWithAlsoAllow,
+      providerProfilePolicyWithAlsoAllow,
+      policyContext.sandboxPolicies.global,
+      policyContext.sandboxPolicies.globalProvider,
+      policyContext.sandboxPolicies.agent,
+      policyContext.sandboxPolicies.agentProvider,
       groupPolicy,
       subagentPolicy,
     ]),
@@ -276,13 +267,13 @@ export async function handleToolsInvokeHttpRequest(
     steps: [
       ...buildDefaultToolPolicyPipelineSteps({
         profilePolicy: profilePolicyWithAlsoAllow,
-        profile,
+        profile: policyContext.profiles.primary.id,
         providerProfilePolicy: providerProfilePolicyWithAlsoAllow,
-        providerProfile,
-        globalPolicy,
-        globalProviderPolicy,
-        agentPolicy,
-        agentProviderPolicy,
+        providerProfile: policyContext.profiles.provider.id,
+        globalPolicy: policyContext.sandboxPolicies.global,
+        globalProviderPolicy: policyContext.sandboxPolicies.globalProvider,
+        agentPolicy: policyContext.sandboxPolicies.agent,
+        agentProviderPolicy: policyContext.sandboxPolicies.agentProvider,
         groupPolicy,
         agentId,
       }),

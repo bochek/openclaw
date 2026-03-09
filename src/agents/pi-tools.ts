@@ -1,6 +1,10 @@
 import { codingTools, createReadTool, readTool } from "@mariozechner/pi-coding-agent";
 import type { OpenClawConfig } from "../config/config.js";
-import type { ToolLoopDetectionConfig } from "../config/types.tools.js";
+import type {
+  AgentToolsConfig,
+  ToolLoopDetectionConfig,
+  ToolsConfig,
+} from "../config/types.tools.js";
 import { resolveMergedSafeBinProfileFixtures } from "../infra/exec-safe-bin-runtime-policy.js";
 import { logWarn } from "../logger.js";
 import { getPluginToolMeta } from "../plugins/tools.js";
@@ -129,32 +133,33 @@ function isApplyPatchAllowedForModel(params: {
   });
 }
 
-function resolveExecConfig(params: { cfg?: OpenClawConfig; agentId?: string }) {
+function resolveToolSectionConfig<T>(
+  params: { cfg?: OpenClawConfig; agentId?: string },
+  select: (tools: ToolsConfig | AgentToolsConfig | undefined) => T | undefined,
+): {
+  global?: T;
+  agent?: T;
+} {
   const cfg = params.cfg;
-  const globalExec = cfg?.tools?.exec;
-  const agentExec =
-    cfg && params.agentId ? resolveAgentConfig(cfg, params.agentId)?.tools?.exec : undefined;
   return {
-    host: agentExec?.host ?? globalExec?.host,
-    security: agentExec?.security ?? globalExec?.security,
-    ask: agentExec?.ask ?? globalExec?.ask,
-    node: agentExec?.node ?? globalExec?.node,
-    pathPrepend: agentExec?.pathPrepend ?? globalExec?.pathPrepend,
-    safeBins: agentExec?.safeBins ?? globalExec?.safeBins,
-    safeBinTrustedDirs: agentExec?.safeBinTrustedDirs ?? globalExec?.safeBinTrustedDirs,
+    global: select(cfg?.tools),
+    agent:
+      cfg && params.agentId ? select(resolveAgentConfig(cfg, params.agentId)?.tools) : undefined,
+  };
+}
+
+function resolveExecConfig(params: { cfg?: OpenClawConfig; agentId?: string }) {
+  const { global: globalExec, agent: agentExec } = resolveToolSectionConfig(
+    params,
+    (tools) => tools?.exec,
+  );
+  return {
+    ...globalExec,
+    ...agentExec,
     safeBinProfiles: resolveMergedSafeBinProfileFixtures({
       global: globalExec,
       local: agentExec,
     }),
-    backgroundMs: agentExec?.backgroundMs ?? globalExec?.backgroundMs,
-    timeoutSec: agentExec?.timeoutSec ?? globalExec?.timeoutSec,
-    approvalRunningNoticeMs:
-      agentExec?.approvalRunningNoticeMs ?? globalExec?.approvalRunningNoticeMs,
-    cleanupMs: agentExec?.cleanupMs ?? globalExec?.cleanupMs,
-    notifyOnExit: agentExec?.notifyOnExit ?? globalExec?.notifyOnExit,
-    notifyOnExitEmptySuccess:
-      agentExec?.notifyOnExitEmptySuccess ?? globalExec?.notifyOnExitEmptySuccess,
-    applyPatch: agentExec?.applyPatch ?? globalExec?.applyPatch,
   };
 }
 
@@ -162,11 +167,7 @@ export function resolveToolLoopDetectionConfig(params: {
   cfg?: OpenClawConfig;
   agentId?: string;
 }): ToolLoopDetectionConfig | undefined {
-  const global = params.cfg?.tools?.loopDetection;
-  const agent =
-    params.agentId && params.cfg
-      ? resolveAgentConfig(params.cfg, params.agentId)?.tools?.loopDetection
-      : undefined;
+  const { global, agent } = resolveToolSectionConfig(params, (tools) => tools?.loopDetection);
 
   if (!agent) {
     return global;
@@ -258,23 +259,14 @@ export function createOpenClawCodingTools(options?: {
 }): AnyAgentTool[] {
   const execToolName = "exec";
   const sandbox = options?.sandbox?.enabled ? options.sandbox : undefined;
-  const {
-    agentId,
-    globalPolicy,
-    globalProviderPolicy,
-    agentPolicy,
-    agentProviderPolicy,
-    profile,
-    providerProfile,
-    profileAlsoAllow,
-    providerProfileAlsoAllow,
-  } = resolveEffectiveToolPolicy({
+  const policyContext = resolveEffectiveToolPolicy({
     config: options?.config,
     sessionKey: options?.sessionKey,
     agentId: options?.agentId,
     modelProvider: options?.modelProvider,
     modelId: options?.modelId,
   });
+  const { agentId } = policyContext;
   const groupPolicy = resolveGroupToolPolicy({
     config: options?.config,
     sessionKey: options?.sessionKey,
@@ -289,13 +281,13 @@ export function createOpenClawCodingTools(options?: {
     senderUsername: options?.senderUsername,
     senderE164: options?.senderE164,
   });
-  const profilePolicy = resolveToolProfilePolicy(profile);
-  const providerProfilePolicy = resolveToolProfilePolicy(providerProfile);
-
-  const profilePolicyWithAlsoAllow = mergeAlsoAllowPolicy(profilePolicy, profileAlsoAllow);
+  const profilePolicyWithAlsoAllow = mergeAlsoAllowPolicy(
+    resolveToolProfilePolicy(policyContext.profiles.primary.id),
+    policyContext.profiles.primary.alsoAllow,
+  );
   const providerProfilePolicyWithAlsoAllow = mergeAlsoAllowPolicy(
-    providerProfilePolicy,
-    providerProfileAlsoAllow,
+    resolveToolProfilePolicy(policyContext.profiles.provider.id),
+    policyContext.profiles.provider.alsoAllow,
   );
   // Prefer sessionKey for process isolation scope to prevent cross-session process visibility/killing.
   // Fallback to agentId if no sessionKey is available (e.g. legacy or global contexts).
@@ -311,10 +303,10 @@ export function createOpenClawCodingTools(options?: {
   const allowBackground = isToolAllowedByPolicies("process", [
     profilePolicyWithAlsoAllow,
     providerProfilePolicyWithAlsoAllow,
-    globalPolicy,
-    globalProviderPolicy,
-    agentPolicy,
-    agentProviderPolicy,
+    policyContext.sandboxPolicies.global,
+    policyContext.sandboxPolicies.globalProvider,
+    policyContext.sandboxPolicies.agent,
+    policyContext.sandboxPolicies.agentProvider,
     groupPolicy,
     sandbox?.tools,
     subagentPolicy,
@@ -491,12 +483,12 @@ export function createOpenClawCodingTools(options?: {
       sandboxed: !!sandbox,
       config: options?.config,
       pluginToolAllowlist: collectExplicitAllowlist([
-        profilePolicy,
-        providerProfilePolicy,
-        globalPolicy,
-        globalProviderPolicy,
-        agentPolicy,
-        agentProviderPolicy,
+        profilePolicyWithAlsoAllow,
+        providerProfilePolicyWithAlsoAllow,
+        policyContext.sandboxPolicies.global,
+        policyContext.sandboxPolicies.globalProvider,
+        policyContext.sandboxPolicies.agent,
+        policyContext.sandboxPolicies.agentProvider,
         groupPolicy,
         sandbox?.tools,
         subagentPolicy,
@@ -530,13 +522,13 @@ export function createOpenClawCodingTools(options?: {
     steps: [
       ...buildDefaultToolPolicyPipelineSteps({
         profilePolicy: profilePolicyWithAlsoAllow,
-        profile,
+        profile: policyContext.profiles.primary.id,
         providerProfilePolicy: providerProfilePolicyWithAlsoAllow,
-        providerProfile,
-        globalPolicy,
-        globalProviderPolicy,
-        agentPolicy,
-        agentProviderPolicy,
+        providerProfile: policyContext.profiles.provider.id,
+        globalPolicy: policyContext.sandboxPolicies.global,
+        globalProviderPolicy: policyContext.sandboxPolicies.globalProvider,
+        agentPolicy: policyContext.sandboxPolicies.agent,
+        agentProviderPolicy: policyContext.sandboxPolicies.agentProvider,
         groupPolicy,
         agentId,
       }),
