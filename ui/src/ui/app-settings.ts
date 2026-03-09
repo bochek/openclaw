@@ -13,7 +13,7 @@ import { loadAgentSkills } from "./controllers/agent-skills.ts";
 import { loadAgents } from "./controllers/agents.ts";
 import { loadChannels } from "./controllers/channels.ts";
 import { loadConfig, loadConfigSchema } from "./controllers/config.ts";
-import { loadCronJobs, loadCronStatus } from "./controllers/cron.ts";
+import { loadCronJobs, loadCronRuns, loadCronStatus } from "./controllers/cron.ts";
 import { loadDebug } from "./controllers/debug.ts";
 import { loadDevices } from "./controllers/devices.ts";
 import { loadExecApprovals } from "./controllers/exec-approvals.ts";
@@ -34,14 +34,8 @@ import {
 import { saveSettings, type UiSettings } from "./storage.ts";
 import { startThemeTransition, type ThemeTransitionContext } from "./theme-transition.ts";
 import { resolveTheme, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
-import { cleanupChatModuleState } from "./views/chat.ts";
-
-/**
- * Per-host theme listener cleanup functions.
- * Prevents stale closures after component remount by keying cleanup by host instance.
- */
-const systemThemeCleanupMap = new WeakMap<SettingsHost, () => void>();
 import type { AgentsListResult, AttentionItem } from "./types.ts";
+import { resetChatViewState } from "./views/chat.ts";
 
 type SettingsHost = {
   settings: UiSettings;
@@ -62,6 +56,7 @@ type SettingsHost = {
   agentsSelectedId?: string | null;
   agentsPanel?: "overview" | "files" | "tools" | "skills" | "channels" | "cron";
   pendingGatewayUrl?: string | null;
+  systemThemeCleanup?: (() => void) | null;
 };
 
 export function applySettings(host: SettingsHost, next: UiSettings) {
@@ -287,11 +282,8 @@ export function attachThemeListener(host: SettingsHost) {
 }
 
 export function detachThemeListener(host: SettingsHost) {
-  const cleanup = systemThemeCleanupMap.get(host);
-  if (cleanup) {
-    cleanup();
-    systemThemeCleanupMap.delete(host);
-  }
+  host.systemThemeCleanup?.();
+  host.systemThemeCleanup = null;
 }
 
 export function applyResolvedTheme(host: SettingsHost, resolved: ResolvedTheme) {
@@ -307,16 +299,13 @@ export function applyResolvedTheme(host: SettingsHost, resolved: ResolvedTheme) 
 function syncSystemThemeListener(host: SettingsHost) {
   // Clean up existing listener if mode is not "system"
   if (host.themeMode !== "system") {
-    const cleanup = systemThemeCleanupMap.get(host);
-    if (cleanup) {
-      cleanup();
-      systemThemeCleanupMap.delete(host);
-    }
+    host.systemThemeCleanup?.();
+    host.systemThemeCleanup = null;
     return;
   }
 
   // Skip if listener already attached for this host
-  if (systemThemeCleanupMap.has(host)) {
+  if (host.systemThemeCleanup) {
     return;
   }
 
@@ -332,7 +321,7 @@ function syncSystemThemeListener(host: SettingsHost) {
     applyResolvedTheme(host, resolveTheme(host.theme, "system"));
   };
   mql.addEventListener("change", onChange);
-  systemThemeCleanupMap.set(host, () => mql.removeEventListener("change", onChange));
+  host.systemThemeCleanup = () => mql.removeEventListener("change", onChange);
 }
 
 export function syncTabWithLocation(host: SettingsHost, replace: boolean) {
@@ -383,7 +372,7 @@ function applyTabSelection(
 
   // Cleanup chat module state when navigating away from chat
   if (prev === "chat" && next !== "chat") {
-    cleanupChatModuleState();
+    resetChatViewState();
   }
 
   if (next === "chat") {
@@ -596,9 +585,12 @@ export async function loadChannelsTab(host: SettingsHost) {
 }
 
 export async function loadCron(host: SettingsHost) {
+  const app = host as unknown as OpenClawApp;
+  const activeCronJobId = app.cronRunsScope === "job" ? app.cronRunsJobId : null;
   await Promise.all([
-    loadChannels(host as unknown as OpenClawApp, false),
-    loadCronStatus(host as unknown as OpenClawApp),
-    loadCronJobs(host as unknown as OpenClawApp),
+    loadChannels(app, false),
+    loadCronStatus(app),
+    loadCronJobs(app),
+    loadCronRuns(app, activeCronJobId),
   ]);
 }

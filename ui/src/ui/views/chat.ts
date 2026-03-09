@@ -1,8 +1,8 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { repeat } from "lit/directives/repeat.js";
-import { exportChatMarkdown } from "../chat-export.ts";
 import { DeletedMessages } from "../chat/deleted-messages.ts";
+import { exportChatMarkdown } from "../chat/export.ts";
 import {
   renderMessageGroup,
   renderReadingIndicatorGroup,
@@ -149,11 +149,11 @@ let searchQuery = "";
 let pinnedExpanded = false;
 
 /**
- * Cleanup module-level state when navigating away from chat view.
- * Prevents STT recording from continuing after tab switch (which would
- * send transcripts to the wrong session) and resets ephemeral UI state.
+ * Reset module-level chat view state when navigating away from chat.
+ * Prevents STT recording from continuing after a tab switch and clears
+ * ephemeral search/slash UI that should not survive navigation.
  */
-export function cleanupChatModuleState() {
+export function resetChatViewState() {
   if (sttRecording) {
     stopStt();
     sttRecording = false;
@@ -169,6 +169,8 @@ export function cleanupChatModuleState() {
   searchQuery = "";
   pinnedExpanded = false;
 }
+
+export const cleanupChatModuleState = resetChatViewState;
 
 function adjustTextareaHeight(el: HTMLTextAreaElement) {
   el.style.height = "auto";
