@@ -10,6 +10,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Doctor/cron: keep `openclaw doctor` read-only in non-interactive mode unless repair is explicitly requested, and migrate legacy `notify: true` + `delivery.mode="none"` cron jobs to `cron.webhook` instead of preserving a non-webhook `delivery.to`.
 - macOS/LaunchAgent install: tighten LaunchAgent directory and plist permissions during install so launchd bootstrap does not fail when the target home path or generated plist inherited group/world-writable modes.
 
 ## 2026.3.8

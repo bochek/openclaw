@@ -223,7 +223,6 @@ export async function doctorCommand(
   await noteSessionLockHealth({ shouldRepair: prompter.shouldRepair });
   await maybeRepairLegacyCronStore({
     cfg,
-    options,
     prompter,
   });
 

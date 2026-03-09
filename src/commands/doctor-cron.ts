@@ -5,7 +5,7 @@ import { resolveCronStorePath, loadCronStore, saveCronStore } from "../cron/stor
 import type { CronJob } from "../cron/types.js";
 import { note } from "../terminal/note.js";
 import { shortenHomePath } from "../utils.js";
-import type { DoctorPrompter, DoctorOptions } from "./doctor-prompter.js";
+import type { DoctorPrompter } from "./doctor-prompter.js";
 
 type CronDoctorOutcome = {
   changed: boolean;
@@ -96,7 +96,7 @@ function migrateLegacyNotifyFallback(params: {
       raw.delivery = {
         ...delivery,
         mode: "webhook",
-        to: to ?? params.legacyWebhook,
+        to: mode === "none" ? params.legacyWebhook : (to ?? params.legacyWebhook),
       };
       delete raw.notify;
       changed = true;
@@ -120,7 +120,6 @@ function migrateLegacyNotifyFallback(params: {
 
 export async function maybeRepairLegacyCronStore(params: {
   cfg: OpenClawConfig;
-  options: DoctorOptions;
   prompter: Pick<DoctorPrompter, "confirm">;
 }) {
   const storePath = resolveCronStorePath(params.cfg.cron?.store);
@@ -152,13 +151,10 @@ export async function maybeRepairLegacyCronStore(params: {
     "Cron",
   );
 
-  const shouldRepair =
-    params.options.nonInteractive === true
-      ? true
-      : await params.prompter.confirm({
-          message: "Repair legacy cron jobs now?",
-          initialValue: true,
-        });
+  const shouldRepair = await params.prompter.confirm({
+    message: "Repair legacy cron jobs now?",
+    initialValue: true,
+  });
   if (!shouldRepair) {
     return;
   }

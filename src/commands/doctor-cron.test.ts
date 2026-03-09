@@ -68,7 +68,6 @@ describe("maybeRepairLegacyCronStore", () => {
 
     await maybeRepairLegacyCronStore({
       cfg,
-      options: {},
       prompter: makePrompter(true),
     });
 
@@ -142,7 +141,6 @@ describe("maybeRepairLegacyCronStore", () => {
           webhook: "https://example.invalid/cron-finished",
         },
       },
-      options: { nonInteractive: true },
       prompter: makePrompter(true),
     });
 
@@ -153,6 +151,109 @@ describe("maybeRepairLegacyCronStore", () => {
     expect(noteSpy).toHaveBeenCalledWith(
       expect.stringContaining('uses legacy notify fallback alongside delivery mode "announce"'),
       "Doctor warnings",
+    );
+  });
+
+  it("prefers cron.webhook over legacy delivery.to when notify fallback job is in mode none", async () => {
+    const storePath = await makeTempStorePath();
+    await fs.mkdir(path.dirname(storePath), { recursive: true });
+    await fs.writeFile(
+      storePath,
+      JSON.stringify(
+        {
+          version: 1,
+          jobs: [
+            {
+              id: "notify-none",
+              name: "Notify none",
+              notify: true,
+              createdAtMs: Date.parse("2026-02-01T00:00:00.000Z"),
+              updatedAtMs: Date.parse("2026-02-02T00:00:00.000Z"),
+              schedule: { kind: "every", everyMs: 60_000 },
+              sessionTarget: "isolated",
+              wakeMode: "now",
+              payload: { kind: "agentTurn", message: "Status" },
+              delivery: { mode: "none", to: "123" },
+              state: {},
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    await maybeRepairLegacyCronStore({
+      cfg: {
+        cron: {
+          store: storePath,
+          webhook: "https://example.invalid/cron-finished",
+        },
+      },
+      prompter: makePrompter(true),
+    });
+
+    const persisted = JSON.parse(await fs.readFile(storePath, "utf-8")) as {
+      jobs: Array<Record<string, unknown>>;
+    };
+    expect(persisted.jobs[0]?.notify).toBeUndefined();
+    expect(persisted.jobs[0]?.delivery).toMatchObject({
+      mode: "webhook",
+      to: "https://example.invalid/cron-finished",
+    });
+  });
+
+  it("does not repair legacy cron storage in headless mode without explicit repair", async () => {
+    const storePath = await makeTempStorePath();
+    await fs.mkdir(path.dirname(storePath), { recursive: true });
+    await fs.writeFile(
+      storePath,
+      JSON.stringify(
+        {
+          version: 1,
+          jobs: [
+            {
+              jobId: "legacy-job",
+              name: "Legacy job",
+              notify: true,
+              createdAtMs: Date.parse("2026-02-01T00:00:00.000Z"),
+              updatedAtMs: Date.parse("2026-02-02T00:00:00.000Z"),
+              schedule: { kind: "cron", cron: "0 7 * * *", tz: "UTC" },
+              payload: {
+                kind: "systemEvent",
+                text: "Morning brief",
+              },
+              state: {},
+            },
+          ],
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    const noteSpy = vi.spyOn(noteModule, "note").mockImplementation(() => {});
+
+    await maybeRepairLegacyCronStore({
+      cfg: {
+        cron: {
+          store: storePath,
+          webhook: "https://example.invalid/cron-finished",
+        },
+      },
+      prompter: makePrompter(false),
+    });
+
+    const persisted = JSON.parse(await fs.readFile(storePath, "utf-8")) as {
+      jobs: Array<Record<string, unknown>>;
+    };
+    expect(persisted.jobs[0]?.jobId).toBe("legacy-job");
+    expect(persisted.jobs[0]?.notify).toBe(true);
+    expect(noteSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("Cron store normalized"),
+      "Doctor changes",
     );
   });
 });
