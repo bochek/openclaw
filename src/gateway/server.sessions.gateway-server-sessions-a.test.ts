@@ -1235,6 +1235,7 @@ describe("gateway server sessions", () => {
 
     embeddedRunMock.activeIds.add("sess-main");
     embeddedRunMock.waitResults.set("sess-main", false);
+    subagentLifecycleHookState.hasBeforeResetHook = true;
 
     const { ws } = await openClient();
 
@@ -1251,6 +1252,7 @@ describe("gateway server sessions", () => {
     );
     expect(waitCallCountAtSnapshotClear).toEqual([1]);
     expect(browserSessionTabMocks.closeTrackedBrowserTabsForSessions).not.toHaveBeenCalled();
+    expect(beforeResetHookMocks.runBeforeReset).not.toHaveBeenCalled();
 
     const store = JSON.parse(await fs.readFile(storePath, "utf-8")) as Record<
       string,

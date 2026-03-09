@@ -90,7 +90,7 @@ export async function emitResetCommandHooks(params: {
     }
   }
 
-  emitBeforeResetPluginHook({
+  await emitBeforeResetPluginHook({
     sessionKey: params.sessionKey,
     previousSessionEntry: params.previousSessionEntry,
     workspaceDir: params.workspaceDir,
