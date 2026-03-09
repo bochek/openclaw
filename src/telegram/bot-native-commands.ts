@@ -595,17 +595,6 @@ export const registerTelegramNativeCommands = ({
             return;
           }
           const { threadSpec, route, mediaLocalRoots, tableMode, chunkMode } = runtimeContext;
-          const deliveryBaseOptions = buildCommandDeliveryBaseOptions({
-            chatId,
-            accountId: route.accountId,
-            sessionKeyForInternalHooks: route.sessionKey,
-            mirrorIsGroup: isGroup,
-            mirrorGroupId: isGroup ? String(chatId) : undefined,
-            mediaLocalRoots,
-            threadSpec,
-            tableMode,
-            chunkMode,
-          });
           const threadParams = buildTelegramThreadParams(threadSpec) ?? {};
 
           const commandDefinition = findCommandByNativeName(command.name, "telegram");
@@ -680,6 +669,17 @@ export const registerTelegramNativeCommands = ({
               userId: String(senderId || chatId),
               targetSessionKey: sessionKey,
             });
+          const deliveryBaseOptions = buildCommandDeliveryBaseOptions({
+            chatId,
+            accountId: route.accountId,
+            sessionKeyForInternalHooks: commandSessionKey,
+            mirrorIsGroup: isGroup,
+            mirrorGroupId: isGroup ? String(chatId) : undefined,
+            mediaLocalRoots,
+            threadSpec,
+            tableMode,
+            chunkMode,
+          });
           const conversationLabel = isGroup
             ? msg.chat.title
               ? `${msg.chat.title} id:${chatId}`

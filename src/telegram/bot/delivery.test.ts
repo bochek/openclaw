@@ -258,6 +258,37 @@ describe("deliverReplies", () => {
     expect(triggerInternalHook).not.toHaveBeenCalled();
   });
 
+  it("emits internal message:sent with success=false on delivery failure", async () => {
+    const runtime = createRuntime(false);
+    const sendMessage = vi.fn().mockRejectedValue(new Error("network error"));
+    const bot = createBot({ sendMessage });
+
+    await expect(
+      deliverWith({
+        sessionKeyForInternalHooks: "agent:test:telegram:123",
+        replies: [{ text: "hello" }],
+        runtime,
+        bot,
+      }),
+    ).rejects.toThrow("network error");
+
+    expect(triggerInternalHook).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "message",
+        action: "sent",
+        sessionKey: "agent:test:telegram:123",
+        context: expect.objectContaining({
+          to: "123",
+          content: "hello",
+          success: false,
+          error: "network error",
+          channelId: "telegram",
+          conversationId: "123",
+        }),
+      }),
+    );
+  });
+
   it("passes media metadata to message_sending hooks", async () => {
     messageHookRunner.hasHooks.mockImplementation((name: string) => name === "message_sending");
 
