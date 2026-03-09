@@ -30,6 +30,8 @@ export type ChatHost = {
   onSlashAction?: (action: string) => void;
 };
 
+export const CHAT_SESSIONS_ACTIVE_MINUTES = 120;
+
 export function isChatBusy(host: ChatHost) {
   return host.chatSending || Boolean(host.chatRunId);
 }

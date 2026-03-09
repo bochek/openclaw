@@ -440,10 +440,7 @@ describe("config form renderer", () => {
           "models.providers.*.apiKey": { sensitive: true },
         },
         unsupportedPaths: analysis.unsupportedPaths,
-        value: { models: { providers: { openai: { apiKey: "old" } } } },
-        streamMode: false,
-        isSensitivePathRevealed: () => true,
-        onToggleSensitivePath: vi.fn(),
+        value: { models: { providers: { openai: { apiKey: "old" } } } }, // pragma: allowlist secret
         onPatch,
       }),
       container,

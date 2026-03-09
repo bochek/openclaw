@@ -2,7 +2,8 @@ import {
   GATEWAY_EVENT_UPDATE_AVAILABLE,
   type GatewayUpdateAvailableEventPayload,
 } from "../../../src/gateway/events.js";
-import { flushChatQueueForEvent } from "./app-chat.ts";
+import { ConnectErrorDetailCodes } from "../../../src/gateway/protocol/connect-error-details.js";
+import { CHAT_SESSIONS_ACTIVE_MINUTES, flushChatQueueForEvent } from "./app-chat.ts";
 import type { EventLogEntry } from "./app-events.ts";
 import {
   applySettings,
@@ -43,6 +44,24 @@ import type {
   StatusSummary,
   UpdateAvailable,
 } from "./types.ts";
+
+function isGenericBrowserFetchFailure(message: string): boolean {
+  return /^(?:typeerror:\s*)?(?:fetch failed|failed to fetch)$/i.test(message.trim());
+}
+
+function formatAuthCloseErrorMessage(code: string | null, fallback: string): string {
+  const resolvedCode = code ?? "";
+  if (resolvedCode === ConnectErrorDetailCodes.AUTH_TOKEN_MISMATCH) {
+    return "unauthorized: gateway token mismatch (open dashboard URL with current token)";
+  }
+  if (resolvedCode === ConnectErrorDetailCodes.AUTH_RATE_LIMITED) {
+    return "unauthorized: too many failed authentication attempts (retry later)";
+  }
+  if (resolvedCode === ConnectErrorDetailCodes.AUTH_UNAUTHORIZED) {
+    return "unauthorized: authentication failed";
+  }
+  return fallback;
+}
 
 type GatewayHost = {
   settings: UiSettings;
@@ -219,7 +238,10 @@ export function connectGateway(host: GatewayHost) {
         (typeof error?.code === "string" ? error.code : null);
       if (code !== 1012) {
         if (error?.message) {
-          host.lastError = error.message;
+          host.lastError =
+            host.lastErrorCode && isGenericBrowserFetchFailure(error.message)
+              ? formatAuthCloseErrorMessage(host.lastErrorCode, error.message)
+              : error.message;
           return;
         }
         host.lastError = `disconnected (${code}): ${reason || "no reason"}`;
@@ -255,6 +277,52 @@ export function handleGatewayEvent(host: GatewayHost, evt: GatewayEventFrame) {
   }
 }
 
+function handleTerminalChatEvent(
+  host: GatewayHost,
+  payload: ChatEventPayload | undefined,
+  state: ReturnType<typeof handleChatEvent>,
+): boolean {
+  if (state !== "final" && state !== "error" && state !== "aborted") {
+    return false;
+  }
+  // Check if tool events were seen before resetting (resetToolStream clears toolStreamOrder).
+  const toolHost = host as unknown as Parameters<typeof resetToolStream>[0];
+  const hadToolEvents = toolHost.toolStreamOrder.length > 0;
+  resetToolStream(toolHost);
+  void flushChatQueueForEvent(host as unknown as Parameters<typeof flushChatQueueForEvent>[0]);
+  const runId = payload?.runId;
+  if (runId && host.refreshSessionsAfterChat.has(runId)) {
+    host.refreshSessionsAfterChat.delete(runId);
+    if (state === "final") {
+      void loadSessions(host as unknown as OpenClawApp, {
+        activeMinutes: CHAT_SESSIONS_ACTIVE_MINUTES,
+      });
+    }
+  }
+  // Reload history when tools were used so the persisted tool results
+  // replace the now-cleared streaming state.
+  if (hadToolEvents && state === "final") {
+    void loadChatHistory(host as unknown as OpenClawApp);
+    return true;
+  }
+  return false;
+}
+
+function handleChatGatewayEvent(host: GatewayHost, payload: ChatEventPayload | undefined) {
+  if (payload?.sessionKey) {
+    setLastActiveSessionKey(
+      host as unknown as Parameters<typeof setLastActiveSessionKey>[0],
+      payload.sessionKey,
+    );
+  }
+  const state = handleChatEvent(host as unknown as OpenClawApp, payload);
+  const historyReloaded = handleTerminalChatEvent(host, payload, state);
+  if (state === "final" && !historyReloaded && shouldReloadHistoryForFinalEvent(payload)) {
+    void loadChatHistory(host as unknown as OpenClawApp);
+  }
+}
+
+
 function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
   host.eventLogBuffer = [
     { ts: Date.now(), event: evt.event, payload: evt.payload },
@@ -272,37 +340,22 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
       host as unknown as Parameters<typeof handleAgentEvent>[0],
       evt.payload as AgentEventPayload | undefined,
     );
+    // Reload history after each tool result so the persisted text + tool
+    // output replaces any truncated streaming fragments.
+    const agentPayload = evt.payload as AgentEventPayload | undefined;
+    const toolData = agentPayload?.data;
+    if (
+      agentPayload?.stream === "tool" &&
+      typeof toolData?.phase === "string" &&
+      toolData.phase === "result"
+    ) {
+      void loadChatHistory(host as unknown as OpenClawApp);
+    }
     return;
   }
 
   if (evt.event === "chat") {
-    const payload = evt.payload as ChatEventPayload | undefined;
-    if (payload?.sessionKey) {
-      setLastActiveSessionKey(
-        host as unknown as Parameters<typeof setLastActiveSessionKey>[0],
-        payload.sessionKey,
-      );
-    }
-    const state = handleChatEvent(host as unknown as OpenClawApp, payload);
-    if (state === "final" || state === "error" || state === "aborted") {
-      resetToolStream(host as unknown as Parameters<typeof resetToolStream>[0]);
-      void flushChatQueueForEvent(host as unknown as Parameters<typeof flushChatQueueForEvent>[0]);
-      const runId = payload?.runId;
-      if (runId && host.refreshSessionsAfterChat.has(runId)) {
-        host.refreshSessionsAfterChat.delete(runId);
-        if (state === "final") {
-          void loadSessions(host as unknown as OpenClawApp, {
-            activeMinutes: 0,
-            limit: 0,
-            includeGlobal: false,
-            includeUnknown: false,
-          });
-        }
-      }
-    }
-    if (state === "final" && shouldReloadHistoryForFinalEvent(payload)) {
-      void loadChatHistory(host as unknown as OpenClawApp);
-    }
+    handleChatGatewayEvent(host, evt.payload as ChatEventPayload | undefined);
     return;
   }
 
