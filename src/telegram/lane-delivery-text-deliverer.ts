@@ -4,6 +4,8 @@ import type { TelegramDraftStream } from "./draft-stream.js";
 
 const MESSAGE_NOT_MODIFIED_RE =
   /400:\s*Bad Request:\s*message is not modified|MESSAGE_NOT_MODIFIED/i;
+const MESSAGE_NOT_FOUND_RE =
+  /400:\s*Bad Request:\s*message to edit not found|MESSAGE_ID_INVALID|message can't be edited/i;
 
 function isMessageNotModifiedError(err: unknown): boolean {
   const text =
@@ -17,6 +19,20 @@ function isMessageNotModifiedError(err: unknown): boolean {
             : ""
           : "";
   return MESSAGE_NOT_MODIFIED_RE.test(text);
+}
+
+function isMissingPreviewMessageError(err: unknown): boolean {
+  const text =
+    typeof err === "string"
+      ? err
+      : err instanceof Error
+        ? err.message
+        : typeof err === "object" && err && "description" in err
+          ? typeof err.description === "string"
+            ? err.description
+            : ""
+          : "";
+  return MESSAGE_NOT_FOUND_RE.test(text);
 }
 
 export type LaneName = "answer" | "reasoning";
@@ -51,6 +67,7 @@ type CreateLaneTextDelivererParams = {
 type DeliverLaneTextParams = {
   laneName: LaneName;
   text: string;
+  sendText?: string;
   payload: ReplyPayload;
   infoKind: string;
   previewButtons?: TelegramInlineButtons;
@@ -196,6 +213,12 @@ export function createLaneTextDeliverer(params: CreateLaneTextDelivererParams) {
         return true;
       }
       if (args.treatEditFailureAsDelivered) {
+        if (isMissingPreviewMessageError(err)) {
+          params.log(
+            `telegram: ${args.laneName} preview ${args.context} edit target missing; falling back to standard send (${String(err)})`,
+          );
+          return false;
+        }
         if (args.context === "final") {
           args.lane.lastPartialText = args.text;
         }
@@ -299,12 +322,14 @@ export function createLaneTextDeliverer(params: CreateLaneTextDelivererParams) {
   return async ({
     laneName,
     text,
+    sendText,
     payload,
     infoKind,
     previewButtons,
     allowPreviewUpdateForNonFinal = false,
   }: DeliverLaneTextParams): Promise<LaneDeliveryResult> => {
     const lane = params.lanes[laneName];
+    const deliveredPayloadText = sendText ?? text;
     const hasMedia = Boolean(payload.mediaUrl) || (payload.mediaUrls?.length ?? 0) > 0;
     const canEditViaPreview =
       !hasMedia && text.length > 0 && text.length <= params.draftMaxChars && !payload.isError;
@@ -342,9 +367,11 @@ export function createLaneTextDeliverer(params: CreateLaneTextDelivererParams) {
         );
       }
       await params.stopDraftLane(lane);
-      const delivered = await params.sendPayload(params.applyTextToPayload(payload, text));
+      const delivered = await params.sendPayload(
+        params.applyTextToPayload(payload, deliveredPayloadText),
+      );
       if (delivered) {
-        lane.lastPartialText = text;
+        lane.lastPartialText = deliveredPayloadText;
       }
       return delivered ? "sent" : "skipped";
     }
@@ -361,7 +388,9 @@ export function createLaneTextDeliverer(params: CreateLaneTextDelivererParams) {
           params.log(
             `telegram: ${laneName} draft preview update not emitted; falling back to standard send`,
           );
-          const delivered = await params.sendPayload(params.applyTextToPayload(payload, text));
+          const delivered = await params.sendPayload(
+            params.applyTextToPayload(payload, deliveredPayloadText),
+          );
           return delivered ? "sent" : "skipped";
         }
         lane.lastPartialText = text;
@@ -383,7 +412,9 @@ export function createLaneTextDeliverer(params: CreateLaneTextDelivererParams) {
       }
     }
 
-    const delivered = await params.sendPayload(params.applyTextToPayload(payload, text));
+    const delivered = await params.sendPayload(
+      params.applyTextToPayload(payload, deliveredPayloadText),
+    );
     return delivered ? "sent" : "skipped";
   };
 }

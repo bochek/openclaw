@@ -177,6 +177,25 @@ describe("createLaneTextDeliverer", () => {
     expect(harness.log).toHaveBeenCalledWith(expect.stringContaining("keeping existing preview"));
   });
 
+  it("resends the final text when the preview message no longer exists", async () => {
+    const harness = createHarness({ answerMessageId: 999 });
+    harness.editPreview.mockRejectedValue(new Error("400: Bad Request: message to edit not found"));
+
+    const result = await harness.deliverLaneText({
+      laneName: "answer",
+      text: "Hello final",
+      payload: { text: "Hello final" },
+      infoKind: "final",
+    });
+
+    expect(result).toBe("sent");
+    expect(harness.editPreview).toHaveBeenCalledTimes(1);
+    expect(harness.sendPayload).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "Hello final" }),
+    );
+    expect(harness.log).toHaveBeenCalledWith(expect.stringContaining("edit target missing"));
+  });
+
   it("falls back to normal delivery when stop-created preview has no message id", async () => {
     const harness = createHarness();
 

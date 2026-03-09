@@ -124,6 +124,17 @@ type DispatchTelegramMessageParams = {
   opts: Pick<TelegramBotOptions, "token">;
 };
 
+type AnswerSegmentState = {
+  text: string;
+  finalized: boolean;
+  implicitAfterFinal: boolean;
+};
+
+type PendingAnswerFinalState = {
+  payload: ReplyPayload;
+  text: string;
+};
+
 type TelegramReasoningLevel = "off" | "on" | "stream";
 
 function resolveTelegramReasoningLevel(params: {
@@ -253,8 +264,10 @@ export const dispatchTelegramMessage = async ({
   const answerLane = lanes.answer;
   const reasoningLane = lanes.reasoning;
   let splitReasoningOnNextStream = false;
-  let answerSegmentPrefixText = "";
-  let pendingAnswerFinalSlots = 1;
+  const answerSegments: AnswerSegmentState[] = [];
+  let answerBoundaryPending = false;
+  const pendingAnswerFinals: PendingAnswerFinalState[] = [];
+  const auxiliaryAnswerFinals: PendingAnswerFinalState[] = [];
   let bufferedAnswerFinal:
     | {
         payload: ReplyPayload;
@@ -291,15 +304,91 @@ export const dispatchTelegramMessage = async ({
         Boolean(split.reasoningText) && suppressReasoning && !split.answerText,
     };
   };
-  const getCurrentAnswerText = () => bufferedAnswerFinal?.text ?? answerLane.lastPartialText;
-  const composeAnswerSegmentText = (text: string) =>
-    appendAnswerSegment(answerSegmentPrefixText, text);
-  const rememberAnswerBoundary = () => {
-    answerSegmentPrefixText = getCurrentAnswerText();
+  const composeAnswerSegmentsText = () =>
+    answerSegments.reduce((acc, segment) => appendAnswerSegment(acc, segment.text), "");
+  const getCurrentAnswerText = () => composeAnswerSegmentsText();
+  const getLastAnswerSegment = () => answerSegments[answerSegments.length - 1];
+  const getUnfinalizedAnswerSegments = () => answerSegments.filter((segment) => !segment.finalized);
+  const bufferAnswerFinal = (payload: ReplyPayload) => {
+    bufferedAnswerFinal = { payload, text: composeAnswerSegmentsText() };
   };
-  const bufferAnswerFinal = (payload: ReplyPayload, text: string) => {
-    bufferedAnswerFinal = { payload, text };
-    answerSegmentPrefixText = text;
+  const createAnswerSegment = (segmentStartsAfterFinal: boolean): AnswerSegmentState => {
+    const segment: AnswerSegmentState = {
+      text: "",
+      finalized: false,
+      implicitAfterFinal: segmentStartsAfterFinal && !answerBoundaryPending,
+    };
+    answerSegments.push(segment);
+    answerBoundaryPending = false;
+    return segment;
+  };
+  const commitAnswerFinal = (segment: AnswerSegmentState, final: PendingAnswerFinalState) => {
+    segment.text = final.text;
+    segment.finalized = true;
+    segment.implicitAfterFinal = false;
+    bufferAnswerFinal(final.payload);
+  };
+  const resolvePendingAnswerFinals = (opts?: { flushRemaining?: boolean }) => {
+    if (pendingAnswerFinals.length === 0) {
+      return;
+    }
+
+    let unresolvedSegments = getUnfinalizedAnswerSegments();
+    if (unresolvedSegments.length === 0) {
+      const lastSegment = getLastAnswerSegment();
+      if (!lastSegment || answerBoundaryPending) {
+        unresolvedSegments = [createAnswerSegment(false)];
+      } else {
+        auxiliaryAnswerFinals.push(...pendingAnswerFinals.splice(0));
+        return;
+      }
+    }
+
+    if (
+      !opts?.flushRemaining &&
+      unresolvedSegments.length > 1 &&
+      pendingAnswerFinals.length < unresolvedSegments.length
+    ) {
+      return;
+    }
+
+    const assignCount = Math.min(pendingAnswerFinals.length, unresolvedSegments.length);
+    const segmentOffset =
+      opts?.flushRemaining && pendingAnswerFinals.length < unresolvedSegments.length
+        ? unresolvedSegments.length - pendingAnswerFinals.length
+        : 0;
+    const assignedFinals = pendingAnswerFinals.splice(0, assignCount);
+    const targetSegments = unresolvedSegments.slice(segmentOffset, segmentOffset + assignCount);
+
+    for (const [index, segment] of targetSegments.entries()) {
+      const final = assignedFinals[index];
+      if (!final) {
+        continue;
+      }
+      commitAnswerFinal(segment, final);
+    }
+
+    if (pendingAnswerFinals.length > 0) {
+      auxiliaryAnswerFinals.push(...pendingAnswerFinals.splice(0));
+    }
+  };
+  const updateAnswerSegmentFromPartial = (text: string) => {
+    const lastSegment = getLastAnswerSegment();
+    const segmentStartsAfterFinal = Boolean(lastSegment?.finalized);
+    const needsNewSegment = answerBoundaryPending || !lastSegment || segmentStartsAfterFinal;
+    const segment = needsNewSegment ? createAnswerSegment(segmentStartsAfterFinal) : lastSegment;
+    if (text === segment.text) {
+      return;
+    }
+    if (segment.text && segment.text.startsWith(text) && text.length < segment.text.length) {
+      return;
+    }
+    segment.text = text;
+    updateDraftFromPartial(answerLane, composeAnswerSegmentsText());
+  };
+  const queueAnswerFinal = (payload: ReplyPayload, text: string) => {
+    pendingAnswerFinals.push({ payload, text });
+    resolvePendingAnswerFinals();
   };
   const resetDraftLaneState = (lane: DraftLaneState) => {
     lane.lastPartialText = "";
@@ -337,7 +426,7 @@ export const dispatchTelegramMessage = async ({
         updateDraftFromPartial(lanes.reasoning, segment.text);
         continue;
       }
-      updateDraftFromPartial(lanes.answer, composeAnswerSegmentText(segment.text));
+      updateAnswerSegmentFromPartial(segment.text);
     }
   };
   const flushDraftLane = async (lane: DraftLaneState) => {
@@ -483,7 +572,11 @@ export const dispatchTelegramMessage = async ({
     },
   });
   const flushBufferedAnswerFinal = async () => {
+    resolvePendingAnswerFinals({ flushRemaining: true });
     if (!bufferedAnswerFinal) {
+      for (const auxiliaryFinal of auxiliaryAnswerFinals.splice(0)) {
+        await sendPayload(auxiliaryFinal.payload);
+      }
       return;
     }
     const { payload, text } = bufferedAnswerFinal;
@@ -498,6 +591,9 @@ export const dispatchTelegramMessage = async ({
       infoKind: "final",
       previewButtons,
     });
+    for (const auxiliaryFinal of auxiliaryAnswerFinals.splice(0)) {
+      await sendPayload(auxiliaryFinal.payload);
+    }
     reasoningStepState.resetForNextStep();
   };
 
@@ -556,19 +652,14 @@ export const dispatchTelegramMessage = async ({
               }
               continue;
             }
-            const answerText = composeAnswerSegmentText(segment.text);
             if (info.kind === "final") {
-              if (pendingAnswerFinalSlots <= 0) {
-                await sendPayload(payload);
-                continue;
-              }
-              pendingAnswerFinalSlots -= 1;
-              bufferAnswerFinal(payload, answerText);
+              queueAnswerFinal(payload, segment.text);
               continue;
             }
             await deliverLaneText({
               laneName: "answer",
-              text: answerText,
+              text: composeAnswerSegmentsText(),
+              sendText: segment.text,
               payload,
               infoKind: info.kind,
               previewButtons,
@@ -636,10 +727,15 @@ export const dispatchTelegramMessage = async ({
           ? () =>
               enqueueDraftLaneEvent(async () => {
                 reasoningStepState.resetForNextStep();
-                if (getCurrentAnswerText()) {
-                  pendingAnswerFinalSlots += 1;
-                  rememberAnswerBoundary();
+                if (!getCurrentAnswerText()) {
+                  return;
                 }
+                const lastSegment = getLastAnswerSegment();
+                if (lastSegment && !lastSegment.finalized && lastSegment.implicitAfterFinal) {
+                  lastSegment.implicitAfterFinal = false;
+                  return;
+                }
+                answerBoundaryPending = true;
               })
           : undefined,
         onReasoningEnd: reasoningLane.stream

@@ -496,11 +496,12 @@ describe("dispatchTelegramMessage draft streaming", () => {
 
     expect(answerDraftStream.forceNewMessage).not.toHaveBeenCalled();
     expect(editMessageTelegram).toHaveBeenCalledTimes(1);
-    expect(editMessageTelegram.mock.calls[0]?.[0]).toBe(123);
-    expect(editMessageTelegram.mock.calls[0]?.[1]).toBe(1001);
-    expect(editMessageTelegram.mock.calls[0]?.[2]).toContain("Message A final");
-    expect(editMessageTelegram.mock.calls[0]?.[2]).toContain("Message B final");
-    expect(editMessageTelegram.mock.calls[0]?.[2]).toContain("Message C final");
+    expect(editMessageTelegram).toHaveBeenCalledWith(
+      123,
+      1001,
+      "Message A final Message B final Message C final",
+      expect.any(Object),
+    );
     expect(deliverReplies).not.toHaveBeenCalled();
   });
 
