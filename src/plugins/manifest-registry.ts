@@ -242,7 +242,8 @@ export function loadPluginManifestRegistry(params: {
         continue;
       }
       const candidateWins =
-        GENUINE_DUPLICATE_RANK[candidate.origin] < GENUINE_DUPLICATE_RANK[existing.candidate.origin];
+        GENUINE_DUPLICATE_RANK[candidate.origin] <
+        GENUINE_DUPLICATE_RANK[existing.candidate.origin];
       const skippedCandidate = candidateWins ? existing.candidate : candidate;
       diagnostics.push({
         level: "warn",
