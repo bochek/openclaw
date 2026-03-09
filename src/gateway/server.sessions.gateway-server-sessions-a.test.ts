@@ -1191,6 +1191,9 @@ describe("gateway server sessions", () => {
   test("sessions.reset runs before_reset plugin hooks with gateway session context", async () => {
     const { dir } = await createSessionStoreDir();
     await writeSingleLineSession(dir, "sess-main", "hello");
+    const resolvedTranscriptPath = await fs
+      .realpath(path.join(dir, "sess-main.jsonl"))
+      .catch(() => path.join(dir, "sess-main.jsonl"));
 
     await writeSessionStore({
       entries: {
@@ -1213,7 +1216,7 @@ describe("gateway server sessions", () => {
     await vi.waitFor(() => expect(beforeResetHookMocks.runBeforeReset).toHaveBeenCalledTimes(1));
     expect(beforeResetHookMocks.runBeforeReset).toHaveBeenCalledWith(
       expect.objectContaining({
-        sessionFile: path.join(dir, "sess-main.jsonl"),
+        sessionFile: resolvedTranscriptPath,
         reason: "new",
       }),
       expect.objectContaining({

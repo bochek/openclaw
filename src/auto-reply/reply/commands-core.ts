@@ -55,6 +55,7 @@ export async function emitResetCommandHooks(params: {
   sessionKey?: string;
   sessionEntry?: HandleCommandsParams["sessionEntry"];
   previousSessionEntry?: HandleCommandsParams["previousSessionEntry"];
+  storePath?: HandleCommandsParams["storePath"];
   workspaceDir: string;
 }): Promise<void> {
   const hookEvent = createInternalHookEvent("command", params.action, params.sessionKey ?? "", {
@@ -95,6 +96,7 @@ export async function emitResetCommandHooks(params: {
     previousSessionEntry: params.previousSessionEntry,
     workspaceDir: params.workspaceDir,
     reason: params.action,
+    storePath: params.storePath,
   });
 }
 
@@ -211,6 +213,7 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
           sessionKey: boundAcpKey,
           sessionEntry: hookSessionEntry,
           previousSessionEntry: hookPreviousSessionEntry,
+          storePath: params.storePath,
           workspaceDir: params.workspaceDir,
         });
         if (resetTail) {
@@ -250,6 +253,7 @@ export async function handleCommands(params: HandleCommandsParams): Promise<Comm
       sessionKey: params.sessionKey,
       sessionEntry: params.sessionEntry,
       previousSessionEntry: params.previousSessionEntry,
+      storePath: params.storePath,
       workspaceDir: params.workspaceDir,
     });
   }

@@ -508,6 +508,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       previousSessionEntry: entry,
       workspaceDir: resolveAgentWorkspaceDir(cfg, target.agentId),
       reason: commandReason,
+      storePath,
     });
     let oldSessionId: string | undefined;
     let oldSessionFile: string | undefined;
