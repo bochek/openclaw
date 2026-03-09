@@ -51,19 +51,17 @@ jobs:
         run: |
           set -euo pipefail
 
-          docker buildx build \
-            --load \
-            --tag openclaw-sandbox-common-smoke:bookworm-slim \
-            --file Dockerfile.sandbox-common \
-            --build-arg BASE_IMAGE=openclaw-sandbox-smoke-base:bookworm-slim \
-            --build-arg PACKAGES=ca-certificates \
-            --build-arg INSTALL_PNPM=0 \
-            --build-arg INSTALL_BUN=0 \
-            --build-arg INSTALL_BREW=0 \
-            --build-arg FINAL_USER=sandbox \
-            --cache-from type=gha,scope=sandbox-common-smoke \
-            --cache-to type=gha,mode=max,scope=sandbox-common-smoke \
-            .
+          BASE_IMAGE="openclaw-sandbox-smoke-base:bookworm-slim" \
+            TARGET_IMAGE="openclaw-sandbox-common-smoke:bookworm-slim" \
+            PACKAGES="ca-certificates" \
+            INSTALL_PNPM=0 \
+            INSTALL_BUN=0 \
+            INSTALL_BREW=0 \
+            FINAL_USER=sandbox \
+            OPENCLAW_DOCKER_BUILD_USE_BUILDX=1 \
+            OPENCLAW_DOCKER_BUILD_CACHE_FROM="type=gha,scope=sandbox-common-smoke" \
+            OPENCLAW_DOCKER_BUILD_CACHE_TO="type=gha,mode=max,scope=sandbox-common-smoke" \
+            scripts/sandbox-common-setup.sh
 
           u="$(docker run --rm openclaw-sandbox-common-smoke:bookworm-slim sh -lc 'id -un')"
           test "$u" = "sandbox"
