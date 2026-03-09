@@ -57,6 +57,7 @@ Docs: https://docs.openclaw.ai
 - Telegram/DM routing: dedupe inbound Telegram DMs per agent instead of per session key so the same DM cannot trigger duplicate replies when both `agent:main:main` and `agent:main:telegram:direct:<id>` resolve for one agent. Fixes #40005. Supersedes #40116. (#40519) thanks @obviyus.
 - Matrix/DM routing: add safer fallback detection for broken `m.direct` homeservers, honor explicit room bindings over DM classification, and preserve room-bound agent selection for Matrix DM rooms. (#19736) Thanks @derbronko.
 - Cron/Telegram announce delivery: route text-only announce jobs through the real outbound adapters after finalizing descendant output so plain Telegram targets no longer report `delivered: true` when no message actually reached Telegram. (#40575) thanks @obviyus.
+- macOS/launchd restart recovery: call `launchctl enable` before `bootstrap` in LaunchAgent restart and repair flows so persisted disabled-state jobs reload cleanly after `openclaw gateway restart`. Landed from contributor PR #39237 by @scoootscooob. Thanks @scoootscooob.
 
 ## 2026.3.7
 
