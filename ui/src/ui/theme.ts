@@ -62,12 +62,31 @@ function resolveMode(mode: ThemeMode): "light" | "dark" {
   return mode;
 }
 
-export function resolveTheme(theme: ThemeName, mode: ThemeMode): ResolvedTheme {
-  const resolvedMode = resolveMode(mode);
-  if (theme === "claw") {
+function normalizeThemeArgs(
+  themeOrMode: ThemeName | ThemeMode,
+  mode: ThemeMode | undefined,
+): { theme: ThemeName; mode: ThemeMode } {
+  if (VALID_THEME_NAMES.has(themeOrMode as ThemeName)) {
+    return {
+      theme: themeOrMode as ThemeName,
+      mode: mode ?? "system",
+    };
+  }
+  return {
+    theme: "claw",
+    mode: themeOrMode as ThemeMode,
+  };
+}
+
+export function resolveTheme(mode: ThemeMode): ResolvedTheme;
+export function resolveTheme(theme: ThemeName, mode?: ThemeMode): ResolvedTheme;
+export function resolveTheme(themeOrMode: ThemeName | ThemeMode, mode?: ThemeMode): ResolvedTheme {
+  const normalized = normalizeThemeArgs(themeOrMode, mode);
+  const resolvedMode = resolveMode(normalized.mode);
+  if (normalized.theme === "claw") {
     return resolvedMode === "light" ? "light" : "dark";
   }
-  if (theme === "knot") {
+  if (normalized.theme === "knot") {
     return resolvedMode === "light" ? "openknot-light" : "openknot";
   }
   return resolvedMode === "light" ? "dash-light" : "dash";

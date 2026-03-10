@@ -11,6 +11,7 @@ export const zh_CN: TranslationMap = {
     disabled: "已禁用",
     na: "不适用",
     docs: "文档",
+    theme: "主题",
     resources: "资源",
     search: "搜索",
   },

@@ -19,7 +19,7 @@ export type UiSettings = {
   chatShowThinking: boolean;
   splitRatio: number; // Sidebar split ratio (0.4 to 0.7, default 0.6)
   navCollapsed: boolean; // Collapsible sidebar state
-  navWidth: number; // Sidebar width when expanded (240–400px)
+  navWidth: number; // Sidebar width when expanded (200–400px)
   navGroupsCollapsed: Record<string, boolean>; // Which nav groups are collapsed
   locale?: string;
 };
@@ -194,10 +194,12 @@ function persistSettings(next: UiSettings) {
     sessionKey: next.sessionKey,
     lastActiveSessionKey: next.lastActiveSessionKey,
     theme: next.theme,
+    themeMode: next.themeMode,
     chatFocusMode: next.chatFocusMode,
     chatShowThinking: next.chatShowThinking,
     splitRatio: next.splitRatio,
     navCollapsed: next.navCollapsed,
+    navWidth: next.navWidth,
     navGroupsCollapsed: next.navGroupsCollapsed,
     ...(next.locale ? { locale: next.locale } : {}),
   };
