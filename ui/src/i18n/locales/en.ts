@@ -158,7 +158,7 @@ export const en: TranslationMap = {
   },
   login: {
     subtitle: "Gateway Dashboard",
-    passwordPlaceholder: "optional",
+    passwordPlaceholder: "optional", // pragma: allowlist secret
   },
   chat: {
     disconnected: "Disconnected from gateway.",
