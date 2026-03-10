@@ -2632,6 +2632,13 @@ function resolveSearchProviderPluginConfig(
   return pluginConfig && typeof pluginConfig === "object" ? pluginConfig : undefined;
 }
 
+function formatWebSearchExecutionLog(provider: SearchProviderPlugin): string {
+  if (provider.pluginId) {
+    return `web_search: executing plugin provider "${provider.id}" from "${provider.pluginId}"`;
+  }
+  return `web_search: executing built-in provider "${provider.id}"`;
+}
+
 export function createWebSearchTool(options?: {
   config?: OpenClawConfig;
   sandboxed?: boolean;
@@ -2699,6 +2706,7 @@ export function createWebSearchTool(options?: {
       }
 
       const providerId = normalizeSearchProviderId(provider.id);
+      logVerbose(formatWebSearchExecutionLog(provider));
       const result =
         !provider.pluginId && isBuiltinSearchProviderId(providerId)
           ? await executeBuiltinSearchProvider({

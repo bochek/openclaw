@@ -1,0 +1,16 @@
+{
+  "id": "tavily-search",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "apiKey": {
+        "type": "string"
+      },
+      "searchDepth": {
+        "type": "string",
+        "enum": ["basic", "advanced"]
+      }
+    }
+  }
+}
