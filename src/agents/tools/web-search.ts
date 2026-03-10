@@ -3,7 +3,14 @@ import { formatCliCommand } from "../../cli/command-format.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { normalizeResolvedSecretInputString } from "../../config/types.secrets.js";
 import { logVerbose } from "../../globals.js";
-import type { RuntimeWebSearchMetadata } from "../../secrets/runtime-web-tools.js";
+import { getActivePluginRegistry } from "../../plugins/runtime.js";
+import type {
+  SearchProviderContext,
+  SearchProviderErrorResult,
+  SearchProviderPlugin,
+  SearchProviderRequest,
+  SearchProviderSuccessResult,
+} from "../../plugins/types.js";
 import { wrapWebContent } from "../../security/external-content.js";
 import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";
 import type { AnyAgentTool } from "./common.js";
@@ -25,6 +32,7 @@ import {
 const SEARCH_PROVIDERS = ["brave", "gemini", "grok", "kimi", "perplexity"] as const;
 const DEFAULT_SEARCH_COUNT = 5;
 const MAX_SEARCH_COUNT = 10;
+const DEFAULT_PROVIDER = "brave";
 
 const BRAVE_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
 const BRAVE_LLM_CONTEXT_ENDPOINT = "https://api.search.brave.com/res/v1/llm/context";
@@ -127,6 +135,78 @@ const RECENCY_TO_FRESHNESS: Record<string, string> = {
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const PERPLEXITY_DATE_PATTERN = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
 
+type BuiltinSearchProviderId = (typeof SEARCH_PROVIDERS)[number];
+
+const SEARCH_QUERY_SCHEMA_FIELDS = {
+  query: Type.String({ description: "Search query string." }),
+  count: Type.Optional(
+    Type.Number({
+      description: "Number of results to return (1-10).",
+      minimum: 1,
+      maximum: MAX_SEARCH_COUNT,
+    }),
+  ),
+} as const;
+
+const SEARCH_FILTER_SCHEMA_FIELDS = {
+  country: Type.Optional(
+    Type.String({
+      description:
+        "2-letter country code for region-specific results (e.g., 'DE', 'US', 'ALL'). Default: 'US'.",
+    }),
+  ),
+  language: Type.Optional(
+    Type.String({
+      description: "ISO 639-1 language code for results (e.g., 'en', 'de', 'fr').",
+    }),
+  ),
+  freshness: Type.Optional(
+    Type.String({
+      description: "Filter by time: 'day' (24h), 'week', 'month', or 'year'.",
+    }),
+  ),
+  date_after: Type.Optional(
+    Type.String({
+      description: "Only results published after this date (YYYY-MM-DD).",
+    }),
+  ),
+  date_before: Type.Optional(
+    Type.String({
+      description: "Only results published before this date (YYYY-MM-DD).",
+    }),
+  ),
+} as const;
+
+const SEARCH_PLUGIN_EXTENSION_FIELDS = {
+  search_lang: Type.Optional(
+    Type.String({
+      description: "Optional provider-specific search language override.",
+    }),
+  ),
+  ui_lang: Type.Optional(
+    Type.String({
+      description: "Optional provider-specific UI locale override.",
+    }),
+  ),
+  domain_filter: Type.Optional(
+    Type.Array(Type.String(), {
+      description: "Optional provider-specific domain allow/deny filter.",
+    }),
+  ),
+  max_tokens: Type.Optional(
+    Type.Number({
+      description: "Optional provider-specific content budget.",
+      minimum: 1,
+    }),
+  ),
+  max_tokens_per_page: Type.Optional(
+    Type.Number({
+      description: "Optional provider-specific per-page content budget.",
+      minimum: 1,
+    }),
+  ),
+} as const;
+
 function isoToPerplexityDate(iso: string): string | undefined {
   const match = iso.match(ISO_DATE_PATTERN);
   if (!match) {
@@ -154,46 +234,6 @@ function createWebSearchSchema(params: {
   provider: (typeof SEARCH_PROVIDERS)[number];
   perplexityTransport?: PerplexityTransport;
 }) {
-  const querySchema = {
-    query: Type.String({ description: "Search query string." }),
-    count: Type.Optional(
-      Type.Number({
-        description: "Number of results to return (1-10).",
-        minimum: 1,
-        maximum: MAX_SEARCH_COUNT,
-      }),
-    ),
-  } as const;
-
-  const filterSchema = {
-    country: Type.Optional(
-      Type.String({
-        description:
-          "2-letter country code for region-specific results (e.g., 'DE', 'US', 'ALL'). Default: 'US'.",
-      }),
-    ),
-    language: Type.Optional(
-      Type.String({
-        description: "ISO 639-1 language code for results (e.g., 'en', 'de', 'fr').",
-      }),
-    ),
-    freshness: Type.Optional(
-      Type.String({
-        description: "Filter by time: 'day' (24h), 'week', 'month', or 'year'.",
-      }),
-    ),
-    date_after: Type.Optional(
-      Type.String({
-        description: "Only results published after this date (YYYY-MM-DD).",
-      }),
-    ),
-    date_before: Type.Optional(
-      Type.String({
-        description: "Only results published before this date (YYYY-MM-DD).",
-      }),
-    ),
-  } as const;
-
   const perplexityStructuredFilterSchema = {
     country: Type.Optional(
       Type.String({
@@ -223,8 +263,8 @@ function createWebSearchSchema(params: {
 
   if (params.provider === "brave") {
     return Type.Object({
-      ...querySchema,
-      ...filterSchema,
+      ...SEARCH_QUERY_SCHEMA_FIELDS,
+      ...SEARCH_FILTER_SCHEMA_FIELDS,
       search_lang: Type.Optional(
         Type.String({
           description:
@@ -243,13 +283,13 @@ function createWebSearchSchema(params: {
   if (params.provider === "perplexity") {
     if (params.perplexityTransport === "chat_completions") {
       return Type.Object({
-        ...querySchema,
-        freshness: filterSchema.freshness,
+        ...SEARCH_QUERY_SCHEMA_FIELDS,
+        freshness: SEARCH_FILTER_SCHEMA_FIELDS.freshness,
       });
     }
     return Type.Object({
-      ...querySchema,
-      freshness: filterSchema.freshness,
+      ...SEARCH_QUERY_SCHEMA_FIELDS,
+      freshness: SEARCH_FILTER_SCHEMA_FIELDS.freshness,
       ...perplexityStructuredFilterSchema,
       domain_filter: Type.Optional(
         Type.Array(Type.String(), {
@@ -277,8 +317,8 @@ function createWebSearchSchema(params: {
 
   // grok, gemini, kimi, etc.
   return Type.Object({
-    ...querySchema,
-    ...filterSchema,
+    ...SEARCH_QUERY_SCHEMA_FIELDS,
+    ...SEARCH_FILTER_SCHEMA_FIELDS,
   });
 }
 
@@ -601,7 +641,7 @@ function missingSearchKeyPayload(provider: (typeof SEARCH_PROVIDERS)[number]) {
   };
 }
 
-function resolveSearchProvider(search?: WebSearchConfig): (typeof SEARCH_PROVIDERS)[number] {
+function resolveBuiltinSearchProvider(search?: WebSearchConfig): BuiltinSearchProviderId {
   const raw =
     search && "provider" in search && typeof search.provider === "string"
       ? search.provider.trim().toLowerCase()
@@ -1615,10 +1655,37 @@ async function runWebSearch(params: {
           : params.provider === "kimi"
             ? `${params.kimiBaseUrl ?? DEFAULT_KIMI_BASE_URL}:${params.kimiModel ?? DEFAULT_KIMI_MODEL}`
             : "";
+  const requestCacheIdentity = buildSearchRequestCacheIdentity({
+    query: params.query,
+    count: params.count,
+    country: params.country,
+    language: params.language,
+    search_lang: params.search_lang,
+    ui_lang: params.ui_lang,
+    freshness: params.freshness,
+    dateAfter: params.dateAfter,
+    dateBefore: params.dateBefore,
+    domainFilter: params.searchDomainFilter,
+    maxTokens: params.maxTokens,
+    maxTokensPerPage: params.maxTokensPerPage,
+  });
   const cacheKey = normalizeCacheKey(
     params.provider === "brave" && effectiveBraveMode === "llm-context"
-      ? `${params.provider}:llm-context:${params.query}:${params.country || "default"}:${params.search_lang || params.language || "default"}:${params.freshness || "default"}`
-      : `${params.provider}:${effectiveBraveMode}:${params.query}:${params.count}:${params.country || "default"}:${params.search_lang || params.language || "default"}:${params.ui_lang || "default"}:${params.freshness || "default"}:${params.dateAfter || "default"}:${params.dateBefore || "default"}:${params.searchDomainFilter?.join(",") || "default"}:${params.maxTokens || "default"}:${params.maxTokensPerPage || "default"}:${providerSpecificKey}`,
+      ? `${params.provider}:llm-context:${buildSearchRequestCacheIdentity({
+          query: params.query,
+          count: params.count,
+          country: params.country,
+          language: params.language,
+          search_lang: params.search_lang,
+          ui_lang: undefined,
+          freshness: params.freshness,
+          dateAfter: undefined,
+          dateBefore: undefined,
+          domainFilter: undefined,
+          maxTokens: undefined,
+          maxTokensPerPage: undefined,
+        })}`
+      : `${params.provider}:${effectiveBraveMode}:${requestCacheIdentity}:${providerSpecificKey}`,
   );
   const cached = readCache(SEARCH_CACHE, cacheKey);
   if (cached) {
@@ -1888,174 +1955,684 @@ async function runWebSearch(params: {
   return payload;
 }
 
-export function createWebSearchTool(options?: {
-  config?: OpenClawConfig;
-  sandboxed?: boolean;
-  runtimeWebSearch?: RuntimeWebSearchMetadata;
-}): AnyAgentTool | null {
-  const search = resolveSearchConfig(options?.config);
-  if (!resolveSearchEnabled({ search, sandboxed: options?.sandboxed })) {
-    return null;
+function normalizeSearchProviderId(value: string | undefined): string {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function isBuiltinSearchProviderId(value: string): value is BuiltinSearchProviderId {
+  return SEARCH_PROVIDERS.includes(value as BuiltinSearchProviderId);
+}
+
+function stableSerializeForCache(value: unknown): string {
+  if (value === null || value === undefined) {
+    return String(value);
+  }
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableSerializeForCache(entry)).join(",")}]`;
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).toSorted(([a], [b]) =>
+      a.localeCompare(b),
+    );
+    return `{${entries
+      .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableSerializeForCache(entryValue)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function buildSearchRequestCacheIdentity(params: {
+  query: string;
+  count: number;
+  country?: string;
+  language?: string;
+  search_lang?: string;
+  ui_lang?: string;
+  freshness?: string;
+  dateAfter?: string;
+  dateBefore?: string;
+  domainFilter?: string[];
+  maxTokens?: number;
+  maxTokensPerPage?: number;
+}): string {
+  return [
+    params.query,
+    params.count,
+    params.country || "default",
+    params.language || "default",
+    params.search_lang || "default",
+    params.ui_lang || "default",
+    params.freshness || "default",
+    params.dateAfter || "default",
+    params.dateBefore || "default",
+    params.domainFilter?.join(",") || "default",
+    params.maxTokens || "default",
+    params.maxTokensPerPage || "default",
+  ].join(":");
+}
+
+function createExtensibleWebSearchSchema() {
+  return Type.Object({
+    ...SEARCH_QUERY_SCHEMA_FIELDS,
+    ...SEARCH_FILTER_SCHEMA_FIELDS,
+    ...SEARCH_PLUGIN_EXTENSION_FIELDS,
+  });
+}
+
+function sanitizeSearchUrl(url: unknown): string | undefined {
+  if (typeof url !== "string" || url.trim() === "") {
+    return undefined;
+  }
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.href;
+    }
+  } catch {
+    // Ignore invalid URLs from plugin providers.
+  }
+  return undefined;
+}
+
+function createMissingSearchProviderPlugin(providerId: string): SearchProviderPlugin {
+  return {
+    id: providerId,
+    name: providerId,
+    description: `Search provider "${providerId}" is configured but not registered.`,
+    search: async () => ({
+      error: "unknown_search_provider",
+      message: `Configured web search provider "${providerId}" is not registered.`,
+      docs: "https://docs.openclaw.ai/tools/web",
+    }),
+  };
+}
+
+function executePluginSearchProvider(params: {
+  provider: SearchProviderPlugin;
+  request: SearchProviderRequest;
+  context: SearchProviderContext;
+}): Promise<Record<string, unknown>> {
+  const pluginConfigKey = params.context.pluginConfig
+    ? stableSerializeForCache(params.context.pluginConfig)
+    : "no-plugin-config";
+  const cacheKey = normalizeCacheKey(
+    `${params.provider.id}:${params.provider.pluginId || "builtin"}:${pluginConfigKey}:${buildSearchRequestCacheIdentity(
+      {
+        query: params.request.query,
+        count: params.request.count,
+        country: params.request.country,
+        language: params.request.language,
+        search_lang: params.request.search_lang,
+        ui_lang: params.request.ui_lang,
+        freshness: params.request.freshness,
+        dateAfter: params.request.dateAfter,
+        dateBefore: params.request.dateBefore,
+        domainFilter: params.request.domainFilter,
+        maxTokens: params.request.maxTokens,
+        maxTokensPerPage: params.request.maxTokensPerPage,
+      },
+    )}`,
+  );
+  const cached = readCache(SEARCH_CACHE, cacheKey);
+  if (cached) {
+    return Promise.resolve({ ...cached.value, cached: true });
   }
 
-  const provider =
-    options?.runtimeWebSearch?.selectedProvider ??
-    options?.runtimeWebSearch?.providerConfigured ??
-    resolveSearchProvider(search);
+  const startedAt = Date.now();
+  return params.provider
+    .search(params.request, params.context)
+    .then((result) => {
+      if ("error" in result && typeof result.error === "string") {
+        const errorResult: SearchProviderErrorResult = result;
+        return {
+          ...errorResult,
+          provider: params.provider.id,
+          ...(typeof errorResult.message === "string"
+            ? {}
+            : {
+                message: `Search provider "${params.provider.id}" returned error "${errorResult.error}".`,
+              }),
+        };
+      }
+
+      const successResult: SearchProviderSuccessResult = result;
+      const rawResults = Array.isArray(successResult.results)
+        ? successResult.results.filter((entry) => entry && typeof entry === "object")
+        : [];
+      const normalizedResults = rawResults
+        .map((entry) => {
+          const value = entry as Record<string, unknown>;
+          const url = sanitizeSearchUrl(value.url);
+          if (!url) {
+            return undefined;
+          }
+          const title =
+            typeof value.title === "string" ? wrapWebContent(value.title, "web_search") : "";
+          const description =
+            typeof value.description === "string"
+              ? wrapWebContent(value.description, "web_search")
+              : undefined;
+          const published = typeof value.published === "string" ? value.published : undefined;
+          return { title, url, description, published };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+      const rawCitations = Array.isArray(successResult.citations) ? successResult.citations : [];
+      const normalizedCitations = rawCitations
+        .map((citation) => {
+          if (typeof citation === "string") {
+            return sanitizeSearchUrl(citation);
+          }
+          if (!citation || typeof citation !== "object") {
+            return undefined;
+          }
+          const value = citation as Record<string, unknown>;
+          const url = sanitizeSearchUrl(value.url);
+          if (!url) {
+            return undefined;
+          }
+          const title =
+            typeof value.title === "string" ? wrapWebContent(value.title, "web_search") : undefined;
+          return title ? { url, title } : { url };
+        })
+        .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+
+      const payload: Record<string, unknown> = {
+        query: params.request.query,
+        provider: params.provider.id,
+        tookMs:
+          typeof successResult.tookMs === "number" && Number.isFinite(successResult.tookMs)
+            ? successResult.tookMs
+            : Date.now() - startedAt,
+        externalContent: {
+          untrusted: true,
+          source: "web_search",
+          provider: params.provider.id,
+          wrapped: true,
+        },
+      };
+      if (normalizedResults.length > 0) {
+        payload.results = normalizedResults;
+        payload.count = normalizedResults.length;
+      }
+      if (typeof successResult.content === "string") {
+        payload.content = wrapWebContent(successResult.content, "web_search");
+      }
+      if (normalizedCitations.length > 0) {
+        payload.citations = normalizedCitations;
+      }
+      writeCache(SEARCH_CACHE, cacheKey, payload, params.context.cacheTtlMs);
+      return payload;
+    })
+    .catch((error) => ({
+      error: "search_failed",
+      provider: params.provider.id,
+      message: error instanceof Error ? error.message : String(error),
+    }));
+}
+
+function executeBuiltinSearchProvider(params: {
+  provider: BuiltinSearchProviderId;
+  request: SearchProviderRequest;
+  context: SearchProviderContext;
+}): Promise<Record<string, unknown>> {
+  const search = params.request.providerConfig as WebSearchConfig | undefined;
+  const provider = params.provider;
   const perplexityConfig = resolvePerplexityConfig(search);
-  const perplexitySchemaTransportHint =
-    options?.runtimeWebSearch?.perplexityTransport ??
-    resolvePerplexitySchemaTransportHint(perplexityConfig);
   const grokConfig = resolveGrokConfig(search);
   const geminiConfig = resolveGeminiConfig(search);
   const kimiConfig = resolveKimiConfig(search);
   const braveConfig = resolveBraveConfig(search);
   const braveMode = resolveBraveMode(braveConfig);
 
-  const description =
+  const perplexityRuntime =
+    provider === "perplexity" ? resolvePerplexityTransport(perplexityConfig) : undefined;
+  const apiKey =
     provider === "perplexity"
-      ? perplexitySchemaTransportHint === "chat_completions"
-        ? "Search the web using Perplexity Sonar via Perplexity/OpenRouter chat completions. Returns AI-synthesized answers with citations from web-grounded search."
-        : "Search the web using Perplexity. Runtime routing decides between native Search API and Sonar chat-completions compatibility. Structured filters are available on the native Search API path."
+      ? perplexityRuntime?.apiKey
       : provider === "grok"
-        ? "Search the web using xAI Grok. Returns AI-synthesized answers with citations from real-time web search."
+        ? resolveGrokApiKey(grokConfig)
         : provider === "kimi"
-          ? "Search the web using Kimi by Moonshot. Returns AI-synthesized answers with citations from native $web_search."
+          ? resolveKimiApiKey(kimiConfig)
           : provider === "gemini"
-            ? "Search the web using Gemini with Google Search grounding. Returns AI-synthesized answers with citations from Google Search."
-            : braveMode === "llm-context"
-              ? "Search the web using Brave Search LLM Context API. Returns pre-extracted page content (text chunks, tables, code blocks) optimized for LLM grounding."
-              : "Search the web using Brave Search API. Supports region-specific and localized search via country and language parameters. Returns titles, URLs, and snippets for fast research.";
+            ? resolveGeminiApiKey(geminiConfig)
+            : resolveSearchApiKey(search);
+
+  if (!apiKey) {
+    return Promise.resolve(missingSearchKeyPayload(provider));
+  }
+
+  const supportsStructuredPerplexityFilters =
+    provider === "perplexity" && perplexityRuntime?.transport === "search_api";
+  if (
+    params.request.country &&
+    provider !== "brave" &&
+    !(provider === "perplexity" && supportsStructuredPerplexityFilters)
+  ) {
+    return Promise.resolve({
+      error: "unsupported_country",
+      message:
+        provider === "perplexity"
+          ? "country filtering is only supported by the native Perplexity Search API path. Remove Perplexity baseUrl/model overrides or use a direct PERPLEXITY_API_KEY to enable it."
+          : `country filtering is not supported by the ${provider} provider. Only Brave and Perplexity support country filtering.`,
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  if (
+    params.request.language &&
+    provider !== "brave" &&
+    !(provider === "perplexity" && supportsStructuredPerplexityFilters)
+  ) {
+    return Promise.resolve({
+      error: "unsupported_language",
+      message:
+        provider === "perplexity"
+          ? "language filtering is only supported by the native Perplexity Search API path. Remove Perplexity baseUrl/model overrides or use a direct PERPLEXITY_API_KEY to enable it."
+          : `language filtering is not supported by the ${provider} provider. Only Brave and Perplexity support language filtering.`,
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  if (
+    params.request.language &&
+    provider === "perplexity" &&
+    !/^[a-z]{2}$/i.test(params.request.language)
+  ) {
+    return Promise.resolve({
+      error: "invalid_language",
+      message: "language must be a 2-letter ISO 639-1 code like 'en', 'de', or 'fr'.",
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  const normalizedBraveLanguageParams =
+    provider === "brave"
+      ? normalizeBraveLanguageParams({
+          search_lang: params.request.search_lang || params.request.language,
+          ui_lang: params.request.ui_lang,
+        })
+      : { search_lang: params.request.language, ui_lang: params.request.ui_lang };
+  if (normalizedBraveLanguageParams.invalidField === "search_lang") {
+    return Promise.resolve({
+      error: "invalid_search_lang",
+      message:
+        "search_lang must be a Brave-supported language code like 'en', 'en-gb', 'zh-hans', or 'zh-hant'.",
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  if (normalizedBraveLanguageParams.invalidField === "ui_lang") {
+    return Promise.resolve({
+      error: "invalid_ui_lang",
+      message: "ui_lang must be a language-region locale like 'en-US'.",
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  if (
+    normalizedBraveLanguageParams.ui_lang &&
+    provider === "brave" &&
+    braveMode === "llm-context"
+  ) {
+    return Promise.resolve({
+      error: "unsupported_ui_lang",
+      message:
+        "ui_lang is not supported by Brave llm-context mode. Remove ui_lang or use Brave web mode for locale-based UI hints.",
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  if (params.request.freshness && provider !== "brave" && provider !== "perplexity") {
+    return Promise.resolve({
+      error: "unsupported_freshness",
+      message: `freshness filtering is not supported by the ${provider} provider. Only Brave and Perplexity support freshness.`,
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  if (params.request.freshness && provider === "brave" && braveMode === "llm-context") {
+    return Promise.resolve({
+      error: "unsupported_freshness",
+      message:
+        "freshness filtering is not supported by Brave llm-context mode. Remove freshness or use Brave web mode.",
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  const normalizedFreshness = params.request.freshness
+    ? normalizeFreshness(params.request.freshness, provider)
+    : undefined;
+  if (params.request.freshness && !normalizedFreshness) {
+    return Promise.resolve({
+      error: "invalid_freshness",
+      message: "freshness must be day, week, month, or year.",
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  if (
+    (params.request.dateAfter || params.request.dateBefore) &&
+    provider !== "brave" &&
+    !(provider === "perplexity" && supportsStructuredPerplexityFilters)
+  ) {
+    return Promise.resolve({
+      error: "unsupported_date_filter",
+      message:
+        provider === "perplexity"
+          ? "date_after/date_before are only supported by the native Perplexity Search API path. Remove Perplexity baseUrl/model overrides or use a direct PERPLEXITY_API_KEY to enable them."
+          : `date_after/date_before filtering is not supported by the ${provider} provider. Only Brave and Perplexity support date filtering.`,
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  if (
+    (params.request.dateAfter || params.request.dateBefore) &&
+    provider === "brave" &&
+    braveMode === "llm-context"
+  ) {
+    return Promise.resolve({
+      error: "unsupported_date_filter",
+      message:
+        "date_after/date_before filtering is not supported by Brave llm-context mode. Use Brave web mode for date filters.",
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  if (params.request.domainFilter && params.request.domainFilter.length > 0) {
+    const hasDenylist = params.request.domainFilter.some((domain) => domain.startsWith("-"));
+    const hasAllowlist = params.request.domainFilter.some((domain) => !domain.startsWith("-"));
+    if (hasDenylist && hasAllowlist) {
+      return Promise.resolve({
+        error: "invalid_domain_filter",
+        message:
+          "domain_filter cannot mix allowlist and denylist entries. Use either all positive entries (allowlist) or all entries prefixed with '-' (denylist).",
+        docs: "https://docs.openclaw.ai/tools/web",
+      });
+    }
+    if (params.request.domainFilter.length > 20) {
+      return Promise.resolve({
+        error: "invalid_domain_filter",
+        message: "domain_filter supports a maximum of 20 domains.",
+        docs: "https://docs.openclaw.ai/tools/web",
+      });
+    }
+  }
+  if (
+    params.request.domainFilter &&
+    params.request.domainFilter.length > 0 &&
+    !(provider === "perplexity" && supportsStructuredPerplexityFilters)
+  ) {
+    return Promise.resolve({
+      error: "unsupported_domain_filter",
+      message:
+        provider === "perplexity"
+          ? "domain_filter is only supported by the native Perplexity Search API path. Remove Perplexity baseUrl/model overrides or use a direct PERPLEXITY_API_KEY to enable it."
+          : `domain_filter is not supported by the ${provider} provider. Only Perplexity supports domain filtering.`,
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+  if (
+    provider === "perplexity" &&
+    perplexityRuntime?.transport === "chat_completions" &&
+    (params.request.maxTokens !== undefined || params.request.maxTokensPerPage !== undefined)
+  ) {
+    return Promise.resolve({
+      error: "unsupported_content_budget",
+      message:
+        "max_tokens and max_tokens_per_page are only supported by the native Perplexity Search API path. Remove Perplexity baseUrl/model overrides or use a direct PERPLEXITY_API_KEY to enable them.",
+      docs: "https://docs.openclaw.ai/tools/web",
+    });
+  }
+
+  return runWebSearch({
+    query: params.request.query,
+    count: params.request.count,
+    apiKey,
+    timeoutSeconds: params.context.timeoutSeconds,
+    cacheTtlMs: params.context.cacheTtlMs,
+    provider,
+    country: params.request.country,
+    language: params.request.language,
+    search_lang: normalizedBraveLanguageParams.search_lang,
+    ui_lang: normalizedBraveLanguageParams.ui_lang,
+    freshness: normalizedFreshness,
+    dateAfter: params.request.dateAfter,
+    dateBefore: params.request.dateBefore,
+    searchDomainFilter: params.request.domainFilter,
+    maxTokens: params.request.maxTokens,
+    maxTokensPerPage: params.request.maxTokensPerPage,
+    perplexityBaseUrl: perplexityRuntime?.baseUrl,
+    perplexityModel: perplexityRuntime?.model,
+    perplexityTransport: perplexityRuntime?.transport,
+    grokModel: resolveGrokModel(grokConfig),
+    grokInlineCitations: resolveGrokInlineCitations(grokConfig),
+    geminiModel: resolveGeminiModel(geminiConfig),
+    kimiBaseUrl: resolveKimiBaseUrl(kimiConfig),
+    kimiModel: resolveKimiModel(kimiConfig),
+    braveMode,
+  });
+}
+
+function getBuiltinSearchProviders(search?: WebSearchConfig): SearchProviderPlugin[] {
+  const braveMode = resolveBraveMode(resolveBraveConfig(search));
+  return [
+    {
+      id: "brave",
+      name: braveMode === "llm-context" ? "Brave LLM Context" : "Brave Search",
+      description:
+        braveMode === "llm-context"
+          ? "Search the web using Brave Search LLM Context API. Returns pre-extracted page content (text chunks, tables, code blocks) optimized for LLM grounding."
+          : "Search the web using Brave Search API. Supports region-specific and localized search via country and language parameters. Returns titles, URLs, and snippets for fast research.",
+      isAvailable: (config) => Boolean(resolveSearchApiKey(resolveSearchConfig(config))),
+      search: (request, context) =>
+        executeBuiltinSearchProvider({ provider: "brave", request, context }),
+    },
+    {
+      id: "gemini",
+      name: "Gemini Search",
+      description:
+        "Search the web using Gemini with Google Search grounding. Returns AI-synthesized answers with citations from Google Search.",
+      isAvailable: (config) =>
+        Boolean(resolveGeminiApiKey(resolveGeminiConfig(resolveSearchConfig(config)))),
+      search: (request, context) =>
+        executeBuiltinSearchProvider({ provider: "gemini", request, context }),
+    },
+    {
+      id: "grok",
+      name: "xAI Grok",
+      description:
+        "Search the web using xAI Grok. Returns AI-synthesized answers with citations from real-time web search.",
+      isAvailable: (config) =>
+        Boolean(resolveGrokApiKey(resolveGrokConfig(resolveSearchConfig(config)))),
+      search: (request, context) =>
+        executeBuiltinSearchProvider({ provider: "grok", request, context }),
+    },
+    {
+      id: "kimi",
+      name: "Kimi by Moonshot",
+      description:
+        "Search the web using Kimi by Moonshot. Returns AI-synthesized answers with citations from native $web_search.",
+      isAvailable: (config) =>
+        Boolean(resolveKimiApiKey(resolveKimiConfig(resolveSearchConfig(config)))),
+      search: (request, context) =>
+        executeBuiltinSearchProvider({ provider: "kimi", request, context }),
+    },
+    {
+      id: "perplexity",
+      name: "Perplexity",
+      description:
+        resolvePerplexitySchemaTransportHint(resolvePerplexityConfig(search)) === "chat_completions"
+          ? "Search the web using Perplexity Sonar via Perplexity/OpenRouter chat completions. Returns AI-synthesized answers with citations from web-grounded search."
+          : "Search the web using Perplexity. Runtime routing decides between native Search API and Sonar chat-completions compatibility. Structured filters are available on the native Search API path.",
+      isAvailable: (config) => {
+        const searchConfig = resolveSearchConfig(config);
+        return Boolean(resolvePerplexityApiKey(resolvePerplexityConfig(searchConfig)).apiKey);
+      },
+      search: (request, context) =>
+        executeBuiltinSearchProvider({ provider: "perplexity", request, context }),
+    },
+  ];
+}
+
+function getPluginSearchProviders(): SearchProviderPlugin[] {
+  return getActivePluginRegistry()?.searchProviders.map((entry) => entry.provider) ?? [];
+}
+
+function resolvePreferredBuiltinSearchProvider(params: {
+  search?: WebSearchConfig;
+}): BuiltinSearchProviderId {
+  const configuredProviderId = normalizeSearchProviderId(
+    typeof params.search?.provider === "string" ? params.search.provider : undefined,
+  );
+  if (isBuiltinSearchProviderId(configuredProviderId)) {
+    return configuredProviderId;
+  }
+
+  return resolveBuiltinSearchProvider(params.search);
+}
+
+function resolveRegisteredSearchProvider(params: {
+  search?: WebSearchConfig;
+  config?: OpenClawConfig;
+}): SearchProviderPlugin {
+  const configuredProviderId = normalizeSearchProviderId(
+    typeof params.search?.provider === "string" ? params.search.provider : undefined,
+  );
+  const builtinProviders = new Map(
+    getBuiltinSearchProviders(params.search).map((provider) => [provider.id, provider]),
+  );
+  const pluginProviders = new Map(
+    getPluginSearchProviders().map((provider) => [
+      normalizeSearchProviderId(provider.id),
+      provider,
+    ]),
+  );
+
+  if (configuredProviderId) {
+    const pluginProvider = pluginProviders.get(configuredProviderId);
+    if (pluginProvider) {
+      return pluginProvider;
+    }
+  } else {
+    for (const provider of pluginProviders.values()) {
+      if (provider.isAvailable?.(params.config)) {
+        logVerbose(
+          `web_search: no provider configured, auto-detected plugin provider "${provider.id}"`,
+        );
+        return provider;
+      }
+    }
+  }
+
+  if (configuredProviderId && !isBuiltinSearchProviderId(configuredProviderId)) {
+    logVerbose(
+      `web_search: configured plugin provider "${configuredProviderId}" is not registered; failing closed`,
+    );
+    return createMissingSearchProviderPlugin(configuredProviderId);
+  }
+
+  return (
+    builtinProviders.get(
+      resolvePreferredBuiltinSearchProvider({
+        search: params.search,
+      }),
+    ) ?? builtinProviders.get(DEFAULT_PROVIDER)!
+  );
+}
+
+function createSearchProviderSchema(params: {
+  provider: SearchProviderPlugin;
+  search?: WebSearchConfig;
+}) {
+  const providerId = normalizeSearchProviderId(params.provider.id);
+  if (!params.provider.pluginId && isBuiltinSearchProviderId(providerId)) {
+    const perplexityConfig = resolvePerplexityConfig(params.search);
+    const perplexityTransport = resolvePerplexitySchemaTransportHint(perplexityConfig);
+    return createWebSearchSchema({
+      provider: providerId,
+      perplexityTransport: providerId === "perplexity" ? perplexityTransport : undefined,
+    });
+  }
+  return createExtensibleWebSearchSchema();
+}
+
+function parseSearchProviderRequest(
+  args: Record<string, unknown>,
+  search?: WebSearchConfig,
+): SearchProviderRequest {
+  const rawFreshness = readStringParam(args, "freshness");
+  const rawDateAfter = readStringParam(args, "date_after");
+  const rawDateBefore = readStringParam(args, "date_before");
+
+  if (rawFreshness && (rawDateAfter || rawDateBefore)) {
+    return {
+      query: readStringParam(args, "query", { required: true }),
+      count: resolveSearchCount(
+        readNumberParam(args, "count", { integer: true }) ?? search?.maxResults ?? undefined,
+        DEFAULT_SEARCH_COUNT,
+      ),
+      freshness: "__invalid_conflicting_time_filters__",
+    };
+  }
+
+  return {
+    query: readStringParam(args, "query", { required: true }),
+    count: resolveSearchCount(
+      readNumberParam(args, "count", { integer: true }) ?? search?.maxResults ?? undefined,
+      DEFAULT_SEARCH_COUNT,
+    ),
+    country: readStringParam(args, "country"),
+    language: readStringParam(args, "language"),
+    search_lang: readStringParam(args, "search_lang"),
+    ui_lang: readStringParam(args, "ui_lang"),
+    freshness: rawFreshness,
+    dateAfter: rawDateAfter ? normalizeToIsoDate(rawDateAfter) : undefined,
+    dateBefore: rawDateBefore ? normalizeToIsoDate(rawDateBefore) : undefined,
+    domainFilter: readStringArrayParam(args, "domain_filter") ?? undefined,
+    maxTokens: readNumberParam(args, "max_tokens", { integer: true }) ?? undefined,
+    maxTokensPerPage: readNumberParam(args, "max_tokens_per_page", { integer: true }) ?? undefined,
+    providerConfig: search as Record<string, unknown> | undefined,
+  };
+}
+
+function resolveSearchProviderPluginConfig(
+  config: OpenClawConfig | undefined,
+  provider: SearchProviderPlugin,
+): Record<string, unknown> | undefined {
+  if (!provider.pluginId) {
+    return undefined;
+  }
+  const pluginConfig = config?.plugins?.entries?.[provider.pluginId]?.config;
+  return pluginConfig && typeof pluginConfig === "object" ? pluginConfig : undefined;
+}
+
+export function createWebSearchTool(options?: {
+  config?: OpenClawConfig;
+  sandboxed?: boolean;
+}): AnyAgentTool | null {
+  const search = resolveSearchConfig(options?.config);
+  if (!resolveSearchEnabled({ search, sandboxed: options?.sandboxed })) {
+    return null;
+  }
+
+  const provider = resolveRegisteredSearchProvider({
+    search,
+    config: options?.config,
+  });
+  const parameters = createSearchProviderSchema({
+    provider,
+    search,
+  });
+  const description =
+    provider.description ??
+    `Search the web using ${provider.name}. Returns relevant results for research.`;
 
   return {
     label: "Web Search",
     name: "web_search",
     description,
-    parameters: createWebSearchSchema({
-      provider,
-      perplexityTransport: provider === "perplexity" ? perplexitySchemaTransportHint : undefined,
-    }),
+    parameters,
     execute: async (_toolCallId, args) => {
-      // Resolve Perplexity auth/transport lazily at execution time so unrelated providers
-      // do not touch Perplexity-only credential surfaces during tool construction.
-      const perplexityRuntime =
-        provider === "perplexity" ? resolvePerplexityTransport(perplexityConfig) : undefined;
-      const apiKey =
-        provider === "perplexity"
-          ? perplexityRuntime?.apiKey
-          : provider === "grok"
-            ? resolveGrokApiKey(grokConfig)
-            : provider === "kimi"
-              ? resolveKimiApiKey(kimiConfig)
-              : provider === "gemini"
-                ? resolveGeminiApiKey(geminiConfig)
-                : resolveSearchApiKey(search);
-
-      if (!apiKey) {
-        return jsonResult(missingSearchKeyPayload(provider));
-      }
-
-      const supportsStructuredPerplexityFilters =
-        provider === "perplexity" && perplexityRuntime?.transport === "search_api";
-      const params = args as Record<string, unknown>;
-      const query = readStringParam(params, "query", { required: true });
-      const count =
-        readNumberParam(params, "count", { integer: true }) ?? search?.maxResults ?? undefined;
-      const country = readStringParam(params, "country");
-      if (
-        country &&
-        provider !== "brave" &&
-        !(provider === "perplexity" && supportsStructuredPerplexityFilters)
-      ) {
-        return jsonResult({
-          error: "unsupported_country",
-          message:
-            provider === "perplexity"
-              ? "country filtering is only supported by the native Perplexity Search API path. Remove Perplexity baseUrl/model overrides or use a direct PERPLEXITY_API_KEY to enable it."
-              : `country filtering is not supported by the ${provider} provider. Only Brave and Perplexity support country filtering.`,
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      const language = readStringParam(params, "language");
-      if (
-        language &&
-        provider !== "brave" &&
-        !(provider === "perplexity" && supportsStructuredPerplexityFilters)
-      ) {
-        return jsonResult({
-          error: "unsupported_language",
-          message:
-            provider === "perplexity"
-              ? "language filtering is only supported by the native Perplexity Search API path. Remove Perplexity baseUrl/model overrides or use a direct PERPLEXITY_API_KEY to enable it."
-              : `language filtering is not supported by the ${provider} provider. Only Brave and Perplexity support language filtering.`,
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      if (language && provider === "perplexity" && !/^[a-z]{2}$/i.test(language)) {
-        return jsonResult({
-          error: "invalid_language",
-          message: "language must be a 2-letter ISO 639-1 code like 'en', 'de', or 'fr'.",
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      const search_lang = readStringParam(params, "search_lang");
-      const ui_lang = readStringParam(params, "ui_lang");
-      // For Brave, accept both `language` (unified) and `search_lang`
-      const normalizedBraveLanguageParams =
-        provider === "brave"
-          ? normalizeBraveLanguageParams({ search_lang: search_lang || language, ui_lang })
-          : { search_lang: language, ui_lang };
-      if (normalizedBraveLanguageParams.invalidField === "search_lang") {
-        return jsonResult({
-          error: "invalid_search_lang",
-          message:
-            "search_lang must be a Brave-supported language code like 'en', 'en-gb', 'zh-hans', or 'zh-hant'.",
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      if (normalizedBraveLanguageParams.invalidField === "ui_lang") {
-        return jsonResult({
-          error: "invalid_ui_lang",
-          message: "ui_lang must be a language-region locale like 'en-US'.",
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      const resolvedSearchLang = normalizedBraveLanguageParams.search_lang;
-      const resolvedUiLang = normalizedBraveLanguageParams.ui_lang;
-      if (resolvedUiLang && provider === "brave" && braveMode === "llm-context") {
-        return jsonResult({
-          error: "unsupported_ui_lang",
-          message:
-            "ui_lang is not supported by Brave llm-context mode. Remove ui_lang or use Brave web mode for locale-based UI hints.",
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      const rawFreshness = readStringParam(params, "freshness");
-      if (rawFreshness && provider !== "brave" && provider !== "perplexity") {
-        return jsonResult({
-          error: "unsupported_freshness",
-          message: `freshness filtering is not supported by the ${provider} provider. Only Brave and Perplexity support freshness.`,
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      if (rawFreshness && provider === "brave" && braveMode === "llm-context") {
-        return jsonResult({
-          error: "unsupported_freshness",
-          message:
-            "freshness filtering is not supported by Brave llm-context mode. Remove freshness or use Brave web mode.",
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      const freshness = rawFreshness ? normalizeFreshness(rawFreshness, provider) : undefined;
-      if (rawFreshness && !freshness) {
-        return jsonResult({
-          error: "invalid_freshness",
-          message: "freshness must be day, week, month, or year.",
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      const rawDateAfter = readStringParam(params, "date_after");
-      const rawDateBefore = readStringParam(params, "date_before");
+      const rawArgs = args as Record<string, unknown>;
+      const rawFreshness = readStringParam(rawArgs, "freshness");
+      const rawDateAfter = readStringParam(rawArgs, "date_after");
+      const rawDateBefore = readStringParam(rawArgs, "date_before");
       if (rawFreshness && (rawDateAfter || rawDateBefore)) {
         return jsonResult({
           error: "conflicting_time_filters",
@@ -2064,136 +2641,67 @@ export function createWebSearchTool(options?: {
           docs: "https://docs.openclaw.ai/tools/web",
         });
       }
-      if (
-        (rawDateAfter || rawDateBefore) &&
-        provider !== "brave" &&
-        !(provider === "perplexity" && supportsStructuredPerplexityFilters)
-      ) {
-        return jsonResult({
-          error: "unsupported_date_filter",
-          message:
-            provider === "perplexity"
-              ? "date_after/date_before are only supported by the native Perplexity Search API path. Remove Perplexity baseUrl/model overrides or use a direct PERPLEXITY_API_KEY to enable them."
-              : `date_after/date_before filtering is not supported by the ${provider} provider. Only Brave and Perplexity support date filtering.`,
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      if ((rawDateAfter || rawDateBefore) && provider === "brave" && braveMode === "llm-context") {
-        return jsonResult({
-          error: "unsupported_date_filter",
-          message:
-            "date_after/date_before filtering is not supported by Brave llm-context mode. Use Brave web mode for date filters.",
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-      const dateAfter = rawDateAfter ? normalizeToIsoDate(rawDateAfter) : undefined;
-      if (rawDateAfter && !dateAfter) {
+
+      const request = parseSearchProviderRequest(rawArgs, search);
+      if (rawDateAfter && !request.dateAfter) {
         return jsonResult({
           error: "invalid_date",
           message: "date_after must be YYYY-MM-DD format.",
           docs: "https://docs.openclaw.ai/tools/web",
         });
       }
-      const dateBefore = rawDateBefore ? normalizeToIsoDate(rawDateBefore) : undefined;
-      if (rawDateBefore && !dateBefore) {
+      if (rawDateBefore && !request.dateBefore) {
         return jsonResult({
           error: "invalid_date",
           message: "date_before must be YYYY-MM-DD format.",
           docs: "https://docs.openclaw.ai/tools/web",
         });
       }
-      if (dateAfter && dateBefore && dateAfter > dateBefore) {
+      if (request.dateAfter && request.dateBefore && request.dateAfter > request.dateBefore) {
         return jsonResult({
           error: "invalid_date_range",
           message: "date_after must be before date_before.",
           docs: "https://docs.openclaw.ai/tools/web",
         });
       }
-      const domainFilter = readStringArrayParam(params, "domain_filter");
-      if (
-        domainFilter &&
-        domainFilter.length > 0 &&
-        !(provider === "perplexity" && supportsStructuredPerplexityFilters)
-      ) {
-        return jsonResult({
-          error: "unsupported_domain_filter",
-          message:
-            provider === "perplexity"
-              ? "domain_filter is only supported by the native Perplexity Search API path. Remove Perplexity baseUrl/model overrides or use a direct PERPLEXITY_API_KEY to enable it."
-              : `domain_filter is not supported by the ${provider} provider. Only Perplexity supports domain filtering.`,
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
 
-      if (domainFilter && domainFilter.length > 0) {
-        const hasDenylist = domainFilter.some((d) => d.startsWith("-"));
-        const hasAllowlist = domainFilter.some((d) => !d.startsWith("-"));
-        if (hasDenylist && hasAllowlist) {
-          return jsonResult({
-            error: "invalid_domain_filter",
-            message:
-              "domain_filter cannot mix allowlist and denylist entries. Use either all positive entries (allowlist) or all entries prefixed with '-' (denylist).",
-            docs: "https://docs.openclaw.ai/tools/web",
-          });
-        }
-        if (domainFilter.length > 20) {
-          return jsonResult({
-            error: "invalid_domain_filter",
-            message: "domain_filter supports a maximum of 20 domains.",
-            docs: "https://docs.openclaw.ai/tools/web",
-          });
-        }
-      }
-
-      const maxTokens = readNumberParam(params, "max_tokens", { integer: true });
-      const maxTokensPerPage = readNumberParam(params, "max_tokens_per_page", { integer: true });
-      if (
-        provider === "perplexity" &&
-        perplexityRuntime?.transport === "chat_completions" &&
-        (maxTokens !== undefined || maxTokensPerPage !== undefined)
-      ) {
-        return jsonResult({
-          error: "unsupported_content_budget",
-          message:
-            "max_tokens and max_tokens_per_page are only supported by the native Perplexity Search API path. Remove Perplexity baseUrl/model overrides or use a direct PERPLEXITY_API_KEY to enable them.",
-          docs: "https://docs.openclaw.ai/tools/web",
-        });
-      }
-
-      const result = await runWebSearch({
-        query,
-        count: resolveSearchCount(count, DEFAULT_SEARCH_COUNT),
-        apiKey,
-        timeoutSeconds: resolveTimeoutSeconds(search?.timeoutSeconds, DEFAULT_TIMEOUT_SECONDS),
-        cacheTtlMs: resolveCacheTtlMs(search?.cacheTtlMinutes, DEFAULT_CACHE_TTL_MINUTES),
-        provider,
-        country,
-        language,
-        search_lang: resolvedSearchLang,
-        ui_lang: resolvedUiLang,
-        freshness,
-        dateAfter,
-        dateBefore,
-        searchDomainFilter: domainFilter,
-        maxTokens: maxTokens ?? undefined,
-        maxTokensPerPage: maxTokensPerPage ?? undefined,
-        perplexityBaseUrl: perplexityRuntime?.baseUrl,
-        perplexityModel: perplexityRuntime?.model,
-        perplexityTransport: perplexityRuntime?.transport,
-        grokModel: resolveGrokModel(grokConfig),
-        grokInlineCitations: resolveGrokInlineCitations(grokConfig),
-        geminiModel: resolveGeminiModel(geminiConfig),
-        kimiBaseUrl: resolveKimiBaseUrl(kimiConfig),
-        kimiModel: resolveKimiModel(kimiConfig),
-        braveMode,
-      });
+      const providerId = normalizeSearchProviderId(provider.id);
+      const result =
+        !provider.pluginId && isBuiltinSearchProviderId(providerId)
+          ? await executeBuiltinSearchProvider({
+              provider: providerId,
+              request,
+              context: {
+                config: options?.config ?? {},
+                timeoutSeconds: resolveTimeoutSeconds(
+                  search?.timeoutSeconds,
+                  DEFAULT_TIMEOUT_SECONDS,
+                ),
+                cacheTtlMs: resolveCacheTtlMs(search?.cacheTtlMinutes, DEFAULT_CACHE_TTL_MINUTES),
+                pluginConfig: resolveSearchProviderPluginConfig(options?.config, provider),
+              },
+            })
+          : await executePluginSearchProvider({
+              provider,
+              request,
+              context: {
+                config: options?.config ?? {},
+                timeoutSeconds: resolveTimeoutSeconds(
+                  search?.timeoutSeconds,
+                  DEFAULT_TIMEOUT_SECONDS,
+                ),
+                cacheTtlMs: resolveCacheTtlMs(search?.cacheTtlMinutes, DEFAULT_CACHE_TTL_MINUTES),
+                pluginConfig: resolveSearchProviderPluginConfig(options?.config, provider),
+              },
+            });
       return jsonResult(result);
     },
   };
 }
 
 export const __testing = {
-  resolveSearchProvider,
+  resolveSearchProvider: resolveBuiltinSearchProvider,
+  resolveRegisteredSearchProvider,
   inferPerplexityBaseUrlFromApiKey,
   resolvePerplexityBaseUrl,
   resolvePerplexityModel,

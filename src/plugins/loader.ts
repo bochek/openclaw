@@ -305,6 +305,7 @@ function createPluginRecord(params: {
     hookNames: [],
     channelIds: [],
     providerIds: [],
+    searchProviderIds: [],
     gatewayMethods: [],
     cliCommands: [],
     services: [],

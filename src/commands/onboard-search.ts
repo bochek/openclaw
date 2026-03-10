@@ -214,7 +214,7 @@ export async function setupSearch(
 
   const defaultProvider: SearchProvider = (() => {
     if (existingProvider && SEARCH_PROVIDER_OPTIONS.some((e) => e.value === existingProvider)) {
-      return existingProvider;
+      return existingProvider as SearchProvider;
     }
     const detected = SEARCH_PROVIDER_OPTIONS.find(
       (e) => hasExistingKey(config, e.value) || hasKeyInEnv(e),

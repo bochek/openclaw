@@ -307,4 +307,50 @@ describe("finalizeOnboardingWizard", () => {
     expect(progressUpdate).toHaveBeenCalledWith("Restarting Gateway service…");
     expect(progressStop).toHaveBeenCalledWith("Gateway service restart scheduled.");
   });
+
+  it("does not report plugin-provided web search providers as missing API keys", async () => {
+    const prompter = buildWizardPrompter({
+      select: vi.fn(async () => "later") as never,
+      confirm: vi.fn(async () => false),
+    });
+    const runtime = createRuntime();
+
+    await finalizeOnboardingWizard({
+      flow: "advanced",
+      opts: {
+        acceptRisk: true,
+        authChoice: "skip",
+        installDaemon: false,
+        skipHealth: true,
+        skipUi: true,
+      },
+      baseConfig: {},
+      nextConfig: {
+        tools: {
+          web: {
+            search: {
+              enabled: true,
+              provider: "searxng",
+            },
+          },
+        },
+      },
+      workspaceDir: "/tmp",
+      settings: {
+        port: 18789,
+        bind: "loopback",
+        authMode: "token",
+        gatewayToken: undefined,
+        tailscaleMode: "off",
+        tailscaleResetOnExit: false,
+      },
+      prompter,
+      runtime,
+    });
+
+    const noteCalls = (prompter.note as ReturnType<typeof vi.fn>).mock.calls;
+    const webSearchNote = noteCalls.find((call) => call?.[1] === "Web search");
+    expect(webSearchNote?.[0]).toContain("plugin-provided provider");
+    expect(webSearchNote?.[0]).not.toContain("no API key was found");
+  });
 });

@@ -239,6 +239,73 @@ export type OpenClawPluginGatewayMethod = {
   handler: GatewayRequestHandler;
 };
 
+export type SearchProviderRequest = {
+  query: string;
+  count: number;
+  country?: string;
+  language?: string;
+  search_lang?: string;
+  ui_lang?: string;
+  freshness?: string;
+  dateAfter?: string;
+  dateBefore?: string;
+  domainFilter?: string[];
+  maxTokens?: number;
+  maxTokensPerPage?: number;
+  providerConfig?: Record<string, unknown>;
+};
+
+export type SearchProviderResultItem = {
+  url: string;
+  title?: string;
+  description?: string;
+  published?: string;
+};
+
+export type SearchProviderCitation =
+  | string
+  | {
+      url: string;
+      title?: string;
+    };
+
+export type SearchProviderSuccessResult = {
+  error?: undefined;
+  message?: undefined;
+  results?: SearchProviderResultItem[];
+  citations?: SearchProviderCitation[];
+  content?: string;
+  tookMs?: number;
+};
+
+export type SearchProviderErrorResult = {
+  error: string;
+  message?: string;
+  docs?: string;
+  tookMs?: number;
+};
+
+export type SearchProviderExecutionResult = SearchProviderSuccessResult | SearchProviderErrorResult;
+
+export type SearchProviderContext = {
+  config: OpenClawConfig;
+  timeoutSeconds: number;
+  cacheTtlMs: number;
+  pluginConfig?: Record<string, unknown>;
+};
+
+export type SearchProviderPlugin = {
+  id: string;
+  name: string;
+  description?: string;
+  pluginId?: string;
+  isAvailable?: (config?: OpenClawConfig) => boolean;
+  search: (
+    params: SearchProviderRequest,
+    ctx: SearchProviderContext,
+  ) => Promise<SearchProviderExecutionResult>;
+};
+
 // =============================================================================
 // Plugin Commands
 // =============================================================================
@@ -388,6 +455,7 @@ export type OpenClawPluginApi = {
   registerCli: (registrar: OpenClawPluginCliRegistrar, opts?: { commands?: string[] }) => void;
   registerService: (service: OpenClawPluginService) => void;
   registerProvider: (provider: ProviderPlugin) => void;
+  registerSearchProvider: (provider: SearchProviderPlugin) => void;
   /**
    * Register a custom command that bypasses the LLM agent.
    * Plugin commands are processed before built-in commands and before agent invocation.

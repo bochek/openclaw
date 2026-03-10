@@ -6,6 +6,7 @@ import {
   resolveEffectiveEnableState,
   resolveMemorySlotDecision,
 } from "../plugins/config-state.js";
+import { loadOpenClawPlugins } from "../plugins/loader.js";
 import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
 import { validateJsonSchemaValue } from "../plugins/schema-validator.js";
 import {
@@ -388,7 +389,54 @@ function validateConfigObjectWithPluginsBase(
     return info.normalizedPlugins;
   };
 
+  const validateWebSearchProvider = () => {
+    const provider = config.tools?.web?.search?.provider;
+    if (
+      typeof provider !== "string" ||
+      provider === "brave" ||
+      provider === "perplexity" ||
+      provider === "grok" ||
+      provider === "gemini" ||
+      provider === "kimi"
+    ) {
+      return;
+    }
+
+    const workspaceDir = resolveAgentWorkspaceDir(config, resolveDefaultAgentId(config));
+    try {
+      const pluginRegistry = loadOpenClawPlugins({
+        config,
+        workspaceDir: workspaceDir ?? undefined,
+        logger: {
+          info: () => {},
+          warn: () => {},
+          error: () => {},
+          debug: () => {},
+        },
+        cache: false,
+      });
+      const normalizedProvider = provider.trim().toLowerCase();
+      const registered = pluginRegistry.searchProviders.some(
+        (entry) => entry.provider.id === normalizedProvider,
+      );
+      if (registered) {
+        return;
+      }
+    } catch {
+      // Fall through and surface the unknown provider issue below.
+    }
+
+    if (provider.trim()) {
+      issues.push({
+        path: "tools.web.search.provider",
+        message: `unknown web search provider: ${provider}`,
+      });
+    }
+  };
+
   const allowedChannels = new Set<string>(["defaults", "modelByChannel", ...CHANNEL_IDS]);
+
+  validateWebSearchProvider();
 
   if (config.channels && isRecord(config.channels)) {
     for (const key of Object.keys(config.channels)) {

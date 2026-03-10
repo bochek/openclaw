@@ -488,8 +488,8 @@ export async function finalizeOnboardingWizard(
       await import("../commands/onboard-search.js");
     const entry = SEARCH_PROVIDER_OPTIONS.find((e) => e.value === webSearchProvider);
     const label = entry?.label ?? webSearchProvider;
-    const storedKey = resolveExistingKey(nextConfig, webSearchProvider);
-    const keyConfigured = hasExistingKey(nextConfig, webSearchProvider);
+    const storedKey = entry ? resolveExistingKey(nextConfig, entry.value) : undefined;
+    const keyConfigured = entry ? hasExistingKey(nextConfig, entry.value) : false;
     const envAvailable = entry ? hasKeyInEnv(entry) : false;
     const hasKey = keyConfigured || envAvailable;
     const keySource = storedKey
@@ -499,7 +499,20 @@ export async function finalizeOnboardingWizard(
         : envAvailable
           ? `API key: provided via ${entry?.envKeys.join(" / ")} env var.`
           : undefined;
-    if (webSearchEnabled !== false && hasKey) {
+    if (!entry) {
+      await prompter.note(
+        [
+          webSearchEnabled !== false
+            ? "Web search is enabled through a plugin-provided provider."
+            : "Web search is configured through a plugin-provided provider but currently disabled.",
+          "",
+          `Provider: ${label}`,
+          "Plugin-managed providers may use plugin config or plugin-specific credentials instead of the built-in API key fields.",
+          "Docs: https://docs.openclaw.ai/tools/web",
+        ].join("\n"),
+        "Web search",
+      );
+    } else if (webSearchEnabled !== false && hasKey) {
       await prompter.note(
         [
           "Web search is enabled, so your agent can look things up online when needed.",
