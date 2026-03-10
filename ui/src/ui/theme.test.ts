@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { parseThemeSelection, resolveTheme } from "./theme.ts";
+import { colorSchemeForTheme, parseThemeSelection, resolveTheme } from "./theme.ts";
 
 describe("resolveTheme", () => {
   it("keeps the legacy mode-only signature working for existing callers", () => {
@@ -16,6 +16,11 @@ describe("resolveTheme", () => {
     vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
     expect(resolveTheme("knot")).toBe("openknot-light");
     vi.unstubAllGlobals();
+  });
+
+  it("maps resolved theme families back to valid CSS color-scheme values", () => {
+    expect(colorSchemeForTheme("openknot")).toBe("dark");
+    expect(colorSchemeForTheme("dash-light")).toBe("light");
   });
 });
 

@@ -91,3 +91,9 @@ export function resolveTheme(themeOrMode: ThemeName | ThemeMode, mode?: ThemeMod
   }
   return resolvedMode === "light" ? "dash-light" : "dash";
 }
+
+export function colorSchemeForTheme(theme: ResolvedTheme): "light" | "dark" {
+  return theme === "light" || theme === "openknot-light" || theme === "dash-light"
+    ? "light"
+    : "dark";
+}
