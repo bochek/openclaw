@@ -80,6 +80,34 @@ describe("setupSearch", () => {
     expect(result).toBe(cfg);
   });
 
+  it("preserves an existing plugin provider when user keeps current provider", async () => {
+    const cfg: OpenClawConfig = {
+      tools: {
+        web: {
+          search: {
+            provider: "searxng",
+            enabled: true,
+          },
+        },
+      },
+    };
+    const { prompter } = createPrompter({ selectValue: "__keep_current__" });
+    const result = await setupSearch(cfg, runtime, prompter);
+    expect(result).toBe(cfg);
+    expect(prompter.text).not.toHaveBeenCalled();
+    expect(prompter.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        initialValue: "__keep_current__",
+        options: expect.arrayContaining([
+          expect.objectContaining({
+            value: "__keep_current__",
+            label: "Keep current provider (searxng)",
+          }),
+        ]),
+      }),
+    );
+  });
+
   it("sets provider and key for perplexity", async () => {
     const cfg: OpenClawConfig = {};
     const { prompter } = createPrompter({

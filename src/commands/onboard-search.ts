@@ -64,6 +64,10 @@ export const SEARCH_PROVIDER_OPTIONS: readonly SearchProviderEntry[] = [
   },
 ] as const;
 
+function isBuiltinSearchProvider(value: string): value is SearchProvider {
+  return SEARCH_PROVIDER_OPTIONS.some((entry) => entry.value === value);
+}
+
 export function hasKeyInEnv(entry: SearchProviderEntry): boolean {
   return entry.envKeys.some((k) => Boolean(process.env[k]?.trim()));
 }
@@ -205,6 +209,12 @@ export async function setupSearch(
   );
 
   const existingProvider = config.tools?.web?.search?.provider;
+  const existingPluginProvider =
+    typeof existingProvider === "string" &&
+    existingProvider.trim() &&
+    !isBuiltinSearchProvider(existingProvider)
+      ? existingProvider
+      : undefined;
 
   const options = SEARCH_PROVIDER_OPTIONS.map((entry) => {
     const configured = hasExistingKey(config, entry.value) || hasKeyInEnv(entry);
@@ -225,10 +235,19 @@ export async function setupSearch(
     return SEARCH_PROVIDER_OPTIONS[0].value;
   })();
 
-  type PickerValue = SearchProvider | "__skip__";
+  type PickerValue = SearchProvider | "__skip__" | "__keep_current__";
   const choice = await prompter.select<PickerValue>({
     message: "Search provider",
     options: [
+      ...(existingPluginProvider
+        ? [
+            {
+              value: "__keep_current__" as const,
+              label: `Keep current provider (${existingPluginProvider})`,
+              hint: "Leave the current plugin-managed web_search provider unchanged",
+            },
+          ]
+        : []),
       ...options,
       {
         value: "__skip__" as const,
@@ -236,10 +255,10 @@ export async function setupSearch(
         hint: "Configure later with openclaw configure --section web",
       },
     ],
-    initialValue: defaultProvider as PickerValue,
+    initialValue: (existingPluginProvider ? "__keep_current__" : defaultProvider) as PickerValue,
   });
 
-  if (choice === "__skip__") {
+  if (choice === "__skip__" || choice === "__keep_current__") {
     return config;
   }
 

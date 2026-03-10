@@ -67,6 +67,28 @@ describe("web search provider config", () => {
     expect(res.ok).toBe(true);
   });
 
+  it("surfaces plugin loading failures during plugin-aware validation", () => {
+    loadOpenClawPlugins.mockImplementation(() => {
+      throw new Error("plugin import failed");
+    });
+
+    const res = validateConfigObjectWithPlugins(
+      buildWebSearchProviderConfig({
+        provider: "searxng",
+      }),
+    );
+
+    expect(res.ok).toBe(false);
+    expect(
+      res.issues.some(
+        (issue) =>
+          issue.path === "tools.web.search.provider" &&
+          issue.message.includes("plugin loading failed") &&
+          issue.message.includes("plugin import failed"),
+      ),
+    ).toBe(true);
+  });
+
   it("rejects invalid custom plugin provider ids", () => {
     const res = validateConfigObject(
       buildWebSearchProviderConfig({

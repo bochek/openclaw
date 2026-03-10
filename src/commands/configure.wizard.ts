@@ -183,6 +183,13 @@ async function promptWebToolsConfig(
     return hasExistingKey(nextConfig, provider as SP) || hasKeyInEnv(entry);
   };
 
+  const existingPluginProvider =
+    typeof existingSearch?.provider === "string" &&
+    existingSearch.provider.trim() &&
+    !SEARCH_PROVIDER_OPTIONS.some((e) => e.value === existingSearch.provider)
+      ? existingSearch.provider
+      : undefined;
+
   const existingProvider: string = (() => {
     const stored = existingSearch?.provider;
     if (stored && SEARCH_PROVIDER_OPTIONS.some((e) => e.value === stored)) {
@@ -227,53 +234,69 @@ async function promptWebToolsConfig(
       };
     });
 
+    type ProviderChoice = SP | "__keep_current__";
     const providerChoice = guardCancel(
-      await select({
+      await select<ProviderChoice>({
         message: "Choose web search provider",
-        options: providerOptions,
-        initialValue: existingProvider,
+        options: [
+          ...(existingPluginProvider
+            ? [
+                {
+                  value: "__keep_current__" as const,
+                  label: `Keep current provider (${existingPluginProvider})`,
+                  hint: "Leave the current plugin-managed web_search provider unchanged",
+                },
+              ]
+            : []),
+          ...providerOptions,
+        ],
+        initialValue: existingPluginProvider ? "__keep_current__" : existingProvider,
       }),
       runtime,
     );
 
-    nextSearch = { ...nextSearch, provider: providerChoice };
-
-    const entry = SEARCH_PROVIDER_OPTIONS.find((e) => e.value === providerChoice)!;
-    const existingKey = resolveExistingKey(nextConfig, providerChoice as SP);
-    const keyConfigured = hasExistingKey(nextConfig, providerChoice as SP);
-    const envAvailable = entry.envKeys.some((k) => Boolean(process.env[k]?.trim()));
-    const envVarNames = entry.envKeys.join(" / ");
-
-    const keyInput = guardCancel(
-      await text({
-        message: keyConfigured
-          ? envAvailable
-            ? `${entry.label} API key (leave blank to keep current or use ${envVarNames})`
-            : `${entry.label} API key (leave blank to keep current)`
-          : envAvailable
-            ? `${entry.label} API key (paste it here; leave blank to use ${envVarNames})`
-            : `${entry.label} API key`,
-        placeholder: keyConfigured ? "Leave blank to keep current" : entry.placeholder,
-      }),
-      runtime,
-    );
-    const key = String(keyInput ?? "").trim();
-
-    if (key || existingKey) {
-      const applied = applySearchKey(nextConfig, providerChoice as SP, (key || existingKey)!);
-      nextSearch = { ...applied.tools?.web?.search };
-    } else if (keyConfigured || envAvailable) {
-      nextSearch = { ...nextSearch };
+    if (providerChoice === "__keep_current__") {
+      nextSearch = { ...nextSearch, provider: existingPluginProvider };
     } else {
-      note(
-        [
-          "No key stored yet — web_search won't work until a key is available.",
-          `Store a key here or set ${envVarNames} in the Gateway environment.`,
-          `Get your API key at: ${entry.signupUrl}`,
-          "Docs: https://docs.openclaw.ai/tools/web",
-        ].join("\n"),
-        "Web search",
+      nextSearch = { ...nextSearch, provider: providerChoice };
+
+      const entry = SEARCH_PROVIDER_OPTIONS.find((e) => e.value === providerChoice)!;
+      const existingKey = resolveExistingKey(nextConfig, providerChoice as SP);
+      const keyConfigured = hasExistingKey(nextConfig, providerChoice as SP);
+      const envAvailable = entry.envKeys.some((k) => Boolean(process.env[k]?.trim()));
+      const envVarNames = entry.envKeys.join(" / ");
+
+      const keyInput = guardCancel(
+        await text({
+          message: keyConfigured
+            ? envAvailable
+              ? `${entry.label} API key (leave blank to keep current or use ${envVarNames})`
+              : `${entry.label} API key (leave blank to keep current)`
+            : envAvailable
+              ? `${entry.label} API key (paste it here; leave blank to use ${envVarNames})`
+              : `${entry.label} API key`,
+          placeholder: keyConfigured ? "Leave blank to keep current" : entry.placeholder,
+        }),
+        runtime,
       );
+      const key = String(keyInput ?? "").trim();
+
+      if (key || existingKey) {
+        const applied = applySearchKey(nextConfig, providerChoice as SP, (key || existingKey)!);
+        nextSearch = { ...applied.tools?.web?.search };
+      } else if (keyConfigured || envAvailable) {
+        nextSearch = { ...nextSearch };
+      } else {
+        note(
+          [
+            "No key stored yet — web_search won't work until a key is available.",
+            `Store a key here or set ${envVarNames} in the Gateway environment.`,
+            `Get your API key at: ${entry.signupUrl}`,
+            "Docs: https://docs.openclaw.ai/tools/web",
+          ].join("\n"),
+          "Web search",
+        );
+      }
     }
   }
 

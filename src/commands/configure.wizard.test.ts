@@ -158,4 +158,58 @@ describe("runConfigureWizard", () => {
 
     expect(runtime.exit).toHaveBeenCalledWith(1);
   });
+
+  it("preserves an existing plugin web search provider when keeping the current provider", async () => {
+    mocks.readConfigFileSnapshot.mockResolvedValue({
+      exists: true,
+      valid: true,
+      config: {
+        tools: {
+          web: {
+            search: {
+              provider: "searxng",
+              enabled: true,
+            },
+          },
+        },
+      },
+      issues: [],
+    });
+    mocks.resolveGatewayPort.mockReturnValue(18789);
+    mocks.probeGatewayReachable.mockResolvedValue({ ok: false });
+    mocks.resolveControlUiLinks.mockReturnValue({ wsUrl: "ws://127.0.0.1:18789" });
+    mocks.summarizeExistingConfig.mockReturnValue("");
+    mocks.createClackPrompter.mockReturnValue({});
+    mocks.ensureControlUiAssetsBuilt.mockResolvedValue({ ok: true });
+    mocks.clackIntro.mockResolvedValue(undefined);
+    mocks.clackOutro.mockResolvedValue(undefined);
+    mocks.clackConfirm
+      .mockResolvedValueOnce(true) // enable web_search
+      .mockResolvedValueOnce(true); // enable web_fetch
+    mocks.clackSelect.mockResolvedValue("__keep_current__");
+    mocks.clackText.mockResolvedValue("");
+
+    await runConfigureWizard(
+      { command: "configure", sections: ["web"] },
+      {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      },
+    );
+
+    expect(mocks.clackText).not.toHaveBeenCalled();
+    expect(mocks.writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.objectContaining({
+          web: expect.objectContaining({
+            search: expect.objectContaining({
+              provider: "searxng",
+              enabled: true,
+            }),
+          }),
+        }),
+      }),
+    );
+  });
 });

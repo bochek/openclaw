@@ -422,8 +422,13 @@ function validateConfigObjectWithPluginsBase(
       if (registered) {
         return;
       }
-    } catch {
-      // Fall through and surface the unknown provider issue below.
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      issues.push({
+        path: "tools.web.search.provider",
+        message: `could not validate web search provider "${provider}" because plugin loading failed: ${detail}`,
+      });
+      return;
     }
 
     if (provider.trim()) {

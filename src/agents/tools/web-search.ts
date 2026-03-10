@@ -11,6 +11,7 @@ import type {
   SearchProviderRequest,
   SearchProviderSuccessResult,
 } from "../../plugins/types.js";
+import type { RuntimeWebSearchMetadata } from "../../secrets/runtime-web-tools.js";
 import { wrapWebContent } from "../../security/external-content.js";
 import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";
 import type { AnyAgentTool } from "./common.js";
@@ -2476,6 +2477,7 @@ function getPluginSearchProviders(): SearchProviderPlugin[] {
 
 function resolvePreferredBuiltinSearchProvider(params: {
   search?: WebSearchConfig;
+  runtimeWebSearch?: RuntimeWebSearchMetadata;
 }): BuiltinSearchProviderId {
   const configuredProviderId = normalizeSearchProviderId(
     typeof params.search?.provider === "string" ? params.search.provider : undefined,
@@ -2484,12 +2486,27 @@ function resolvePreferredBuiltinSearchProvider(params: {
     return configuredProviderId;
   }
 
+  if (
+    params.runtimeWebSearch?.providerConfigured &&
+    params.runtimeWebSearch.providerConfigured === configuredProviderId
+  ) {
+    return params.runtimeWebSearch.providerConfigured;
+  }
+
+  if (
+    params.runtimeWebSearch?.selectedProvider &&
+    params.runtimeWebSearch.providerSource !== "none"
+  ) {
+    return params.runtimeWebSearch.selectedProvider;
+  }
+
   return resolveBuiltinSearchProvider(params.search);
 }
 
 function resolveRegisteredSearchProvider(params: {
   search?: WebSearchConfig;
   config?: OpenClawConfig;
+  runtimeWebSearch?: RuntimeWebSearchMetadata;
 }): SearchProviderPlugin {
   const configuredProviderId = normalizeSearchProviderId(
     typeof params.search?.provider === "string" ? params.search.provider : undefined,
@@ -2511,7 +2528,16 @@ function resolveRegisteredSearchProvider(params: {
     }
   } else {
     for (const provider of pluginProviders.values()) {
-      if (provider.isAvailable?.(params.config)) {
+      let isAvailable = false;
+      try {
+        isAvailable = provider.isAvailable?.(params.config) ?? false;
+      } catch (error) {
+        logVerbose(
+          `web_search: plugin provider "${provider.id}" auto-detect failed during isAvailable: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        continue;
+      }
+      if (isAvailable) {
         logVerbose(
           `web_search: no provider configured, auto-detected plugin provider "${provider.id}"`,
         );
@@ -2531,6 +2557,7 @@ function resolveRegisteredSearchProvider(params: {
     builtinProviders.get(
       resolvePreferredBuiltinSearchProvider({
         search: params.search,
+        runtimeWebSearch: params.runtimeWebSearch,
       }),
     ) ?? builtinProviders.get(DEFAULT_PROVIDER)!
   );
@@ -2539,11 +2566,14 @@ function resolveRegisteredSearchProvider(params: {
 function createSearchProviderSchema(params: {
   provider: SearchProviderPlugin;
   search?: WebSearchConfig;
+  runtimeWebSearch?: RuntimeWebSearchMetadata;
 }) {
   const providerId = normalizeSearchProviderId(params.provider.id);
   if (!params.provider.pluginId && isBuiltinSearchProviderId(providerId)) {
-    const perplexityConfig = resolvePerplexityConfig(params.search);
-    const perplexityTransport = resolvePerplexitySchemaTransportHint(perplexityConfig);
+    const perplexityTransport =
+      params.runtimeWebSearch?.selectedProvider === "perplexity"
+        ? params.runtimeWebSearch.perplexityTransport
+        : resolvePerplexitySchemaTransportHint(resolvePerplexityConfig(params.search));
     return createWebSearchSchema({
       provider: providerId,
       perplexityTransport: providerId === "perplexity" ? perplexityTransport : undefined,
@@ -2605,6 +2635,7 @@ function resolveSearchProviderPluginConfig(
 export function createWebSearchTool(options?: {
   config?: OpenClawConfig;
   sandboxed?: boolean;
+  runtimeWebSearch?: RuntimeWebSearchMetadata;
 }): AnyAgentTool | null {
   const search = resolveSearchConfig(options?.config);
   if (!resolveSearchEnabled({ search, sandboxed: options?.sandboxed })) {
@@ -2614,10 +2645,12 @@ export function createWebSearchTool(options?: {
   const provider = resolveRegisteredSearchProvider({
     search,
     config: options?.config,
+    runtimeWebSearch: options?.runtimeWebSearch,
   });
   const parameters = createSearchProviderSchema({
     provider,
     search,
+    runtimeWebSearch: options?.runtimeWebSearch,
   });
   const description =
     provider.description ??
