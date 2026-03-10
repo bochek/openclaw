@@ -163,6 +163,28 @@ describe("sessions_spawn tool", () => {
     );
   });
 
+  it("passes resumeSessionId through to ACP spawns", async () => {
+    const tool = createSessionsSpawnTool({
+      agentSessionKey: "agent:main:main",
+    });
+
+    await tool.execute("call-2c", {
+      runtime: "acp",
+      task: "resume prior work",
+      agentId: "codex",
+      resumeSessionId: "7f4a78e0-f6be-43fe-855c-c1c4fd229bc4",
+    });
+
+    expect(hoisted.spawnAcpDirectMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        task: "resume prior work",
+        agentId: "codex",
+        resumeSessionId: "7f4a78e0-f6be-43fe-855c-c1c4fd229bc4",
+      }),
+      expect.any(Object),
+    );
+  });
+
   it("rejects attachments for ACP runtime", async () => {
     const tool = createSessionsSpawnTool({
       agentSessionKey: "agent:main:main",
