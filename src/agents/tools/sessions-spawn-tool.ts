@@ -28,7 +28,7 @@ const SessionsSpawnToolSchema = Type.Object({
   resumeSessionId: Type.Optional(
     Type.String({
       description:
-        "Resume an existing agent session by its ID (e.g. a Codex session UUID from ~/.codex/sessions/). The agent replays conversation history via session/load instead of starting fresh.",
+        'Resume an existing agent session by its ID (e.g. a Codex session UUID from ~/.codex/sessions/). Requires runtime="acp". The agent replays conversation history via session/load instead of starting fresh.',
     }),
   ),
   model: Type.Optional(Type.String()),
@@ -131,6 +131,13 @@ export function createSessionsSpawnTool(
         return jsonResult({
           status: "error",
           error: `streamTo is only supported for runtime=acp; got runtime=${runtime}`,
+        });
+      }
+
+      if (resumeSessionId && runtime !== "acp") {
+        return jsonResult({
+          status: "error",
+          error: `resumeSessionId is only supported for runtime=acp; got runtime=${runtime}`,
         });
       }
 

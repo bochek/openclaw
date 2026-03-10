@@ -185,6 +185,21 @@ describe("sessions_spawn tool", () => {
     );
   });
 
+  it("rejects resumeSessionId without runtime=acp", async () => {
+    const tool = createSessionsSpawnTool({
+      agentSessionKey: "agent:main:main",
+    });
+
+    const result = await tool.execute("call-guard", {
+      task: "resume prior work",
+      resumeSessionId: "7f4a78e0-f6be-43fe-855c-c1c4fd229bc4",
+    });
+
+    expect(JSON.stringify(result)).toContain("resumeSessionId is only supported for runtime=acp");
+    expect(hoisted.spawnSubagentDirectMock).not.toHaveBeenCalled();
+    expect(hoisted.spawnAcpDirectMock).not.toHaveBeenCalled();
+  });
+
   it("rejects attachments for ACP runtime", async () => {
     const tool = createSessionsSpawnTool({
       agentSessionKey: "agent:main:main",
