@@ -41,6 +41,7 @@ import {
   readConfigIncludeFileWithGuards,
   resolveConfigIncludes,
 } from "./includes.js";
+import { migrateLegacyConfig } from "./legacy-migrate.js";
 import { findLegacyConfigIssues } from "./legacy.js";
 import { applyMergePatch } from "./merge-patch.js";
 import { normalizeExecSafeBinProfilesInConfig } from "./normalize-exec-safe-bin.js";
@@ -195,6 +196,13 @@ function isWritePlainObject(value: unknown): value is Record<string, unknown> {
 
 function hasOwnObjectKey(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function shouldAutoMigrateLegacyIssues(legacyIssues: LegacyConfigIssue[]): boolean {
+  return (
+    legacyIssues.length > 0 &&
+    legacyIssues.every((issue) => issue.message.includes("(auto-migrated on load)."))
+  );
 }
 
 const WRITE_PRUNED_OBJECT = Symbol("write-pruned-object");
@@ -705,6 +713,27 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
   const configPath =
     candidatePaths.find((candidate) => deps.fs.existsSync(candidate)) ?? requestedConfigPath;
 
+  function validateResolvedConfigWithAutoMigration(
+    resolvedConfigRaw: unknown,
+    sourceRaw?: unknown,
+  ) {
+    const legacyIssues = findLegacyConfigIssues(resolvedConfigRaw, sourceRaw);
+    if (shouldAutoMigrateLegacyIssues(legacyIssues)) {
+      const migrated = migrateLegacyConfig(resolvedConfigRaw);
+      if (migrated.config) {
+        return {
+          legacyIssues,
+          validated: validateConfigObjectWithPlugins(migrated.config),
+        };
+      }
+    }
+
+    return {
+      legacyIssues,
+      validated: validateConfigObjectWithPlugins(resolvedConfigRaw),
+    };
+  }
+
   function loadConfig(): OpenClawConfig {
     try {
       maybeLoadDotEnvForConfig(deps.env);
@@ -743,7 +772,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
       if (preValidationDuplicates.length > 0) {
         throw new DuplicateAgentDirError(preValidationDuplicates);
       }
-      const validated = validateConfigObjectWithPlugins(resolvedConfig);
+      const { validated } = validateResolvedConfigWithAutoMigration(resolvedConfig, parsed);
       if (!validated.ok) {
         const details = validated.issues
           .map(
@@ -949,11 +978,10 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
       }));
 
       const resolvedConfigRaw = readResolution.resolvedConfigRaw;
-      // Detect legacy keys on resolved config, but only mark source-literal legacy
-      // entries (for auto-migration) when they are present in the parsed source.
-      const legacyIssues = findLegacyConfigIssues(resolvedConfigRaw, parsedRes.parsed);
-
-      const validated = validateConfigObjectWithPlugins(resolvedConfigRaw);
+      const { legacyIssues, validated } = validateResolvedConfigWithAutoMigration(
+        resolvedConfigRaw,
+        parsedRes.parsed,
+      );
       if (!validated.ok) {
         return {
           snapshot: {
