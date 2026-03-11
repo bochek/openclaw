@@ -13,6 +13,7 @@ export type GeminiBatchRequest = {
   custom_id: string;
   content: { parts: Array<{ text: string }> };
   taskType: "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY";
+  outputDimensionality?: number;
 };
 
 export type GeminiBatchStatus = {
@@ -84,7 +85,10 @@ async function submitGeminiBatch(params: {
         key: request.custom_id,
         request: {
           content: request.content,
-          task_type: request.taskType,
+          taskType: request.taskType,
+          ...(typeof request.outputDimensionality === "number"
+            ? { outputDimensionality: request.outputDimensionality }
+            : {}),
         },
       }),
     )

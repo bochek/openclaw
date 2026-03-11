@@ -236,6 +236,7 @@ export abstract class MemoryManagerEmbeddingOps extends MemoryManagerSyncOps {
           provider: "gemini",
           baseUrl: this.gemini.baseUrl,
           model: this.gemini.model,
+          outputDimensionality: this.gemini.outputDimensionality,
           headers: entries,
         }),
       );
@@ -483,6 +484,7 @@ export abstract class MemoryManagerEmbeddingOps extends MemoryManagerSyncOps {
       buildRequest: (chunk) => ({
         content: { parts: [{ text: chunk.text }] },
         taskType: "RETRIEVAL_DOCUMENT",
+        outputDimensionality: this.gemini?.outputDimensionality,
       }),
       runBatch: async (runnerOptions) =>
         await runGeminiEmbeddingBatches({
