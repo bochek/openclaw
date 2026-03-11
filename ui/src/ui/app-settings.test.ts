@@ -216,4 +216,20 @@ describe("setTabFromRoute", () => {
     listeners[0]?.({ matches: false } as MediaQueryListEvent);
     expect(host.themeResolved).toBe("openknot-light");
   });
+
+  it("normalizes light family themes to the shared light CSS token", async () => {
+    appSettings ??= await import("./app-settings.ts");
+    const root = {
+      dataset: {} as DOMStringMap,
+      style: { colorScheme: "" } as CSSStyleDeclaration & { colorScheme: string },
+    };
+    vi.stubGlobal("document", { documentElement: root } as Document);
+
+    const host = createHost("chat");
+    appSettings.applyResolvedTheme(host, "dash-light");
+
+    expect(host.themeResolved).toBe("dash-light");
+    expect(root.dataset.theme).toBe("light");
+    expect(root.style.colorScheme).toBe("light");
+  });
 });
