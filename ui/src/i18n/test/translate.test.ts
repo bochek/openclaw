@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { i18n, t } from "../lib/translate.ts";
+import { pt_BR } from "../locales/pt-BR.ts";
+import { zh_CN } from "../locales/zh-CN.ts";
+import { zh_TW } from "../locales/zh-TW.ts";
 
 describe("i18n", () => {
   beforeEach(async () => {
@@ -44,13 +47,17 @@ describe("i18n", () => {
   it("loads saved non-English locale on startup", async () => {
     localStorage.setItem("openclaw.i18n.locale", "zh-CN");
     vi.resetModules();
-    const fresh = await import("../lib/translate.ts");
-
-    for (let index = 0; index < 5 && fresh.i18n.getLocale() !== "zh-CN"; index += 1) {
-      await Promise.resolve();
-    }
-
+    const fresh = await import("../lib/translate.ts?startup-locale");
+    await vi.waitFor(() => {
+      expect(fresh.i18n.getLocale()).toBe("zh-CN");
+    });
     expect(fresh.i18n.getLocale()).toBe("zh-CN");
     expect(fresh.t("common.health")).toBe("健康状况");
+  });
+
+  it("keeps the version label available in shipped locales", () => {
+    expect(pt_BR.common.version).toBeTruthy();
+    expect(zh_CN.common.version).toBeTruthy();
+    expect(zh_TW.common.version).toBeTruthy();
   });
 });
