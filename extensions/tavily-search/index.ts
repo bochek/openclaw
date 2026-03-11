@@ -76,6 +76,8 @@ const plugin = {
       name: "Tavily Search",
       description:
         "Search the web using Tavily via an external plugin provider. Returns structured results and an AI-synthesized answer when available.",
+      docsUrl: "https://docs.tavily.com/",
+      configFieldOrder: ["apiKey", "searchDepth"],
       isAvailable: (config) =>
         Boolean(resolveApiKey(resolveRootPluginConfig(config ?? {}, api.id))),
       search: async (params, ctx) => {

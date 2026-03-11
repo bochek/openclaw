@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../../agents/agent-scope.js";
-import type { ChannelPluginCatalogEntry } from "../../channels/plugins/catalog.js";
 import { resolveBundledInstallPlanForCatalogEntry } from "../../cli/plugin-install-plan.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
@@ -19,6 +18,18 @@ import type { RuntimeEnv } from "../../runtime.js";
 import type { WizardPrompter } from "../../wizard/prompts.js";
 
 type InstallChoice = "npm" | "local" | "skip";
+
+export type InstallablePluginCatalogEntry = {
+  id: string;
+  meta: {
+    label: string;
+  };
+  install: {
+    npmSpec: string;
+    localPath?: string;
+    defaultChoice?: "npm" | "local";
+  };
+};
 
 type InstallResult = {
   cfg: OpenClawConfig;
@@ -40,7 +51,7 @@ function hasGitWorkspace(workspaceDir?: string): boolean {
 }
 
 function resolveLocalPath(
-  entry: ChannelPluginCatalogEntry,
+  entry: InstallablePluginCatalogEntry,
   workspaceDir: string | undefined,
   allowLocal: boolean,
 ): string | null {
@@ -80,7 +91,7 @@ function addPluginLoadPath(cfg: OpenClawConfig, pluginPath: string): OpenClawCon
 }
 
 async function promptInstallChoice(params: {
-  entry: ChannelPluginCatalogEntry;
+  entry: InstallablePluginCatalogEntry;
   localPath?: string | null;
   defaultChoice: InstallChoice;
   prompter: WizardPrompter;
@@ -111,7 +122,7 @@ async function promptInstallChoice(params: {
 
 function resolveInstallDefaultChoice(params: {
   cfg: OpenClawConfig;
-  entry: ChannelPluginCatalogEntry;
+  entry: InstallablePluginCatalogEntry;
   localPath?: string | null;
   bundledLocalPath?: string | null;
 }): InstallChoice {
@@ -138,7 +149,7 @@ function resolveInstallDefaultChoice(params: {
 
 export async function ensureOnboardingPluginInstalled(params: {
   cfg: OpenClawConfig;
-  entry: ChannelPluginCatalogEntry;
+  entry: InstallablePluginCatalogEntry;
   prompter: WizardPrompter;
   runtime: RuntimeEnv;
   workspaceDir?: string;

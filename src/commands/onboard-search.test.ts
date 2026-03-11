@@ -1,7 +1,25 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
+
+const loadOpenClawPlugins = vi.hoisted(() =>
+  vi.fn(() => ({ searchProviders: [] as unknown[], plugins: [] as unknown[] })),
+);
+const ensureOnboardingPluginInstalled = vi.hoisted(() =>
+  vi.fn(async ({ cfg }: { cfg: OpenClawConfig }) => ({ cfg, installed: false })),
+);
+const reloadOnboardingPluginRegistry = vi.hoisted(() => vi.fn());
+
+vi.mock("../plugins/loader.js", () => ({
+  loadOpenClawPlugins,
+}));
+
+vi.mock("./onboarding/plugin-install.js", () => ({
+  ensureOnboardingPluginInstalled,
+  reloadOnboardingPluginRegistry,
+}));
+
 import { SEARCH_PROVIDER_OPTIONS, setupSearch } from "./onboard-search.js";
 
 const runtime: RuntimeEnv = {
@@ -73,6 +91,87 @@ async function runQuickstartPerplexitySetup(
 }
 
 describe("setupSearch", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  beforeEach(() => {
+    loadOpenClawPlugins.mockReset();
+    loadOpenClawPlugins.mockReturnValue({ searchProviders: [], plugins: [] });
+    ensureOnboardingPluginInstalled.mockReset();
+    ensureOnboardingPluginInstalled.mockImplementation(
+      async ({ cfg }: { cfg: OpenClawConfig }) => ({
+        cfg,
+        installed: false,
+      }),
+    );
+    reloadOnboardingPluginRegistry.mockReset();
+  });
+
+  it("shows registered plugin providers with source and configured hints", async () => {
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Plugin search",
+            isAvailable: () => true,
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "External Tavily plugin",
+          origin: "workspace",
+          source: "/tmp/tavily-search",
+          configJsonSchema: undefined,
+          configUiHints: undefined,
+        },
+      ],
+    });
+
+    const cfg: OpenClawConfig = {};
+    const { prompter } = createPrompter({ selectValue: "__skip__" });
+    await setupSearch(cfg, runtime, prompter);
+
+    expect(prompter.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.arrayContaining([
+          expect.objectContaining({
+            value: "tavily",
+            label: "Tavily Search",
+            hint: expect.stringContaining("Plugin search · Third-party plugin"),
+          }),
+        ]),
+      }),
+    );
+    expect(loadOpenClawPlugins).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceDir: undefined,
+      }),
+    );
+  });
+
+  it("passes workspaceDir when resolving plugin providers for setup", async () => {
+    const cfg: OpenClawConfig = {};
+    const { prompter } = createPrompter({ selectValue: "__skip__" });
+
+    await setupSearch(cfg, runtime, prompter, {
+      workspaceDir: "/tmp/workspace-search",
+    });
+
+    expect(loadOpenClawPlugins).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceDir: "/tmp/workspace-search",
+      }),
+    );
+  });
+
   it("returns config unchanged when user skips", async () => {
     const cfg: OpenClawConfig = {};
     const { prompter } = createPrompter({ selectValue: "__skip__" });
@@ -106,6 +205,57 @@ describe("setupSearch", () => {
         ]),
       }),
     );
+  });
+
+  it("puts configured providers first and marks the active provider when multiple are configured", async () => {
+    vi.stubEnv("BRAVE_API_KEY", "BSA-test-key");
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Plugin search",
+            isAvailable: () => true,
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "External Tavily plugin",
+          origin: "workspace",
+          source: "/tmp/tavily-search",
+          configJsonSchema: undefined,
+          configUiHints: undefined,
+        },
+      ],
+    });
+    const cfg: OpenClawConfig = {
+      tools: {
+        web: {
+          search: {
+            provider: "tavily",
+          },
+        },
+      },
+    };
+    const { prompter } = createPrompter({ selectValue: "__skip__" });
+
+    await setupSearch(cfg, runtime, prompter);
+
+    const options = (prompter.select as ReturnType<typeof vi.fn>).mock.calls[0]?.[0]?.options;
+    expect(options[0]).toMatchObject({
+      value: "tavily",
+      hint: "Plugin search · Third-party plugin · Configured · current",
+    });
+    expect(options[1]).toMatchObject({
+      value: "brave",
+      hint: "Structured results · country/language/time filters · Configured",
+    });
   });
 
   it("sets provider and key for perplexity", async () => {
@@ -166,6 +316,321 @@ describe("setupSearch", () => {
     expect(result.tools?.web?.search?.provider).toBe("kimi");
     expect(result.tools?.web?.search?.enabled).toBe(true);
     expect(result.tools?.web?.search?.kimi?.apiKey).toBe("sk-moonshot");
+  });
+
+  it("sets plugin provider and prompts generic plugin config fields", async () => {
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Plugin search",
+            configFieldOrder: ["apiKey", "searchDepth"],
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "External Tavily plugin",
+          origin: "workspace",
+          source: "/tmp/tavily-search",
+          configJsonSchema: {
+            type: "object",
+            properties: {
+              apiKey: { type: "string" },
+              searchDepth: { type: "string", enum: ["basic", "advanced"] },
+            },
+          },
+          configUiHints: {
+            apiKey: {
+              label: "Tavily API key",
+              placeholder: "tvly-...",
+              sensitive: true,
+            },
+            searchDepth: {
+              label: "Search depth",
+            },
+          },
+        },
+      ],
+    });
+
+    const cfg: OpenClawConfig = {};
+    const { prompter } = createPrompter({
+      selectValue: "tavily",
+      textValue: "tvly-test-key",
+    });
+    (prompter.select as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("tavily")
+      .mockResolvedValueOnce("advanced");
+
+    const result = await setupSearch(cfg, runtime, prompter);
+
+    expect(result.tools?.web?.search?.provider).toBe("tavily");
+    expect(result.tools?.web?.search?.enabled).toBe(true);
+    expect(result.plugins?.entries?.["tavily-search"]?.enabled).toBe(true);
+    expect(result.plugins?.entries?.["tavily-search"]?.config).toEqual({
+      apiKey: "tvly-test-key",
+      searchDepth: "advanced",
+    });
+    expect(loadOpenClawPlugins).toHaveBeenCalledWith(
+      expect.objectContaining({
+        suppressOpenAllowlistWarning: true,
+      }),
+    );
+  });
+
+  it("re-prompts invalid plugin config values before saving", async () => {
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Plugin search",
+            configFieldOrder: ["apiKey", "searchDepth"],
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "External Tavily plugin",
+          origin: "workspace",
+          source: "/tmp/tavily-search",
+          configJsonSchema: {
+            type: "object",
+            required: ["apiKey"],
+            properties: {
+              apiKey: { type: "string", minLength: 1, pattern: "^tvly-\\S+$" },
+              searchDepth: { type: "string", enum: ["basic", "advanced"] },
+            },
+          },
+          configUiHints: {
+            apiKey: {
+              label: "Tavily API key",
+              placeholder: "tvly-...",
+              sensitive: true,
+            },
+            searchDepth: {
+              label: "Search depth",
+            },
+          },
+        },
+      ],
+    });
+
+    const cfg: OpenClawConfig = {};
+    const { prompter, notes } = createPrompter({
+      selectValue: "tavily",
+      textValue: "",
+    });
+    (prompter.select as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("tavily")
+      .mockResolvedValueOnce("advanced")
+      .mockResolvedValueOnce("advanced");
+    (prompter.text as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("bad-key")
+      .mockResolvedValueOnce("tvly-valid-key");
+
+    const result = await setupSearch(cfg, runtime, prompter);
+
+    expect(notes.some((note) => note.title === "Invalid plugin config")).toBe(true);
+    expect(result.plugins?.entries?.["tavily-search"]?.config).toEqual({
+      apiKey: "tvly-valid-key",
+      searchDepth: "advanced",
+    });
+  });
+
+  it("keeps the existing sensitive plugin config value when left blank", async () => {
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Plugin search",
+            configFieldOrder: ["apiKey", "searchDepth"],
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "External Tavily plugin",
+          origin: "workspace",
+          source: "/tmp/tavily-search",
+          configJsonSchema: {
+            type: "object",
+            required: ["apiKey"],
+            properties: {
+              apiKey: { type: "string", minLength: 1, pattern: "^tvly-\\S+$" },
+              searchDepth: { type: "string", enum: ["basic", "advanced"] },
+            },
+          },
+          configUiHints: {
+            apiKey: {
+              label: "Tavily API key",
+              placeholder: "tvly-...",
+              sensitive: true,
+            },
+            searchDepth: {
+              label: "Search depth",
+            },
+          },
+        },
+      ],
+    });
+
+    const cfg: OpenClawConfig = {
+      tools: {
+        web: {
+          search: {
+            provider: "tavily",
+            enabled: true,
+          },
+        },
+      },
+      plugins: {
+        entries: {
+          "tavily-search": {
+            enabled: true,
+            config: {
+              apiKey: "tvly-existing-key",
+              searchDepth: "basic",
+            },
+          },
+        },
+      },
+    };
+    const { prompter } = createPrompter({
+      selectValue: "tavily",
+      textValue: "",
+    });
+    (prompter.select as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("tavily")
+      .mockResolvedValueOnce("advanced");
+    (prompter.text as ReturnType<typeof vi.fn>).mockResolvedValueOnce("");
+
+    const result = await setupSearch(cfg, runtime, prompter);
+
+    expect(result.plugins?.entries?.["tavily-search"]?.config).toEqual({
+      apiKey: "tvly-existing-key",
+      searchDepth: "advanced",
+    });
+  });
+
+  it("installs a search plugin from the shared catalog and continues provider setup", async () => {
+    loadOpenClawPlugins.mockImplementation(({ config }: { config: OpenClawConfig }) => {
+      const enabled = config.plugins?.entries?.["tavily-search"]?.enabled === true;
+      return enabled
+        ? {
+            searchProviders: [
+              {
+                pluginId: "tavily-search",
+                provider: {
+                  id: "tavily",
+                  name: "Tavily Search",
+                  description: "Plugin search",
+                  configFieldOrder: ["apiKey", "searchDepth"],
+                  search: async () => ({ content: "ok" }),
+                },
+              },
+            ],
+            plugins: [
+              {
+                id: "tavily-search",
+                name: "Tavily Search",
+                description: "External Tavily plugin",
+                origin: "workspace",
+                source: "/tmp/tavily-search",
+                configJsonSchema: {
+                  type: "object",
+                  properties: {
+                    apiKey: { type: "string" },
+                    searchDepth: { type: "string", enum: ["basic", "advanced"] },
+                  },
+                },
+                configUiHints: {
+                  apiKey: {
+                    label: "Tavily API key",
+                    placeholder: "tvly-...",
+                    sensitive: true,
+                  },
+                  searchDepth: {
+                    label: "Search depth",
+                  },
+                },
+              },
+            ],
+          }
+        : { searchProviders: [], plugins: [] };
+    });
+    ensureOnboardingPluginInstalled.mockImplementation(
+      async ({ cfg }: { cfg: OpenClawConfig }) => ({
+        cfg: {
+          ...cfg,
+          plugins: {
+            ...cfg.plugins,
+            entries: {
+              ...cfg.plugins?.entries,
+              "tavily-search": {
+                ...(cfg.plugins?.entries?.["tavily-search"] as Record<string, unknown> | undefined),
+                enabled: true,
+              },
+            },
+          },
+        },
+        installed: true,
+      }),
+    );
+
+    const { prompter } = createPrompter({
+      selectValue: "__install_plugin__",
+      textValue: "tvly-installed-key",
+    });
+    (prompter.select as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("__install_plugin__")
+      .mockResolvedValueOnce("advanced");
+
+    const result = await setupSearch({}, runtime, prompter, {
+      workspaceDir: "/tmp/workspace-search",
+    });
+
+    expect(ensureOnboardingPluginInstalled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entry: expect.objectContaining({
+          id: "tavily-search",
+          install: expect.objectContaining({
+            npmSpec: "@openclaw/tavily-search",
+            localPath: "extensions/tavily-search",
+          }),
+        }),
+        workspaceDir: "/tmp/workspace-search",
+      }),
+    );
+    expect(reloadOnboardingPluginRegistry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceDir: "/tmp/workspace-search",
+      }),
+    );
+    expect(result.tools?.web?.search?.provider).toBe("tavily");
+    expect(result.plugins?.entries?.["tavily-search"]?.enabled).toBe(true);
+    expect(result.plugins?.entries?.["tavily-search"]?.config).toEqual({
+      apiKey: "tvly-installed-key",
+      searchDepth: "advanced",
+    });
   });
 
   it("shows missing-key note when no key is provided and no env var", async () => {

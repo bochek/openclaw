@@ -1577,17 +1577,53 @@ describe("loadOpenClawPlugins", () => {
     const options = {
       cache: false,
       logger: createWarningLogger(warnings),
+=======
+  it("suppresses the open allowlist warning when requested", () => {
+    useNoBundledPlugins();
+    const plugin = writePlugin({
+      id: "warn-open-allow-suppressed",
+      body: `module.exports = { id: "warn-open-allow-suppressed", register() {} };`,
+    });
+    const warnings: string[] = [];
+    loadOpenClawPlugins({
+      cache: false,
+      logger: createWarningLogger(warnings),
+      suppressOpenAllowlistWarning: true,
+>>>>>>> bd6c276db1 (feat: extend pluggable web search onboarding)
       config: {
         plugins: {
           load: { paths: [plugin.file] },
         },
       },
+<<<<<<< HEAD
     };
 
     loadOpenClawPlugins(options);
     loadOpenClawPlugins(options);
 
     expect(warnings.filter((msg) => msg.includes("plugins.allow is empty"))).toHaveLength(1);
+  });
+
+  it("suppresses the open allowlist warning when requested", () => {
+    useNoBundledPlugins();
+    const plugin = writePlugin({
+      id: "warn-open-allow-suppressed",
+      body: `module.exports = { id: "warn-open-allow-suppressed", register() {} };`,
+    });
+    const warnings: string[] = [];
+    loadOpenClawPlugins({
+      cache: false,
+      logger: createWarningLogger(warnings),
+      suppressOpenAllowlistWarning: true,
+      config: {
+        plugins: {
+          load: { paths: [plugin.file] },
+        },
+      },
+    });
+    expect(
+      warnings.some((msg) => msg.includes("plugins.allow is empty") && msg.includes(plugin.id)),
+    ).toBe(false);
   });
 
   it("does not auto-load workspace-discovered plugins unless explicitly trusted", () => {

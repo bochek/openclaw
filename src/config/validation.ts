@@ -1,5 +1,6 @@
 import path from "node:path";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { isBuiltinWebSearchProviderId } from "../agents/tools/web-search-provider-catalog.js";
 import { CHANNEL_IDS, normalizeChatChannelId } from "../channels/registry.js";
 import {
   normalizePluginsConfig,
@@ -391,14 +392,11 @@ function validateConfigObjectWithPluginsBase(
 
   const validateWebSearchProvider = () => {
     const provider = config.tools?.web?.search?.provider;
-    if (
-      typeof provider !== "string" ||
-      provider === "brave" ||
-      provider === "perplexity" ||
-      provider === "grok" ||
-      provider === "gemini" ||
-      provider === "kimi"
-    ) {
+    if (typeof provider !== "string") {
+      return;
+    }
+    const normalizedProvider = provider.trim().toLowerCase();
+    if (!normalizedProvider || isBuiltinWebSearchProviderId(normalizedProvider)) {
       return;
     }
 
@@ -415,7 +413,6 @@ function validateConfigObjectWithPluginsBase(
         },
         cache: false,
       });
-      const normalizedProvider = provider.trim().toLowerCase();
       const registered = pluginRegistry.searchProviders.some(
         (entry) => entry.provider.id === normalizedProvider,
       );
@@ -431,12 +428,10 @@ function validateConfigObjectWithPluginsBase(
       return;
     }
 
-    if (provider.trim()) {
-      issues.push({
-        path: "tools.web.search.provider",
-        message: `unknown web search provider: ${provider}`,
-      });
-    }
+    issues.push({
+      path: "tools.web.search.provider",
+      message: `unknown web search provider: ${provider}`,
+    });
   };
 
   const allowedChannels = new Set<string>(["defaults", "modelByChannel", ...CHANNEL_IDS]);

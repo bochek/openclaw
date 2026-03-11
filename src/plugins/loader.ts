@@ -47,6 +47,7 @@ export type PluginLoadOptions = {
   runtimeOptions?: CreatePluginRuntimeOptions;
   cache?: boolean;
   mode?: "full" | "validate";
+  suppressOpenAllowlistWarning?: boolean;
 };
 
 const MAX_PLUGIN_REGISTRY_CACHE_ENTRIES = 32;
@@ -460,7 +461,11 @@ function warnWhenAllowlistIsOpen(params: {
   allow: string[];
   warningCacheKey: string;
   discoverablePlugins: Array<{ id: string; source: string; origin: PluginRecord["origin"] }>;
+  suppress?: boolean;
 }) {
+  if (params.suppress) {
+    return;
+  }
   if (!params.pluginsEnabled) {
     return;
   }
@@ -612,6 +617,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       source: plugin.source,
       origin: plugin.origin,
     })),
+    suppress: options.suppressOpenAllowlistWarning === true,
   });
   const provenance = buildProvenanceIndex({
     config: cfg,

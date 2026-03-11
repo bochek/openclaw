@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { validateConfigObject, validateConfigObjectWithPlugins } from "./config.js";
 import { buildWebSearchProviderConfig } from "./test-helpers.js";
 
-const loadOpenClawPlugins = vi.hoisted(() => vi.fn(() => ({ searchProviders: [] })));
+const loadOpenClawPlugins = vi.hoisted(() => vi.fn(() => ({ searchProviders: [] as unknown[] })));
 
 vi.mock("../runtime.js", () => ({
   defaultRuntime: { log: vi.fn(), error: vi.fn() },
@@ -44,7 +44,9 @@ describe("web search provider config", () => {
     );
 
     expect(res.ok).toBe(false);
-    expect(res.issues.some((issue) => issue.path === "tools.web.search.provider")).toBe(true);
+    if (!res.ok) {
+      expect(res.issues.some((issue) => issue.path === "tools.web.search.provider")).toBe(true);
+    }
   });
 
   it("accepts registered custom plugin provider ids during plugin-aware validation", () => {
@@ -79,14 +81,16 @@ describe("web search provider config", () => {
     );
 
     expect(res.ok).toBe(false);
-    expect(
-      res.issues.some(
-        (issue) =>
-          issue.path === "tools.web.search.provider" &&
-          issue.message.includes("plugin loading failed") &&
-          issue.message.includes("plugin import failed"),
-      ),
-    ).toBe(true);
+    if (!res.ok) {
+      expect(
+        res.issues.some(
+          (issue) =>
+            issue.path === "tools.web.search.provider" &&
+            issue.message.includes("plugin loading failed") &&
+            issue.message.includes("plugin import failed"),
+        ),
+      ).toBe(true);
+    }
   });
 
   it("rejects invalid custom plugin provider ids", () => {

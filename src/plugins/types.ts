@@ -299,6 +299,8 @@ export type SearchProviderPlugin = {
   name: string;
   description?: string;
   pluginId?: string;
+  docsUrl?: string;
+  configFieldOrder?: string[];
   isAvailable?: (config?: OpenClawConfig) => boolean;
   search: (
     params: SearchProviderRequest,

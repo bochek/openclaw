@@ -19,6 +19,10 @@ import { jsonResult, readNumberParam, readStringArrayParam, readStringParam } fr
 import { withTrustedWebToolsEndpoint } from "./web-guarded-fetch.js";
 import { resolveCitationRedirectUrl } from "./web-search-citation-redirect.js";
 import {
+  type BuiltinWebSearchProviderId,
+  isBuiltinWebSearchProviderId,
+} from "./web-search-provider-catalog.js";
+import {
   CacheEntry,
   DEFAULT_CACHE_TTL_MINUTES,
   DEFAULT_TIMEOUT_SECONDS,
@@ -30,7 +34,6 @@ import {
   writeCache,
 } from "./web-shared.js";
 
-const SEARCH_PROVIDERS = ["brave", "gemini", "grok", "kimi", "perplexity"] as const;
 const DEFAULT_SEARCH_COUNT = 5;
 const MAX_SEARCH_COUNT = 10;
 const DEFAULT_PROVIDER = "brave";
@@ -136,8 +139,6 @@ const RECENCY_TO_FRESHNESS: Record<string, string> = {
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const PERPLEXITY_DATE_PATTERN = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
 
-type BuiltinSearchProviderId = (typeof SEARCH_PROVIDERS)[number];
-
 const SEARCH_QUERY_SCHEMA_FIELDS = {
   query: Type.String({ description: "Search query string." }),
   count: Type.Optional(
@@ -232,7 +233,7 @@ function normalizeToIsoDate(value: string): string | undefined {
 }
 
 function createWebSearchSchema(params: {
-  provider: (typeof SEARCH_PROVIDERS)[number];
+  provider: BuiltinWebSearchProviderId;
   perplexityTransport?: PerplexityTransport;
 }) {
   const perplexityStructuredFilterSchema = {
@@ -602,7 +603,7 @@ function resolveSearchApiKey(search?: WebSearchConfig): string | undefined {
   return fromConfig || fromEnv || undefined;
 }
 
-function missingSearchKeyPayload(provider: (typeof SEARCH_PROVIDERS)[number]) {
+function missingSearchKeyPayload(provider: BuiltinWebSearchProviderId) {
   if (provider === "brave") {
     return {
       error: "missing_brave_api_key",
@@ -642,25 +643,13 @@ function missingSearchKeyPayload(provider: (typeof SEARCH_PROVIDERS)[number]) {
   };
 }
 
-function resolveBuiltinSearchProvider(search?: WebSearchConfig): BuiltinSearchProviderId {
+function resolveBuiltinSearchProvider(search?: WebSearchConfig): BuiltinWebSearchProviderId {
   const raw =
     search && "provider" in search && typeof search.provider === "string"
       ? search.provider.trim().toLowerCase()
       : "";
-  if (raw === "brave") {
-    return "brave";
-  }
-  if (raw === "gemini") {
-    return "gemini";
-  }
-  if (raw === "grok") {
-    return "grok";
-  }
-  if (raw === "kimi") {
-    return "kimi";
-  }
-  if (raw === "perplexity") {
-    return "perplexity";
+  if (isBuiltinWebSearchProviderId(raw)) {
+    return raw;
   }
 
   // Auto-detect provider from available API keys (alphabetical order)
@@ -1135,7 +1124,7 @@ function normalizeBraveLanguageParams(params: { search_lang?: string; ui_lang?: 
  */
 function normalizeFreshness(
   value: string | undefined,
-  provider: (typeof SEARCH_PROVIDERS)[number],
+  provider: BuiltinWebSearchProviderId,
 ): string | undefined {
   if (!value) {
     return undefined;
@@ -1624,7 +1613,7 @@ async function runWebSearch(params: {
   apiKey: string;
   timeoutSeconds: number;
   cacheTtlMs: number;
-  provider: (typeof SEARCH_PROVIDERS)[number];
+  provider: BuiltinWebSearchProviderId;
   country?: string;
   language?: string;
   search_lang?: string;
@@ -1960,8 +1949,8 @@ function normalizeSearchProviderId(value: string | undefined): string {
   return value?.trim().toLowerCase() ?? "";
 }
 
-function isBuiltinSearchProviderId(value: string): value is BuiltinSearchProviderId {
-  return SEARCH_PROVIDERS.includes(value as BuiltinSearchProviderId);
+function isBuiltinSearchProviderId(value: string): value is BuiltinWebSearchProviderId {
+  return isBuiltinWebSearchProviderId(value);
 }
 
 function stableSerializeForCache(value: unknown): string {
@@ -2179,7 +2168,7 @@ function executePluginSearchProvider(params: {
 }
 
 function executeBuiltinSearchProvider(params: {
-  provider: BuiltinSearchProviderId;
+  provider: BuiltinWebSearchProviderId;
   request: SearchProviderRequest;
   context: SearchProviderContext;
 }): Promise<Record<string, unknown>> {
@@ -2478,7 +2467,7 @@ function getPluginSearchProviders(): SearchProviderPlugin[] {
 function resolvePreferredBuiltinSearchProvider(params: {
   search?: WebSearchConfig;
   runtimeWebSearch?: RuntimeWebSearchMetadata;
-}): BuiltinSearchProviderId {
+}): BuiltinWebSearchProviderId {
   const configuredProviderId = normalizeSearchProviderId(
     typeof params.search?.provider === "string" ? params.search.provider : undefined,
   );

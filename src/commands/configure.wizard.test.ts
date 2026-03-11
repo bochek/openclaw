@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 
 const mocks = vi.hoisted(() => ({
@@ -19,6 +19,14 @@ const mocks = vi.hoisted(() => ({
   resolveControlUiLinks: vi.fn(),
   summarizeExistingConfig: vi.fn(),
 }));
+
+const loadOpenClawPlugins = vi.hoisted(() =>
+  vi.fn(() => ({ searchProviders: [] as unknown[], plugins: [] as unknown[] })),
+);
+const ensureOnboardingPluginInstalled = vi.hoisted(() =>
+  vi.fn(async ({ cfg }: { cfg: OpenClawConfig }) => ({ cfg, installed: false })),
+);
+const reloadOnboardingPluginRegistry = vi.hoisted(() => vi.fn());
 
 vi.mock("@clack/prompts", () => ({
   intro: mocks.clackIntro,
@@ -41,6 +49,15 @@ vi.mock("../infra/control-ui-assets.js", () => ({
 
 vi.mock("../wizard/clack-prompter.js", () => ({
   createClackPrompter: mocks.createClackPrompter,
+}));
+
+vi.mock("../plugins/loader.js", () => ({
+  loadOpenClawPlugins,
+}));
+
+vi.mock("./onboarding/plugin-install.js", () => ({
+  ensureOnboardingPluginInstalled,
+  reloadOnboardingPluginRegistry,
 }));
 
 vi.mock("../terminal/note.js", () => ({
@@ -99,6 +116,401 @@ import { WizardCancelledError } from "../wizard/prompts.js";
 import { runConfigureWizard } from "./configure.wizard.js";
 
 describe("runConfigureWizard", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  beforeEach(() => {
+    mocks.clackIntro.mockReset();
+    mocks.clackOutro.mockReset();
+    mocks.clackSelect.mockReset();
+    mocks.clackText.mockReset();
+    mocks.clackConfirm.mockReset();
+    mocks.readConfigFileSnapshot.mockReset();
+    mocks.writeConfigFile.mockReset();
+    mocks.resolveGatewayPort.mockReset();
+    mocks.ensureControlUiAssetsBuilt.mockReset();
+    mocks.createClackPrompter.mockReset();
+    mocks.note.mockReset();
+    mocks.printWizardHeader.mockReset();
+    mocks.probeGatewayReachable.mockReset();
+    mocks.waitForGatewayReachable.mockReset();
+    mocks.resolveControlUiLinks.mockReset();
+    mocks.summarizeExistingConfig.mockReset();
+    loadOpenClawPlugins.mockReset();
+    loadOpenClawPlugins.mockReturnValue({ searchProviders: [], plugins: [] });
+    ensureOnboardingPluginInstalled.mockReset();
+    ensureOnboardingPluginInstalled.mockImplementation(
+      async ({ cfg }: { cfg: OpenClawConfig }) => ({
+        cfg,
+        installed: false,
+      }),
+    );
+    reloadOnboardingPluginRegistry.mockReset();
+  });
+
+  it("configures a plugin web search provider from the picker", async () => {
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Plugin search",
+            configFieldOrder: ["apiKey", "searchDepth"],
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "External Tavily plugin",
+          origin: "workspace",
+          source: "/tmp/tavily-search",
+          configJsonSchema: {
+            type: "object",
+            properties: {
+              apiKey: { type: "string" },
+              searchDepth: { type: "string", enum: ["basic", "advanced"] },
+            },
+          },
+          configUiHints: {
+            apiKey: {
+              label: "Tavily API key",
+              placeholder: "tvly-...",
+              sensitive: true,
+            },
+            searchDepth: {
+              label: "Search depth",
+            },
+          },
+        },
+      ],
+    });
+    mocks.readConfigFileSnapshot.mockResolvedValue({
+      exists: true,
+      valid: true,
+      config: {
+        agents: {
+          defaults: {
+            workspace: "/tmp/configure-workspace-search",
+          },
+        },
+      },
+      issues: [],
+    });
+    mocks.resolveGatewayPort.mockReturnValue(18789);
+    mocks.probeGatewayReachable.mockResolvedValue({ ok: false });
+    mocks.resolveControlUiLinks.mockReturnValue({ wsUrl: "ws://127.0.0.1:18789" });
+    mocks.summarizeExistingConfig.mockReturnValue("");
+    mocks.createClackPrompter.mockReturnValue({});
+    mocks.ensureControlUiAssetsBuilt.mockResolvedValue({ ok: true });
+    mocks.clackIntro.mockResolvedValue(undefined);
+    mocks.clackOutro.mockResolvedValue(undefined);
+    mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+    mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
+      if (params.message === "Choose web search provider") {
+        return "tavily";
+      }
+      if (params.message.startsWith("Search depth")) {
+        return "advanced";
+      }
+      return "__continue";
+    });
+    mocks.clackText.mockResolvedValue("tvly-test-key");
+
+    await runConfigureWizard(
+      { command: "configure", sections: ["web"] },
+      {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      },
+    );
+
+    expect(mocks.writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.objectContaining({
+          web: expect.objectContaining({
+            search: expect.objectContaining({
+              provider: "tavily",
+              enabled: true,
+            }),
+          }),
+        }),
+        plugins: expect.objectContaining({
+          entries: expect.objectContaining({
+            "tavily-search": expect.objectContaining({
+              enabled: true,
+              config: {
+                apiKey: "tvly-test-key",
+                searchDepth: "advanced",
+              },
+            }),
+          }),
+        }),
+      }),
+    );
+    expect(loadOpenClawPlugins).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceDir: "/tmp/configure-workspace-search",
+      }),
+    );
+  });
+
+  it("re-prompts invalid plugin config values during configure", async () => {
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Plugin search",
+            configFieldOrder: ["apiKey", "searchDepth"],
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "External Tavily plugin",
+          origin: "workspace",
+          source: "/tmp/tavily-search",
+          configJsonSchema: {
+            type: "object",
+            required: ["apiKey"],
+            properties: {
+              apiKey: { type: "string", minLength: 1, pattern: "^tvly-\\S+$" },
+              searchDepth: { type: "string", enum: ["basic", "advanced"] },
+            },
+          },
+          configUiHints: {
+            apiKey: {
+              label: "Tavily API key",
+              placeholder: "tvly-...",
+              sensitive: true,
+            },
+            searchDepth: {
+              label: "Search depth",
+            },
+          },
+        },
+      ],
+    });
+    mocks.readConfigFileSnapshot.mockResolvedValue({
+      exists: true,
+      valid: true,
+      config: {
+        agents: {
+          defaults: {
+            workspace: "/tmp/configure-workspace-search",
+          },
+        },
+      },
+      issues: [],
+    });
+    mocks.resolveGatewayPort.mockReturnValue(18789);
+    mocks.probeGatewayReachable.mockResolvedValue({ ok: false });
+    mocks.resolveControlUiLinks.mockReturnValue({ wsUrl: "ws://127.0.0.1:18789" });
+    mocks.summarizeExistingConfig.mockReturnValue("");
+    mocks.createClackPrompter.mockReturnValue({});
+    mocks.ensureControlUiAssetsBuilt.mockResolvedValue({ ok: true });
+    mocks.clackIntro.mockResolvedValue(undefined);
+    mocks.clackOutro.mockResolvedValue(undefined);
+    mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+    mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
+      if (params.message === "Choose web search provider") {
+        return "tavily";
+      }
+      if (params.message.startsWith("Search depth")) {
+        return "advanced";
+      }
+      return "__continue";
+    });
+    mocks.clackText.mockResolvedValueOnce("bad-key").mockResolvedValueOnce("tvly-test-key");
+
+    await runConfigureWizard(
+      { command: "configure", sections: ["web"] },
+      {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      },
+    );
+
+    expect(mocks.note).toHaveBeenCalledWith(
+      expect.stringContaining("Api Key"),
+      "Invalid plugin config",
+    );
+    expect(mocks.writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        plugins: expect.objectContaining({
+          entries: expect.objectContaining({
+            "tavily-search": expect.objectContaining({
+              config: {
+                apiKey: "tvly-test-key",
+                searchDepth: "advanced",
+              },
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("installs a plugin search provider from configure and continues setup", async () => {
+    loadOpenClawPlugins.mockImplementation(({ config }: { config: OpenClawConfig }) => {
+      const enabled = config.plugins?.entries?.["tavily-search"]?.enabled === true;
+      return enabled
+        ? {
+            searchProviders: [
+              {
+                pluginId: "tavily-search",
+                provider: {
+                  id: "tavily",
+                  name: "Tavily Search",
+                  description: "Plugin search",
+                  configFieldOrder: ["apiKey", "searchDepth"],
+                  search: async () => ({ content: "ok" }),
+                },
+              },
+            ],
+            plugins: [
+              {
+                id: "tavily-search",
+                name: "Tavily Search",
+                description: "External Tavily plugin",
+                origin: "workspace",
+                source: "/tmp/tavily-search",
+                configJsonSchema: {
+                  type: "object",
+                  properties: {
+                    apiKey: { type: "string" },
+                    searchDepth: { type: "string", enum: ["basic", "advanced"] },
+                  },
+                },
+                configUiHints: {
+                  apiKey: {
+                    label: "Tavily API key",
+                    placeholder: "tvly-...",
+                    sensitive: true,
+                  },
+                  searchDepth: {
+                    label: "Search depth",
+                  },
+                },
+              },
+            ],
+          }
+        : { searchProviders: [], plugins: [] };
+    });
+    ensureOnboardingPluginInstalled.mockImplementation(
+      async ({ cfg }: { cfg: OpenClawConfig }) => ({
+        cfg: {
+          ...cfg,
+          plugins: {
+            ...cfg.plugins,
+            entries: {
+              ...cfg.plugins?.entries,
+              "tavily-search": {
+                ...(cfg.plugins?.entries?.["tavily-search"] as Record<string, unknown> | undefined),
+                enabled: true,
+              },
+            },
+          },
+        },
+        installed: true,
+      }),
+    );
+    mocks.readConfigFileSnapshot.mockResolvedValue({
+      exists: true,
+      valid: true,
+      config: {
+        agents: {
+          defaults: {
+            workspace: "/tmp/configure-install-workspace",
+          },
+        },
+      },
+      issues: [],
+    });
+    mocks.resolveGatewayPort.mockReturnValue(18789);
+    mocks.probeGatewayReachable.mockResolvedValue({ ok: false });
+    mocks.resolveControlUiLinks.mockReturnValue({ wsUrl: "ws://127.0.0.1:18789" });
+    mocks.summarizeExistingConfig.mockReturnValue("");
+    mocks.createClackPrompter.mockReturnValue({});
+    mocks.ensureControlUiAssetsBuilt.mockResolvedValue({ ok: true });
+    mocks.clackIntro.mockResolvedValue(undefined);
+    mocks.clackOutro.mockResolvedValue(undefined);
+    mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+    mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
+      if (params.message === "Choose web search provider") {
+        return "__install_plugin__";
+      }
+      if (params.message.startsWith("Search depth")) {
+        return "advanced";
+      }
+      return "__continue";
+    });
+    mocks.clackText.mockResolvedValue("tvly-installed-key");
+
+    await runConfigureWizard(
+      { command: "configure", sections: ["web"] },
+      {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      },
+    );
+
+    expect(ensureOnboardingPluginInstalled).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entry: expect.objectContaining({
+          id: "tavily-search",
+          install: expect.objectContaining({
+            npmSpec: "@openclaw/tavily-search",
+            localPath: "extensions/tavily-search",
+          }),
+        }),
+        workspaceDir: "/tmp/configure-install-workspace",
+      }),
+    );
+    expect(reloadOnboardingPluginRegistry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceDir: "/tmp/configure-install-workspace",
+      }),
+    );
+    expect(mocks.writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.objectContaining({
+          web: expect.objectContaining({
+            search: expect.objectContaining({
+              provider: "tavily",
+              enabled: true,
+            }),
+          }),
+        }),
+        plugins: expect.objectContaining({
+          entries: expect.objectContaining({
+            "tavily-search": expect.objectContaining({
+              enabled: true,
+              config: {
+                apiKey: "tvly-installed-key",
+                searchDepth: "advanced",
+              },
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it("persists gateway.mode=local when only the run mode is selected", async () => {
     mocks.readConfigFileSnapshot.mockResolvedValue({
       exists: false,
@@ -210,6 +622,85 @@ describe("runConfigureWizard", () => {
           }),
         }),
       }),
+    );
+  });
+
+  it("shows the active provider first when multiple providers are configured", async () => {
+    vi.stubEnv("BRAVE_API_KEY", "BSA-test-key");
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Plugin search",
+            isAvailable: () => true,
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "External Tavily plugin",
+          origin: "workspace",
+          source: "/tmp/tavily-search",
+          configJsonSchema: undefined,
+          configUiHints: undefined,
+        },
+      ],
+    });
+    mocks.readConfigFileSnapshot.mockResolvedValue({
+      exists: true,
+      valid: true,
+      config: {
+        tools: {
+          web: {
+            search: {
+              provider: "tavily",
+              enabled: true,
+            },
+          },
+        },
+      },
+      issues: [],
+    });
+    mocks.resolveGatewayPort.mockReturnValue(18789);
+    mocks.probeGatewayReachable.mockResolvedValue({ ok: false });
+    mocks.resolveControlUiLinks.mockReturnValue({ wsUrl: "ws://127.0.0.1:18789" });
+    mocks.summarizeExistingConfig.mockReturnValue("");
+    mocks.createClackPrompter.mockReturnValue({});
+    mocks.ensureControlUiAssetsBuilt.mockResolvedValue({ ok: true });
+    mocks.clackIntro.mockResolvedValue(undefined);
+    mocks.clackOutro.mockResolvedValue(undefined);
+    mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
+    mocks.clackSelect.mockImplementation(
+      async (params: { message: string; options?: Array<{ value: string; hint?: string }> }) => {
+        if (params.message === "Choose web search provider") {
+          expect(params.options?.[0]).toMatchObject({
+            value: "tavily",
+            hint: "Plugin search · Third-party plugin · Configured · current",
+          });
+          expect(params.options?.[1]).toMatchObject({
+            value: "brave",
+            hint: "Structured results · country/language/time filters · Configured",
+          });
+          return "tavily";
+        }
+        return "__continue";
+      },
+    );
+    mocks.clackText.mockResolvedValue("");
+
+    await runConfigureWizard(
+      { command: "configure", sections: ["web"] },
+      {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      },
     );
   });
 });

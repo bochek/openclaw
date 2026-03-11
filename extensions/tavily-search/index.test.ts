@@ -112,7 +112,7 @@ describe("tavily-search plugin", () => {
     );
 
     expect(fetchMock).toHaveBeenCalled();
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(JSON.parse(String(init.body))).toMatchObject({
       api_key: "tvly-test-key",
       query: "hello",
