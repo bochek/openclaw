@@ -41,8 +41,7 @@ import {
   readConfigIncludeFileWithGuards,
   resolveConfigIncludes,
 } from "./includes.js";
-import { migrateLegacyConfig } from "./legacy-migrate.js";
-import { findLegacyConfigIssues } from "./legacy.js";
+import { applyLegacyMigrations, findLegacyConfigIssues } from "./legacy.js";
 import { applyMergePatch } from "./merge-patch.js";
 import { normalizeExecSafeBinProfilesInConfig } from "./normalize-exec-safe-bin.js";
 import { normalizeConfigPaths } from "./normalize-paths.js";
@@ -719,18 +718,49 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
   ) {
     const legacyIssues = findLegacyConfigIssues(resolvedConfigRaw, sourceRaw);
     if (shouldAutoMigrateLegacyIssues(legacyIssues)) {
-      const migrated = migrateLegacyConfig(resolvedConfigRaw);
-      if (migrated.config) {
-        return {
-          legacyIssues,
-          validated: validateConfigObjectWithPlugins(migrated.config),
-        };
+      const migrated = applyLegacyMigrations(resolvedConfigRaw);
+      if (migrated.next) {
+        const validatedMigrated = validateConfigObjectWithPlugins(migrated.next);
+        if (validatedMigrated.ok) {
+          return {
+            legacyIssues,
+            validated: validatedMigrated,
+            effectiveResolvedConfigRaw: migrated.next,
+          };
+        }
       }
     }
 
     return {
       legacyIssues,
       validated: validateConfigObjectWithPlugins(resolvedConfigRaw),
+      effectiveResolvedConfigRaw: resolvedConfigRaw,
+    };
+  }
+
+  function validateResolvedRawConfigWithAutoMigration(
+    resolvedConfigRaw: unknown,
+    sourceRaw?: unknown,
+  ) {
+    const legacyIssues = findLegacyConfigIssues(resolvedConfigRaw, sourceRaw);
+    if (shouldAutoMigrateLegacyIssues(legacyIssues)) {
+      const migrated = applyLegacyMigrations(resolvedConfigRaw);
+      if (migrated.next) {
+        const validatedMigrated = validateConfigObjectRawWithPlugins(migrated.next);
+        if (validatedMigrated.ok) {
+          return {
+            legacyIssues,
+            validated: validatedMigrated,
+            effectiveResolvedConfigRaw: migrated.next,
+          };
+        }
+      }
+    }
+
+    return {
+      legacyIssues,
+      validated: validateConfigObjectRawWithPlugins(resolvedConfigRaw),
+      effectiveResolvedConfigRaw: resolvedConfigRaw,
     };
   }
 
@@ -978,10 +1008,8 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
       }));
 
       const resolvedConfigRaw = readResolution.resolvedConfigRaw;
-      const { legacyIssues, validated } = validateResolvedConfigWithAutoMigration(
-        resolvedConfigRaw,
-        parsedRes.parsed,
-      );
+      const { legacyIssues, validated, effectiveResolvedConfigRaw } =
+        validateResolvedConfigWithAutoMigration(resolvedConfigRaw, parsedRes.parsed);
       if (!validated.ok) {
         return {
           snapshot: {
@@ -989,7 +1017,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
             exists: true,
             raw,
             parsed: parsedRes.parsed,
-            resolved: coerceConfig(resolvedConfigRaw),
+            resolved: coerceConfig(effectiveResolvedConfigRaw),
             valid: false,
             config: coerceConfig(resolvedConfigRaw),
             hash,
@@ -1021,7 +1049,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
           parsed: parsedRes.parsed,
           // Use resolvedConfigRaw (after $include and ${ENV} substitution but BEFORE runtime defaults)
           // for config set/unset operations (issue #6070)
-          resolved: coerceConfig(resolvedConfigRaw),
+          resolved: coerceConfig(effectiveResolvedConfigRaw),
           valid: true,
           config: snapshotConfig,
           hash,
@@ -1118,7 +1146,7 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
       }
     }
 
-    const validated = validateConfigObjectRawWithPlugins(persistCandidate);
+    const { validated } = validateResolvedRawConfigWithAutoMigration(persistCandidate);
     if (!validated.ok) {
       const issue = validated.issues[0];
       const pathLabel = issue?.path ? issue.path : "<root>";
