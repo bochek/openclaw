@@ -211,12 +211,12 @@ export async function createGeminiEmbeddingProvider(
         content: { parts: [{ text }] },
         taskType: options.taskType ?? "RETRIEVAL_DOCUMENT",
       };
+      if (isV2 && outputDimensionality != null) {
+        req.outputDimensionality = outputDimensionality;
+      }
       return req;
     });
     const batchBody: Record<string, unknown> = { requests };
-    if (isV2 && outputDimensionality != null) {
-      batchBody.outputDimensionality = outputDimensionality;
-    }
     const payload = await executeWithApiKeyRotation({
       provider: "google",
       apiKeys: client.apiKeys,

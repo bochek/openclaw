@@ -220,17 +220,18 @@ describe("gemini-embedding-2-preview provider", () => {
     await provider.embedBatch(["text1", "text2"]);
 
     const body = parseFetchBody(fetchMock);
-    expect(body.outputDimensionality).toBe(3072);
     expect(body.requests).toEqual([
       {
         model: "models/gemini-embedding-2-preview",
         content: { parts: [{ text: "text1" }] },
         taskType: "RETRIEVAL_DOCUMENT",
+        outputDimensionality: 3072,
       },
       {
         model: "models/gemini-embedding-2-preview",
         content: { parts: [{ text: "text2" }] },
         taskType: "RETRIEVAL_DOCUMENT",
+        outputDimensionality: 3072,
       },
     ]);
   });

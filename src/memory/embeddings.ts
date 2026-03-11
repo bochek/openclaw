@@ -4,7 +4,11 @@ import type { OpenClawConfig } from "../config/config.js";
 import type { SecretInput } from "../config/types.secrets.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { resolveUserPath } from "../utils.js";
-import { createGeminiEmbeddingProvider, type GeminiEmbeddingClient } from "./embeddings-gemini.js";
+import {
+  createGeminiEmbeddingProvider,
+  type GeminiEmbeddingClient,
+  type GeminiTaskType,
+} from "./embeddings-gemini.js";
 import {
   createMistralEmbeddingProvider,
   type MistralEmbeddingClient,
@@ -77,7 +81,7 @@ export type EmbeddingProviderOptions = {
   /** Gemini embedding-2: output vector dimensions (768, 1536, or 3072). */
   outputDimensionality?: number;
   /** Gemini: override the default task type sent with embedding requests. */
-  taskType?: string;
+  taskType?: GeminiTaskType;
 };
 
 export const DEFAULT_LOCAL_MODEL =
