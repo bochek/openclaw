@@ -340,6 +340,10 @@ function collectDeclaredCapabilities(plugin: PluginRecord): Set<string> {
   return new Set([...plugin.declaredCapabilities, ...plugin.capabilityIds]);
 }
 
+function collectCapabilityIds(plugin: PluginRecord): Set<string> {
+  return new Set(plugin.capabilityIds);
+}
+
 function evaluateCapabilityRelationships(params: {
   activePlugins: PluginRecord[];
   candidatePlugin?: PluginRecord;
@@ -412,6 +416,44 @@ function evaluateCapabilityRelationships(params: {
         message: `conflicting capability present: ${conflict} (${Array.from(new Set(conflictingOwners)).join(", ")})`,
       });
     }
+  }
+
+  return diagnostics;
+}
+
+function evaluateCapabilityDeclarationAlignment(plugin: PluginRecord): PluginDiagnostic[] {
+  const diagnostics: PluginDiagnostic[] = [];
+  const declaredCapabilities = new Set(plugin.declaredCapabilities);
+  const runtimeCapabilities = collectCapabilityIds(plugin);
+
+  for (const capability of declaredCapabilities) {
+    if (runtimeCapabilities.has(capability)) {
+      continue;
+    }
+    diagnostics.push({
+      level: "error",
+      pluginId: plugin.id,
+      source: plugin.source,
+      code: "capability_declared_not_registered",
+      capability,
+      slot: capability.includes(".") ? capability.split(".").slice(0, -1).join(".") : undefined,
+      message: `declared capability was not registered at runtime: ${capability}`,
+    });
+  }
+
+  for (const capability of runtimeCapabilities) {
+    if (declaredCapabilities.has(capability)) {
+      continue;
+    }
+    diagnostics.push({
+      level: "warn",
+      pluginId: plugin.id,
+      source: plugin.source,
+      code: "capability_registered_not_declared",
+      capability,
+      slot: capability.includes(".") ? capability.split(".").slice(0, -1).join(".") : undefined,
+      message: `runtime capability was not declared in manifest: ${capability}`,
+    });
   }
 
   return diagnostics;
@@ -987,6 +1029,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
           message: "plugin register returned a promise; async registration is ignored",
         });
       }
+      pushDiagnostics(registry.diagnostics, evaluateCapabilityDeclarationAlignment(record));
       registry.plugins.push(record);
       seenIds.set(pluginId, candidate.origin);
     } catch (err) {
@@ -1007,6 +1050,9 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
   if (typeof memorySlot === "string" && !memorySlotMatched) {
     registry.diagnostics.push({
       level: "warn",
+      code: "capability_slot_selection_missing",
+      slot: "memory.backend",
+      capability: memorySlot,
       message: `memory slot plugin not found or not marked as memory: ${memorySlot}`,
     });
   }

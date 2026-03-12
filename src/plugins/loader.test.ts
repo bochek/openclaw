@@ -2256,4 +2256,84 @@ describe("loadOpenClawPlugins", () => {
       expect.arrayContaining([expect.objectContaining({ id: "memory-b", status: "error" })]),
     );
   });
+
+  it("errors when a declared capability is not registered at runtime", () => {
+    useNoBundledPlugins();
+    const plugin = writePlugin({
+      id: "search-manifest-mismatch",
+      body: `module.exports = { id: "search-manifest-mismatch", register(api) { api.registerSearchProvider({ id: "alpha", name: "Alpha", search: async () => ({ content: "alpha" }) }); } };`,
+      manifest: {
+        id: "search-manifest-mismatch",
+        configSchema: EMPTY_PLUGIN_SCHEMA,
+        provides: ["providers.search.beta"],
+      },
+    });
+
+    const registry = loadRegistryFromSinglePlugin({ plugin });
+
+    expect(registry.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          pluginId: "search-manifest-mismatch",
+          code: "capability_declared_not_registered",
+          capability: "providers.search.beta",
+          message: "declared capability was not registered at runtime: providers.search.beta",
+        }),
+      ]),
+    );
+  });
+
+  it("warns when a runtime capability is not declared in the manifest", () => {
+    useNoBundledPlugins();
+    const plugin = writePlugin({
+      id: "search-runtime-undeclared",
+      body: `module.exports = { id: "search-runtime-undeclared", register(api) { api.registerSearchProvider({ id: "alpha", name: "Alpha", search: async () => ({ content: "alpha" }) }); } };`,
+      manifest: {
+        id: "search-runtime-undeclared",
+        configSchema: EMPTY_PLUGIN_SCHEMA,
+      },
+    });
+
+    const registry = loadRegistryFromSinglePlugin({ plugin });
+
+    expect(registry.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          pluginId: "search-runtime-undeclared",
+          code: "capability_registered_not_declared",
+          capability: "providers.search.alpha",
+          message: "runtime capability was not declared in manifest: providers.search.alpha",
+        }),
+      ]),
+    );
+  });
+
+  it("emits a structured diagnostic when the configured memory slot is missing", () => {
+    useNoBundledPlugins();
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      config: {
+        plugins: {
+          slots: {
+            memory: "missing-memory-backend",
+          },
+        },
+      },
+    });
+
+    expect(registry.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          code: "capability_slot_selection_missing",
+          slot: "memory.backend",
+          capability: "missing-memory-backend",
+          message: "memory slot plugin not found or not marked as memory: missing-memory-backend",
+        }),
+      ]),
+    );
+  });
 });

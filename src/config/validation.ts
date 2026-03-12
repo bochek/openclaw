@@ -49,7 +49,7 @@ function resolvePluginDiagnosticPath(diag: {
   if (diag.message.includes("plugin path not found")) {
     return "plugins.load.paths";
   }
-  if (diag.code === "capability_slot_conflict" && diag.slot) {
+  if (diag.slot) {
     return resolveCapabilitySlotConfigPath(diag.slot as CapabilitySlotId);
   }
   if (diag.pluginId) {

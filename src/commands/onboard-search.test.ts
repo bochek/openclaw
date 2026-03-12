@@ -453,6 +453,13 @@ describe("setupSearch", () => {
       typedHooks: [
         {
           pluginId: "tavily-search",
+          hookName: "before_provider_configure",
+          priority: 10,
+          source: "/tmp/tavily-search",
+          handler: () => ({ note: "Generic provider guidance." }),
+        },
+        {
+          pluginId: "tavily-search",
           hookName: "before_search_provider_configure",
           priority: 0,
           source: "/tmp/tavily-search",
@@ -473,7 +480,7 @@ describe("setupSearch", () => {
       expect.arrayContaining([
         expect.objectContaining({
           title: "Provider setup",
-          message: "Read the provider docs before entering your key.",
+          message: "Generic provider guidance.\n\nRead the provider docs before entering your key.",
         }),
       ]),
     );
@@ -481,6 +488,7 @@ describe("setupSearch", () => {
 
   it("fires after_search_provider_activate only when the active provider changes", async () => {
     const afterActivate = vi.fn();
+    const afterProviderActivate = vi.fn();
     loadOpenClawPlugins.mockReturnValue({
       searchProviders: [
         {
@@ -506,6 +514,13 @@ describe("setupSearch", () => {
         },
       ],
       typedHooks: [
+        {
+          pluginId: "tavily-search",
+          hookName: "after_provider_activate",
+          priority: 0,
+          source: "/tmp/tavily-search",
+          handler: afterProviderActivate,
+        },
         {
           pluginId: "tavily-search",
           hookName: "after_search_provider_activate",
@@ -547,6 +562,19 @@ describe("setupSearch", () => {
 
     expect(result.tools?.web?.search?.provider).toBe("tavily");
     expect(afterActivate).toHaveBeenCalledTimes(1);
+    expect(afterProviderActivate).toHaveBeenCalledTimes(1);
+    expect(afterProviderActivate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerKind: "search",
+        slot: "providers.search",
+        providerId: "tavily",
+        previousProviderId: "brave",
+        intent: "switch-active",
+      }),
+      expect.objectContaining({
+        workspaceDir: undefined,
+      }),
+    );
     expect(afterActivate).toHaveBeenCalledWith(
       expect.objectContaining({
         providerId: "tavily",

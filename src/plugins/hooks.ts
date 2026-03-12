@@ -10,6 +10,8 @@ import type { PluginRegistry } from "./registry.js";
 import type {
   PluginHookAfterSearchProviderActivateEvent,
   PluginHookAfterSearchProviderConfigureEvent,
+  PluginHookAfterProviderActivateEvent,
+  PluginHookAfterProviderConfigureEvent,
   PluginHookAfterCompactionEvent,
   PluginHookAfterToolCallEvent,
   PluginHookAgentContext,
@@ -18,6 +20,8 @@ import type {
   PluginHookBeforeAgentStartResult,
   PluginHookBeforeSearchProviderConfigureEvent,
   PluginHookBeforeSearchProviderConfigureResult,
+  PluginHookBeforeProviderConfigureEvent,
+  PluginHookBeforeProviderConfigureResult,
   PluginHookBeforeModelResolveEvent,
   PluginHookBeforeModelResolveResult,
   PluginHookBeforePromptBuildEvent,
@@ -64,6 +68,8 @@ export type {
   PluginHookBeforeAgentStartResult,
   PluginHookBeforeSearchProviderConfigureEvent,
   PluginHookBeforeSearchProviderConfigureResult,
+  PluginHookBeforeProviderConfigureEvent,
+  PluginHookBeforeProviderConfigureResult,
   PluginHookBeforeModelResolveEvent,
   PluginHookBeforeModelResolveResult,
   PluginHookBeforePromptBuildEvent,
@@ -104,6 +110,8 @@ export type {
   PluginHookGatewayStopEvent,
   PluginHookAfterSearchProviderConfigureEvent,
   PluginHookAfterSearchProviderActivateEvent,
+  PluginHookAfterProviderConfigureEvent,
+  PluginHookAfterProviderActivateEvent,
 };
 
 export type HookRunnerLogger = {
@@ -195,6 +203,16 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     acc: PluginHookBeforeSearchProviderConfigureResult | undefined,
     next: PluginHookBeforeSearchProviderConfigureResult,
   ): PluginHookBeforeSearchProviderConfigureResult => ({
+    note: concatOptionalTextSegments({
+      left: acc?.note,
+      right: next.note,
+    }),
+  });
+
+  const mergeBeforeProviderConfigure = (
+    acc: PluginHookBeforeProviderConfigureResult | undefined,
+    next: PluginHookBeforeProviderConfigureResult,
+  ): PluginHookBeforeProviderConfigureResult => ({
     note: concatOptionalTextSegments({
       left: acc?.note,
       right: next.note,
@@ -346,6 +364,32 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
       "before_search_provider_configure",
       PluginHookBeforeSearchProviderConfigureResult
     >("before_search_provider_configure", event, ctx, mergeBeforeSearchProviderConfigure);
+  }
+
+  async function runBeforeProviderConfigure(
+    event: PluginHookBeforeProviderConfigureEvent,
+    ctx: PluginHookSearchProviderContext,
+  ): Promise<PluginHookBeforeProviderConfigureResult | undefined> {
+    return runModifyingHook<"before_provider_configure", PluginHookBeforeProviderConfigureResult>(
+      "before_provider_configure",
+      event,
+      ctx,
+      mergeBeforeProviderConfigure,
+    );
+  }
+
+  async function runAfterProviderConfigure(
+    event: PluginHookAfterProviderConfigureEvent,
+    ctx: PluginHookSearchProviderContext,
+  ): Promise<void> {
+    return runVoidHook("after_provider_configure", event, ctx);
+  }
+
+  async function runAfterProviderActivate(
+    event: PluginHookAfterProviderActivateEvent,
+    ctx: PluginHookSearchProviderContext,
+  ): Promise<void> {
+    return runVoidHook("after_provider_activate", event, ctx);
   }
 
   async function runAfterSearchProviderConfigure(
@@ -771,8 +815,11 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     runBeforeModelResolve,
     runBeforePromptBuild,
     runBeforeAgentStart,
+    runBeforeProviderConfigure,
     runBeforeSearchProviderConfigure,
+    runAfterProviderConfigure,
     runAfterSearchProviderConfigure,
+    runAfterProviderActivate,
     runAfterSearchProviderActivate,
     runLlmInput,
     runLlmOutput,

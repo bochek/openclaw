@@ -334,6 +334,29 @@ describe("config plugin validation", () => {
     }
   });
 
+  it("routes missing slot selection diagnostics to the slot config path", async () => {
+    const res = validateInSuite({
+      agents: { list: [{ id: "pi" }] },
+      plugins: {
+        enabled: true,
+        slots: { memory: "missing-memory-backend" },
+      },
+    });
+
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.issues).toContainEqual({
+        path: "plugins.slots.memory",
+        message: "plugin not found: missing-memory-backend",
+      });
+      expect(res.warnings).toContainEqual({
+        path: "plugins.slots.memory",
+        message:
+          "plugin: memory slot plugin not found or not marked as memory: missing-memory-backend",
+      });
+    }
+  });
+
   it("surfaces allowed enum values for plugin config diagnostics", async () => {
     const res = validateInSuite({
       agents: { list: [{ id: "pi" }] },

@@ -487,9 +487,12 @@ export type PluginDiagnostic = {
   source?: string;
   code?:
     | "capability_declared_duplicate"
+    | "capability_declared_not_registered"
     | "capability_missing_requirement"
     | "capability_conflict_present"
-    | "capability_slot_conflict";
+    | "capability_slot_conflict"
+    | "capability_registered_not_declared"
+    | "capability_slot_selection_missing";
   capability?: string;
   slot?: string;
 };
@@ -502,8 +505,11 @@ export type PluginHookName =
   | "before_model_resolve"
   | "before_prompt_build"
   | "before_agent_start"
+  | "before_provider_configure"
   | "before_search_provider_configure"
+  | "after_provider_configure"
   | "after_search_provider_configure"
+  | "after_provider_activate"
   | "after_search_provider_activate"
   | "llm_input"
   | "llm_output"
@@ -531,8 +537,11 @@ export const PLUGIN_HOOK_NAMES = [
   "before_model_resolve",
   "before_prompt_build",
   "before_agent_start",
+  "before_provider_configure",
   "before_search_provider_configure",
+  "after_provider_configure",
   "after_search_provider_configure",
+  "after_provider_activate",
   "after_search_provider_activate",
   "llm_input",
   "llm_output",
@@ -678,7 +687,29 @@ export type PluginHookSearchProviderContext = {
   workspaceDir?: string;
 };
 
+export type PluginHookProviderLifecycleContext = {
+  workspaceDir?: string;
+};
+
 export type PluginHookSearchProviderSource = "builtin" | "plugin";
+
+export type PluginHookProviderKind = "search";
+
+export type PluginHookBeforeProviderConfigureEvent = {
+  providerKind: PluginHookProviderKind;
+  slot: string;
+  providerId: string;
+  providerLabel: string;
+  providerSource: PluginHookSearchProviderSource;
+  pluginId?: string;
+  intent: "switch-active" | "configure-provider";
+  activeProviderId?: string | null;
+  configured: boolean;
+};
+
+export type PluginHookBeforeProviderConfigureResult = {
+  note?: string;
+};
 
 export type PluginHookBeforeSearchProviderConfigureEvent = {
   providerId: string;
@@ -694,6 +725,18 @@ export type PluginHookBeforeSearchProviderConfigureResult = {
   note?: string;
 };
 
+export type PluginHookAfterProviderConfigureEvent = {
+  providerKind: PluginHookProviderKind;
+  slot: string;
+  providerId: string;
+  providerLabel: string;
+  providerSource: PluginHookSearchProviderSource;
+  pluginId?: string;
+  intent: "switch-active" | "configure-provider";
+  activeProviderId?: string | null;
+  configured: boolean;
+};
+
 export type PluginHookAfterSearchProviderConfigureEvent = {
   providerId: string;
   providerLabel: string;
@@ -702,6 +745,17 @@ export type PluginHookAfterSearchProviderConfigureEvent = {
   intent: "switch-active" | "configure-provider";
   activeProviderId?: string | null;
   configured: boolean;
+};
+
+export type PluginHookAfterProviderActivateEvent = {
+  providerKind: PluginHookProviderKind;
+  slot: string;
+  providerId: string;
+  providerLabel: string;
+  providerSource: PluginHookSearchProviderSource;
+  pluginId?: string;
+  previousProviderId?: string | null;
+  intent: "switch-active" | "configure-provider";
 };
 
 export type PluginHookAfterSearchProviderActivateEvent = {
@@ -1026,6 +1080,13 @@ export type PluginHookHandlerMap = {
     event: PluginHookBeforeAgentStartEvent,
     ctx: PluginHookAgentContext,
   ) => Promise<PluginHookBeforeAgentStartResult | void> | PluginHookBeforeAgentStartResult | void;
+  before_provider_configure: (
+    event: PluginHookBeforeProviderConfigureEvent,
+    ctx: PluginHookProviderLifecycleContext,
+  ) =>
+    | Promise<PluginHookBeforeProviderConfigureResult | void>
+    | PluginHookBeforeProviderConfigureResult
+    | void;
   before_search_provider_configure: (
     event: PluginHookBeforeSearchProviderConfigureEvent,
     ctx: PluginHookSearchProviderContext,
@@ -1033,9 +1094,17 @@ export type PluginHookHandlerMap = {
     | Promise<PluginHookBeforeSearchProviderConfigureResult | void>
     | PluginHookBeforeSearchProviderConfigureResult
     | void;
+  after_provider_configure: (
+    event: PluginHookAfterProviderConfigureEvent,
+    ctx: PluginHookProviderLifecycleContext,
+  ) => Promise<void> | void;
   after_search_provider_configure: (
     event: PluginHookAfterSearchProviderConfigureEvent,
     ctx: PluginHookSearchProviderContext,
+  ) => Promise<void> | void;
+  after_provider_activate: (
+    event: PluginHookAfterProviderActivateEvent,
+    ctx: PluginHookProviderLifecycleContext,
   ) => Promise<void> | void;
   after_search_provider_activate: (
     event: PluginHookAfterSearchProviderActivateEvent,

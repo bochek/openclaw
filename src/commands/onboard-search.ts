@@ -330,25 +330,48 @@ async function maybeNoteBeforeSearchProviderConfigure(params: {
   prompter: WizardPrompter;
   workspaceDir?: string;
 }): Promise<void> {
-  if (!params.hookRunner?.hasHooks("before_search_provider_configure")) {
+  if (
+    !params.hookRunner?.hasHooks("before_provider_configure") &&
+    !params.hookRunner?.hasHooks("before_search_provider_configure")
+  ) {
     return;
   }
-  const result = await params.hookRunner.runBeforeSearchProviderConfigure(
-    {
-      providerId: params.provider.providerId,
-      providerLabel: params.provider.providerLabel,
-      providerSource: params.provider.providerSource,
-      pluginId: params.provider.pluginId,
-      intent: params.intent,
-      activeProviderId: resolveCapabilitySlotSelection(params.config, "providers.search") ?? null,
-      configured: params.provider.configured,
-    },
-    {
-      workspaceDir: params.workspaceDir,
-    },
-  );
-  if (result?.note?.trim()) {
-    await params.prompter.note(result.note, "Provider setup");
+  const activeProviderId =
+    resolveCapabilitySlotSelection(params.config, "providers.search") ?? null;
+  const ctx = { workspaceDir: params.workspaceDir };
+  const genericResult = params.hookRunner.hasHooks("before_provider_configure")
+    ? await params.hookRunner.runBeforeProviderConfigure(
+        {
+          providerKind: "search",
+          slot: "providers.search",
+          providerId: params.provider.providerId,
+          providerLabel: params.provider.providerLabel,
+          providerSource: params.provider.providerSource,
+          pluginId: params.provider.pluginId,
+          intent: params.intent,
+          activeProviderId,
+          configured: params.provider.configured,
+        },
+        ctx,
+      )
+    : undefined;
+  const searchResult = params.hookRunner.hasHooks("before_search_provider_configure")
+    ? await params.hookRunner.runBeforeSearchProviderConfigure(
+        {
+          providerId: params.provider.providerId,
+          providerLabel: params.provider.providerLabel,
+          providerSource: params.provider.providerSource,
+          pluginId: params.provider.pluginId,
+          intent: params.intent,
+          activeProviderId,
+          configured: params.provider.configured,
+        },
+        ctx,
+      )
+    : undefined;
+  const note = [genericResult?.note, searchResult?.note].filter(hasNonEmptyString).join("\n\n");
+  if (note.trim()) {
+    await params.prompter.note(note, "Provider setup");
   }
 }
 
@@ -368,41 +391,65 @@ async function runAfterSearchProviderHooks(params: {
   const activeProviderAfter =
     resolveCapabilitySlotSelection(params.resultConfig, "providers.search") ?? null;
 
+  const ctx = { workspaceDir: params.workspaceDir };
+  const genericConfigureEvent = {
+    providerKind: "search" as const,
+    slot: "providers.search",
+    providerId: params.provider.providerId,
+    providerLabel: params.provider.providerLabel,
+    providerSource: params.provider.providerSource,
+    pluginId: params.provider.pluginId,
+    intent: params.intent,
+    activeProviderId: activeProviderAfter,
+    configured: params.provider.configured,
+  };
+  const searchConfigureEvent = {
+    providerId: params.provider.providerId,
+    providerLabel: params.provider.providerLabel,
+    providerSource: params.provider.providerSource,
+    pluginId: params.provider.pluginId,
+    intent: params.intent,
+    activeProviderId: activeProviderAfter,
+    configured: params.provider.configured,
+  };
+
+  if (params.hookRunner.hasHooks("after_provider_configure")) {
+    await params.hookRunner.runAfterProviderConfigure(genericConfigureEvent, ctx);
+  }
   if (params.hookRunner.hasHooks("after_search_provider_configure")) {
-    await params.hookRunner.runAfterSearchProviderConfigure(
-      {
-        providerId: params.provider.providerId,
-        providerLabel: params.provider.providerLabel,
-        providerSource: params.provider.providerSource,
-        pluginId: params.provider.pluginId,
-        intent: params.intent,
-        activeProviderId: activeProviderAfter,
-        configured: params.provider.configured,
-      },
-      {
-        workspaceDir: params.workspaceDir,
-      },
-    );
+    await params.hookRunner.runAfterSearchProviderConfigure(searchConfigureEvent, ctx);
   }
 
   if (
     activeProviderAfter === params.provider.providerId &&
     activeProviderBefore !== activeProviderAfter &&
-    params.hookRunner.hasHooks("after_search_provider_activate")
+    (params.hookRunner.hasHooks("after_provider_activate") ||
+      params.hookRunner.hasHooks("after_search_provider_activate"))
   ) {
-    await params.hookRunner.runAfterSearchProviderActivate(
-      {
-        providerId: params.provider.providerId,
-        providerLabel: params.provider.providerLabel,
-        providerSource: params.provider.providerSource,
-        pluginId: params.provider.pluginId,
-        previousProviderId: activeProviderBefore,
-        intent: params.intent,
-      },
-      {
-        workspaceDir: params.workspaceDir,
-      },
-    );
+    const genericActivateEvent = {
+      providerKind: "search" as const,
+      slot: "providers.search",
+      providerId: params.provider.providerId,
+      providerLabel: params.provider.providerLabel,
+      providerSource: params.provider.providerSource,
+      pluginId: params.provider.pluginId,
+      previousProviderId: activeProviderBefore,
+      intent: params.intent,
+    };
+    const searchActivateEvent = {
+      providerId: params.provider.providerId,
+      providerLabel: params.provider.providerLabel,
+      providerSource: params.provider.providerSource,
+      pluginId: params.provider.pluginId,
+      previousProviderId: activeProviderBefore,
+      intent: params.intent,
+    };
+    if (params.hookRunner.hasHooks("after_provider_activate")) {
+      await params.hookRunner.runAfterProviderActivate(genericActivateEvent, ctx);
+    }
+    if (params.hookRunner.hasHooks("after_search_provider_activate")) {
+      await params.hookRunner.runAfterSearchProviderActivate(searchActivateEvent, ctx);
+    }
   }
 }
 
