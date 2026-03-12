@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isSlackStreamingEnabled, resolveSlackStreamingThreadHint } from "./dispatch.js";
+import type { ReplyPayload } from "../../../auto-reply/types.js";
+import {
+  buildSlackStreamFallbackText,
+  isSlackStreamingEnabled,
+  resolveSlackStreamingThreadHint,
+  shouldFinalizeSlackStreamBeforePlainPayload,
+} from "./dispatch.js";
 
 describe("slack native streaming defaults", () => {
   it("is enabled for partial mode when native streaming is on", () => {
@@ -43,5 +49,48 @@ describe("slack native streaming thread hint", () => {
         messageTs: "1000.3",
       }),
     ).toBe("2000.1");
+  });
+});
+
+describe("slack native streaming fallback helpers", () => {
+  it("replays accumulated streamed text before the failing chunk", () => {
+    expect(buildSlackStreamFallbackText("First chunk", "Second chunk")).toBe(
+      "First chunk\nSecond chunk",
+    );
+    expect(buildSlackStreamFallbackText("", "Only chunk")).toBe("Only chunk");
+  });
+
+  it("finalizes an active stream before sending plain payloads", () => {
+    const mediaPayload: ReplyPayload = {
+      text: "Image caption",
+      mediaUrl: "file:///tmp/example.png",
+    };
+    const emptyTextPayload: ReplyPayload = { text: "   " };
+    const normalTextPayload: ReplyPayload = { text: "Continue streaming" };
+
+    expect(
+      shouldFinalizeSlackStreamBeforePlainPayload({
+        hasActiveStream: true,
+        payload: mediaPayload,
+      }),
+    ).toBe(true);
+    expect(
+      shouldFinalizeSlackStreamBeforePlainPayload({
+        hasActiveStream: true,
+        payload: emptyTextPayload,
+      }),
+    ).toBe(true);
+    expect(
+      shouldFinalizeSlackStreamBeforePlainPayload({
+        hasActiveStream: true,
+        payload: normalTextPayload,
+      }),
+    ).toBe(false);
+    expect(
+      shouldFinalizeSlackStreamBeforePlainPayload({
+        hasActiveStream: false,
+        payload: mediaPayload,
+      }),
+    ).toBe(false);
   });
 });
