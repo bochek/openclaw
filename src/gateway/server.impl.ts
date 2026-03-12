@@ -63,6 +63,7 @@ import {
   prepareSecretsRuntimeSnapshot,
   resolveCommandSecretsFromActiveRuntimeSnapshot,
 } from "../secrets/runtime.js";
+import { onSessionTranscriptUpdate } from "../sessions/transcript-events.js";
 import { runOnboardingWizard } from "../wizard/onboarding.js";
 import { createAuthRateLimiter, type AuthRateLimiter } from "./auth-rate-limit.js";
 import { startChannelHealthMonitor } from "./channel-health-monitor.js";
@@ -110,6 +111,7 @@ import {
 import { resolveHookClientIpConfig } from "./server/hooks.js";
 import { createReadinessChecker } from "./server/readiness.js";
 import { loadGatewayTlsRuntime } from "./server/tls.js";
+import { resolveSessionKeyForTranscriptFile } from "./session-transcript-key.js";
 import {
   ensureGatewayStartupAuth,
   mergeGatewayAuthConfig,
@@ -748,6 +750,24 @@ export async function startGatewayServer(
         broadcast("heartbeat", evt, { dropIfSlow: true });
       });
 
+  const transcriptUnsub = minimalTestGateway
+    ? null
+    : onSessionTranscriptUpdate((update) => {
+        const sessionKey =
+          update.sessionKey ?? resolveSessionKeyForTranscriptFile(update.sessionFile);
+        if (!sessionKey || update.message === undefined) {
+          return;
+        }
+        broadcast(
+          "session.message",
+          {
+            sessionKey,
+            message: update.message,
+          },
+          { dropIfSlow: true },
+        );
+      });
+
   let heartbeatRunner: HeartbeatRunner = minimalTestGateway
     ? {
         stop: () => {},
@@ -1035,6 +1055,7 @@ export async function startGatewayServer(
     mediaCleanup,
     agentUnsub,
     heartbeatUnsub,
+    transcriptUnsub,
     chatRunState,
     clients,
     configReloader,

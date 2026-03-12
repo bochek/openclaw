@@ -245,7 +245,7 @@ export function installSessionToolResultGuard(
       sessionManager as { getSessionFile?: () => string | null }
     ).getSessionFile?.();
     if (sessionFile) {
-      emitSessionTranscriptUpdate(sessionFile);
+      emitSessionTranscriptUpdate({ sessionFile, message: finalMessage });
     }
 
     if (toolCalls.length > 0) {
