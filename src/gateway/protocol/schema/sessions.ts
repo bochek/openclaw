@@ -51,6 +51,8 @@ export const SessionsCreateParamsSchema = Type.Object(
   {
     agentId: Type.Optional(NonEmptyString),
     label: Type.Optional(SessionLabelString),
+    task: Type.Optional(Type.String()),
+    message: Type.Optional(Type.String()),
   },
   { additionalProperties: false },
 );
@@ -63,6 +65,20 @@ export const SessionsSendParamsSchema = Type.Object(
     attachments: Type.Optional(Type.Array(Type.Unknown())),
     timeoutMs: Type.Optional(Type.Integer({ minimum: 0 })),
     idempotencyKey: Type.Optional(NonEmptyString),
+  },
+  { additionalProperties: false },
+);
+
+export const SessionsMessagesSubscribeParamsSchema = Type.Object(
+  {
+    key: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+export const SessionsMessagesUnsubscribeParamsSchema = Type.Object(
+  {
+    key: NonEmptyString,
   },
   { additionalProperties: false },
 );

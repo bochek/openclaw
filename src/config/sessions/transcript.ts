@@ -137,7 +137,7 @@ export async function appendAssistantMessageToSessionTranscript(params: {
   mediaUrls?: string[];
   /** Optional override for store path (mostly for tests). */
   storePath?: string;
-}): Promise<{ ok: true; sessionFile: string } | { ok: false; reason: string }> {
+}): Promise<{ ok: true; sessionFile: string; messageId: string } | { ok: false; reason: string }> {
   const sessionKey = params.sessionKey.trim();
   if (!sessionKey) {
     return { ok: false, reason: "missing sessionKey" };
@@ -203,8 +203,8 @@ export async function appendAssistantMessageToSessionTranscript(params: {
     timestamp: Date.now(),
   } as Parameters<SessionManager["appendMessage"]>[0];
   const sessionManager = SessionManager.open(sessionFile);
-  sessionManager.appendMessage(message);
+  const messageId = sessionManager.appendMessage(message);
 
-  emitSessionTranscriptUpdate({ sessionFile, sessionKey, message });
-  return { ok: true, sessionFile };
+  emitSessionTranscriptUpdate({ sessionFile, sessionKey, message, messageId });
+  return { ok: true, sessionFile, messageId };
 }

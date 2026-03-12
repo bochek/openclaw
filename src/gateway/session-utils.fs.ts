@@ -71,6 +71,27 @@ function setCachedSessionTitleFields(cacheKey: string, stat: fs.Stats, value: Se
   }
 }
 
+export function attachOpenClawTranscriptMeta(
+  message: unknown,
+  meta: Record<string, unknown>,
+): unknown {
+  if (!message || typeof message !== "object" || Array.isArray(message)) {
+    return message;
+  }
+  const record = message as Record<string, unknown>;
+  const existing =
+    record.__openclaw && typeof record.__openclaw === "object" && !Array.isArray(record.__openclaw)
+      ? (record.__openclaw as Record<string, unknown>)
+      : {};
+  return {
+    ...record,
+    __openclaw: {
+      ...existing,
+      ...meta,
+    },
+  };
+}
+
 export function readSessionMessages(
   sessionId: string,
   storePath: string | undefined,
@@ -85,6 +106,7 @@ export function readSessionMessages(
 
   const lines = fs.readFileSync(filePath, "utf-8").split(/\r?\n/);
   const messages: unknown[] = [];
+  let messageSeq = 0;
   for (const line of lines) {
     if (!line.trim()) {
       continue;
@@ -92,7 +114,13 @@ export function readSessionMessages(
     try {
       const parsed = JSON.parse(line);
       if (parsed?.message) {
-        messages.push(parsed.message);
+        messageSeq += 1;
+        messages.push(
+          attachOpenClawTranscriptMeta(parsed.message, {
+            ...(typeof parsed.id === "string" ? { id: parsed.id } : {}),
+            seq: messageSeq,
+          }),
+        );
         continue;
       }
 
@@ -101,6 +129,7 @@ export function readSessionMessages(
       if (parsed?.type === "compaction") {
         const ts = typeof parsed.timestamp === "string" ? Date.parse(parsed.timestamp) : Number.NaN;
         const timestamp = Number.isFinite(ts) ? ts : Date.now();
+        messageSeq += 1;
         messages.push({
           role: "system",
           content: [{ type: "text", text: "Compaction" }],
@@ -108,6 +137,7 @@ export function readSessionMessages(
           __openclaw: {
             kind: "compaction",
             id: typeof parsed.id === "string" ? parsed.id : undefined,
+            seq: messageSeq,
           },
         });
       }

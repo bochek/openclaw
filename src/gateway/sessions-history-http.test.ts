@@ -105,6 +105,15 @@ describe("session history HTTP endpoints", () => {
       expect(body.sessionKey).toBe("agent:main:main");
       expect(body.messages).toHaveLength(1);
       expect(body.messages?.[0]?.content?.[0]?.text).toBe("hello from history");
+      expect(
+        (
+          body.messages?.[0] as {
+            __openclaw?: { id?: string; seq?: number };
+          }
+        )?.__openclaw,
+      ).toMatchObject({
+        seq: 1,
+      });
     } finally {
       await harness.close();
     }
@@ -210,6 +219,17 @@ describe("session history HTTP endpoints", () => {
         (messageEvent.data as { message?: { content?: Array<{ text?: string }> } }).message
           ?.content?.[0]?.text,
       ).toBe("second message");
+      expect((messageEvent.data as { messageSeq?: number }).messageSeq).toBe(2);
+      expect(
+        (
+          messageEvent.data as {
+            message?: { __openclaw?: { id?: string; seq?: number } };
+          }
+        ).message?.__openclaw,
+      ).toMatchObject({
+        id: appended.messageId,
+        seq: 2,
+      });
 
       await reader?.cancel();
     } finally {

@@ -193,6 +193,7 @@ describe("gateway server chat", () => {
       });
       expect(res.ok).toBe(true);
       expect(res.payload?.runId).toBe("idem-sessions-send-1");
+      expect(res.payload?.messageSeq).toBe(1);
 
       await waitFor(() => spy.mock.calls.length > callsBefore, 1_000);
       const ctx = spy.mock.calls.at(-1)?.[0] as { Body?: string; SessionKey?: string } | undefined;
@@ -258,8 +259,17 @@ describe("gateway server chat", () => {
         runId: "idem-sessions-abort-1",
       });
       expect(abortRes.ok).toBe(true);
-      expect(abortRes.payload?.aborted).toBe(true);
+      expect(abortRes.payload?.abortedRunId).toBe("idem-sessions-abort-1");
+      expect(abortRes.payload?.status).toBe("aborted");
       await waitFor(() => aborted, 1_000);
+
+      const idleAbortRes = await rpcReq(ws, "sessions.abort", {
+        key: "agent:main:dashboard:test-abort",
+        runId: "idem-sessions-abort-1",
+      });
+      expect(idleAbortRes.ok).toBe(true);
+      expect(idleAbortRes.payload?.abortedRunId).toBeNull();
+      expect(idleAbortRes.payload?.status).toBe("no-active-run");
     } finally {
       testState.sessionStorePath = undefined;
       await fs.rm(dir, { recursive: true, force: true });

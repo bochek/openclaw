@@ -15,6 +15,7 @@ import {
 } from "./http-common.js";
 import { getBearerToken, getHeader } from "./http-utils.js";
 import {
+  attachOpenClawTranscriptMeta,
   readSessionMessages,
   resolveGatewaySessionStoreTarget,
   resolveSessionTranscriptCandidates,
@@ -171,15 +172,22 @@ export async function handleSessionHistoryHttpRequest(
       return;
     }
     if (update.message !== undefined) {
+      const messageSeq = sentMessages.length + 1;
+      const nextMessage = attachOpenClawTranscriptMeta(update.message, {
+        ...(typeof update.messageId === "string" ? { id: update.messageId } : {}),
+        seq: messageSeq,
+      });
       if (limit === undefined) {
-        sentMessages = [...sentMessages, update.message];
+        sentMessages = [...sentMessages, nextMessage];
         sseWrite(res, "message", {
           sessionKey: target.canonicalKey,
-          message: update.message,
+          message: nextMessage,
+          ...(typeof update.messageId === "string" ? { messageId: update.messageId } : {}),
+          messageSeq,
         });
         return;
       }
-      sentMessages = maybeLimitMessages([...sentMessages, update.message], limit);
+      sentMessages = maybeLimitMessages([...sentMessages, nextMessage], limit);
       sseWrite(res, "history", {
         sessionKey: target.canonicalKey,
         messages: sentMessages,

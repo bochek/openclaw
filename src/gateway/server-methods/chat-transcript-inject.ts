@@ -72,6 +72,7 @@ export function appendInjectedAssistantMessageToTranscript(params: {
     emitSessionTranscriptUpdate({
       sessionFile: params.transcriptPath,
       message: messageBody,
+      messageId,
     });
     return { ok: true, messageId, message: messageBody };
   } catch (err) {

@@ -17,6 +17,7 @@ import {
   trackConnectChallengeNonce,
   writeSessionStore,
 } from "./test-helpers.js";
+import { getReplyFromConfig } from "./test-helpers.mocks.js";
 
 const sessionCleanupMocks = vi.hoisted(() => ({
   clearSessionQueues: vi.fn(() => ({ followupCleared: 0, laneCleared: 0, keys: [] })),
@@ -270,6 +271,42 @@ describe("gateway server sessions", () => {
       type: "session",
       id: created.payload?.sessionId,
     });
+
+    ws.close();
+  });
+
+  test("sessions.create can start the first agent turn from an initial task", async () => {
+    const { ws } = await openClient();
+    const replySpy = vi.mocked(getReplyFromConfig);
+    const callsBefore = replySpy.mock.calls.length;
+
+    const created = await rpcReq<{
+      key?: string;
+      sessionId?: string;
+      runStarted?: boolean;
+      runId?: string;
+      messageSeq?: number;
+    }>(ws, "sessions.create", {
+      agentId: "ops",
+      label: "Dashboard Chat",
+      task: "hello from create",
+    });
+
+    expect(created.ok).toBe(true);
+    expect(created.payload?.key).toMatch(/^agent:ops:dashboard:/);
+    expect(created.payload?.sessionId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+    expect(created.payload?.runStarted).toBe(true);
+    expect(created.payload?.runId).toBeTruthy();
+    expect(created.payload?.messageSeq).toBe(1);
+
+    await vi.waitFor(() => replySpy.mock.calls.length > callsBefore);
+    const ctx = replySpy.mock.calls.at(-1)?.[0] as
+      | { Body?: string; SessionKey?: string }
+      | undefined;
+    expect(ctx?.Body).toContain("hello from create");
+    expect(ctx?.SessionKey).toBe(created.payload?.key);
 
     ws.close();
   });

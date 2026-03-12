@@ -77,7 +77,11 @@ import { ExecApprovalManager } from "./exec-approval-manager.js";
 import { NodeRegistry } from "./node-registry.js";
 import type { startBrowserControlServerIfEnabled } from "./server-browser.js";
 import { createChannelManager } from "./server-channels.js";
-import { createAgentEventHandler, createSessionEventSubscriberRegistry } from "./server-chat.js";
+import {
+  createAgentEventHandler,
+  createSessionEventSubscriberRegistry,
+  createSessionMessageSubscriberRegistry,
+} from "./server-chat.js";
 import { createGatewayCloseHandler } from "./server-close.js";
 import { buildGatewayCronService } from "./server-cron.js";
 import { startGatewayDiscovery } from "./server-discovery-runtime.js";
@@ -112,6 +116,11 @@ import { resolveHookClientIpConfig } from "./server/hooks.js";
 import { createReadinessChecker } from "./server/readiness.js";
 import { loadGatewayTlsRuntime } from "./server/tls.js";
 import { resolveSessionKeyForTranscriptFile } from "./session-transcript-key.js";
+import {
+  attachOpenClawTranscriptMeta,
+  loadSessionEntry,
+  readSessionMessages,
+} from "./session-utils.js";
 import {
   ensureGatewayStartupAuth,
   mergeGatewayAuthConfig,
@@ -634,6 +643,7 @@ export async function startGatewayServer(
   const nodePresenceTimers = new Map<string, ReturnType<typeof setInterval>>();
   const nodeSubscriptions = createNodeSubscriptionManager();
   const sessionEventSubscribers = createSessionEventSubscriberRegistry();
+  const sessionMessageSubscribers = createSessionMessageSubscriberRegistry();
   const nodeSendEvent = (opts: { nodeId: string; event: string; payloadJSON?: string | null }) => {
     const payload = safeParseJson(opts.payloadJSON ?? null);
     nodeRegistry.sendEvent(opts.nodeId, opts.event, payload);
@@ -760,15 +770,31 @@ export async function startGatewayServer(
         if (!sessionKey || update.message === undefined) {
           return;
         }
-        const connIds = sessionEventSubscribers.getAll();
+        const connIds = new Set<string>();
+        for (const connId of sessionEventSubscribers.getAll()) {
+          connIds.add(connId);
+        }
+        for (const connId of sessionMessageSubscribers.get(sessionKey)) {
+          connIds.add(connId);
+        }
         if (connIds.size === 0) {
           return;
         }
+        const { entry, storePath } = loadSessionEntry(sessionKey);
+        const messageSeq = entry?.sessionId
+          ? readSessionMessages(entry.sessionId, storePath, entry.sessionFile).length
+          : undefined;
+        const message = attachOpenClawTranscriptMeta(update.message, {
+          ...(typeof update.messageId === "string" ? { id: update.messageId } : {}),
+          ...(typeof messageSeq === "number" ? { seq: messageSeq } : {}),
+        });
         broadcastToConnIds(
           "session.message",
           {
             sessionKey,
-            message: update.message,
+            message,
+            ...(typeof update.messageId === "string" ? { messageId: update.messageId } : {}),
+            ...(typeof messageSeq === "number" ? { messageSeq } : {}),
           },
           connIds,
           { dropIfSlow: true },
@@ -882,7 +908,12 @@ export async function startGatewayServer(
     removeChatRun,
     subscribeSessionEvents: sessionEventSubscribers.subscribe,
     unsubscribeSessionEvents: sessionEventSubscribers.unsubscribe,
-    unsubscribeAllSessionEvents: sessionEventSubscribers.unsubscribe,
+    subscribeSessionMessageEvents: sessionMessageSubscribers.subscribe,
+    unsubscribeSessionMessageEvents: sessionMessageSubscribers.unsubscribe,
+    unsubscribeAllSessionEvents: (connId: string) => {
+      sessionEventSubscribers.unsubscribe(connId);
+      sessionMessageSubscribers.unsubscribeAll(connId);
+    },
     getSessionEventSubscriberConnIds: sessionEventSubscribers.getAll,
     registerToolEventRecipient: toolEventRecipients.add,
     dedupe,

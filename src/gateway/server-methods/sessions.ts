@@ -22,6 +22,8 @@ import {
   validateSessionsCreateParams,
   validateSessionsDeleteParams,
   validateSessionsListParams,
+  validateSessionsMessagesSubscribeParams,
+  validateSessionsMessagesUnsubscribeParams,
   validateSessionsPatchParams,
   validateSessionsPreviewParams,
   validateSessionsResetParams,
@@ -81,6 +83,30 @@ function resolveGatewaySessionTargetFromKey(key: string) {
   const cfg = loadConfig();
   const target = resolveGatewaySessionStoreTarget({ cfg, key });
   return { cfg, target, storePath: target.storePath };
+}
+
+function resolveOptionalInitialSessionMessage(params: {
+  task?: unknown;
+  message?: unknown;
+}): string | undefined {
+  if (typeof params.task === "string" && params.task.trim()) {
+    return params.task;
+  }
+  if (typeof params.message === "string" && params.message.trim()) {
+    return params.message;
+  }
+  return undefined;
+}
+
+function shouldAttachPendingMessageSeq(params: { payload: unknown; cached?: boolean }): boolean {
+  if (params.cached) {
+    return false;
+  }
+  const status =
+    params.payload && typeof params.payload === "object"
+      ? (params.payload as { status?: unknown }).status
+      : undefined;
+  return status === "started";
 }
 
 function emitSessionsChanged(
@@ -246,6 +272,52 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
     respond(true, { subscribed: false }, undefined);
   },
+  "sessions.messages.subscribe": ({ params, client, context, respond }) => {
+    if (
+      !assertValidParams(
+        params,
+        validateSessionsMessagesSubscribeParams,
+        "sessions.messages.subscribe",
+        respond,
+      )
+    ) {
+      return;
+    }
+    const connId = client?.connId?.trim();
+    const key = requireSessionKey((params as { key?: unknown }).key, respond);
+    if (!key) {
+      return;
+    }
+    const { canonicalKey } = loadSessionEntry(key);
+    if (connId) {
+      context.subscribeSessionMessageEvents(connId, canonicalKey);
+      respond(true, { subscribed: true, key: canonicalKey }, undefined);
+      return;
+    }
+    respond(true, { subscribed: false, key: canonicalKey }, undefined);
+  },
+  "sessions.messages.unsubscribe": ({ params, client, context, respond }) => {
+    if (
+      !assertValidParams(
+        params,
+        validateSessionsMessagesUnsubscribeParams,
+        "sessions.messages.unsubscribe",
+        respond,
+      )
+    ) {
+      return;
+    }
+    const connId = client?.connId?.trim();
+    const key = requireSessionKey((params as { key?: unknown }).key, respond);
+    if (!key) {
+      return;
+    }
+    const { canonicalKey } = loadSessionEntry(key);
+    if (connId) {
+      context.unsubscribeSessionMessageEvents(connId, canonicalKey);
+    }
+    respond(true, { subscribed: false, key: canonicalKey }, undefined);
+  },
   "sessions.preview": ({ params, respond }) => {
     if (!assertValidParams(params, validateSessionsPreviewParams, "sessions.preview", respond)) {
       return;
@@ -322,7 +394,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     }
     respond(true, { ok: true, key: resolved.key }, undefined);
   },
-  "sessions.create": async ({ params, respond, context }) => {
+  "sessions.create": async ({ req, params, respond, context, client, isWebchatConnect }) => {
     if (!assertValidParams(params, validateSessionsCreateParams, "sessions.create", respond)) {
       return;
     }
@@ -366,6 +438,45 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       );
       return;
     }
+
+    const initialMessage = resolveOptionalInitialSessionMessage(p);
+    let runPayload: Record<string, unknown> | undefined;
+    let runError: unknown;
+    let runMeta: Record<string, unknown> | undefined;
+    const messageSeq = initialMessage
+      ? readSessionMessages(created.entry.sessionId, target.storePath, created.entry.sessionFile)
+          .length + 1
+      : undefined;
+
+    if (initialMessage) {
+      await chatHandlers["chat.send"]({
+        req,
+        params: {
+          sessionKey: target.canonicalKey,
+          message: initialMessage,
+          idempotencyKey: randomUUID(),
+        },
+        respond: (ok, payload, error, meta) => {
+          if (ok && payload && typeof payload === "object") {
+            runPayload = payload as Record<string, unknown>;
+          } else {
+            runError = error;
+          }
+          runMeta = meta;
+        },
+        context,
+        client,
+        isWebchatConnect,
+      });
+    }
+
+    const runStarted =
+      runPayload !== undefined &&
+      shouldAttachPendingMessageSeq({
+        payload: runPayload,
+        cached: runMeta?.cached === true,
+      });
+
     respond(
       true,
       {
@@ -373,6 +484,10 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         key: target.canonicalKey,
         sessionId: created.entry.sessionId,
         entry: created.entry,
+        runStarted,
+        ...(runPayload ? runPayload : {}),
+        ...(runStarted && typeof messageSeq === "number" ? { messageSeq } : {}),
+        ...(runError ? { runError } : {}),
       },
       undefined,
     );
@@ -380,6 +495,12 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       sessionKey: target.canonicalKey,
       reason: "create",
     });
+    if (runStarted) {
+      emitSessionsChanged(context, {
+        sessionKey: target.canonicalKey,
+        reason: "send",
+      });
+    }
   },
   "sessions.send": async ({ req, params, respond, context, client, isWebchatConnect }) => {
     if (!assertValidParams(params, validateSessionsSendParams, "sessions.send", respond)) {
@@ -390,7 +511,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
     if (!key) {
       return;
     }
-    const { entry, canonicalKey } = loadSessionEntry(key);
+    const { entry, canonicalKey, storePath } = loadSessionEntry(key);
     if (!entry?.sessionId) {
       respond(
         false,
@@ -399,6 +520,8 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       );
       return;
     }
+    const messageSeq =
+      readSessionMessages(entry.sessionId, storePath, entry.sessionFile).length + 1;
     let sendAcked = false;
     await chatHandlers["chat.send"]({
       req,
@@ -415,6 +538,18 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       },
       respond: (ok, payload, error, meta) => {
         sendAcked = ok;
+        if (ok && shouldAttachPendingMessageSeq({ payload, cached: meta?.cached === true })) {
+          respond(
+            true,
+            {
+              ...(payload && typeof payload === "object" ? payload : {}),
+              messageSeq,
+            },
+            undefined,
+            meta,
+          );
+          return;
+        }
         respond(ok, payload, error, meta);
       },
       context,
@@ -444,7 +579,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       canonicalKey,
       runId: typeof p.runId === "string" ? p.runId : undefined,
     });
-    let aborted = false;
+    let abortedRunId: string | null = null;
     await chatHandlers["chat.abort"]({
       req,
       params: {
@@ -452,18 +587,35 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         runId: typeof p.runId === "string" ? p.runId : undefined,
       },
       respond: (ok, payload, error, meta) => {
-        aborted =
-          ok &&
-          Boolean(
-            payload && typeof payload === "object" && (payload as { aborted?: boolean }).aborted,
-          );
-        respond(ok, payload, error, meta);
+        if (!ok) {
+          respond(ok, payload, error, meta);
+          return;
+        }
+        const runIds =
+          payload &&
+          typeof payload === "object" &&
+          Array.isArray((payload as { runIds?: unknown[] }).runIds)
+            ? (payload as { runIds: unknown[] }).runIds.filter(
+                (value): value is string => typeof value === "string" && value.trim().length > 0,
+              )
+            : [];
+        abortedRunId = runIds[0] ?? null;
+        respond(
+          true,
+          {
+            ok: true,
+            abortedRunId,
+            status: abortedRunId ? "aborted" : "no-active-run",
+          },
+          undefined,
+          meta,
+        );
       },
       context,
       client,
       isWebchatConnect,
     });
-    if (aborted) {
+    if (abortedRunId) {
       emitSessionsChanged(context, {
         sessionKey: canonicalKey,
         reason: "abort",

@@ -136,6 +136,115 @@ describe("session.message websocket events", () => {
           (event.payload as { message?: { content?: Array<{ text?: string }> } }).message
             ?.content?.[0]?.text,
         ).toBe("live websocket message");
+        expect((event.payload as { messageSeq?: number }).messageSeq).toBe(1);
+        expect(
+          (
+            event.payload as {
+              message?: { __openclaw?: { id?: string; seq?: number } };
+            }
+          ).message?.__openclaw,
+        ).toMatchObject({
+          id: appended.messageId,
+          seq: 1,
+        });
+      } finally {
+        ws.close();
+      }
+    } finally {
+      await harness.close();
+    }
+  });
+
+  test("sessions.messages.subscribe only delivers transcript events for the requested session", async () => {
+    const storePath = await createSessionStoreFile();
+    await writeSessionStore({
+      entries: {
+        main: {
+          sessionId: "sess-main",
+          updatedAt: Date.now(),
+        },
+        worker: {
+          sessionId: "sess-worker",
+          updatedAt: Date.now(),
+        },
+      },
+      storePath,
+    });
+
+    const harness = await createGatewaySuiteHarness();
+    try {
+      const ws = await harness.openWs();
+      try {
+        await connectOk(ws, { scopes: ["operator.read"] });
+        const subscribeRes = await rpcReq(ws, "sessions.messages.subscribe", {
+          key: "agent:main:main",
+        });
+        expect(subscribeRes.ok).toBe(true);
+        expect(subscribeRes.payload?.subscribed).toBe(true);
+        expect(subscribeRes.payload?.key).toBe("agent:main:main");
+
+        const mainEvent = onceMessage(
+          ws,
+          (message) =>
+            message.type === "event" &&
+            message.event === "session.message" &&
+            (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
+              "agent:main:main",
+        );
+        const workerEvent = Promise.race([
+          onceMessage(
+            ws,
+            (message) =>
+              message.type === "event" &&
+              message.event === "session.message" &&
+              (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
+                "agent:main:worker",
+          ).then(() => "received"),
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 300)),
+        ]);
+
+        const [mainAppend] = await Promise.all([
+          appendAssistantMessageToSessionTranscript({
+            sessionKey: "agent:main:main",
+            text: "main only",
+            storePath,
+          }),
+          mainEvent,
+        ]);
+        expect(mainAppend.ok).toBe(true);
+
+        const workerAppend = await appendAssistantMessageToSessionTranscript({
+          sessionKey: "agent:main:worker",
+          text: "worker hidden",
+          storePath,
+        });
+        expect(workerAppend.ok).toBe(true);
+        await expect(workerEvent).resolves.toBe("timeout");
+
+        const unsubscribeRes = await rpcReq(ws, "sessions.messages.unsubscribe", {
+          key: "agent:main:main",
+        });
+        expect(unsubscribeRes.ok).toBe(true);
+        expect(unsubscribeRes.payload?.subscribed).toBe(false);
+
+        const postUnsubscribeEvent = Promise.race([
+          onceMessage(
+            ws,
+            (message) =>
+              message.type === "event" &&
+              message.event === "session.message" &&
+              (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
+                "agent:main:main",
+          ).then(() => "received"),
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 300)),
+        ]);
+        const hiddenAppend = await appendAssistantMessageToSessionTranscript({
+          sessionKey: "agent:main:main",
+          text: "hidden after unsubscribe",
+          storePath,
+        });
+        expect(hiddenAppend.ok).toBe(true);
+        await expect(postUnsubscribeEvent).resolves.toBe("timeout");
       } finally {
         ws.close();
       }

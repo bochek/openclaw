@@ -56,6 +56,8 @@ const BASE_METHODS = [
   "sessions.list",
   "sessions.subscribe",
   "sessions.unsubscribe",
+  "sessions.messages.subscribe",
+  "sessions.messages.unsubscribe",
   "sessions.preview",
   "sessions.create",
   "sessions.send",

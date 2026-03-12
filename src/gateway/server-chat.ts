@@ -244,6 +244,14 @@ export type SessionEventSubscriberRegistry = {
   clear: () => void;
 };
 
+export type SessionMessageSubscriberRegistry = {
+  subscribe: (connId: string, sessionKey: string) => void;
+  unsubscribe: (connId: string, sessionKey: string) => void;
+  unsubscribeAll: (connId: string) => void;
+  get: (sessionKey: string) => ReadonlySet<string>;
+  clear: () => void;
+};
+
 type ToolRecipientEntry = {
   connIds: Set<string>;
   updatedAt: number;
@@ -275,6 +283,84 @@ export function createSessionEventSubscriberRegistry(): SessionEventSubscriberRe
     getAll: () => (connIds.size > 0 ? connIds : empty),
     clear: () => {
       connIds.clear();
+    },
+  };
+}
+
+export function createSessionMessageSubscriberRegistry(): SessionMessageSubscriberRegistry {
+  const sessionToConnIds = new Map<string, Set<string>>();
+  const connToSessionKeys = new Map<string, Set<string>>();
+  const empty = new Set<string>();
+
+  const normalize = (value: string): string => value.trim();
+
+  return {
+    subscribe: (connId: string, sessionKey: string) => {
+      const normalizedConnId = normalize(connId);
+      const normalizedSessionKey = normalize(sessionKey);
+      if (!normalizedConnId || !normalizedSessionKey) {
+        return;
+      }
+      const connIds = sessionToConnIds.get(normalizedSessionKey) ?? new Set<string>();
+      connIds.add(normalizedConnId);
+      sessionToConnIds.set(normalizedSessionKey, connIds);
+
+      const sessionKeys = connToSessionKeys.get(normalizedConnId) ?? new Set<string>();
+      sessionKeys.add(normalizedSessionKey);
+      connToSessionKeys.set(normalizedConnId, sessionKeys);
+    },
+    unsubscribe: (connId: string, sessionKey: string) => {
+      const normalizedConnId = normalize(connId);
+      const normalizedSessionKey = normalize(sessionKey);
+      if (!normalizedConnId || !normalizedSessionKey) {
+        return;
+      }
+      const connIds = sessionToConnIds.get(normalizedSessionKey);
+      if (connIds) {
+        connIds.delete(normalizedConnId);
+        if (connIds.size === 0) {
+          sessionToConnIds.delete(normalizedSessionKey);
+        }
+      }
+      const sessionKeys = connToSessionKeys.get(normalizedConnId);
+      if (sessionKeys) {
+        sessionKeys.delete(normalizedSessionKey);
+        if (sessionKeys.size === 0) {
+          connToSessionKeys.delete(normalizedConnId);
+        }
+      }
+    },
+    unsubscribeAll: (connId: string) => {
+      const normalizedConnId = normalize(connId);
+      if (!normalizedConnId) {
+        return;
+      }
+      const sessionKeys = connToSessionKeys.get(normalizedConnId);
+      if (!sessionKeys) {
+        return;
+      }
+      for (const sessionKey of sessionKeys) {
+        const connIds = sessionToConnIds.get(sessionKey);
+        if (!connIds) {
+          continue;
+        }
+        connIds.delete(normalizedConnId);
+        if (connIds.size === 0) {
+          sessionToConnIds.delete(sessionKey);
+        }
+      }
+      connToSessionKeys.delete(normalizedConnId);
+    },
+    get: (sessionKey: string) => {
+      const normalizedSessionKey = normalize(sessionKey);
+      if (!normalizedSessionKey) {
+        return empty;
+      }
+      return sessionToConnIds.get(normalizedSessionKey) ?? empty;
+    },
+    clear: () => {
+      sessionToConnIds.clear();
+      connToSessionKeys.clear();
     },
   };
 }
