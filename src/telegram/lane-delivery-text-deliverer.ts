@@ -536,11 +536,17 @@ export function createLaneTextDeliverer(params: CreateLaneTextDelivererParams) {
           `telegram: preview final too long for edit (${text.length} > ${params.draftMaxChars}); falling back to standard send`,
         );
       }
+      const shouldCleanupTransientPreview =
+        params.activePreviewLifecycleByLane[laneName] === "transient";
       const previewMessageIdBeforeFallback = lane.stream?.messageId();
       await params.stopDraftLane(lane);
       const previewMessageIdAfterStop = previewMessageIdBeforeFallback ?? lane.stream?.messageId();
       const delivered = await params.sendPayload(params.applyTextToPayload(payload, text));
-      if (delivered && typeof previewMessageIdAfterStop === "number") {
+      if (
+        delivered &&
+        shouldCleanupTransientPreview &&
+        typeof previewMessageIdAfterStop === "number"
+      ) {
         try {
           await params.deletePreviewMessage(previewMessageIdAfterStop);
           clearActivePreviewState(laneName, lane);
