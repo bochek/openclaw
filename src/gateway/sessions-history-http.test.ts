@@ -119,6 +119,70 @@ describe("session history HTTP endpoints", () => {
     }
   });
 
+  test("supports cursor pagination over direct REST while preserving the messages field", async () => {
+    const { storePath } = await seedSession({ text: "first message" });
+    const second = await appendAssistantMessageToSessionTranscript({
+      sessionKey: "agent:main:main",
+      text: "second message",
+      storePath,
+    });
+    expect(second.ok).toBe(true);
+    const third = await appendAssistantMessageToSessionTranscript({
+      sessionKey: "agent:main:main",
+      text: "third message",
+      storePath,
+    });
+    expect(third.ok).toBe(true);
+
+    const harness = await createGatewaySuiteHarness();
+    try {
+      const firstPage = await fetch(
+        `http://127.0.0.1:${harness.port}/sessions/${encodeURIComponent("agent:main:main")}/history?limit=2`,
+        {
+          headers: AUTH_HEADER,
+        },
+      );
+      expect(firstPage.status).toBe(200);
+      const firstBody = (await firstPage.json()) as {
+        sessionKey?: string;
+        items?: Array<{ content?: Array<{ text?: string }>; __openclaw?: { seq?: number } }>;
+        messages?: Array<{ content?: Array<{ text?: string }>; __openclaw?: { seq?: number } }>;
+        nextCursor?: string;
+        hasMore?: boolean;
+      };
+      expect(firstBody.sessionKey).toBe("agent:main:main");
+      expect(firstBody.items?.map((message) => message.content?.[0]?.text)).toEqual([
+        "second message",
+        "third message",
+      ]);
+      expect(firstBody.messages?.map((message) => message.__openclaw?.seq)).toEqual([2, 3]);
+      expect(firstBody.hasMore).toBe(true);
+      expect(firstBody.nextCursor).toBe("2");
+
+      const secondPage = await fetch(
+        `http://127.0.0.1:${harness.port}/sessions/${encodeURIComponent("agent:main:main")}/history?limit=2&cursor=${encodeURIComponent(firstBody.nextCursor ?? "")}`,
+        {
+          headers: AUTH_HEADER,
+        },
+      );
+      expect(secondPage.status).toBe(200);
+      const secondBody = (await secondPage.json()) as {
+        items?: Array<{ content?: Array<{ text?: string }>; __openclaw?: { seq?: number } }>;
+        messages?: Array<{ __openclaw?: { seq?: number } }>;
+        nextCursor?: string;
+        hasMore?: boolean;
+      };
+      expect(secondBody.items?.map((message) => message.content?.[0]?.text)).toEqual([
+        "first message",
+      ]);
+      expect(secondBody.messages?.map((message) => message.__openclaw?.seq)).toEqual([1]);
+      expect(secondBody.hasMore).toBe(false);
+      expect(secondBody.nextCursor).toBeUndefined();
+    } finally {
+      await harness.close();
+    }
+  });
+
   test("streams bounded history windows over SSE", async () => {
     const { storePath } = await seedSession({ text: "first message" });
     const second = await appendAssistantMessageToSessionTranscript({

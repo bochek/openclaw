@@ -594,10 +594,17 @@ function readTailChunk(fd: number, size: number, maxBytes: number): string | nul
   return buf.toString("utf-8");
 }
 
+function resolvePositiveUsageNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
 function extractLatestUsageFromTranscriptChunk(
   chunk: string,
 ): SessionTranscriptUsageSnapshot | null {
   const lines = chunk.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  const snapshot: SessionTranscriptUsageSnapshot = {};
+  let sawSnapshot = false;
+
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     const line = lines[i];
     try {
@@ -620,7 +627,7 @@ function extractLatestUsageFromTranscriptChunk(
             ? parsed.usage
             : undefined;
       const usage = normalizeUsage(usageRaw);
-      const totalTokens = deriveSessionTotalTokens({ usage });
+      const totalTokens = resolvePositiveUsageNumber(deriveSessionTotalTokens({ usage }));
       const costUsd = extractTranscriptUsageCost(usageRaw);
       const modelProvider =
         typeof message.provider === "string"
@@ -637,8 +644,8 @@ function extractLatestUsageFromTranscriptChunk(
       const isDeliveryMirror = modelProvider === "openclaw" && model === "delivery-mirror";
       const hasMeaningfulUsage =
         hasNonzeroUsage(usage) ||
-        (typeof totalTokens === "number" && Number.isFinite(totalTokens) && totalTokens > 0) ||
-        (typeof costUsd === "number" && Number.isFinite(costUsd) && costUsd > 0);
+        typeof totalTokens === "number" ||
+        (typeof costUsd === "number" && Number.isFinite(costUsd));
       const hasModelIdentity = Boolean(modelProvider || model);
       if (!hasMeaningfulUsage && !hasModelIdentity) {
         continue;
@@ -646,23 +653,51 @@ function extractLatestUsageFromTranscriptChunk(
       if (isDeliveryMirror && !hasMeaningfulUsage) {
         continue;
       }
-      return {
-        ...(modelProvider ? { modelProvider } : {}),
-        ...(model ? { model } : {}),
-        ...(typeof usage?.input === "number" ? { inputTokens: usage.input } : {}),
-        ...(typeof usage?.output === "number" ? { outputTokens: usage.output } : {}),
-        ...(typeof usage?.cacheRead === "number" ? { cacheRead: usage.cacheRead } : {}),
-        ...(typeof usage?.cacheWrite === "number" ? { cacheWrite: usage.cacheWrite } : {}),
-        ...(typeof totalTokens === "number" && Number.isFinite(totalTokens) && totalTokens > 0
-          ? { totalTokens, totalTokensFresh: true }
-          : {}),
-        ...(typeof costUsd === "number" && Number.isFinite(costUsd) ? { costUsd } : {}),
-      };
+
+      sawSnapshot = true;
+      if (!snapshot.modelProvider && modelProvider) {
+        snapshot.modelProvider = modelProvider;
+      }
+      if (!snapshot.model && model) {
+        snapshot.model = model;
+      }
+      if (snapshot.inputTokens === undefined) {
+        snapshot.inputTokens = resolvePositiveUsageNumber(usage?.input);
+      }
+      if (snapshot.outputTokens === undefined) {
+        snapshot.outputTokens = resolvePositiveUsageNumber(usage?.output);
+      }
+      if (snapshot.cacheRead === undefined) {
+        snapshot.cacheRead = resolvePositiveUsageNumber(usage?.cacheRead);
+      }
+      if (snapshot.cacheWrite === undefined) {
+        snapshot.cacheWrite = resolvePositiveUsageNumber(usage?.cacheWrite);
+      }
+      if (snapshot.totalTokens === undefined && typeof totalTokens === "number") {
+        snapshot.totalTokens = totalTokens;
+        snapshot.totalTokensFresh = true;
+      }
+      if (
+        snapshot.costUsd === undefined &&
+        typeof costUsd === "number" &&
+        Number.isFinite(costUsd)
+      ) {
+        snapshot.costUsd = costUsd;
+      }
+
+      if (
+        snapshot.modelProvider &&
+        snapshot.model &&
+        snapshot.totalTokens !== undefined &&
+        snapshot.costUsd !== undefined
+      ) {
+        break;
+      }
     } catch {
       // skip malformed lines
     }
   }
-  return null;
+  return sawSnapshot ? snapshot : null;
 }
 
 export function readLatestSessionUsageFromTranscript(

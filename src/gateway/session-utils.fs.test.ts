@@ -699,6 +699,46 @@ describe("readLatestSessionUsageFromTranscript", () => {
     });
   });
 
+  test("backfills missing model and cost fields from earlier assistant usage snapshots", () => {
+    const sessionId = "usage-aggregate";
+    writeTranscript(tmpDir, sessionId, [
+      { type: "session", version: 1, id: sessionId },
+      {
+        message: {
+          role: "assistant",
+          provider: "anthropic",
+          model: "claude-sonnet-4-6",
+          usage: {
+            input: 1_800,
+            output: 400,
+            cacheRead: 600,
+            cost: { total: 0.0055 },
+          },
+        },
+      },
+      {
+        message: {
+          role: "assistant",
+          usage: {
+            input: 2_400,
+            cacheRead: 900,
+          },
+        },
+      },
+    ]);
+
+    expect(readLatestSessionUsageFromTranscript(sessionId, storePath)).toEqual({
+      modelProvider: "anthropic",
+      model: "claude-sonnet-4-6",
+      inputTokens: 2400,
+      outputTokens: 400,
+      cacheRead: 900,
+      totalTokens: 3300,
+      totalTokensFresh: true,
+      costUsd: 0.0055,
+    });
+  });
+
   test("returns null when the transcript has no assistant usage snapshot", () => {
     const sessionId = "usage-empty";
     writeTranscript(tmpDir, sessionId, [

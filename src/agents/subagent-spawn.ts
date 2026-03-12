@@ -438,41 +438,28 @@ export async function spawnSubagentDirect(
     }
   };
 
-  const spawnDepthPatchError = await patchChildSession({
+  const initialChildSessionPatch: Record<string, unknown> = {
     spawnDepth: childDepth,
     subagentRole: childCapabilities.role === "main" ? null : childCapabilities.role,
     subagentControlScope: childCapabilities.controlScope,
-  });
-  if (spawnDepthPatchError) {
+  };
+  if (resolvedModel) {
+    initialChildSessionPatch.model = resolvedModel;
+  }
+  if (thinkingOverride !== undefined) {
+    initialChildSessionPatch.thinkingLevel = thinkingOverride === "off" ? null : thinkingOverride;
+  }
+
+  const initialPatchError = await patchChildSession(initialChildSessionPatch);
+  if (initialPatchError) {
     return {
       status: "error",
-      error: spawnDepthPatchError,
+      error: initialPatchError,
       childSessionKey,
     };
   }
-
   if (resolvedModel) {
-    const modelPatchError = await patchChildSession({ model: resolvedModel });
-    if (modelPatchError) {
-      return {
-        status: "error",
-        error: modelPatchError,
-        childSessionKey,
-      };
-    }
     modelApplied = true;
-  }
-  if (thinkingOverride !== undefined) {
-    const thinkingPatchError = await patchChildSession({
-      thinkingLevel: thinkingOverride === "off" ? null : thinkingOverride,
-    });
-    if (thinkingPatchError) {
-      return {
-        status: "error",
-        error: thinkingPatchError,
-        childSessionKey,
-      };
-    }
   }
   if (requestThreadBinding) {
     const bindResult = await ensureThreadBindingForSubagentSpawn({

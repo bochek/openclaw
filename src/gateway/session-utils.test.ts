@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import {
   addSubagentRunForTests,
   resetSubagentRegistryForTests,
@@ -941,9 +941,96 @@ describe("listSessionsFromStore search", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  test("uses subagent run model immediately for child sessions while transcript usage fills live totals", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-session-utils-subagent-"));
+    const storePath = path.join(tmpDir, "sessions.json");
+    const now = Date.now();
+    const cfg = {
+      session: { mainKey: "main" },
+      agents: {
+        list: [{ id: "main", default: true }],
+        defaults: {
+          models: {
+            "anthropic/claude-sonnet-4-6": { params: { context1m: true } },
+          },
+        },
+      },
+    } as unknown as OpenClawConfig;
+    fs.writeFileSync(
+      path.join(tmpDir, "sess-child.jsonl"),
+      [
+        JSON.stringify({ type: "session", version: 1, id: "sess-child" }),
+        JSON.stringify({
+          message: {
+            role: "assistant",
+            provider: "anthropic",
+            model: "claude-sonnet-4-6",
+            usage: {
+              input: 2_000,
+              output: 500,
+              cacheRead: 1_200,
+              cost: { total: 0.007725 },
+            },
+          },
+        }),
+      ].join("\n"),
+      "utf-8",
+    );
+
+    addSubagentRunForTests({
+      runId: "run-child-live",
+      childSessionKey: "agent:main:subagent:child-live",
+      controllerSessionKey: "agent:main:main",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      task: "child task",
+      cleanup: "keep",
+      createdAt: now - 5_000,
+      startedAt: now - 4_000,
+      model: "anthropic/claude-sonnet-4-6",
+    });
+
+    try {
+      const result = listSessionsFromStore({
+        cfg,
+        storePath,
+        store: {
+          "agent:main:subagent:child-live": {
+            sessionId: "sess-child",
+            updatedAt: now,
+            spawnedBy: "agent:main:main",
+            totalTokens: 0,
+            totalTokensFresh: false,
+          } as SessionEntry,
+        },
+        opts: {},
+      });
+
+      expect(result.sessions[0]).toMatchObject({
+        key: "agent:main:subagent:child-live",
+        status: "running",
+        modelProvider: "anthropic",
+        model: "claude-sonnet-4-6",
+        totalTokens: 3_200,
+        totalTokensFresh: true,
+        contextTokens: 1_048_576,
+      });
+      expect(result.sessions[0]?.estimatedCostUsd).toBeCloseTo(0.007725, 8);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("listSessionsFromStore subagent metadata", () => {
+  afterEach(() => {
+    resetSubagentRegistryForTests({ persist: false });
+  });
+  beforeEach(() => {
+    resetSubagentRegistryForTests({ persist: false });
+  });
+
   const cfg = {
     session: { mainKey: "main" },
     agents: { list: [{ id: "main", default: true }] },

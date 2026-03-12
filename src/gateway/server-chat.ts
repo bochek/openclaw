@@ -5,7 +5,7 @@ import { loadConfig } from "../config/config.js";
 import { type AgentEventPayload, getAgentRunContext } from "../infra/agent-events.js";
 import { resolveHeartbeatVisibility } from "../infra/heartbeat-visibility.js";
 import { stripInlineDirectiveTagsForDisplay } from "../utils/directive-tags.js";
-import { loadSessionEntry } from "./session-utils.js";
+import { loadGatewaySessionRow, loadSessionEntry } from "./session-utils.js";
 import { formatForLog } from "./ws-log.js";
 
 function resolveHeartbeatAckMaxChars(): number {
@@ -459,12 +459,24 @@ export function createAgentEventHandler({
   toolEventRecipients,
   sessionEventSubscribers,
 }: AgentEventHandlerOptions) {
-  const emitSessionEvent = (event: string, payload: unknown) => {
-    const connIds = sessionEventSubscribers.getAll();
-    if (connIds.size === 0) {
-      return;
+  const buildSessionEventSnapshot = (sessionKey: string) => {
+    const row = loadGatewaySessionRow(sessionKey);
+    if (!row) {
+      return {};
     }
-    broadcastToConnIds(event, payload, connIds, { dropIfSlow: true });
+    return {
+      session: row,
+      totalTokens: row.totalTokens,
+      totalTokensFresh: row.totalTokensFresh,
+      contextTokens: row.contextTokens,
+      estimatedCostUsd: row.estimatedCostUsd,
+      modelProvider: row.modelProvider,
+      model: row.model,
+      status: row.status,
+      startedAt: row.startedAt,
+      endedAt: row.endedAt,
+      runtimeMs: row.runtimeMs,
+    };
   };
 
   const emitChatDelta = (
@@ -778,12 +790,21 @@ export function createAgentEventHandler({
       sessionKey &&
       (lifecyclePhase === "start" || lifecyclePhase === "end" || lifecyclePhase === "error")
     ) {
-      emitSessionEvent("sessions.changed", {
-        sessionKey,
-        phase: lifecyclePhase,
-        runId: evt.runId,
-        ts: evt.ts,
-      });
+      const sessionEventConnIds = sessionEventSubscribers.getAll();
+      if (sessionEventConnIds.size > 0) {
+        broadcastToConnIds(
+          "sessions.changed",
+          {
+            sessionKey,
+            phase: lifecyclePhase,
+            runId: evt.runId,
+            ts: evt.ts,
+            ...buildSessionEventSnapshot(sessionKey),
+          },
+          sessionEventConnIds,
+          { dropIfSlow: true },
+        );
+      }
     }
   };
 }
