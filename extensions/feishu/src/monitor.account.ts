@@ -402,7 +402,7 @@ function registerEventHandlers(
       const messageId = event.message?.message_id?.trim();
       if (messageId) {
         const eventKey = `${accountId}:evt:${messageId}`;
-        if (!eventDedup.check(eventKey)) {
+        if (eventDedup.check(eventKey)) {
           log(`feishu[${accountId}]: dropping duplicate event for message ${messageId}`);
           return;
         }
