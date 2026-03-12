@@ -836,6 +836,46 @@ describe("listSessionsFromStore search", () => {
     expect(missing?.totalTokens).toBeUndefined();
     expect(missing?.totalTokensFresh).toBe(false);
   });
+
+  test("includes estimated session cost when model pricing is configured", () => {
+    const cfg = {
+      session: { mainKey: "main" },
+      agents: { list: [{ id: "main", default: true }] },
+      models: {
+        providers: {
+          openai: {
+            models: [
+              {
+                id: "gpt-5.4",
+                label: "GPT 5.4",
+                baseUrl: "https://api.openai.com/v1",
+                cost: { input: 1.25, output: 10, cacheRead: 0.125, cacheWrite: 0.5 },
+              },
+            ],
+          },
+        },
+      },
+    } as unknown as OpenClawConfig;
+    const result = listSessionsFromStore({
+      cfg,
+      storePath: "/tmp/sessions.json",
+      store: {
+        "agent:main:main": {
+          sessionId: "sess-main",
+          updatedAt: Date.now(),
+          modelProvider: "openai",
+          model: "gpt-5.4",
+          inputTokens: 2_000,
+          outputTokens: 500,
+          cacheRead: 1_000,
+          cacheWrite: 200,
+        } as SessionEntry,
+      },
+      opts: {},
+    });
+
+    expect(result.sessions[0]?.estimatedCostUsd).toBeCloseTo(0.007725, 8);
+  });
 });
 
 describe("listSessionsFromStore subagent metadata", () => {

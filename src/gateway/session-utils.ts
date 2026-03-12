@@ -44,6 +44,7 @@ import {
   resolveAvatarMime,
 } from "../shared/avatar-policy.js";
 import { normalizeSessionDeliveryFields } from "../utils/delivery-context.js";
+import { estimateUsageCost, resolveModelCostConfig } from "../utils/usage-format.js";
 import { readSessionTitleFieldsFromTranscript } from "./session-utils.fs.js";
 import type {
   GatewayAgentRow,
@@ -211,6 +212,32 @@ function resolveSessionRuntimeMs(
     return undefined;
   }
   return Math.max(0, (run.endedAt ?? now) - run.startedAt);
+}
+
+function resolveEstimatedSessionCostUsd(params: {
+  cfg: OpenClawConfig;
+  provider?: string;
+  model?: string;
+  entry?: SessionEntry;
+}): number | undefined {
+  const cost = resolveModelCostConfig({
+    provider: params.provider,
+    model: params.model,
+    config: params.cfg,
+  });
+  if (!cost) {
+    return undefined;
+  }
+  const estimated = estimateUsageCost({
+    usage: {
+      input: params.entry?.inputTokens,
+      output: params.entry?.outputTokens,
+      cacheRead: params.entry?.cacheRead,
+      cacheWrite: params.entry?.cacheWrite,
+    },
+    cost,
+  });
+  return typeof estimated === "number" && Number.isFinite(estimated) ? estimated : undefined;
 }
 
 function resolveChildSessionKeys(controllerSessionKey: string): string[] | undefined {
@@ -960,6 +987,12 @@ export function listSessionsFromStore(params: {
       const model = resolvedModel.model ?? DEFAULT_MODEL;
       const subagentRun = getSubagentRunByChildSessionKey(key);
       const childSessions = resolveChildSessionKeys(key);
+      const estimatedCostUsd = resolveEstimatedSessionCostUsd({
+        cfg,
+        provider: modelProvider,
+        model,
+        entry,
+      });
       return {
         key,
         spawnedBy: entry?.spawnedBy,
@@ -987,6 +1020,7 @@ export function listSessionsFromStore(params: {
         outputTokens: entry?.outputTokens,
         totalTokens: total,
         totalTokensFresh,
+        estimatedCostUsd,
         status: resolveSessionRunStatus(subagentRun),
         startedAt: subagentRun?.startedAt,
         endedAt: subagentRun?.endedAt,
