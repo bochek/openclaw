@@ -502,6 +502,9 @@ export type PluginHookName =
   | "before_model_resolve"
   | "before_prompt_build"
   | "before_agent_start"
+  | "before_search_provider_configure"
+  | "after_search_provider_configure"
+  | "after_search_provider_activate"
   | "llm_input"
   | "llm_output"
   | "agent_end"
@@ -528,6 +531,9 @@ export const PLUGIN_HOOK_NAMES = [
   "before_model_resolve",
   "before_prompt_build",
   "before_agent_start",
+  "before_search_provider_configure",
+  "after_search_provider_configure",
+  "after_search_provider_activate",
   "llm_input",
   "llm_output",
   "agent_end",
@@ -665,6 +671,46 @@ export const stripPromptMutationFieldsFromLegacyHookResult = (
   return Object.keys(remaining).length > 0
     ? (remaining as PluginHookBeforeAgentStartOverrideResult)
     : undefined;
+};
+
+// search-provider hooks
+export type PluginHookSearchProviderContext = {
+  workspaceDir?: string;
+};
+
+export type PluginHookSearchProviderSource = "builtin" | "plugin";
+
+export type PluginHookBeforeSearchProviderConfigureEvent = {
+  providerId: string;
+  providerLabel: string;
+  providerSource: PluginHookSearchProviderSource;
+  pluginId?: string;
+  intent: "switch-active" | "configure-provider";
+  activeProviderId?: string | null;
+  configured: boolean;
+};
+
+export type PluginHookBeforeSearchProviderConfigureResult = {
+  note?: string;
+};
+
+export type PluginHookAfterSearchProviderConfigureEvent = {
+  providerId: string;
+  providerLabel: string;
+  providerSource: PluginHookSearchProviderSource;
+  pluginId?: string;
+  intent: "switch-active" | "configure-provider";
+  activeProviderId?: string | null;
+  configured: boolean;
+};
+
+export type PluginHookAfterSearchProviderActivateEvent = {
+  providerId: string;
+  providerLabel: string;
+  providerSource: PluginHookSearchProviderSource;
+  pluginId?: string;
+  previousProviderId?: string | null;
+  intent: "switch-active" | "configure-provider";
 };
 
 // llm_input hook
@@ -980,6 +1026,21 @@ export type PluginHookHandlerMap = {
     event: PluginHookBeforeAgentStartEvent,
     ctx: PluginHookAgentContext,
   ) => Promise<PluginHookBeforeAgentStartResult | void> | PluginHookBeforeAgentStartResult | void;
+  before_search_provider_configure: (
+    event: PluginHookBeforeSearchProviderConfigureEvent,
+    ctx: PluginHookSearchProviderContext,
+  ) =>
+    | Promise<PluginHookBeforeSearchProviderConfigureResult | void>
+    | PluginHookBeforeSearchProviderConfigureResult
+    | void;
+  after_search_provider_configure: (
+    event: PluginHookAfterSearchProviderConfigureEvent,
+    ctx: PluginHookSearchProviderContext,
+  ) => Promise<void> | void;
+  after_search_provider_activate: (
+    event: PluginHookAfterSearchProviderActivateEvent,
+    ctx: PluginHookSearchProviderContext,
+  ) => Promise<void> | void;
   llm_input: (event: PluginHookLlmInputEvent, ctx: PluginHookAgentContext) => Promise<void> | void;
   llm_output: (
     event: PluginHookLlmOutputEvent,

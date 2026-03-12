@@ -17,6 +17,7 @@ import {
   resolveCapabilitySlotSelection,
 } from "../plugins/capability-slots.js";
 import { enablePluginInConfig } from "../plugins/enable.js";
+import { createHookRunner, type HookRunner } from "../plugins/hooks.js";
 import { loadOpenClawPlugins } from "../plugins/loader.js";
 import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
 import { validateJsonSchemaValue } from "../plugins/schema-validator.js";
@@ -95,6 +96,19 @@ type PluginPromptableField =
       help?: string;
       existingValue?: boolean;
     };
+
+type SearchProviderHookDetails = {
+  providerId: string;
+  providerLabel: string;
+  providerSource: "builtin" | "plugin";
+  pluginId?: string;
+  configured: boolean;
+};
+
+const HOOK_RUNNER_LOGGER = {
+  warn: () => {},
+  error: () => {},
+} as const;
 
 function hasNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
@@ -283,6 +297,113 @@ function validatePluginSearchProviderConfig(
     ok: false,
     message: result.errors[0]?.message ?? "invalid config",
   };
+}
+
+function createSearchProviderHookRunner(
+  config: OpenClawConfig,
+  workspaceDir?: string,
+): HookRunner | null {
+  try {
+    const registry = loadOpenClawPlugins({
+      config,
+      cache: false,
+      workspaceDir,
+      suppressOpenAllowlistWarning: true,
+    });
+    if (registry.typedHooks.length === 0) {
+      return null;
+    }
+    return createHookRunner(registry, {
+      logger: HOOK_RUNNER_LOGGER,
+      catchErrors: true,
+    });
+  } catch {
+    return null;
+  }
+}
+
+async function maybeNoteBeforeSearchProviderConfigure(params: {
+  hookRunner: HookRunner | null;
+  config: OpenClawConfig;
+  provider: SearchProviderHookDetails;
+  intent: SearchProviderFlowIntent;
+  prompter: WizardPrompter;
+  workspaceDir?: string;
+}): Promise<void> {
+  if (!params.hookRunner?.hasHooks("before_search_provider_configure")) {
+    return;
+  }
+  const result = await params.hookRunner.runBeforeSearchProviderConfigure(
+    {
+      providerId: params.provider.providerId,
+      providerLabel: params.provider.providerLabel,
+      providerSource: params.provider.providerSource,
+      pluginId: params.provider.pluginId,
+      intent: params.intent,
+      activeProviderId: resolveCapabilitySlotSelection(params.config, "providers.search") ?? null,
+      configured: params.provider.configured,
+    },
+    {
+      workspaceDir: params.workspaceDir,
+    },
+  );
+  if (result?.note?.trim()) {
+    await params.prompter.note(result.note, "Provider setup");
+  }
+}
+
+async function runAfterSearchProviderHooks(params: {
+  hookRunner: HookRunner | null;
+  originalConfig: OpenClawConfig;
+  resultConfig: OpenClawConfig;
+  provider: SearchProviderHookDetails;
+  intent: SearchProviderFlowIntent;
+  workspaceDir?: string;
+}): Promise<void> {
+  if (!params.hookRunner) {
+    return;
+  }
+  const activeProviderBefore =
+    resolveCapabilitySlotSelection(params.originalConfig, "providers.search") ?? null;
+  const activeProviderAfter =
+    resolveCapabilitySlotSelection(params.resultConfig, "providers.search") ?? null;
+
+  if (params.hookRunner.hasHooks("after_search_provider_configure")) {
+    await params.hookRunner.runAfterSearchProviderConfigure(
+      {
+        providerId: params.provider.providerId,
+        providerLabel: params.provider.providerLabel,
+        providerSource: params.provider.providerSource,
+        pluginId: params.provider.pluginId,
+        intent: params.intent,
+        activeProviderId: activeProviderAfter,
+        configured: params.provider.configured,
+      },
+      {
+        workspaceDir: params.workspaceDir,
+      },
+    );
+  }
+
+  if (
+    activeProviderAfter === params.provider.providerId &&
+    activeProviderBefore !== activeProviderAfter &&
+    params.hookRunner.hasHooks("after_search_provider_activate")
+  ) {
+    await params.hookRunner.runAfterSearchProviderActivate(
+      {
+        providerId: params.provider.providerId,
+        providerLabel: params.provider.providerLabel,
+        providerSource: params.provider.providerSource,
+        pluginId: params.provider.pluginId,
+        previousProviderId: activeProviderBefore,
+        intent: params.intent,
+      },
+      {
+        workspaceDir: params.workspaceDir,
+      },
+    );
+  }
 }
 
 async function promptPluginSearchProviderConfig(
@@ -610,12 +731,42 @@ export async function applySearchProviderChoice(params: {
       return installedConfig;
     }
     const enabled = enablePluginInConfig(installedConfig, installedProvider.pluginId);
+    const hookRunner = createSearchProviderHookRunner(enabled.config, params.opts?.workspaceDir);
+    const providerDetails: SearchProviderHookDetails = {
+      providerId: installedProvider.value,
+      providerLabel: installedProvider.label,
+      providerSource: "plugin",
+      pluginId: installedProvider.pluginId,
+      configured: installedProvider.configured,
+    };
     let next =
       intent === "switch-active"
         ? setWebSearchProvider(enabled.config, installedProvider.value)
         : enabled.config;
+    await maybeNoteBeforeSearchProviderConfigure({
+      hookRunner,
+      config: next,
+      provider: providerDetails,
+      intent,
+      prompter: params.prompter,
+      workspaceDir: params.opts?.workspaceDir,
+    });
     next = await promptPluginSearchProviderConfig(next, installedProvider, params.prompter);
-    return preserveSearchProviderIntent(installedConfig, next, intent, installedProvider.value);
+    const result = preserveSearchProviderIntent(
+      installedConfig,
+      next,
+      intent,
+      installedProvider.value,
+    );
+    await runAfterSearchProviderHooks({
+      hookRunner,
+      originalConfig: installedConfig,
+      resultConfig: result,
+      provider: providerDetails,
+      intent,
+      workspaceDir: params.opts?.workspaceDir,
+    });
+    return result;
   }
 
   return configureSearchProviderSelection(
@@ -775,18 +926,61 @@ export async function configureSearchProviderSelection(
   const selectedEntry = providerEntries.find((entry) => entry.value === choice);
   if (selectedEntry?.kind === "plugin") {
     const enabled = enablePluginInConfig(config, selectedEntry.pluginId);
+    const hookRunner = createSearchProviderHookRunner(enabled.config, opts?.workspaceDir);
+    const providerDetails: SearchProviderHookDetails = {
+      providerId: selectedEntry.value,
+      providerLabel: selectedEntry.label,
+      providerSource: "plugin",
+      pluginId: selectedEntry.pluginId,
+      configured: selectedEntry.configured,
+    };
     let next =
       intent === "switch-active"
         ? setWebSearchProvider(enabled.config, selectedEntry.value)
         : enabled.config;
     if (selectedEntry.configured) {
-      return preserveSearchProviderIntent(config, next, intent, selectedEntry.value);
+      const result = preserveSearchProviderIntent(config, next, intent, selectedEntry.value);
+      await runAfterSearchProviderHooks({
+        hookRunner,
+        originalConfig: config,
+        resultConfig: result,
+        provider: providerDetails,
+        intent,
+        workspaceDir: opts?.workspaceDir,
+      });
+      return result;
     }
     if (opts?.quickstartDefaults && selectedEntry.configured) {
-      return preserveSearchProviderIntent(config, next, intent, selectedEntry.value);
+      const result = preserveSearchProviderIntent(config, next, intent, selectedEntry.value);
+      await runAfterSearchProviderHooks({
+        hookRunner,
+        originalConfig: config,
+        resultConfig: result,
+        provider: providerDetails,
+        intent,
+        workspaceDir: opts?.workspaceDir,
+      });
+      return result;
     }
+    await maybeNoteBeforeSearchProviderConfigure({
+      hookRunner,
+      config: next,
+      provider: providerDetails,
+      intent,
+      prompter,
+      workspaceDir: opts?.workspaceDir,
+    });
     next = await promptPluginSearchProviderConfig(next, selectedEntry, prompter);
-    return preserveSearchProviderIntent(config, next, intent, selectedEntry.value);
+    const result = preserveSearchProviderIntent(config, next, intent, selectedEntry.value);
+    await runAfterSearchProviderHooks({
+      hookRunner,
+      originalConfig: config,
+      resultConfig: result,
+      provider: providerDetails,
+      intent,
+      workspaceDir: opts?.workspaceDir,
+    });
+    return result;
   }
 
   const builtinChoice = choice as SearchProvider;
@@ -794,6 +988,13 @@ export async function configureSearchProviderSelection(
   if (!entry) {
     return config;
   }
+  const hookRunner = createSearchProviderHookRunner(config, opts?.workspaceDir);
+  const providerDetails: SearchProviderHookDetails = {
+    providerId: builtinChoice,
+    providerLabel: entry.label,
+    providerSource: "builtin",
+    configured: hasExistingKey(config, builtinChoice) || hasKeyInEnv(entry),
+  };
   const existingKey = resolveExistingKey(config, builtinChoice);
   const keyConfigured = hasExistingKey(config, builtinChoice);
   const envAvailable = hasKeyInEnv(entry);
@@ -802,15 +1003,42 @@ export async function configureSearchProviderSelection(
     const result = existingKey
       ? applySearchKey(config, builtinChoice, existingKey)
       : applyProviderOnly(config, builtinChoice);
-    return preserveSearchProviderIntent(config, result, intent, builtinChoice);
+    const next = preserveSearchProviderIntent(config, result, intent, builtinChoice);
+    await runAfterSearchProviderHooks({
+      hookRunner,
+      originalConfig: config,
+      resultConfig: next,
+      provider: providerDetails,
+      intent,
+      workspaceDir: opts?.workspaceDir,
+    });
+    return next;
   }
 
   if (opts?.quickstartDefaults && (keyConfigured || envAvailable)) {
     const result = existingKey
       ? applySearchKey(config, builtinChoice, existingKey)
       : applyProviderOnly(config, builtinChoice);
-    return preserveSearchProviderIntent(config, result, intent, builtinChoice);
+    const next = preserveSearchProviderIntent(config, result, intent, builtinChoice);
+    await runAfterSearchProviderHooks({
+      hookRunner,
+      originalConfig: config,
+      resultConfig: next,
+      provider: providerDetails,
+      intent,
+      workspaceDir: opts?.workspaceDir,
+    });
+    return next;
   }
+
+  await maybeNoteBeforeSearchProviderConfigure({
+    hookRunner,
+    config,
+    provider: providerDetails,
+    intent,
+    prompter,
+    workspaceDir: opts?.workspaceDir,
+  });
 
   const useSecretRefMode = opts?.secretInputMode === "ref"; // pragma: allowlist secret
   if (useSecretRefMode) {
@@ -827,12 +1055,21 @@ export async function configureSearchProviderSelection(
       ].join("\n"),
       "Web search",
     );
-    return preserveSearchProviderIntent(
+    const result = preserveSearchProviderIntent(
       config,
       applySearchKey(config, builtinChoice, ref),
       intent,
       builtinChoice,
     );
+    await runAfterSearchProviderHooks({
+      hookRunner,
+      originalConfig: config,
+      resultConfig: result,
+      provider: providerDetails,
+      intent,
+      workspaceDir: opts?.workspaceDir,
+    });
+    return result;
   }
 
   const keyInput = await prompter.text({
@@ -847,30 +1084,57 @@ export async function configureSearchProviderSelection(
   const key = keyInput?.trim() ?? "";
   if (key) {
     const secretInput = resolveSearchSecretInput(builtinChoice, key, opts?.secretInputMode);
-    return preserveSearchProviderIntent(
+    const result = preserveSearchProviderIntent(
       config,
       applySearchKey(config, builtinChoice, secretInput),
       intent,
       builtinChoice,
     );
+    await runAfterSearchProviderHooks({
+      hookRunner,
+      originalConfig: config,
+      resultConfig: result,
+      provider: providerDetails,
+      intent,
+      workspaceDir: opts?.workspaceDir,
+    });
+    return result;
   }
 
   if (existingKey) {
-    return preserveSearchProviderIntent(
+    const result = preserveSearchProviderIntent(
       config,
       applySearchKey(config, builtinChoice, existingKey),
       intent,
       builtinChoice,
     );
+    await runAfterSearchProviderHooks({
+      hookRunner,
+      originalConfig: config,
+      resultConfig: result,
+      provider: providerDetails,
+      intent,
+      workspaceDir: opts?.workspaceDir,
+    });
+    return result;
   }
 
   if (keyConfigured || envAvailable) {
-    return preserveSearchProviderIntent(
+    const result = preserveSearchProviderIntent(
       config,
       applyProviderOnly(config, builtinChoice),
       intent,
       builtinChoice,
     );
+    await runAfterSearchProviderHooks({
+      hookRunner,
+      originalConfig: config,
+      resultConfig: result,
+      provider: providerDetails,
+      intent,
+      workspaceDir: opts?.workspaceDir,
+    });
+    return result;
   }
 
   await prompter.note(
@@ -882,7 +1146,7 @@ export async function configureSearchProviderSelection(
     "Web search",
   );
 
-  return preserveSearchProviderIntent(
+  const result = preserveSearchProviderIntent(
     config,
     applyCapabilitySlotSelection({
       config,
@@ -892,6 +1156,15 @@ export async function configureSearchProviderSelection(
     intent,
     builtinChoice,
   );
+  await runAfterSearchProviderHooks({
+    hookRunner,
+    originalConfig: config,
+    resultConfig: result,
+    provider: providerDetails,
+    intent,
+    workspaceDir: opts?.workspaceDir,
+  });
+  return result;
 }
 
 function preserveSearchProviderIntent(

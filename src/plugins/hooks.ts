@@ -8,12 +8,16 @@
 import { concatOptionalTextSegments } from "../shared/text/join-segments.js";
 import type { PluginRegistry } from "./registry.js";
 import type {
+  PluginHookAfterSearchProviderActivateEvent,
+  PluginHookAfterSearchProviderConfigureEvent,
   PluginHookAfterCompactionEvent,
   PluginHookAfterToolCallEvent,
   PluginHookAgentContext,
   PluginHookAgentEndEvent,
   PluginHookBeforeAgentStartEvent,
   PluginHookBeforeAgentStartResult,
+  PluginHookBeforeSearchProviderConfigureEvent,
+  PluginHookBeforeSearchProviderConfigureResult,
   PluginHookBeforeModelResolveEvent,
   PluginHookBeforeModelResolveResult,
   PluginHookBeforePromptBuildEvent,
@@ -37,6 +41,7 @@ import type {
   PluginHookSessionContext,
   PluginHookSessionEndEvent,
   PluginHookSessionStartEvent,
+  PluginHookSearchProviderContext,
   PluginHookSubagentContext,
   PluginHookSubagentDeliveryTargetEvent,
   PluginHookSubagentDeliveryTargetResult,
@@ -57,6 +62,8 @@ export type {
   PluginHookAgentContext,
   PluginHookBeforeAgentStartEvent,
   PluginHookBeforeAgentStartResult,
+  PluginHookBeforeSearchProviderConfigureEvent,
+  PluginHookBeforeSearchProviderConfigureResult,
   PluginHookBeforeModelResolveEvent,
   PluginHookBeforeModelResolveResult,
   PluginHookBeforePromptBuildEvent,
@@ -84,6 +91,7 @@ export type {
   PluginHookSessionContext,
   PluginHookSessionStartEvent,
   PluginHookSessionEndEvent,
+  PluginHookSearchProviderContext,
   PluginHookSubagentContext,
   PluginHookSubagentDeliveryTargetEvent,
   PluginHookSubagentDeliveryTargetResult,
@@ -94,6 +102,8 @@ export type {
   PluginHookGatewayContext,
   PluginHookGatewayStartEvent,
   PluginHookGatewayStopEvent,
+  PluginHookAfterSearchProviderConfigureEvent,
+  PluginHookAfterSearchProviderActivateEvent,
 };
 
 export type HookRunnerLogger = {
@@ -180,6 +190,16 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     }
     return next;
   };
+
+  const mergeBeforeSearchProviderConfigure = (
+    acc: PluginHookBeforeSearchProviderConfigureResult | undefined,
+    next: PluginHookBeforeSearchProviderConfigureResult,
+  ): PluginHookBeforeSearchProviderConfigureResult => ({
+    note: concatOptionalTextSegments({
+      left: acc?.note,
+      right: next.note,
+    }),
+  });
 
   const handleHookError = (params: {
     hookName: PluginHookName;
@@ -316,6 +336,30 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
         ...mergeBeforeModelResolve(acc, next),
       }),
     );
+  }
+
+  async function runBeforeSearchProviderConfigure(
+    event: PluginHookBeforeSearchProviderConfigureEvent,
+    ctx: PluginHookSearchProviderContext,
+  ): Promise<PluginHookBeforeSearchProviderConfigureResult | undefined> {
+    return runModifyingHook<
+      "before_search_provider_configure",
+      PluginHookBeforeSearchProviderConfigureResult
+    >("before_search_provider_configure", event, ctx, mergeBeforeSearchProviderConfigure);
+  }
+
+  async function runAfterSearchProviderConfigure(
+    event: PluginHookAfterSearchProviderConfigureEvent,
+    ctx: PluginHookSearchProviderContext,
+  ): Promise<void> {
+    return runVoidHook("after_search_provider_configure", event, ctx);
+  }
+
+  async function runAfterSearchProviderActivate(
+    event: PluginHookAfterSearchProviderActivateEvent,
+    ctx: PluginHookSearchProviderContext,
+  ): Promise<void> {
+    return runVoidHook("after_search_provider_activate", event, ctx);
   }
 
   /**
@@ -727,6 +771,9 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     runBeforeModelResolve,
     runBeforePromptBuild,
     runBeforeAgentStart,
+    runBeforeSearchProviderConfigure,
+    runAfterSearchProviderConfigure,
+    runAfterSearchProviderActivate,
     runLlmInput,
     runLlmOutput,
     runAgentEnd,
