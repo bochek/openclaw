@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { withTempHome } from "../../test/helpers/temp-home.js";
+import { validateConfigObjectWithPlugins } from "../config/config.js";
 import * as noteModule from "../terminal/note.js";
 import { loadAndMaybeMigrateDoctorConfig } from "./doctor-config-flow.js";
 import { runDoctorConfigWithInput } from "./doctor-config-flow.test-utils.js";
@@ -177,6 +178,138 @@ describe("doctor config flow", () => {
       mode: "token",
       token: "ok",
     });
+  });
+
+  it("removes invalid plugin config leaves and disables the affected plugin on repair", async () => {
+    const tavilyPath = path.join(process.cwd(), "extensions", "tavily-search");
+    const result = await runDoctorConfigWithInput({
+      repair: true,
+      config: {
+        plugins: {
+          load: { paths: [tavilyPath] },
+          allow: ["tavily-search"],
+          entries: {
+            "tavily-search": {
+              enabled: true,
+              config: {
+                apiKey: "◇  Enable web_search?",
+                searchDepth: "basic",
+              },
+            },
+          },
+        },
+        tools: {
+          web: {
+            search: {
+              enabled: true,
+              provider: "brave",
+            },
+          },
+        },
+      },
+      run: loadAndMaybeMigrateDoctorConfig,
+    });
+
+    const cfg = result.cfg as {
+      plugins?: {
+        entries?: Record<string, { enabled?: boolean; config?: Record<string, unknown> }>;
+      };
+      tools?: { web?: { search?: { provider?: string } } };
+    };
+    expect(cfg.plugins?.entries?.["tavily-search"]?.enabled).toBe(false);
+    expect(cfg.plugins?.entries?.["tavily-search"]?.config).toBeUndefined();
+    expect(cfg.tools?.web?.search?.provider).toBe("brave");
+
+    const validated = validateConfigObjectWithPlugins(cfg);
+    expect(validated.ok).toBe(true);
+  });
+
+  it("does not delete missing plugin entries during repair", async () => {
+    const result = await runDoctorConfigWithInput({
+      repair: true,
+      config: {
+        plugins: {
+          allow: ["webchat"],
+          entries: {
+            webchat: {
+              enabled: true,
+              config: {
+                port: 3000,
+              },
+            },
+          },
+        },
+      },
+      run: loadAndMaybeMigrateDoctorConfig,
+    });
+
+    const cfg = result.cfg as {
+      plugins?: {
+        allow?: string[];
+        entries?: Record<string, unknown>;
+      };
+    };
+    expect(cfg.plugins?.entries?.webchat).toBeDefined();
+    expect(cfg.plugins?.allow).toContain("webchat");
+
+    const validated = validateConfigObjectWithPlugins(cfg);
+    expect(validated.ok).toBe(false);
+    expect(
+      validated.warnings.some(
+        (warning) =>
+          warning.path === "plugins.entries.webchat" &&
+          warning.message.includes("plugin not found"),
+      ),
+    ).toBe(true);
+    expect(
+      validated.issues.some(
+        (issue) => issue.path === "plugins.allow" && issue.message.includes("plugin not found"),
+      ),
+    ).toBe(true);
+  });
+
+  it("clears active web search provider when it points at a repaired plugin", async () => {
+    const tavilyPath = path.join(process.cwd(), "extensions", "tavily-search");
+    const result = await runDoctorConfigWithInput({
+      repair: true,
+      config: {
+        plugins: {
+          load: { paths: [tavilyPath] },
+          allow: ["tavily-search"],
+          entries: {
+            "tavily-search": {
+              enabled: true,
+              config: {
+                apiKey: "not-a-real-key",
+                searchDepth: "basic",
+              },
+            },
+          },
+        },
+        tools: {
+          web: {
+            search: {
+              enabled: true,
+              provider: "tavily",
+            },
+          },
+        },
+      },
+      run: loadAndMaybeMigrateDoctorConfig,
+    });
+
+    const cfg = result.cfg as {
+      plugins?: {
+        entries?: Record<string, { enabled?: boolean; config?: Record<string, unknown> }>;
+      };
+      tools?: { web?: { search?: { provider?: string } } };
+    };
+    expect(cfg.plugins?.entries?.["tavily-search"]?.enabled).toBe(false);
+    expect(cfg.plugins?.entries?.["tavily-search"]?.config).toBeUndefined();
+    expect(cfg.tools?.web?.search?.provider).toBeUndefined();
+
+    const validated = validateConfigObjectWithPlugins(cfg);
+    expect(validated.ok).toBe(true);
   });
 
   it("preserves discord streaming intent while stripping unsupported keys on repair", async () => {

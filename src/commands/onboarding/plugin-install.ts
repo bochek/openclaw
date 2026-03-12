@@ -235,6 +235,7 @@ export function reloadOnboardingPluginRegistry(params: {
   cfg: OpenClawConfig;
   runtime: RuntimeEnv;
   workspaceDir?: string;
+  suppressOpenAllowlistWarning?: boolean;
 }): void {
   clearPluginDiscoveryCache();
   const workspaceDir =
@@ -245,5 +246,6 @@ export function reloadOnboardingPluginRegistry(params: {
     workspaceDir,
     cache: false,
     logger: createPluginLoaderLogger(log),
+    suppressOpenAllowlistWarning: params.suppressOpenAllowlistWarning,
   });
 }

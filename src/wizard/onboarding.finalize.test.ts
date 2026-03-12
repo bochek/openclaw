@@ -467,7 +467,7 @@ describe("finalizeOnboardingWizard", () => {
     const webSearchNote = noteCalls.find((call) => call?.[1] === "Web search");
     expect(webSearchNote?.[0]).toContain("Active provider: Tavily Search");
     expect(webSearchNote?.[0]).toContain(
-      "Multiple web search providers are configured; this is the active provider for web_search.",
+      "Multiple web search providers are configured; the others remain available to switch to later via configure.",
     );
   });
 });

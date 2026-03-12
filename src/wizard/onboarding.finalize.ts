@@ -530,7 +530,7 @@ export async function finalizeOnboardingWizard(
           ...(sourceLine ? [sourceLine] : []),
           ...(configuredProviderCount > 1
             ? [
-                "Multiple web search providers are configured; this is the active provider for web_search.",
+                "Multiple web search providers are configured; the others remain available to switch to later via configure.",
               ]
             : []),
           "Plugin-managed providers may use plugin config or plugin-specific credentials instead of the built-in API key fields.",
@@ -548,7 +548,7 @@ export async function finalizeOnboardingWizard(
           `Active provider: ${label}`,
           ...(configuredProviderCount > 1
             ? [
-                "Multiple web search providers are configured; this is the active provider for web_search.",
+                "Multiple web search providers are configured; the others remain available to switch to later via configure.",
               ]
             : []),
           "Plugin-managed providers may use plugin config or plugin-specific credentials instead of the built-in API key fields.",
@@ -565,7 +565,7 @@ export async function finalizeOnboardingWizard(
           ...(sourceLine ? [sourceLine] : []),
           ...(configuredProviderCount > 1
             ? [
-                "Multiple web search providers are configured; this is the active provider for web_search.",
+                "Multiple web search providers are configured; the others remain available to switch to later via configure.",
               ]
             : []),
           ...(keySource ? [keySource] : []),

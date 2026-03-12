@@ -189,12 +189,8 @@ async function promptWebToolsConfig(
     confirm: async (params) => guardCancel(await confirm(params), runtime),
     progress: () => ({ update: () => {}, stop: () => {} }),
   };
-  const {
-    applySearchProviderChoice,
-    SEARCH_PROVIDER_OPTIONS,
-    buildSearchProviderPickerModel,
-    resolveSearchProviderPickerEntries,
-  } = await import("./onboard-search.js");
+  const { resolveSearchProviderPickerEntries, promptSearchProviderFlow } =
+    await import("./onboard-search.js");
   const providerEntries = await resolveSearchProviderPickerEntries(nextConfig, workspaceDir);
 
   note(
@@ -220,39 +216,18 @@ async function promptWebToolsConfig(
   };
 
   if (enableSearch) {
-    type ProviderChoice = string;
-    const pickerModel = buildSearchProviderPickerModel({
+    const applied = await promptSearchProviderFlow({
       config: nextConfig,
-      providerEntries,
-      includeSkipOption: false,
-    });
-    const providerChoice = guardCancel(
-      await select<ProviderChoice>({
-        message: "Choose web search provider",
-        options: pickerModel.options.filter((option) => option.value !== "__skip__"),
-        initialValue:
-          pickerModel.initialValue === "__skip__"
-            ? SEARCH_PROVIDER_OPTIONS[0].value
-            : pickerModel.initialValue,
-      }),
       runtime,
-    );
-
-    if (providerChoice === "__keep_current__") {
-      nextSearch = { ...nextSearch, provider: existingSearch?.provider };
-    } else {
-      const applied = await applySearchProviderChoice({
-        config: nextConfig,
-        choice: providerChoice,
-        runtime,
-        prompter,
-        opts: {
-          workspaceDir,
-        },
-      });
-      nextConfig = applied;
-      nextSearch = { ...applied.tools?.web?.search };
-    }
+      prompter,
+      opts: {
+        workspaceDir,
+      },
+      includeSkipOption: true,
+      skipHint: "Leave the current web search setup unchanged",
+    });
+    nextConfig = applied;
+    nextSearch = { ...applied.tools?.web?.search };
   }
 
   const enableFetch = guardCancel(

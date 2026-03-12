@@ -121,6 +121,11 @@ describe("runConfigureWizard", () => {
   });
 
   beforeEach(() => {
+    vi.stubEnv("BRAVE_API_KEY", "");
+    vi.stubEnv("GEMINI_API_KEY", "");
+    vi.stubEnv("XAI_API_KEY", "");
+    vi.stubEnv("MOONSHOT_API_KEY", "");
+    vi.stubEnv("PERPLEXITY_API_KEY", "");
     mocks.clackIntro.mockReset();
     mocks.clackOutro.mockReset();
     mocks.clackSelect.mockReset();
@@ -212,7 +217,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Choose web search provider") {
+      if (params.message === "Choose active web search provider") {
         return "tavily";
       }
       if (params.message.startsWith("Search depth")) {
@@ -325,7 +330,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Choose web search provider") {
+      if (params.message === "Choose active web search provider") {
         return "tavily";
       }
       if (params.message.startsWith("Search depth")) {
@@ -344,10 +349,14 @@ describe("runConfigureWizard", () => {
       },
     );
 
-    expect(mocks.note).toHaveBeenCalledWith(
-      expect.stringContaining("Api Key"),
-      "Invalid plugin config",
-    );
+    expect(
+      mocks.note.mock.calls.some(
+        ([message, title]) =>
+          title === "Invalid plugin config" &&
+          typeof message === "string" &&
+          message.includes("Api Key"),
+      ),
+    ).toBe(true);
     expect(mocks.writeConfigFile).toHaveBeenCalledWith(
       expect.objectContaining({
         plugins: expect.objectContaining({
@@ -450,7 +459,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Choose web search provider") {
+      if (params.message === "Choose active web search provider") {
         return "__install_plugin__";
       }
       if (params.message.startsWith("Search depth")) {
