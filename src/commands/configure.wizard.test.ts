@@ -266,6 +266,69 @@ describe("runConfigureWizard", () => {
     );
   });
 
+  it("persists enabling web_search when configuring a provider from a previously disabled state", async () => {
+    mocks.readConfigFileSnapshot.mockResolvedValue({
+      exists: true,
+      valid: true,
+      config: {
+        agents: {
+          defaults: {
+            workspace: "/tmp/configure-workspace-enable-search",
+          },
+        },
+        tools: {
+          web: {
+            search: {
+              enabled: false,
+              provider: "brave",
+            },
+          },
+        },
+      },
+      issues: [],
+    });
+    mocks.resolveGatewayPort.mockReturnValue(18789);
+    mocks.probeGatewayReachable.mockResolvedValue({ ok: false });
+    mocks.resolveControlUiLinks.mockReturnValue({ wsUrl: "ws://127.0.0.1:18789" });
+    mocks.summarizeExistingConfig.mockReturnValue("");
+    mocks.createClackPrompter.mockReturnValue({});
+    mocks.ensureControlUiAssetsBuilt.mockResolvedValue({ ok: true });
+    mocks.clackIntro.mockResolvedValue(undefined);
+    mocks.clackOutro.mockResolvedValue(undefined);
+    mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
+      if (params.message === "Web search setup") {
+        return "__configure_provider__";
+      }
+      if (params.message === "Choose provider to configure") {
+        return "brave";
+      }
+      return "__continue";
+    });
+
+    await runConfigureWizard(
+      { command: "configure", sections: ["web"] },
+      {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      },
+    );
+
+    expect(mocks.writeConfigFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tools: expect.objectContaining({
+          web: expect.objectContaining({
+            search: expect.objectContaining({
+              enabled: true,
+              provider: "brave",
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it("re-prompts invalid plugin config values during configure", async () => {
     loadOpenClawPlugins.mockReturnValue({
       searchProviders: [
@@ -690,7 +753,7 @@ describe("runConfigureWizard", () => {
         if (params.message === "Choose web search provider") {
           expect(params.options?.[0]).toMatchObject({
             value: "tavily",
-            hint: "Plugin search · Third-party plugin · Configured · current",
+            hint: "Plugin search · External plugin · Configured · current",
           });
           expect(params.options?.[1]).toMatchObject({
             value: "brave",

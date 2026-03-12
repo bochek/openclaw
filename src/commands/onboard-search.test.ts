@@ -170,7 +170,7 @@ describe("setupSearch", () => {
           expect.objectContaining({
             value: "tavily",
             label: "Tavily Search",
-            hint: expect.stringContaining("Plugin search · Third-party plugin"),
+            hint: expect.stringContaining("Plugin search · External plugin"),
           }),
         ]),
       }),
@@ -344,7 +344,7 @@ describe("setupSearch", () => {
     )?.[0]?.options;
     expect(options[0]).toMatchObject({
       value: "tavily",
-      hint: "Plugin search · Third-party plugin · Active now",
+      hint: "Plugin search · External plugin · Active now",
     });
     expect(options[1]).toMatchObject({
       value: "brave",
@@ -413,9 +413,13 @@ describe("setupSearch", () => {
       expect.objectContaining({
         options: expect.arrayContaining([
           expect.objectContaining({
+            value: "brave",
+            label: "Brave Search [Active]",
+          }),
+          expect.objectContaining({
             value: "__install_plugin__",
-            label: "Install another provider plugin",
-            hint: "Add another supported web search plugin",
+            label: "Install external provider plugin",
+            hint: "Add an external web search plugin",
           }),
         ]),
       }),

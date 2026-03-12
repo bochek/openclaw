@@ -216,6 +216,16 @@ async function promptWebToolsConfig(
   };
 
   if (enableSearch) {
+    nextConfig = {
+      ...nextConfig,
+      tools: {
+        ...nextConfig.tools,
+        web: {
+          ...nextConfig.tools?.web,
+          search: nextSearch,
+        },
+      },
+    };
     const applied = await promptSearchProviderFlow({
       config: nextConfig,
       runtime,

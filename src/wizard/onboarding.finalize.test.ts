@@ -388,7 +388,7 @@ describe("finalizeOnboardingWizard", () => {
     const noteCalls = (prompter.note as ReturnType<typeof vi.fn>).mock.calls;
     const webSearchNote = noteCalls.find((call) => call?.[1] === "Web search");
     expect(webSearchNote?.[0]).toContain("plugin-provided provider");
-    expect(webSearchNote?.[0]).toContain("Source: Third-party plugin");
+    expect(webSearchNote?.[0]).toContain("Source: External plugin");
     expect(webSearchNote?.[0]).not.toContain("no API key was found");
     expect(loadOpenClawPlugins).toHaveBeenCalledWith(
       expect.objectContaining({

@@ -61,17 +61,17 @@ export function buildProviderSelectionOptions<T extends string>(params: {
   intent: ProviderManagementIntent;
   options: Array<ProviderManagementOption<T>>;
   activeValue?: string;
-  activePrefix?: string;
+  activeSuffix?: string;
   hiddenValues?: Iterable<string>;
 }): Array<ProviderManagementOption<T>> {
   const hiddenValues = new Set(params.hiddenValues ?? []);
   return params.options
     .filter((option) => !hiddenValues.has(option.value))
     .map((option) =>
-      params.intent === "switch-active" && option.value === params.activeValue
+      option.value === params.activeValue
         ? {
             ...option,
-            label: `${params.activePrefix ?? "[Active] "} ${option.label}`.trim(),
+            label: `${option.label}${params.activeSuffix ?? " [Active]"}`.trim(),
           }
         : option,
     );

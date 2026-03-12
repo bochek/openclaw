@@ -17,8 +17,6 @@ import { createPluginLoaderLogger } from "../../plugins/logger.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import type { WizardPrompter } from "../../wizard/prompts.js";
 
-type InstallChoice = "enter" | "skip";
-
 export type InstallablePluginCatalogEntry = {
   id: string;
   meta: {
@@ -117,58 +115,41 @@ function addPluginLoadPath(cfg: OpenClawConfig, pluginPath: string): OpenClawCon
 
 async function promptInstallChoice(params: {
   entry: InstallablePluginCatalogEntry;
-  localPath?: string | null;
-  defaultSource: string;
   prompter: WizardPrompter;
   workspaceDir?: string;
   allowLocal: boolean;
 }): Promise<string | null> {
-  const { entry, localPath, prompter, defaultSource, workspaceDir, allowLocal } = params;
-  const action = await prompter.select<InstallChoice>({
-    message: `Install ${entry.meta.label} plugin?`,
-    options: [
-      {
-        value: "enter",
-        label: "Enter package or local path",
-        hint: localPath
-          ? `${entry.install.npmSpec} or ${localPath}`
-          : `${entry.install.npmSpec} or ./path/to/plugin`,
-      },
-      { value: "skip", label: "Skip for now" },
-    ],
-    initialValue: "enter",
-  });
-
-  if (action === "skip") {
-    return null;
-  }
+  const { entry, prompter, workspaceDir, allowLocal } = params;
+  const genericPlaceholder = "@scope/plugin-name or extensions/plugin-name (leave blank to skip)";
 
   while (true) {
     const source = (
       await prompter.text({
         message: "Plugin package or local path",
-        initialValue: defaultSource,
-        placeholder: localPath
-          ? `${entry.install.npmSpec} or ${localPath}`
-          : `${entry.install.npmSpec} or ./path/to/plugin`,
-        validate: (value) =>
-          value.trim().length > 0 ? undefined : "Enter a package or local path",
+        placeholder: genericPlaceholder,
       })
     ).trim();
+
+    if (!source) {
+      return null;
+    }
 
     const existingPath = resolveExistingPath(source, workspaceDir, allowLocal);
     if (existingPath) {
       return existingPath;
     }
 
-    const looksLikePath =
-      source.startsWith(".") ||
-      source.startsWith("/") ||
-      source.startsWith("~") ||
-      source.includes("/") ||
-      source.includes("\\");
+    const looksLikePath = isLikelyLocalPath(source);
     if (looksLikePath) {
       await prompter.note(`Path not found: ${source}`, "Plugin install");
+      continue;
+    }
+
+    if (!matchesCatalogNpmSpec(source, entry.install.npmSpec)) {
+      await prompter.note(
+        `This flow installs ${entry.install.npmSpec}. Enter that package or a local plugin path.`,
+        "Plugin install",
+      );
       continue;
     }
 
@@ -176,53 +157,42 @@ async function promptInstallChoice(params: {
   }
 }
 
-function resolveInstallDefaultSource(params: {
-  entry: InstallablePluginCatalogEntry;
-  defaultChoice: "npm" | "local";
-  localPath?: string | null;
-}): string {
-  const { entry, defaultChoice, localPath } = params;
-  if (defaultChoice === "local" && localPath) {
-    return localPath;
-  }
-  return entry.install.npmSpec;
-}
-
 function isLikelyLocalPath(source: string): boolean {
-  return (
-    source.startsWith(".") ||
-    source.startsWith("/") ||
-    source.startsWith("~") ||
-    source.includes("/") ||
-    source.includes("\\")
-  );
+  const trimmed = source.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (trimmed.startsWith(".") || trimmed.startsWith("/") || trimmed.startsWith("~")) {
+    return true;
+  }
+  if (trimmed.includes("\\")) {
+    return true;
+  }
+  if (trimmed.startsWith("@")) {
+    return false;
+  }
+  return trimmed.includes("/");
 }
 
-function resolveInstallDefaultChoice(params: {
-  cfg: OpenClawConfig;
-  entry: InstallablePluginCatalogEntry;
-  localPath?: string | null;
-  bundledLocalPath?: string | null;
-}): InstallChoice {
-  const { cfg, entry, localPath, bundledLocalPath } = params;
-  if (bundledLocalPath) {
-    return "local";
+function parseNpmPackageName(spec: string): string {
+  const trimmed = spec.trim();
+  if (!trimmed) {
+    return trimmed;
   }
-  const updateChannel = cfg.update?.channel;
-  if (updateChannel === "dev") {
-    return localPath ? "local" : "npm";
+  if (trimmed.startsWith("@")) {
+    const slashIndex = trimmed.indexOf("/");
+    if (slashIndex === -1) {
+      return trimmed;
+    }
+    const versionIndex = trimmed.indexOf("@", slashIndex + 1);
+    return versionIndex === -1 ? trimmed : trimmed.slice(0, versionIndex);
   }
-  if (updateChannel === "stable" || updateChannel === "beta") {
-    return "npm";
-  }
-  const entryDefault = entry.install.defaultChoice;
-  if (entryDefault === "local") {
-    return localPath ? "local" : "npm";
-  }
-  if (entryDefault === "npm") {
-    return "npm";
-  }
-  return localPath ? "local" : "npm";
+  const versionIndex = trimmed.indexOf("@");
+  return versionIndex === -1 ? trimmed : trimmed.slice(0, versionIndex);
+}
+
+function matchesCatalogNpmSpec(input: string, expectedSpec: string): boolean {
+  return parseNpmPackageName(input) === parseNpmPackageName(expectedSpec);
 }
 
 export async function ensureOnboardingPluginInstalled(params: {
@@ -244,16 +214,8 @@ export async function ensureOnboardingPluginInstalled(params: {
         findBundledPluginSourceInMap({ bundled: bundledSources, lookup }),
     })?.bundledSource.localPath ?? null;
   const localPath = bundledLocalPath ?? resolveLocalPath(entry, workspaceDir, allowLocal);
-  const defaultChoice = resolveInstallDefaultChoice({
-    cfg: next,
-    entry,
-    localPath,
-    bundledLocalPath,
-  });
   const source = await promptInstallChoice({
     entry,
-    localPath,
-    defaultSource: resolveInstallDefaultSource({ entry, defaultChoice, localPath }),
     prompter,
     workspaceDir,
     allowLocal,

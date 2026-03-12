@@ -507,7 +507,7 @@ export async function finalizeOnboardingWizard(
     const label = pickerEntry?.label ?? builtinEntry?.label ?? webSearchProvider;
     const sourceLine =
       pickerEntry?.kind === "plugin"
-        ? `Source: ${pickerEntry.origin === "bundled" ? "Bundled plugin" : "Third-party plugin"}`
+        ? `Source: ${pickerEntry.origin === "bundled" ? "Bundled plugin" : "External plugin"}`
         : undefined;
     const storedKey = builtinEntry ? resolveExistingKey(nextConfig, builtinEntry.value) : undefined;
     const keyConfigured = builtinEntry ? hasExistingKey(nextConfig, builtinEntry.value) : false;

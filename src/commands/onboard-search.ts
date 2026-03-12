@@ -124,7 +124,7 @@ function humanizeConfigKey(value: string): string {
 }
 
 function formatPluginSourceHint(origin: PluginOrigin): string {
-  return origin === "bundled" ? "Bundled plugin" : "Third-party plugin";
+  return origin === "bundled" ? "Bundled plugin" : "External plugin";
 }
 
 export function resolveInstallableSearchProviderPlugins(
@@ -937,8 +937,8 @@ export function buildSearchProviderPickerModel(
       ? [
           {
             value: SEARCH_PROVIDER_INSTALL_SENTINEL as const,
-            label: "Install another provider plugin",
-            hint: "Add another supported web search plugin",
+            label: "Install external provider plugin",
+            hint: "Add an external web search plugin",
           },
         ]
       : []),
