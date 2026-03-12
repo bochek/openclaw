@@ -11,7 +11,7 @@ import { makeZeroUsageSnapshot } from "./usage.js";
 type SessionEventHandler = (evt: unknown) => void;
 
 describe("subscribeEmbeddedPiSession", () => {
-  it("splits long single-line fenced blocks with reopen/close", () => {
+  it("splits long single-line fenced blocks with reopen/close", async () => {
     const onBlockReply = vi.fn();
     const { emit } = createParagraphChunkedBlockReplyHarness({
       onBlockReply,
@@ -23,6 +23,7 @@ describe("subscribeEmbeddedPiSession", () => {
 
     const text = `\`\`\`json\n${"x".repeat(120)}\n\`\`\``;
     emitAssistantTextDeltaAndEnd({ emit, text });
+    await Promise.resolve();
     expectFencedChunks(onBlockReply.mock.calls, "```json");
   });
   it("waits for auto-compaction retry and clears buffered text", async () => {
@@ -151,5 +152,33 @@ describe("subscribeEmbeddedPiSession", () => {
 
     const usage = (session.messages?.[0] as { usage?: unknown } | undefined)?.usage;
     expect(usage).toEqual(makeZeroUsageSnapshot());
+  });
+
+  it("does not cache non-block assistant text across a willRetry compaction reset", () => {
+    const listeners: SessionEventHandler[] = [];
+    const session = {
+      subscribe: (listener: SessionEventHandler) => {
+        listeners.push(listener);
+        return () => {};
+      },
+    } as unknown as Parameters<typeof subscribeEmbeddedPiSession>[0]["session"];
+
+    const subscription = subscribeEmbeddedPiSession({
+      session,
+      runId: "run-4",
+    });
+
+    const assistantMessage = {
+      role: "assistant",
+      content: [{ type: "text", text: "Repeated completion text" }],
+    } as AssistantMessage;
+
+    for (const listener of listeners) {
+      listener({ type: "message_end", message: assistantMessage });
+      listener({ type: "auto_compaction_end", willRetry: true });
+      listener({ type: "message_end", message: assistantMessage });
+    }
+
+    expect(subscription.assistantTexts).toEqual(["Repeated completion text"]);
   });
 });

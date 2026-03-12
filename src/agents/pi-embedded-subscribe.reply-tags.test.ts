@@ -27,7 +27,7 @@ describe("subscribeEmbeddedPiSession reply tags", () => {
     return { emit, onBlockReply };
   }
 
-  it("carries reply_to_current across tag-only block chunks", () => {
+  it("carries reply_to_current across tag-only block chunks", async () => {
     const { emit, onBlockReply } = createBlockReplyHarness();
 
     emit({ type: "message_start", message: { role: "assistant" } });
@@ -39,6 +39,7 @@ describe("subscribeEmbeddedPiSession reply tags", () => {
       content: [{ type: "text", text: "[[reply_to_current]]\nHello" }],
     } as AssistantMessage;
     emit({ type: "message_end", message: assistantMessage });
+    await Promise.resolve();
 
     expect(onBlockReply).toHaveBeenCalledTimes(1);
     const payload = onBlockReply.mock.calls[0]?.[0];
@@ -47,7 +48,7 @@ describe("subscribeEmbeddedPiSession reply tags", () => {
     expect(payload?.replyToTag).toBe(true);
   });
 
-  it("flushes trailing directive tails on stream end", () => {
+  it("flushes trailing directive tails on stream end", async () => {
     const { emit, onBlockReply } = createBlockReplyHarness();
 
     emit({ type: "message_start", message: { role: "assistant" } });
@@ -59,6 +60,7 @@ describe("subscribeEmbeddedPiSession reply tags", () => {
       content: [{ type: "text", text: "Hello [[" }],
     } as AssistantMessage;
     emit({ type: "message_end", message: assistantMessage });
+    await Promise.resolve();
 
     expect(onBlockReply).toHaveBeenCalledTimes(2);
     expect(onBlockReply.mock.calls[0]?.[0]?.text).toBe("Hello");
@@ -87,5 +89,44 @@ describe("subscribeEmbeddedPiSession reply tags", () => {
     for (const call of onPartialReply.mock.calls) {
       expect(call[0]?.text?.includes("[[reply_to")).toBe(false);
     }
+  });
+
+  it("rebuilds reply_to_current after a compaction retry replays a directive chunk", async () => {
+    const { session, emit } = createStubSessionHarness();
+    const onBlockReply = vi.fn();
+
+    subscribeEmbeddedPiSession({
+      session,
+      runId: "run",
+      onBlockReply,
+      blockReplyBreak: "text_end",
+      blockReplyChunking: {
+        minChars: 1,
+        maxChars: 50,
+        breakPreference: "newline",
+      },
+    });
+
+    emit({ type: "message_start", message: { role: "assistant" } });
+    emitAssistantTextDelta({ emit, delta: "[[reply_to_current]]" });
+    emit({ type: "auto_compaction_end", willRetry: true });
+
+    emit({ type: "message_start", message: { role: "assistant" } });
+    emitAssistantTextDelta({ emit, delta: "[[reply_to_current]]\nHello again" });
+    emitAssistantTextEnd({ emit });
+    emit({
+      type: "message_end",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "[[reply_to_current]]\nHello again" }],
+      } as AssistantMessage,
+    });
+    await Promise.resolve();
+
+    expect(onBlockReply).toHaveBeenCalledTimes(1);
+    const payload = onBlockReply.mock.calls[0]?.[0];
+    expect(payload?.text).toBe("Hello again");
+    expect(payload?.replyToCurrent).toBe(true);
+    expect(payload?.replyToTag).toBe(true);
   });
 });
