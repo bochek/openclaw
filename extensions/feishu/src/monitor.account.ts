@@ -401,7 +401,7 @@ function registerEventHandlers(
       const event = data as unknown as FeishuMessageEvent;
       const messageId = event.message?.message_id?.trim();
       if (messageId) {
-        const eventKey = `${accountId}:evt:${messageId}`;
+        const eventKey = `evt:${messageId}`;
         if (eventDedup.check(eventKey)) {
           log(`feishu[${accountId}]: dropping duplicate event for message ${messageId}`);
           return;
