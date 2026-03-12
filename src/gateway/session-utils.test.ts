@@ -877,6 +877,55 @@ describe("listSessionsFromStore search", () => {
     expect(result.sessions[0]?.estimatedCostUsd).toBeCloseTo(0.007725, 8);
   });
 
+  test("prefers persisted estimated session cost from the store", () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-session-utils-store-cost-"));
+    const storePath = path.join(tmpDir, "sessions.json");
+    fs.writeFileSync(
+      path.join(tmpDir, "sess-main.jsonl"),
+      [
+        JSON.stringify({ type: "session", version: 1, id: "sess-main" }),
+        JSON.stringify({
+          message: {
+            role: "assistant",
+            provider: "anthropic",
+            model: "claude-sonnet-4-6",
+            usage: {
+              input: 2_000,
+              output: 500,
+              cacheRead: 1_200,
+              cost: { total: 0.007725 },
+            },
+          },
+        }),
+      ].join("\n"),
+      "utf-8",
+    );
+
+    try {
+      const result = listSessionsFromStore({
+        cfg: baseCfg,
+        storePath,
+        store: {
+          "agent:main:main": {
+            sessionId: "sess-main",
+            updatedAt: Date.now(),
+            modelProvider: "anthropic",
+            model: "claude-sonnet-4-6",
+            estimatedCostUsd: 0.1234,
+            totalTokens: 0,
+            totalTokensFresh: false,
+          } as SessionEntry,
+        },
+        opts: {},
+      });
+
+      expect(result.sessions[0]?.estimatedCostUsd).toBe(0.1234);
+      expect(result.sessions[0]?.totalTokens).toBe(3_200);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
   test("keeps zero estimated session cost when configured model pricing resolves to free", () => {
     const cfg = {
       session: { mainKey: "main" },

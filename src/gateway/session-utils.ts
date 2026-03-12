@@ -234,10 +234,15 @@ function resolveEstimatedSessionCostUsd(params: {
   cfg: OpenClawConfig;
   provider?: string;
   model?: string;
-  entry?: Pick<SessionEntry, "inputTokens" | "outputTokens" | "cacheRead" | "cacheWrite">;
+  entry?: Pick<
+    SessionEntry,
+    "estimatedCostUsd" | "inputTokens" | "outputTokens" | "cacheRead" | "cacheWrite"
+  >;
   explicitCostUsd?: number;
 }): number | undefined {
-  const explicitCostUsd = resolveNonNegativeNumber(params.explicitCostUsd);
+  const explicitCostUsd = resolveNonNegativeNumber(
+    params.explicitCostUsd ?? params.entry?.estimatedCostUsd,
+  );
   if (explicitCostUsd !== undefined) {
     return explicitCostUsd;
   }

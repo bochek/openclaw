@@ -569,8 +569,6 @@ export type SessionTranscriptUsageSnapshot = {
   costUsd?: number;
 };
 
-const USAGE_READ_SIZES = [16 * 1024, 64 * 1024, 256 * 1024, 1024 * 1024];
-
 function extractTranscriptUsageCost(raw: unknown): number | undefined {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     return undefined;
@@ -583,17 +581,6 @@ function extractTranscriptUsageCost(raw: unknown): number | undefined {
   return typeof total === "number" && Number.isFinite(total) && total >= 0 ? total : undefined;
 }
 
-function readTailChunk(fd: number, size: number, maxBytes: number): string | null {
-  const readLen = Math.min(size, maxBytes);
-  if (readLen <= 0) {
-    return null;
-  }
-  const readStart = Math.max(0, size - readLen);
-  const buf = Buffer.alloc(readLen);
-  fs.readSync(fd, buf, 0, readLen, readStart);
-  return buf.toString("utf-8");
-}
-
 function resolvePositiveUsageNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
@@ -604,9 +591,18 @@ function extractLatestUsageFromTranscriptChunk(
   const lines = chunk.split(/\r?\n/).filter((line) => line.trim().length > 0);
   const snapshot: SessionTranscriptUsageSnapshot = {};
   let sawSnapshot = false;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cacheRead = 0;
+  let cacheWrite = 0;
+  let sawInputTokens = false;
+  let sawOutputTokens = false;
+  let sawCacheRead = false;
+  let sawCacheWrite = false;
+  let costUsdTotal = 0;
+  let sawCost = false;
 
-  for (let i = lines.length - 1; i >= 0; i -= 1) {
-    const line = lines[i];
+  for (const line of lines) {
     try {
       const parsed = JSON.parse(line) as Record<string, unknown>;
       const message =
@@ -655,49 +651,62 @@ function extractLatestUsageFromTranscriptChunk(
       }
 
       sawSnapshot = true;
-      if (!snapshot.modelProvider && modelProvider) {
-        snapshot.modelProvider = modelProvider;
+      if (!isDeliveryMirror) {
+        if (modelProvider) {
+          snapshot.modelProvider = modelProvider;
+        }
+        if (model) {
+          snapshot.model = model;
+        }
       }
-      if (!snapshot.model && model) {
-        snapshot.model = model;
+      if (typeof usage?.input === "number" && Number.isFinite(usage.input)) {
+        inputTokens += usage.input;
+        sawInputTokens = true;
       }
-      if (snapshot.inputTokens === undefined) {
-        snapshot.inputTokens = resolvePositiveUsageNumber(usage?.input);
+      if (typeof usage?.output === "number" && Number.isFinite(usage.output)) {
+        outputTokens += usage.output;
+        sawOutputTokens = true;
       }
-      if (snapshot.outputTokens === undefined) {
-        snapshot.outputTokens = resolvePositiveUsageNumber(usage?.output);
+      if (typeof usage?.cacheRead === "number" && Number.isFinite(usage.cacheRead)) {
+        cacheRead += usage.cacheRead;
+        sawCacheRead = true;
       }
-      if (snapshot.cacheRead === undefined) {
-        snapshot.cacheRead = resolvePositiveUsageNumber(usage?.cacheRead);
+      if (typeof usage?.cacheWrite === "number" && Number.isFinite(usage.cacheWrite)) {
+        cacheWrite += usage.cacheWrite;
+        sawCacheWrite = true;
       }
-      if (snapshot.cacheWrite === undefined) {
-        snapshot.cacheWrite = resolvePositiveUsageNumber(usage?.cacheWrite);
-      }
-      if (snapshot.totalTokens === undefined && typeof totalTokens === "number") {
+      if (typeof totalTokens === "number") {
         snapshot.totalTokens = totalTokens;
         snapshot.totalTokensFresh = true;
       }
-      if (
-        snapshot.costUsd === undefined &&
-        typeof costUsd === "number" &&
-        Number.isFinite(costUsd)
-      ) {
-        snapshot.costUsd = costUsd;
-      }
-
-      if (
-        snapshot.modelProvider &&
-        snapshot.model &&
-        snapshot.totalTokens !== undefined &&
-        snapshot.costUsd !== undefined
-      ) {
-        break;
+      if (typeof costUsd === "number" && Number.isFinite(costUsd)) {
+        costUsdTotal += costUsd;
+        sawCost = true;
       }
     } catch {
       // skip malformed lines
     }
   }
-  return sawSnapshot ? snapshot : null;
+
+  if (!sawSnapshot) {
+    return null;
+  }
+  if (sawInputTokens) {
+    snapshot.inputTokens = inputTokens;
+  }
+  if (sawOutputTokens) {
+    snapshot.outputTokens = outputTokens;
+  }
+  if (sawCacheRead) {
+    snapshot.cacheRead = cacheRead;
+  }
+  if (sawCacheWrite) {
+    snapshot.cacheWrite = cacheWrite;
+  }
+  if (sawCost) {
+    snapshot.costUsd = costUsdTotal;
+  }
+  return snapshot;
 }
 
 export function readLatestSessionUsageFromTranscript(
@@ -713,24 +722,11 @@ export function readLatestSessionUsageFromTranscript(
 
   return withOpenTranscriptFd(filePath, (fd) => {
     const stat = fs.fstatSync(fd);
-    const size = stat.size;
-    if (size === 0) {
+    if (stat.size === 0) {
       return null;
     }
-    for (const maxBytes of USAGE_READ_SIZES) {
-      const chunk = readTailChunk(fd, size, maxBytes);
-      if (!chunk) {
-        continue;
-      }
-      const snapshot = extractLatestUsageFromTranscriptChunk(chunk);
-      if (snapshot) {
-        return snapshot;
-      }
-      if (maxBytes >= size) {
-        break;
-      }
-    }
-    return null;
+    const chunk = fs.readFileSync(fd, "utf-8");
+    return extractLatestUsageFromTranscriptChunk(chunk);
   });
 }
 

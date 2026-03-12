@@ -699,7 +699,7 @@ describe("readLatestSessionUsageFromTranscript", () => {
     });
   });
 
-  test("backfills missing model and cost fields from earlier assistant usage snapshots", () => {
+  test("aggregates assistant usage across the full transcript and keeps the latest context snapshot", () => {
     const sessionId = "usage-aggregate";
     writeTranscript(tmpDir, sessionId, [
       { type: "session", version: 1, id: sessionId },
@@ -721,22 +721,72 @@ describe("readLatestSessionUsageFromTranscript", () => {
           role: "assistant",
           usage: {
             input: 2_400,
+            output: 250,
             cacheRead: 900,
+            cost: { total: 0.006 },
           },
         },
       },
     ]);
 
-    expect(readLatestSessionUsageFromTranscript(sessionId, storePath)).toEqual({
+    const snapshot = readLatestSessionUsageFromTranscript(sessionId, storePath);
+    expect(snapshot).toMatchObject({
       modelProvider: "anthropic",
       model: "claude-sonnet-4-6",
-      inputTokens: 2400,
-      outputTokens: 400,
-      cacheRead: 900,
+      inputTokens: 4200,
+      outputTokens: 650,
+      cacheRead: 1500,
       totalTokens: 3300,
       totalTokensFresh: true,
-      costUsd: 0.0055,
     });
+    expect(snapshot?.costUsd).toBeCloseTo(0.0115, 8);
+  });
+
+  test("reads earlier assistant usage outside the old tail window", () => {
+    const sessionId = "usage-full-transcript";
+    const filler = "x".repeat(20_000);
+    writeTranscript(tmpDir, sessionId, [
+      { type: "session", version: 1, id: sessionId },
+      {
+        message: {
+          role: "assistant",
+          provider: "openai",
+          model: "gpt-5.4",
+          usage: {
+            input: 1_000,
+            output: 200,
+            cacheRead: 100,
+            cost: { total: 0.0042 },
+          },
+        },
+      },
+      ...Array.from({ length: 80 }, () => ({ message: { role: "user", content: filler } })),
+      {
+        message: {
+          role: "assistant",
+          provider: "openai",
+          model: "gpt-5.4",
+          usage: {
+            input: 500,
+            output: 150,
+            cacheRead: 50,
+            cost: { total: 0.0021 },
+          },
+        },
+      },
+    ]);
+
+    const snapshot = readLatestSessionUsageFromTranscript(sessionId, storePath);
+    expect(snapshot).toMatchObject({
+      modelProvider: "openai",
+      model: "gpt-5.4",
+      inputTokens: 1500,
+      outputTokens: 350,
+      cacheRead: 150,
+      totalTokens: 550,
+      totalTokensFresh: true,
+    });
+    expect(snapshot?.costUsd).toBeCloseTo(0.0063, 8);
   });
 
   test("returns null when the transcript has no assistant usage snapshot", () => {
