@@ -237,6 +237,13 @@ export type ToolEventRecipientRegistry = {
   markFinal: (runId: string) => void;
 };
 
+export type SessionEventSubscriberRegistry = {
+  subscribe: (connId: string) => void;
+  unsubscribe: (connId: string) => void;
+  getAll: () => ReadonlySet<string>;
+  clear: () => void;
+};
+
 type ToolRecipientEntry = {
   connIds: Set<string>;
   updatedAt: number;
@@ -245,6 +252,32 @@ type ToolRecipientEntry = {
 
 const TOOL_EVENT_RECIPIENT_TTL_MS = 10 * 60 * 1000;
 const TOOL_EVENT_RECIPIENT_FINAL_GRACE_MS = 30 * 1000;
+
+export function createSessionEventSubscriberRegistry(): SessionEventSubscriberRegistry {
+  const connIds = new Set<string>();
+  const empty = new Set<string>();
+
+  return {
+    subscribe: (connId: string) => {
+      const normalized = connId.trim();
+      if (!normalized) {
+        return;
+      }
+      connIds.add(normalized);
+    },
+    unsubscribe: (connId: string) => {
+      const normalized = connId.trim();
+      if (!normalized) {
+        return;
+      }
+      connIds.delete(normalized);
+    },
+    getAll: () => (connIds.size > 0 ? connIds : empty),
+    clear: () => {
+      connIds.clear();
+    },
+  };
+}
 
 export function createToolEventRecipientRegistry(): ToolEventRecipientRegistry {
   const recipients = new Map<string, ToolRecipientEntry>();
@@ -326,6 +359,7 @@ export type AgentEventHandlerOptions = {
   resolveSessionKeyForRun: (runId: string) => string | undefined;
   clearAgentRunContext: (runId: string) => void;
   toolEventRecipients: ToolEventRecipientRegistry;
+  sessionEventSubscribers: SessionEventSubscriberRegistry;
 };
 
 export function createAgentEventHandler({
@@ -337,7 +371,16 @@ export function createAgentEventHandler({
   resolveSessionKeyForRun,
   clearAgentRunContext,
   toolEventRecipients,
+  sessionEventSubscribers,
 }: AgentEventHandlerOptions) {
+  const emitSessionEvent = (event: string, payload: unknown) => {
+    const connIds = sessionEventSubscribers.getAll();
+    if (connIds.size === 0) {
+      return;
+    }
+    broadcastToConnIds(event, payload, connIds, { dropIfSlow: true });
+  };
+
   const emitChatDelta = (
     sessionKey: string,
     clientRunId: string,
@@ -649,11 +692,12 @@ export function createAgentEventHandler({
       sessionKey &&
       (lifecyclePhase === "start" || lifecyclePhase === "end" || lifecyclePhase === "error")
     ) {
-      broadcast(
-        "sessions.changed",
-        { sessionKey, phase: lifecyclePhase, runId: evt.runId, ts: evt.ts },
-        { dropIfSlow: true },
-      );
+      emitSessionEvent("sessions.changed", {
+        sessionKey,
+        phase: lifecyclePhase,
+        runId: evt.runId,
+        ts: evt.ts,
+      });
     }
   };
 }

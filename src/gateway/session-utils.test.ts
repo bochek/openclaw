@@ -981,6 +981,45 @@ describe("listSessionsFromStore subagent metadata", () => {
     expect(failed?.status).toBe("failed");
     expect(failed?.runtimeMs).toBe(5_000);
   });
+
+  test("maps timeout outcomes to timeout status and clamps negative runtime", () => {
+    const now = Date.now();
+    const store: Record<string, SessionEntry> = {
+      "agent:main:subagent:timeout": {
+        sessionId: "sess-timeout",
+        updatedAt: now,
+        spawnedBy: "agent:main:main",
+      } as SessionEntry,
+    };
+
+    addSubagentRunForTests({
+      runId: "run-timeout",
+      childSessionKey: "agent:main:subagent:timeout",
+      controllerSessionKey: "agent:main:main",
+      requesterSessionKey: "agent:main:main",
+      requesterDisplayKey: "main",
+      task: "timeout task",
+      cleanup: "keep",
+      createdAt: now - 10_000,
+      startedAt: now - 1_000,
+      endedAt: now - 2_000,
+      outcome: { status: "timeout" },
+      model: "openai/gpt-5.4",
+    });
+
+    const result = listSessionsFromStore({
+      cfg,
+      storePath: "/tmp/sessions.json",
+      store,
+      opts: {},
+    });
+
+    const timeout = result.sessions.find(
+      (session) => session.key === "agent:main:subagent:timeout",
+    );
+    expect(timeout?.status).toBe("timeout");
+    expect(timeout?.runtimeMs).toBe(0);
+  });
 });
 
 describe("loadCombinedSessionStoreForGateway includes disk-only agents (#32804)", () => {

@@ -9,6 +9,7 @@ import {
   createGatewaySuiteHarness,
   installGatewayTestHooks,
   onceMessage,
+  rpcReq,
   writeSessionStore,
 } from "./test-helpers.server.js";
 
@@ -31,6 +32,71 @@ async function createSessionStoreFile(): Promise<string> {
 }
 
 describe("session.message websocket events", () => {
+  test("only sends transcript events to subscribed operator clients", async () => {
+    const storePath = await createSessionStoreFile();
+    await writeSessionStore({
+      entries: {
+        main: {
+          sessionId: "sess-main",
+          updatedAt: Date.now(),
+        },
+      },
+      storePath,
+    });
+
+    const harness = await createGatewaySuiteHarness();
+    try {
+      const subscribedWs = await harness.openWs();
+      const unsubscribedWs = await harness.openWs();
+      const nodeWs = await harness.openWs();
+      try {
+        await connectOk(subscribedWs, { scopes: ["operator.read"] });
+        await rpcReq(subscribedWs, "sessions.subscribe");
+        await connectOk(unsubscribedWs, { scopes: ["operator.read"] });
+        await connectOk(nodeWs, { role: "node", scopes: [] });
+
+        const subscribedEvent = onceMessage(
+          subscribedWs,
+          (message) =>
+            message.type === "event" &&
+            message.event === "session.message" &&
+            (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
+              "agent:main:main",
+        );
+        const unsubscribedEvent = Promise.race([
+          onceMessage(
+            unsubscribedWs,
+            (message) => message.type === "event" && message.event === "session.message",
+          ).then(() => "received"),
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 300)),
+        ]);
+        const nodeEvent = Promise.race([
+          onceMessage(
+            nodeWs,
+            (message) => message.type === "event" && message.event === "session.message",
+          ).then(() => "received"),
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 300)),
+        ]);
+
+        const appended = await appendAssistantMessageToSessionTranscript({
+          sessionKey: "agent:main:main",
+          text: "subscribed only",
+          storePath,
+        });
+        expect(appended.ok).toBe(true);
+        await expect(subscribedEvent).resolves.toBeTruthy();
+        await expect(unsubscribedEvent).resolves.toBe("timeout");
+        await expect(nodeEvent).resolves.toBe("timeout");
+      } finally {
+        subscribedWs.close();
+        unsubscribedWs.close();
+        nodeWs.close();
+      }
+    } finally {
+      await harness.close();
+    }
+  });
+
   test("broadcasts appended transcript messages with the session key", async () => {
     const storePath = await createSessionStoreFile();
     await writeSessionStore({
@@ -47,7 +113,8 @@ describe("session.message websocket events", () => {
     try {
       const ws = await harness.openWs();
       try {
-        await connectOk(ws);
+        await connectOk(ws, { scopes: ["operator.read"] });
+        await rpcReq(ws, "sessions.subscribe");
 
         const appendPromise = appendAssistantMessageToSessionTranscript({
           sessionKey: "agent:main:main",

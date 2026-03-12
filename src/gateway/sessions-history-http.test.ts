@@ -110,6 +110,58 @@ describe("session history HTTP endpoints", () => {
     }
   });
 
+  test("streams bounded history windows over SSE", async () => {
+    const { storePath } = await seedSession({ text: "first message" });
+    const second = await appendAssistantMessageToSessionTranscript({
+      sessionKey: "agent:main:main",
+      text: "second message",
+      storePath,
+    });
+    expect(second.ok).toBe(true);
+
+    const harness = await createGatewaySuiteHarness();
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:${harness.port}/sessions/${encodeURIComponent("agent:main:main")}/history?limit=1`,
+        {
+          headers: {
+            ...AUTH_HEADER,
+            Accept: "text/event-stream",
+          },
+        },
+      );
+
+      expect(res.status).toBe(200);
+      const reader = res.body?.getReader();
+      expect(reader).toBeTruthy();
+      const streamState = { buffer: "" };
+      const historyEvent = await readSseEvent(reader!, streamState);
+      expect(historyEvent.event).toBe("history");
+      expect(
+        (historyEvent.data as { messages?: Array<{ content?: Array<{ text?: string }> }> })
+          .messages?.[0]?.content?.[0]?.text,
+      ).toBe("second message");
+
+      const appended = await appendAssistantMessageToSessionTranscript({
+        sessionKey: "agent:main:main",
+        text: "third message",
+        storePath,
+      });
+      expect(appended.ok).toBe(true);
+
+      const nextEvent = await readSseEvent(reader!, streamState);
+      expect(nextEvent.event).toBe("history");
+      expect(
+        (nextEvent.data as { messages?: Array<{ content?: Array<{ text?: string }> }> })
+          .messages?.[0]?.content?.[0]?.text,
+      ).toBe("third message");
+
+      await reader?.cancel();
+    } finally {
+      await harness.close();
+    }
+  });
+
   test("streams session history updates over SSE", async () => {
     const { storePath } = await seedSession({ text: "first message" });
 

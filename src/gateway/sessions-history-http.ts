@@ -20,6 +20,8 @@ import {
   resolveSessionTranscriptCandidates,
 } from "./session-utils.js";
 
+const MAX_SESSION_HISTORY_LIMIT = 1000;
+
 function resolveSessionHistoryPath(req: IncomingMessage): string | null {
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   const match = url.pathname.match(/^\/sessions\/([^/]+)\/history$/);
@@ -48,7 +50,7 @@ function resolveLimit(req: IncomingMessage): number | undefined {
   if (!Number.isFinite(value) || value < 1) {
     return 1;
   }
-  return Math.max(1, value);
+  return Math.min(MAX_SESSION_HISTORY_LIMIT, Math.max(1, value));
 }
 
 function maybeLimitMessages(messages: unknown[], limit: number | undefined): unknown[] {
@@ -168,29 +170,30 @@ export async function handleSessionHistoryHttpRequest(
     if (!updatePath || !transcriptCandidates.has(updatePath)) {
       return;
     }
-    const nextMessages = maybeLimitMessages(
-      readSessionMessages(entry.sessionId, target.storePath, entry.sessionFile),
-      limit,
-    );
-    if (nextMessages.length < sentMessages.length) {
-      sentMessages = nextMessages;
+    if (update.message !== undefined) {
+      if (limit === undefined) {
+        sentMessages = [...sentMessages, update.message];
+        sseWrite(res, "message", {
+          sessionKey: target.canonicalKey,
+          message: update.message,
+        });
+        return;
+      }
+      sentMessages = maybeLimitMessages([...sentMessages, update.message], limit);
       sseWrite(res, "history", {
         sessionKey: target.canonicalKey,
         messages: sentMessages,
       });
       return;
     }
-    if (nextMessages.length === sentMessages.length) {
-      return;
-    }
-    const appended = nextMessages.slice(sentMessages.length);
-    sentMessages = nextMessages;
-    for (const message of appended) {
-      sseWrite(res, "message", {
-        sessionKey: target.canonicalKey,
-        message,
-      });
-    }
+    sentMessages = maybeLimitMessages(
+      readSessionMessages(entry.sessionId, target.storePath, entry.sessionFile),
+      limit,
+    );
+    sseWrite(res, "history", {
+      sessionKey: target.canonicalKey,
+      messages: sentMessages,
+    });
   });
 
   const cleanup = () => {

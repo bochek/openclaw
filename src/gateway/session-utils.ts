@@ -187,7 +187,7 @@ function resolveSessionRunStatus(
     endedAt?: number;
     outcome?: { status?: string };
   } | null,
-): "running" | "done" | "failed" | "killed" | undefined {
+): "running" | "done" | "failed" | "killed" | "timeout" | undefined {
   if (!run) {
     return undefined;
   }
@@ -200,6 +200,9 @@ function resolveSessionRunStatus(
   }
   if (status === "killed") {
     return "killed";
+  }
+  if (status === "timeout") {
+    return "timeout";
   }
   return "done";
 }
