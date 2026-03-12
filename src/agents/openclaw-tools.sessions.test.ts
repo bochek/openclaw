@@ -845,6 +845,16 @@ describe("sessions tools", () => {
       startedAt: now - 2 * 60_000,
     });
     addSubagentRunForTests({
+      runId: "run-child",
+      childSessionKey: "agent:main:subagent:active:subagent:child",
+      requesterSessionKey: "agent:main:subagent:active",
+      requesterDisplayKey: "subagent:active",
+      task: "child worker",
+      cleanup: "keep",
+      createdAt: now - 60_000,
+      startedAt: now - 60_000,
+    });
+    addSubagentRunForTests({
       runId: "run-recent",
       childSessionKey: "agent:main:subagent:recent",
       requesterSessionKey: "agent:main:main",
@@ -880,12 +890,16 @@ describe("sessions tools", () => {
     const result = await tool.execute("call-subagents-list", { action: "list" });
     const details = result.details as {
       status?: string;
-      active?: unknown[];
+      active?: Array<{ runId?: string; childSessions?: string[] }>;
       recent?: unknown[];
       text?: string;
     };
     expect(details.status).toBe("ok");
     expect(details.active).toHaveLength(1);
+    expect(details.active?.[0]).toMatchObject({
+      runId: "run-active",
+      childSessions: ["agent:main:subagent:active:subagent:child"],
+    });
     expect(details.recent).toHaveLength(1);
     expect(details.text).toContain("active subagents:");
     expect(details.text).toContain("recent (last 30m):");

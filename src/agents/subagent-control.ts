@@ -73,6 +73,7 @@ export type SubagentListItem = {
   pendingDescendants: number;
   runtime: string;
   runtimeMs: number;
+  childSessions?: string[];
   model?: string;
   totalTokens?: number;
   startedAt?: number;
@@ -273,6 +274,11 @@ export function buildSubagentList(params: {
     const status = resolveRunStatus(entry, {
       pendingDescendants,
     });
+    const childSessions = Array.from(
+      new Set(
+        listSubagentRunsForController(entry.childSessionKey).map((run) => run.childSessionKey),
+      ),
+    );
     const runtime = formatDurationCompact(runtimeMs);
     const label = truncateLine(resolveSubagentLabel(entry), 48);
     const task = truncateLine(entry.task.trim(), params.taskMaxChars ?? 72);
@@ -288,6 +294,7 @@ export function buildSubagentList(params: {
       pendingDescendants,
       runtime,
       runtimeMs,
+      ...(childSessions.length > 0 ? { childSessions } : {}),
       model: resolveModelRef(sessionEntry) || entry.model,
       totalTokens,
       startedAt: entry.startedAt,
