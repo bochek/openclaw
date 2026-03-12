@@ -120,13 +120,16 @@ async function promptInstallChoice(params: {
   allowLocal: boolean;
 }): Promise<string | null> {
   const { entry, prompter, workspaceDir, allowLocal } = params;
-  const genericPlaceholder = "@scope/plugin-name or extensions/plugin-name (leave blank to skip)";
+  const message = allowLocal ? "npm package or local path" : "npm package";
+  const placeholder = allowLocal
+    ? "@scope/plugin-name or extensions/plugin-name (leave blank to skip)"
+    : "@scope/plugin-name (leave blank to skip)";
 
   while (true) {
     const source = (
       await prompter.text({
-        message: "Plugin package or local path",
-        placeholder: genericPlaceholder,
+        message,
+        placeholder,
       })
     ).trim();
 
@@ -141,13 +144,20 @@ async function promptInstallChoice(params: {
 
     const looksLikePath = isLikelyLocalPath(source);
     if (looksLikePath) {
-      await prompter.note(`Path not found: ${source}`, "Plugin install");
+      await prompter.note(
+        allowLocal
+          ? `Path not found: ${source}`
+          : "Local plugin paths are unavailable here. Enter an npm package.",
+        "Plugin install",
+      );
       continue;
     }
 
     if (!matchesCatalogNpmSpec(source, entry.install.npmSpec)) {
       await prompter.note(
-        `This flow installs ${entry.install.npmSpec}. Enter that package or a local plugin path.`,
+        allowLocal
+          ? `This flow installs ${entry.install.npmSpec}. Enter that npm package or a local plugin path.`
+          : `This flow installs ${entry.install.npmSpec}. Enter that npm package.`,
         "Plugin install",
       );
       continue;

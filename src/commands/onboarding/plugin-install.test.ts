@@ -213,7 +213,7 @@ describe("ensureOnboardingPluginInstalled", () => {
   it("uses a generic placeholder without prefilled local value on dev channel", async () => {
     expect(await runPromptShapeForChannel("dev")).toEqual(
       expect.objectContaining({
-        message: "Plugin package or local path",
+        message: "npm package or local path",
         placeholder: "@scope/plugin-name or extensions/plugin-name (leave blank to skip)",
       }),
     );
@@ -222,7 +222,7 @@ describe("ensureOnboardingPluginInstalled", () => {
   it("uses the same generic placeholder without prefilled npm value on beta channel", async () => {
     expect(await runPromptShapeForChannel("beta")).toEqual(
       expect.objectContaining({
-        message: "Plugin package or local path",
+        message: "npm package or local path",
         placeholder: "@scope/plugin-name or extensions/plugin-name (leave blank to skip)",
       }),
     );
@@ -261,7 +261,7 @@ describe("ensureOnboardingPluginInstalled", () => {
 
     expect(text).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: "Plugin package or local path",
+        message: "npm package or local path",
         placeholder: "@scope/plugin-name or extensions/plugin-name (leave blank to skip)",
       }),
     );
@@ -311,7 +311,7 @@ describe("ensureOnboardingPluginInstalled", () => {
       note,
     });
     const cfg: OpenClawConfig = {};
-    vi.mocked(fs.existsSync).mockReturnValue(false);
+    mockRepoLocalPathExists();
     installPluginFromNpmSpec.mockResolvedValue({
       ok: true,
       pluginId: "zalo",
@@ -346,7 +346,7 @@ describe("ensureOnboardingPluginInstalled", () => {
       note,
     });
     const cfg: OpenClawConfig = {};
-    vi.mocked(fs.existsSync).mockReturnValue(false);
+    mockRepoLocalPathExists();
     installPluginFromNpmSpec.mockResolvedValue({
       ok: true,
       pluginId: "zalo",
@@ -363,7 +363,7 @@ describe("ensureOnboardingPluginInstalled", () => {
 
     expect(result.installed).toBe(true);
     expect(note).toHaveBeenCalledWith(
-      "This flow installs @openclaw/zalo. Enter that package or a local plugin path.",
+      "This flow installs @openclaw/zalo. Enter that npm package or a local plugin path.",
       "Plugin install",
     );
     expect(text).toHaveBeenCalledTimes(2);
@@ -391,6 +391,51 @@ describe("ensureOnboardingPluginInstalled", () => {
     expect(result.cfg).toBe(cfg);
     expect(text).toHaveBeenCalledTimes(1);
     expect(installPluginFromNpmSpec).not.toHaveBeenCalled();
+  });
+
+  it("suppresses local path affordance when local paths are unavailable", async () => {
+    const runtime = makeRuntime();
+    const note = vi.fn(async () => {});
+    const text = vi
+      .fn()
+      .mockResolvedValueOnce("extensions/zalo")
+      .mockResolvedValueOnce("@openclaw/zalo");
+    const prompter = makePrompter({
+      text: text as unknown as WizardPrompter["text"],
+      note,
+    });
+    const cfg: OpenClawConfig = {};
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    installPluginFromNpmSpec.mockResolvedValue({
+      ok: true,
+      pluginId: "zalo",
+      targetDir: "/tmp/zalo",
+      extensions: [],
+    });
+
+    const result = await ensureOnboardingPluginInstalled({
+      cfg,
+      entry: baseEntry,
+      prompter,
+      runtime,
+      workspaceDir: "/tmp/no-git-workspace",
+    });
+
+    expect(result.installed).toBe(true);
+    expect(note).toHaveBeenCalledWith(
+      "Local plugin paths are unavailable here. Enter an npm package.",
+      "Plugin install",
+    );
+    expect(text).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        message: "npm package",
+        placeholder: "@scope/plugin-name (leave blank to skip)",
+      }),
+    );
+    expect(installPluginFromNpmSpec).toHaveBeenCalledWith(
+      expect.objectContaining({ spec: "@openclaw/zalo" }),
+    );
   });
 
   it("clears discovery cache before reloading the onboarding plugin registry", () => {

@@ -46,7 +46,7 @@ function resolvePluginDiagnosticPath(diag: {
   code?: string;
   slot?: string;
 }): string {
-  if (diag.message.includes("plugin path not found")) {
+  if (diag.code === "plugin_path_not_found") {
     return "plugins.load.paths";
   }
   if (diag.slot) {

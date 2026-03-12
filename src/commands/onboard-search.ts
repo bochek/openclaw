@@ -333,46 +333,27 @@ async function maybeNoteBeforeSearchProviderConfigure(params: {
   prompter: WizardPrompter;
   workspaceDir?: string;
 }): Promise<void> {
-  if (
-    !params.hookRunner?.hasHooks("before_provider_configure") &&
-    !params.hookRunner?.hasHooks("before_search_provider_configure")
-  ) {
+  if (!params.hookRunner?.hasProviderConfigureHooks("search")) {
     return;
   }
   const activeProviderId =
     resolveCapabilitySlotSelection(params.config, "providers.search") ?? null;
   const ctx = { workspaceDir: params.workspaceDir };
-  const genericResult = params.hookRunner.hasHooks("before_provider_configure")
-    ? await params.hookRunner.runBeforeProviderConfigure(
-        {
-          providerKind: "search",
-          slot: "providers.search",
-          providerId: params.provider.providerId,
-          providerLabel: params.provider.providerLabel,
-          providerSource: params.provider.providerSource,
-          pluginId: params.provider.pluginId,
-          intent: params.intent,
-          activeProviderId,
-          configured: params.provider.configured,
-        },
-        ctx,
-      )
-    : undefined;
-  const searchResult = params.hookRunner.hasHooks("before_search_provider_configure")
-    ? await params.hookRunner.runBeforeSearchProviderConfigure(
-        {
-          providerId: params.provider.providerId,
-          providerLabel: params.provider.providerLabel,
-          providerSource: params.provider.providerSource,
-          pluginId: params.provider.pluginId,
-          intent: params.intent,
-          activeProviderId,
-          configured: params.provider.configured,
-        },
-        ctx,
-      )
-    : undefined;
-  const note = [genericResult?.note, searchResult?.note].filter(hasNonEmptyString).join("\n\n");
+  const result = await params.hookRunner.runBeforeProviderConfigure(
+    {
+      providerKind: "search",
+      slot: "providers.search",
+      providerId: params.provider.providerId,
+      providerLabel: params.provider.providerLabel,
+      providerSource: params.provider.providerSource,
+      pluginId: params.provider.pluginId,
+      intent: params.intent,
+      activeProviderId,
+      configured: params.provider.configured,
+    },
+    ctx,
+  );
+  const note = result?.note;
   if (note.trim()) {
     await params.prompter.note(note, "Provider setup");
   }
@@ -406,28 +387,15 @@ async function runAfterSearchProviderHooks(params: {
     activeProviderId: activeProviderAfter,
     configured: params.provider.configured,
   };
-  const searchConfigureEvent = {
-    providerId: params.provider.providerId,
-    providerLabel: params.provider.providerLabel,
-    providerSource: params.provider.providerSource,
-    pluginId: params.provider.pluginId,
-    intent: params.intent,
-    activeProviderId: activeProviderAfter,
-    configured: params.provider.configured,
-  };
 
-  if (params.hookRunner.hasHooks("after_provider_configure")) {
+  if (params.hookRunner.hasProviderConfigureHooks("search")) {
     await params.hookRunner.runAfterProviderConfigure(genericConfigureEvent, ctx);
-  }
-  if (params.hookRunner.hasHooks("after_search_provider_configure")) {
-    await params.hookRunner.runAfterSearchProviderConfigure(searchConfigureEvent, ctx);
   }
 
   if (
     activeProviderAfter === params.provider.providerId &&
     activeProviderBefore !== activeProviderAfter &&
-    (params.hookRunner.hasHooks("after_provider_activate") ||
-      params.hookRunner.hasHooks("after_search_provider_activate"))
+    params.hookRunner.hasProviderActivationHooks("search")
   ) {
     const genericActivateEvent = {
       providerKind: "search" as const,
@@ -439,20 +407,7 @@ async function runAfterSearchProviderHooks(params: {
       previousProviderId: activeProviderBefore,
       intent: params.intent,
     };
-    const searchActivateEvent = {
-      providerId: params.provider.providerId,
-      providerLabel: params.provider.providerLabel,
-      providerSource: params.provider.providerSource,
-      pluginId: params.provider.pluginId,
-      previousProviderId: activeProviderBefore,
-      intent: params.intent,
-    };
-    if (params.hookRunner.hasHooks("after_provider_activate")) {
-      await params.hookRunner.runAfterProviderActivate(genericActivateEvent, ctx);
-    }
-    if (params.hookRunner.hasHooks("after_search_provider_activate")) {
-      await params.hookRunner.runAfterSearchProviderActivate(searchActivateEvent, ctx);
-    }
+    await params.hookRunner.runAfterProviderActivate(genericActivateEvent, ctx);
   }
 }
 
@@ -460,12 +415,25 @@ async function promptPluginSearchProviderConfig(
   config: OpenClawConfig,
   entry: PluginSearchProviderEntry,
   prompter: WizardPrompter,
-): Promise<OpenClawConfig> {
+): Promise<{ config: OpenClawConfig; valid: boolean }> {
   let nextConfig = config;
   let nextPluginConfig = getPluginConfig(nextConfig, entry.pluginId);
   const fields = resolvePromptablePluginFields(entry, nextPluginConfig);
   if (fields.length === 0) {
-    return config;
+    const validation = validatePluginSearchProviderConfig(entry, nextPluginConfig);
+    if (!validation.ok) {
+      await prompter.note(
+        validation.fieldKey
+          ? `${humanizeConfigKey(validation.fieldKey)}: ${validation.message}`
+          : [
+              "This provider needs configuration that this prompt cannot collect yet.",
+              validation.message,
+            ].join("\n"),
+        "Invalid plugin config",
+      );
+      return { config, valid: false };
+    }
+    return { config, valid: true };
   }
 
   let fieldIndex = 0;
@@ -536,7 +504,7 @@ async function promptPluginSearchProviderConfig(
   }
 
   nextConfig = setPluginConfig(nextConfig, entry.pluginId, nextPluginConfig);
-  return nextConfig;
+  return { config: nextConfig, valid: true };
 }
 
 export async function resolveSearchProviderPickerEntries(
@@ -801,13 +769,24 @@ export async function applySearchProviderChoice(params: {
       prompter: params.prompter,
       workspaceDir: params.opts?.workspaceDir,
     });
-    next = await promptPluginSearchProviderConfig(next, installedProvider, params.prompter);
-    const result = preserveSearchProviderIntent(
-      installedConfig,
+    const pluginConfigResult = await promptPluginSearchProviderConfig(
       next,
-      intent,
-      installedProvider.value,
+      installedProvider,
+      params.prompter,
     );
+    const result = pluginConfigResult.valid
+      ? preserveSearchProviderIntent(
+          installedConfig,
+          pluginConfigResult.config,
+          intent,
+          installedProvider.value,
+        )
+      : preserveSearchProviderIntent(
+          installedConfig,
+          enabled.config,
+          "configure-provider",
+          installedProvider.value,
+        );
     await runAfterSearchProviderHooks({
       hookRunner,
       originalConfig: installedConfig,
@@ -1020,8 +999,19 @@ export async function configureSearchProviderSelection(
       prompter,
       workspaceDir: opts?.workspaceDir,
     });
-    next = await promptPluginSearchProviderConfig(next, selectedEntry, prompter);
-    const result = preserveSearchProviderIntent(config, next, intent, selectedEntry.value);
+    const pluginConfigResult = await promptPluginSearchProviderConfig(
+      next,
+      selectedEntry,
+      prompter,
+    );
+    const result = pluginConfigResult.valid
+      ? preserveSearchProviderIntent(config, pluginConfigResult.config, intent, selectedEntry.value)
+      : preserveSearchProviderIntent(
+          config,
+          enabled.config,
+          "configure-provider",
+          selectedEntry.value,
+        );
     await runAfterSearchProviderHooks({
       hookRunner,
       originalConfig: config,

@@ -486,6 +486,7 @@ export type PluginDiagnostic = {
   pluginId?: string;
   source?: string;
   code?:
+    | "plugin_path_not_found"
     | "capability_declared_duplicate"
     | "capability_declared_not_registered"
     | "capability_missing_requirement"
