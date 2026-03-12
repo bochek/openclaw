@@ -17,7 +17,7 @@ import { createPluginLoaderLogger } from "../../plugins/logger.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import type { WizardPrompter } from "../../wizard/prompts.js";
 
-type InstallChoice = "npm" | "local" | "skip";
+type InstallChoice = "enter" | "skip";
 
 export type InstallablePluginCatalogEntry = {
   id: string;
@@ -75,6 +75,31 @@ function resolveLocalPath(
   return null;
 }
 
+function resolveExistingPath(
+  rawValue: string,
+  workspaceDir: string | undefined,
+  allowLocal: boolean,
+): string | null {
+  if (!allowLocal) {
+    return null;
+  }
+  const raw = rawValue.trim();
+  if (!raw) {
+    return null;
+  }
+  const candidates = new Set<string>();
+  candidates.add(path.resolve(process.cwd(), raw));
+  if (workspaceDir && workspaceDir !== process.cwd()) {
+    candidates.add(path.resolve(workspaceDir, raw));
+  }
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 function addPluginLoadPath(cfg: OpenClawConfig, pluginPath: string): OpenClawConfig {
   const existing = cfg.plugins?.load?.paths ?? [];
   const merged = Array.from(new Set([...existing, pluginPath]));
@@ -93,31 +118,84 @@ function addPluginLoadPath(cfg: OpenClawConfig, pluginPath: string): OpenClawCon
 async function promptInstallChoice(params: {
   entry: InstallablePluginCatalogEntry;
   localPath?: string | null;
-  defaultChoice: InstallChoice;
+  defaultSource: string;
   prompter: WizardPrompter;
-}): Promise<InstallChoice> {
-  const { entry, localPath, prompter, defaultChoice } = params;
-  const localOptions: Array<{ value: InstallChoice; label: string; hint?: string }> = localPath
-    ? [
-        {
-          value: "local",
-          label: "Use local plugin path",
-          hint: localPath,
-        },
-      ]
-    : [];
-  const options: Array<{ value: InstallChoice; label: string; hint?: string }> = [
-    { value: "npm", label: `Download from npm (${entry.install.npmSpec})` },
-    ...localOptions,
-    { value: "skip", label: "Skip for now" },
-  ];
-  const initialValue: InstallChoice =
-    defaultChoice === "local" && !localPath ? "npm" : defaultChoice;
-  return await prompter.select<InstallChoice>({
+  workspaceDir?: string;
+  allowLocal: boolean;
+}): Promise<string | null> {
+  const { entry, localPath, prompter, defaultSource, workspaceDir, allowLocal } = params;
+  const action = await prompter.select<InstallChoice>({
     message: `Install ${entry.meta.label} plugin?`,
-    options,
-    initialValue,
+    options: [
+      {
+        value: "enter",
+        label: "Enter package or local path",
+        hint: localPath
+          ? `${entry.install.npmSpec} or ${localPath}`
+          : `${entry.install.npmSpec} or ./path/to/plugin`,
+      },
+      { value: "skip", label: "Skip for now" },
+    ],
+    initialValue: "enter",
   });
+
+  if (action === "skip") {
+    return null;
+  }
+
+  while (true) {
+    const source = (
+      await prompter.text({
+        message: "Plugin package or local path",
+        initialValue: defaultSource,
+        placeholder: localPath
+          ? `${entry.install.npmSpec} or ${localPath}`
+          : `${entry.install.npmSpec} or ./path/to/plugin`,
+        validate: (value) =>
+          value.trim().length > 0 ? undefined : "Enter a package or local path",
+      })
+    ).trim();
+
+    const existingPath = resolveExistingPath(source, workspaceDir, allowLocal);
+    if (existingPath) {
+      return existingPath;
+    }
+
+    const looksLikePath =
+      source.startsWith(".") ||
+      source.startsWith("/") ||
+      source.startsWith("~") ||
+      source.includes("/") ||
+      source.includes("\\");
+    if (looksLikePath) {
+      await prompter.note(`Path not found: ${source}`, "Plugin install");
+      continue;
+    }
+
+    return source;
+  }
+}
+
+function resolveInstallDefaultSource(params: {
+  entry: InstallablePluginCatalogEntry;
+  defaultChoice: "npm" | "local";
+  localPath?: string | null;
+}): string {
+  const { entry, defaultChoice, localPath } = params;
+  if (defaultChoice === "local" && localPath) {
+    return localPath;
+  }
+  return entry.install.npmSpec;
+}
+
+function isLikelyLocalPath(source: string): boolean {
+  return (
+    source.startsWith(".") ||
+    source.startsWith("/") ||
+    source.startsWith("~") ||
+    source.includes("/") ||
+    source.includes("\\")
+  );
 }
 
 function resolveInstallDefaultChoice(params: {
@@ -172,25 +250,31 @@ export async function ensureOnboardingPluginInstalled(params: {
     localPath,
     bundledLocalPath,
   });
-  const choice = await promptInstallChoice({
+  const source = await promptInstallChoice({
     entry,
     localPath,
-    defaultChoice,
+    defaultSource: resolveInstallDefaultSource({ entry, defaultChoice, localPath }),
     prompter,
+    workspaceDir,
+    allowLocal,
   });
 
-  if (choice === "skip") {
+  if (!source) {
     return { cfg: next, installed: false };
   }
 
-  if (choice === "local" && localPath) {
-    next = addPluginLoadPath(next, localPath);
+  if (isLikelyLocalPath(source)) {
+    await prompter.note(
+      [`Using existing local plugin at ${source}.`, "No download needed."].join("\n"),
+      "Plugin install",
+    );
+    next = addPluginLoadPath(next, source);
     next = enablePluginInConfig(next, entry.id).config;
     return { cfg: next, installed: true };
   }
 
   const result = await installPluginFromNpmSpec({
-    spec: entry.install.npmSpec,
+    spec: source,
     logger: {
       info: (msg) => runtime.log?.(msg),
       warn: (msg) => runtime.log?.(msg),
@@ -202,7 +286,7 @@ export async function ensureOnboardingPluginInstalled(params: {
     next = recordPluginInstall(next, {
       pluginId: result.pluginId,
       source: "npm",
-      spec: entry.install.npmSpec,
+      spec: source,
       installPath: result.targetDir,
       version: result.version,
       ...buildNpmResolutionInstallFields(result.npmResolution),
@@ -210,10 +294,7 @@ export async function ensureOnboardingPluginInstalled(params: {
     return { cfg: next, installed: true };
   }
 
-  await prompter.note(
-    `Failed to install ${entry.install.npmSpec}: ${result.error}`,
-    "Plugin install",
-  );
+  await prompter.note(`Failed to install ${source}: ${result.error}`, "Plugin install");
 
   if (localPath) {
     const fallback = await prompter.confirm({
@@ -221,6 +302,10 @@ export async function ensureOnboardingPluginInstalled(params: {
       initialValue: true,
     });
     if (fallback) {
+      await prompter.note(
+        [`Using existing local plugin at ${localPath}.`, "No download needed."].join("\n"),
+        "Plugin install",
+      );
       next = addPluginLoadPath(next, localPath);
       next = enablePluginInConfig(next, entry.id).config;
       return { cfg: next, installed: true };

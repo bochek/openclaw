@@ -95,10 +95,18 @@ function mockRepoLocalPathExists() {
 
 async function runInitialValueForChannel(channel: "dev" | "beta") {
   const runtime = makeRuntime();
-  const select = vi.fn((async <T extends string>() => "skip" as T) as WizardPrompter["select"]);
-  const prompter = makePrompter({ select: select as unknown as WizardPrompter["select"] });
+  const select = vi.fn((async <T extends string>() => "enter" as T) as WizardPrompter["select"]);
+  const text = vi.fn(async ({ initialValue }: { initialValue?: string }) => initialValue ?? "");
+  const prompter = makePrompter({
+    select: select as unknown as WizardPrompter["select"],
+    text: text as unknown as WizardPrompter["text"],
+  });
   const cfg: OpenClawConfig = { update: { channel } };
   mockRepoLocalPathExists();
+  installPluginFromNpmSpec.mockResolvedValue({
+    ok: false,
+    error: "nope",
+  });
 
   await ensureOnboardingPluginInstalled({
     cfg,
@@ -107,7 +115,7 @@ async function runInitialValueForChannel(channel: "dev" | "beta") {
     runtime,
   });
 
-  const call = select.mock.calls[0];
+  const call = text.mock.calls[0];
   return call?.[0]?.initialValue;
 }
 
@@ -123,7 +131,8 @@ describe("ensureOnboardingPluginInstalled", () => {
   it("installs from npm and enables the plugin", async () => {
     const runtime = makeRuntime();
     const prompter = makePrompter({
-      select: vi.fn(async () => "npm") as WizardPrompter["select"],
+      select: vi.fn(async () => "enter") as WizardPrompter["select"],
+      text: vi.fn(async () => "@openclaw/zalo") as WizardPrompter["text"],
     });
     const cfg: OpenClawConfig = { plugins: { allow: ["other"] } };
     vi.mocked(fs.existsSync).mockReturnValue(false);
@@ -154,8 +163,11 @@ describe("ensureOnboardingPluginInstalled", () => {
 
   it("uses local path when selected", async () => {
     const runtime = makeRuntime();
+    const note = vi.fn(async () => {});
     const prompter = makePrompter({
-      select: vi.fn(async () => "local") as WizardPrompter["select"],
+      select: vi.fn(async () => "enter") as WizardPrompter["select"],
+      text: vi.fn(async () => "extensions/zalo") as WizardPrompter["text"],
+      note,
     });
     const cfg: OpenClawConfig = {};
     mockRepoLocalPathExists();
@@ -169,22 +181,35 @@ describe("ensureOnboardingPluginInstalled", () => {
 
     expectPluginLoadedFromLocalPath(result);
     expect(result.cfg.plugins?.entries?.zalo?.enabled).toBe(true);
+    expect(note).toHaveBeenCalledWith(
+      `Using existing local plugin at ${path.resolve(process.cwd(), "extensions/zalo")}.\nNo download needed.`,
+      "Plugin install",
+    );
   });
 
   it("defaults to local on dev channel when local path exists", async () => {
-    expect(await runInitialValueForChannel("dev")).toBe("local");
+    expect(await runInitialValueForChannel("dev")).toBe(
+      path.resolve(process.cwd(), "extensions/zalo"),
+    );
   });
 
   it("defaults to npm on beta channel even when local path exists", async () => {
-    expect(await runInitialValueForChannel("beta")).toBe("npm");
+    expect(await runInitialValueForChannel("beta")).toBe("@openclaw/zalo");
   });
 
   it("defaults to bundled local path on beta channel when available", async () => {
     const runtime = makeRuntime();
-    const select = vi.fn((async <T extends string>() => "skip" as T) as WizardPrompter["select"]);
-    const prompter = makePrompter({ select: select as unknown as WizardPrompter["select"] });
+    const select = vi.fn((async <T extends string>() => "enter" as T) as WizardPrompter["select"]);
+    const text = vi.fn(async ({ initialValue }: { initialValue?: string }) => initialValue ?? "");
+    const prompter = makePrompter({
+      select: select as unknown as WizardPrompter["select"],
+      text: text as unknown as WizardPrompter["text"],
+    });
     const cfg: OpenClawConfig = { update: { channel: "beta" } };
-    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.existsSync).mockImplementation((value) => {
+      const raw = String(value);
+      return raw === "/opt/openclaw/extensions/zalo" || raw.endsWith(`${path.sep}.git`);
+    });
     resolveBundledPluginSources.mockReturnValue(
       new Map([
         [
@@ -205,15 +230,9 @@ describe("ensureOnboardingPluginInstalled", () => {
       runtime,
     });
 
-    expect(select).toHaveBeenCalledWith(
+    expect(text).toHaveBeenCalledWith(
       expect.objectContaining({
-        initialValue: "local",
-        options: expect.arrayContaining([
-          expect.objectContaining({
-            value: "local",
-            hint: "/opt/openclaw/extensions/zalo",
-          }),
-        ]),
+        initialValue: "/opt/openclaw/extensions/zalo",
       }),
     );
   });
@@ -223,7 +242,8 @@ describe("ensureOnboardingPluginInstalled", () => {
     const note = vi.fn(async () => {});
     const confirm = vi.fn(async () => true);
     const prompter = makePrompter({
-      select: vi.fn(async () => "npm") as WizardPrompter["select"],
+      select: vi.fn(async () => "enter") as WizardPrompter["select"],
+      text: vi.fn(async () => "@openclaw/zalo") as WizardPrompter["text"],
       note,
       confirm,
     });
@@ -242,8 +262,70 @@ describe("ensureOnboardingPluginInstalled", () => {
     });
 
     expectPluginLoadedFromLocalPath(result);
-    expect(note).toHaveBeenCalled();
+    expect(note).toHaveBeenCalledWith(`Failed to install @openclaw/zalo: nope`, "Plugin install");
+    expect(note).toHaveBeenCalledWith(
+      `Using existing local plugin at ${path.resolve(process.cwd(), "extensions/zalo")}.\nNo download needed.`,
+      "Plugin install",
+    );
     expect(runtime.error).not.toHaveBeenCalled();
+  });
+
+  it("re-prompts when a path-like input does not exist", async () => {
+    const runtime = makeRuntime();
+    const note = vi.fn(async () => {});
+    const text = vi
+      .fn()
+      .mockResolvedValueOnce("./missing-plugin")
+      .mockResolvedValueOnce("@openclaw/zalo");
+    const prompter = makePrompter({
+      select: vi.fn(async () => "enter") as WizardPrompter["select"],
+      text: text as unknown as WizardPrompter["text"],
+      note,
+    });
+    const cfg: OpenClawConfig = {};
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    installPluginFromNpmSpec.mockResolvedValue({
+      ok: true,
+      pluginId: "zalo",
+      targetDir: "/tmp/zalo",
+      extensions: [],
+    });
+
+    const result = await ensureOnboardingPluginInstalled({
+      cfg,
+      entry: baseEntry,
+      prompter,
+      runtime,
+    });
+
+    expect(result.installed).toBe(true);
+    expect(note).toHaveBeenCalledWith("Path not found: ./missing-plugin", "Plugin install");
+    expect(text).toHaveBeenCalledTimes(2);
+    expect(installPluginFromNpmSpec).toHaveBeenCalledWith(
+      expect.objectContaining({ spec: "@openclaw/zalo" }),
+    );
+  });
+
+  it("returns unchanged config when install is skipped", async () => {
+    const runtime = makeRuntime();
+    const text = vi.fn();
+    const prompter = makePrompter({
+      select: vi.fn(async () => "skip") as WizardPrompter["select"],
+      text: text as unknown as WizardPrompter["text"],
+    });
+    const cfg: OpenClawConfig = {};
+
+    const result = await ensureOnboardingPluginInstalled({
+      cfg,
+      entry: baseEntry,
+      prompter,
+      runtime,
+    });
+
+    expect(result.installed).toBe(false);
+    expect(result.cfg).toBe(cfg);
+    expect(text).not.toHaveBeenCalled();
+    expect(installPluginFromNpmSpec).not.toHaveBeenCalled();
   });
 
   it("clears discovery cache before reloading the onboarding plugin registry", () => {

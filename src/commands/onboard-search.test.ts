@@ -182,6 +182,72 @@ describe("setupSearch", () => {
     );
   });
 
+  it("uses the updated configure-or-install action label", async () => {
+    vi.stubEnv("BRAVE_API_KEY", "BSA-test-key");
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Plugin search",
+            isAvailable: () => true,
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "External Tavily plugin",
+          origin: "workspace",
+          source: "/tmp/tavily-search",
+          configJsonSchema: undefined,
+          configUiHints: undefined,
+        },
+      ],
+      typedHooks: [],
+    });
+    const cfg: OpenClawConfig = {
+      tools: {
+        web: {
+          search: {
+            provider: "brave",
+            enabled: true,
+          },
+        },
+      },
+      plugins: {
+        entries: {
+          "tavily-search": {
+            enabled: true,
+            config: { apiKey: "tvly-installed-key" },
+          },
+        },
+      },
+    };
+    const { prompter } = createPrompter({
+      actionValue: "__skip__",
+      selectValue: "__skip__",
+    });
+
+    await setupSearch(cfg, runtime, prompter);
+
+    expect(prompter.select).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: "Web search setup",
+        options: expect.arrayContaining([
+          expect.objectContaining({
+            value: "__configure_provider__",
+            label: "Configure or install a provider",
+          }),
+        ]),
+      }),
+    );
+  });
+
   it("passes workspaceDir when resolving plugin providers for setup", async () => {
     const cfg: OpenClawConfig = {};
     const { prompter } = createPrompter({ selectValue: "__skip__" });
@@ -284,6 +350,76 @@ describe("setupSearch", () => {
       value: "brave",
       hint: "Structured results · country/language/time filters · Built-in · Configured",
     });
+  });
+
+  it("keeps the install option visible in configure-provider flow even when Tavily is already loaded", async () => {
+    vi.stubEnv("BRAVE_API_KEY", "BSA-test-key");
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Plugin search",
+            isAvailable: () => true,
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "External Tavily plugin",
+          origin: "workspace",
+          source: "/tmp/tavily-search",
+          configJsonSchema: undefined,
+          configUiHints: undefined,
+        },
+      ],
+      typedHooks: [],
+    });
+
+    const cfg: OpenClawConfig = {
+      tools: {
+        web: {
+          search: {
+            provider: "brave",
+            enabled: true,
+          },
+        },
+      },
+      plugins: {
+        entries: {
+          "tavily-search": {
+            enabled: true,
+            config: { apiKey: "tvly-installed-key" },
+          },
+        },
+      },
+    };
+    const { prompter } = createPrompter({
+      actionValue: "__configure_provider__",
+      selectValue: "__skip__",
+    });
+
+    await setupSearch(cfg, runtime, prompter);
+
+    const configurePickerCall = (prompter.select as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0]?.message === "Choose provider to configure",
+    );
+    expect(configurePickerCall?.[0]).toEqual(
+      expect.objectContaining({
+        options: expect.arrayContaining([
+          expect.objectContaining({
+            value: "__install_plugin__",
+            label: "Install another provider plugin",
+            hint: "Add another supported web search plugin",
+          }),
+        ]),
+      }),
+    );
   });
 
   it("sets provider and key for perplexity", async () => {

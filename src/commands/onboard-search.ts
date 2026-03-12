@@ -133,9 +133,12 @@ export function resolveInstallableSearchProviderPlugins(
   const loadedPluginProviderIds = new Set(
     providerEntries.filter((entry) => entry.kind === "plugin").map((entry) => entry.value),
   );
-  return SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG.filter(
-    (entry) => !loadedPluginProviderIds.has(entry.providerId),
-  );
+  return SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG.map((entry) => ({
+    ...entry,
+    description: loadedPluginProviderIds.has(entry.providerId)
+      ? `${entry.description} Already installed.`
+      : entry.description,
+  }));
 }
 
 function normalizePluginConfigObject(value: unknown): Record<string, unknown> {
@@ -935,7 +938,7 @@ export function buildSearchProviderPickerModel(
           {
             value: SEARCH_PROVIDER_INSTALL_SENTINEL as const,
             label: "Install another provider plugin",
-            hint: "Add Tavily or another supported web search plugin",
+            hint: "Add another supported web search plugin",
           },
         ]
       : []),
@@ -1262,8 +1265,9 @@ export async function promptSearchProviderFlow(params: {
     configureValue: SEARCH_PROVIDER_CONFIGURE_SENTINEL,
     switchValue: SEARCH_PROVIDER_SWITCH_ACTIVE_SENTINEL,
     skipValue: SEARCH_PROVIDER_SKIP_SENTINEL,
-    configureLabel: "Configure a provider",
-    configureHint: "Update keys or plugin settings without changing the active provider",
+    configureLabel: "Configure or install a provider",
+    configureHint:
+      "Update keys, plugin settings, or install a provider without changing the active provider",
     switchLabel: "Switch active provider",
     switchHint: "Change which provider web_search uses right now",
     skipHint: "Configure later with openclaw configure --section web",
