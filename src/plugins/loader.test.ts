@@ -97,6 +97,7 @@ function writePlugin(params: {
   body: string;
   dir?: string;
   filename?: string;
+  manifest?: Record<string, unknown>;
 }): TempPlugin {
   const dir = params.dir ?? makeTempDir();
   const filename = params.filename ?? `${params.id}.cjs`;
@@ -106,7 +107,7 @@ function writePlugin(params: {
   fs.writeFileSync(
     path.join(dir, "openclaw.plugin.json"),
     JSON.stringify(
-      {
+      params.manifest ?? {
         id: params.id,
         configSchema: EMPTY_PLUGIN_SCHEMA,
       },
@@ -2142,5 +2143,117 @@ describe("loadOpenClawPlugins", () => {
       }),
     );
     expect(resolved).toBe(srcFile);
+  });
+
+  it("emits diagnostics for duplicate declared capabilities", () => {
+    useNoBundledPlugins();
+    const first = writePlugin({
+      id: "search-one",
+      body: `module.exports = { id: "search-one", register(api) { api.registerSearchProvider({ id: "alpha", name: "Alpha", search: async () => ({ content: "alpha" }) }); } };`,
+      manifest: {
+        id: "search-one",
+        configSchema: EMPTY_PLUGIN_SCHEMA,
+        provides: ["providers.search.shared"],
+      },
+    });
+    const second = writePlugin({
+      id: "search-two",
+      body: `module.exports = { id: "search-two", register(api) { api.registerSearchProvider({ id: "beta", name: "Beta", search: async () => ({ content: "beta" }) }); } };`,
+      manifest: {
+        id: "search-two",
+        configSchema: EMPTY_PLUGIN_SCHEMA,
+        provides: ["providers.search.shared"],
+      },
+    });
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      config: {
+        plugins: {
+          load: { paths: [first.file, second.file] },
+        },
+      },
+    });
+
+    expect(
+      registry.diagnostics.filter((diag) =>
+        diag.message.includes("declared capability already provided by another plugin"),
+      ),
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ pluginId: "search-two" })]));
+    expect(registry.searchProviders.map((entry) => entry.provider.id)).toEqual(["alpha"]);
+    expect(registry.plugins).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "search-two", status: "error" })]),
+    );
+  });
+
+  it("warns when a declared required capability is missing", () => {
+    useNoBundledPlugins();
+    const plugin = writePlugin({
+      id: "memory-ui",
+      body: `module.exports = { id: "memory-ui", register() {} };`,
+      manifest: {
+        id: "memory-ui",
+        configSchema: EMPTY_PLUGIN_SCHEMA,
+        requires: ["memory.backend.*"],
+      },
+    });
+
+    const registry = loadRegistryFromSinglePlugin({ plugin });
+
+    expect(registry.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "warn",
+          pluginId: "memory-ui",
+          message: "missing required capability: memory.backend.*",
+        }),
+      ]),
+    );
+  });
+
+  it("errors when a declared conflicting capability is present", () => {
+    useNoBundledPlugins();
+    const first = writePlugin({
+      id: "memory-a",
+      body: `module.exports = { id: "memory-a", register(api) { api.registerSearchProvider({ id: "alpha", name: "Alpha", search: async () => ({ content: "alpha" }) }); } };`,
+      manifest: {
+        id: "memory-a",
+        configSchema: EMPTY_PLUGIN_SCHEMA,
+        provides: ["memory.backend.a"],
+      },
+    });
+    const second = writePlugin({
+      id: "memory-b",
+      body: `module.exports = { id: "memory-b", register(api) { api.registerSearchProvider({ id: "beta", name: "Beta", search: async () => ({ content: "beta" }) }); } };`,
+      manifest: {
+        id: "memory-b",
+        configSchema: EMPTY_PLUGIN_SCHEMA,
+        provides: ["memory.backend.b"],
+        conflicts: ["memory.backend.*"],
+      },
+    });
+
+    const registry = loadOpenClawPlugins({
+      cache: false,
+      config: {
+        plugins: {
+          load: { paths: [first.file, second.file] },
+        },
+      },
+    });
+
+    expect(registry.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          pluginId: "memory-b",
+          message: "conflicting capability present: memory.backend.* (memory-a)",
+        }),
+      ]),
+    );
+    expect(registry.searchProviders.map((entry) => entry.provider.id)).toEqual(["alpha"]);
+    expect(registry.plugins).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "memory-b", status: "error" })]),
+    );
   });
 });

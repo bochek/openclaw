@@ -26,6 +26,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import { describeGatewayServiceRestart, resolveGatewayService } from "../daemon/service.js";
 import { isSystemdUserServiceAvailable } from "../daemon/systemd.js";
 import { ensureControlUiAssetsBuilt } from "../infra/control-ui-assets.js";
+import { resolveCapabilitySlotSelection } from "../plugins/capability-slots.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { restoreTerminalState } from "../terminal/restore.js";
 import { runTui } from "../tui/tui.js";
@@ -481,7 +482,7 @@ export async function finalizeOnboardingWizard(
     );
   }
 
-  const webSearchProvider = nextConfig.tools?.web?.search?.provider;
+  const webSearchProvider = resolveCapabilitySlotSelection(nextConfig, "providers.search");
   const webSearchEnabled = nextConfig.tools?.web?.search?.enabled;
   if (webSearchProvider) {
     const {

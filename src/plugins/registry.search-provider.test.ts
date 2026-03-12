@@ -14,6 +14,10 @@ function createRecord(id: string): PluginRecord {
     channelIds: [],
     providerIds: [],
     searchProviderIds: [],
+    capabilityIds: [],
+    declaredCapabilities: [],
+    requiredCapabilities: [],
+    conflictingCapabilities: [],
     gatewayMethods: [],
     cliCommands: [],
     services: [],
@@ -53,6 +57,18 @@ describe("search provider registration", () => {
     expect(registry.searchProviders).toHaveLength(1);
     expect(registry.searchProviders[0]?.provider.id).toBe("tavily");
     expect(registry.searchProviders[0]?.provider.pluginId).toBe("first-plugin");
+    expect(registry.capabilities).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          pluginId: "first-plugin",
+          kind: "search-provider",
+          capability: "providers.search.tavily",
+          id: "tavily",
+          slot: "providers.search",
+          slotMode: "multi",
+        }),
+      ]),
+    );
     expect(registry.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

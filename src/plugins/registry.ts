@@ -10,6 +10,13 @@ import type {
 import { registerInternalHook } from "../hooks/internal-hooks.js";
 import type { HookEntry } from "../hooks/types.js";
 import { resolveUserPath } from "../utils.js";
+import {
+  buildCapabilityName,
+  resolveCapabilitySlotForKind,
+  resolveCapabilitySlotModeForKind,
+  type PluginCapabilityKind,
+  type PluginCapabilitySlotMode,
+} from "./capabilities.js";
 import { registerPluginCommand } from "./commands.js";
 import { normalizePluginHttpPath } from "./http-path.js";
 import { findOverlappingPluginHttpRoute } from "./http-route-overlap.js";
@@ -88,6 +95,17 @@ export type PluginSearchProviderRegistration = {
   source: string;
 };
 
+export type PluginCapabilityRegistration<T = unknown> = {
+  pluginId: string;
+  kind: PluginCapabilityKind;
+  capability: string;
+  id: string;
+  slot: string;
+  slotMode: PluginCapabilitySlotMode;
+  value: T;
+  source: string;
+};
+
 export type PluginHookRegistration = {
   pluginId: string;
   entry: HookEntry;
@@ -124,6 +142,10 @@ export type PluginRecord = {
   channelIds: string[];
   providerIds: string[];
   searchProviderIds: string[];
+  capabilityIds: string[];
+  declaredCapabilities: string[];
+  requiredCapabilities: string[];
+  conflictingCapabilities: string[];
   gatewayMethods: string[];
   cliCommands: string[];
   services: string[];
@@ -143,6 +165,7 @@ export type PluginRegistry = {
   channels: PluginChannelRegistration[];
   providers: PluginProviderRegistration[];
   searchProviders: PluginSearchProviderRegistration[];
+  capabilities: PluginCapabilityRegistration[];
   gatewayHandlers: GatewayRequestHandlers;
   httpRoutes: PluginHttpRouteRegistration[];
   cliRegistrars: PluginCliRegistration[];
@@ -184,6 +207,7 @@ export function createEmptyPluginRegistry(): PluginRegistry {
     channels: [],
     providers: [],
     searchProviders: [],
+    capabilities: [],
     gatewayHandlers: {},
     httpRoutes: [],
     cliRegistrars: [],
@@ -199,6 +223,60 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
 
   const pushDiagnostic = (diag: PluginDiagnostic) => {
     registry.diagnostics.push(diag);
+  };
+
+  const registerCapability = <T>(params: {
+    record: PluginRecord;
+    kind: PluginCapabilityKind;
+    id: string;
+    value: T;
+    slotMode?: PluginCapabilitySlotMode;
+    duplicateMessage: string;
+  }): PluginCapabilityRegistration<T> | undefined => {
+    const slotMode = params.slotMode ?? resolveCapabilitySlotModeForKind(params.kind);
+    const capability = buildCapabilityName(params.kind, params.id);
+    const slot = resolveCapabilitySlotForKind(params.kind);
+    const existing = registry.capabilities.find((entry) => entry.capability === capability);
+    if (existing) {
+      pushDiagnostic({
+        level: "error",
+        pluginId: params.record.id,
+        source: params.record.source,
+        code: "capability_declared_duplicate",
+        capability,
+        slot,
+        message: params.duplicateMessage,
+      });
+      return undefined;
+    }
+    if (slotMode === "exclusive") {
+      const existingSlotOwner = registry.capabilities.find((entry) => entry.slot === slot);
+      if (existingSlotOwner) {
+        pushDiagnostic({
+          level: "error",
+          pluginId: params.record.id,
+          source: params.record.source,
+          code: "capability_slot_conflict",
+          capability,
+          slot,
+          message: `exclusive capability slot already registered: ${slot} (${existingSlotOwner.pluginId})`,
+        });
+        return undefined;
+      }
+    }
+    const registration: PluginCapabilityRegistration<T> = {
+      pluginId: params.record.id,
+      kind: params.kind,
+      capability,
+      id: params.id,
+      slot,
+      slotMode,
+      value: params.value,
+      source: params.record.source,
+    };
+    params.record.capabilityIds.push(capability);
+    registry.capabilities.push(registration);
+    return registration;
   };
 
   const registerTool = (
@@ -504,6 +582,16 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       id,
       pluginId: record.id,
     };
+    const registeredCapability = registerCapability({
+      record,
+      kind: "search-provider",
+      id,
+      value: normalizedProvider,
+      duplicateMessage: `search provider already registered: ${id} (${registry.capabilities.find((entry) => entry.capability === buildCapabilityName("search-provider", id))?.pluginId ?? "unknown"})`,
+    });
+    if (!registeredCapability) {
+      return;
+    }
     record.searchProviderIds.push(id);
     registry.searchProviders.push({
       pluginId: record.id,

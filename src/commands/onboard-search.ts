@@ -12,6 +12,10 @@ import {
   hasConfiguredSecretInput,
   normalizeSecretInputString,
 } from "../config/types.secrets.js";
+import {
+  applyCapabilitySlotSelection,
+  resolveCapabilitySlotSelection,
+} from "../plugins/capability-slots.js";
 import { enablePluginInConfig } from "../plugins/enable.js";
 import { loadOpenClawPlugins } from "../plugins/loader.js";
 import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
@@ -24,6 +28,11 @@ import {
   ensureOnboardingPluginInstalled,
   reloadOnboardingPluginRegistry,
 } from "./onboarding/plugin-install.js";
+import {
+  buildProviderSelectionOptions,
+  promptProviderManagementIntent,
+  type ProviderManagementIntent,
+} from "./provider-management.js";
 import {
   SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG,
   type InstallableSearchProviderPluginCatalogEntry,
@@ -59,7 +68,7 @@ export type SearchProviderPickerEntry =
   | PluginSearchProviderEntry;
 
 type SearchProviderPickerChoice = string;
-type SearchProviderFlowIntent = "switch-active" | "configure-provider";
+type SearchProviderFlowIntent = ProviderManagementIntent;
 
 type PluginPromptableField =
   | {
@@ -661,7 +670,7 @@ export function buildSearchProviderPickerModel(
   params: SearchProviderPickerModelParams,
 ): SearchProviderPickerModel {
   const { config, providerEntries, includeSkipOption, skipHint } = params;
-  const existingProvider = config.tools?.web?.search?.provider;
+  const existingProvider = resolveCapabilitySlotSelection(config, "providers.search");
   const existingPluginProvider =
     typeof existingProvider === "string" &&
     existingProvider.trim() &&
@@ -875,19 +884,11 @@ export async function configureSearchProviderSelection(
 
   return preserveSearchProviderIntent(
     config,
-    {
-      ...config,
-      tools: {
-        ...config.tools,
-        web: {
-          ...config.tools?.web,
-          search: {
-            ...config.tools?.web?.search,
-            provider: builtinChoice,
-          },
-        },
-      },
-    },
+    applyCapabilitySlotSelection({
+      config,
+      slot: "providers.search",
+      selectedId: builtinChoice,
+    }),
     intent,
     builtinChoice,
   );
@@ -903,61 +904,16 @@ function preserveSearchProviderIntent(
     return preserveDisabledState(original, result);
   }
 
-  const currentProvider = original.tools?.web?.search?.provider;
+  const currentProvider = resolveCapabilitySlotSelection(original, "providers.search");
   let next = result;
   if (currentProvider && currentProvider !== selectedProvider) {
-    next = {
-      ...next,
-      tools: {
-        ...next.tools,
-        web: {
-          ...next.tools?.web,
-          search: {
-            ...next.tools?.web?.search,
-            provider: currentProvider,
-          },
-        },
-      },
-    };
+    next = applyCapabilitySlotSelection({
+      config: next,
+      slot: "providers.search",
+      selectedId: currentProvider,
+    });
   }
   return preserveDisabledState(original, next);
-}
-
-async function promptSearchProviderIntent(params: {
-  prompter: WizardPrompter;
-  includeSkipOption: boolean;
-  configuredCount: number;
-}): Promise<SearchProviderFlowIntent | typeof SEARCH_PROVIDER_SKIP_SENTINEL> {
-  if (params.configuredCount <= 1) {
-    return "switch-active";
-  }
-  return await params.prompter.select<
-    SearchProviderFlowIntent | typeof SEARCH_PROVIDER_SKIP_SENTINEL
-  >({
-    message: "Web search setup",
-    options: [
-      {
-        value: SEARCH_PROVIDER_CONFIGURE_SENTINEL,
-        label: "Configure a provider",
-        hint: "Update keys or plugin settings without changing the active provider",
-      },
-      {
-        value: SEARCH_PROVIDER_SWITCH_ACTIVE_SENTINEL,
-        label: "Switch active provider",
-        hint: "Change which provider web_search uses right now",
-      },
-      ...(params.includeSkipOption
-        ? [
-            {
-              value: SEARCH_PROVIDER_SKIP_SENTINEL,
-              label: "Skip for now",
-              hint: "Configure later with openclaw configure --section web",
-            },
-          ]
-        : []),
-    ],
-    initialValue: SEARCH_PROVIDER_CONFIGURE_SENTINEL,
-  });
 }
 
 export async function promptSearchProviderFlow(params: {
@@ -978,10 +934,19 @@ export async function promptSearchProviderFlow(params: {
     includeSkipOption: params.includeSkipOption,
     skipHint: params.skipHint,
   });
-  const action = await promptSearchProviderIntent({
+  const action = await promptProviderManagementIntent({
     prompter: params.prompter,
+    message: "Web search setup",
     includeSkipOption: params.includeSkipOption,
     configuredCount: pickerModel.configuredCount,
+    configureValue: SEARCH_PROVIDER_CONFIGURE_SENTINEL,
+    switchValue: SEARCH_PROVIDER_SWITCH_ACTIVE_SENTINEL,
+    skipValue: SEARCH_PROVIDER_SKIP_SENTINEL,
+    configureLabel: "Configure a provider",
+    configureHint: "Update keys or plugin settings without changing the active provider",
+    switchLabel: "Switch active provider",
+    switchHint: "Change which provider web_search uses right now",
+    skipHint: "Configure later with openclaw configure --section web",
   });
   if (action === SEARCH_PROVIDER_SKIP_SENTINEL) {
     return params.config;
@@ -993,18 +958,12 @@ export async function promptSearchProviderFlow(params: {
       intent === "switch-active"
         ? "Choose active web search provider"
         : "Choose provider to configure",
-    options: pickerModel.options
-      .filter((option) => {
-        if (intent === "configure-provider") {
-          return option.value !== SEARCH_PROVIDER_KEEP_CURRENT_SENTINEL;
-        }
-        return true;
-      })
-      .map((option) =>
-        intent === "switch-active" && option.value === pickerModel.activeProvider
-          ? { ...option, label: `[Active] ${option.label}` }
-          : option,
-      ),
+    options: buildProviderSelectionOptions({
+      intent,
+      options: pickerModel.options,
+      activeValue: pickerModel.activeProvider,
+      hiddenValues: intent === "configure-provider" ? [SEARCH_PROVIDER_KEEP_CURRENT_SENTINEL] : [],
+    }),
     initialValue:
       intent === "switch-active"
         ? pickerModel.initialValue
@@ -1114,15 +1073,19 @@ export function applySearchKey(
 }
 
 function applyProviderOnly(config: OpenClawConfig, provider: SearchProvider): OpenClawConfig {
+  const next = applyCapabilitySlotSelection({
+    config,
+    slot: "providers.search",
+    selectedId: provider,
+  });
   return {
-    ...config,
+    ...next,
     tools: {
-      ...config.tools,
+      ...next.tools,
       web: {
-        ...config.tools?.web,
+        ...next.tools?.web,
         search: {
-          ...config.tools?.web?.search,
-          provider,
+          ...next.tools?.web?.search,
           enabled: true,
         },
       },

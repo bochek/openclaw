@@ -1,5 +1,6 @@
 {
   "id": "tavily-search",
+  "provides": ["providers.search.tavily"],
   "uiHints": {
     "apiKey": {
       "label": "Tavily API key",

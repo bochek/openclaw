@@ -485,6 +485,13 @@ export type PluginDiagnostic = {
   message: string;
   pluginId?: string;
   source?: string;
+  code?:
+    | "capability_declared_duplicate"
+    | "capability_missing_requirement"
+    | "capability_conflict_present"
+    | "capability_slot_conflict";
+  capability?: string;
+  slot?: string;
 };
 
 // ============================================================================

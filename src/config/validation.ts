@@ -3,6 +3,11 @@ import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent
 import { isBuiltinWebSearchProviderId } from "../agents/tools/web-search-provider-catalog.js";
 import { CHANNEL_IDS, normalizeChatChannelId } from "../channels/registry.js";
 import {
+  resolveCapabilitySlotConfigPath,
+  resolveCapabilitySlotSelection,
+  type CapabilitySlotId,
+} from "../plugins/capability-slots.js";
+import {
   normalizePluginsConfig,
   resolveEffectiveEnableState,
   resolveMemorySlotDecision,
@@ -34,6 +39,24 @@ type AllowedValuesCollection = {
   incomplete: boolean;
   hasValues: boolean;
 };
+
+function resolvePluginDiagnosticPath(diag: {
+  pluginId?: string;
+  message: string;
+  code?: string;
+  slot?: string;
+}): string {
+  if (diag.message.includes("plugin path not found")) {
+    return "plugins.load.paths";
+  }
+  if (diag.code === "capability_slot_conflict" && diag.slot) {
+    return resolveCapabilitySlotConfigPath(diag.slot as CapabilitySlotId);
+  }
+  if (diag.pluginId) {
+    return `plugins.entries.${diag.pluginId}`;
+  }
+  return "plugins";
+}
 
 function toIssueRecord(value: unknown): UnknownIssueRecord | null {
   if (!value || typeof value !== "object") {
@@ -357,10 +380,36 @@ function validateConfigObjectWithPluginsBase(
     });
 
     for (const diag of registry.diagnostics) {
-      let path = diag.pluginId ? `plugins.entries.${diag.pluginId}` : "plugins";
-      if (!diag.pluginId && diag.message.includes("plugin path not found")) {
-        path = "plugins.load.paths";
+      const path = resolvePluginDiagnosticPath(diag);
+      const pluginLabel = diag.pluginId ? `plugin ${diag.pluginId}` : "plugin";
+      const message = `${pluginLabel}: ${diag.message}`;
+      if (diag.level === "error") {
+        issues.push({ path, message });
+      } else {
+        warnings.push({ path, message });
       }
+    }
+
+    const capabilityRegistry = loadOpenClawPlugins({
+      config,
+      workspaceDir: workspaceDir ?? undefined,
+      cache: false,
+      mode: "validate",
+      logger: {
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+        debug: () => {},
+      },
+    });
+    for (const diag of capabilityRegistry.diagnostics) {
+      if (diag.message.startsWith("invalid config:")) {
+        continue;
+      }
+      if (!diag.code?.startsWith("capability_")) {
+        continue;
+      }
+      const path = resolvePluginDiagnosticPath(diag);
       const pluginLabel = diag.pluginId ? `plugin ${diag.pluginId}` : "plugin";
       const message = `${pluginLabel}: ${diag.message}`;
       if (diag.level === "error") {
@@ -391,7 +440,7 @@ function validateConfigObjectWithPluginsBase(
   };
 
   const validateWebSearchProvider = () => {
-    const provider = config.tools?.web?.search?.provider;
+    const provider = resolveCapabilitySlotSelection(config, "providers.search");
     if (typeof provider !== "string") {
       return;
     }

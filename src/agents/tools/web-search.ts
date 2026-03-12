@@ -3,6 +3,7 @@ import { formatCliCommand } from "../../cli/command-format.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { normalizeResolvedSecretInputString } from "../../config/types.secrets.js";
 import { logVerbose } from "../../globals.js";
+import { resolveCapabilitySlotSelection } from "../../plugins/capability-slots.js";
 import { getActivePluginRegistry } from "../../plugins/runtime.js";
 import type {
   SearchProviderContext,
@@ -2464,12 +2465,32 @@ function getPluginSearchProviders(): SearchProviderPlugin[] {
   return getActivePluginRegistry()?.searchProviders.map((entry) => entry.provider) ?? [];
 }
 
+function resolveConfiguredSearchProviderId(params: {
+  config?: OpenClawConfig;
+  search?: WebSearchConfig;
+}): string | null | undefined {
+  if (params.config) {
+    return resolveCapabilitySlotSelection(params.config, "providers.search");
+  }
+  if (!params.search) {
+    return undefined;
+  }
+  return resolveCapabilitySlotSelection(
+    { tools: { web: { search: params.search } } } as OpenClawConfig,
+    "providers.search",
+  );
+}
+
 function resolvePreferredBuiltinSearchProvider(params: {
   search?: WebSearchConfig;
   runtimeWebSearch?: RuntimeWebSearchMetadata;
+  config?: OpenClawConfig;
 }): BuiltinWebSearchProviderId {
   const configuredProviderId = normalizeSearchProviderId(
-    typeof params.search?.provider === "string" ? params.search.provider : undefined,
+    resolveConfiguredSearchProviderId({
+      config: params.config,
+      search: params.search,
+    }) ?? undefined,
   );
   if (isBuiltinSearchProviderId(configuredProviderId)) {
     return configuredProviderId;
@@ -2498,7 +2519,10 @@ function resolveRegisteredSearchProvider(params: {
   runtimeWebSearch?: RuntimeWebSearchMetadata;
 }): SearchProviderPlugin {
   const configuredProviderId = normalizeSearchProviderId(
-    typeof params.search?.provider === "string" ? params.search.provider : undefined,
+    resolveConfiguredSearchProviderId({
+      config: params.config,
+      search: params.search,
+    }) ?? undefined,
   );
   const builtinProviders = new Map(
     getBuiltinSearchProviders(params.search).map((provider) => [provider.id, provider]),
@@ -2545,6 +2569,7 @@ function resolveRegisteredSearchProvider(params: {
   return (
     builtinProviders.get(
       resolvePreferredBuiltinSearchProvider({
+        config: params.config,
         search: params.search,
         runtimeWebSearch: params.runtimeWebSearch,
       }),

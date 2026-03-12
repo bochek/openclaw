@@ -307,6 +307,10 @@ function createPluginRecord(params: {
     channelIds: [],
     providerIds: [],
     searchProviderIds: [],
+    capabilityIds: [],
+    declaredCapabilities: [],
+    requiredCapabilities: [],
+    conflictingCapabilities: [],
     gatewayMethods: [],
     cliCommands: [],
     services: [],
@@ -317,6 +321,100 @@ function createPluginRecord(params: {
     configUiHints: undefined,
     configJsonSchema: undefined,
   };
+}
+
+function capabilityPatternMatches(params: { pattern: string; capability: string }): boolean {
+  const pattern = params.pattern.trim();
+  const capability = params.capability.trim();
+  if (!pattern || !capability) {
+    return false;
+  }
+  if (pattern.endsWith(".*")) {
+    const prefix = pattern.slice(0, -2);
+    return capability === prefix || capability.startsWith(`${prefix}.`);
+  }
+  return capability === pattern;
+}
+
+function collectDeclaredCapabilities(plugin: PluginRecord): Set<string> {
+  return new Set([...plugin.declaredCapabilities, ...plugin.capabilityIds]);
+}
+
+function evaluateCapabilityRelationships(params: {
+  activePlugins: PluginRecord[];
+  candidatePlugin?: PluginRecord;
+}): PluginDiagnostic[] {
+  const diagnostics: PluginDiagnostic[] = [];
+  const activeCapabilityOwners = new Map<string, string[]>();
+
+  for (const plugin of params.activePlugins) {
+    for (const capability of collectDeclaredCapabilities(plugin)) {
+      const owners = activeCapabilityOwners.get(capability) ?? [];
+      owners.push(plugin.id);
+      activeCapabilityOwners.set(capability, owners);
+    }
+  }
+
+  const pluginsToEvaluate = params.candidatePlugin
+    ? [params.candidatePlugin]
+    : params.activePlugins;
+  for (const plugin of pluginsToEvaluate) {
+    const pluginCapabilities = collectDeclaredCapabilities(plugin);
+    for (const capability of pluginCapabilities) {
+      const owners = activeCapabilityOwners.get(capability) ?? [];
+      const conflictingOwners = params.candidatePlugin
+        ? owners
+        : owners.filter((owner) => owner !== plugin.id);
+      if (conflictingOwners.length > 0) {
+        diagnostics.push({
+          level: "error",
+          pluginId: plugin.id,
+          source: plugin.source,
+          code: "capability_declared_duplicate",
+          capability,
+          slot: capability.includes(".") ? capability.split(".").slice(0, -1).join(".") : undefined,
+          message: `declared capability already provided by another plugin: ${capability} (${Array.from(new Set(conflictingOwners)).join(", ")})`,
+        });
+      }
+    }
+
+    for (const requirement of plugin.requiredCapabilities) {
+      const satisfied = Array.from(activeCapabilityOwners.keys()).some((capability) =>
+        capabilityPatternMatches({ pattern: requirement, capability }),
+      );
+      if (satisfied) {
+        continue;
+      }
+      diagnostics.push({
+        level: "warn",
+        pluginId: plugin.id,
+        source: plugin.source,
+        code: "capability_missing_requirement",
+        capability: requirement,
+        message: `missing required capability: ${requirement}`,
+      });
+    }
+
+    for (const conflict of plugin.conflictingCapabilities) {
+      const conflictingOwners = Array.from(activeCapabilityOwners.entries())
+        .filter(([capability]) => capabilityPatternMatches({ pattern: conflict, capability }))
+        .flatMap(([, owners]) => owners)
+        .filter((ownerId) => ownerId !== plugin.id);
+      if (conflictingOwners.length === 0) {
+        continue;
+      }
+      diagnostics.push({
+        level: "error",
+        pluginId: plugin.id,
+        source: plugin.source,
+        code: "capability_conflict_present",
+        capability: conflict,
+        message: `conflicting capability present: ${conflict} (${Array.from(new Set(conflictingOwners)).join(", ")})`,
+      });
+    }
+  }
+
+  return diagnostics;
 }
 
 function recordPluginError(params: {
@@ -703,6 +801,9 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     record.kind = manifestRecord.kind;
     record.configUiHints = manifestRecord.configUiHints;
     record.configJsonSchema = manifestRecord.configSchema;
+    record.declaredCapabilities = [...manifestRecord.provides];
+    record.requiredCapabilities = [...manifestRecord.requires];
+    record.conflictingCapabilities = [...manifestRecord.conflicts];
     const pushPluginLoadError = (message: string) => {
       record.status = "error";
       record.error = message;
@@ -741,6 +842,21 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
         seenIds.set(pluginId, candidate.origin);
         continue;
       }
+    }
+
+    const preflightCapabilityDiagnostics = evaluateCapabilityRelationships({
+      activePlugins: registry.plugins.filter((plugin) => plugin.status === "loaded"),
+      candidatePlugin: record,
+    });
+    if (preflightCapabilityDiagnostics.some((diag) => diag.level === "error")) {
+      record.status = "error";
+      record.error =
+        preflightCapabilityDiagnostics.find((diag) => diag.level === "error")?.message ??
+        "plugin capability relationship error";
+      registry.plugins.push(record);
+      seenIds.set(pluginId, candidate.origin);
+      pushDiagnostics(registry.diagnostics, preflightCapabilityDiagnostics);
+      continue;
     }
 
     if (!manifestRecord.configSchema) {
@@ -894,6 +1010,13 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       message: `memory slot plugin not found or not marked as memory: ${memorySlot}`,
     });
   }
+
+  pushDiagnostics(
+    registry.diagnostics,
+    evaluateCapabilityRelationships({
+      activePlugins: registry.plugins.filter((plugin) => plugin.status === "loaded"),
+    }),
+  );
 
   warnAboutUntrackedLoadedPlugins({
     registry,

@@ -28,7 +28,7 @@ async function collectDoctorWarnings(config: Record<string, unknown>): Promise<s
       run: loadAndMaybeMigrateDoctorConfig,
     });
     return noteSpy.mock.calls
-      .filter((call) => call[1] === "Doctor warnings")
+      .filter((call) => call[1] === "Doctor warnings" || call[1] === "Config warnings")
       .map((call) => String(call[0]));
   } finally {
     noteSpy.mockRestore();
@@ -127,6 +127,56 @@ describe("doctor config flow", () => {
     ).toBe(true);
   });
 
+  it("surfaces missing required plugin capabilities as doctor warnings", async () => {
+    const temp = await withTempHome(async (homeDir) => {
+      const providerDir = path.join(homeDir, "embedding-provider");
+      await fs.mkdir(providerDir, { recursive: true });
+      await fs.writeFile(
+        path.join(providerDir, "index.js"),
+        'export default { id: "embedding-provider", register() {} };',
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(providerDir, "openclaw.plugin.json"),
+        JSON.stringify({
+          id: "embedding-provider",
+          configSchema: { type: "object" },
+          provides: ["providers.embedding.fixture"],
+        }),
+        "utf-8",
+      );
+      const consumerDir = path.join(homeDir, "embedding-consumer");
+      await fs.mkdir(consumerDir, { recursive: true });
+      await fs.writeFile(
+        path.join(consumerDir, "index.js"),
+        'export default { id: "embedding-consumer", register() {} };',
+        "utf-8",
+      );
+      await fs.writeFile(
+        path.join(consumerDir, "openclaw.plugin.json"),
+        JSON.stringify({
+          id: "embedding-consumer",
+          configSchema: { type: "object" },
+          requires: ["providers.embedding.fixture"],
+        }),
+        "utf-8",
+      );
+
+      return collectDoctorWarnings({
+        plugins: {
+          enabled: true,
+          load: { paths: [consumerDir] },
+        },
+      });
+    });
+
+    expect(
+      temp.some((line) =>
+        line.includes("missing required capability: providers.embedding.fixture"),
+      ),
+    ).toBe(true);
+  });
+
   it("does not warn on mutable Zalouser group entries when dangerous name matching is enabled", async () => {
     const doctorWarnings = await collectDoctorWarnings({
       channels: {
@@ -141,7 +191,6 @@ describe("doctor config flow", () => {
 
     expect(doctorWarnings.some((line) => line.includes("channels.zalouser.groups"))).toBe(false);
   });
-
   it("warns when imessage group allowlist is empty even if allowFrom is set", async () => {
     const doctorWarnings = await collectDoctorWarnings({
       channels: {
