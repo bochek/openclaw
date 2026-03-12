@@ -124,7 +124,7 @@ describe("setTabFromRoute", () => {
     vi.stubGlobal("window", {
       setInterval,
       clearInterval,
-    } as Window & typeof globalThis);
+    } as unknown as Window & typeof globalThis);
   });
 
   afterEach(() => {
@@ -203,7 +203,7 @@ describe("setTabFromRoute", () => {
       setInterval,
       clearInterval,
       matchMedia,
-    } as Window & typeof globalThis);
+    } as unknown as Window & typeof globalThis);
 
     const host = createHost("chat");
     host.theme = "knot" as unknown as ThemeName & ThemeMode;
