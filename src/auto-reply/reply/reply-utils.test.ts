@@ -151,12 +151,22 @@ describe("normalizeReplyPayload", () => {
     expect(result!.mediaUrl).toBe("https://example.com/img.png");
   });
 
+  it("does not compile Slack directives unless interactive replies are enabled", () => {
+    const result = normalizeReplyPayload({
+      text: "hello [[slack_buttons: Retry:retry, Ignore:ignore]]",
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe("hello [[slack_buttons: Retry:retry, Ignore:ignore]]");
+    expect(result!.channelData).toBeUndefined();
+  });
+
   it("applies responsePrefix before compiling Slack directives into blocks", () => {
     const result = normalizeReplyPayload(
       {
         text: "hello [[slack_buttons: Retry:retry, Ignore:ignore]]",
       },
-      { responsePrefix: "[bot]" },
+      { responsePrefix: "[bot]", enableSlackInteractiveReplies: true },
     );
 
     expect(result).not.toBeNull();
