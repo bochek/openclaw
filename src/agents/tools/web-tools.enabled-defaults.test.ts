@@ -1,5 +1,25 @@
 import { EnvHttpProxyAgent } from "undici";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  createBundledBraveSearchProvider,
+  __testing as bundledBraveTesting,
+} from "../../../extensions/search-brave/src/provider.js";
+import {
+  createBundledGeminiSearchProvider,
+  __testing as bundledGeminiTesting,
+} from "../../../extensions/search-gemini/src/provider.js";
+import {
+  createBundledGrokSearchProvider,
+  __testing as bundledGrokTesting,
+} from "../../../extensions/search-grok/src/provider.js";
+import {
+  createBundledKimiSearchProvider,
+  __testing as bundledKimiTesting,
+} from "../../../extensions/search-kimi/src/provider.js";
+import {
+  createBundledPerplexitySearchProvider,
+  __testing as bundledPerplexityTesting,
+} from "../../../extensions/search-perplexity/src/provider.js";
 import { createEmptyPluginRegistry } from "../../plugins/registry.js";
 import { getActivePluginRegistry, setActivePluginRegistry } from "../../plugins/runtime.js";
 import { withFetchPreconnect } from "../../test-utils/fetch-mock.js";
@@ -8,9 +28,41 @@ import { createWebFetchTool, createWebSearchTool } from "./web-tools.js";
 
 let previousPluginRegistry = getActivePluginRegistry();
 
+const BUNDLED_PROVIDER_CREATORS = {
+  brave: createBundledBraveSearchProvider,
+  gemini: createBundledGeminiSearchProvider,
+  grok: createBundledGrokSearchProvider,
+  kimi: createBundledKimiSearchProvider,
+  perplexity: createBundledPerplexitySearchProvider,
+} as const;
+
 beforeEach(() => {
   previousPluginRegistry = getActivePluginRegistry();
-  setActivePluginRegistry(createEmptyPluginRegistry());
+  const registry = createEmptyPluginRegistry();
+  (
+    Object.entries(BUNDLED_PROVIDER_CREATORS) as Array<
+      [
+        keyof typeof BUNDLED_PROVIDER_CREATORS,
+        (typeof BUNDLED_PROVIDER_CREATORS)[keyof typeof BUNDLED_PROVIDER_CREATORS],
+      ]
+    >
+  ).forEach(([providerId, createProvider]) => {
+    registry.searchProviders.push({
+      pluginId: `search-${providerId}`,
+      source: `/plugins/search-${providerId}`,
+      provider: {
+        ...createProvider(),
+        pluginId: `search-${providerId}`,
+      },
+    });
+  });
+  setActivePluginRegistry(registry);
+  webSearchTesting.SEARCH_CACHE.clear();
+  bundledBraveTesting.clearSearchProviderCaches();
+  bundledPerplexityTesting.clearSearchProviderCaches();
+  bundledGrokTesting.clearSearchProviderCaches();
+  bundledGeminiTesting.clearSearchProviderCaches();
+  bundledKimiTesting.clearSearchProviderCaches();
 });
 
 afterEach(() => {
@@ -214,16 +266,13 @@ describe("web_search plugin providers", () => {
     "resolves configured built-in provider %s through bundled plugin registrations when available",
     async (providerId) => {
       const registry = createEmptyPluginRegistry();
+      const bundledProvider = BUNDLED_PROVIDER_CREATORS[providerId]();
       registry.searchProviders.push({
         pluginId: `search-${providerId}`,
         source: `/plugins/search-${providerId}`,
         provider: {
-          id: providerId,
-          name: `${providerId} bundled provider`,
+          ...bundledProvider,
           pluginId: `search-${providerId}`,
-          builtinProviderId: providerId,
-          isAvailable: () => true,
-          search: async () => ({ content: "unused" }),
         },
       });
       setActivePluginRegistry(registry);
@@ -706,6 +755,11 @@ describe("web_search perplexity Search API", () => {
     vi.unstubAllEnvs();
     global.fetch = priorFetch;
     webSearchTesting.SEARCH_CACHE.clear();
+    bundledBraveTesting.clearSearchProviderCaches();
+    bundledPerplexityTesting.clearSearchProviderCaches();
+    bundledGrokTesting.clearSearchProviderCaches();
+    bundledGeminiTesting.clearSearchProviderCaches();
+    bundledKimiTesting.clearSearchProviderCaches();
   });
 
   it("uses Perplexity Search API when PERPLEXITY_API_KEY is set", async () => {
@@ -843,6 +897,11 @@ describe("web_search perplexity OpenRouter compatibility", () => {
     vi.unstubAllEnvs();
     global.fetch = priorFetch;
     webSearchTesting.SEARCH_CACHE.clear();
+    bundledBraveTesting.clearSearchProviderCaches();
+    bundledPerplexityTesting.clearSearchProviderCaches();
+    bundledGrokTesting.clearSearchProviderCaches();
+    bundledGeminiTesting.clearSearchProviderCaches();
+    bundledKimiTesting.clearSearchProviderCaches();
   });
 
   it("routes OPENROUTER_API_KEY through chat completions", async () => {

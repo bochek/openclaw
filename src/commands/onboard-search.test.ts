@@ -260,7 +260,6 @@ describe("setupSearch", () => {
               name: providerLabel,
               description: `Bundled ${providerLabel} provider`,
               pluginId: `search-${providerId}`,
-              builtinProviderId: providerId,
               isAvailable: () => true,
               search: async () => ({ content: "ok" }),
             },

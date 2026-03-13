@@ -294,14 +294,35 @@ export type SearchProviderContext = {
   pluginConfig?: Record<string, unknown>;
 };
 
+export type SearchProviderLegacyConfigMetadata = {
+  hint?: string;
+  envKeys?: readonly string[];
+  placeholder?: string;
+  signupUrl?: string;
+  apiKeyConfigPath?: string;
+  readApiKeyValue?: (search: Record<string, unknown> | undefined) => unknown;
+  writeApiKeyValue?: (search: Record<string, unknown>, value: unknown) => void;
+};
+
+export type SearchProviderRuntimeMetadata = Record<string, unknown>;
+
+export type SearchProviderRuntimeMetadataResolver = (params: {
+  search: Record<string, unknown> | undefined;
+  keyValue?: string;
+  keySource: "config" | "secretRef" | "env" | "missing";
+  fallbackEnvVar?: string;
+}) => SearchProviderRuntimeMetadata;
+
 export type SearchProviderPlugin = {
   id: string;
   name: string;
   description?: string;
   pluginId?: string;
-  builtinProviderId?: string;
+  pluginOwnedExecution?: boolean;
   docsUrl?: string;
   configFieldOrder?: string[];
+  legacyConfig?: SearchProviderLegacyConfigMetadata;
+  resolveRuntimeMetadata?: SearchProviderRuntimeMetadataResolver;
   isAvailable?: (config?: OpenClawConfig) => boolean;
   search: (
     params: SearchProviderRequest,
