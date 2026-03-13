@@ -12,6 +12,7 @@ import {
   resolveResponsePrefixTemplate,
   type ResponsePrefixContext,
 } from "./response-prefix-template.js";
+import { hasSlackDirectives, parseSlackDirectives } from "./slack-directives.js";
 
 export type NormalizeReplySkipReason = "empty" | "silent" | "heartbeat";
 
@@ -105,5 +106,10 @@ export function normalizeReplyPayload(
     text = `${effectivePrefix} ${text}`;
   }
 
-  return { ...enrichedPayload, text };
+  enrichedPayload = { ...enrichedPayload, text };
+  if (text && hasSlackDirectives(text)) {
+    enrichedPayload = parseSlackDirectives(enrichedPayload);
+  }
+
+  return enrichedPayload;
 }
