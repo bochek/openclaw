@@ -331,12 +331,13 @@ describe("BlueBubbles webhook monitor", () => {
     const req = new EventEmitter() as IncomingMessage & {
       destroy: (error?: Error) => IncomingMessage;
     };
+    const destroyMock = vi.fn();
     req.method = "POST";
     req.url = url;
     req.headers = {};
-    req.destroy = vi.fn((_: Error | undefined) => req) as typeof req.destroy;
+    req.destroy = destroyMock as unknown as typeof req.destroy;
     setRequestRemoteAddress(req, "127.0.0.1");
-    return req;
+    return { req, destroyMock };
   }
 
   function registerWebhookTargets(
@@ -417,7 +418,7 @@ describe("BlueBubbles webhook monitor", () => {
         setupWebhookTarget();
 
         // Create a request that never sends data or ends (simulates slow-loris)
-        const req = createHangingWebhookRequest();
+        const { req, destroyMock } = createHangingWebhookRequest();
 
         const res = createMockResponse();
 
@@ -429,7 +430,7 @@ describe("BlueBubbles webhook monitor", () => {
         const handled = await handledPromise;
         expect(handled).toBe(true);
         expect(res.statusCode).toBe(408);
-        expect(req.destroy).toHaveBeenCalled();
+        expect(destroyMock).toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }
@@ -438,7 +439,7 @@ describe("BlueBubbles webhook monitor", () => {
     it("rejects unauthorized requests before reading the body", async () => {
       const account = createMockAccount({ password: "secret-token" });
       setupWebhookTarget({ account });
-      const req = createHangingWebhookRequest("/bluebubbles-webhook?password=wrong-token");
+      const { req } = createHangingWebhookRequest("/bluebubbles-webhook?password=wrong-token");
       const onSpy = vi.spyOn(req, "on");
       await expectWebhookStatus(req, 401);
       expect(onSpy).not.toHaveBeenCalledWith("data", expect.any(Function));
