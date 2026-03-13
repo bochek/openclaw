@@ -44,6 +44,7 @@ import {
 } from "./bot-access.js";
 import type { TelegramMediaRef } from "./bot-message-context.js";
 import { RegisterTelegramHandlerParams } from "./bot-native-commands.js";
+import { parseTelegramNativeCommandCallbackData } from "./bot-native-commands.js";
 import {
   MEDIA_GROUP_TIMEOUT_MS,
   type MediaGroupEntry,
@@ -1437,14 +1438,16 @@ export const registerTelegramHandlers = ({
         return;
       }
 
+      const nativeCommandText = parseTelegramNativeCommandCallbackData(data);
       const syntheticMessage = buildSyntheticTextMessage({
         base: callbackMessage,
         from: callback.from,
-        text: data,
+        text: nativeCommandText ?? data,
       });
       await processMessage(buildSyntheticContext(ctx, syntheticMessage), [], storeAllowFrom, {
         forceWasMentioned: true,
         messageIdOverride: callback.id,
+        commandSource: nativeCommandText ? "native" : undefined,
       });
     } catch (err) {
       runtime.error?.(danger(`callback handler failed: ${String(err)}`));
