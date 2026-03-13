@@ -1,0 +1,4 @@
+{
+  "id": "search-kimi",
+  "provides": ["providers.search.kimi"]
+}

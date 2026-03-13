@@ -1,5 +1,6 @@
 import {
   BUILTIN_WEB_SEARCH_PROVIDER_OPTIONS,
+  MIGRATED_BUNDLED_WEB_SEARCH_PROVIDER_IDS,
   type BuiltinWebSearchProviderEntry,
   type BuiltinWebSearchProviderId,
   isBuiltinWebSearchProviderId,
@@ -48,6 +49,10 @@ const SEARCH_PROVIDER_KEEP_CURRENT_SENTINEL = "__keep_current__" as const;
 const SEARCH_PROVIDER_SKIP_SENTINEL = "__skip__" as const;
 const SEARCH_PROVIDER_SWITCH_ACTIVE_SENTINEL = "__switch_active__" as const;
 const SEARCH_PROVIDER_CONFIGURE_SENTINEL = "__configure_provider__" as const;
+
+const MIGRATED_BUNDLED_WEB_SEARCH_PROVIDER_ID_SET = new Set<string>(
+  MIGRATED_BUNDLED_WEB_SEARCH_PROVIDER_IDS,
+);
 
 type PluginSearchProviderEntry = {
   kind: "plugin";
@@ -517,7 +522,9 @@ export async function resolveSearchProviderPickerEntries(
   config: OpenClawConfig,
   workspaceDir?: string,
 ): Promise<SearchProviderPickerEntry[]> {
-  const builtins: SearchProviderPickerEntry[] = SEARCH_PROVIDER_OPTIONS.map((entry) => ({
+  const builtins: SearchProviderPickerEntry[] = SEARCH_PROVIDER_OPTIONS.filter(
+    (entry) => !MIGRATED_BUNDLED_WEB_SEARCH_PROVIDER_ID_SET.has(entry.value),
+  ).map((entry) => ({
     ...entry,
     kind: "builtin",
     configured: hasExistingKey(config, entry.value) || hasKeyInEnv(entry),
@@ -567,6 +574,15 @@ export async function resolveSearchProviderPickerEntries(
           configJsonSchema: pluginRecord.configJsonSchema,
           configUiHints: pluginRecord.configUiHints,
         };
+      })
+      .filter((entry) => {
+        if (!entry) {
+          return false;
+        }
+        return !(
+          entry.origin === "bundled" &&
+          !MIGRATED_BUNDLED_WEB_SEARCH_PROVIDER_ID_SET.has(entry.value)
+        );
       })
       .filter(Boolean) as PluginSearchProviderEntry[];
     pluginEntries = resolvedPluginEntries.toSorted((left, right) =>

@@ -242,6 +242,64 @@ describe("setupSearch", () => {
     );
   });
 
+  it.each([
+    ["brave", "Brave Search"],
+    ["gemini", "Gemini (Google Search)"],
+    ["grok", "Grok (xAI)"],
+    ["kimi", "Kimi (Moonshot)"],
+    ["perplexity", "Perplexity Search"],
+  ] as const)(
+    "does not duplicate built-in provider %s when a bundled search plugin registers the same provider id",
+    async (providerId, providerLabel) => {
+      loadOpenClawPlugins.mockReturnValue({
+        searchProviders: [
+          {
+            pluginId: `search-${providerId}`,
+            provider: {
+              id: providerId,
+              name: providerLabel,
+              description: `Bundled ${providerLabel} provider`,
+              pluginId: `search-${providerId}`,
+              builtinProviderId: providerId,
+              isAvailable: () => true,
+              search: async () => ({ content: "ok" }),
+            },
+          },
+        ],
+        plugins: [
+          {
+            id: `search-${providerId}`,
+            name: providerLabel,
+            description: `Bundled ${providerLabel} provider`,
+            origin: "bundled",
+            source: `/tmp/bundled/search-${providerId}`,
+            configJsonSchema: undefined,
+            configUiHints: undefined,
+          },
+        ],
+        typedHooks: [],
+      });
+      loadPluginManifestRegistry.mockReturnValue({
+        plugins: [],
+        diagnostics: [],
+      });
+
+      const cfg: OpenClawConfig = {};
+      const { prompter } = createPrompter({ selectValue: "__skip__" });
+      await setupSearch(cfg, runtime, prompter);
+
+      const providerSelectCall = (prompter.select as ReturnType<typeof vi.fn>).mock.calls.find(
+        (call) => call[0]?.message === "Choose active web search provider",
+      );
+      const matchingOptions =
+        providerSelectCall?.[0]?.options?.filter(
+          (option: { value?: string }) => option.value === providerId,
+        ) ?? [];
+      expect(matchingOptions).toHaveLength(1);
+      expect(matchingOptions[0]?.hint).toContain("Bundled plugin");
+    },
+  );
+
   it("uses the updated configure-or-install action label", async () => {
     vi.stubEnv("BRAVE_API_KEY", "BSA-test-key");
     loadOpenClawPlugins.mockReturnValue({

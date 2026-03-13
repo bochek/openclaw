@@ -335,7 +335,7 @@ describe("runConfigureWizard", () => {
         }),
       }),
     );
-    expect(mocks.writeConfigFile.mock.calls[0]?.[0]?.tools?.web?.search?.provider).toBeUndefined();
+    expect(mocks.writeConfigFile.mock.calls[0]?.[0]?.tools?.web?.search?.provider).toBe("brave");
   });
 
   it("re-prompts invalid plugin config values during configure", async () => {

@@ -1,0 +1,4 @@
+{
+  "id": "search-gemini",
+  "provides": ["providers.search.gemini"]
+}

@@ -1,0 +1,4 @@
+{
+  "id": "search-grok",
+  "provides": ["providers.search.grok"]
+}

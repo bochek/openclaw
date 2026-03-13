@@ -210,6 +210,75 @@ describe("web tools defaults", () => {
 });
 
 describe("web_search plugin providers", () => {
+  it.each(["brave", "perplexity", "grok", "gemini", "kimi"] as const)(
+    "resolves configured built-in provider %s through bundled plugin registrations when available",
+    async (providerId) => {
+      const registry = createEmptyPluginRegistry();
+      registry.searchProviders.push({
+        pluginId: `search-${providerId}`,
+        source: `/plugins/search-${providerId}`,
+        provider: {
+          id: providerId,
+          name: `${providerId} bundled provider`,
+          pluginId: `search-${providerId}`,
+          builtinProviderId: providerId,
+          isAvailable: () => true,
+          search: async () => ({ content: "unused" }),
+        },
+      });
+      setActivePluginRegistry(registry);
+
+      const mockFetch = installMockFetch(createProviderSuccessPayload(providerId));
+      const provider = webSearchTesting.resolveRegisteredSearchProvider({
+        config: {
+          tools: {
+            web: {
+              search:
+                providerId === "perplexity"
+                  ? { provider: providerId, perplexity: { apiKey: "pplx-config-test" } }
+                  : providerId === "grok"
+                    ? { provider: providerId, grok: { apiKey: "xai-config-test" } }
+                    : providerId === "gemini"
+                      ? { provider: providerId, gemini: { apiKey: "gemini-config-test" } }
+                      : providerId === "kimi"
+                        ? { provider: providerId, kimi: { apiKey: "moonshot-config-test" } }
+                        : { provider: providerId, apiKey: "brave-config-test" },
+            },
+          },
+        },
+      });
+
+      expect(provider.pluginId).toBe(`search-${providerId}`);
+
+      const tool = createWebSearchTool({
+        config: {
+          tools: {
+            web: {
+              search:
+                providerId === "perplexity"
+                  ? { provider: providerId, perplexity: { apiKey: "pplx-config-test" } }
+                  : providerId === "grok"
+                    ? { provider: providerId, grok: { apiKey: "xai-config-test" } }
+                    : providerId === "gemini"
+                      ? { provider: providerId, gemini: { apiKey: "gemini-config-test" } }
+                      : providerId === "kimi"
+                        ? { provider: providerId, kimi: { apiKey: "moonshot-config-test" } }
+                        : { provider: providerId, apiKey: "brave-config-test" },
+            },
+          },
+        },
+        sandboxed: true,
+      });
+
+      const result = await tool?.execute?.(`call-bundled-${providerId}`, {
+        query: `bundled ${providerId}`,
+      });
+
+      expect(mockFetch).toHaveBeenCalled();
+      expect((result?.details as { provider?: string } | undefined)?.provider).toBe(providerId);
+    },
+  );
+
   it("prefers an explicitly configured plugin provider over a built-in provider with the same id", async () => {
     const searchMock = vi.fn(async () => ({
       results: [

@@ -8,6 +8,18 @@ export const BUILTIN_WEB_SEARCH_PROVIDER_IDS = [
 
 export type BuiltinWebSearchProviderId = (typeof BUILTIN_WEB_SEARCH_PROVIDER_IDS)[number];
 
+export const MIGRATED_BUNDLED_WEB_SEARCH_PROVIDER_IDS = BUILTIN_WEB_SEARCH_PROVIDER_IDS;
+
+export type MigratedBundledWebSearchProviderId =
+  (typeof MIGRATED_BUNDLED_WEB_SEARCH_PROVIDER_IDS)[number];
+
+export const bundledCoreWebSearchPluginId = (providerId: BuiltinWebSearchProviderId): string =>
+  `search-${providerId}`;
+
+export const MIGRATED_BUNDLED_WEB_SEARCH_PLUGIN_IDS = MIGRATED_BUNDLED_WEB_SEARCH_PROVIDER_IDS.map(
+  bundledCoreWebSearchPluginId,
+);
+
 export type BuiltinWebSearchProviderEntry = {
   value: BuiltinWebSearchProviderId;
   label: string;

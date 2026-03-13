@@ -139,6 +139,7 @@ describe("plugin-sdk exports", () => {
       "formatInboundFromLabel",
       "resolveRuntimeGroupPolicy",
       "emptyPluginConfigSchema",
+      "createBundledBuiltinSearchProvider",
       "normalizePluginHttpPath",
       "registerPluginHttpRoute",
       "buildBaseAccountStatusSnapshot",

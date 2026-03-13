@@ -2461,8 +2461,54 @@ function getBuiltinSearchProviders(search?: WebSearchConfig): SearchProviderPlug
   ];
 }
 
+export function createBundledBuiltinSearchProvider(
+  providerId: BuiltinWebSearchProviderId,
+): SearchProviderPlugin {
+  const providers = getBuiltinSearchProviders();
+  switch (providerId) {
+    case "brave":
+      return {
+        ...providers[0],
+        builtinProviderId: "brave",
+      };
+    case "gemini":
+      return {
+        ...providers[1],
+        builtinProviderId: "gemini",
+      };
+    case "grok":
+      return {
+        ...providers[2],
+        builtinProviderId: "grok",
+      };
+    case "kimi":
+      return {
+        ...providers[3],
+        builtinProviderId: "kimi",
+      };
+    case "perplexity":
+      return {
+        ...providers[4],
+        builtinProviderId: "perplexity",
+      };
+  }
+}
+
 function getPluginSearchProviders(): SearchProviderPlugin[] {
   return getActivePluginRegistry()?.searchProviders.map((entry) => entry.provider) ?? [];
+}
+
+function resolveBuiltinSchemaProviderId(
+  provider: SearchProviderPlugin,
+): BuiltinWebSearchProviderId | undefined {
+  if (provider.builtinProviderId && isBuiltinSearchProviderId(provider.builtinProviderId)) {
+    return provider.builtinProviderId;
+  }
+  if (!provider.pluginId) {
+    const candidate = normalizeSearchProviderId(provider.id);
+    return isBuiltinSearchProviderId(candidate) ? candidate : undefined;
+  }
+  return undefined;
 }
 
 function resolveConfiguredSearchProviderId(params: {
@@ -2582,8 +2628,8 @@ function createSearchProviderSchema(params: {
   search?: WebSearchConfig;
   runtimeWebSearch?: RuntimeWebSearchMetadata;
 }) {
-  const providerId = normalizeSearchProviderId(params.provider.id);
-  if (!params.provider.pluginId && isBuiltinSearchProviderId(providerId)) {
+  const providerId = resolveBuiltinSchemaProviderId(params.provider);
+  if (providerId) {
     const perplexityTransport =
       params.runtimeWebSearch?.selectedProvider === "perplexity"
         ? params.runtimeWebSearch.perplexityTransport
@@ -2719,36 +2765,35 @@ export function createWebSearchTool(options?: {
         });
       }
 
-      const providerId = normalizeSearchProviderId(provider.id);
+      const builtinProviderId = resolveBuiltinSchemaProviderId(provider);
       logVerbose(formatWebSearchExecutionLog(provider));
-      const result =
-        !provider.pluginId && isBuiltinSearchProviderId(providerId)
-          ? await executeBuiltinSearchProvider({
-              provider: providerId,
-              request,
-              context: {
-                config: options?.config ?? {},
-                timeoutSeconds: resolveTimeoutSeconds(
-                  search?.timeoutSeconds,
-                  DEFAULT_TIMEOUT_SECONDS,
-                ),
-                cacheTtlMs: resolveCacheTtlMs(search?.cacheTtlMinutes, DEFAULT_CACHE_TTL_MINUTES),
-                pluginConfig: resolveSearchProviderPluginConfig(options?.config, provider),
-              },
-            })
-          : await executePluginSearchProvider({
-              provider,
-              request,
-              context: {
-                config: options?.config ?? {},
-                timeoutSeconds: resolveTimeoutSeconds(
-                  search?.timeoutSeconds,
-                  DEFAULT_TIMEOUT_SECONDS,
-                ),
-                cacheTtlMs: resolveCacheTtlMs(search?.cacheTtlMinutes, DEFAULT_CACHE_TTL_MINUTES),
-                pluginConfig: resolveSearchProviderPluginConfig(options?.config, provider),
-              },
-            });
+      const result = builtinProviderId
+        ? await executeBuiltinSearchProvider({
+            provider: builtinProviderId,
+            request,
+            context: {
+              config: options?.config ?? {},
+              timeoutSeconds: resolveTimeoutSeconds(
+                search?.timeoutSeconds,
+                DEFAULT_TIMEOUT_SECONDS,
+              ),
+              cacheTtlMs: resolveCacheTtlMs(search?.cacheTtlMinutes, DEFAULT_CACHE_TTL_MINUTES),
+              pluginConfig: resolveSearchProviderPluginConfig(options?.config, provider),
+            },
+          })
+        : await executePluginSearchProvider({
+            provider,
+            request,
+            context: {
+              config: options?.config ?? {},
+              timeoutSeconds: resolveTimeoutSeconds(
+                search?.timeoutSeconds,
+                DEFAULT_TIMEOUT_SECONDS,
+              ),
+              cacheTtlMs: resolveCacheTtlMs(search?.cacheTtlMinutes, DEFAULT_CACHE_TTL_MINUTES),
+              pluginConfig: resolveSearchProviderPluginConfig(options?.config, provider),
+            },
+          });
       return jsonResult(result);
     },
   };
