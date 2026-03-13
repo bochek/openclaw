@@ -64,7 +64,7 @@ describe("formatBackupCreateSummary", () => {
             displayPath: "~/.openclaw/config.json",
           },
           {
-            kind: "oauth",
+            kind: "credentials",
             sourcePath: "/oauth",
             archivePath: "archive/oauth",
             displayPath: "~/.openclaw/oauth",
