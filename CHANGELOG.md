@@ -34,6 +34,7 @@ Docs: https://docs.openclaw.ai
 - Agents/compaction: preserve safeguard compaction summary language continuity via default and configurable custom instructions so persona drift is reduced after auto-compaction. (#10456) Thanks @keepitmello.
 - Agents/tool warnings: distinguish gated core tools like `apply_patch` from plugin-only unknown entries in `tools.profile` warnings, so unavailable core tools now report current runtime/provider/model/config gating instead of suggesting a missing plugin.
 - Slack/probe: keep `auth.test()` bot and team metadata mapping stable while simplifying the probe result path. (#44775) Thanks @Cafexss.
+- Telegram/native commands: preserve native command routing for `/fast` option-button callbacks even when text commands are disabled, so `/fast status|on|off` no longer falls through into normal model runs. Thanks @vincentkoc.
 
 ## 2026.3.12
 
