@@ -18,6 +18,7 @@ export type NormalizeReplySkipReason = "empty" | "silent" | "heartbeat";
 
 export type NormalizeReplyOptions = {
   responsePrefix?: string;
+  enableSlackInteractiveReplies?: boolean;
   /** Context for template variable interpolation in responsePrefix */
   responsePrefixContext?: ResponsePrefixContext;
   onHeartbeatStrip?: () => void;
@@ -107,7 +108,7 @@ export function normalizeReplyPayload(
   }
 
   enrichedPayload = { ...enrichedPayload, text };
-  if (text && hasSlackDirectives(text)) {
+  if (opts.enableSlackInteractiveReplies && text && hasSlackDirectives(text)) {
     enrichedPayload = parseSlackDirectives(enrichedPayload);
   }
 
