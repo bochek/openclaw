@@ -43,8 +43,10 @@ import {
   type NormalizedAllowFrom,
 } from "./bot-access.js";
 import type { TelegramMediaRef } from "./bot-message-context.js";
-import { RegisterTelegramHandlerParams } from "./bot-native-commands.js";
-import { parseTelegramNativeCommandCallbackData } from "./bot-native-commands.js";
+import {
+  parseTelegramNativeCommandCallbackData,
+  RegisterTelegramHandlerParams,
+} from "./bot-native-commands.js";
 import {
   MEDIA_GROUP_TIMEOUT_MS,
   type MediaGroupEntry,
