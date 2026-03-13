@@ -35,6 +35,7 @@ import {
 import type {
   ExecEventPayload,
   ExecFinishedEventParams,
+  ExecFinishedResult,
   RunResult,
   SkillBinsProvider,
   SystemRunParams,
