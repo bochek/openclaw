@@ -701,6 +701,70 @@ describe("parseSlackDirectives", () => {
     expect(getSlackData(result).blocks).toEqual([
       { type: "divider" },
       {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: "Act now",
+        },
+      },
+      {
+        type: "actions",
+        block_id: "openclaw_reply_buttons_1",
+        elements: [
+          {
+            type: "button",
+            action_id: "openclaw:reply_button",
+            text: {
+              type: "plain_text",
+              text: "Retry",
+              emoji: true,
+            },
+            value: "retry",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("preserves authored order for mixed Slack directives", () => {
+    const result = parseSlackDirectives({
+      text: "[[slack_select: Pick one | Alpha:alpha]] then [[slack_buttons: Retry:retry]]",
+    });
+
+    expect(getSlackData(result).blocks).toEqual([
+      {
+        type: "actions",
+        block_id: "openclaw_reply_select_1",
+        elements: [
+          {
+            type: "static_select",
+            action_id: "openclaw:reply_select",
+            placeholder: {
+              type: "plain_text",
+              text: "Pick one",
+              emoji: true,
+            },
+            options: [
+              {
+                text: {
+                  type: "plain_text",
+                  text: "Alpha",
+                  emoji: true,
+                },
+                value: "alpha",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: "then",
+        },
+      },
+      {
         type: "actions",
         block_id: "openclaw_reply_buttons_1",
         elements: [
@@ -1624,6 +1688,43 @@ describe("createReplyDispatcher", () => {
     expect(deliver).toHaveBeenCalledTimes(1);
     expect(deliver.mock.calls[0][0].text).toBe("PFX hello");
     expect(onHeartbeatStrip).toHaveBeenCalledTimes(2);
+  });
+
+  it("compiles Slack directives in dispatcher flows when enabled", async () => {
+    const deliver = vi.fn().mockResolvedValue(undefined);
+    const dispatcher = createReplyDispatcher({
+      deliver,
+      enableSlackInteractiveReplies: true,
+    });
+
+    expect(
+      dispatcher.sendFinalReply({
+        text: "Choose [[slack_buttons: Retry:retry]]",
+      }),
+    ).toBe(true);
+    await dispatcher.waitForIdle();
+
+    expect(deliver).toHaveBeenCalledTimes(1);
+    expect(deliver.mock.calls[0]?.[0]).toMatchObject({
+      text: "Choose",
+      channelData: {
+        slack: {
+          blocks: [
+            {
+              type: "section",
+              text: {
+                type: "mrkdwn",
+                text: "Choose",
+              },
+            },
+            {
+              type: "actions",
+              block_id: "openclaw_reply_buttons_1",
+            },
+          ],
+        },
+      },
+    });
   });
 
   it("avoids double-prefixing and keeps media when heartbeat is the only text", async () => {

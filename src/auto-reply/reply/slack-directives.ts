@@ -1,12 +1,11 @@
 import { parseSlackBlocksInput } from "../../slack/blocks-input.js";
 import type { ReplyPayload } from "../types.js";
 
-const SLACK_BUTTONS_DIRECTIVE_RE = /\[\[slack_buttons:\s*([^\]]+)\]\]/gi;
-const SLACK_SELECT_DIRECTIVE_RE = /\[\[slack_select:\s*([^\]]+)\]\]/gi;
 const SLACK_REPLY_BUTTON_ACTION_ID = "openclaw:reply_button";
 const SLACK_REPLY_SELECT_ACTION_ID = "openclaw:reply_select";
 const SLACK_BUTTON_MAX_ITEMS = 5;
 const SLACK_SELECT_MAX_ITEMS = 100;
+const SLACK_DIRECTIVE_RE = /\[\[(slack_buttons|slack_select):\s*([^\]]+)\]\]/gi;
 
 type SlackBlock = Record<string, unknown>;
 type SlackChannelData = {
@@ -127,9 +126,8 @@ function readExistingSlackBlocks(payload: ReplyPayload): SlackBlock[] {
 }
 
 export function hasSlackDirectives(text: string): boolean {
-  SLACK_BUTTONS_DIRECTIVE_RE.lastIndex = 0;
-  SLACK_SELECT_DIRECTIVE_RE.lastIndex = 0;
-  return SLACK_BUTTONS_DIRECTIVE_RE.test(text) || SLACK_SELECT_DIRECTIVE_RE.test(text);
+  SLACK_DIRECTIVE_RE.lastIndex = 0;
+  return SLACK_DIRECTIVE_RE.test(text);
 }
 
 export function parseSlackDirectives(payload: ReplyPayload): ReplyPayload {
@@ -139,40 +137,51 @@ export function parseSlackDirectives(payload: ReplyPayload): ReplyPayload {
   }
 
   const generatedBlocks: SlackBlock[] = [];
+  const visibleTextParts: string[] = [];
   let buttonIndex = 0;
   let selectIndex = 0;
+  let cursor = 0;
+  let matchedDirective = false;
+  let generatedInteractiveBlock = false;
+  SLACK_DIRECTIVE_RE.lastIndex = 0;
 
-  let cleanedText = text.replace(SLACK_BUTTONS_DIRECTIVE_RE, (_match, body: string) => {
-    buttonIndex += 1;
-    const block = buildButtonsBlock(body, buttonIndex);
+  for (const match of text.matchAll(SLACK_DIRECTIVE_RE)) {
+    matchedDirective = true;
+    const matchText = match[0];
+    const directiveType = match[1];
+    const body = match[2];
+    const index = match.index ?? 0;
+    const precedingText = text.slice(cursor, index);
+    visibleTextParts.push(precedingText);
+    const section = buildSectionBlock(precedingText);
+    if (section) {
+      generatedBlocks.push(section);
+    }
+    const block =
+      directiveType.toLowerCase() === "slack_buttons"
+        ? buildButtonsBlock(body, ++buttonIndex)
+        : buildSelectBlock(body, ++selectIndex);
     if (block) {
+      generatedInteractiveBlock = true;
       generatedBlocks.push(block);
     }
-    return "";
-  });
+    cursor = index + matchText.length;
+  }
 
-  cleanedText = cleanedText.replace(SLACK_SELECT_DIRECTIVE_RE, (_match, body: string) => {
-    selectIndex += 1;
-    const block = buildSelectBlock(body, selectIndex);
-    if (block) {
-      generatedBlocks.push(block);
-    }
-    return "";
-  });
+  const trailingText = text.slice(cursor);
+  visibleTextParts.push(trailingText);
+  const trailingSection = buildSectionBlock(trailingText);
+  if (trailingSection) {
+    generatedBlocks.push(trailingSection);
+  }
+  const cleanedText = visibleTextParts.join("");
 
-  if (generatedBlocks.length === 0) {
+  if (!matchedDirective || !generatedInteractiveBlock) {
     return payload;
   }
 
   const existingBlocks = readExistingSlackBlocks(payload);
-  const nextBlocks = [...existingBlocks];
-  if (existingBlocks.length === 0) {
-    const section = buildSectionBlock(cleanedText);
-    if (section) {
-      nextBlocks.push(section);
-    }
-  }
-  nextBlocks.push(...generatedBlocks);
+  const nextBlocks = [...existingBlocks, ...generatedBlocks];
 
   return {
     ...payload,

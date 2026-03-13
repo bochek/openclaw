@@ -135,6 +135,7 @@ export function createReplyDispatcher(options: ReplyDispatcherOptions): ReplyDis
   const enqueue = (kind: ReplyDispatchKind, payload: ReplyPayload) => {
     const normalized = normalizeReplyPayloadInternal(payload, {
       responsePrefix: options.responsePrefix,
+      enableSlackInteractiveReplies: options.enableSlackInteractiveReplies,
       responsePrefixContext: options.responsePrefixContext,
       responsePrefixContextProvider: options.responsePrefixContextProvider,
       onHeartbeatStrip: options.onHeartbeatStrip,

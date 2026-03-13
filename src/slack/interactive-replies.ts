@@ -28,8 +28,9 @@ export function isSlackInteractiveRepliesEnabled(params: {
   if (accountIds.length === 0) {
     return resolveInteractiveRepliesFromCapabilities(params.cfg.channels?.slack?.capabilities);
   }
-  return accountIds.some((accountId) => {
-    const account = resolveSlackAccount({ cfg: params.cfg, accountId });
-    return resolveInteractiveRepliesFromCapabilities(account.config.capabilities);
-  });
+  if (accountIds.length > 1) {
+    return false;
+  }
+  const account = resolveSlackAccount({ cfg: params.cfg, accountId: accountIds[0] });
+  return resolveInteractiveRepliesFromCapabilities(account.config.capabilities);
 }
