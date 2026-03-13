@@ -60,6 +60,15 @@ function parseChoices(raw: string, maxItems: number): SlackChoice[] {
     .slice(0, maxItems);
 }
 
+function buildSlackReplyChoiceToken(value: string, index: number): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return truncateSlackText(`reply_${index}_${slug || "choice"}`, SLACK_OPTION_VALUE_MAX);
+}
+
 function buildSectionBlock(text: string): SlackBlock | null {
   const trimmed = text.trim();
   if (!trimmed) {
@@ -82,7 +91,7 @@ function buildButtonsBlock(raw: string, index: number): SlackBlock | null {
   return {
     type: "actions",
     block_id: `openclaw_reply_buttons_${index}`,
-    elements: choices.map((choice) => ({
+    elements: choices.map((choice, choiceIndex) => ({
       type: "button",
       action_id: SLACK_REPLY_BUTTON_ACTION_ID,
       text: {
@@ -90,7 +99,7 @@ function buildButtonsBlock(raw: string, index: number): SlackBlock | null {
         text: truncateSlackText(choice.label, SLACK_PLAIN_TEXT_MAX),
         emoji: true,
       },
-      value: truncateSlackText(choice.value, SLACK_OPTION_VALUE_MAX),
+      value: buildSlackReplyChoiceToken(choice.value, choiceIndex + 1),
     })),
   };
 }
@@ -121,13 +130,13 @@ function buildSelectBlock(raw: string, index: number): SlackBlock | null {
           text: truncateSlackText(placeholder, SLACK_PLAIN_TEXT_MAX),
           emoji: true,
         },
-        options: choices.map((choice) => ({
+        options: choices.map((choice, choiceIndex) => ({
           text: {
             type: "plain_text",
             text: truncateSlackText(choice.label, SLACK_PLAIN_TEXT_MAX),
             emoji: true,
           },
-          value: truncateSlackText(choice.value, SLACK_OPTION_VALUE_MAX),
+          value: buildSlackReplyChoiceToken(choice.value, choiceIndex + 1),
         })),
       },
     ],
@@ -136,8 +145,12 @@ function buildSelectBlock(raw: string, index: number): SlackBlock | null {
 
 function readExistingSlackBlocks(payload: ReplyPayload): SlackBlock[] {
   const slackData = payload.channelData?.slack as SlackChannelData | undefined;
-  const blocks = parseSlackBlocksInput(slackData?.blocks) as SlackBlock[] | undefined;
-  return blocks ?? [];
+  try {
+    const blocks = parseSlackBlocksInput(slackData?.blocks) as SlackBlock[] | undefined;
+    return blocks ?? [];
+  } catch {
+    return [];
+  }
 }
 
 export function hasSlackDirectives(text: string): boolean {

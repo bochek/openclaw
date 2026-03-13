@@ -193,7 +193,7 @@ describe("normalizeReplyPayload", () => {
                   text: "Retry",
                   emoji: true,
                 },
-                value: "retry",
+                value: "reply_1_retry",
               },
               {
                 type: "button",
@@ -203,7 +203,7 @@ describe("normalizeReplyPayload", () => {
                   text: "Ignore",
                   emoji: true,
                 },
-                value: "ignore",
+                value: "reply_2_ignore",
               },
             ],
           },

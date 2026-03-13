@@ -627,7 +627,7 @@ describe("parseSlackDirectives", () => {
               text: "Approve",
               emoji: true,
             },
-            value: "approve",
+            value: "reply_1_approve",
           },
           {
             type: "button",
@@ -637,7 +637,7 @@ describe("parseSlackDirectives", () => {
               text: "Reject",
               emoji: true,
             },
-            value: "reject",
+            value: "reply_2_reject",
           },
         ],
       },
@@ -670,7 +670,7 @@ describe("parseSlackDirectives", () => {
                   text: "Alpha",
                   emoji: true,
                 },
-                value: "alpha",
+                value: "reply_1_alpha",
               },
               {
                 text: {
@@ -678,7 +678,7 @@ describe("parseSlackDirectives", () => {
                   text: "Beta",
                   emoji: true,
                 },
-                value: "beta",
+                value: "reply_2_beta",
               },
             ],
           },
@@ -719,7 +719,7 @@ describe("parseSlackDirectives", () => {
               text: "Retry",
               emoji: true,
             },
-            value: "retry",
+            value: "reply_1_retry",
           },
         ],
       },
@@ -751,7 +751,7 @@ describe("parseSlackDirectives", () => {
                   text: "Alpha",
                   emoji: true,
                 },
-                value: "alpha",
+                value: "reply_1_alpha",
               },
             ],
           },
@@ -776,7 +776,7 @@ describe("parseSlackDirectives", () => {
               text: "Retry",
               emoji: true,
             },
-            value: "retry",
+            value: "reply_1_retry",
           },
         ],
       },
@@ -857,6 +857,19 @@ describe("parseSlackDirectives", () => {
         },
       },
     });
+  });
+
+  it("ignores malformed existing Slack blocks during directive compilation", () => {
+    expect(() =>
+      parseSlackDirectives({
+        text: "Choose [[slack_buttons: Retry:retry]]",
+        channelData: {
+          slack: {
+            blocks: "{not json}",
+          },
+        },
+      }),
+    ).not.toThrow();
   });
 });
 

@@ -230,6 +230,26 @@ describe("routeReply", () => {
     );
   });
 
+  it("does not bypass the empty-reply guard for invalid Slack blocks", async () => {
+    mocks.sendMessageSlack.mockClear();
+    const res = await routeReply({
+      payload: {
+        text: " ",
+        channelData: {
+          slack: {
+            blocks: " ",
+          },
+        },
+      },
+      channel: "slack",
+      to: "channel:C123",
+      cfg: {} as never,
+    });
+
+    expect(res.ok).toBe(true);
+    expect(mocks.sendMessageSlack).not.toHaveBeenCalled();
+  });
+
   it("does not derive responsePrefix from agent identity when routing", async () => {
     mocks.sendMessageSlack.mockClear();
     const cfg = {

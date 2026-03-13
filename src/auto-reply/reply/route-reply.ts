@@ -12,6 +12,7 @@ import { resolveEffectiveMessagesConfig } from "../../agents/identity.js";
 import { normalizeChannelId } from "../../channels/plugins/index.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { buildOutboundSessionContext } from "../../infra/outbound/session-context.js";
+import { parseSlackBlocksInput } from "../../slack/blocks-input.js";
 import { isSlackInteractiveRepliesEnabled } from "../../slack/interactive-replies.js";
 import { INTERNAL_MESSAGE_CHANNEL, normalizeMessageChannel } from "../../utils/message-channel.js";
 import type { OriginatingChannelType } from "../templating.js";
@@ -109,14 +110,22 @@ export async function routeReply(params: RouteReplyParams): Promise<RouteReplyRe
       ? [normalized.mediaUrl]
       : [];
   const replyToId = normalized.replyToId;
-  const hasSlackBlocks =
+  let hasSlackBlocks = false;
+  if (
     channel === "slack" &&
-    Boolean(
-      normalized.channelData?.slack &&
-      typeof normalized.channelData.slack === "object" &&
-      !Array.isArray(normalized.channelData.slack) &&
-      (normalized.channelData.slack as { blocks?: unknown }).blocks,
-    );
+    normalized.channelData?.slack &&
+    typeof normalized.channelData.slack === "object" &&
+    !Array.isArray(normalized.channelData.slack)
+  ) {
+    try {
+      hasSlackBlocks = Boolean(
+        parseSlackBlocksInput((normalized.channelData.slack as { blocks?: unknown }).blocks)
+          ?.length,
+      );
+    } catch {
+      hasSlackBlocks = false;
+    }
+  }
 
   // Skip empty replies.
   if (!text.trim() && mediaUrls.length === 0 && !hasSlackBlocks) {
