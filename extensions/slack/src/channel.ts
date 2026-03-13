@@ -146,6 +146,12 @@ export const slackPlugin: ChannelPlugin<ResolvedSlackAccount> = {
     media: true,
     nativeCommands: true,
   },
+  agentPrompt: {
+    messageToolHints: () => [
+      "- Slack interactive replies: use `[[slack_buttons: Label:value, Other:other]]` to add action buttons that route clicks back as Slack interaction system events.",
+      "- Slack selects: use `[[slack_select: Placeholder | Label:value, Other:other]]` to add a static select menu that routes the chosen value back as a Slack interaction system event.",
+    ],
+  },
   streaming: {
     blockStreamingCoalesceDefaults: { minChars: 1500, idleMs: 1000 },
   },
