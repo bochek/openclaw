@@ -1,33 +1,18 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { quoteCmdScriptArg } from "./cmd-argv.js";
-
-const schtasksResponses = vi.hoisted(
-  () => [] as Array<{ code: number; stdout: string; stderr: string }>,
-);
-const schtasksCalls = vi.hoisted(() => [] as string[][]);
-const inspectPortUsage = vi.hoisted(() => vi.fn());
-const killProcessTree = vi.hoisted(() => vi.fn());
+import "./test-helpers/schtasks-base-mocks.js";
+import {
+  inspectPortUsage,
+  killProcessTree,
+  resetSchtasksBaseMocks,
+  schtasksResponses,
+  withWindowsEnv,
+} from "./test-helpers/schtasks-fixtures.js";
 const childUnref = vi.hoisted(() => vi.fn());
 const spawn = vi.hoisted(() => vi.fn(() => ({ unref: childUnref })));
-
-vi.mock("./schtasks-exec.js", () => ({
-  execSchtasks: async (argv: string[]) => {
-    schtasksCalls.push(argv);
-    return schtasksResponses.shift() ?? { code: 0, stdout: "", stderr: "" };
-  },
-}));
-
-vi.mock("../infra/ports.js", () => ({
-  inspectPortUsage: (...args: unknown[]) => inspectPortUsage(...args),
-}));
-
-vi.mock("../process/kill-tree.js", () => ({
-  killProcessTree: (...args: unknown[]) => killProcessTree(...args),
-}));
 
 vi.mock("node:child_process", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:child_process")>();
@@ -43,6 +28,7 @@ const {
   readScheduledTaskRuntime,
   restartScheduledTask,
   resolveTaskScriptPath,
+  stopScheduledTask,
 } = await import("./schtasks.js");
 
 function resolveStartupEntryPath(env: Record<string, string>) {
@@ -57,6 +43,7 @@ function resolveStartupEntryPath(env: Record<string, string>) {
   );
 }
 
+<<<<<<< HEAD
 async function withWindowsEnv(
   run: (params: { tmpDir: string; env: Record<string, string> }) => Promise<void>,
 ) {
@@ -74,11 +61,43 @@ async function withWindowsEnv(
   }
 }
 
+async function writeGatewayScript(env: Record<string, string>, port = 18789) {
+  const scriptPath = resolveTaskScriptPath(env);
+  await fs.mkdir(path.dirname(scriptPath), { recursive: true });
+  await fs.writeFile(
+    scriptPath,
+    [
+      "@echo off",
+      `set "OPENCLAW_GATEWAY_PORT=${port}"`,
+      `"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\steipete\\AppData\\Roaming\\npm\\node_modules\\openclaw\\dist\\index.js" gateway --port ${port}`,
+      "",
+    ].join("\r\n"),
+    "utf8",
+  );
+}
+
+||||||| parent of 8fb2c3f894 (refactor: share windows daemon test fixtures)
+async function withWindowsEnv(
+  run: (params: { tmpDir: string; env: Record<string, string> }) => Promise<void>,
+) {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-win-startup-"));
+  const env = {
+    USERPROFILE: tmpDir,
+    APPDATA: path.join(tmpDir, "AppData", "Roaming"),
+    OPENCLAW_PROFILE: "default",
+    OPENCLAW_GATEWAY_PORT: "18789",
+  };
+  try {
+    await run({ tmpDir, env });
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+=======
+>>>>>>> 8fb2c3f894 (refactor: share windows daemon test fixtures)
 beforeEach(() => {
-  schtasksResponses.length = 0;
-  schtasksCalls.length = 0;
-  inspectPortUsage.mockReset();
-  killProcessTree.mockReset();
+  resetSchtasksBaseMocks();
   spawn.mockClear();
   childUnref.mockClear();
 });
@@ -89,7 +108,7 @@ afterEach(() => {
 
 describe("Windows startup fallback", () => {
   it("falls back to a Startup-folder launcher when schtasks create is denied", async () => {
-    await withWindowsEnv(async ({ env }) => {
+    await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
       schtasksResponses.push(
         { code: 0, stdout: "", stderr: "" },
         { code: 5, stdout: "", stderr: "ERROR: Access is denied." },
@@ -124,7 +143,7 @@ describe("Windows startup fallback", () => {
   });
 
   it("falls back to a Startup-folder launcher when schtasks create hangs", async () => {
-    await withWindowsEnv(async ({ env }) => {
+    await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
       schtasksResponses.push(
         { code: 0, stdout: "", stderr: "" },
         { code: 124, stdout: "", stderr: "schtasks timed out after 15000ms" },
@@ -148,7 +167,7 @@ describe("Windows startup fallback", () => {
   });
 
   it("treats an installed Startup-folder launcher as loaded", async () => {
-    await withWindowsEnv(async ({ env }) => {
+    await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
       schtasksResponses.push(
         { code: 0, stdout: "", stderr: "" },
         { code: 1, stdout: "", stderr: "not found" },
@@ -161,7 +180,7 @@ describe("Windows startup fallback", () => {
   });
 
   it("reports runtime from the gateway listener when using the Startup fallback", async () => {
-    await withWindowsEnv(async ({ env }) => {
+    await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
       schtasksResponses.push(
         { code: 0, stdout: "", stderr: "" },
         { code: 1, stdout: "", stderr: "not found" },
@@ -183,7 +202,7 @@ describe("Windows startup fallback", () => {
   });
 
   it("restarts the Startup fallback by killing the current pid and relaunching the entry", async () => {
-    await withWindowsEnv(async ({ env }) => {
+    await withWindowsEnv("openclaw-win-startup-", async ({ env }) => {
       schtasksResponses.push(
         { code: 0, stdout: "", stderr: "" },
         { code: 1, stdout: "", stderr: "not found" },
@@ -209,6 +228,41 @@ describe("Windows startup fallback", () => {
         ["/d", "/s", "/c", quoteCmdScriptArg(resolveTaskScriptPath(env))],
         expect.objectContaining({ detached: true, stdio: "ignore", windowsHide: true }),
       );
+    });
+  });
+
+  it("kills the Startup fallback runtime even when the CLI env omits the gateway port", async () => {
+    await withWindowsEnv(async ({ env }) => {
+      schtasksResponses.push({ code: 0, stdout: "", stderr: "" });
+      await writeGatewayScript(env);
+      await fs.mkdir(path.dirname(resolveStartupEntryPath(env)), { recursive: true });
+      await fs.writeFile(resolveStartupEntryPath(env), "@echo off\r\n", "utf8");
+      inspectPortUsage
+        .mockResolvedValueOnce({
+          port: 18789,
+          status: "busy",
+          listeners: [{ pid: 5151, command: "node.exe" }],
+          hints: [],
+        })
+        .mockResolvedValueOnce({
+          port: 18789,
+          status: "busy",
+          listeners: [{ pid: 5151, command: "node.exe" }],
+          hints: [],
+        })
+        .mockResolvedValueOnce({
+          port: 18789,
+          status: "free",
+          listeners: [],
+          hints: [],
+        });
+
+      const stdout = new PassThrough();
+      const envWithoutPort = { ...env };
+      delete envWithoutPort.OPENCLAW_GATEWAY_PORT;
+      await stopScheduledTask({ env: envWithoutPort, stdout });
+
+      expect(killProcessTree).toHaveBeenCalledWith(5151, { graceMs: 300 });
     });
   });
 });
