@@ -333,11 +333,15 @@ function deriveIdHint(params: {
   const unscoped = rawPackageName.includes("/")
     ? (rawPackageName.split("/").pop() ?? rawPackageName)
     : rawPackageName;
+  const normalizedPackageId =
+    unscoped.endsWith("-provider") && unscoped.length > "-provider".length
+      ? unscoped.slice(0, -"-provider".length)
+      : unscoped;
 
   if (!params.hasMultipleExtensions) {
-    return unscoped;
+    return normalizedPackageId;
   }
-  return `${unscoped}/${base}`;
+  return `${normalizedPackageId}/${base}`;
 }
 
 function addCandidate(params: {
