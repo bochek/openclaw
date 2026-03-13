@@ -63,7 +63,7 @@ describe("gateway auth compatibility baseline", () => {
       }
     });
 
-    test("clears client-declared scopes for shared-token operator connects", async () => {
+    test("keeps requested scopes for shared-token operator connects without device identity", async () => {
       const ws = await openWs(port);
       try {
         const res = await connectReq(ws, {
@@ -74,8 +74,8 @@ describe("gateway auth compatibility baseline", () => {
         expect(res.ok).toBe(true);
 
         const adminRes = await rpcReq(ws, "set-heartbeats", { enabled: false });
-        expect(adminRes.ok).toBe(false);
-        expect(adminRes.error?.message).toBe("missing scope: operator.admin");
+        expect(adminRes.ok).toBe(true);
+        expect((adminRes.payload as { enabled?: boolean } | undefined)?.enabled).toBe(false);
       } finally {
         ws.close();
       }
@@ -183,7 +183,7 @@ describe("gateway auth compatibility baseline", () => {
       }
     });
 
-    test("clears client-declared scopes for shared-password operator connects", async () => {
+    test("keeps requested scopes for shared-password operator connects without device identity", async () => {
       const ws = await openWs(port);
       try {
         const res = await connectReq(ws, {
@@ -194,8 +194,8 @@ describe("gateway auth compatibility baseline", () => {
         expect(res.ok).toBe(true);
 
         const adminRes = await rpcReq(ws, "set-heartbeats", { enabled: false });
-        expect(adminRes.ok).toBe(false);
-        expect(adminRes.error?.message).toBe("missing scope: operator.admin");
+        expect(adminRes.ok).toBe(true);
+        expect((adminRes.payload as { enabled?: boolean } | undefined)?.enabled).toBe(false);
       } finally {
         ws.close();
       }

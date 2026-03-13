@@ -580,11 +580,11 @@ vi.mock("../channels/web/index.js", async () => {
   };
 });
 vi.mock("../commands/agent.js", () => ({
-  agentCommand,
-  agentCommandFromIngress: agentCommand,
+  agentCommand: hoisted.agentCommand,
+  agentCommandFromIngress: hoisted.agentCommand,
 }));
 vi.mock("../auto-reply/reply.js", () => ({
-  getReplyFromConfig,
+  getReplyFromConfig: hoisted.getReplyFromConfig,
 }));
 vi.mock("../cli/deps.js", async () => {
   const actual = await vi.importActual<typeof import("../cli/deps.js")>("../cli/deps.js");

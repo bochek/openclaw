@@ -526,7 +526,7 @@ export function attachGatewayWsMessageHandler(params: {
             hasSharedAuth,
             isLocalClient,
           });
-          if (!device && (!isControlUi || decision.kind !== "allow")) {
+          if (!device && decision.kind !== "allow" && !isControlUi) {
             clearUnboundScopes();
           }
           if (decision.kind === "allow") {
