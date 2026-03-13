@@ -60,33 +60,23 @@ describe("usage-format", () => {
     expect(total).toBeCloseTo(0.003);
   });
 
-  it("falls back to built in pricing for common models", () => {
+  it("returns undefined when model pricing is not configured", () => {
     expect(
       resolveModelCostConfig({
         provider: "anthropic",
         model: "claude-sonnet-4-6",
       }),
-    ).toEqual({
-      input: 3,
-      output: 15,
-      cacheRead: 0.3,
-      cacheWrite: 3.75,
-    });
+    ).toBeUndefined();
 
     expect(
       resolveModelCostConfig({
         provider: "openai-codex",
         model: "gpt-5.4",
       }),
-    ).toEqual({
-      input: 2,
-      output: 8,
-      cacheRead: 0,
-      cacheWrite: 0,
-    });
+    ).toBeUndefined();
   });
 
-  it("prefers configured pricing over built in defaults", () => {
+  it("uses configured pricing when present", () => {
     const config = {
       models: {
         providers: {

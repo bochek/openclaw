@@ -203,6 +203,8 @@ export function createSessionsListTool(opts?: {
           model: typeof entry.model === "string" ? entry.model : undefined,
           contextTokens: typeof entry.contextTokens === "number" ? entry.contextTokens : undefined,
           totalTokens: typeof entry.totalTokens === "number" ? entry.totalTokens : undefined,
+          estimatedCostUsd:
+            typeof entry.estimatedCostUsd === "number" ? entry.estimatedCostUsd : undefined,
           status: typeof entry.status === "string" ? entry.status : undefined,
           startedAt: typeof entry.startedAt === "number" ? entry.startedAt : undefined,
           endedAt: typeof entry.endedAt === "number" ? entry.endedAt : undefined,

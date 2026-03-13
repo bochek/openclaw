@@ -123,6 +123,7 @@ describe("sessions tools", () => {
               status: "running",
               startedAt: 100,
               runtimeMs: 42,
+              estimatedCostUsd: 0.0042,
               childSessions: ["agent:main:subagent:worker"],
             },
             {
@@ -164,6 +165,7 @@ describe("sessions tools", () => {
         status?: string;
         startedAt?: number;
         runtimeMs?: number;
+        estimatedCostUsd?: number;
         childSessions?: string[];
         messages?: Array<{ role?: string }>;
       }>;
@@ -178,6 +180,7 @@ describe("sessions tools", () => {
     expect(group?.status).toBe("running");
     expect(group?.startedAt).toBe(100);
     expect(group?.runtimeMs).toBe(42);
+    expect(group?.estimatedCostUsd).toBe(0.0042);
     expect(group?.childSessions).toEqual(["agent:main:subagent:worker"]);
 
     const cronOnly = await tool.execute("call2", { kinds: ["cron"] });
