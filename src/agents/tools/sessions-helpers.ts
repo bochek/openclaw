@@ -44,7 +44,7 @@ export type SessionListDeliveryContext = {
   accountId?: string;
 };
 
-export type SessionRunStatus = "running" | "done" | "failed" | "killed";
+export type SessionRunStatus = "running" | "done" | "failed" | "killed" | "timeout";
 
 export type SessionListRow = {
   key: string;
