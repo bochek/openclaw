@@ -261,4 +261,24 @@ describe("CallManager", () => {
 
     expect(manager.getCallByProviderCallId("provider-exact")).toBeDefined();
   });
+
+  it("persists the webhook replay ledger across restarts", () => {
+    const config = VoiceCallConfigSchema.parse({
+      enabled: true,
+      provider: "plivo",
+      fromNumber: "+15550000000",
+    });
+
+    const now = Date.now();
+    const storePath = path.join(os.tmpdir(), `openclaw-voice-call-test-${Date.now()}`);
+    const manager = new CallManager(config, storePath);
+    manager.initialize(new FakeProvider(), "https://example.com/voice/webhook");
+    manager.rememberWebhookReplay("plivo:replay-key", 60_000, now);
+
+    const restarted = new CallManager(config, storePath);
+    restarted.initialize(new FakeProvider(), "https://example.com/voice/webhook");
+
+    expect(restarted.isRecentWebhookReplay("plivo:replay-key", now + 1)).toBe(true);
+    expect(restarted.isRecentWebhookReplay("plivo:replay-key", now + 60_001)).toBe(false);
+  });
 });

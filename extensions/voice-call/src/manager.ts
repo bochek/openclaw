@@ -15,6 +15,7 @@ import {
   speakInitialMessage as speakInitialMessageWithContext,
 } from "./manager/outbound.js";
 import { getCallHistoryFromStore, loadActiveCallsFromStore } from "./manager/store.js";
+import { loadReplayLedger, persistReplayLedgerEntry, pruneReplayLedger } from "./replay-ledger.js";
 import { resolveUserPath } from "./utils.js";
 
 function resolveDefaultStoreBase(config: VoiceCallConfig, storePath?: string): string {
@@ -43,6 +44,7 @@ export class CallManager {
   private providerCallIdMap = new Map<string, CallId>();
   private processedEventIds = new Set<string>();
   private rejectedProviderCallIds = new Set<string>();
+  private webhookReplayLedger = new Map<string, number>();
   private provider: VoiceCallProvider | null = null;
   private config: VoiceCallConfig;
   private storePath: string;
@@ -76,6 +78,7 @@ export class CallManager {
     this.providerCallIdMap = persisted.providerCallIdMap;
     this.processedEventIds = persisted.processedEventIds;
     this.rejectedProviderCallIds = persisted.rejectedProviderCallIds;
+    this.webhookReplayLedger = loadReplayLedger(this.storePath);
   }
 
   /**
@@ -196,6 +199,30 @@ export class CallManager {
    */
   getActiveCalls(): CallRecord[] {
     return Array.from(this.activeCalls.values());
+  }
+
+  isRecentWebhookReplay(key: string, now = Date.now()): boolean {
+    this.pruneWebhookReplayLedger(now);
+    const expiresAt = this.webhookReplayLedger.get(key);
+    return typeof expiresAt === "number" && expiresAt > now;
+  }
+
+  rememberWebhookReplay(key: string, ttlMs: number, now = Date.now()): void {
+    if (!Number.isFinite(ttlMs) || ttlMs <= 0) {
+      return;
+    }
+    this.pruneWebhookReplayLedger(now);
+    const expiresAt = now + ttlMs;
+    const previous = this.webhookReplayLedger.get(key);
+    if (typeof previous === "number" && previous >= expiresAt) {
+      return;
+    }
+    this.webhookReplayLedger.set(key, expiresAt);
+    persistReplayLedgerEntry(this.storePath, { key, expiresAt });
+  }
+
+  private pruneWebhookReplayLedger(now = Date.now()): void {
+    pruneReplayLedger(this.webhookReplayLedger, now);
   }
 
   /**

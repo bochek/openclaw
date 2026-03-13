@@ -108,6 +108,23 @@ describe("exec PATH login shell merge", () => {
 
     expect(shellPathMock).not.toHaveBeenCalled();
   });
+
+  it("throws security violation on sandbox fallback when env.PATH is provided", async () => {
+    if (isWin) {
+      return;
+    }
+    process.env.PATH = "/usr/bin";
+
+    const { createExecTool } = await import("./bash-tools.exec.js");
+    const tool = createExecTool({ host: "sandbox", security: "full", ask: "off" });
+
+    await expect(
+      tool.execute("call1", {
+        command: "echo ok",
+        env: { PATH: "/explicit/bin" },
+      }),
+    ).rejects.toThrow(/Security Violation: Custom 'PATH' variable is forbidden/);
+  });
 });
 
 describe("exec host env validation", () => {

@@ -15,8 +15,10 @@ import type { TwilioProvider } from "./providers/twilio.js";
 import type { NormalizedEvent, WebhookContext } from "./types.js";
 import { MediaStreamHandler } from "./media-stream.js";
 import { OpenAIRealtimeSTTProvider } from "./providers/stt-openai-realtime.js";
+import { buildWebhookReplayKey } from "./replay-ledger.js";
 
 const MAX_WEBHOOK_BODY_BYTES = 1024 * 1024;
+const WEBHOOK_REPLAY_TTL_MS = 15 * 60_000;
 
 /**
  * HTTP server for receiving voice call webhooks from providers.
@@ -281,8 +283,24 @@ export class VoiceCallWebhookServer {
       return;
     }
 
+    const replayKey = buildWebhookReplayKey({
+      provider: this.provider.name,
+      ctx,
+    });
+    if (this.manager.isRecentWebhookReplay(replayKey)) {
+      console.warn(`[voice-call] Dropping replayed ${this.provider.name} webhook request`);
+      const replayResult = this.provider.parseWebhookEvent(ctx);
+      this.sendProviderResponse(res, replayResult);
+      return;
+    }
+
     // Parse events
     const result = this.provider.parseWebhookEvent(ctx);
+
+    if ((result.statusCode ?? 200) >= 400) {
+      this.sendProviderResponse(res, result);
+      return;
+    }
 
     // Process each event
     for (const event of result.events) {
@@ -293,16 +311,10 @@ export class VoiceCallWebhookServer {
       }
     }
 
+    this.manager.rememberWebhookReplay(replayKey, WEBHOOK_REPLAY_TTL_MS);
+
     // Send response
-    res.statusCode = result.statusCode || 200;
-
-    if (result.providerResponseHeaders) {
-      for (const [key, value] of Object.entries(result.providerResponseHeaders)) {
-        res.setHeader(key, value);
-      }
-    }
-
-    res.end(result.providerResponseBody || "OK");
+    this.sendProviderResponse(res, result);
   }
 
   /**
@@ -314,6 +326,23 @@ export class VoiceCallWebhookServer {
     timeoutMs = 30_000,
   ): Promise<string> {
     return readRequestBodyWithLimit(req, { maxBytes, timeoutMs });
+  }
+
+  private sendProviderResponse(
+    res: http.ServerResponse,
+    result: {
+      providerResponseBody?: string;
+      providerResponseHeaders?: Record<string, string>;
+      statusCode?: number;
+    },
+  ): void {
+    res.statusCode = result.statusCode || 200;
+    if (result.providerResponseHeaders) {
+      for (const [key, value] of Object.entries(result.providerResponseHeaders)) {
+        res.setHeader(key, value);
+      }
+    }
+    res.end(result.providerResponseBody || "OK");
   }
 
   /**

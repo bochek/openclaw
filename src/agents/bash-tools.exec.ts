@@ -293,10 +293,11 @@ export function createExecTool(
       }
 
       const baseEnv = coerceEnv(process.env);
+      const isHostExecution = !sandbox || host === "gateway" || host === "node";
 
-      // Logic: Sandbox gets raw env. Host (gateway/node) must pass validation.
-      // We validate BEFORE merging to prevent any dangerous vars from entering the stream.
-      if (host !== "sandbox" && params.env) {
+      // When sandboxing is disabled, host=sandbox still executes on the gateway host.
+      // Validate dangerous env overrides on every real host execution path.
+      if (isHostExecution && params.env) {
         validateHostEnv(params.env);
       }
 
