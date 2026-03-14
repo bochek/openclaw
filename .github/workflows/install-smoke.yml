@@ -81,6 +81,24 @@ jobs:
         run: |
           docker run --rm --entrypoint sh openclaw-ext-smoke:local -lc 'which openclaw && openclaw --version'
 
+      - name: Build browser MCP smoke image
+        uses: useblacksmith/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile
+          build-args: |
+            OPENCLAW_INSTALL_BROWSER=1
+          tags: openclaw-browser-mcp-smoke:local
+          load: true
+          push: false
+          provenance: false
+
+      - name: Run browser existing-session MCP docker smoke
+        env:
+          OPENCLAW_BROWSER_SMOKE_IMAGE: openclaw-browser-mcp-smoke:local
+          OPENCLAW_BROWSER_SMOKE_SKIP_IMAGE_BUILD: "1"
+        run: bash scripts/test-browser-existing-session-docker.sh
+
       - name: Build installer smoke image
         uses: useblacksmith/build-push-action@v2
         with:
