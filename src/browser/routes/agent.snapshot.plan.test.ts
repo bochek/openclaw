@@ -3,10 +3,11 @@ import { resolveBrowserConfig, resolveProfile } from "../config.js";
 import { resolveSnapshotPlan } from "./agent.snapshot.plan.js";
 
 describe("resolveSnapshotPlan", () => {
-  it("defaults chrome extension relay snapshots to aria when format is omitted", () => {
+  it("defaults chrome existing-session snapshots to ai when format is omitted", () => {
     const resolved = resolveBrowserConfig({});
     const profile = resolveProfile(resolved, "chrome");
     expect(profile).toBeTruthy();
+    expect(profile?.driver).toBe("existing-session");
 
     const plan = resolveSnapshotPlan({
       profile: profile as NonNullable<typeof profile>,
@@ -14,7 +15,7 @@ describe("resolveSnapshotPlan", () => {
       hasPlaywright: true,
     });
 
-    expect(plan.format).toBe("aria");
+    expect(plan.format).toBe("ai");
   });
 
   it("keeps ai snapshots for managed browsers when Playwright is available", () => {

@@ -23,9 +23,10 @@ describe("browser config", () => {
     expect(openclaw?.cdpPort).toBe(18800);
     expect(openclaw?.cdpUrl).toBe("http://127.0.0.1:18800");
     const chrome = resolveProfile(resolved, "chrome");
-    expect(chrome?.driver).toBe("extension");
-    expect(chrome?.cdpPort).toBe(18792);
-    expect(chrome?.cdpUrl).toBe("http://127.0.0.1:18792");
+    expect(chrome?.driver).toBe("existing-session");
+    expect(chrome?.cdpPort).toBe(0);
+    expect(chrome?.cdpUrl).toBe("");
+    expect(chrome?.attachOnly).toBe(true);
     expect(resolved.remoteCdpTimeoutMs).toBe(1500);
     expect(resolved.remoteCdpHandshakeTimeoutMs).toBe(3000);
   });
@@ -35,9 +36,7 @@ describe("browser config", () => {
       const resolved = resolveBrowserConfig(undefined);
       expect(resolved.controlPort).toBe(19003);
       const chrome = resolveProfile(resolved, "chrome");
-      expect(chrome?.driver).toBe("extension");
-      expect(chrome?.cdpPort).toBe(19004);
-      expect(chrome?.cdpUrl).toBe("http://127.0.0.1:19004");
+      expect(chrome?.driver).toBe("existing-session");
 
       const openclaw = resolveProfile(resolved, "openclaw");
       expect(openclaw?.cdpPort).toBe(19012);
@@ -50,9 +49,7 @@ describe("browser config", () => {
       const resolved = resolveBrowserConfig(undefined, { gateway: { port: 19011 } });
       expect(resolved.controlPort).toBe(19013);
       const chrome = resolveProfile(resolved, "chrome");
-      expect(chrome?.driver).toBe("extension");
-      expect(chrome?.cdpPort).toBe(19014);
-      expect(chrome?.cdpUrl).toBe("http://127.0.0.1:19014");
+      expect(chrome?.driver).toBe("existing-session");
 
       const openclaw = resolveProfile(resolved, "openclaw");
       expect(openclaw?.cdpPort).toBe(19022);
@@ -205,14 +202,16 @@ describe("browser config", () => {
     );
   });
 
-  it("does not add the built-in chrome extension profile if the derived relay port is already used", () => {
+  it("does not add the built-in chrome profile if the user already has one", () => {
     const resolved = resolveBrowserConfig({
       profiles: {
-        openclaw: { cdpPort: 18792, color: "#FF4500" },
+        chrome: { driver: "extension", cdpUrl: "http://127.0.0.1:18792", color: "#0066CC" },
       },
     });
-    expect(resolveProfile(resolved, "chrome")).toBe(null);
-    expect(resolved.defaultProfile).toBe("openclaw");
+    // User's explicit chrome profile is preserved, not overwritten
+    const chrome = resolveProfile(resolved, "chrome");
+    expect(chrome?.driver).toBe("extension");
+    expect(chrome?.cdpUrl).toBe("http://127.0.0.1:18792");
   });
 
   it("defaults extraArgs to empty array when not provided", () => {
@@ -303,6 +302,7 @@ describe("browser config", () => {
     const resolved = resolveBrowserConfig({
       profiles: {
         "chrome-live": { driver: "existing-session", attachOnly: true, color: "#00AA00" },
+        relay: { driver: "extension", cdpUrl: "http://127.0.0.1:18792", color: "#0066CC" },
         work: { cdpPort: 18801, color: "#0066CC" },
       },
     });
@@ -313,7 +313,7 @@ describe("browser config", () => {
     const managed = resolveProfile(resolved, "openclaw")!;
     expect(getBrowserProfileCapabilities(managed).usesChromeMcp).toBe(false);
 
-    const extension = resolveProfile(resolved, "chrome")!;
+    const extension = resolveProfile(resolved, "relay")!;
     expect(getBrowserProfileCapabilities(extension).usesChromeMcp).toBe(false);
 
     const work = resolveProfile(resolved, "work")!;

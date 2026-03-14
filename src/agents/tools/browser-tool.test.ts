@@ -311,10 +311,10 @@ describe("browser tool snapshot maxChars", () => {
     );
   });
 
-  it('uses the host user browser for browserSession="user"', async () => {
+  it('resolves sole user profile for browserSession="user"', async () => {
     setResolvedBrowserProfiles({
       openclaw: { cdpPort: 18800, color: "#FF4500" },
-      chrome: { driver: "extension", cdpUrl: "http://127.0.0.1:18792", color: "#0066CC" },
+      chrome: { driver: "existing-session", attachOnly: true, color: "#00AA00" },
     });
     const tool = createBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
     await tool.execute?.("call-1", {
@@ -331,31 +331,11 @@ describe("browser tool snapshot maxChars", () => {
     );
   });
 
-  it('uses a sole existing-session profile for browserSession="user"', async () => {
+  it('lists available profiles when browserSession="user" is ambiguous', async () => {
     setResolvedBrowserProfiles({
       openclaw: { cdpPort: 18800, color: "#FF4500" },
-      "chrome-live": { driver: "existing-session", attachOnly: true, color: "#00AA00" },
-    });
-    const tool = createBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
-    await tool.execute?.("call-1", {
-      action: "snapshot",
-      browserSession: "user",
-      snapshotFormat: "ai",
-    });
-
-    expect(browserClientMocks.browserSnapshot).toHaveBeenCalledWith(
-      undefined,
-      expect.objectContaining({
-        profile: "chrome-live",
-      }),
-    );
-  });
-
-  it('fails when browserSession="user" is ambiguous', async () => {
-    setResolvedBrowserProfiles({
-      openclaw: { cdpPort: 18800, color: "#FF4500" },
-      personal: { driver: "existing-session", attachOnly: true, color: "#00AA00" },
-      work: { driver: "existing-session", attachOnly: true, color: "#0066CC" },
+      chrome: { driver: "existing-session", attachOnly: true, color: "#00AA00" },
+      relay: { driver: "extension", cdpUrl: "http://127.0.0.1:18792", color: "#0066CC" },
     });
     const tool = createBrowserTool();
 
@@ -365,12 +345,12 @@ describe("browser tool snapshot maxChars", () => {
         browserSession: "user",
         snapshotFormat: "ai",
       }),
-    ).rejects.toThrow(/Multiple user-browser profiles are configured/);
+    ).rejects.toThrow(/Multiple user-browser profiles available.*profile=".*"/s);
   });
 
   it('rejects browserSession="user" with target="sandbox"', async () => {
     setResolvedBrowserProfiles({
-      chrome: { driver: "extension", cdpUrl: "http://127.0.0.1:18792", color: "#0066CC" },
+      chrome: { driver: "existing-session", attachOnly: true, color: "#00AA00" },
     });
     const tool = createBrowserTool({ sandboxBridgeUrl: "http://127.0.0.1:9999" });
 

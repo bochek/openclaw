@@ -280,18 +280,13 @@ function resolveBrowserBaseUrl(params: {
   return undefined;
 }
 
-function listUserBrowserProfiles() {
-  const cfg = loadConfig();
-  const resolved = resolveBrowserConfig(cfg.browser, cfg);
-  return Object.keys(resolved.profiles ?? {})
-    .map((name) => resolveProfile(resolved, name))
-    .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile))
-    .filter((profile) => {
-      const capabilities = getBrowserProfileCapabilities(profile);
-      return capabilities.requiresRelay || capabilities.usesChromeMcp;
-    });
-}
-
+/**
+ * Resolve which browser profile to use for a given browserSession value.
+ *
+ * For browserSession="user": if exactly one user-capable profile exists, use
+ * it. Otherwise return undefined and let the caller list available profiles so
+ * the model (or user) can pick.
+ */
 function resolveBrowserToolProfile(params: {
   profile?: string;
   browserSession?: "agent" | "user";
@@ -306,31 +301,24 @@ function resolveBrowserToolProfile(params: {
     return DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME;
   }
 
-  const userProfiles = listUserBrowserProfiles();
-  const defaultUserProfile = userProfiles.find(
-    (profile) => profile.name !== DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME,
-  );
-  if (defaultUserProfile?.name === "chrome") {
-    return defaultUserProfile.name;
-  }
-  const chromeRelay = userProfiles.find((profile) => profile.name === "chrome");
-  if (chromeRelay) {
-    return chromeRelay.name;
-  }
+  // Find all profiles that connect to the user's real browser.
+  const cfg = loadConfig();
+  const resolved = resolveBrowserConfig(cfg.browser, cfg);
+  const userProfiles = Object.keys(resolved.profiles ?? {})
+    .map((name) => resolveProfile(resolved, name))
+    .filter((profile): profile is NonNullable<typeof profile> => Boolean(profile))
+    .filter((profile) => getBrowserProfileCapabilities(profile).isUserBrowser);
+
   if (userProfiles.length === 1) {
-    return userProfiles[0]?.name;
-  }
-  const chromeLive = userProfiles.find((profile) => profile.name === "chrome-live");
-  if (chromeLive) {
-    return chromeLive.name;
+    return userProfiles[0].name;
   }
   if (userProfiles.length === 0) {
-    throw new Error(
-      'No user-browser profile is configured. Use profile="chrome" for the extension relay or create an existing-session profile first.',
-    );
+    throw new Error("No user-browser profile found. Set up an existing-session profile first.");
   }
+  // Multiple — tell the model what's available so it can pick or ask the user.
+  const descriptions = userProfiles.map((p) => `  - profile="${p.name}" (${p.driver})`).join("\n");
   throw new Error(
-    `Multiple user-browser profiles are configured (${userProfiles.map((profile) => profile.name).join(", ")}). Pass profile="<name>".`,
+    `Multiple user-browser profiles available. Pick one with profile="<name>" or ask the user:\n${descriptions}`,
   );
 }
 
@@ -347,12 +335,11 @@ export function createBrowserTool(opts?: {
     name: "browser",
     description: [
       "Control the browser via OpenClaw's browser control server (status/start/stop/profiles/tabs/open/snapshot/screenshot/actions).",
-      'Browser choice: use browserSession="agent" by default for the isolated OpenClaw browser. Use browserSession="user" only when logged-in browser state matters and the user is present to click/approve browser attach prompts.',
-      'browserSession="user" means the real local user browser on the host, not sandbox/node browsers. If user presence is unclear, ask first.',
-      'profile remains the explicit override. Use profile="chrome" for Chrome extension relay takeover (existing Chrome tabs). Use profile="openclaw" for the isolated OpenClaw-managed browser.',
-      'If the user mentions the Chrome extension / Browser Relay / toolbar button / “attach tab”, ALWAYS use browserSession="user" and prefer profile="chrome" (do not ask which profile unless ambiguous).',
+      'browserSession="agent" (default): isolated OpenClaw-managed browser — fresh profile, no cookies/logins.',
+      'browserSession="user": the user\'s real local browser with their logged-in sessions. Use when you need their cookies/auth. Chrome (v146+) must be running. If unsure whether the user is present, ask first.',
+      'If browserSession="user" can\'t auto-resolve (multiple profiles), the error lists available profiles — pick one with profile="<name>" or ask the user.',
+      'profile is an explicit override and always takes precedence over browserSession. Use action="profiles" to discover available profiles.',
       'When a node-hosted browser proxy is available, the tool may auto-route to it. Pin a node with node=<id|name> or target="node".',
-      "User-browser flows need user interaction: Chrome extension relay needs the user to click the OpenClaw Browser Relay toolbar icon on the tab (badge ON); existing-session may require approving a browser attach prompt.",
       "When using refs from snapshot (e.g. e12), keep the same tab: prefer passing targetId from the snapshot response into subsequent actions (act/click/type/etc).",
       'For stable, self-resolving refs across calls, use snapshot with refs="aria" (Playwright aria-ref ids). Default refs="role" are role+name-based.',
       "Use snapshot+act for UI automation. Avoid act:wait by default; use only in exceptional cases when no reliable UI state exists.",

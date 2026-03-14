@@ -1,3 +1,9 @@
+/**
+ * Drivers that launch/manage a browser instance (sandbox). Any driver not in
+ * this set attaches to the user's existing browser.
+ */
+export const MANAGED_BROWSER_DRIVERS = new Set(["openclaw", "clawd"]);
+
 export const DEFAULT_OPENCLAW_BROWSER_ENABLED = true;
 export const DEFAULT_BROWSER_EVALUATE_ENABLED = true;
 export const DEFAULT_OPENCLAW_BROWSER_COLOR = "#FF4500";

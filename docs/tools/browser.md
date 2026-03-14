@@ -371,11 +371,7 @@ openclaw browser create-profile \
   --color "#00AA00"
 ```
 
-Then in Chrome:
-
-1. Open `chrome://inspect/#remote-debugging`
-2. Enable remote debugging
-3. Keep Chrome running and approve the connection prompt when OpenClaw attaches
+Then keep Chrome (v146+) running. OpenClaw auto-discovers it — no setup needed.
 
 Live attach smoke test:
 
@@ -396,17 +392,15 @@ What success looks like:
 
 What to check if attach does not work:
 
-- Chrome is version `144+`
-- remote debugging is enabled at `chrome://inspect/#remote-debugging`
-- Chrome showed and you accepted the attach consent prompt
+- Chrome is version `146+` and running
+- no other tool is already attached to the same Chrome session
 
 Agent use:
 
 - Use `browserSession="user"` when you need the user’s logged-in browser state.
 - If you know the profile name, pass `profile="chrome-live"` (or your custom
   existing-session profile).
-- Only choose this mode when the user is at the computer to approve the attach
-  prompt.
+- Only choose this mode when the user is at the computer.
 - the Gateway or node host can spawn `npx chrome-devtools-mcp@latest --autoConnect`
 
 Notes:

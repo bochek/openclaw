@@ -8,13 +8,14 @@ import {
 import { isLoopbackHost } from "../gateway/net.js";
 import type { SsrFPolicy } from "../infra/net/ssrf.js";
 import {
+  MANAGED_BROWSER_DRIVERS,
   DEFAULT_OPENCLAW_BROWSER_COLOR,
   DEFAULT_OPENCLAW_BROWSER_ENABLED,
   DEFAULT_BROWSER_EVALUATE_ENABLED,
   DEFAULT_BROWSER_DEFAULT_PROFILE_NAME,
   DEFAULT_OPENCLAW_BROWSER_PROFILE_NAME,
 } from "./constants.js";
-import { CDP_PORT_RANGE_START, getUsedPorts } from "./profiles.js";
+import { CDP_PORT_RANGE_START } from "./profiles.js";
 
 export type ResolvedBrowserConfig = {
   enabled: boolean;
@@ -180,31 +181,31 @@ function ensureDefaultProfile(
 }
 
 /**
- * Ensure a built-in "chrome" profile exists for the Chrome extension relay.
+ * Ensure a built-in "chrome" profile exists for connecting to the user's
+ * real Chrome browser.
  *
- * Note: this is an OpenClaw browser profile (routing config), not a Chrome user profile.
- * It points at the local relay CDP endpoint (controlPort + 1).
+ * Uses the existing-session driver (Chrome MCP) which connects via
+ * Chrome MCP auto-discovers a running Chrome (v146+) via its user data
+ * directory — no CDP port or remote-debugging toggle needed.
  */
-function ensureDefaultChromeExtensionProfile(
+function ensureDefaultUserBrowserProfile(
   profiles: Record<string, BrowserProfileConfig>,
-  controlPort: number,
 ): Record<string, BrowserProfileConfig> {
   const result = { ...profiles };
   if (result.chrome) {
     return result;
   }
-  const relayPort = controlPort + 1;
-  if (!Number.isFinite(relayPort) || relayPort <= 0 || relayPort > 65535) {
-    return result;
-  }
-  // Avoid adding the built-in profile if the derived relay port is already used by another profile
-  // (legacy single-profile configs may use controlPort+1 for openclaw/openclaw CDP).
-  if (getUsedPorts(result).has(relayPort)) {
+  // Skip when the user already has a profile that connects to their real
+  // browser (any driver not in MANAGED_BROWSER_DRIVERS).
+  const hasUserProfile = Object.values(result).some(
+    (p) => p.driver && !MANAGED_BROWSER_DRIVERS.has(p.driver),
+  );
+  if (hasUserProfile) {
     return result;
   }
   result.chrome = {
-    driver: "extension",
-    cdpUrl: `http://127.0.0.1:${relayPort}`,
+    driver: "existing-session",
+    attachOnly: true,
     color: "#00AA00",
   };
   return result;
@@ -268,7 +269,7 @@ export function resolveBrowserConfig(
   const legacyCdpPort = rawCdpUrl ? cdpInfo.port : undefined;
   const isWsUrl = cdpInfo.parsed.protocol === "ws:" || cdpInfo.parsed.protocol === "wss:";
   const legacyCdpUrl = rawCdpUrl && isWsUrl ? cdpInfo.normalized : undefined;
-  const profiles = ensureDefaultChromeExtensionProfile(
+  const profiles = ensureDefaultUserBrowserProfile(
     ensureDefaultProfile(
       cfg?.profiles,
       defaultColor,
@@ -276,7 +277,6 @@ export function resolveBrowserConfig(
       cdpPortRangeStart,
       legacyCdpUrl,
     ),
-    controlPort,
   );
   const cdpProtocol = cdpInfo.parsed.protocol === "https:" ? "https" : "http";
 
