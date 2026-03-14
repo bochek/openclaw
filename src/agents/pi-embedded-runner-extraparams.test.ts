@@ -1,7 +1,17 @@
 import type { StreamFn } from "@mariozechner/pi-agent-core";
 import type { Context, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
 import { describe, expect, it, vi } from "vitest";
-import { applyExtraParamsToAgent, resolveExtraParams } from "./pi-embedded-runner.js";
+
+vi.mock(
+  "@mariozechner/pi-ai/oauth",
+  () => ({
+    getOAuthApiKey: vi.fn(),
+    getOAuthProviders: vi.fn(() => []),
+  }),
+  { virtual: true },
+);
+
+import { applyExtraParamsToAgent, resolveExtraParams } from "./pi-embedded-runner/extra-params.js";
 import { log } from "./pi-embedded-runner/logger.js";
 
 describe("resolveExtraParams", () => {
@@ -207,6 +217,9 @@ describe("applyExtraParamsToAgent", () => {
     cfg?: Record<string, unknown>;
     extraParamsOverride?: Record<string, unknown>;
     payload?: Record<string, unknown>;
+    runtimeHints?: {
+      codexAuthAvailable?: boolean;
+    };
   }) {
     const payload = params.payload ?? { store: false };
     const baseStreamFn: StreamFn = (model, _context, options) => {
@@ -220,6 +233,9 @@ describe("applyExtraParamsToAgent", () => {
       params.applyProvider,
       params.applyModelId,
       params.extraParamsOverride,
+      undefined,
+      undefined,
+      params.runtimeHints,
     );
     const context: Context = { messages: [] };
     void agent.streamFn?.(params.model, context, params.options ?? {});
@@ -1360,6 +1376,327 @@ describe("applyExtraParamsToAgent", () => {
 
     expect(calls).toHaveLength(1);
     expect(calls[0]?.transport).toBe("auto");
+  });
+
+  it("injects native Codex web_search into OpenAI Codex payloads when opted in", () => {
+    const payload = runResponsesPayloadMutationCase({
+      applyProvider: "openai-codex",
+      applyModelId: "gpt-5.3-codex",
+      cfg: {
+        tools: {
+          web: {
+            search: {
+              openaiCodex: {
+                strategy: "native",
+                mode: "live",
+                allowedDomains: [" example.com ", "openai.com", "example.com"],
+                contextSize: "high",
+                userLocation: {
+                  country: " US ",
+                  city: " New York ",
+                  timezone: " America/New_York ",
+                },
+              },
+            },
+          },
+        },
+      },
+      model: {
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        id: "gpt-5.3-codex",
+      } as Model<"openai-codex-responses">,
+      payload: {
+        tools: [
+          { type: "function", function: { name: "web_search" } },
+          { type: "function", function: { name: "web_fetch" } },
+        ],
+      },
+      runtimeHints: { codexAuthAvailable: true },
+    });
+
+    expect(payload).toEqual({
+      tools: [
+        { type: "function", function: { name: "web_search" } },
+        { type: "function", function: { name: "web_fetch" } },
+        {
+          type: "web_search",
+          external_web_access: true,
+          filters: { allowed_domains: ["example.com", "openai.com"] },
+          search_context_size: "high",
+          user_location: {
+            type: "approximate",
+            country: "US",
+            city: "New York",
+            timezone: "America/New_York",
+          },
+        },
+      ],
+    });
+  });
+
+  it("does not inject native Codex web_search by default", () => {
+    const payload = runResponsesPayloadMutationCase({
+      applyProvider: "openai-codex",
+      applyModelId: "gpt-5.3-codex",
+      model: {
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        id: "gpt-5.3-codex",
+      } as Model<"openai-codex-responses">,
+      payload: {
+        tools: [{ type: "function", function: { name: "web_fetch" } }],
+      },
+    });
+
+    expect(payload).toEqual({
+      tools: [{ type: "function", function: { name: "web_fetch" } }],
+    });
+  });
+
+  it("does not append duplicate native Codex web_search tools", () => {
+    const payload = runResponsesPayloadMutationCase({
+      applyProvider: "openai-codex",
+      applyModelId: "gpt-5.3-codex",
+      cfg: {
+        tools: {
+          web: {
+            search: {
+              openaiCodex: {
+                strategy: "native",
+              },
+            },
+          },
+        },
+      },
+      model: {
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        id: "gpt-5.3-codex",
+      } as Model<"openai-codex-responses">,
+      payload: {
+        tools: [
+          { type: "function", function: { name: "web_search" } },
+          { type: "web_search_2025_08_26", external_web_access: false },
+        ],
+      },
+      runtimeHints: { codexAuthAvailable: true },
+    });
+
+    expect(payload).toEqual({
+      tools: [
+        { type: "function", function: { name: "web_search" } },
+        { type: "web_search_2025_08_26", external_web_access: false },
+      ],
+    });
+  });
+
+  it("injects native Codex web_search based on API eligibility even when provider id differs", () => {
+    const payload = runResponsesPayloadMutationCase({
+      applyProvider: "custom-openai-gateway",
+      applyModelId: "gpt-5.3-codex",
+      cfg: {
+        tools: {
+          web: {
+            search: {
+              openaiCodex: {
+                strategy: "native",
+              },
+            },
+          },
+        },
+      },
+      model: {
+        api: "openai-codex-responses",
+        provider: "custom-openai-gateway",
+        id: "gpt-5.3-codex",
+      } as Model<"openai-codex-responses">,
+      payload: {
+        tools: [{ type: "function", function: { name: "web_fetch" } }],
+      },
+      runtimeHints: { codexAuthAvailable: false },
+    });
+
+    expect(payload).toEqual({
+      tools: [
+        { type: "function", function: { name: "web_fetch" } },
+        { type: "web_search", external_web_access: false },
+      ],
+    });
+  });
+
+  it("preserves hosted web_search function tools when native Codex search is injected", () => {
+    const payload = runResponsesPayloadMutationCase({
+      applyProvider: "openai-codex",
+      applyModelId: "gpt-5.3-codex",
+      cfg: {
+        tools: {
+          web: {
+            search: {
+              openaiCodex: {
+                strategy: "native",
+              },
+            },
+          },
+        },
+      },
+      model: {
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        id: "gpt-5.3-codex",
+      } as Model<"openai-codex-responses">,
+      payload: {
+        tools: [{ type: "function", function: { name: "web_search" } }],
+      },
+      runtimeHints: { codexAuthAvailable: true },
+    });
+
+    expect(payload).toEqual({
+      tools: [
+        { type: "function", function: { name: "web_search" } },
+        { type: "web_search", external_web_access: false },
+      ],
+    });
+  });
+
+  it("does not inject native Codex web_search when auth is unavailable", () => {
+    const payload = { tools: [{ type: "function", function: { name: "web_fetch" } }] };
+    const baseStreamFn: StreamFn = (model, _context, options) => {
+      options?.onPayload?.(payload, model);
+      return {} as ReturnType<StreamFn>;
+    };
+    const agent = { streamFn: baseStreamFn };
+    applyExtraParamsToAgent(
+      agent,
+      {
+        tools: {
+          web: {
+            search: {
+              openaiCodex: {
+                strategy: "native",
+              },
+            },
+          },
+        },
+      },
+      "openai-codex",
+      "gpt-5.3-codex",
+      undefined,
+      undefined,
+      undefined,
+      { codexAuthAvailable: false },
+    );
+
+    void agent.streamFn?.(
+      {
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        id: "gpt-5.3-codex",
+      } as Model<"openai-codex-responses">,
+      { messages: [] } as Context,
+      {},
+    );
+
+    expect(payload).toEqual({
+      tools: [{ type: "function", function: { name: "web_fetch" } }],
+    });
+  });
+
+  it("does not inject native Codex web_search when native mode is disabled", () => {
+    const payload = runResponsesPayloadMutationCase({
+      applyProvider: "openai-codex",
+      applyModelId: "gpt-5.3-codex",
+      cfg: {
+        tools: {
+          web: {
+            search: {
+              openaiCodex: {
+                strategy: "native",
+                mode: "disabled",
+              },
+            },
+          },
+        },
+      },
+      model: {
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        id: "gpt-5.3-codex",
+      } as Model<"openai-codex-responses">,
+      payload: {
+        tools: [{ type: "function", function: { name: "web_fetch" } }],
+      },
+      runtimeHints: { codexAuthAvailable: true },
+    });
+
+    expect(payload).toEqual({
+      tools: [{ type: "function", function: { name: "web_fetch" } }],
+    });
+  });
+
+  it("does not inject native Codex web_search when the global search switch is off", () => {
+    const payload = runResponsesPayloadMutationCase({
+      applyProvider: "openai-codex",
+      applyModelId: "gpt-5.3-codex",
+      cfg: {
+        tools: {
+          web: {
+            search: {
+              enabled: false,
+              openaiCodex: {
+                strategy: "native",
+                mode: "live",
+              },
+            },
+          },
+        },
+      },
+      model: {
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        id: "gpt-5.3-codex",
+      } as Model<"openai-codex-responses">,
+      payload: {
+        tools: [{ type: "function", function: { name: "web_fetch" } }],
+      },
+      runtimeHints: { codexAuthAvailable: true },
+    });
+
+    expect(payload).toEqual({
+      tools: [{ type: "function", function: { name: "web_fetch" } }],
+    });
+  });
+
+  it("keeps web_fetch available when Codex native web_search is enabled", () => {
+    const filtered = runResponsesPayloadMutationCase({
+      applyProvider: "openai-codex",
+      applyModelId: "gpt-5.3-codex",
+      cfg: {
+        tools: {
+          web: {
+            search: {
+              openaiCodex: {
+                strategy: "native",
+              },
+            },
+          },
+        },
+      },
+      model: {
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        id: "gpt-5.3-codex",
+      } as Model<"openai-codex-responses">,
+      payload: {
+        tools: [
+          { type: "function", function: { name: "web_search" } },
+          { type: "function", function: { name: "web_fetch" } },
+        ],
+      },
+      runtimeHints: { codexAuthAvailable: true },
+    });
+
+    expect(filtered.tools).toContainEqual({ type: "function", function: { name: "web_fetch" } });
   });
 
   it("disables prompt caching for non-Anthropic Bedrock models", () => {

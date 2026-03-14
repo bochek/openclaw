@@ -23,6 +23,7 @@ import {
 } from "./moonshot-stream-wrappers.js";
 import {
   createCodexDefaultTransportWrapper,
+  createOpenAICodexNativeWebSearchWrapper,
   createOpenAIDefaultTransportWrapper,
   createOpenAIFastModeWrapper,
   createOpenAIResponsesContextManagementWrapper,
@@ -335,6 +336,9 @@ export function applyExtraParamsToAgent(
   extraParamsOverride?: Record<string, unknown>,
   thinkingLevel?: ThinkLevel,
   agentId?: string,
+  runtimeHints?: {
+    codexAuthAvailable?: boolean;
+  },
 ): void {
   const resolvedExtraParams = resolveExtraParams({
     cfg,
@@ -463,6 +467,16 @@ export function applyExtraParamsToAgent(
   // Force `store=true` for direct OpenAI Responses models and auto-enable
   // server-side compaction for compatible OpenAI Responses payloads.
   agent.streamFn = createOpenAIResponsesContextManagementWrapper(agent.streamFn, merged);
+
+  // Install the Codex native-search wrapper for all embedded runs. The wrapper
+  // is a no-op unless the actual model provider/api resolves to a Codex-native
+  // Responses path, which keeps API-based eligibility consistent with tool
+  // suppression even when provider IDs differ from the Codex provider id.
+  agent.streamFn = createOpenAICodexNativeWebSearchWrapper(agent.streamFn, {
+    cfg,
+    modelId,
+    codexAuthAvailable: runtimeHints?.codexAuthAvailable,
+  });
 
   const rawParallelToolCalls = resolveAliasedParamValue(
     [resolvedExtraParams, override],

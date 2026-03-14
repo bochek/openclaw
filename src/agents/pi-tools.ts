@@ -20,6 +20,7 @@ import type { ModelAuthMode } from "./model-auth.js";
 import { createOpenClawTools } from "./openclaw-tools.js";
 import { wrapToolWithAbortSignal } from "./pi-tools.abort.js";
 import { wrapToolWithBeforeToolCallHook } from "./pi-tools.before-tool-call.js";
+import { applyModelProviderToolPolicy } from "./pi-tools.model-provider-policy.js";
 import {
   isToolAllowedByPolicies,
   resolveEffectiveToolPolicy,
@@ -44,7 +45,6 @@ import {
 import { cleanToolSchemaForGemini, normalizeToolParameters } from "./pi-tools.schema.js";
 import type { AnyAgentTool } from "./pi-tools.types.js";
 import type { SandboxContext } from "./sandbox.js";
-import { isXaiProvider } from "./schema/clean-for-xai.js";
 import { createToolFsPolicy, resolveToolFsConfig } from "./tool-fs-policy.js";
 import {
   applyToolPolicyPipeline,
@@ -66,7 +66,6 @@ function isOpenAIProvider(provider?: string) {
 const TOOL_DENY_BY_MESSAGE_PROVIDER: Readonly<Record<string, readonly string[]>> = {
   voice: ["tts"],
 };
-const TOOL_DENY_FOR_XAI_PROVIDERS = new Set(["web_search"]);
 const MEMORY_FLUSH_ALLOWED_TOOL_NAMES = new Set(["read", "write"]);
 
 function normalizeMessageProvider(messageProvider?: string): string | undefined {
@@ -88,18 +87,6 @@ function applyMessageProviderToolPolicy(
   }
   const deniedSet = new Set(deniedTools);
   return tools.filter((tool) => !deniedSet.has(tool.name));
-}
-
-function applyModelProviderToolPolicy(
-  tools: AnyAgentTool[],
-  params?: { modelProvider?: string; modelId?: string },
-): AnyAgentTool[] {
-  if (!isXaiProvider(params?.modelProvider, params?.modelId)) {
-    return tools;
-  }
-  // xAI/Grok providers expose a native web_search tool; sending OpenClaw's
-  // web_search alongside it causes duplicate-name request failures.
-  return tools.filter((tool) => !TOOL_DENY_FOR_XAI_PROVIDERS.has(tool.name));
 }
 
 function isApplyPatchAllowedForModel(params: {
@@ -228,8 +215,12 @@ export function createOpenClawCodingTools(options?: {
    * Example: "anthropic", "openai", "google", "openai-codex".
    */
   modelProvider?: string;
+  /** Provider API id for the current model (used for provider-native tool gating). */
+  modelApi?: string;
   /** Model id for the current provider (used for model-specific tool gating). */
   modelId?: string;
+  /** Whether Codex OAuth auth is available for this run. */
+  codexAuthAvailable?: boolean;
   /** Model context window in tokens (used to scale read-tool output budget). */
   modelContextWindowTokens?: number;
   /**
@@ -562,8 +553,11 @@ export function createOpenClawCodingTools(options?: {
     options?.messageProvider,
   );
   const toolsForModelProvider = applyModelProviderToolPolicy(toolsForMessageProvider, {
+    cfg: options?.config,
     modelProvider: options?.modelProvider,
+    modelApi: options?.modelApi,
     modelId: options?.modelId,
+    codexAuthAvailable: options?.codexAuthAvailable,
   });
   // Security: treat unknown/undefined as unauthorized (opt-in, not opt-out)
   const senderIsOwner = options?.senderIsOwner === true;

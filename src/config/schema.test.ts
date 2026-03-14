@@ -246,6 +246,53 @@ describe("config schema", () => {
     ).toThrow();
   });
 
+  it("accepts opt-in Codex native web-search config", () => {
+    const parsed = ToolsSchema.parse({
+      web: {
+        search: {
+          openaiCodex: {
+            strategy: "native",
+            mode: "live",
+            allowedDomains: ["example.com", "openai.com"],
+            contextSize: "high",
+            userLocation: {
+              country: "US",
+              city: "New York",
+              timezone: "America/New_York",
+            },
+          },
+        },
+      },
+    });
+
+    expect(parsed?.web?.search?.openaiCodex).toMatchObject({
+      strategy: "native",
+      mode: "live",
+      allowedDomains: ["example.com", "openai.com"],
+      contextSize: "high",
+      userLocation: {
+        country: "US",
+        city: "New York",
+        timezone: "America/New_York",
+      },
+    });
+  });
+
+  it("rejects unknown keys inside Codex native web-search config", () => {
+    expect(() =>
+      ToolsSchema.parse({
+        web: {
+          search: {
+            openaiCodex: {
+              strategy: "native",
+              nope: true,
+            },
+          },
+        },
+      }),
+    ).toThrow();
+  });
+
   it("keeps tags in the allowed taxonomy", () => {
     const withTags = applyDerivedTags({
       "gateway.auth.token": {},

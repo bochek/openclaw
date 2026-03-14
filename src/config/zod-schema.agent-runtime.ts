@@ -275,6 +275,24 @@ export const ToolsWebSearchSchema = z
     maxResults: z.number().int().positive().optional(),
     timeoutSeconds: z.number().int().positive().optional(),
     cacheTtlMinutes: z.number().nonnegative().optional(),
+    openaiCodex: z
+      .object({
+        strategy: z.union([z.literal("openclaw"), z.literal("native")]).optional(),
+        mode: z.union([z.literal("disabled"), z.literal("cached"), z.literal("live")]).optional(),
+        allowedDomains: z.array(z.string()).optional(),
+        contextSize: z.union([z.literal("low"), z.literal("medium"), z.literal("high")]).optional(),
+        userLocation: z
+          .object({
+            country: z.string().optional(),
+            region: z.string().optional(),
+            city: z.string().optional(),
+            timezone: z.string().optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     perplexity: z
       .object({
         apiKey: SecretInputSchema.optional().register(sensitive),

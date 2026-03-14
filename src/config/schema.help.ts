@@ -659,13 +659,34 @@ export const FIELD_HELP: Record<string, string> = {
   "tools.message.crossContext.marker.suffix":
     'Text suffix for cross-context markers (supports "{channel}").',
   "tools.message.broadcast.enabled": "Enable broadcast action (default: true).",
-  "tools.web.search.enabled": "Enable the web_search tool (requires a provider API key).",
+  "tools.web.search.enabled":
+    "Enable web search globally. This is the master switch for both the OpenClaw web_search tool and Codex-native web search.",
   "tools.web.search.provider":
     'Search provider ("brave", "gemini", "grok", "kimi", or "perplexity"). Auto-detected from available API keys if omitted.',
   "tools.web.search.apiKey": "Brave Search API key (fallback: BRAVE_API_KEY env var).",
   "tools.web.search.maxResults": "Number of results to return (1-10).",
   "tools.web.search.timeoutSeconds": "Timeout in seconds for web_search requests.",
   "tools.web.search.cacheTtlMinutes": "Cache TTL in minutes for web_search results.",
+  "tools.web.search.openaiCodex":
+    "Opt-in OpenAI Codex native web-search settings. Leave this unset to preserve the existing OpenClaw web_search tool behavior for Codex-authenticated users.",
+  "tools.web.search.openaiCodex.strategy":
+    'Opt-in strategy for Codex models: "openclaw" preserves the existing OpenClaw web_search tool, while "native" hides that tool and injects the OpenAI Codex native web_search payload instead.',
+  "tools.web.search.openaiCodex.mode":
+    'Native Codex search mode: "cached" keeps provider-side cached search only, "live" allows live external web access, and "disabled" turns search off entirely for Codex runs using the native strategy.',
+  "tools.web.search.openaiCodex.allowedDomains":
+    "Optional domain allowlist forwarded to the native Codex web_search payload. Empty or whitespace-only entries are ignored at runtime.",
+  "tools.web.search.openaiCodex.contextSize":
+    'Optional native search context-size hint for Codex web_search ("low", "medium", or "high").',
+  "tools.web.search.openaiCodex.userLocation":
+    "Optional approximate location metadata forwarded to native Codex web_search for region-aware results.",
+  "tools.web.search.openaiCodex.userLocation.country":
+    "Optional approximate country hint for native Codex web_search (for example: US).",
+  "tools.web.search.openaiCodex.userLocation.region":
+    "Optional approximate region/state hint for native Codex web_search.",
+  "tools.web.search.openaiCodex.userLocation.city":
+    "Optional approximate city hint for native Codex web_search.",
+  "tools.web.search.openaiCodex.userLocation.timezone":
+    "Optional approximate timezone hint for native Codex web_search (for example: America/New_York).",
   "tools.web.search.brave.mode":
     'Brave Search mode: "web" (URL results) or "llm-context" (pre-extracted page content for LLM grounding).',
   "tools.web.search.gemini.apiKey":

@@ -551,7 +551,9 @@ export async function compactEmbeddedPiSessionDirect(
       config: params.config,
       abortSignal: runAbortController.signal,
       modelProvider: model.provider,
+      modelApi: model.api,
       modelId,
+      codexAuthAvailable: authStorage.hasAuth("openai-codex"),
       modelContextWindowTokens: ctxInfo.tokens,
       modelAuthMode: resolveModelAuthMode(model.provider, params.config),
     });

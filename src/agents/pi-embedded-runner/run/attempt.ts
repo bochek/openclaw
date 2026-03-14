@@ -1511,7 +1511,9 @@ export async function runEmbeddedAttempt(
           config: params.config,
           abortSignal: runAbortController.signal,
           modelProvider: params.model.provider,
+          modelApi: params.model.api,
           modelId: params.modelId,
+          codexAuthAvailable: params.authStorage.hasAuth("openai-codex"),
           modelContextWindowTokens: params.model.contextWindow,
           modelAuthMode: resolveModelAuthMode(params.model.provider, params.config),
           currentChannelId: params.currentChannelId,
@@ -1938,6 +1940,9 @@ export async function runEmbeddedAttempt(
         },
         params.thinkLevel,
         sessionAgentId,
+        {
+          codexAuthAvailable: params.authStorage.hasAuth("openai-codex"),
+        },
       );
 
       if (cacheTrace) {

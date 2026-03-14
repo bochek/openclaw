@@ -1,6 +1,12 @@
 import type { StreamFn } from "@mariozechner/pi-agent-core";
 import type { SimpleStreamOptions } from "@mariozechner/pi-ai";
 import { streamSimple } from "@mariozechner/pi-ai";
+import type { OpenClawConfig } from "../../config/config.js";
+import {
+  patchPayloadForCodexNativeWebSearch,
+  resolveCodexNativeSearchActivation,
+  resolveCodexNativeWebSearchConfig,
+} from "../codex-native-web-search.js";
 import { log } from "./logger.js";
 import { streamWithPayloadPatch } from "./stream-payload-utils.js";
 
@@ -251,6 +257,85 @@ function applyOpenAIFastModePayloadOverrides(params: {
   ) {
     params.payloadObj.service_tier = "priority";
   }
+}
+
+export function createOpenAICodexNativeWebSearchWrapper(
+  baseStreamFn: StreamFn | undefined,
+  params: {
+    cfg: OpenClawConfig | undefined;
+    modelId: string;
+    codexAuthAvailable?: boolean;
+  },
+): StreamFn {
+  const underlying = baseStreamFn ?? streamSimple;
+  return (model, context, options) => {
+    const resolvedModelId = model.id ?? params.modelId;
+    const activation = resolveCodexNativeSearchActivation({
+      cfg: params.cfg,
+      modelProvider: model.provider,
+      modelApi: model.api,
+      modelId: resolvedModelId,
+      hasCodexAuth: params.codexAuthAvailable,
+    });
+    if (activation.state !== "native_codex_search") {
+      const isDirectCodexProvider = model.provider?.trim().toLowerCase() === "openai-codex";
+      if (
+        activation.globalWebSearchEnabled &&
+        activation.nativeEligible &&
+        activation.codexStrategy === "native" &&
+        activation.codexMode !== "disabled" &&
+        isDirectCodexProvider &&
+        !activation.hasCodexAuth
+      ) {
+        log.debug("codex native web search unavailable: missing auth", {
+          provider: model.provider,
+          modelId: resolvedModelId,
+          codexStrategy: activation.codexStrategy,
+          codexMode: activation.codexMode,
+          hasCodexAuth: activation.hasCodexAuth,
+          nativeEnabled: false,
+        });
+      }
+      return underlying(model, context, options);
+    }
+
+    const config = resolveCodexNativeWebSearchConfig(params.cfg);
+    return streamWithPayloadPatch(underlying, model, context, options, (payloadObj) => {
+      const patched = patchPayloadForCodexNativeWebSearch({
+        payload: payloadObj,
+        config,
+      });
+      if (patched.kind === "payload_not_object") {
+        log.debug("codex native web search skipped: provider payload was not an object", {
+          provider: model.provider,
+          modelId: resolvedModelId,
+        });
+        return;
+      }
+
+      payloadObj.tools = patched.payload.tools;
+      if (patched.kind === "existing_native_tool") {
+        log.debug("codex native web search already present in provider payload", {
+          provider: model.provider,
+          modelId: resolvedModelId,
+          codexStrategy: activation.codexStrategy,
+          codexMode: activation.codexMode,
+          hasCodexAuth: activation.hasCodexAuth,
+          nativeEnabled: activation.nativeEnabled,
+        });
+        return;
+      }
+
+      log.debug("codex native web search injected into provider payload", {
+        provider: model.provider,
+        modelId: resolvedModelId,
+        codexStrategy: activation.codexStrategy,
+        codexMode: activation.codexMode,
+        hasCodexAuth: activation.hasCodexAuth,
+        nativeEnabled: true,
+      });
+    });
+  };
 }
 
 export function createOpenAIResponsesContextManagementWrapper(
