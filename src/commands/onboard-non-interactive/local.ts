@@ -259,8 +259,10 @@ export async function runNonInteractiveOnboardingLocal(params: {
   });
 
   if (!opts.json) {
-    runtime.log(
-      `Tip: run \`${formatCliCommand("openclaw configure --section web")}\` to store your Brave API key for web_search. Docs: https://docs.openclaw.ai/tools/web`,
-    );
+    const searchTip =
+      authChoice === "openai-codex"
+        ? `Tip: run \`${formatCliCommand("openclaw configure --section web")}\` to choose Native Codex search or search with a configured provider. Docs: https://docs.openclaw.ai/tools/web`
+        : `Tip: run \`${formatCliCommand("openclaw configure --section web")}\` to set up web search with a configured provider or Native Codex search. Docs: https://docs.openclaw.ai/tools/web`;
+    runtime.log(searchTip);
   }
 }

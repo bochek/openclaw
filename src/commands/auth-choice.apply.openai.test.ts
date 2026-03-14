@@ -1,4 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("@mariozechner/pi-ai/oauth", () => ({
+  getOAuthApiKey: vi.fn(async () => undefined),
+  getOAuthProviders: vi.fn(() => []),
+}));
+
+vi.mock("./openai-codex-oauth.js", () => ({
+  loginOpenAICodexOAuth: vi.fn(async () => ({
+    type: "oauth",
+    provider: "openai-codex",
+    access: "access-token",
+    refresh: "refresh-token",
+    expires: Date.now() + 60_000,
+    email: "user@example.com",
+  })),
+}));
+
 import { applyAuthChoiceOpenAI } from "./auth-choice.apply.openai.js";
 import {
   createAuthTestLifecycle,
@@ -112,5 +129,25 @@ describe("applyAuthChoiceOpenAI", () => {
     }>(agentDir);
     expect(parsed.profiles?.["openai:default"]?.key).toBe("sk-openai-token");
     expect(parsed.profiles?.["openai:default"]?.keyRef).toBeUndefined();
+  });
+
+  it("notes native Codex search availability after Codex login", async () => {
+    await setupTempState();
+    const prompter = createWizardPrompter({}, { defaultSelect: "" });
+    const runtime = createExitThrowingRuntime();
+
+    const result = await applyAuthChoiceOpenAI({
+      authChoice: "openai-codex",
+      config: {},
+      prompter,
+      runtime,
+      setDefaultModel: false,
+    });
+
+    expect(result).not.toBeNull();
+    expect(prompter.note).toHaveBeenCalledWith(
+      expect.stringContaining("Native Codex search is available"),
+      "Codex web search",
+    );
   });
 });

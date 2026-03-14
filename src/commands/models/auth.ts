@@ -91,6 +91,19 @@ function resolveDefaultTokenProfileId(provider: string): string {
   return `${normalizeProviderId(provider)}:manual`;
 }
 
+async function noteCodexNativeSearchAvailability(
+  note: (message: string, title?: string) => Promise<void>,
+) {
+  await note(
+    [
+      "Native Codex search is available for Codex-capable models.",
+      `To enable it, run ${formatCliCommand("openclaw configure --section web")} and choose Native Codex search (recommended: cached).`,
+      "Docs: https://docs.openclaw.ai/tools/web",
+    ].join("\n"),
+    "Codex web search",
+  );
+}
+
 export async function modelsAuthSetupTokenCommand(
   opts: { provider?: string; yes?: boolean },
   runtime: RuntimeEnv,
@@ -340,6 +353,7 @@ async function runBuiltInOpenAICodexLogin(params: {
       `Default model available: ${OPENAI_CODEX_DEFAULT_MODEL} (use --set-default to apply)`,
     );
   }
+  await noteCodexNativeSearchAvailability(params.prompter.note);
 }
 
 export async function modelsAuthLoginCommand(opts: LoginOptions, runtime: RuntimeEnv) {

@@ -4,6 +4,7 @@ import {
   patchPayloadForCodexNativeWebSearch,
   resolveCodexNativeSearchActivation,
   resolveCodexNativeWebSearchConfig,
+  type ResolvedCodexNativeWebSearchConfig,
 } from "./codex-native-web-search.js";
 
 describe("resolveCodexNativeWebSearchConfig", () => {
@@ -273,7 +274,7 @@ describe("buildCodexNativeWebSearchTool", () => {
 });
 
 describe("patchPayloadForCodexNativeWebSearch", () => {
-  const config = {
+  const config: ResolvedCodexNativeWebSearchConfig = {
     strategy: "native",
     mode: "cached",
     allowedDomains: ["example.com"],
@@ -282,7 +283,7 @@ describe("patchPayloadForCodexNativeWebSearch", () => {
       country: "US",
       timezone: "America/New_York",
     },
-  } as const;
+  };
 
   it("preserves existing function tools and injects native web_search", () => {
     const patched = patchPayloadForCodexNativeWebSearch({

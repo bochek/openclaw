@@ -1,3 +1,4 @@
+import { formatCliCommand } from "../cli/command-format.js";
 import { normalizeApiKeyInput, validateApiKeyInput } from "./auth-choice.api-key.js";
 import {
   createAuthChoiceAgentModelNoter,
@@ -19,6 +20,19 @@ import {
   applyOpenAIProviderConfig,
   OPENAI_DEFAULT_MODEL,
 } from "./openai-model-default.js";
+
+async function noteCodexNativeSearchAvailability(
+  note: (message: string, title?: string) => Promise<void>,
+) {
+  await note(
+    [
+      "Native Codex search is available for Codex-capable models.",
+      `To enable it, run ${formatCliCommand("openclaw configure --section web")} and choose Native Codex search (recommended: cached).`,
+      "Docs: https://docs.openclaw.ai/tools/web",
+    ].join("\n"),
+    "Codex web search",
+  );
+}
 
 export async function applyAuthChoiceOpenAI(
   params: ApplyAuthChoiceParams,
@@ -115,6 +129,7 @@ export async function applyAuthChoiceOpenAI(
         agentModelOverride = OPENAI_CODEX_DEFAULT_MODEL;
         await noteAgentModel(OPENAI_CODEX_DEFAULT_MODEL);
       }
+      await noteCodexNativeSearchAvailability(params.prompter.note);
     }
     return { config: nextConfig, agentModelOverride };
   }

@@ -1,5 +1,10 @@
 import { describe, expect, it, type Mock, vi } from "vitest";
 
+vi.mock("@mariozechner/pi-ai/oauth", () => ({
+  getOAuthApiKey: vi.fn(async () => undefined),
+  getOAuthProviders: vi.fn(() => []),
+}));
+
 const mocks = vi.hoisted(() => {
   type MockAuthProfile = { provider: string; [key: string]: unknown };
   const store = {
@@ -209,6 +214,13 @@ describe("modelsStatusCommand auth overview", () => {
     expect(mocks.resolveOpenClawAgentDir).toHaveBeenCalled();
     expect(payload.defaultModel).toBe("anthropic/claude-opus-4-5");
     expect(payload.configPath).toBe("/tmp/openclaw-dev/openclaw.json");
+    expect(payload.search).toEqual(
+      expect.objectContaining({
+        state: "openclaw_search",
+        strategy: "openclaw",
+        mode: "cached",
+      }),
+    );
     expect(payload.auth.storePath).toBe("/tmp/openclaw-agent/auth-profiles.json");
     expect(payload.auth.shellEnvFallback.enabled).toBe(true);
     expect(payload.auth.shellEnvFallback.appliedKeys).toContain("OPENAI_API_KEY");
@@ -305,6 +317,8 @@ describe("modelsStatusCommand auth overview", () => {
           .join("\n");
         expect(output).toContain("Default (defaults)");
         expect(output).toContain("Fallbacks (0) (defaults)");
+        expect(output).toContain("Search mode");
+        expect(output).toContain("Search reason");
       },
     );
   });
@@ -325,6 +339,48 @@ describe("modelsStatusCommand auth overview", () => {
         });
       },
     );
+  });
+
+  it("reports native Codex search when configured for a Codex default model", async () => {
+    const localRuntime = createRuntime();
+    const originalLoadConfig = mocks.loadConfig.getMockImplementation();
+    mocks.loadConfig.mockReturnValue({
+      agents: {
+        defaults: {
+          model: { primary: "openai-codex/gpt-5.4", fallbacks: [] },
+          models: {},
+        },
+      },
+      tools: {
+        web: {
+          search: {
+            enabled: true,
+            openaiCodex: {
+              strategy: "native",
+              mode: "live",
+            },
+          },
+        },
+      },
+      models: { providers: {} },
+      env: { shellEnv: { enabled: true } },
+    });
+
+    try {
+      await modelsStatusCommand({ json: true }, localRuntime as never);
+      const payload = JSON.parse(String((localRuntime.log as Mock).mock.calls[0]?.[0]));
+      expect(payload.search).toEqual(
+        expect.objectContaining({
+          state: "native_codex_search",
+          strategy: "native",
+          mode: "live",
+        }),
+      );
+    } finally {
+      if (originalLoadConfig) {
+        mocks.loadConfig.mockImplementation(originalLoadConfig);
+      }
+    }
   });
 
   it("throws when agent id is unknown", async () => {

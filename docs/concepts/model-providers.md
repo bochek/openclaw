@@ -84,6 +84,10 @@ OpenClaw ships with the pi‑ai catalog. These providers require **no**
 - Shares the same `/fast` toggle and `params.fastMode` config as direct `openai/*`
 - `openai-codex/gpt-5.3-codex-spark` remains available when the Codex OAuth catalog exposes it; entitlement-dependent
 - Policy note: OpenAI Codex OAuth is explicitly supported for external tools/workflows like OpenClaw.
+- Codex models can use either:
+  - **Native Codex search** via `tools.web.search.openaiCodex`
+  - **Search with a configured provider** via OpenClaw's `web_search` tool
+- To configure either path, run `openclaw configure --section web` or see [/tools/web](/tools/web).
 
 ```json5
 {

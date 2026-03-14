@@ -12,20 +12,30 @@ const runtime: RuntimeEnv = {
   }) as RuntimeEnv["exit"],
 };
 
-function createPrompter(params: { selectValue?: string; textValue?: string }): {
+function createPrompter(params: {
+  selectValue?: string;
+  selectValues?: string[];
+  textValue?: string;
+}): {
   prompter: WizardPrompter;
   notes: Array<{ title?: string; message: string }>;
 } {
   const notes: Array<{ title?: string; message: string }> = [];
+  let selectIndex = 0;
   const prompter: WizardPrompter = {
     intro: vi.fn(async () => {}),
     outro: vi.fn(async () => {}),
     note: vi.fn(async (message: string, title?: string) => {
       notes.push({ title, message });
     }),
-    select: vi.fn(
-      async () => params.selectValue ?? "perplexity",
-    ) as unknown as WizardPrompter["select"],
+    select: vi.fn(async () => {
+      if (params.selectValues && params.selectValues.length > 0) {
+        const value = params.selectValues[Math.min(selectIndex, params.selectValues.length - 1)];
+        selectIndex += 1;
+        return value;
+      }
+      return params.selectValue ?? "perplexity";
+    }) as unknown as WizardPrompter["select"],
     multiselect: vi.fn(async () => []) as unknown as WizardPrompter["multiselect"],
     text: vi.fn(async () => params.textValue ?? ""),
     confirm: vi.fn(async () => true),
@@ -78,6 +88,86 @@ describe("setupSearch", () => {
     const { prompter } = createPrompter({ selectValue: "__skip__" });
     const result = await setupSearch(cfg, runtime, prompter);
     expect(result).toBe(cfg);
+  });
+
+  it("offers native Codex search during Codex onboarding", async () => {
+    const cfg: OpenClawConfig = {};
+    const { prompter, notes } = createPrompter({
+      selectValues: ["native-codex", "cached"],
+    });
+    const result = await setupSearch(cfg, runtime, prompter, {
+      authChoice: "openai-codex",
+    });
+
+    expect(result.tools?.web?.search?.enabled).toBe(true);
+    expect(result.tools?.web?.search?.openaiCodex?.strategy).toBe("native");
+    expect(result.tools?.web?.search?.openaiCodex?.mode).toBe("cached");
+    expect(prompter.text).not.toHaveBeenCalled();
+    expect(notes.some((note) => note.message.includes("Native Codex search"))).toBe(true);
+  });
+
+  it("switches Codex onboarding back to configured-provider search", async () => {
+    const cfg: OpenClawConfig = {};
+    const { prompter } = createPrompter({
+      selectValues: ["configured-provider", "perplexity"],
+      textValue: "pplx-test-key",
+    });
+    const result = await setupSearch(cfg, runtime, prompter, {
+      authChoice: "openai-codex",
+    });
+
+    expect(result.tools?.web?.search?.provider).toBe("perplexity");
+    expect(result.tools?.web?.search?.perplexity?.apiKey).toBe("pplx-test-key");
+    expect(result.tools?.web?.search?.openaiCodex?.strategy).toBe("openclaw");
+  });
+
+  it("does not mutate config when Codex onboarding skips configured-provider setup", async () => {
+    const cfg: OpenClawConfig = {
+      tools: {
+        web: {
+          search: {
+            openaiCodex: {
+              strategy: "native",
+              mode: "cached",
+            },
+          },
+        },
+      },
+    };
+    const { prompter } = createPrompter({
+      selectValues: ["configured-provider", "__skip__"],
+    });
+    const result = await setupSearch(cfg, runtime, prompter, {
+      authChoice: "openai-codex",
+    });
+
+    expect(result).toBe(cfg);
+    expect(result.tools?.web?.search?.openaiCodex?.strategy).toBe("native");
+  });
+
+  it("detects Codex-compatible custom providers from the default model", async () => {
+    const cfg: OpenClawConfig = {
+      agents: {
+        defaults: {
+          model: { primary: "custom-codex/codex-max" },
+        },
+      },
+      models: {
+        providers: {
+          "custom-codex": {
+            api: "openai-codex-responses",
+            models: [{ id: "codex-max", name: "Codex Max" }],
+          },
+        },
+      },
+    };
+    const { prompter } = createPrompter({
+      selectValues: ["native-codex", "live"],
+    });
+    const result = await setupSearch(cfg, runtime, prompter);
+
+    expect(result.tools?.web?.search?.openaiCodex?.strategy).toBe("native");
+    expect(result.tools?.web?.search?.openaiCodex?.mode).toBe("live");
   });
 
   it("sets provider and key for perplexity", async () => {

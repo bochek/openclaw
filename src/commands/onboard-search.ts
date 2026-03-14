@@ -1,3 +1,4 @@
+import { isCodexNativeWebSearchModel } from "../agents/codex-native-web-search.js";
 import type { OpenClawConfig } from "../config/config.js";
 import {
   DEFAULT_SECRET_PROVIDER_ALIAS,
@@ -8,9 +9,10 @@ import {
 } from "../config/types.secrets.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
-import type { SecretInputMode } from "./onboard-types.js";
+import type { AuthChoice, SecretInputMode } from "./onboard-types.js";
 
 export type SearchProvider = "brave" | "gemini" | "grok" | "kimi" | "perplexity";
+export type InteractiveSearchMode = "configured-provider" | "native-codex";
 
 type SearchProviderEntry = {
   value: SearchProvider;
@@ -63,6 +65,103 @@ export const SEARCH_PROVIDER_OPTIONS: readonly SearchProviderEntry[] = [
     signupUrl: "https://www.perplexity.ai/settings/api",
   },
 ] as const;
+
+function trimOptionalString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function resolveDefaultModelRef(config: OpenClawConfig): string | undefined {
+  const modelConfig = config.agents?.defaults?.model;
+  if (typeof modelConfig === "string") {
+    return trimOptionalString(modelConfig);
+  }
+  return trimOptionalString(modelConfig?.primary);
+}
+
+function resolveConfiguredModelContext(config: OpenClawConfig): {
+  modelProvider?: string;
+  modelApi?: string;
+} {
+  const modelRef = resolveDefaultModelRef(config);
+  if (!modelRef) {
+    return {};
+  }
+
+  const slashIndex = modelRef.indexOf("/");
+  const modelProvider =
+    slashIndex > 0 ? trimOptionalString(modelRef.slice(0, slashIndex)) : undefined;
+  if (!modelProvider) {
+    return {};
+  }
+
+  const providerConfig = config.models?.providers?.[modelProvider];
+  const modelApi = trimOptionalString(providerConfig?.api);
+  return {
+    modelProvider,
+    modelApi,
+  };
+}
+
+export function shouldOfferNativeCodexSearch(
+  config: OpenClawConfig,
+  params?: { authChoice?: AuthChoice },
+): boolean {
+  if (params?.authChoice === "openai-codex") {
+    return true;
+  }
+  return isCodexNativeWebSearchModel(resolveConfiguredModelContext(config));
+}
+
+function applyCodexSearchStrategy(
+  config: OpenClawConfig,
+  params: {
+    strategy: "openclaw" | "native";
+    mode?: "disabled" | "cached" | "live";
+    enabled?: boolean;
+  },
+): OpenClawConfig {
+  const previousSearch = config.tools?.web?.search;
+  return {
+    ...config,
+    tools: {
+      ...config.tools,
+      web: {
+        ...config.tools?.web,
+        search: {
+          ...previousSearch,
+          ...(params.enabled === undefined ? {} : { enabled: params.enabled }),
+          openaiCodex: {
+            ...previousSearch?.openaiCodex,
+            strategy: params.strategy,
+            ...(params.strategy === "native" && params.mode ? { mode: params.mode } : {}),
+          },
+        },
+      },
+    },
+  };
+}
+
+export function applyConfiguredProviderSearchStrategy(config: OpenClawConfig): OpenClawConfig {
+  return applyCodexSearchStrategy(config, {
+    strategy: "openclaw",
+    enabled: true,
+  });
+}
+
+export function applyNativeCodexSearchConfig(
+  config: OpenClawConfig,
+  mode: "disabled" | "cached" | "live",
+): OpenClawConfig {
+  return applyCodexSearchStrategy(config, {
+    strategy: "native",
+    mode,
+    enabled: true,
+  });
+}
 
 export function hasKeyInEnv(entry: SearchProviderEntry): boolean {
   return entry.envKeys.some((k) => Boolean(process.env[k]?.trim()));
@@ -127,7 +226,15 @@ export function applySearchKey(
   provider: SearchProvider,
   key: SecretInput,
 ): OpenClawConfig {
-  const search = { ...config.tools?.web?.search, provider, enabled: true };
+  const search = {
+    ...config.tools?.web?.search,
+    provider,
+    enabled: true,
+    openaiCodex: {
+      ...config.tools?.web?.search?.openaiCodex,
+      strategy: "openclaw" as const,
+    },
+  };
   switch (provider) {
     case "brave":
       search.apiKey = key;
@@ -165,6 +272,10 @@ function applyProviderOnly(config: OpenClawConfig, provider: SearchProvider): Op
           ...config.tools?.web?.search,
           provider,
           enabled: true,
+          openaiCodex: {
+            ...config.tools?.web?.search?.openaiCodex,
+            strategy: "openclaw",
+          },
         },
       },
     },
@@ -184,26 +295,11 @@ function preserveDisabledState(original: OpenClawConfig, result: OpenClawConfig)
   };
 }
 
-export type SetupSearchOptions = {
-  quickstartDefaults?: boolean;
-  secretInputMode?: SecretInputMode;
-};
-
-export async function setupSearch(
+async function setupConfiguredProviderSearch(
   config: OpenClawConfig,
-  _runtime: RuntimeEnv,
   prompter: WizardPrompter,
   opts?: SetupSearchOptions,
 ): Promise<OpenClawConfig> {
-  await prompter.note(
-    [
-      "Web search lets your agent look things up online.",
-      "Choose a provider and paste your API key.",
-      "Docs: https://docs.openclaw.ai/tools/web",
-    ].join("\n"),
-    "Web search",
-  );
-
   const existingProvider = config.tools?.web?.search?.provider;
 
   const options = SEARCH_PROVIDER_OPTIONS.map((entry) => {
@@ -298,7 +394,7 @@ export async function setupSearch(
 
   await prompter.note(
     [
-      "No API key stored — web_search won't work until a key is available.",
+      "No API key stored — search with a configured provider won't work until a key is available.",
       `Get your key at: ${entry.signupUrl}`,
       "Docs: https://docs.openclaw.ai/tools/web",
     ].join("\n"),
@@ -314,8 +410,117 @@ export async function setupSearch(
         search: {
           ...config.tools?.web?.search,
           provider: choice,
+          openaiCodex: {
+            ...config.tools?.web?.search?.openaiCodex,
+            strategy: "openclaw",
+          },
         },
       },
     },
   };
+}
+
+async function promptCodexSearchMode(
+  config: OpenClawConfig,
+  prompter: WizardPrompter,
+): Promise<OpenClawConfig> {
+  const existingMode = config.tools?.web?.search?.openaiCodex?.mode;
+  const choice = await prompter.select<"cached" | "live" | "disabled">({
+    message: "Native Codex search mode",
+    options: [
+      {
+        value: "cached",
+        label: "cached (recommended)",
+        hint: "Use Codex native search without live external web access",
+      },
+      {
+        value: "live",
+        label: "live",
+        hint: "Allow live external web access for native Codex search",
+      },
+      {
+        value: "disabled",
+        label: "disabled",
+        hint: "Disable all search for eligible Codex runs",
+      },
+    ],
+    initialValue: existingMode === "disabled" || existingMode === "live" ? existingMode : "cached",
+  });
+  return applyNativeCodexSearchConfig(config, choice);
+}
+
+export type SetupSearchOptions = {
+  quickstartDefaults?: boolean;
+  secretInputMode?: SecretInputMode;
+  authChoice?: AuthChoice;
+};
+
+export async function setupSearch(
+  config: OpenClawConfig,
+  _runtime: RuntimeEnv,
+  prompter: WizardPrompter,
+  opts?: SetupSearchOptions,
+): Promise<OpenClawConfig> {
+  const offerNativeCodexSearch = shouldOfferNativeCodexSearch(config, {
+    authChoice: opts?.authChoice,
+  });
+
+  if (offerNativeCodexSearch) {
+    await prompter.note(
+      [
+        "Web search lets your agent look things up online.",
+        "Choose how search should work for Codex-capable models.",
+        "- Native Codex search uses Codex's built-in search capability.",
+        "- Search with a configured provider uses Brave, Perplexity, Gemini, Grok, or Kimi.",
+        "Docs: https://docs.openclaw.ai/tools/web",
+      ].join("\n"),
+      "Web search",
+    );
+
+    const searchMode = await prompter.select<InteractiveSearchMode | "__skip__">({
+      message: "How should web search work?",
+      options: [
+        {
+          value: "native-codex",
+          label: "Native Codex search (recommended)",
+          hint: "Use Codex built-in search for eligible Codex models",
+        },
+        {
+          value: "configured-provider",
+          label: "Search with a configured provider",
+          hint: "Use Brave, Perplexity, Gemini, Grok, or Kimi with an API key",
+        },
+        {
+          value: "__skip__",
+          label: "Skip for now",
+          hint: "Configure later with openclaw configure --section web",
+        },
+      ],
+      initialValue:
+        config.tools?.web?.search?.openaiCodex?.strategy === "native"
+          ? "native-codex"
+          : "configured-provider",
+    });
+
+    if (searchMode === "__skip__") {
+      return config;
+    }
+
+    if (searchMode === "native-codex") {
+      return await promptCodexSearchMode(config, prompter);
+    }
+
+    return await setupConfiguredProviderSearch(config, prompter, opts);
+  }
+
+  await prompter.note(
+    [
+      "Web search lets your agent look things up online.",
+      "Choose a provider and paste your API key.",
+      "Docs: https://docs.openclaw.ai/tools/web",
+    ].join("\n"),
+    "Web search",
+  );
+
+  return await setupConfiguredProviderSearch(config, prompter, opts);
 }

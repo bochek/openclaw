@@ -1,8 +1,9 @@
 ---
-summary: "Web search + fetch tools (Brave, Gemini, Grok, Kimi, and Perplexity providers)"
+summary: "Web search + fetch tools, including configured-provider search and native Codex search"
 read_when:
   - You want to enable web_search or web_fetch
   - You need provider API key setup
+  - You want to use native Codex search
   - You want to use Gemini with Google Search grounding
 title: "Web Tools"
 ---
@@ -11,7 +12,9 @@ title: "Web Tools"
 
 OpenClaw ships two lightweight web tools:
 
-- `web_search` — Search the web using Brave Search API, Gemini with Google Search grounding, Grok, Kimi, or Perplexity Search API.
+- `web_search` — Search the web using either:
+  - **Search with a configured provider** (Brave Search API, Gemini with Google Search grounding, Grok, Kimi, or Perplexity Search API)
+  - **Native Codex search** for eligible Codex-capable models
 - `web_fetch` — HTTP fetch + readable extraction (HTML → markdown/text).
 
 These are **not** browser automation. For JS-heavy sites or logins, use the
@@ -19,13 +22,30 @@ These are **not** browser automation. For JS-heavy sites or logins, use the
 
 ## How it works
 
-- `web_search` calls your configured provider and returns results.
-- Results are cached by query for 15 minutes (configurable).
+- `tools.web.search.enabled` is the global master switch for all web search paths.
+- `web_search` can call either your configured provider or native Codex search, depending on model + config.
+- Results from configured-provider search are cached by query for 15 minutes (configurable).
 - `web_fetch` does a plain HTTP GET and extracts readable content
   (HTML → markdown/text). It does **not** execute JavaScript.
 - `web_fetch` is enabled by default (unless explicitly disabled).
 
 See [Brave Search setup](/brave-search) and [Perplexity Search setup](/perplexity) for provider-specific details.
+
+## Choosing a search path
+
+You can configure web search in two different ways:
+
+1. **Search with a configured provider**
+   - OpenClaw calls Brave, Gemini, Grok, Kimi, or Perplexity using your configured API key.
+   - This is the legacy/default behavior.
+   - Config is mainly under `tools.web.search.provider` plus the provider-specific API key field.
+
+2. **Native Codex search**
+   - For eligible Codex-capable models, OpenClaw asks the provider to use Codex's built-in web search.
+   - Config lives under `tools.web.search.openaiCodex`.
+   - This is opt-in. By default, OpenClaw preserves configured-provider search behavior.
+
+Use `openclaw configure --section web` to choose between these paths.
 
 ## Choosing a search provider
 
@@ -55,9 +75,83 @@ Runtime SecretRef behavior:
 - In auto-detect mode, OpenClaw resolves only the selected provider key. Non-selected provider SecretRefs stay inactive until selected.
 - If the selected provider SecretRef is unresolved and no provider env fallback exists, startup/reload fails fast.
 
+## Native Codex search
+
+Native Codex search is available for eligible Codex-capable models.
+
+Use this when you want the provider itself to perform web search, instead of routing `web_search` through Brave, Gemini, Grok, Kimi, or Perplexity.
+
+### Config path
+
+Native Codex search is configured under `tools.web.search.openaiCodex`.
+
+### Fields
+
+- `tools.web.search.enabled`
+  - Global master switch for all web search paths
+  - If `false`, both configured-provider search and native Codex search are disabled
+- `tools.web.search.openaiCodex.strategy`
+  - `"openclaw"` (default): preserve configured-provider `web_search` behavior
+  - `"native"`: use native Codex search for eligible Codex runs
+- `tools.web.search.openaiCodex.mode`
+  - `"cached"` (default): native Codex search without live external web access
+  - `"live"`: allow live external web access
+  - `"disabled"`: disable all search for eligible Codex runs
+- `tools.web.search.openaiCodex.allowedDomains`
+  - Optional domain allowlist passed to native Codex search
+- `tools.web.search.openaiCodex.contextSize`
+  - Optional native search context-size hint: `"low"`, `"medium"`, or `"high"`
+- `tools.web.search.openaiCodex.userLocation.*`
+  - Optional approximate location hint for native search
+
+### Auth rules
+
+- Direct `openai-codex/*` models require OpenAI Codex auth.
+- API-compatible providers using `api: "openai-codex-responses"` use that provider's own auth; they do **not** require separate OpenAI Codex OAuth just to enable native search.
+
+### Examples
+
+**Native Codex search (cached):**
+
+```json5
+{
+  tools: {
+    web: {
+      search: {
+        enabled: true,
+        openaiCodex: {
+          strategy: "native",
+          mode: "cached",
+        },
+      },
+    },
+  },
+}
+```
+
+**Preserve configured-provider search for Codex models:**
+
+```json5
+{
+  tools: {
+    web: {
+      search: {
+        enabled: true,
+        provider: "perplexity",
+        openaiCodex: {
+          strategy: "openclaw",
+        },
+      },
+    },
+  },
+}
+```
+
+`web_fetch` is separate from both search paths and can remain enabled regardless of which search mode you choose.
+
 ## Setting up web search
 
-Use `openclaw configure --section web` to set up your API key and choose a provider.
+Use `openclaw configure --section web` to choose Native Codex search or set up provider-backed search with an API key.
 
 ### Brave Search
 
@@ -227,17 +321,21 @@ For a gateway install, put it in `~/.openclaw/.env`.
 
 ## web_search
 
-Search the web using your configured provider.
+Search the web using the currently configured search path.
 
 ### Requirements
 
 - `tools.web.search.enabled` must not be `false` (default: enabled)
-- API key for your chosen provider:
+- For configured-provider search:
   - **Brave**: `BRAVE_API_KEY` or `tools.web.search.apiKey`
   - **Gemini**: `GEMINI_API_KEY` or `tools.web.search.gemini.apiKey`
   - **Grok**: `XAI_API_KEY` or `tools.web.search.grok.apiKey`
   - **Kimi**: `KIMI_API_KEY`, `MOONSHOT_API_KEY`, or `tools.web.search.kimi.apiKey`
   - **Perplexity**: `PERPLEXITY_API_KEY`, `OPENROUTER_API_KEY`, or `tools.web.search.perplexity.apiKey`
+- For native Codex search:
+  - `tools.web.search.openaiCodex.strategy` must be `"native"`
+  - the current model must be eligible for native Codex search
+  - direct `openai-codex/*` runs require OpenAI Codex auth
 - All provider key fields above support SecretRef objects.
 
 ### Config

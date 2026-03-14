@@ -15,6 +15,7 @@ import {
   resolveAuthStorePathForDisplay,
   resolveProfileUnusableUntilForDisplay,
 } from "../../agents/auth-profiles.js";
+import { resolveCodexNativeSearchActivation } from "../../agents/codex-native-web-search.js";
 import { resolveEnvApiKey } from "../../agents/model-auth.js";
 import {
   buildModelAliasIndex,
@@ -57,6 +58,58 @@ import {
   ensureFlagCompatibility,
   resolveKnownAgentId,
 } from "./shared.js";
+
+function resolveEffectiveSearchStatus(params: {
+  cfg: Awaited<ReturnType<typeof loadModelsConfig>>;
+  defaultModelRef: string;
+  store: ReturnType<typeof ensureAuthProfileStore>;
+}) {
+  const parsed = parseModelRef(params.defaultModelRef, DEFAULT_PROVIDER);
+  const provider = parsed?.provider;
+  const modelId = parsed?.model;
+  const providerConfig = provider ? params.cfg.models?.providers?.[provider] : undefined;
+  const modelApi = typeof providerConfig?.api === "string" ? providerConfig.api : undefined;
+  const hasCodexAuth = Object.values(params.store.profiles).some(
+    (profile) => profile.provider === "openai-codex",
+  );
+  const activation = resolveCodexNativeSearchActivation({
+    cfg: params.cfg,
+    modelProvider: provider,
+    modelApi,
+    modelId,
+    hasCodexAuth,
+  });
+
+  const reason = (() => {
+    if (!activation.globalWebSearchEnabled) {
+      return "global web search disabled";
+    }
+    if (!activation.nativeEligible) {
+      return "current model is not Codex-native-search capable";
+    }
+    if (activation.codexStrategy !== "native") {
+      return "configured to use search with a configured provider";
+    }
+    if (activation.codexMode === "disabled") {
+      return "native Codex search mode is disabled";
+    }
+    if (provider === "openai-codex" && !activation.hasCodexAuth) {
+      return "direct OpenAI Codex auth is missing";
+    }
+    return activation.state === "native_codex_search"
+      ? "eligible Codex runs use native Codex search"
+      : "configured-provider search remains active";
+  })();
+
+  return {
+    state: activation.state,
+    strategy: activation.codexStrategy,
+    mode: activation.codexMode,
+    reason,
+    modelProvider: provider ?? null,
+    modelApi: modelApi ?? null,
+  };
+}
 
 export async function modelsStatusCommand(
   opts: {
@@ -323,6 +376,12 @@ export async function modelsStatusCommand(
     return 0;
   })();
 
+  const effectiveSearch = resolveEffectiveSearchStatus({
+    cfg,
+    defaultModelRef: resolvedLabel,
+    store,
+  });
+
   if (opts.json) {
     runtime.log(
       JSON.stringify(
@@ -345,6 +404,7 @@ export async function modelsStatusCommand(
             : {}),
           aliases,
           allowed,
+          search: effectiveSearch,
           auth: {
             storePath: resolveAuthStorePathForDisplay(agentDir),
             shellEnvFallback: {
@@ -453,6 +513,31 @@ export async function modelsStatusCommand(
       rich,
       allowed.length ? theme.info : theme.muted,
       allowed.length ? allowed.join(", ") : "all",
+    )}`,
+  );
+  runtime.log(
+    `${label("Search mode")}${colorize(rich, theme.muted, ":")} ${colorize(
+      rich,
+      effectiveSearch.state === "native_codex_search"
+        ? theme.success
+        : effectiveSearch.state === "search_disabled"
+          ? theme.warn
+          : theme.info,
+      effectiveSearch.state,
+    )}`,
+  );
+  runtime.log(
+    `${label("Search config")}${colorize(rich, theme.muted, ":")} ${colorize(
+      rich,
+      theme.info,
+      `strategy=${effectiveSearch.strategy}, mode=${effectiveSearch.mode}`,
+    )}${effectiveSearch.modelApi ? colorize(rich, theme.muted, ` (api=${effectiveSearch.modelApi})`) : ""}`,
+  );
+  runtime.log(
+    `${label("Search reason")}${colorize(rich, theme.muted, ":")} ${colorize(
+      rich,
+      theme.muted,
+      effectiveSearch.reason,
     )}`,
   );
 

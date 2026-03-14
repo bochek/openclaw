@@ -483,7 +483,41 @@ export async function finalizeOnboardingWizard(
 
   const webSearchProvider = nextConfig.tools?.web?.search?.provider;
   const webSearchEnabled = nextConfig.tools?.web?.search?.enabled;
-  if (webSearchProvider) {
+  const { resolveCodexNativeWebSearchConfig } =
+    await import("../agents/codex-native-web-search.js");
+  const codexSearch = resolveCodexNativeWebSearchConfig(nextConfig);
+
+  if (webSearchEnabled === false) {
+    await prompter.note(
+      [
+        codexSearch.strategy === "native"
+          ? `Web search is disabled. Native Codex search is set to ${codexSearch.mode}.`
+          : "Web search is disabled.",
+        `Configure later: ${formatCliCommand("openclaw configure --section web")}`,
+        "Docs: https://docs.openclaw.ai/tools/web",
+      ].join("\n"),
+      "Web search",
+    );
+  } else if (codexSearch.strategy === "native" && codexSearch.mode === "disabled") {
+    await prompter.note(
+      [
+        "Native Codex search is configured but disabled for eligible Codex models.",
+        `Configure later: ${formatCliCommand("openclaw configure --section web")}`,
+        "Docs: https://docs.openclaw.ai/tools/web",
+      ].join("\n"),
+      "Web search",
+    );
+  } else if (codexSearch.strategy === "native") {
+    await prompter.note(
+      [
+        "Native Codex search is enabled for eligible Codex models.",
+        `Mode: ${codexSearch.mode}`,
+        "Use `openclaw configure --section web` to switch between native Codex search and search with a configured provider.",
+        "Docs: https://docs.openclaw.ai/tools/web",
+      ].join("\n"),
+      "Web search",
+    );
+  } else if (webSearchProvider) {
     const { SEARCH_PROVIDER_OPTIONS, resolveExistingKey, hasExistingKey, hasKeyInEnv } =
       await import("../commands/onboard-search.js");
     const entry = SEARCH_PROVIDER_OPTIONS.find((e) => e.value === webSearchProvider);
@@ -499,10 +533,10 @@ export async function finalizeOnboardingWizard(
         : envAvailable
           ? `API key: provided via ${entry?.envKeys.join(" / ")} env var.`
           : undefined;
-    if (webSearchEnabled !== false && hasKey) {
+    if (hasKey) {
       await prompter.note(
         [
-          "Web search is enabled, so your agent can look things up online when needed.",
+          "Search with a configured provider is enabled, so your agent can look things up online when needed.",
           "",
           `Provider: ${label}`,
           ...(keySource ? [keySource] : []),
@@ -510,24 +544,14 @@ export async function finalizeOnboardingWizard(
         ].join("\n"),
         "Web search",
       );
-    } else if (!hasKey) {
-      await prompter.note(
-        [
-          `Provider ${label} is selected but no API key was found.`,
-          "web_search will not work until a key is added.",
-          `  ${formatCliCommand("openclaw configure --section web")}`,
-          "",
-          `Get your key at: ${entry?.signupUrl ?? "https://docs.openclaw.ai/tools/web"}`,
-          "Docs: https://docs.openclaw.ai/tools/web",
-        ].join("\n"),
-        "Web search",
-      );
     } else {
       await prompter.note(
         [
-          `Web search (${label}) is configured but disabled.`,
-          `Re-enable: ${formatCliCommand("openclaw configure --section web")}`,
+          `Provider ${label} is selected but no API key was found.`,
+          "Search with a configured provider will not work until a key is added.",
+          `  ${formatCliCommand("openclaw configure --section web")}`,
           "",
+          `Get your key at: ${entry?.signupUrl ?? "https://docs.openclaw.ai/tools/web"}`,
           "Docs: https://docs.openclaw.ai/tools/web",
         ].join("\n"),
         "Web search",
@@ -544,7 +568,7 @@ export async function finalizeOnboardingWizard(
     if (legacyDetected) {
       await prompter.note(
         [
-          `Web search is available via ${legacyDetected.label} (auto-detected).`,
+          `Search with a configured provider is available via ${legacyDetected.label} (auto-detected).`,
           "Docs: https://docs.openclaw.ai/tools/web",
         ].join("\n"),
         "Web search",
@@ -552,7 +576,7 @@ export async function finalizeOnboardingWizard(
     } else {
       await prompter.note(
         [
-          "Web search was skipped. You can enable it later:",
+          "Web search was skipped. You can enable native Codex search or provider-backed search later:",
           `  ${formatCliCommand("openclaw configure --section web")}`,
           "",
           "Docs: https://docs.openclaw.ai/tools/web",

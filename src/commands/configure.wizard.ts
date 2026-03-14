@@ -172,6 +172,8 @@ async function promptWebToolsConfig(
     hasExistingKey,
     applySearchKey,
     hasKeyInEnv,
+    applyConfiguredProviderSearchStrategy,
+    applyNativeCodexSearchConfig,
   } = await import("./onboard-search.js");
   type SP = (typeof SEARCH_PROVIDER_OPTIONS)[number]["value"];
 
@@ -196,18 +198,23 @@ async function promptWebToolsConfig(
 
   note(
     [
-      "Web search lets your agent look things up online using the `web_search` tool.",
-      "Choose a provider and paste your API key.",
+      "Web search lets your agent look things up online.",
+      "Choose between provider-backed search and native Codex search.",
       "Docs: https://docs.openclaw.ai/tools/web",
     ].join("\n"),
     "Web search",
   );
 
+  const defaultSearchEnabled =
+    existingSearch?.enabled ??
+    (existingSearch?.openaiCodex?.strategy === "native"
+      ? true
+      : SEARCH_PROVIDER_OPTIONS.some((e) => hasKeyForProvider(e.value)));
+
   const enableSearch = guardCancel(
     await confirm({
-      message: "Enable web_search?",
-      initialValue:
-        existingSearch?.enabled ?? SEARCH_PROVIDER_OPTIONS.some((e) => hasKeyForProvider(e.value)),
+      message: "Enable web search?",
+      initialValue: defaultSearchEnabled,
     }),
     runtime,
   );
@@ -218,62 +225,125 @@ async function promptWebToolsConfig(
   };
 
   if (enableSearch) {
-    const providerOptions = SEARCH_PROVIDER_OPTIONS.map((entry) => {
-      const configured = hasKeyForProvider(entry.value);
-      return {
-        value: entry.value,
-        label: entry.label,
-        hint: configured ? `${entry.hint} · configured` : entry.hint,
-      };
-    });
-
-    const providerChoice = guardCancel(
-      await select({
-        message: "Choose web search provider",
-        options: providerOptions,
-        initialValue: existingProvider,
+    const searchMode = guardCancel(
+      await select<"configured-provider" | "native-codex">({
+        message: "How should web search work?",
+        options: [
+          {
+            value: "configured-provider",
+            label: "Search with a configured provider",
+            hint: "Use Brave, Perplexity, Gemini, Grok, or Kimi with an API key",
+          },
+          {
+            value: "native-codex",
+            label: "Native Codex search",
+            hint: "Use Codex built-in search for eligible Codex models",
+          },
+        ],
+        initialValue:
+          existingSearch?.openaiCodex?.strategy === "native"
+            ? "native-codex"
+            : "configured-provider",
       }),
       runtime,
     );
 
-    nextSearch = { ...nextSearch, provider: providerChoice };
-
-    const entry = SEARCH_PROVIDER_OPTIONS.find((e) => e.value === providerChoice)!;
-    const existingKey = resolveExistingKey(nextConfig, providerChoice as SP);
-    const keyConfigured = hasExistingKey(nextConfig, providerChoice as SP);
-    const envAvailable = entry.envKeys.some((k) => Boolean(process.env[k]?.trim()));
-    const envVarNames = entry.envKeys.join(" / ");
-
-    const keyInput = guardCancel(
-      await text({
-        message: keyConfigured
-          ? envAvailable
-            ? `${entry.label} API key (leave blank to keep current or use ${envVarNames})`
-            : `${entry.label} API key (leave blank to keep current)`
-          : envAvailable
-            ? `${entry.label} API key (paste it here; leave blank to use ${envVarNames})`
-            : `${entry.label} API key`,
-        placeholder: keyConfigured ? "Leave blank to keep current" : entry.placeholder,
-      }),
-      runtime,
-    );
-    const key = String(keyInput ?? "").trim();
-
-    if (key || existingKey) {
-      const applied = applySearchKey(nextConfig, providerChoice as SP, (key || existingKey)!);
-      nextSearch = { ...applied.tools?.web?.search };
-    } else if (keyConfigured || envAvailable) {
-      nextSearch = { ...nextSearch };
-    } else {
-      note(
-        [
-          "No key stored yet — web_search won't work until a key is available.",
-          `Store a key here or set ${envVarNames} in the Gateway environment.`,
-          `Get your API key at: ${entry.signupUrl}`,
-          "Docs: https://docs.openclaw.ai/tools/web",
-        ].join("\n"),
-        "Web search",
+    if (searchMode === "native-codex") {
+      const nativeMode = guardCancel(
+        await select<"cached" | "live" | "disabled">({
+          message: "Native Codex search mode",
+          options: [
+            {
+              value: "cached",
+              label: "cached (recommended)",
+              hint: "Use native Codex search without live external web access",
+            },
+            {
+              value: "live",
+              label: "live",
+              hint: "Allow live external web access for native Codex search",
+            },
+            {
+              value: "disabled",
+              label: "disabled",
+              hint: "Disable all search for eligible Codex runs",
+            },
+          ],
+          initialValue:
+            existingSearch?.openaiCodex?.mode === "disabled" ||
+            existingSearch?.openaiCodex?.mode === "live"
+              ? existingSearch.openaiCodex.mode
+              : "cached",
+        }),
+        runtime,
       );
+
+      nextSearch = {
+        ...applyNativeCodexSearchConfig(nextConfig, nativeMode).tools?.web?.search,
+        enabled: true,
+      };
+    } else {
+      const providerOptions = SEARCH_PROVIDER_OPTIONS.map((entry) => {
+        const configured = hasKeyForProvider(entry.value);
+        return {
+          value: entry.value,
+          label: entry.label,
+          hint: configured ? `${entry.hint} · configured` : entry.hint,
+        };
+      });
+
+      const providerChoice = guardCancel(
+        await select({
+          message: "Choose search provider",
+          options: providerOptions,
+          initialValue: existingProvider,
+        }),
+        runtime,
+      );
+
+      const providerConfig = applyConfiguredProviderSearchStrategy(nextConfig);
+      nextSearch = {
+        ...providerConfig.tools?.web?.search,
+        provider: providerChoice,
+      };
+
+      const entry = SEARCH_PROVIDER_OPTIONS.find((e) => e.value === providerChoice)!;
+      const existingKey = resolveExistingKey(nextConfig, providerChoice as SP);
+      const keyConfigured = hasExistingKey(nextConfig, providerChoice as SP);
+      const envAvailable = entry.envKeys.some((k) => Boolean(process.env[k]?.trim()));
+      const envVarNames = entry.envKeys.join(" / ");
+
+      const keyInput = guardCancel(
+        await text({
+          message: keyConfigured
+            ? envAvailable
+              ? `${entry.label} API key (leave blank to keep current or use ${envVarNames})`
+              : `${entry.label} API key (leave blank to keep current)`
+            : envAvailable
+              ? `${entry.label} API key (paste it here; leave blank to use ${envVarNames})`
+              : `${entry.label} API key`,
+          placeholder: keyConfigured ? "Leave blank to keep current" : entry.placeholder,
+        }),
+        runtime,
+      );
+      const key = String(keyInput ?? "").trim();
+
+      if (key || existingKey) {
+        const applied = applySearchKey(providerConfig, providerChoice as SP, (key || existingKey)!);
+        nextSearch = { ...applied.tools?.web?.search };
+      } else if (keyConfigured || envAvailable) {
+        nextSearch = { ...nextSearch };
+      } else {
+        note(
+          [
+            "No key stored yet — search with a configured provider won't work until a key is available.",
+            `Store a key here or set ${envVarNames} in the Gateway environment.`,
+            `Get your API key at: ${entry.signupUrl}`,
+            "Docs: https://docs.openclaw.ai/tools/web",
+          ].join("\n"),
+          "Web search",
+        );
+      }
     }
   }
 

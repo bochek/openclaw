@@ -471,7 +471,7 @@ export type ToolsConfig = {
       openaiCodex?: {
         /** Search strategy for Codex models. "openclaw" preserves Brave/Perplexity/etc behavior. */
         strategy?: "openclaw" | "native";
-        /** Native Codex search mode. "cached" disables live external web access. */
+        /** Native Codex search mode. "cached" disables live external web access; "disabled" means no search for eligible Codex runs (no fallback to configured-provider search). */
         mode?: "disabled" | "cached" | "live";
         /** Optional allowlist of domains for native Codex search. */
         allowedDomains?: string[];

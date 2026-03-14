@@ -2,14 +2,10 @@ import type { StreamFn } from "@mariozechner/pi-agent-core";
 import type { Context, Model, SimpleStreamOptions } from "@mariozechner/pi-ai";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock(
-  "@mariozechner/pi-ai/oauth",
-  () => ({
-    getOAuthApiKey: vi.fn(),
-    getOAuthProviders: vi.fn(() => []),
-  }),
-  { virtual: true },
-);
+vi.mock("@mariozechner/pi-ai/oauth", () => ({
+  getOAuthApiKey: vi.fn(),
+  getOAuthProviders: vi.fn(() => []),
+}));
 
 import { applyExtraParamsToAgent, resolveExtraParams } from "./pi-embedded-runner/extra-params.js";
 import { log } from "./pi-embedded-runner/logger.js";

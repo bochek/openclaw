@@ -114,6 +114,7 @@ describe("modelsAuthLoginCommand", () => {
   let restoreStdin: (() => void) | null = null;
   let currentConfig: OpenClawConfig;
   let lastUpdatedConfig: OpenClawConfig | null;
+  let currentPrompter: { note: ReturnType<typeof vi.fn>; select: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -141,10 +142,11 @@ describe("modelsAuthLoginCommand", () => {
         return lastUpdatedConfig;
       },
     );
-    mocks.createClackPrompter.mockReturnValue({
+    currentPrompter = {
       note: vi.fn(async () => {}),
       select: vi.fn(),
-    });
+    };
+    mocks.createClackPrompter.mockReturnValue(currentPrompter);
     mocks.loginOpenAICodexOAuth.mockResolvedValue({
       type: "oauth",
       provider: "openai-codex",
@@ -184,6 +186,10 @@ describe("modelsAuthLoginCommand", () => {
     );
     expect(runtime.log).toHaveBeenCalledWith(
       "Default model available: openai-codex/gpt-5.4 (use --set-default to apply)",
+    );
+    expect(currentPrompter.note).toHaveBeenCalledWith(
+      expect.stringContaining("Native Codex search is available"),
+      "Codex web search",
     );
   });
 
