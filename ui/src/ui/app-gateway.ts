@@ -301,7 +301,7 @@ function handleTerminalChatEvent(
   }
   // Reload history when tools were used so the persisted tool results
   // replace the now-cleared streaming state.
-  if (hadToolEvents && state === "final") {
+  if (hadToolEvents) {
     void loadChatHistory(host as unknown as OpenClawApp);
     return true;
   }

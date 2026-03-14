@@ -380,6 +380,42 @@ describe("connectGateway", () => {
 
     expect(loadChatHistoryMock).toHaveBeenCalledTimes(1);
   });
+
+  it("reloads chat history after an error chat event when tool output was used", () => {
+    const host = createHost();
+
+    connectGateway(host);
+    const client = gatewayClientInstances[0];
+    expect(client).toBeDefined();
+
+    client.emitEvent({
+      event: "agent",
+      payload: {
+        runId: "engine-run-1",
+        seq: 1,
+        stream: "tool",
+        ts: 1,
+        sessionKey: "main",
+        data: {
+          toolCallId: "tool-1",
+          name: "fetch",
+          phase: "result",
+          result: { text: "ok" },
+        },
+      },
+    });
+
+    client.emitEvent({
+      event: "chat",
+      payload: {
+        runId: "engine-run-1",
+        sessionKey: "main",
+        state: "error",
+      },
+    });
+
+    expect(loadChatHistoryMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("resolveControlUiClientVersion", () => {
