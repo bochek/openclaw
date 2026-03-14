@@ -496,6 +496,22 @@ function buildChatCommands(): ChatCommandDefinition[] {
       category: "session",
     }),
     defineChatCommand({
+      key: "btw",
+      nativeName: "btw",
+      description: "Ask a side question without interrupting the current run.",
+      textAlias: "/btw",
+      category: "session",
+      acceptsArgs: true,
+      args: [
+        {
+          name: "message",
+          description: "Side question",
+          type: "string",
+          captureRemaining: true,
+        },
+      ],
+    }),
+    defineChatCommand({
       key: "restart",
       nativeName: "restart",
       description: "Restart OpenClaw.",

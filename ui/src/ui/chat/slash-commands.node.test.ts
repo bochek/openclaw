@@ -31,6 +31,13 @@ describe("parseSlashCommand", () => {
     });
   });
 
+  it("parses /btw side messages", () => {
+    expect(parseSlashCommand("/btw check on step 2")).toMatchObject({
+      command: { name: "btw" },
+      args: "check on step 2",
+    });
+  });
+
   it("keeps /status on the agent path", () => {
     const status = SLASH_COMMANDS.find((entry) => entry.name === "status");
     expect(status?.executeLocal).not.toBe(true);

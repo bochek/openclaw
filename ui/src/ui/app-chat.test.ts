@@ -118,4 +118,94 @@ describe("handleSendChat", () => {
     });
     expect(host.chatModelOverrides.main).toBe("gpt-5-mini");
   });
+
+  it("sends /btw immediately while a run is active", async () => {
+    const request = vi.fn(async (method: string, _params?: unknown) => {
+      if (method === "chat.send") {
+        return { runId: "run-btw", status: "started" };
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+    const host = makeHost({
+      client: { request } as unknown as ChatHost["client"],
+      sessionKey: "main",
+      chatRunId: "run-active",
+      chatMessage: "/btw can you also check lint output?",
+    });
+
+    await handleSendChat(host);
+
+    expect(request).toHaveBeenCalledWith("chat.send", {
+      sessionKey: expect.stringMatching(/^agent:main:btw:/),
+      message: [
+        "Side-question mode: answer only this one question.",
+        "Do not use tools.",
+        "",
+        "Question:",
+        "can you also check lint output?",
+      ].join("\n"),
+      deliver: false,
+      idempotencyKey: expect.any(String),
+    });
+    expect(host.chatQueue).toHaveLength(0);
+    expect(host.chatRunId).toBe("run-active");
+    expect(host.chatMessage).toBe("");
+    expect(host.chatMessages.at(-1)).toEqual({
+      role: "system",
+      content: "Sent side question with `/btw`. I will post one answer here.",
+      timestamp: expect.any(Number),
+    });
+  });
+
+  it("includes recent visible chat context in /btw side questions", async () => {
+    const request = vi.fn(async (method: string, _params?: unknown) => {
+      if (method === "chat.send") {
+        return { runId: "run-btw", status: "started" };
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+    const host = makeHost({
+      client: { request } as unknown as ChatHost["client"],
+      sessionKey: "main",
+      chatRunId: "run-active",
+      chatStream: "I am editing commands-core.ts",
+      chatMessage: "/btw what file are you editing?",
+      chatMessages: [
+        { role: "user", content: [{ type: "text", text: "continue with the btw command" }] },
+        { role: "assistant", content: [{ type: "text", text: "I will implement it globally." }] },
+      ],
+    });
+
+    await handleSendChat(host);
+
+    expect(request).toHaveBeenCalledWith("chat.send", {
+      sessionKey: expect.stringMatching(/^agent:main:btw:/),
+      message: expect.stringContaining("Current session context (recent messages):"),
+      deliver: false,
+      idempotencyKey: expect.any(String),
+    });
+    const message = request.mock.calls[0]?.[1] as { message?: string };
+    expect(message.message).toContain("user: continue with the btw command");
+    expect(message.message).toContain("assistant: I will implement it globally.");
+    expect(message.message).toContain("assistant (in-progress): I am editing commands-core.ts");
+    expect(message.message).toContain("Question:");
+    expect(message.message).toContain("what file are you editing?");
+  });
+
+  it("shows usage help for /btw without a message", async () => {
+    const request = vi.fn();
+    const host = makeHost({
+      client: { request } as unknown as ChatHost["client"],
+      chatMessage: "/btw",
+    });
+
+    await handleSendChat(host);
+
+    expect(request).not.toHaveBeenCalled();
+    expect(host.chatMessages.at(-1)).toEqual({
+      role: "system",
+      content: "Usage: `/btw <message>`",
+      timestamp: expect.any(Number),
+    });
+  });
 });

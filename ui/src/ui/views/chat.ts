@@ -1377,6 +1377,7 @@ function groupMessages(items: ChatItem[]): Array<ChatItem | MessageGroup> {
 
 function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
   const items: ChatItem[] = [];
+  const deferredSideReplies: ChatItem[] = [];
   const history = Array.isArray(props.messages) ? props.messages : [];
   const tools = Array.isArray(props.toolMessages) ? props.toolMessages : [];
   const historyStart = Math.max(0, history.length - CHAT_HISTORY_RENDER_LIMIT);
@@ -1405,6 +1406,16 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
             : `divider:compaction:${normalized.timestamp}:${i}`,
         label: "Compaction",
         timestamp: normalized.timestamp ?? Date.now(),
+      });
+      continue;
+    }
+    // Keep side-question replies visually below the active stream so they
+    // remain visible while the main run is still producing output.
+    if (props.stream !== null && marker && marker.kind === "side-reply") {
+      deferredSideReplies.push({
+        kind: "message",
+        key: messageKey(msg, i),
+        message: msg,
       });
       continue;
     }
@@ -1459,6 +1470,10 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
     } else {
       items.push({ kind: "reading-indicator", key });
     }
+  }
+
+  if (deferredSideReplies.length > 0) {
+    items.push(...deferredSideReplies);
   }
 
   return groupMessages(items);

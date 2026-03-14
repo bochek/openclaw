@@ -3,8 +3,11 @@ import { GatewayRequestError } from "../gateway.ts";
 import {
   abortChatRun,
   handleChatEvent,
+  isTrackedSideQuestionRun,
   loadChatHistory,
   sendChatMessage,
+  sendChatMessageBackground,
+  trackSideQuestionRun,
   type ChatEventPayload,
   type ChatState,
 } from "./chat.ts";
@@ -42,6 +45,37 @@ describe("handleChatEvent", () => {
       state: "final",
     };
     expect(handleChatEvent(state, payload)).toBe(null);
+  });
+
+  it("handles tracked side-question final events outside the active session", () => {
+    const state = createState({
+      sessionKey: "main",
+      chatRunId: "run-user",
+      chatStream: "Working...",
+      chatStreamStartedAt: 123,
+    });
+    trackSideQuestionRun("run-btw");
+
+    const payload: ChatEventPayload = {
+      runId: "run-btw",
+      sessionKey: "agent:main:btw:123",
+      state: "final",
+      message: {
+        role: "assistant",
+        content: [{ type: "text", text: "Short side answer" }],
+      },
+    };
+
+    expect(handleChatEvent(state, payload)).toBe(null);
+    expect(isTrackedSideQuestionRun("run-btw")).toBe(false);
+    expect(state.chatRunId).toBe("run-user");
+    expect(state.chatStream).toBe("Working...");
+    expect(state.chatMessages.at(-1)).toEqual({
+      role: "assistant",
+      content: [{ type: "text", text: "**/btw**\n\nShort side answer" }],
+      timestamp: expect.any(Number),
+      __openclaw: { kind: "side-reply", id: "run-btw" },
+    });
   });
 
   it("returns null for delta from another run", () => {
@@ -570,6 +604,40 @@ describe("sendChatMessage", () => {
           text: expect.stringContaining("origin not allowed"),
         },
       ],
+    });
+  });
+});
+
+describe("sendChatMessageBackground", () => {
+  it("sends side messages without replacing the active run stream", async () => {
+    const request = vi.fn().mockResolvedValue({ runId: "run-btw", status: "started" });
+    const state = createState({
+      connected: true,
+      sessionKey: "main",
+      chatRunId: "run-active",
+      chatStream: "Working...",
+      chatStreamStartedAt: 123,
+      client: { request } as unknown as ChatState["client"],
+    });
+
+    const runId = await sendChatMessageBackground(state, "quick note");
+
+    expect(runId).toEqual(expect.any(String));
+    expect(request).toHaveBeenCalledWith("chat.send", {
+      sessionKey: "main",
+      message: "quick note",
+      deliver: false,
+      idempotencyKey: expect.any(String),
+    });
+    const payload = request.mock.calls[0]?.[1] as { idempotencyKey?: string } | undefined;
+    expect(runId).toBe(payload?.idempotencyKey);
+    expect(state.chatRunId).toBe("run-active");
+    expect(state.chatStream).toBe("Working...");
+    expect(state.chatStreamStartedAt).toBe(123);
+    expect(state.chatMessages.at(-1)).toEqual({
+      role: "user",
+      content: [{ type: "text", text: "quick note" }],
+      timestamp: expect.any(Number),
     });
   });
 });

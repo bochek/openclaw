@@ -3,9 +3,16 @@ import { scheduleChatScroll } from "./app-scroll.ts";
 import { setLastActiveSessionKey } from "./app-settings.ts";
 import { resetToolStream } from "./app-tool-stream.ts";
 import type { OpenClawApp } from "./app.ts";
+import { extractText } from "./chat/message-extract.ts";
 import { executeSlashCommand } from "./chat/slash-command-executor.ts";
 import { parseSlashCommand } from "./chat/slash-commands.ts";
-import { abortChatRun, loadChatHistory, sendChatMessage } from "./controllers/chat.ts";
+import {
+  abortChatRun,
+  loadChatHistory,
+  sendChatMessage,
+  sendChatMessageBackground,
+  trackSideQuestionRun,
+} from "./controllers/chat.ts";
 import { loadModels } from "./controllers/models.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
@@ -257,7 +264,7 @@ export async function handleSendChat(
 }
 
 function shouldQueueLocalSlashCommand(name: string): boolean {
-  return !["stop", "focus", "export"].includes(name);
+  return !["btw", "stop", "focus", "export"].includes(name);
 }
 
 // ── Slash Command Dispatch ──
@@ -295,6 +302,9 @@ async function dispatchSlashCommand(
     case "export":
       host.onSlashAction?.("export");
       return;
+    case "btw":
+      await sendBtwMessage(host, args);
+      return;
   }
 
   if (!host.client) {
@@ -320,6 +330,80 @@ async function dispatchSlashCommand(
   }
 
   scheduleChatScroll(host as unknown as Parameters<typeof scheduleChatScroll>[0]);
+}
+
+async function sendBtwMessage(host: ChatHost, args: string) {
+  const message = args.trim();
+  if (!message) {
+    injectCommandResult(host, "Usage: `/btw <message>`");
+    return;
+  }
+  const agentId = parseAgentSessionKey(host.sessionKey)?.agentId ?? "main";
+  const isolatedSessionKey = `agent:${agentId}:btw:${generateUUID()}`;
+  const sessionContext = buildRecentVisibleSessionContext(host);
+  const sideQuestionMessage = [
+    "Side-question mode: answer only this one question.",
+    "Do not use tools.",
+    ...(sessionContext ? ["", "Current session context (recent messages):", sessionContext] : []),
+    "",
+    "Question:",
+    message,
+  ].join("\n");
+  const runId = await sendChatMessageBackground(
+    host as unknown as Parameters<typeof sendChatMessageBackground>[0],
+    message,
+    {
+      appendUserMessage: false,
+      sessionKey: isolatedSessionKey,
+      rpcMessage: sideQuestionMessage,
+    },
+  );
+  if (!runId) {
+    return;
+  }
+  trackSideQuestionRun(runId);
+  injectCommandResult(host, "Sent side question with `/btw`. I will post one answer here.");
+  scheduleChatScroll(host as unknown as Parameters<typeof scheduleChatScroll>[0]);
+}
+
+function buildRecentVisibleSessionContext(host: ChatHost): string {
+  const history = Array.isArray(host.chatMessages) ? host.chatMessages : [];
+  const lines: string[] = [];
+  for (let i = history.length - 1; i >= 0; i--) {
+    const entry = history[i];
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const roleValue = (entry as { role?: unknown }).role;
+    const role = typeof roleValue === "string" ? roleValue.toLowerCase() : "";
+    if (role !== "user" && role !== "assistant") {
+      continue;
+    }
+    const text = extractText(entry)?.trim();
+    if (!text) {
+      continue;
+    }
+    if (role === "user" && text.toLowerCase().startsWith("/btw")) {
+      continue;
+    }
+    lines.push(`${role}: ${text}`);
+    if (lines.length >= 8) {
+      break;
+    }
+  }
+  if (host.chatRunId && host.chatStream?.trim()) {
+    lines.push(`assistant (in-progress): ${host.chatStream.trim()}`);
+  }
+  if (lines.length === 0) {
+    return "";
+  }
+  const joined = lines.toReversed().join("\n");
+  if (joined.length <= 2500) {
+    return joined;
+  }
+  const clipped = joined.slice(joined.length - 2500);
+  const firstNewline = clipped.indexOf("\n");
+  return firstNewline >= 0 ? clipped.slice(firstNewline + 1) : clipped;
 }
 
 async function clearChatHistory(host: ChatHost) {

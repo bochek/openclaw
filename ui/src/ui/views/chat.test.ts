@@ -219,6 +219,37 @@ describe("chat view", () => {
     expect(logoImage?.getAttribute("src")).toBe("/openclaw/favicon.svg");
   });
 
+  it("renders side-question replies below the active stream", () => {
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          messages: [
+            {
+              role: "assistant",
+              content: [{ type: "text", text: "Main response so far" }],
+              timestamp: 10,
+            },
+            {
+              role: "assistant",
+              content: [{ type: "text", text: "**/btw**\n\nSide answer" }],
+              timestamp: 20,
+              __openclaw: { kind: "side-reply", id: "run-btw-1" },
+            },
+          ],
+          stream: "Main stream still running",
+          streamStartedAt: 30,
+        }),
+      ),
+      container,
+    );
+
+    const text = container.textContent ?? "";
+    expect(text.indexOf("Main stream still running")).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf("Side answer")).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf("Main stream still running")).toBeLessThan(text.indexOf("Side answer"));
+  });
+
   it("keeps grouped assistant avatar fallbacks under the mounted base path", () => {
     const container = document.createElement("div");
     render(

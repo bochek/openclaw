@@ -6,6 +6,7 @@ import type { ChatAttachment } from "../ui-types.ts";
 import { generateUUID } from "../uuid.ts";
 
 const SILENT_REPLY_PATTERN = /^\s*NO_REPLY\s*$/;
+const SIDE_QUESTION_RUN_IDS = new Set<string>();
 
 function isSilentReplyStream(text: string): boolean {
   return SILENT_REPLY_PATTERN.test(text);
@@ -50,6 +51,12 @@ export type ChatEventPayload = {
   state: "delta" | "final" | "aborted" | "error";
   message?: unknown;
   errorMessage?: string;
+};
+
+export type BackgroundSendOptions = {
+  appendUserMessage?: boolean;
+  rpcMessage?: string;
+  sessionKey?: string;
 };
 
 function maybeResetToolStream(state: ChatState) {
@@ -99,6 +106,42 @@ function dataUrlToBase64(dataUrl: string): { content: string; mimeType: string }
     return null;
   }
   return { mimeType: match[1], content: match[2] };
+}
+
+function buildUserContentBlocks(
+  message: string,
+  attachments?: ChatAttachment[],
+): Array<{ type: string; text?: string; source?: unknown }> {
+  const contentBlocks: Array<{ type: string; text?: string; source?: unknown }> = [];
+  if (message) {
+    contentBlocks.push({ type: "text", text: message });
+  }
+  if (attachments && attachments.length > 0) {
+    for (const att of attachments) {
+      contentBlocks.push({
+        type: "image",
+        source: { type: "base64", media_type: att.mimeType, data: att.dataUrl },
+      });
+    }
+  }
+  return contentBlocks;
+}
+
+function appendUserMessage(
+  state: ChatState,
+  message: string,
+  attachments?: ChatAttachment[],
+): number {
+  const now = Date.now();
+  state.chatMessages = [
+    ...state.chatMessages,
+    {
+      role: "user",
+      content: buildUserContentBlocks(message, attachments),
+      timestamp: now,
+    },
+  ];
+  return now;
 }
 
 type AssistantMessageNormalizationOptions = {
@@ -164,31 +207,7 @@ export async function sendChatMessage(
     return null;
   }
 
-  const now = Date.now();
-
-  // Build user message content blocks
-  const contentBlocks: Array<{ type: string; text?: string; source?: unknown }> = [];
-  if (msg) {
-    contentBlocks.push({ type: "text", text: msg });
-  }
-  // Add image previews to the message for display
-  if (hasAttachments) {
-    for (const att of attachments) {
-      contentBlocks.push({
-        type: "image",
-        source: { type: "base64", media_type: att.mimeType, data: att.dataUrl },
-      });
-    }
-  }
-
-  state.chatMessages = [
-    ...state.chatMessages,
-    {
-      role: "user",
-      content: contentBlocks,
-      timestamp: now,
-    },
-  ];
+  const now = appendUserMessage(state, msg, attachments);
 
   state.chatSending = true;
   state.lastError = null;
@@ -243,6 +262,66 @@ export async function sendChatMessage(
   }
 }
 
+export async function sendChatMessageBackground(
+  state: ChatState,
+  message: string,
+  opts?: BackgroundSendOptions,
+): Promise<string | null> {
+  if (!state.client || !state.connected) {
+    return null;
+  }
+  const msg = message.trim();
+  if (!msg) {
+    return null;
+  }
+
+  if (opts?.appendUserMessage !== false) {
+    appendUserMessage(state, msg);
+  }
+  state.lastError = null;
+  const runId = generateUUID();
+
+  try {
+    const rpcMessage = (opts?.rpcMessage ?? msg).trim();
+    if (!rpcMessage) {
+      return null;
+    }
+    await state.client.request("chat.send", {
+      sessionKey: opts?.sessionKey ?? state.sessionKey,
+      message: rpcMessage,
+      deliver: false,
+      idempotencyKey: runId,
+    });
+    return runId;
+  } catch (err) {
+    const error = formatConnectError(err);
+    state.lastError = error;
+    state.chatMessages = [
+      ...state.chatMessages,
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "Error: " + error }],
+        timestamp: Date.now(),
+      },
+    ];
+    return null;
+  }
+}
+
+export function trackSideQuestionRun(runId: string): void {
+  if (!runId.trim()) {
+    return;
+  }
+  SIDE_QUESTION_RUN_IDS.add(runId);
+}
+
+export function isTrackedSideQuestionRun(runId: string | null | undefined): boolean {
+  if (!runId) {
+    return false;
+  }
+  return SIDE_QUESTION_RUN_IDS.has(runId);
+}
+
 export async function abortChatRun(state: ChatState): Promise<boolean> {
   if (!state.client || !state.connected) {
     return false;
@@ -262,6 +341,41 @@ export async function abortChatRun(state: ChatState): Promise<boolean> {
 
 export function handleChatEvent(state: ChatState, payload?: ChatEventPayload) {
   if (!payload) {
+    return null;
+  }
+  if (isTrackedSideQuestionRun(payload.runId)) {
+    if (payload.state === "final") {
+      const finalMessage = normalizeFinalAssistantMessage(payload.message);
+      const text = finalMessage ? extractText(finalMessage) : null;
+      if (typeof text === "string" && text.trim()) {
+        state.chatMessages = [
+          ...state.chatMessages,
+          {
+            role: "assistant",
+            content: [{ type: "text", text: `**/btw**\n\n${text.trim()}` }],
+            timestamp: Date.now(),
+            __openclaw: { kind: "side-reply", id: payload.runId },
+          },
+        ];
+      }
+      SIDE_QUESTION_RUN_IDS.delete(payload.runId);
+      return null;
+    }
+    if (payload.state === "error" || payload.state === "aborted") {
+      const summary =
+        payload.state === "error"
+          ? `Side question failed: ${payload.errorMessage ?? "chat error"}`
+          : "Side question was aborted.";
+      state.chatMessages = [
+        ...state.chatMessages,
+        {
+          role: "system",
+          content: summary,
+          timestamp: Date.now(),
+        },
+      ];
+      SIDE_QUESTION_RUN_IDS.delete(payload.runId);
+    }
     return null;
   }
   if (payload.sessionKey !== state.sessionKey) {

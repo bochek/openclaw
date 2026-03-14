@@ -47,6 +47,14 @@ export const SLASH_COMMANDS: SlashCommandDef[] = [
     executeLocal: true,
   },
   {
+    name: "btw",
+    description: "Send message without interrupting current run",
+    args: "<message>",
+    icon: "send",
+    category: "session",
+    executeLocal: true,
+  },
+  {
     name: "clear",
     description: "Clear chat history",
     icon: "trash",
