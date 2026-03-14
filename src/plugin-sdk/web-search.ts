@@ -40,10 +40,48 @@ export type SearchProviderFilterSupport = {
   domainFilter?: boolean;
 };
 
+export type SearchProviderLegacyUiMetadataParams = Omit<
+  SearchProviderLegacyUiMetadata,
+  "readApiKeyValue" | "writeApiKeyValue"
+> & {
+  provider: string;
+};
+
 const WEB_SEARCH_DOCS_URL = "https://docs.openclaw.ai/tools/web";
 
 export function resolveSearchConfig<T>(search?: Record<string, unknown>): T {
   return search as T;
+}
+
+export function resolveSearchProviderSectionConfig<T>(
+  search: Record<string, unknown> | undefined,
+  provider: string,
+): T {
+  if (!search || typeof search !== "object") {
+    return {} as T;
+  }
+  const scoped = search[provider];
+  if (!scoped || typeof scoped !== "object" || Array.isArray(scoped)) {
+    return {} as T;
+  }
+  return scoped as T;
+}
+
+export function createLegacySearchProviderMetadata(
+  params: SearchProviderLegacyUiMetadataParams,
+): SearchProviderLegacyUiMetadata {
+  return {
+    label: params.label,
+    hint: params.hint,
+    envKeys: params.envKeys,
+    placeholder: params.placeholder,
+    signupUrl: params.signupUrl,
+    apiKeyConfigPath: params.apiKeyConfigPath,
+    resolveRuntimeMetadata: params.resolveRuntimeMetadata,
+    readApiKeyValue: (search) => readSearchProviderApiKeyValue(search, params.provider),
+    writeApiKeyValue: (search, value) =>
+      writeSearchProviderApiKeyValue({ search, provider: params.provider, value }),
+  };
 }
 
 export function createSearchProviderErrorResult(

@@ -14,6 +14,7 @@ import { installPluginFromNpmSpec } from "../../plugins/install.js";
 import { buildNpmResolutionInstallFields, recordPluginInstall } from "../../plugins/installs.js";
 import { loadOpenClawPlugins } from "../../plugins/loader.js";
 import { createPluginLoaderLogger } from "../../plugins/logger.js";
+import { loadPluginManifest } from "../../plugins/manifest.js";
 import type { RuntimeEnv } from "../../runtime.js";
 import type { WizardPrompter } from "../../wizard/prompts.js";
 
@@ -32,6 +33,7 @@ export type InstallablePluginCatalogEntry = {
 type InstallResult = {
   cfg: OpenClawConfig;
   installed: boolean;
+  pluginId?: string;
 };
 
 function hasGitWorkspace(workspaceDir?: string): boolean {
@@ -114,12 +116,12 @@ function addPluginLoadPath(cfg: OpenClawConfig, pluginPath: string): OpenClawCon
 }
 
 async function promptInstallChoice(params: {
-  entry: InstallablePluginCatalogEntry;
   prompter: WizardPrompter;
   workspaceDir?: string;
   allowLocal: boolean;
+  expectedNpmSpec?: string;
 }): Promise<string | null> {
-  const { entry, prompter, workspaceDir, allowLocal } = params;
+  const { prompter, workspaceDir, allowLocal, expectedNpmSpec } = params;
   const message = allowLocal ? "npm package or local path" : "npm package";
   const placeholder = allowLocal
     ? "@scope/plugin-name or extensions/plugin-name (leave blank to skip)"
@@ -153,11 +155,11 @@ async function promptInstallChoice(params: {
       continue;
     }
 
-    if (!matchesCatalogNpmSpec(source, entry.install.npmSpec)) {
+    if (expectedNpmSpec && !matchesCatalogNpmSpec(source, expectedNpmSpec)) {
       await prompter.note(
         allowLocal
-          ? `This flow installs ${entry.install.npmSpec}. Enter that npm package or a local plugin path.`
-          : `This flow installs ${entry.install.npmSpec}. Enter that npm package.`,
+          ? `This flow installs ${expectedNpmSpec}. Enter that npm package or a local plugin path.`
+          : `This flow installs ${expectedNpmSpec}. Enter that npm package.`,
         "Plugin install",
       );
       continue;
@@ -225,10 +227,10 @@ export async function ensureOnboardingPluginInstalled(params: {
     })?.bundledSource.localPath ?? null;
   const localPath = bundledLocalPath ?? resolveLocalPath(entry, workspaceDir, allowLocal);
   const source = await promptInstallChoice({
-    entry,
     prompter,
     workspaceDir,
     allowLocal,
+    expectedNpmSpec: entry.install.npmSpec,
   });
 
   if (!source) {
@@ -242,7 +244,7 @@ export async function ensureOnboardingPluginInstalled(params: {
     );
     next = addPluginLoadPath(next, source);
     next = enablePluginInConfig(next, entry.id).config;
-    return { cfg: next, installed: true };
+    return { cfg: next, installed: true, pluginId: entry.id };
   }
 
   const result = await installPluginFromNpmSpec({
@@ -263,7 +265,7 @@ export async function ensureOnboardingPluginInstalled(params: {
       version: result.version,
       ...buildNpmResolutionInstallFields(result.npmResolution),
     });
-    return { cfg: next, installed: true };
+    return { cfg: next, installed: true, pluginId: result.pluginId };
   }
 
   await prompter.note(`Failed to install ${source}: ${result.error}`, "Plugin install");
@@ -280,10 +282,73 @@ export async function ensureOnboardingPluginInstalled(params: {
       );
       next = addPluginLoadPath(next, localPath);
       next = enablePluginInConfig(next, entry.id).config;
-      return { cfg: next, installed: true };
+      return { cfg: next, installed: true, pluginId: entry.id };
     }
   }
 
+  runtime.error?.(`Plugin install failed: ${result.error}`);
+  return { cfg: next, installed: false };
+}
+
+export async function ensureGenericOnboardingPluginInstalled(params: {
+  cfg: OpenClawConfig;
+  prompter: WizardPrompter;
+  runtime: RuntimeEnv;
+  workspaceDir?: string;
+}): Promise<InstallResult> {
+  const { prompter, runtime, workspaceDir } = params;
+  let next = params.cfg;
+  const allowLocal = hasGitWorkspace(workspaceDir);
+  const source = await promptInstallChoice({
+    prompter,
+    workspaceDir,
+    allowLocal,
+  });
+
+  if (!source) {
+    return { cfg: next, installed: false };
+  }
+
+  if (isLikelyLocalPath(source)) {
+    const manifestRes = loadPluginManifest(source, false);
+    if (!manifestRes.ok) {
+      await prompter.note(
+        `Failed to load plugin from ${source}: ${manifestRes.error}`,
+        "Plugin install",
+      );
+      return { cfg: next, installed: false };
+    }
+    await prompter.note(
+      [`Using existing local plugin at ${source}.`, "No download needed."].join("\n"),
+      "Plugin install",
+    );
+    next = addPluginLoadPath(next, source);
+    next = enablePluginInConfig(next, manifestRes.manifest.id).config;
+    return { cfg: next, installed: true, pluginId: manifestRes.manifest.id };
+  }
+
+  const result = await installPluginFromNpmSpec({
+    spec: source,
+    logger: {
+      info: (msg) => runtime.log?.(msg),
+      warn: (msg) => runtime.log?.(msg),
+    },
+  });
+
+  if (result.ok) {
+    next = enablePluginInConfig(next, result.pluginId).config;
+    next = recordPluginInstall(next, {
+      pluginId: result.pluginId,
+      source: "npm",
+      spec: source,
+      installPath: result.targetDir,
+      version: result.version,
+      ...buildNpmResolutionInstallFields(result.npmResolution),
+    });
+    return { cfg: next, installed: true, pluginId: result.pluginId };
+  }
+
+  await prompter.note(`Failed to install ${source}: ${result.error}`, "Plugin install");
   runtime.error?.(`Plugin install failed: ${result.error}`);
   return { cfg: next, installed: false };
 }

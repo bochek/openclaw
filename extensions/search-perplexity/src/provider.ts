@@ -1,5 +1,6 @@
 import {
   buildSearchRequestCacheIdentity,
+  createLegacySearchProviderMetadata,
   createMissingSearchKeyPayload,
   createSearchProviderErrorResult,
   normalizeCacheKey,
@@ -7,8 +8,8 @@ import {
   normalizeResolvedSecretInputString,
   normalizeSecretInput,
   readCache,
-  readSearchProviderApiKeyValue,
   resolveSearchConfig,
+  resolveSearchProviderSectionConfig,
   resolveSiteName,
   throwWebSearchApiError,
   type OpenClawConfig,
@@ -18,7 +19,6 @@ import {
   withTrustedWebToolsEndpoint,
   wrapWebContent,
   writeCache,
-  writeSearchProviderApiKeyValue,
 } from "openclaw/plugin-sdk/web-search";
 
 const DEFAULT_PERPLEXITY_BASE_URL = "https://openrouter.ai/api/v1";
@@ -112,14 +112,10 @@ function extractPerplexityCitations(data: PerplexitySearchResponse): string[] {
 }
 
 function resolvePerplexityConfig(search?: WebSearchConfig): PerplexityConfig {
-  if (!search || typeof search !== "object") {
-    return {};
-  }
-  const perplexity = "perplexity" in search ? search.perplexity : undefined;
-  if (!perplexity || typeof perplexity !== "object") {
-    return {};
-  }
-  return perplexity as PerplexityConfig;
+  return resolveSearchProviderSectionConfig<PerplexityConfig>(
+    search as Record<string, unknown> | undefined,
+    "perplexity",
+  );
 }
 
 function resolvePerplexityApiKey(perplexity?: PerplexityConfig): {
@@ -380,22 +376,21 @@ function createPerplexityPayload(params: {
   return payload;
 }
 
-export const PERPLEXITY_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata = {
-  label: "Perplexity Search",
-  hint: "Structured results · domain/country/language/time filters",
-  envKeys: ["PERPLEXITY_API_KEY"],
-  placeholder: "pplx-...",
-  signupUrl: "https://www.perplexity.ai/settings/api",
-  apiKeyConfigPath: "tools.web.search.perplexity.apiKey",
-  readApiKeyValue: (search) => readSearchProviderApiKeyValue(search, "perplexity"),
-  writeApiKeyValue: (search, value) =>
-    writeSearchProviderApiKeyValue({ search, provider: "perplexity", value }),
-  resolveRuntimeMetadata: (params) => ({
-    perplexityTransport: resolvePerplexityTransport(
-      resolvePerplexityConfig(resolveSearchConfig<WebSearchConfig>(params.search)),
-    ).transport,
-  }),
-};
+export const PERPLEXITY_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata =
+  createLegacySearchProviderMetadata({
+    provider: "perplexity",
+    label: "Perplexity Search",
+    hint: "Structured results · domain/country/language/time filters",
+    envKeys: ["PERPLEXITY_API_KEY"],
+    placeholder: "pplx-...",
+    signupUrl: "https://www.perplexity.ai/settings/api",
+    apiKeyConfigPath: "tools.web.search.perplexity.apiKey",
+    resolveRuntimeMetadata: (params) => ({
+      perplexityTransport: resolvePerplexityTransport(
+        resolvePerplexityConfig(resolveSearchConfig<WebSearchConfig>(params.search)),
+      ).transport,
+    }),
+  });
 
 export function createBundledPerplexitySearchProvider(): SearchProviderPlugin {
   return {

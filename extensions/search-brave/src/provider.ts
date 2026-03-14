@@ -1,5 +1,6 @@
 import {
   CacheEntry,
+  createLegacySearchProviderMetadata,
   createMissingSearchKeyPayload,
   formatCliCommand,
   normalizeCacheKey,
@@ -125,10 +126,7 @@ function resolveBraveConfig(search?: WebSearchConfig): BraveConfig {
     return {};
   }
   const brave = "brave" in search ? search.brave : undefined;
-  if (!brave || typeof brave !== "object") {
-    return {};
-  }
-  return brave as BraveConfig;
+  return brave && typeof brave === "object" ? (brave as BraveConfig) : {};
 }
 
 function resolveBraveMode(brave: BraveConfig): "web" | "llm-context" {
@@ -397,16 +395,16 @@ async function runBraveWebSearch(params: {
   );
 }
 
-export const BRAVE_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata = {
-  label: "Brave Search",
-  hint: "Structured results · country/language/time filters",
-  envKeys: ["BRAVE_API_KEY"],
-  placeholder: "BSA...",
-  signupUrl: "https://brave.com/search/api/",
-  apiKeyConfigPath: "tools.web.search.apiKey",
-  readApiKeyValue: (search) => readSearchProviderApiKeyValue(search, "brave"),
-  writeApiKeyValue: (search, value) => void ((search.apiKey = value) as unknown),
-};
+export const BRAVE_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata =
+  createLegacySearchProviderMetadata({
+    provider: "brave",
+    label: "Brave Search",
+    hint: "Structured results · country/language/time filters",
+    envKeys: ["BRAVE_API_KEY"],
+    placeholder: "BSA...",
+    signupUrl: "https://brave.com/search/api/",
+    apiKeyConfigPath: "tools.web.search.apiKey",
+  });
 
 export function createBundledBraveSearchProvider(): SearchProviderPlugin {
   return {

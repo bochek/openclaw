@@ -18,6 +18,10 @@ const installPluginFromNpmSpec = vi.fn();
 vi.mock("../../plugins/install.js", () => ({
   installPluginFromNpmSpec: (...args: unknown[]) => installPluginFromNpmSpec(...args),
 }));
+const loadPluginManifest = vi.fn();
+vi.mock("../../plugins/manifest.js", () => ({
+  loadPluginManifest: (...args: unknown[]) => loadPluginManifest(...args),
+}));
 
 const resolveBundledPluginSources = vi.fn();
 vi.mock("../../plugins/bundled-sources.js", () => ({
@@ -61,6 +65,7 @@ import { loadOpenClawPlugins } from "../../plugins/loader.js";
 import type { WizardPrompter } from "../../wizard/prompts.js";
 import { makePrompter, makeRuntime } from "./__tests__/test-utils.js";
 import {
+  ensureGenericOnboardingPluginInstalled,
   ensureOnboardingPluginInstalled,
   reloadOnboardingPluginRegistry,
 } from "./plugin-install.js";
@@ -84,6 +89,7 @@ const baseEntry: ChannelPluginCatalogEntry = {
 beforeEach(() => {
   vi.clearAllMocks();
   resolveBundledPluginSources.mockReturnValue(new Map());
+  loadPluginManifest.mockReset();
 });
 
 function mockRepoLocalPathExists() {
@@ -459,5 +465,89 @@ describe("ensureOnboardingPluginInstalled", () => {
     expect(clearPluginDiscoveryCache.mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(loadOpenClawPlugins).mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
     );
+  });
+});
+
+describe("ensureGenericOnboardingPluginInstalled", () => {
+  it("installs an arbitrary scoped npm package", async () => {
+    const runtime = makeRuntime();
+    const prompter = makePrompter({
+      text: vi.fn(async () => "@other/provider") as WizardPrompter["text"],
+    });
+    const cfg: OpenClawConfig = {};
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    installPluginFromNpmSpec.mockResolvedValue({
+      ok: true,
+      pluginId: "external-search",
+      targetDir: "/tmp/external-search",
+      extensions: [],
+    });
+
+    const result = await ensureGenericOnboardingPluginInstalled({
+      cfg,
+      prompter,
+      runtime,
+    });
+
+    expect(result.installed).toBe(true);
+    expect(result.pluginId).toBe("external-search");
+    expect(installPluginFromNpmSpec).toHaveBeenCalledWith(
+      expect.objectContaining({ spec: "@other/provider" }),
+    );
+  });
+
+  it("links an arbitrary existing local plugin path and derives its plugin id from the manifest", async () => {
+    const runtime = makeRuntime();
+    const note = vi.fn(async () => {});
+    const prompter = makePrompter({
+      text: vi.fn(async () => "extensions/external-search") as WizardPrompter["text"],
+      note,
+    });
+    const cfg: OpenClawConfig = {};
+    vi.mocked(fs.existsSync).mockImplementation((value) => {
+      const raw = String(value);
+      return (
+        raw.endsWith(`${path.sep}.git`) ||
+        raw.endsWith(`${path.sep}extensions${path.sep}external-search`)
+      );
+    });
+    loadPluginManifest.mockReturnValue({
+      ok: true,
+      manifest: { id: "external-search" },
+    });
+
+    const result = await ensureGenericOnboardingPluginInstalled({
+      cfg,
+      prompter,
+      runtime,
+    });
+
+    expect(result.installed).toBe(true);
+    expect(result.pluginId).toBe("external-search");
+    expect(result.cfg.plugins?.load?.paths).toContain(
+      path.resolve(process.cwd(), "extensions/external-search"),
+    );
+    expect(note).toHaveBeenCalledWith(
+      `Using existing local plugin at ${path.resolve(process.cwd(), "extensions/external-search")}.\nNo download needed.`,
+      "Plugin install",
+    );
+  });
+
+  it("skips cleanly when the generic install input is blank", async () => {
+    const runtime = makeRuntime();
+    const prompter = makePrompter({
+      text: vi.fn(async () => "") as WizardPrompter["text"],
+    });
+    const cfg: OpenClawConfig = {};
+
+    const result = await ensureGenericOnboardingPluginInstalled({
+      cfg,
+      prompter,
+      runtime,
+    });
+
+    expect(result.installed).toBe(false);
+    expect(result.cfg).toBe(cfg);
+    expect(installPluginFromNpmSpec).not.toHaveBeenCalled();
   });
 });

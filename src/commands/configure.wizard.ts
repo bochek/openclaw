@@ -196,7 +196,7 @@ async function promptWebToolsConfig(
   note(
     [
       "Web search lets your agent look things up online using the `web_search` tool.",
-      "Choose a provider and enter the required built-in or plugin settings.",
+      "Choose a provider and enter the required settings.",
       "Docs: https://docs.openclaw.ai/tools/web",
     ].join("\n"),
     "Web search",

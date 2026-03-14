@@ -1,14 +1,15 @@
 import {
   buildSearchRequestCacheIdentity,
+  createLegacySearchProviderMetadata,
   createMissingSearchKeyPayload,
   normalizeCacheKey,
   normalizeSecretInput,
   readCache,
   readResponseText,
-  readSearchProviderApiKeyValue,
   rejectUnsupportedSearchFilters,
   resolveCitationRedirectUrl,
   resolveSearchConfig,
+  resolveSearchProviderSectionConfig,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
   type SearchProviderLegacyUiMetadata,
@@ -16,7 +17,6 @@ import {
   withTrustedWebToolsEndpoint,
   wrapWebContent,
   writeCache,
-  writeSearchProviderApiKeyValue,
 } from "openclaw/plugin-sdk/web-search";
 
 const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
@@ -62,10 +62,10 @@ type GeminiGroundingResponse = {
 };
 
 function resolveGeminiConfig(search?: WebSearchConfig): GeminiConfig {
-  if (!search || typeof search !== "object") return {};
-  const gemini = "gemini" in search ? search.gemini : undefined;
-  if (!gemini || typeof gemini !== "object") return {};
-  return gemini as GeminiConfig;
+  return resolveSearchProviderSectionConfig<GeminiConfig>(
+    search as Record<string, unknown> | undefined,
+    "gemini",
+  );
 }
 
 function resolveGeminiApiKey(gemini?: GeminiConfig): string | undefined {
@@ -156,17 +156,16 @@ async function runGeminiSearch(params: {
   );
 }
 
-export const GEMINI_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata = {
-  label: "Gemini (Google Search)",
-  hint: "Google Search grounding · AI-synthesized",
-  envKeys: ["GEMINI_API_KEY"],
-  placeholder: "AIza...",
-  signupUrl: "https://aistudio.google.com/apikey",
-  apiKeyConfigPath: "tools.web.search.gemini.apiKey",
-  readApiKeyValue: (search) => readSearchProviderApiKeyValue(search, "gemini"),
-  writeApiKeyValue: (search, value) =>
-    writeSearchProviderApiKeyValue({ search, provider: "gemini", value }),
-};
+export const GEMINI_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata =
+  createLegacySearchProviderMetadata({
+    provider: "gemini",
+    label: "Gemini (Google Search)",
+    hint: "Google Search grounding · AI-synthesized",
+    envKeys: ["GEMINI_API_KEY"],
+    placeholder: "AIza...",
+    signupUrl: "https://aistudio.google.com/apikey",
+    apiKeyConfigPath: "tools.web.search.gemini.apiKey",
+  });
 
 export function createBundledGeminiSearchProvider(): SearchProviderPlugin {
   return {

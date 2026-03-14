@@ -1513,7 +1513,7 @@ async function _runBraveLlmContextSearch(params: {
   }>;
   sources?: BraveLlmContextResponse["sources"];
 }> {
-  const url = new URL(BRAVE_LLM_CONTEXT_ENDPOINT);
+  const url = new URL(_BRAVE_LLM_CONTEXT_ENDPOINT);
   url.searchParams.set("q", params.query);
   if (params.country) {
     url.searchParams.set("country", params.country);

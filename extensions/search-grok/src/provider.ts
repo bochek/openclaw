@@ -1,12 +1,13 @@
 import {
   buildSearchRequestCacheIdentity,
+  createLegacySearchProviderMetadata,
   createMissingSearchKeyPayload,
   normalizeCacheKey,
   normalizeSecretInput,
   readCache,
-  readSearchProviderApiKeyValue,
   rejectUnsupportedSearchFilters,
   resolveSearchConfig,
+  resolveSearchProviderSectionConfig,
   throwWebSearchApiError,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
@@ -15,7 +16,6 @@ import {
   withTrustedWebToolsEndpoint,
   wrapWebContent,
   writeCache,
-  writeSearchProviderApiKeyValue,
 } from "openclaw/plugin-sdk/web-search";
 
 const XAI_API_ENDPOINT = "https://api.x.ai/v1/responses";
@@ -67,10 +67,10 @@ type GrokSearchResponse = {
 };
 
 function resolveGrokConfig(search?: WebSearchConfig): GrokConfig {
-  if (!search || typeof search !== "object") return {};
-  const grok = "grok" in search ? search.grok : undefined;
-  if (!grok || typeof grok !== "object") return {};
-  return grok as GrokConfig;
+  return resolveSearchProviderSectionConfig<GrokConfig>(
+    search as Record<string, unknown> | undefined,
+    "grok",
+  );
 }
 
 function resolveGrokApiKey(grok?: GrokConfig): string | undefined {
@@ -164,17 +164,16 @@ async function runGrokSearch(params: {
   );
 }
 
-export const GROK_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata = {
-  label: "Grok (xAI)",
-  hint: "xAI web-grounded responses",
-  envKeys: ["XAI_API_KEY"],
-  placeholder: "xai-...",
-  signupUrl: "https://console.x.ai/",
-  apiKeyConfigPath: "tools.web.search.grok.apiKey",
-  readApiKeyValue: (search) => readSearchProviderApiKeyValue(search, "grok"),
-  writeApiKeyValue: (search, value) =>
-    writeSearchProviderApiKeyValue({ search, provider: "grok", value }),
-};
+export const GROK_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata =
+  createLegacySearchProviderMetadata({
+    provider: "grok",
+    label: "Grok (xAI)",
+    hint: "xAI web-grounded responses",
+    envKeys: ["XAI_API_KEY"],
+    placeholder: "xai-...",
+    signupUrl: "https://console.x.ai/",
+    apiKeyConfigPath: "tools.web.search.grok.apiKey",
+  });
 
 export function createBundledGrokSearchProvider(): SearchProviderPlugin {
   return {

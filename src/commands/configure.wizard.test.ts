@@ -29,6 +29,9 @@ const loadPluginManifestRegistry = vi.hoisted(() =>
 const ensureOnboardingPluginInstalled = vi.hoisted(() =>
   vi.fn(async ({ cfg }: { cfg: OpenClawConfig }) => ({ cfg, installed: false })),
 );
+const ensureGenericOnboardingPluginInstalled = vi.hoisted(() =>
+  vi.fn(async ({ cfg }: { cfg: OpenClawConfig }) => ({ cfg, installed: false })),
+);
 const reloadOnboardingPluginRegistry = vi.hoisted(() => vi.fn());
 
 vi.mock("@clack/prompts", () => ({
@@ -63,6 +66,7 @@ vi.mock("../plugins/manifest-registry.js", () => ({
 }));
 
 vi.mock("./onboarding/plugin-install.js", () => ({
+  ensureGenericOnboardingPluginInstalled,
   ensureOnboardingPluginInstalled,
   reloadOnboardingPluginRegistry,
 }));
@@ -160,6 +164,13 @@ describe("runConfigureWizard", () => {
         installed: false,
       }),
     );
+    ensureGenericOnboardingPluginInstalled.mockReset();
+    ensureGenericOnboardingPluginInstalled.mockImplementation(
+      async ({ cfg }: { cfg: OpenClawConfig }) => ({
+        cfg,
+        installed: false,
+      }),
+    );
     reloadOnboardingPluginRegistry.mockReset();
   });
 
@@ -226,7 +237,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Choose active web search provider") {
+      if (params.message === "Choose web search provider") {
         return "tavily";
       }
       if (params.message.startsWith("Search depth")) {
@@ -251,6 +262,7 @@ describe("runConfigureWizard", () => {
           web: expect.objectContaining({
             search: expect.objectContaining({
               enabled: true,
+              provider: "tavily",
             }),
           }),
         }),
@@ -305,10 +317,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Web search setup") {
-        return "__configure_provider__";
-      }
-      if (params.message === "Choose provider to configure") {
+      if (params.message === "Choose web search provider") {
         return "brave";
       }
       return "__continue";
@@ -402,7 +411,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Choose active web search provider") {
+      if (params.message === "Choose web search provider") {
         return "tavily";
       }
       if (params.message.startsWith("Search depth")) {
@@ -497,6 +506,7 @@ describe("runConfigureWizard", () => {
           id: "tavily-search",
           name: "Tavily Search",
           description: "Search the web using Tavily.",
+          provides: ["providers.search.tavily"],
           origin: "bundled",
           source: "/tmp/bundled/tavily-search",
           configSchema: {
@@ -561,7 +571,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Choose active web search provider") {
+      if (params.message === "Choose web search provider") {
         return "tavily";
       }
       if (params.message.startsWith("Search depth")) {
@@ -777,11 +787,11 @@ describe("runConfigureWizard", () => {
         if (params.message === "Choose web search provider") {
           expect(params.options?.[0]).toMatchObject({
             value: "tavily",
-            hint: "Plugin search · External plugin · Configured · current",
+            hint: "Plugin search · External plugin",
           });
           expect(params.options?.[1]).toMatchObject({
-            value: "brave",
-            hint: "Structured results · country/language/time filters · Configured",
+            value: "__install_plugin__",
+            hint: "Add an external web search plugin",
           });
           return "tavily";
         }

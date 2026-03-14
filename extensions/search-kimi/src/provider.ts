@@ -1,12 +1,13 @@
 import {
   buildSearchRequestCacheIdentity,
+  createLegacySearchProviderMetadata,
   createMissingSearchKeyPayload,
   normalizeCacheKey,
   normalizeSecretInput,
   readCache,
-  readSearchProviderApiKeyValue,
   rejectUnsupportedSearchFilters,
   resolveSearchConfig,
+  resolveSearchProviderSectionConfig,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
   type SearchProviderLegacyUiMetadata,
@@ -14,7 +15,6 @@ import {
   withTrustedWebToolsEndpoint,
   wrapWebContent,
   writeCache,
-  writeSearchProviderApiKeyValue,
 } from "openclaw/plugin-sdk/web-search";
 
 const DEFAULT_KIMI_BASE_URL = "https://api.moonshot.ai/v1";
@@ -67,10 +67,10 @@ type KimiSearchResponse = {
 };
 
 function resolveKimiConfig(search?: WebSearchConfig): KimiConfig {
-  if (!search || typeof search !== "object") return {};
-  const kimi = "kimi" in search ? search.kimi : undefined;
-  if (!kimi || typeof kimi !== "object") return {};
-  return kimi as KimiConfig;
+  return resolveSearchProviderSectionConfig<KimiConfig>(
+    search as Record<string, unknown> | undefined,
+    "kimi",
+  );
 }
 
 function resolveKimiApiKey(kimi?: KimiConfig): string | undefined {
@@ -216,17 +216,16 @@ async function runKimiSearch(params: {
   };
 }
 
-export const KIMI_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata = {
-  label: "Kimi (Moonshot)",
-  hint: "Moonshot web search",
-  envKeys: ["KIMI_API_KEY", "MOONSHOT_API_KEY"],
-  placeholder: "sk-...",
-  signupUrl: "https://platform.moonshot.cn/",
-  apiKeyConfigPath: "tools.web.search.kimi.apiKey",
-  readApiKeyValue: (search) => readSearchProviderApiKeyValue(search, "kimi"),
-  writeApiKeyValue: (search, value) =>
-    writeSearchProviderApiKeyValue({ search, provider: "kimi", value }),
-};
+export const KIMI_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata =
+  createLegacySearchProviderMetadata({
+    provider: "kimi",
+    label: "Kimi (Moonshot)",
+    hint: "Moonshot web search",
+    envKeys: ["KIMI_API_KEY", "MOONSHOT_API_KEY"],
+    placeholder: "sk-...",
+    signupUrl: "https://platform.moonshot.cn/",
+    apiKeyConfigPath: "tools.web.search.kimi.apiKey",
+  });
 
 export function createBundledKimiSearchProvider(): SearchProviderPlugin {
   return {
