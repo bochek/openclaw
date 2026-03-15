@@ -1,5 +1,6 @@
 import {
   approveDevicePairing,
+  getPendingDevicePairing,
   getPairedDevice,
   listDevicePairing,
   removePairedDevice,
@@ -78,7 +79,7 @@ export const deviceHandlers: GatewayRequestHandlers = {
       undefined,
     );
   },
-  "device.pair.approve": async ({ params, respond, context }) => {
+  "device.pair.approve": async ({ params, respond, context, client }) => {
     if (!validateDevicePairApproveParams(params)) {
       respond(
         false,
@@ -93,6 +94,26 @@ export const deviceHandlers: GatewayRequestHandlers = {
       return;
     }
     const { requestId } = params as { requestId: string };
+    const pending = await getPendingDevicePairing(requestId);
+    if (!pending) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "unknown requestId"));
+      return;
+    }
+    const callerScopes = Array.isArray(client?.connect?.scopes) ? client.connect.scopes : [];
+    const requestedScopes = normalizeDeviceAuthScopes(pending.scopes);
+    const missingScope = resolveMissingRequestedScope({
+      role: pending.role,
+      requestedScopes,
+      callerScopes,
+    });
+    if (missingScope) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `missing scope: ${missingScope}`),
+      );
+      return;
+    }
     const approved = await approveDevicePairing(requestId);
     if (!approved) {
       respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "unknown requestId"));

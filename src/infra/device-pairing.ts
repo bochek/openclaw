@@ -254,6 +254,14 @@ export async function getPairedDevice(
   return state.pairedByDeviceId[normalizeDeviceId(deviceId)] ?? null;
 }
 
+export async function getPendingDevicePairing(
+  requestId: string,
+  baseDir?: string,
+): Promise<DevicePairingPendingRequest | null> {
+  const state = await loadState(baseDir);
+  return state.pendingById[requestId] ?? null;
+}
+
 export async function requestDevicePairing(
   req: Omit<DevicePairingPendingRequest, "requestId" | "ts" | "isRepair">,
   baseDir?: string,
