@@ -12,13 +12,7 @@ import type {
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import { MediaAttachmentCache, selectAttachments } from "../media-understanding/attachments.js";
 import { isMediaUnderstandingSkipError } from "../media-understanding/errors.js";
-import { resolveModelEntries, resolveScopeDecision } from "../media-understanding/resolve.js";
-import {
-  buildModelDecision,
-  formatDecisionSummary,
-  runCliEntry,
-  runProviderEntry,
-} from "../media-understanding/runner.entries.js";
+import { runCliEntry, runProviderEntry } from "../media-understanding/runner.entries.js";
 import type {
   MediaAttachment,
   MediaUnderstandingCapability,
@@ -28,6 +22,8 @@ import type {
   MediaUnderstandingProvider,
 } from "../media-understanding/types.js";
 import { resolveAutoEntries, type ActiveMediaModel } from "./media-runtime-auto.js";
+import { resolveModelEntries, resolveScopeDecision } from "./media-runtime-config.js";
+import { buildModelDecision, formatDecisionSummary } from "./media-runtime-decision.js";
 
 type ProviderRegistry = Map<string, MediaUnderstandingProvider>;
 
