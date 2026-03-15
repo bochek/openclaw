@@ -294,6 +294,57 @@ describe("plugin conversation binding approvals", () => {
     expect(samePluginNewPath.status).toBe("pending");
   });
 
+  it("expires stale pending approval requests before resolution", async () => {
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const request = await requestPluginConversationBinding({
+      pluginId: "codex",
+      pluginName: "Codex App Server",
+      pluginRoot: "/plugins/codex-a",
+      requestedBySenderId: "user-1",
+      conversation: {
+        channel: "discord",
+        accountId: "default",
+        conversationId: "channel:stale",
+      },
+      binding: { summary: "Bind this conversation." },
+    });
+
+    expect(request.status).toBe("pending");
+    if (request.status !== "pending") {
+      throw new Error("expected pending bind request");
+    }
+
+    nowSpy.mockReturnValue(1_000 + 30 * 60_000 + 1);
+    const resolved = await resolvePluginConversationBindingApproval({
+      approvalId: request.approvalId,
+      decision: "allow-once",
+      senderId: "user-1",
+    });
+
+    expect(resolved).toEqual({ status: "expired" });
+    nowSpy.mockRestore();
+  });
+
+  it("rejects bind requests on channels without a binding adapter", async () => {
+    const request = await requestPluginConversationBinding({
+      pluginId: "codex",
+      pluginName: "Codex App Server",
+      pluginRoot: "/plugins/codex-a",
+      requestedBySenderId: "user-1",
+      conversation: {
+        channel: "slack",
+        accountId: "default",
+        conversationId: "C123",
+      },
+      binding: { summary: "Bind this conversation." },
+    });
+
+    expect(request).toEqual({
+      status: "error",
+      message: "This channel does not support plugin conversation binding.",
+    });
+  });
+
   it("persists detachHint on approved plugin bindings", async () => {
     const request = await requestPluginConversationBinding({
       pluginId: "codex",
