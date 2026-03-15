@@ -1,49 +1,10 @@
-import fs from "node:fs";
-import path from "node:path";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { PluginDiagnostic } from "../plugins/types.js";
-import type { ExtensionHostProvenanceIndex } from "./loader-policy.js";
-
-function safeRealpathOrResolve(value: string): string {
-  try {
-    return fs.realpathSync(value);
-  } catch {
-    return path.resolve(value);
-  }
-}
-
-function matchesPathMatcher(
-  matcher: { exact: Set<string>; dirs: string[] },
-  sourcePath: string,
-): boolean {
-  if (matcher.exact.has(sourcePath)) {
-    return true;
-  }
-  return matcher.dirs.some(
-    (dirPath) => sourcePath === dirPath || sourcePath.startsWith(`${dirPath}/`),
-  );
-}
-
-function isTrackedByProvenance(params: {
-  pluginId: string;
-  source: string;
-  index: ExtensionHostProvenanceIndex;
-  env: NodeJS.ProcessEnv;
-}): boolean {
-  const sourcePath = params.source.startsWith("~")
-    ? `${params.env.HOME ?? ""}${params.source.slice(1)}`
-    : params.source;
-  const installRule = params.index.installRules.get(params.pluginId);
-  if (installRule) {
-    if (installRule.trackedWithoutPaths) {
-      return true;
-    }
-    if (matchesPathMatcher(installRule.matcher, sourcePath)) {
-      return true;
-    }
-  }
-  return matchesPathMatcher(params.index.loadPathMatcher, sourcePath);
-}
+import {
+  isExtensionHostTrackedByProvenance,
+  safeRealpathOrResolveExtensionHostPath,
+  type ExtensionHostProvenanceIndex,
+} from "./loader-provenance.js";
 
 export function resolveExtensionHostFinalizationPolicy(params: {
   registry: PluginRegistry;
@@ -70,7 +31,7 @@ export function resolveExtensionHostFinalizationPolicy(params: {
       continue;
     }
     if (
-      isTrackedByProvenance({
+      isExtensionHostTrackedByProvenance({
         pluginId: plugin.id,
         source: plugin.source,
         index: params.provenance,
@@ -88,7 +49,7 @@ export function resolveExtensionHostFinalizationPolicy(params: {
       message,
     });
     warningMessages.push(
-      `[plugins] ${plugin.id}: ${message} (${safeRealpathOrResolve(plugin.source)})`,
+      `[plugins] ${plugin.id}: ${message} (${safeRealpathOrResolveExtensionHostPath(plugin.source)})`,
     );
   }
 

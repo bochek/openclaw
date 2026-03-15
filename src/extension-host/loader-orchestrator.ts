@@ -7,7 +7,6 @@ import {
   getCachedExtensionHostRegistry,
   setCachedExtensionHostRegistry,
 } from "../extension-host/loader-cache.js";
-import { resolveExtensionHostDiscoveryPolicy } from "../extension-host/loader-discovery-policy.js";
 import {
   buildExtensionHostProvenanceIndex,
   compareExtensionHostDuplicateCandidateOrder,
@@ -24,6 +23,7 @@ import { createPluginRuntime, type CreatePluginRuntimeOptions } from "../plugins
 import type { PluginRuntime } from "../plugins/runtime/types.js";
 import type { OpenClawPluginModule, PluginLogger } from "../plugins/types.js";
 import { resolvePluginSdkAlias, resolvePluginSdkScopedAliasMap } from "./loader-compat.js";
+import { resolveExtensionHostDiscoveryPolicy } from "./loader-discovery-policy.js";
 import {
   createExtensionHostLoaderSession,
   finalizeExtensionHostLoaderSession,

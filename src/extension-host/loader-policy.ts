@@ -1,28 +1,18 @@
 import type { OpenClawConfig } from "../config/config.js";
 import type { PluginCandidate } from "../plugins/discovery.js";
-import { isPathInside, safeStatSync } from "../plugins/path-safety.js";
 import type { PluginRecord, PluginRegistry } from "../plugins/registry.js";
 import type { PluginDiagnostic, PluginLogger } from "../plugins/types.js";
-import { resolveUserPath } from "../utils.js";
+import {
+  addExtensionHostPathToMatcher,
+  createExtensionHostPathMatcher,
+  matchesExplicitExtensionHostInstallRule,
+  type ExtensionHostInstallTrackingRule,
+  type ExtensionHostProvenanceIndex,
+} from "./loader-provenance.js";
 import {
   appendExtensionHostPluginRecord,
   setExtensionHostPluginRecordLifecycleState,
 } from "./loader-state.js";
-
-type PathMatcher = {
-  exact: Set<string>;
-  dirs: string[];
-};
-
-type InstallTrackingRule = {
-  trackedWithoutPaths: boolean;
-  matcher: PathMatcher;
-};
-
-export type ExtensionHostProvenanceIndex = {
-  loadPathMatcher: PathMatcher;
-  installRules: Map<string, InstallTrackingRule>;
-};
 
 export function createExtensionHostPluginRecord(params: {
   id: string;
@@ -106,57 +96,22 @@ export function pushExtensionHostDiagnostics(
   diagnostics.push(...append);
 }
 
-function createPathMatcher(): PathMatcher {
-  return { exact: new Set<string>(), dirs: [] };
-}
-
-function addPathToMatcher(
-  matcher: PathMatcher,
-  rawPath: string,
-  env: NodeJS.ProcessEnv = process.env,
-): void {
-  const trimmed = rawPath.trim();
-  if (!trimmed) {
-    return;
-  }
-  const resolved = resolveUserPath(trimmed, env);
-  if (!resolved) {
-    return;
-  }
-  if (matcher.exact.has(resolved) || matcher.dirs.includes(resolved)) {
-    return;
-  }
-  const stat = safeStatSync(resolved);
-  if (stat?.isDirectory()) {
-    matcher.dirs.push(resolved);
-    return;
-  }
-  matcher.exact.add(resolved);
-}
-
-function matchesPathMatcher(matcher: PathMatcher, sourcePath: string): boolean {
-  if (matcher.exact.has(sourcePath)) {
-    return true;
-  }
-  return matcher.dirs.some((dirPath) => isPathInside(dirPath, sourcePath));
-}
-
 export function buildExtensionHostProvenanceIndex(params: {
   config: OpenClawConfig;
   normalizedLoadPaths: string[];
   env: NodeJS.ProcessEnv;
 }): ExtensionHostProvenanceIndex {
-  const loadPathMatcher = createPathMatcher();
+  const loadPathMatcher = createExtensionHostPathMatcher();
   for (const loadPath of params.normalizedLoadPaths) {
-    addPathToMatcher(loadPathMatcher, loadPath, params.env);
+    addExtensionHostPathToMatcher(loadPathMatcher, loadPath, params.env);
   }
 
-  const installRules = new Map<string, InstallTrackingRule>();
+  const installRules = new Map<string, ExtensionHostInstallTrackingRule>();
   const installs = params.config.plugins?.installs ?? {};
   for (const [pluginId, install] of Object.entries(installs)) {
-    const rule: InstallTrackingRule = {
+    const rule: ExtensionHostInstallTrackingRule = {
       trackedWithoutPaths: false,
-      matcher: createPathMatcher(),
+      matcher: createExtensionHostPathMatcher(),
     };
     const trackedPaths = [install.installPath, install.sourcePath]
       .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
@@ -165,27 +120,13 @@ export function buildExtensionHostProvenanceIndex(params: {
       rule.trackedWithoutPaths = true;
     } else {
       for (const trackedPath of trackedPaths) {
-        addPathToMatcher(rule.matcher, trackedPath, params.env);
+        addExtensionHostPathToMatcher(rule.matcher, trackedPath, params.env);
       }
     }
     installRules.set(pluginId, rule);
   }
 
   return { loadPathMatcher, installRules };
-}
-
-function matchesExplicitInstallRule(params: {
-  pluginId: string;
-  source: string;
-  index: ExtensionHostProvenanceIndex;
-  env: NodeJS.ProcessEnv;
-}): boolean {
-  const sourcePath = resolveUserPath(params.source, params.env);
-  const installRule = params.index.installRules.get(params.pluginId);
-  if (!installRule || installRule.trackedWithoutPaths) {
-    return false;
-  }
-  return matchesPathMatcher(installRule.matcher, sourcePath);
 }
 
 function resolveCandidateDuplicateRank(params: {
@@ -199,7 +140,7 @@ function resolveCandidateDuplicateRank(params: {
   const isExplicitInstall =
     params.candidate.origin === "global" &&
     pluginId !== undefined &&
-    matchesExplicitInstallRule({
+    matchesExplicitExtensionHostInstallRule({
       pluginId,
       source: params.candidate.source,
       index: params.provenance,
