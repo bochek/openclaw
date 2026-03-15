@@ -37,6 +37,7 @@ Relevant prerequisite work that has landed:
 - config doc baseline generation now uses the same host-owned resolved-extension data path
 - channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registration normalization now has a host-owned helper boundary
 - loader provenance and duplicate-order policy now have a host-owned helper boundary
+- loader initial candidate planning and record creation now have a host-owned helper boundary
 - loader module-export resolution, config validation, and memory-slot load decisions now have a host-owned helper boundary
 - loader record-state transitions now have a host-owned helper boundary
 

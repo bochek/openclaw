@@ -47,6 +47,7 @@ What has landed:
 - an initial Phase 0 cutover inventory now exists in `src/extension-host/cutover-inventory.md`
 - plugin SDK alias resolution now routes through `src/extension-host/loader-compat.ts`
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
+- loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
 - loader module-export resolution, config validation, and memory-slot load decisions now route through `src/extension-host/loader-runtime.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`
 - runtime registration normalization has started in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registrations
@@ -72,14 +73,23 @@ How it was done:
 - by leaving duplicate enforcement in legacy subsystems only where that behavior has not been migrated yet, such as plugin commands
 - by moving the first loader-owned compatibility pieces behind host-owned helpers before changing discovery, enablement, or policy flow
 - by moving the next loader-owned policy helpers behind host-owned modules while preserving the current load/skip/error behavior
+- by moving initial candidate planning and record construction behind host-owned helpers before changing import and registration flow
 - by moving loader runtime decisions next, while preserving lazy loading, config validation behavior, and memory-slot policy behavior
 - by moving loader record-state transitions into host-owned helpers before introducing a full lifecycle state machine
 - by moving static and lookup-heavy consumers first, where the ownership boundary matters but runtime risk is lower
+
+Committed implementation slices so far:
+
+- `6abf6750ee` `Plugins: add extension host registry boundary`
+- `1aab89e820` `Plugins: extract loader host seams`
+- `7bc3135082` `Plugins: extract loader candidate planning`
+- `89414ed857` `Docs: track extension host migration internally`
 
 What has not landed:
 
 - keeping the cutover inventory current as more surfaces move
 - the lifecycle state machine and remaining loader orchestration
+- the remaining per-plugin import and registration flow in the loader
 - host-owned registration surfaces beyond the first channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook helper slices
 - SDK compatibility translation work
 - canonical event stages

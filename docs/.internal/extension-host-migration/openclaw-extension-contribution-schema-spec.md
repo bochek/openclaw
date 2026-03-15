@@ -41,6 +41,7 @@ What has been implemented:
 - the first runtime registration normalization helpers now exist in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook writes
 - plugin SDK alias resolution now routes through `src/extension-host/loader-compat.ts`
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
+- loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
 - loader module-export resolution, config validation, and memory-slot load decisions now route through `src/extension-host/loader-runtime.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`
 
@@ -51,7 +52,7 @@ How it has been implemented:
 - by moving static metadata consumers onto the normalized model before attempting runtime contribution migration
 - by keeping legacy manifest records available only as compatibility projections while new readers move to the normalized shape
 - by starting runtime contribution migration with normalization helpers that preserve the legacy plugin API surface
-- by making the first loader compatibility and runtime decisions explicit host-owned helpers before introducing a versioned compatibility layer
+- by making the first loader compatibility, candidate-planning, and runtime decisions explicit host-owned helpers before introducing a versioned compatibility layer
 
 What remains pending:
 
