@@ -46,6 +46,7 @@ What has landed:
 - a host-owned resolved-extension registry view now exists for static consumers
 - an initial Phase 0 cutover inventory now exists in `src/extension-host/cutover-inventory.md`
 - plugin SDK alias resolution now routes through `src/extension-host/loader-compat.ts`
+- loader cache key construction and registry cache control now route through `src/extension-host/loader-cache.ts`
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
 - loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
 - loader entry-path opening and module import now route through `src/extension-host/loader-import.ts`
@@ -76,6 +77,7 @@ How it was done:
 - by moving the first low-risk runtime writes behind host-owned helpers while keeping `src/plugins/registry.ts` as the compatibility call surface
 - by leaving duplicate enforcement in legacy subsystems only where that behavior has not been migrated yet, such as plugin commands
 - by moving the first loader-owned compatibility pieces behind host-owned helpers before changing discovery, enablement, or policy flow
+- by moving cache-key construction, cache reads, cache writes, and cache clearing behind host-owned helpers before changing activation-state ownership
 - by moving the next loader-owned policy helpers behind host-owned modules while preserving the current load/skip/error behavior
 - by moving initial candidate planning and record construction behind host-owned helpers before changing import and registration flow
 - by moving entry-path opening and module import behind host-owned helpers before changing cache wiring or lifecycle orchestration
@@ -97,13 +99,14 @@ Committed implementation slices so far:
 - `e1b207f4cf` `Plugins: extract loader candidate orchestration`
 - `0c44d8049b` `Plugins: extract loader finalization`
 - `33ef55a9ee` `Plugins: add loader lifecycle state mapping`
+- `6590e19095` `Plugins: extract loader cache control`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
 What has not landed:
 
 - keeping the cutover inventory current as more surfaces move
-- the full lifecycle state machine and remaining explicit activation-state ownership
+- the full lifecycle state machine and remaining explicit activation-state plus policy ownership
 - host-owned registration surfaces beyond the first channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook helper slices
 - SDK compatibility translation work
 - canonical event stages
@@ -1319,7 +1322,7 @@ Current implementation status:
 - partially implemented in a compatibility-preserving form
 - the host now owns active registry state
 - the host now exposes resolved static registries for static consumers
-- activation, loader policy, loader runtime decisions, loader record-state helpers, and loader finalization now route through `src/extension-host/*`
+- activation, loader cache control, loader policy, loader runtime decisions, loader record-state helpers, and loader finalization now route through `src/extension-host/*`
 - broader lifecycle ownership, registration surfaces, policy gates, and activation-state management are still pending
 
 ## Phase 3: Broader Legacy Compatibility Bridges

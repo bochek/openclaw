@@ -40,6 +40,7 @@ What has been implemented:
 - config doc baseline generation now reads bundled extension metadata through the resolved-extension registry
 - the first runtime registration normalization helpers now exist in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook writes
 - plugin SDK alias resolution now routes through `src/extension-host/loader-compat.ts`
+- loader cache key construction and registry cache control now route through `src/extension-host/loader-cache.ts`
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
 - loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
 - loader entry-path opening and module import now route through `src/extension-host/loader-import.ts`
@@ -56,6 +57,7 @@ How it has been implemented:
 - by moving static metadata consumers onto the normalized model before attempting runtime contribution migration
 - by keeping legacy manifest records available only as compatibility projections while new readers move to the normalized shape
 - by starting runtime contribution migration with normalization helpers that preserve the legacy plugin API surface
+- by making cache-key construction and registry cache control explicit host-owned seams before changing loader activation-state ownership
 - by making the first loader compatibility, candidate-planning, import-flow, runtime-decision, register-flow, candidate-orchestration, record-state with compatibility lifecycle mapping, and finalization helpers explicit host-owned seams before introducing a versioned compatibility layer
 
 What remains pending:

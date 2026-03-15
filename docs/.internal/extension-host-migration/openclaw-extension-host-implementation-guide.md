@@ -61,6 +61,7 @@ What has been implemented so far:
 - `src/extension-host/resolved-registry.ts` now exposes a host-owned resolved-extension registry view
 - an initial Phase 0 inventory now exists in `src/extension-host/cutover-inventory.md`
 - plugin SDK alias resolution now routes through `src/extension-host/loader-compat.ts`
+- loader cache key construction and registry cache control now route through `src/extension-host/loader-cache.ts`
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
 - loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
 - loader entry-path opening and module import now route through `src/extension-host/loader-import.ts`
@@ -90,6 +91,7 @@ How it has been done:
 - by extracting low-risk runtime registration helpers next and letting `src/plugins/registry.ts` delegate to them as a compatibility facade
 - by keeping duplicate enforcement in legacy subsystems only where that logic has not moved yet, such as plugin commands
 - by starting loader and lifecycle migration with compatibility helpers for activation and SDK alias resolution before changing discovery or policy behavior
+- by moving cache-key construction, cache reads, cache writes, and cache clearing behind host-owned helpers before changing activation-state ownership
 - by moving loader-owned policy helpers next, while keeping module loading and enablement flow behavior unchanged
 - by moving initial candidate planning and record construction behind host-owned helpers before changing import and registration flow
 - by moving entry-path opening and module import behind host-owned helpers before changing cache wiring or lifecycle orchestration
@@ -112,6 +114,7 @@ Committed implementation slices so far:
 - `e1b207f4cf` `Plugins: extract loader candidate orchestration`
 - `0c44d8049b` `Plugins: extract loader finalization`
 - `33ef55a9ee` `Plugins: add loader lifecycle state mapping`
+- `6590e19095` `Plugins: extract loader cache control`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
@@ -308,7 +311,7 @@ Current implementation status:
 - the host owns the active registry state
 - the host exposes a resolved-extension registry view for static consumers
 - plugin skills, plugin auto-enable, and config validation indexing now consume host-owned resolved-extension data
-- activation, loader policy, loader candidate planning, loader import flow, loader runtime decisions, loader post-import register flow, loader candidate orchestration, loader record-state helpers, and loader finalization now route through `src/extension-host/*`
+- activation, loader cache control, loader policy, loader candidate planning, loader import flow, loader runtime decisions, loader post-import register flow, loader candidate orchestration, loader record-state helpers, and loader finalization now route through `src/extension-host/*`
 - lifecycle state ownership, activation states, policy evaluation, and broad host-owned registries are still not implemented
 
 ### Phase 3: Build compatibility bridges

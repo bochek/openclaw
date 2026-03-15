@@ -36,6 +36,7 @@ What has been implemented:
 - host-owned resolved-extension records now carry the static metadata needed for install, onboarding, and lightweight operator UX
 - config doc baseline generation now uses the same host-owned resolved-extension metadata path
 - plugin SDK alias resolution now routes through `src/extension-host/loader-compat.ts`
+- loader cache key construction and registry cache control now route through `src/extension-host/loader-cache.ts`
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
 - loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
 - loader entry-path opening and module import now route through `src/extension-host/loader-import.ts`
@@ -52,6 +53,7 @@ How it has been implemented:
 - by keeping the existing catalog behavior intact while shifting metadata ownership into normalized host-owned records
 - by reusing the resolved-extension registry for static operator/documentation surfaces instead of creating separate metadata caches
 - by beginning runtime registration migration with host-owned normalization helpers before attempting full canonical catalog publication
+- by moving cache-key construction and registry cache control behind host-owned helpers before attempting canonical catalog publication
 - by beginning loader-path migration with host-owned compatibility, candidate-planning, import-flow, policy, runtime, register-flow, candidate-orchestration, record-state with compatibility lifecycle mapping, and finalization helpers before attempting canonical catalog publication
 
 What remains pending:

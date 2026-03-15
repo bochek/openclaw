@@ -37,6 +37,7 @@ What has been implemented:
 - a host-owned resolved-extension registry exists for static consumers
 - static config-baseline generation now reads bundled extension metadata through the host-owned resolved-extension registry
 - channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registration normalization now delegates through `src/extension-host/runtime-registrations.ts`
+- loader cache key construction and registry cache control now route through `src/extension-host/loader-cache.ts`
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
 - loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
 - loader entry-path opening and module import now route through `src/extension-host/loader-import.ts`
@@ -56,6 +57,7 @@ How it has been implemented:
 - by leaving start/stop ordering and duplicate-enforcement behavior in legacy subsystems where those subsystems are still the real owner
 - by treating hook execution and hook registration as separate migration concerns so event-pipeline work does not get conflated with record normalization
 - by starting loader/lifecycle migration with activation and SDK alias compatibility helpers while leaving discovery and policy flow unchanged
+- by moving cache-key construction, cache reads, cache writes, and cache clearing next while leaving activation-state ownership unchanged
 - by moving provenance and duplicate-order policy next, so lifecycle migration can land on host-owned policy helpers instead of loader-local utilities
 - by moving initial candidate planning and record construction next while leaving module import and registration flow unchanged
 - by moving entry-path opening and module import next while leaving cache wiring and lifecycle orchestration unchanged
