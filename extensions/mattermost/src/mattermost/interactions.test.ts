@@ -741,6 +741,7 @@ describe("createMattermostInteractionHandler", () => {
   it("blocks button dispatch when the sender is not allowed for the action", async () => {
     const { context, token } = createActionContext();
     const dispatchButtonClick = vi.fn();
+    const handleInteraction = vi.fn();
     const handler = createMattermostInteractionHandler({
       client: {
         request: async (_path: string, init?: { method?: string }) =>
@@ -754,6 +755,7 @@ describe("createMattermostInteractionHandler", () => {
           ephemeral_text: "blocked",
         },
       }),
+      handleInteraction,
       dispatchButtonClick,
     });
 
@@ -763,6 +765,7 @@ describe("createMattermostInteractionHandler", () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.body).toContain("blocked");
+    expect(handleInteraction).not.toHaveBeenCalled();
     expect(dispatchButtonClick).not.toHaveBeenCalled();
   });
 

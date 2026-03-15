@@ -574,32 +574,6 @@ export function createMattermostInteractionHandler(params: {
         `post=${payload.post_id} channel=${payload.channel_id}`,
     );
 
-    if (params.handleInteraction) {
-      try {
-        const response = await params.handleInteraction({
-          payload,
-          userName,
-          actionId,
-          actionName: clickedButtonName,
-          originalMessage,
-          context: contextWithoutToken,
-          post: originalPost,
-        });
-        if (response !== null) {
-          res.statusCode = 200;
-          res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify(response));
-          return;
-        }
-      } catch (err) {
-        log?.(`mattermost interaction: custom handler failed: ${String(err)}`);
-        res.statusCode = 500;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ error: "Interaction handler failed" }));
-        return;
-      }
-    }
-
     if (params.authorizeButtonClick) {
       try {
         const authorization = await params.authorizeButtonClick({
@@ -623,6 +597,32 @@ export function createMattermostInteractionHandler(params: {
         res.statusCode = 500;
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ error: "Interaction authorization failed" }));
+        return;
+      }
+    }
+
+    if (params.handleInteraction) {
+      try {
+        const response = await params.handleInteraction({
+          payload,
+          userName,
+          actionId,
+          actionName: clickedButtonName,
+          originalMessage,
+          context: contextWithoutToken,
+          post: originalPost,
+        });
+        if (response !== null) {
+          res.statusCode = 200;
+          res.setHeader("Content-Type", "application/json");
+          res.end(JSON.stringify(response));
+          return;
+        }
+      } catch (err) {
+        log?.(`mattermost interaction: custom handler failed: ${String(err)}`);
+        res.statusCode = 500;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Interaction handler failed" }));
         return;
       }
     }

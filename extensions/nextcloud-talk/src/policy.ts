@@ -57,7 +57,6 @@ export type NextcloudTalkRoomMatch = {
 export function resolveNextcloudTalkRoomMatch(params: {
   rooms?: Record<string, NextcloudTalkRoomConfig>;
   roomToken: string;
-  roomName?: string | null;
 }): NextcloudTalkRoomMatch {
   const rooms = params.rooms ?? {};
   const allowlistConfigured = Object.keys(rooms).length > 0;
@@ -96,11 +95,9 @@ export function resolveNextcloudTalkGroupToolPolicy(
   if (!roomToken) {
     return undefined;
   }
-  const roomName = params.groupChannel?.trim() || undefined;
   const match = resolveNextcloudTalkRoomMatch({
     rooms: cfg.channels?.["nextcloud-talk"]?.rooms,
     roomToken,
-    roomName,
   });
   return match.roomConfig?.tools ?? match.wildcardConfig?.tools;
 }

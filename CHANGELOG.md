@@ -26,7 +26,7 @@ Docs: https://docs.openclaw.ai
 ### Fixes
 
 - Slack/interactive replies: preserve `channelData.slack.blocks` through live DM delivery and preview-finalized edits so Block Kit button and select directives render instead of falling back to raw text. Thanks @vincentkoc.
-- Inbound policy hardening: tighten callback and webhook sender checks across Mattermost and Google Chat, match Nextcloud Talk rooms by stable room token, treat explicit empty allowlists in Twitch and Tlon as deny-all, defer Tlon cross-channel cite expansion until after authorization, and require `operator.admin` for mutating internal `/acp` actions. Thanks @vincentkoc.
+- Inbound policy hardening: tighten callback and webhook sender checks across Mattermost and Google Chat, match Nextcloud Talk rooms by stable room token, and treat explicit empty Twitch allowlists as deny-all. Thanks @vincentkoc.
 - CI/channel test routing: move the built-in channel suites into `test:channels` and keep them out of `test:extensions`, so extension CI no longer fails after the channel migration while targeted test routing still sends Slack, Signal, and iMessage suites to the right lane. (#46066) Thanks @scoootscooob.
 - Node/startup: remove leftover debug `console.log("node host PATH: ...")` that printed the resolved PATH on every `openclaw node run` invocation. (#46411)
 - Control UI/dashboard: preserve structured gateway shutdown reasons across restart disconnects so config-triggered restarts no longer fall back to `disconnected (1006): no reason`. (#46532) Thanks @vincentkoc.
