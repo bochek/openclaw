@@ -147,7 +147,7 @@ describe("applyPatch", () => {
     });
   });
 
-  it("revalidates delete targets before removing files", async () => {
+  it("resolves delete targets before calling fs.rm", async () => {
     await withTempDir(async (dir) => {
       const target = path.join(dir, "delete-me.txt");
       await fs.writeFile(target, "x\n", "utf8");
