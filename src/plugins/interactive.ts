@@ -73,6 +73,13 @@ function normalizeNamespace(namespace: string): string {
   return namespace.trim();
 }
 
+function normalizeInteractiveChannel(channel: unknown): "telegram" | "discord" | null {
+  if (channel === "telegram" || channel === "discord") {
+    return channel;
+  }
+  return null;
+}
+
 function validateNamespace(namespace: string): string | null {
   if (!namespace.trim()) {
     return "Interactive handler namespace cannot be empty";
@@ -112,12 +119,22 @@ export function registerPluginInteractiveHandler(
   registration: PluginInteractiveHandlerRegistration,
   opts?: { pluginName?: string; pluginRoot?: string },
 ): InteractiveRegistrationResult {
+  const channel = normalizeInteractiveChannel(registration.channel);
+  if (!channel) {
+    return {
+      ok: false,
+      error: 'Interactive handler channel must be either "telegram" or "discord"',
+    };
+  }
   const namespace = normalizeNamespace(registration.namespace);
   const validationError = validateNamespace(namespace);
   if (validationError) {
     return { ok: false, error: validationError };
   }
-  const key = toRegistryKey(registration.channel, namespace);
+  if (typeof registration.handler !== "function") {
+    return { ok: false, error: "Interactive handler must be a function" };
+  }
+  const key = toRegistryKey(channel, namespace);
   const existing = interactiveHandlers.get(key);
   if (existing) {
     return {
@@ -125,9 +142,10 @@ export function registerPluginInteractiveHandler(
       error: `Interactive handler namespace "${namespace}" already registered by plugin "${existing.pluginId}"`,
     };
   }
-  if (registration.channel === "telegram") {
+  if (channel === "telegram") {
+    const telegramRegistration = registration as PluginInteractiveTelegramHandlerRegistration;
     interactiveHandlers.set(key, {
-      ...registration,
+      ...telegramRegistration,
       namespace,
       channel: "telegram",
       pluginId,
@@ -135,8 +153,9 @@ export function registerPluginInteractiveHandler(
       pluginRoot: opts?.pluginRoot,
     });
   } else {
+    const discordRegistration = registration as PluginInteractiveDiscordHandlerRegistration;
     interactiveHandlers.set(key, {
-      ...registration,
+      ...discordRegistration,
       namespace,
       channel: "discord",
       pluginId,
@@ -204,8 +223,9 @@ export async function dispatchPluginInteractiveHandler(params: {
     return { matched: false, handled: false, duplicate: false };
   }
 
-  const dedupeKey =
+  const dedupeId =
     params.channel === "telegram" ? params.callbackId?.trim() : params.interactionId?.trim();
+  const dedupeKey = dedupeId ? `${params.channel}:${match.namespace}:${dedupeId}` : undefined;
   if (dedupeKey && callbackDedupe.peek(dedupeKey)) {
     return { matched: true, handled: true, duplicate: true };
   }
@@ -354,7 +374,7 @@ export async function dispatchPluginInteractiveHandler(params: {
     });
   }
   const resolved = await result;
-  if (dedupeKey) {
+  if (dedupeKey && (resolved?.handled ?? true)) {
     callbackDedupe.check(dedupeKey);
   }
 
