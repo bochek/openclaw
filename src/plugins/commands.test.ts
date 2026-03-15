@@ -127,6 +127,20 @@ describe("registerPluginCommand", () => {
     });
   });
 
+  it("resolves Discord group DM command bindings as channel conversations", () => {
+    expect(
+      __testing.resolveBindingConversationFromCommand({
+        channel: "discord",
+        from: "discord:group:1480554272859881494",
+        accountId: "default",
+      }),
+    ).toEqual({
+      channel: "discord",
+      accountId: "default",
+      conversationId: "channel:1480554272859881494",
+    });
+  });
+
   it("does not resolve binding conversations for unsupported command channels", () => {
     expect(
       __testing.resolveBindingConversationFromCommand({
