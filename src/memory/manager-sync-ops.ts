@@ -20,6 +20,14 @@ import {
   type OpenAiEmbeddingClient,
   type VoyageEmbeddingClient,
 } from "../extension-host/embedding-runtime.js";
+import {
+  buildEmbeddingIndexMeta,
+  type EmbeddingIndexMeta,
+  metaSourcesDiffer as extensionHostMetaSourcesDiffer,
+  normalizeEmbeddingMetaSources,
+  resolveEmbeddingSyncPlan,
+  shouldUseUnsafeEmbeddingReindex,
+} from "../extension-host/embedding-sync-planning.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { onSessionTranscriptUpdate } from "../sessions/transcript-events.js";
 import { resolveUserPath } from "../utils.js";
@@ -48,17 +56,6 @@ import {
 import { loadSqliteVecExtension } from "./sqlite-vec.js";
 import { requireNodeSqlite } from "./sqlite.js";
 import type { MemorySource, MemorySyncProgressUpdate } from "./types.js";
-
-type MemoryIndexMeta = {
-  model: string;
-  provider: string;
-  providerKey?: string;
-  sources?: MemorySource[];
-  scopeHash?: string;
-  chunkTokens: number;
-  chunkOverlap: number;
-  vectorDims?: number;
-};
 
 type MemorySyncProgressState = {
   completed: number;
@@ -950,25 +947,39 @@ export abstract class MemoryManagerSyncOps {
     const configuredScopeHash = this.resolveConfiguredScopeHash();
     const targetSessionFiles = this.normalizeTargetSessionFiles(params?.sessionFiles);
     const hasTargetSessionFiles = targetSessionFiles !== null;
-    if (hasTargetSessionFiles && targetSessionFiles && this.sources.has("sessions")) {
+    const syncPlan = resolveEmbeddingSyncPlan({
+      force: params?.force,
+      hasTargetSessionFiles,
+      targetSessionFiles,
+      sessionsEnabled: this.sources.has("sessions"),
+      dirty: this.dirty,
+      shouldSyncSessions: this.shouldSyncSessions(params, false),
+      useUnsafeReindex: shouldUseUnsafeEmbeddingReindex(),
+      vectorReady,
+      meta,
+      provider: this.provider,
+      providerKey: this.providerKey,
+      configuredSources,
+      configuredScopeHash,
+      chunkTokens: this.settings.chunking.tokens,
+      chunkOverlap: this.settings.chunking.overlap,
+    });
+    if (syncPlan.kind === "targeted-sessions") {
       // Post-compaction refreshes should only update the explicit transcript files and
       // leave broader reindex/dirty-work decisions to the regular sync path.
       try {
         await this.syncSessionFiles({
           needsFullReindex: false,
-          targetSessionFiles: Array.from(targetSessionFiles),
+          targetSessionFiles: syncPlan.targetSessionFiles,
           progress: progress ?? undefined,
         });
-        this.clearSyncedSessionFiles(targetSessionFiles);
+        this.clearSyncedSessionFiles(new Set(syncPlan.targetSessionFiles));
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
         const activated =
           this.shouldFallbackOnError(reason) && (await this.activateFallbackProvider(reason));
         if (activated) {
-          if (
-            process.env.OPENCLAW_TEST_FAST === "1" &&
-            process.env.OPENCLAW_TEST_MEMORY_UNSAFE_REINDEX === "1"
-          ) {
+          if (shouldUseUnsafeEmbeddingReindex()) {
             await this.runUnsafeReindex({
               reason: params?.reason,
               force: true,
@@ -987,23 +998,9 @@ export abstract class MemoryManagerSyncOps {
       }
       return;
     }
-    const needsFullReindex =
-      (params?.force && !hasTargetSessionFiles) ||
-      !meta ||
-      (this.provider && meta.model !== this.provider.model) ||
-      (this.provider && meta.provider !== this.provider.id) ||
-      meta.providerKey !== this.providerKey ||
-      this.metaSourcesDiffer(meta, configuredSources) ||
-      meta.scopeHash !== configuredScopeHash ||
-      meta.chunkTokens !== this.settings.chunking.tokens ||
-      meta.chunkOverlap !== this.settings.chunking.overlap ||
-      (vectorReady && !meta?.vectorDims);
     try {
-      if (needsFullReindex) {
-        if (
-          process.env.OPENCLAW_TEST_FAST === "1" &&
-          process.env.OPENCLAW_TEST_MEMORY_UNSAFE_REINDEX === "1"
-        ) {
+      if (syncPlan.kind === "full-reindex") {
+        if (syncPlan.unsafe) {
           await this.runUnsafeReindex({
             reason: params?.reason,
             force: params?.force,
@@ -1019,20 +1016,15 @@ export abstract class MemoryManagerSyncOps {
         return;
       }
 
-      const shouldSyncMemory =
-        this.sources.has("memory") &&
-        ((!hasTargetSessionFiles && params?.force) || needsFullReindex || this.dirty);
-      const shouldSyncSessions = this.shouldSyncSessions(params, needsFullReindex);
-
-      if (shouldSyncMemory) {
-        await this.syncMemoryFiles({ needsFullReindex, progress: progress ?? undefined });
+      if (syncPlan.shouldSyncMemory) {
+        await this.syncMemoryFiles({ needsFullReindex: false, progress: progress ?? undefined });
         this.dirty = false;
       }
 
-      if (shouldSyncSessions) {
+      if (syncPlan.shouldSyncSessions) {
         await this.syncSessionFiles({
-          needsFullReindex,
-          targetSessionFiles: targetSessionFiles ? Array.from(targetSessionFiles) : undefined,
+          needsFullReindex: false,
+          targetSessionFiles: syncPlan.targetSessionFiles,
           progress: progress ?? undefined,
         });
         this.sessionsDirty = false;
@@ -1159,7 +1151,7 @@ export abstract class MemoryManagerSyncOps {
     this.fts.loadError = undefined;
     this.ensureSchema();
 
-    let nextMeta: MemoryIndexMeta | null = null;
+    let nextMeta: EmbeddingIndexMeta | null = null;
 
     try {
       this.seedEmbeddingCache(originalDb);
@@ -1184,15 +1176,14 @@ export abstract class MemoryManagerSyncOps {
         this.sessionsDirty = false;
       }
 
-      nextMeta = {
-        model: this.provider?.model ?? "fts-only",
-        provider: this.provider?.id ?? "none",
-        providerKey: this.providerKey!,
-        sources: this.resolveConfiguredSourcesForMeta(),
-        scopeHash: this.resolveConfiguredScopeHash(),
+      nextMeta = buildEmbeddingIndexMeta({
+        provider: this.provider,
+        providerKey: this.providerKey,
+        configuredSources: this.resolveConfiguredSourcesForMeta(),
+        configuredScopeHash: this.resolveConfiguredScopeHash(),
         chunkTokens: this.settings.chunking.tokens,
         chunkOverlap: this.settings.chunking.overlap,
-      };
+      });
       if (!nextMeta) {
         throw new Error("Failed to compute memory index metadata for reindexing.");
       }
@@ -1256,15 +1247,14 @@ export abstract class MemoryManagerSyncOps {
       this.sessionsDirty = false;
     }
 
-    const nextMeta: MemoryIndexMeta = {
-      model: this.provider?.model ?? "fts-only",
-      provider: this.provider?.id ?? "none",
-      providerKey: this.providerKey!,
-      sources: this.resolveConfiguredSourcesForMeta(),
-      scopeHash: this.resolveConfiguredScopeHash(),
+    const nextMeta = buildEmbeddingIndexMeta({
+      provider: this.provider,
+      providerKey: this.providerKey,
+      configuredSources: this.resolveConfiguredSourcesForMeta(),
+      configuredScopeHash: this.resolveConfiguredScopeHash(),
       chunkTokens: this.settings.chunking.tokens,
       chunkOverlap: this.settings.chunking.overlap,
-    };
+    });
     if (this.vector.available && this.vector.dims) {
       nextMeta.vectorDims = this.vector.dims;
     }
@@ -1286,7 +1276,7 @@ export abstract class MemoryManagerSyncOps {
     this.sessionsDirtyFiles.clear();
   }
 
-  protected readMeta(): MemoryIndexMeta | null {
+  protected readMeta(): EmbeddingIndexMeta | null {
     const row = this.db.prepare(`SELECT value FROM meta WHERE key = ?`).get(META_KEY) as
       | { value: string }
       | undefined;
@@ -1295,7 +1285,7 @@ export abstract class MemoryManagerSyncOps {
       return null;
     }
     try {
-      const parsed = JSON.parse(row.value) as MemoryIndexMeta;
+      const parsed = JSON.parse(row.value) as EmbeddingIndexMeta;
       this.lastMetaSerialized = row.value;
       return parsed;
     } catch {
@@ -1304,7 +1294,7 @@ export abstract class MemoryManagerSyncOps {
     }
   }
 
-  protected writeMeta(meta: MemoryIndexMeta) {
+  protected writeMeta(meta: EmbeddingIndexMeta) {
     const value = JSON.stringify(meta);
     if (this.lastMetaSerialized === value) {
       return;
@@ -1324,19 +1314,8 @@ export abstract class MemoryManagerSyncOps {
     return normalized.length > 0 ? normalized : ["memory"];
   }
 
-  private normalizeMetaSources(meta: MemoryIndexMeta): MemorySource[] {
-    if (!Array.isArray(meta.sources)) {
-      // Backward compatibility for older indexes that did not persist sources.
-      return ["memory"];
-    }
-    const normalized = Array.from(
-      new Set(
-        meta.sources.filter(
-          (source): source is MemorySource => source === "memory" || source === "sessions",
-        ),
-      ),
-    ).toSorted();
-    return normalized.length > 0 ? normalized : ["memory"];
+  private normalizeMetaSources(meta: EmbeddingIndexMeta): MemorySource[] {
+    return normalizeEmbeddingMetaSources(meta);
   }
 
   private resolveConfiguredScopeHash(): string {
@@ -1355,11 +1334,7 @@ export abstract class MemoryManagerSyncOps {
     );
   }
 
-  private metaSourcesDiffer(meta: MemoryIndexMeta, configuredSources: MemorySource[]): boolean {
-    const metaSources = this.normalizeMetaSources(meta);
-    if (metaSources.length !== configuredSources.length) {
-      return true;
-    }
-    return metaSources.some((source, index) => source !== configuredSources[index]);
+  private metaSourcesDiffer(meta: EmbeddingIndexMeta, configuredSources: MemorySource[]): boolean {
+    return extensionHostMetaSourcesDiffer(meta, configuredSources);
   }
 }
