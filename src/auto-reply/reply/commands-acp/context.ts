@@ -6,6 +6,7 @@ import {
 } from "../../../acp/conversation-id.js";
 import { DISCORD_THREAD_BINDING_CHANNEL } from "../../../channels/thread-bindings-policy.js";
 import { resolveConversationIdFromTargets } from "../../../infra/outbound/conversation-id.js";
+import { getSessionBindingService } from "../../../infra/outbound/session-binding-service.js";
 import { parseAgentSessionKey } from "../../../routing/session-key.js";
 import type { HandleCommandsParams } from "../commands-types.js";
 import { parseDiscordParentChannelFromSessionKey } from "../discord-parent-channel.js";
@@ -41,6 +42,7 @@ function parseFeishuDirectConversationId(raw: unknown): string | undefined {
 }
 
 function resolveFeishuSenderScopedConversationId(params: {
+  accountId: string;
   parentConversationId?: string;
   threadId?: string;
   senderId?: string;
@@ -55,7 +57,33 @@ function resolveFeishuSenderScopedConversationId(params: {
     const scopedRest = parseAgentSessionKey(candidate)?.rest?.trim().toLowerCase() ?? "";
     return Boolean(scopedRest && expectedScopePrefix && scopedRest.startsWith(expectedScopePrefix));
   });
-  if (!parentConversationId || !threadId || !senderId || !isSenderScopedSession) {
+  if (!parentConversationId || !threadId || !senderId) {
+    return undefined;
+  }
+  if (!isSenderScopedSession && params.sessionKey?.trim()) {
+    const boundConversation = getSessionBindingService()
+      .listBySession(params.sessionKey)
+      .find((binding) => {
+        if (
+          binding.conversation.channel !== "feishu" ||
+          binding.conversation.accountId !== params.accountId ||
+          binding.conversation.parentConversationId !== parentConversationId
+        ) {
+          return false;
+        }
+        return (
+          binding.conversation.conversationId ===
+          buildFeishuConversationId({
+            chatId: parentConversationId,
+            scope: "group_topic_sender",
+            topicId: threadId,
+            senderOpenId: senderId,
+          })
+        );
+      });
+    if (boundConversation) {
+      return boundConversation.conversation.conversationId;
+    }
     return undefined;
   }
   return buildFeishuConversationId({
@@ -120,6 +148,7 @@ export function resolveAcpCommandConversationId(params: HandleCommandsParams): s
     const parentConversationId = resolveAcpCommandParentConversationId(params);
     if (threadId && parentConversationId) {
       const senderScopedConversationId = resolveFeishuSenderScopedConversationId({
+        accountId: resolveAcpCommandAccountId(params),
         parentConversationId,
         threadId,
         senderId: params.command.senderId ?? params.ctx.SenderId,

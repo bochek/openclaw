@@ -1,5 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  __testing as feishuThreadBindingTesting,
+  createFeishuThreadBindingManager,
+} from "../../../../extensions/feishu/src/thread-bindings.js";
 import type { OpenClawConfig } from "../../../config/config.js";
+import {
+  __testing as sessionBindingTesting,
+  getSessionBindingService,
+} from "../../../infra/outbound/session-binding-service.js";
 import { buildCommandTestParams } from "../commands-spawn.test-harness.js";
 import {
   isAcpCommandDiscordChannel,
@@ -12,6 +20,11 @@ const baseCfg = {
 } satisfies OpenClawConfig;
 
 describe("commands-acp context", () => {
+  beforeEach(() => {
+    feishuThreadBindingTesting.resetFeishuThreadBindingsForTests();
+    sessionBindingTesting.resetSessionBindingAdaptersForTests();
+  });
+
   it("resolves channel/account/thread context from originating fields", () => {
     const params = buildCommandTestParams("/acp sessions", baseCfg, {
       Provider: "discord",
@@ -185,6 +198,43 @@ describe("commands-acp context", () => {
       AccountId: "work",
       ParentSessionKey:
         "agent:main:feishu:group:oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
+    });
+    params.sessionKey = "agent:codex:acp:binding:feishu:work:abc123";
+
+    expect(resolveAcpCommandBindingContext(params)).toEqual({
+      channel: "feishu",
+      accountId: "work",
+      threadId: "om_topic_root",
+      conversationId: "oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
+      parentConversationId: "oc_group_chat",
+    });
+  });
+
+  it("preserves sender-scoped Feishu topic ids after ACP takeover from the live binding record", async () => {
+    createFeishuThreadBindingManager({ cfg: baseCfg, accountId: "work" });
+    await getSessionBindingService().bind({
+      targetSessionKey: "agent:codex:acp:binding:feishu:work:abc123",
+      targetKind: "session",
+      conversation: {
+        channel: "feishu",
+        accountId: "work",
+        conversationId: "oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
+        parentConversationId: "oc_group_chat",
+      },
+      placement: "current",
+      metadata: {
+        agentId: "codex",
+      },
+    });
+
+    const params = buildCommandTestParams("/acp status", baseCfg, {
+      Provider: "feishu",
+      Surface: "feishu",
+      OriginatingChannel: "feishu",
+      OriginatingTo: "chat:oc_group_chat",
+      MessageThreadId: "om_topic_root",
+      SenderId: "ou_topic_user",
+      AccountId: "work",
     });
     params.sessionKey = "agent:codex:acp:binding:feishu:work:abc123";
 
