@@ -10,29 +10,14 @@ import {
   resolvePluginSdkAliasFile,
   resolvePluginSdkScopedAliasMap,
 } from "../extension-host/loader-compat.js";
-import { importExtensionHostPluginModule } from "../extension-host/loader-import.js";
+import { processExtensionHostPluginCandidate } from "../extension-host/loader-flow.js";
 import {
   buildExtensionHostProvenanceIndex,
   compareExtensionHostDuplicateCandidateOrder,
   pushExtensionHostDiagnostics,
-  recordExtensionHostPluginError,
   warnAboutUntrackedLoadedExtensions,
   warnWhenExtensionAllowlistIsOpen,
 } from "../extension-host/loader-policy.js";
-import { prepareExtensionHostPluginCandidate } from "../extension-host/loader-records.js";
-import {
-  planExtensionHostLoadedPlugin,
-  runExtensionHostPluginRegister,
-} from "../extension-host/loader-register.js";
-import {
-  resolveExtensionHostEarlyMemoryDecision,
-  resolveExtensionHostModuleExport,
-} from "../extension-host/loader-runtime.js";
-import {
-  appendExtensionHostPluginRecord,
-  setExtensionHostPluginRecordDisabled,
-  setExtensionHostPluginRecordError,
-} from "../extension-host/loader-state.js";
 import type { GatewayRequestHandler } from "../gateway/server-methods/types.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveUserPath } from "../utils.js";
@@ -975,82 +960,15 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       selectedMemoryPluginId,
       entryConfig: entry?.config,
       validateOnly,
-    });
-    if (loadedPlan.memorySlotMatched) {
-      memorySlotMatched = true;
-    }
-    selectedMemoryPluginId = loadedPlan.selectedMemoryPluginId;
-
-    if (loadedPlan.kind === "error") {
-      pushPluginLoadError(loadedPlan.message);
-      continue;
-    }
-
-    if (loadedPlan.kind === "disabled") {
-      setExtensionHostPluginRecordDisabled(record, loadedPlan.reason);
-      appendExtensionHostPluginRecord({
-        registry,
-        record,
-        seenIds,
-        pluginId,
-        origin: candidate.origin,
-      });
-      continue;
-    }
-
-    if (loadedPlan.kind === "invalid-config") {
-      logger.error(`[plugins] ${record.id} ${loadedPlan.message}`);
-      pushPluginLoadError(loadedPlan.message);
-      continue;
-    }
-
-    if (loadedPlan.kind === "validate-only") {
-      appendExtensionHostPluginRecord({
-        registry,
-        record,
-        seenIds,
-        pluginId,
-        origin: candidate.origin,
-      });
-      continue;
-    }
-
-    if (loadedPlan.kind === "missing-register") {
-      logger.error(`[plugins] ${record.id} missing register/activate export`);
-      pushPluginLoadError(loadedPlan.message);
-      continue;
-    }
-
-    const registerResult = runExtensionHostPluginRegister({
-      register: loadedPlan.register,
-      createApi,
-      record,
-      config: cfg,
-      pluginConfig: loadedPlan.pluginConfig,
-      hookPolicy: entry?.hooks,
-      diagnostics: registry.diagnostics,
-    });
-    if (!registerResult.ok) {
-      recordExtensionHostPluginError({
-        logger,
-        registry,
-        record,
-        seenIds,
-        pluginId,
-        origin: candidate.origin,
-        error: registerResult.error,
-        logPrefix: `[plugins] ${record.id} failed during register from ${record.source}: `,
-        diagnosticMessagePrefix: "plugin failed during register: ",
-      });
-      continue;
-    }
-    appendExtensionHostPluginRecord({
+      logger,
       registry,
-      record,
       seenIds,
-      pluginId,
-      origin: candidate.origin,
+      selectedMemoryPluginId,
+      createApi,
+      loadModule: (safeSource) => getJiti()(safeSource) as OpenClawPluginModule,
     });
+    selectedMemoryPluginId = processed.selectedMemoryPluginId;
+    memorySlotMatched ||= processed.memorySlotMatched;
   }
 
   if (typeof memorySlot === "string" && !memorySlotMatched) {
