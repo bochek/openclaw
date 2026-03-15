@@ -15,12 +15,12 @@ import {
 import {
   buildExtensionHostProvenanceIndex,
   compareExtensionHostDuplicateCandidateOrder,
-  createExtensionHostPluginRecord,
   pushExtensionHostDiagnostics,
   recordExtensionHostPluginError,
   warnAboutUntrackedLoadedExtensions,
   warnWhenExtensionAllowlistIsOpen,
 } from "../extension-host/loader-policy.js";
+import { prepareExtensionHostPluginCandidate } from "../extension-host/loader-records.js";
 import {
   applyExtensionHostDefinitionToRecord,
   resolveExtensionHostEarlyMemoryDecision,
@@ -41,7 +41,6 @@ import { clearPluginCommands } from "./commands.js";
 import {
   applyTestPluginDefaults,
   normalizePluginsConfig,
-  resolveEffectiveEnableState,
   type NormalizedPluginsConfig,
 } from "./config-state.js";
 import { discoverOpenClawPlugins } from "./discovery.js";

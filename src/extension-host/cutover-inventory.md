@@ -33,6 +33,7 @@ This is an implementation checklist, not a future-design spec.
 | Manifest/package metadata loading                                  | `src/plugins/manifest.ts`, `src/plugins/discovery.ts`, `src/plugins/install.ts`                                                                 | `src/extension-host/schema.ts` and `src/extension-host/manifest-registry.ts` | `partial`     | Package metadata parsing is routed through host schema helpers; legacy loader flow still supplies the source manifests.                                                                         |
 | Loader SDK alias compatibility                                     | `src/plugins/loader.ts`                                                                                                                         | `src/extension-host/loader-compat.ts`                                        | `partial`     | Plugin-SDK alias candidate ordering, alias-file resolution, and scoped alias-map construction now live in host-owned loader compatibility helpers.                                              |
 | Loader provenance and duplicate-order policy                       | `src/plugins/loader.ts`                                                                                                                         | `src/extension-host/loader-policy.ts`                                        | `partial`     | Plugin-record creation, duplicate precedence, provenance indexing, and allowlist/untracked warnings now live in host-owned loader-policy helpers.                                               |
+| Loader initial candidate planning and record creation              | `src/plugins/loader.ts`                                                                                                                         | `src/extension-host/loader-records.ts`                                       | `partial`     | Duplicate detection, initial record creation, manifest metadata attachment, and first-pass enable-state planning now delegate through host-owned loader-records helpers.                        |
 | Loader module-export, config-validation, and memory-slot decisions | `src/plugins/loader.ts`                                                                                                                         | `src/extension-host/loader-runtime.ts`                                       | `partial`     | Module export resolution, export-metadata application, config validation, and early or final memory-slot decisions now delegate through host-owned loader-runtime helpers.                      |
 | Loader record-state transitions                                    | `src/plugins/loader.ts`                                                                                                                         | `src/extension-host/loader-state.ts`                                         | `partial`     | Disabled, error, and appended plugin-record state transitions now delegate through host-owned loader-state helpers; a real lifecycle state machine still does not exist.                        |
 | Channel lookup                                                     | `src/channels/plugins/index.ts`, `src/channels/plugins/registry-loader.ts`, `src/channels/registry.ts`                                          | extension-host-backed registries plus kernel channel contracts               | `partial`     | Readers now consume the host-owned active registry, but writes still originate from plugin registration.                                                                                        |
@@ -80,14 +81,14 @@ That pattern has been used for:
 - active registry ownership
 - normalized extension schema and resolved-extension records
 - static consumers such as skills, validation, auto-enable, and config baseline generation
-- loader compatibility, policy, runtime decisions, and record-state transitions
+- loader compatibility, initial candidate planning, policy, runtime decisions, and record-state transitions
 
 ## Immediate Next Targets
 
 These are the next lowest-risk cutover steps:
 
 1. Replace remaining static-only manifest-registry injections with resolved-extension registry inputs where practical.
-2. Move the remaining loader orchestration into `src/extension-host/*`, especially per-plugin load flow, enablement, and lifecycle-state transitions.
+2. Move the remaining loader orchestration into `src/extension-host/*`, especially per-plugin import and registration flow, enablement completion, and lifecycle-state transitions.
 3. Introduce explicit host-owned registration surfaces for runtime writes, starting with the least-coupled registries.
 4. Move minimal SDK compatibility and loader normalization into `src/extension-host/*` without breaking current `openclaw/plugin-sdk/*` loading.
 5. Start the first pilot on `extensions/thread-ownership` only after the host-side registry and lifecycle seams are explicit.
