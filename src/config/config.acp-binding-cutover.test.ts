@@ -208,6 +208,24 @@ describe("ACP binding cutover schema", () => {
     expect(parsed.success).toBe(false);
   });
 
+  it("rejects Feishu ACP topic peer IDs with non-canonical sender ids", () => {
+    const parsed = OpenClawSchema.safeParse({
+      bindings: [
+        {
+          type: "acp",
+          agentId: "codex",
+          match: {
+            channel: "feishu",
+            accountId: "default",
+            peer: { kind: "group", id: "oc_group_chat:topic:om_topic_root:sender:user_123" },
+          },
+        },
+      ],
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
   it("rejects bare Feishu group chat ACP peer IDs", () => {
     const parsed = OpenClawSchema.safeParse({
       bindings: [

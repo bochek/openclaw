@@ -90,7 +90,7 @@ const AcpBindingSchema = z
     }
     if (
       channel === "feishu" &&
-      !/^(ou_[^:]+|oc_[^:]+:topic:[^:]+(?::sender:[^:]+)?)$/.test(peerId)
+      !/^(ou_[^:]+|oc_[^:]+:topic:[^:]+(?::sender:ou_[^:]+)?)$/.test(peerId)
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
