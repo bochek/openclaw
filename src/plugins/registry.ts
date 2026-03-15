@@ -351,8 +351,12 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       });
       return;
     }
-    registry.gatewayHandlers[result.method] = result.handler;
-    record.gatewayMethods.push(result.method);
+    addExtensionGatewayMethodRegistration({
+      registry,
+      record,
+      method: result.method,
+      handler: result.handler,
+    });
   };
 
   const registerHttpRoute = (record: PluginRecord, params: OpenClawPluginHttpRouteParams) => {
@@ -372,14 +376,21 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       return;
     }
     if (result.action === "replace") {
-      if (result.existingIndex === undefined) {
-        return;
-      }
-      registry.httpRoutes[result.existingIndex] = result.entry;
+      addExtensionHttpRouteRegistration({
+        registry,
+        record,
+        action: "replace",
+        existingIndex: result.existingIndex,
+        entry: result.entry,
+      });
       return;
     }
-    record.httpRoutes += 1;
-    registry.httpRoutes.push(result.entry);
+    addExtensionHttpRouteRegistration({
+      registry,
+      record,
+      action: "append",
+      entry: result.entry,
+    });
   };
 
   const registerChannel = (
@@ -429,8 +440,12 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       });
       return;
     }
-    record.channelIds.push(result.channelId);
-    registry.channels.push(result.entry);
+    addExtensionChannelRegistration({
+      registry,
+      record,
+      channelId: result.channelId,
+      entry: result.entry,
+    });
   };
 
   const registerProvider = (record: PluginRecord, provider: ProviderPlugin) => {
