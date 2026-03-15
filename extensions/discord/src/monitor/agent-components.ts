@@ -863,14 +863,16 @@ async function dispatchPluginDiscordInteractiveEvent(params: {
       senderId: params.interactionCtx.userId,
     });
     let cleared = false;
-    try {
-      await respond.clearComponents();
-      cleared = true;
-    } catch {
+    if (resolved.status !== "expired") {
       try {
-        await respond.acknowledge();
+        await respond.clearComponents();
+        cleared = true;
       } catch {
-        // Interaction may already be acknowledged; continue with best-effort follow-up.
+        try {
+          await respond.acknowledge();
+        } catch {
+          // Interaction may already be acknowledged; continue with best-effort follow-up.
+        }
       }
     }
     try {
@@ -1341,6 +1343,17 @@ async function handleDiscordComponentEvent(params: {
 
   const values = params.values ? mapSelectValues(consumed, params.values) : undefined;
   if (consumed.callbackData) {
+    if (!commandAuthorized) {
+      try {
+        await params.interaction.reply({
+          content: unauthorizedReply,
+          ephemeral: true,
+        });
+      } catch {
+        // Interaction may have expired
+      }
+      return;
+    }
     const pluginDispatch = await dispatchPluginDiscordInteractiveEvent({
       ctx: params.ctx,
       interaction: params.interaction,
