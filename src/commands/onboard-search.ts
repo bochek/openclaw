@@ -30,6 +30,7 @@ import {
 } from "./onboarding/plugin-install.js";
 import {
   buildProviderSelectionOptions,
+  promptProviderManagementIntent,
   type ProviderManagementIntent,
 } from "./provider-management.js";
 import {
@@ -42,6 +43,8 @@ export type SearchProvider = string;
 const SEARCH_PROVIDER_INSTALL_SENTINEL = "__install_plugin__" as const;
 const SEARCH_PROVIDER_KEEP_CURRENT_SENTINEL = "__keep_current__" as const;
 const SEARCH_PROVIDER_SKIP_SENTINEL = "__skip__" as const;
+const SEARCH_PROVIDER_CONFIGURE_SENTINEL = "__configure_provider__" as const;
+const SEARCH_PROVIDER_SWITCH_ACTIVE_SENTINEL = "__switch_active_provider__" as const;
 
 type PluginSearchProviderEntry = {
   kind: "plugin";
@@ -1231,14 +1234,43 @@ export async function promptSearchProviderFlow(params: {
     includeSkipOption: params.includeSkipOption,
     skipHint: params.skipHint,
   });
+  const action = await promptProviderManagementIntent({
+    prompter: params.prompter,
+    message: "Web search setup",
+    includeSkipOption: params.includeSkipOption,
+    configuredCount: pickerModel.configuredCount,
+    configureValue: SEARCH_PROVIDER_CONFIGURE_SENTINEL,
+    switchValue: SEARCH_PROVIDER_SWITCH_ACTIVE_SENTINEL,
+    skipValue: SEARCH_PROVIDER_SKIP_SENTINEL,
+    configureLabel: "Configure or install a provider",
+    configureHint:
+      "Update keys, plugin settings, or install a provider without changing the active provider",
+    switchLabel: "Switch active provider",
+    switchHint: "Change which provider web_search uses right now",
+    skipHint: params.skipHint ?? "Configure later with openclaw configure --section web",
+  });
+  if (action === SEARCH_PROVIDER_SKIP_SENTINEL) {
+    return params.config;
+  }
+  const intent: SearchProviderFlowIntent =
+    action === SEARCH_PROVIDER_CONFIGURE_SENTINEL ? "configure-provider" : "switch-active";
   const choice = await params.prompter.select<SearchProviderPickerChoice>({
-    message: "Choose web search provider",
+    message:
+      intent === "switch-active"
+        ? "Choose active web search provider"
+        : "Choose provider to configure",
     options: buildProviderSelectionOptions({
-      intent: "configure-provider",
+      intent,
       options: pickerModel.options,
       activeValue: pickerModel.activeProvider,
+      hiddenValues: intent === "configure-provider" ? [SEARCH_PROVIDER_KEEP_CURRENT_SENTINEL] : [],
     }),
-    initialValue: pickerModel.initialValue,
+    initialValue:
+      intent === "switch-active"
+        ? pickerModel.initialValue
+        : (pickerModel.options.find(
+            (option) => option.value !== SEARCH_PROVIDER_KEEP_CURRENT_SENTINEL,
+          )?.value ?? pickerModel.initialValue),
   });
 
   if (
@@ -1247,17 +1279,6 @@ export async function promptSearchProviderFlow(params: {
   ) {
     return params.config;
   }
-
-  const selectedEntry = providerEntries.find((entry) => entry.value === choice);
-  const intent: SearchProviderFlowIntent =
-    choice === SEARCH_PROVIDER_INSTALL_SENTINEL
-      ? "configure-provider"
-      : choice === pickerModel.activeProvider
-        ? "configure-provider"
-        : selectedEntry?.configured
-          ? "switch-active"
-          : "configure-provider";
-
   return applySearchProviderChoice({
     config: params.config,
     choice,

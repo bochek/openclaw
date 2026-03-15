@@ -237,7 +237,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Choose web search provider") {
+      if (params.message === "Choose active web search provider") {
         return "tavily";
       }
       if (params.message.startsWith("Search depth")) {
@@ -317,7 +317,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Choose web search provider") {
+      if (params.message === "Choose active web search provider") {
         return "brave";
       }
       return "__continue";
@@ -411,7 +411,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Choose web search provider") {
+      if (params.message === "Choose active web search provider") {
         return "tavily";
       }
       if (params.message.startsWith("Search depth")) {
@@ -571,7 +571,7 @@ describe("runConfigureWizard", () => {
     mocks.clackOutro.mockResolvedValue(undefined);
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(async (params: { message: string }) => {
-      if (params.message === "Choose web search provider") {
+      if (params.message === "Choose active web search provider") {
         return "tavily";
       }
       if (params.message.startsWith("Search depth")) {
@@ -784,7 +784,7 @@ describe("runConfigureWizard", () => {
     mocks.clackConfirm.mockResolvedValueOnce(true).mockResolvedValueOnce(true);
     mocks.clackSelect.mockImplementation(
       async (params: { message: string; options?: Array<{ value: string; hint?: string }> }) => {
-        if (params.message === "Choose web search provider") {
+        if (params.message === "Choose active web search provider") {
           expect(params.options?.[0]).toMatchObject({
             value: "tavily",
             hint: "Plugin search · External plugin",

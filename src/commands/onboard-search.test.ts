@@ -166,7 +166,7 @@ describe("setupSearch", () => {
     await setupSearch(cfg, runtime, prompter);
 
     const providerSelectCall = (prompter.select as ReturnType<typeof vi.fn>).mock.calls.find(
-      (call) => call[0]?.message === "Choose web search provider",
+      (call) => call[0]?.message === "Choose active web search provider",
     );
     expect(providerSelectCall?.[0]).toEqual(
       expect.objectContaining({
@@ -225,7 +225,7 @@ describe("setupSearch", () => {
     await setupSearch(cfg, runtime, prompter);
 
     const providerSelectCall = (prompter.select as ReturnType<typeof vi.fn>).mock.calls.find(
-      (call) => call[0]?.message === "Choose web search provider",
+      (call) => call[0]?.message === "Choose active web search provider",
     );
     expect(providerSelectCall?.[0]).toEqual(
       expect.objectContaining({
@@ -294,7 +294,7 @@ describe("setupSearch", () => {
       await setupSearch(cfg, runtime, prompter);
 
       const providerSelectCall = (prompter.select as ReturnType<typeof vi.fn>).mock.calls.find(
-        (call) => call[0]?.message === "Choose web search provider",
+        (call) => call[0]?.message === "Choose active web search provider",
       );
       const matchingOptions =
         providerSelectCall?.[0]?.options?.filter(
@@ -359,7 +359,7 @@ describe("setupSearch", () => {
 
     expect(prompter.select).toHaveBeenCalledWith(
       expect.objectContaining({
-        message: "Choose web search provider",
+        message: "Choose active web search provider",
         options: expect.arrayContaining([
           expect.objectContaining({
             value: "__install_plugin__",
@@ -462,7 +462,7 @@ describe("setupSearch", () => {
     await setupSearch(cfg, runtime, prompter);
 
     const options = (prompter.select as ReturnType<typeof vi.fn>).mock.calls.find(
-      (call) => call[0]?.message === "Choose web search provider",
+      (call) => call[0]?.message === "Choose active web search provider",
     )?.[0]?.options;
     expect(options[0]).toMatchObject({
       value: "tavily",
@@ -528,7 +528,7 @@ describe("setupSearch", () => {
     await setupSearch(cfg, runtime, prompter);
 
     const configurePickerCall = (prompter.select as ReturnType<typeof vi.fn>).mock.calls.find(
-      (call) => call[0]?.message === "Choose web search provider",
+      (call) => call[0]?.message === "Choose active web search provider",
     );
     expect(configurePickerCall?.[0]).toEqual(
       expect.objectContaining({
