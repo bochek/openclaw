@@ -146,7 +146,7 @@ What is still pending from this spec:
 - broader extension-host lifecycle ownership beyond the loader state machine, service-lifecycle boundary, CLI-lifecycle boundary, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes
 - activation pipeline ownership
 - host-owned registries for setup, CLI, routes, services, slots, and backends
-- broader embedding-runtime execution and fallback ownership, remaining media facade and config-helper cleanup, plus remaining TTS config/status and facade cleanup, including explicit fallback and override policy instead of plugin-era capability reads
+- broader embedding-runtime execution and fallback ownership, remaining media compatibility-facade cleanup, plus remaining TTS config/status and facade cleanup, including explicit fallback and override policy instead of plugin-era capability reads
 - a clear host-owned split for extension-backed search between agent-visible tool publication and any optional runtime-internal search backend registry
 - permission-mode enforcement
 - per-extension state ownership and migration
@@ -745,7 +745,7 @@ The host must emit structured telemetry for:
 4. Add a policy evaluator that understands advisory versus enforced permission modes.
 5. Add host-owned credential and per-extension state boundaries for extension services.
 6. Generalize backend registration into a host-managed `capability.runtime-backend` registry.
-7. Finish broader embedding-runtime execution and fallback ownership, remaining media facade and config-helper cleanup, plus remaining TTS config/status and facade cleanup, instead of widening `registerProvider(...)`.
+7. Finish broader embedding-runtime execution and fallback ownership, remaining media compatibility-facade cleanup, plus remaining TTS config/status and facade cleanup, instead of widening `registerProvider(...)`.
 8. Keep extension-backed search generic by publishing agent-visible search through tool contracts and using runtime-backend only for search backends consumed internally by the host or another subsystem.
 9. Add slot-backed provider management for context engines and other exclusive runtime providers.
 10. Preserve provenance, origin precedence, and current workspace and bundled enablement rules in host policy.
