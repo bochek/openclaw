@@ -117,6 +117,11 @@ describe("runtime-backend-catalog", () => {
       "elevenlabs",
       "edge",
     ]);
+    expect(catalog.resolveExtensionHostTtsRuntimeBackendOrder("edge")).toEqual([
+      "edge",
+      "openai",
+      "elevenlabs",
+    ]);
   });
 
   it("aggregates runtime-backend catalog entries across subsystem families", async () => {

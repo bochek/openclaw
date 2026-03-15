@@ -124,6 +124,11 @@ describe("tts", () => {
     );
   });
 
+  it("keeps compatibility provider exports aligned with the runtime-backend catalog", () => {
+    expect(tts.TTS_PROVIDERS).toEqual(["openai", "elevenlabs", "edge"]);
+    expect(tts.resolveTtsProviderOrder("edge")).toEqual(["edge", "openai", "elevenlabs"]);
+  });
+
   describe("isValidVoiceId", () => {
     it("validates ElevenLabs voice ID length and character rules", () => {
       const cases = [

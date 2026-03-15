@@ -235,10 +235,29 @@ export function listExtensionHostRuntimeBackendIdsForSubsystem(
     .map((entry) => entry.backendId);
 }
 
+export function resolveExtensionHostRuntimeBackendOrderForSubsystem(
+  subsystemId: ExtensionHostRuntimeBackendSubsystemId,
+  preferredBackendId: string,
+): readonly string[] {
+  const ordered = listExtensionHostRuntimeBackendIdsForSubsystem(subsystemId);
+  if (!ordered.includes(preferredBackendId)) {
+    return [preferredBackendId, ...ordered];
+  }
+  return [preferredBackendId, ...ordered.filter((backendId) => backendId !== preferredBackendId)];
+}
+
 export function listExtensionHostMediaRuntimeBackendIds(
   subsystemId: ExtensionHostMediaRuntimeSubsystemId,
 ): readonly string[] {
   return listExtensionHostRuntimeBackendIdsForSubsystem(subsystemId);
+}
+
+export function resolveExtensionHostTtsRuntimeBackendOrder(
+  preferredBackendId: TtsProvider,
+): readonly TtsProvider[] {
+  return resolveExtensionHostRuntimeBackendOrderForSubsystem("tts", preferredBackendId).map(
+    (backendId) => backendId as TtsProvider,
+  );
 }
 
 export function listExtensionHostRuntimeBackendCatalogEntries(): readonly ExtensionHostRuntimeBackendCatalogEntry[] {

@@ -1,5 +1,9 @@
 import type { TtsProvider } from "../config/types.tts.js";
 import {
+  listExtensionHostTtsRuntimeBackendIds,
+  resolveExtensionHostTtsRuntimeBackendOrder,
+} from "../extension-host/runtime-backend-catalog.js";
+import {
   applyExtensionHostTtsToPayload,
   buildExtensionHostTtsSystemPromptHint,
   resolveExtensionHostEdgeOutputFormat,
@@ -26,10 +30,8 @@ import {
   setExtensionHostTtsSummarizationEnabled,
 } from "../extension-host/tts-preferences.js";
 import {
-  EXTENSION_HOST_TTS_PROVIDER_IDS,
   isExtensionHostTtsProviderConfigured,
   resolveExtensionHostTtsApiKey,
-  resolveExtensionHostTtsProviderOrder,
 } from "../extension-host/tts-runtime-registry.js";
 import { resolveExtensionHostTtsProvider } from "../extension-host/tts-runtime-setup.js";
 import {
@@ -129,11 +131,11 @@ export function setLastTtsAttempt(entry: TtsStatusEntry | undefined): void {
   setExtensionHostLastTtsAttempt(entry);
 }
 
-export const TTS_PROVIDERS = EXTENSION_HOST_TTS_PROVIDER_IDS;
+export const TTS_PROVIDERS = listExtensionHostTtsRuntimeBackendIds();
 
 export const resolveTtsApiKey = resolveExtensionHostTtsApiKey;
 
-export const resolveTtsProviderOrder = resolveExtensionHostTtsProviderOrder;
+export const resolveTtsProviderOrder = resolveExtensionHostTtsRuntimeBackendOrder;
 
 export const isTtsProviderConfigured = isExtensionHostTtsProviderConfigured;
 

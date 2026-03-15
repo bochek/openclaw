@@ -10,7 +10,11 @@ import {
 } from "./tts-runtime-setup.js";
 
 vi.mock("./runtime-backend-catalog.js", () => ({
-  listExtensionHostTtsRuntimeBackendIds: vi.fn(() => ["openai", "elevenlabs", "edge"]),
+  resolveExtensionHostTtsRuntimeBackendOrder: vi.fn((provider: string) =>
+    [provider, "openai", "elevenlabs", "edge"].filter(
+      (candidate, index, items) => items.indexOf(candidate) === index,
+    ),
+  ),
 }));
 
 const tempDirs: string[] = [];
