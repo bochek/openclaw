@@ -147,6 +147,30 @@ describe("message hook mappers", () => {
     });
   });
 
+  it("preserves Discord channel identity for group DM inbound claims", () => {
+    const canonical = deriveInboundMessageHookContext(
+      makeInboundCtx({
+        Provider: "discord",
+        Surface: "discord",
+        OriginatingChannel: "discord",
+        From: "discord:channel:1480554272859881494",
+        To: "channel:1480554272859881494",
+        OriginatingTo: "channel:1480554272859881494",
+        GroupChannel: undefined,
+        GroupSubject: undefined,
+      }),
+    );
+
+    expect(toPluginInboundClaimContext(canonical)).toEqual({
+      channelId: "discord",
+      accountId: "acc-1",
+      conversationId: "channel:1480554272859881494",
+      parentConversationId: undefined,
+      senderId: "sender-1",
+      messageId: "msg-1",
+    });
+  });
+
   it("maps transcribed and preprocessed internal payloads", () => {
     const cfg = {} as OpenClawConfig;
     const canonical = deriveInboundMessageHookContext(makeInboundCtx({ Transcript: undefined }));
