@@ -738,6 +738,34 @@ describe("createMattermostInteractionHandler", () => {
     expectSuccessfulApprovalUpdate(res, requestLog);
   });
 
+  it("blocks button dispatch when the sender is not allowed for the action", async () => {
+    const { context, token } = createActionContext();
+    const dispatchButtonClick = vi.fn();
+    const handler = createMattermostInteractionHandler({
+      client: {
+        request: async (_path: string, init?: { method?: string }) =>
+          init?.method === "PUT" ? { id: "post-1" } : createActionPost(),
+      } as unknown as MattermostClient,
+      botUserId: "bot",
+      accountId: "acct",
+      authorizeButtonClick: async () => ({
+        ok: false,
+        response: {
+          ephemeral_text: "blocked",
+        },
+      }),
+      dispatchButtonClick,
+    });
+
+    const res = await runHandler(handler, {
+      body: createInteractionBody({ context, token }),
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("blocked");
+    expect(dispatchButtonClick).not.toHaveBeenCalled();
+  });
+
   it("forwards fetched post threading metadata to session and button callbacks", async () => {
     const enqueueSystemEvent = vi.fn();
     setMattermostRuntime({

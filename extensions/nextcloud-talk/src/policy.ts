@@ -61,12 +61,7 @@ export function resolveNextcloudTalkRoomMatch(params: {
 }): NextcloudTalkRoomMatch {
   const rooms = params.rooms ?? {};
   const allowlistConfigured = Object.keys(rooms).length > 0;
-  const roomName = params.roomName?.trim() || undefined;
-  const roomCandidates = buildChannelKeyCandidates(
-    params.roomToken,
-    roomName,
-    roomName ? normalizeChannelSlug(roomName) : undefined,
-  );
+  const roomCandidates = buildChannelKeyCandidates(params.roomToken);
   const match = resolveChannelEntryMatchWithFallback({
     entries: rooms,
     keys: roomCandidates,

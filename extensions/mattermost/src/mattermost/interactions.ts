@@ -37,6 +37,10 @@ export type MattermostInteractionResponse = {
   ephemeral_text?: string;
 };
 
+export type MattermostInteractionAuthorizationResult =
+  | { ok: true }
+  | { ok: false; statusCode?: number; response?: MattermostInteractionResponse };
+
 export type MattermostInteractiveButtonInput = {
   id?: string;
   callback_data?: string;
@@ -404,6 +408,10 @@ export function createMattermostInteractionHandler(params: {
     context: Record<string, unknown>;
     post: MattermostPost;
   }) => Promise<MattermostInteractionResponse | null>;
+  authorizeButtonClick?: (opts: {
+    payload: MattermostInteractionPayload;
+    post: MattermostPost;
+  }) => Promise<MattermostInteractionAuthorizationResult>;
   dispatchButtonClick?: (opts: {
     channelId: string;
     userId: string;
@@ -588,6 +596,33 @@ export function createMattermostInteractionHandler(params: {
         res.statusCode = 500;
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ error: "Interaction handler failed" }));
+        return;
+      }
+    }
+
+    if (params.authorizeButtonClick) {
+      try {
+        const authorization = await params.authorizeButtonClick({
+          payload,
+          post: originalPost,
+        });
+        if (!authorization.ok) {
+          res.statusCode = authorization.statusCode ?? 200;
+          res.setHeader("Content-Type", "application/json");
+          res.end(
+            JSON.stringify(
+              authorization.response ?? {
+                ephemeral_text: "You are not allowed to use this action here.",
+              },
+            ),
+          );
+          return;
+        }
+      } catch (err) {
+        log?.(`mattermost interaction: authorization failed: ${String(err)}`);
+        res.statusCode = 500;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Interaction authorization failed" }));
         return;
       }
     }
