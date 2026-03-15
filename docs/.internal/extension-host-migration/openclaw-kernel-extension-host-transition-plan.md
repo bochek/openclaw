@@ -89,6 +89,7 @@ What has landed:
 - plugin provider discovery filtering, order grouping, and result normalization now route through `src/extension-host/provider-discovery.ts`
 - provider matching, auth-method selection, config-patch merging, and default-model application now route through `src/extension-host/provider-auth.ts`
 - media-provider normalization, built-in registry construction, override merging, and runtime lookup now route through `src/extension-host/media-runtime-registry.ts` while `src/media-understanding/providers/index.ts` remains the compatibility facade
+- TTS provider metadata, provider ordering, API-key resolution, configuration checks, and telephony support now route through `src/extension-host/tts-runtime-registry.ts` while `src/tts/tts.ts` remains the synthesis execution owner
 - provider onboarding option building, model-picker entry building, and provider-method choice resolution now route through `src/extension-host/provider-wizard.ts`
 - loaded-provider auth application, plugin-enable gating, auth-method execution, and post-auth default-model handling now route through `src/extension-host/provider-auth-flow.ts`
 - provider post-selection hook lookup and invocation now route through `src/extension-host/provider-model-selection.ts`
@@ -227,6 +228,7 @@ Committed implementation slices so far:
 - `871086537b` `Plugins: extract slot arbitration`
 - `b7868d06ba` `ACP: extract runtime backend registry`
 - `e592f60fa7` `Media: extract runtime provider registry`
+- `36711383f6` `TTS: extract runtime registry`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
@@ -235,7 +237,7 @@ What has not landed:
 - keeping the cutover inventory current as more surfaces move
 - broader lifecycle ownership beyond the loader state machine, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes, plus remaining policy semantics
 - host-owned registration surfaces beyond the first normalization helpers and low-risk channel, provider, gateway-method, HTTP-route, tool, CLI, service, command, context-engine, and hook compatibility write slices
-- broader subsystem-runtime fallback ownership beyond the media runtime-registry seam, plus new embedding and TTS runtime registries
+- the embedding runtime registry, plus broader media- and TTS-runtime execution and fallback ownership
 - SDK compatibility translation work
 - canonical event stages
 - canonical capability catalogs

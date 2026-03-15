@@ -44,6 +44,7 @@ What has been implemented:
 - exclusive-slot selection and default-slot resolution now route through `src/extension-host/slot-arbitration.ts` while `src/plugins/slots.ts` remains the compatibility facade
 - ACP backend registration and runtime resolution now route through `src/extension-host/acp-runtime-backend-registry.ts` while `src/acp/runtime/registry.ts` remains the compatibility facade
 - media-provider normalization, built-in registry construction, override merging, and runtime lookup now route through `src/extension-host/media-runtime-registry.ts` while `src/media-understanding/providers/index.ts` remains the compatibility facade
+- TTS provider metadata, provider ordering, API-key resolution, configuration checks, and telephony support now route through `src/extension-host/tts-runtime-registry.ts` while `src/tts/tts.ts` remains the synthesis execution owner
 - legacy internal-hook bridging and typed prompt-injection compatibility policy now route through `src/extension-host/hook-compat.ts`
 - compatibility `OpenClawPluginApi` composition and logger shaping now route through `src/extension-host/plugin-api.ts`
 - compatibility plugin-registry facade ownership now routes through `src/extension-host/plugin-registry.ts`
