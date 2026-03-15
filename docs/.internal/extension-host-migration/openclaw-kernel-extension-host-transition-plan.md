@@ -79,6 +79,7 @@ What has landed:
 - service startup, stop ordering, service-context creation, and failure logging now route through `src/extension-host/service-lifecycle.ts`
 - CLI duplicate detection, registrar invocation, and async failure logging now route through `src/extension-host/cli-lifecycle.ts`
 - gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition now route through `src/extension-host/gateway-methods.ts`
+- plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking now route through `src/extension-host/tool-runtime.ts`
 - several existing consumers now read host-owned normalized data instead of plugin-era manifest or runtime state directly:
   - channel and dock lookup surfaces
   - message-channel normalization
@@ -133,6 +134,7 @@ How it was done:
 - by extracting service startup, stop ordering, service-context creation, and failure logging into a host-owned service-lifecycle helper while `src/plugins/services.ts` remains the compatibility entry point
 - by extracting CLI duplicate detection, registrar invocation, and async failure logging into a host-owned CLI-lifecycle helper while `src/plugins/cli.ts` remains the compatibility entry point
 - by extracting gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition into a host-owned gateway-methods helper while request dispatch semantics remain in the gateway server code
+- by extracting plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking into a host-owned tool-runtime helper while `src/plugins/tools.ts` remains the loader and config-normalization facade
 - by moving static and lookup-heavy consumers first, where the ownership boundary matters but runtime risk is lower
 
 Committed implementation slices so far:
@@ -171,6 +173,7 @@ Committed implementation slices so far:
 - `6b24e65719` `Plugins: extract service lifecycle`
 - `b5757a6625` `Plugins: extract CLI lifecycle`
 - `e0e3229bcb` `Gateway: extract extension host method surface`
+- `af7ac14eed` `Plugins: extract tool runtime`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 

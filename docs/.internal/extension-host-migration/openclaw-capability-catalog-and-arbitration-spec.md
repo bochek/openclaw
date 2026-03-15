@@ -69,6 +69,7 @@ What has been implemented:
 - service startup, stop ordering, service-context creation, and failure logging now route through `src/extension-host/service-lifecycle.ts` ahead of broader catalog-backed lifecycle ownership
 - CLI duplicate detection, registrar invocation, and async failure logging now route through `src/extension-host/cli-lifecycle.ts` ahead of broader catalog-backed CLI ownership
 - gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition now route through `src/extension-host/gateway-methods.ts` ahead of broader catalog-backed gateway ownership
+- plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking now route through `src/extension-host/tool-runtime.ts` ahead of broader catalog-backed tool ownership
 
 How it has been implemented:
 
@@ -100,6 +101,7 @@ How it has been implemented:
 - by extracting service startup, stop ordering, service-context creation, and failure logging into a host-owned service-lifecycle helper before broader catalog-backed service ownership
 - by extracting CLI duplicate detection, registrar invocation, and async failure logging into a host-owned CLI-lifecycle helper before broader catalog-backed CLI ownership
 - by extracting gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition into a host-owned gateway-methods helper before broader catalog-backed gateway ownership
+- by extracting plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking into a host-owned tool-runtime helper before broader catalog-backed tool ownership
 
 What remains pending:
 
