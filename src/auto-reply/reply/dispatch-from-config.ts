@@ -387,6 +387,18 @@ export async function dispatchReplyFromConfig(params: {
     }
   }
 
+  if (!pluginOwnedBinding && hookRunner?.hasHooks("inbound_claim")) {
+    const inboundClaimResult = await hookRunner.runInboundClaim(
+      inboundClaimEvent,
+      inboundClaimContext,
+    );
+    if (inboundClaimResult?.handled) {
+      markIdle("plugin_inbound_claim");
+      recordProcessed("completed", { reason: "plugin-inbound-claimed" });
+      return { queuedFinal: false, counts: dispatcher.getQueuedCounts() };
+    }
+  }
+
   // Trigger plugin hooks (fire-and-forget)
   if (hookRunner?.hasHooks("message_received")) {
     fireAndForgetHook(
