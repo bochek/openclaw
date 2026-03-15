@@ -1,3 +1,4 @@
+import { stripUrlUserInfo } from "../shared/net/url-userinfo.js";
 import type { ChannelAccountSnapshot } from "./plugins/types.core.js";
 
 // Read-only status commands project a safe subset of account fields into snapshots
@@ -28,20 +29,6 @@ function readTrimmedString(record: Record<string, unknown>, key: string): string
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function stripUrlUserInfo(value: string): string {
-  try {
-    const parsed = new URL(value);
-    if (!parsed.username && !parsed.password) {
-      return value;
-    }
-    parsed.username = "";
-    parsed.password = "";
-    return parsed.toString();
-  } catch {
-    return value;
-  }
 }
 
 function readBoolean(record: Record<string, unknown>, key: string): boolean | undefined {

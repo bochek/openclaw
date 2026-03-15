@@ -1,5 +1,6 @@
 import JSON5 from "json5";
 import { createSubsystemLogger } from "../logging/subsystem.js";
+import { stripUrlUserInfo } from "../shared/net/url-userinfo.js";
 import {
   replaceSensitiveValuesInRaw,
   shouldFallbackToStructuredRawRedaction,
@@ -30,20 +31,6 @@ function isWholeObjectSensitivePath(path: string): boolean {
 
 function isUserInfoUrlPath(path: string): boolean {
   return path.endsWith(".baseUrl") || path.endsWith(".httpUrl");
-}
-
-function stripUrlUserInfo(value: string): string {
-  try {
-    const parsed = new URL(value);
-    if (!parsed.username && !parsed.password) {
-      return value;
-    }
-    parsed.username = "";
-    parsed.password = "";
-    return parsed.toString();
-  } catch {
-    return value;
-  }
 }
 
 function collectSensitiveStrings(value: unknown, values: string[]): void {
@@ -231,7 +218,11 @@ function redactObjectWithLookup(
             // Keep primitives at explicitly-sensitive paths fully redacted.
             result[key] = REDACTED_SENTINEL;
           } else if (typeof value === "string" && isUserInfoUrlPath(path)) {
-            result[key] = stripUrlUserInfo(value);
+            const scrubbed = stripUrlUserInfo(value);
+            if (scrubbed !== value) {
+              values.push(value);
+            }
+            result[key] = scrubbed;
           }
           break;
         }
@@ -250,7 +241,11 @@ function redactObjectWithLookup(
           result[key] = REDACTED_SENTINEL;
           values.push(value);
         } else if (typeof value === "string" && isUserInfoUrlPath(path)) {
-          result[key] = stripUrlUserInfo(value);
+          const scrubbed = stripUrlUserInfo(value);
+          if (scrubbed !== value) {
+            values.push(value);
+          }
+          result[key] = scrubbed;
         } else if (typeof value === "object" && value !== null) {
           result[key] = redactObjectGuessing(value, path, values, hints);
         }
@@ -316,7 +311,11 @@ function redactObjectGuessing(
         collectSensitiveStrings(value, values);
         result[key] = REDACTED_SENTINEL;
       } else if (typeof value === "string" && isUserInfoUrlPath(dotPath)) {
-        result[key] = stripUrlUserInfo(value);
+        const scrubbed = stripUrlUserInfo(value);
+        if (scrubbed !== value) {
+          values.push(value);
+        }
+        result[key] = scrubbed;
       } else if (typeof value === "object" && value !== null) {
         result[key] = redactObjectGuessing(value, dotPath, values, hints);
       } else {
