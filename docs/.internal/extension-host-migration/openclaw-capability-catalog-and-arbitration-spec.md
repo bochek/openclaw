@@ -502,6 +502,8 @@ The selected provider integration may also contribute:
 - token refresh behavior
 - model-selected hooks
 
+It should not silently absorb unrelated subsystem runtimes such as embeddings, transcription, media understanding, or TTS.
+
 ## Memory Arbitration
 
 Memory needs both backend arbitration and agent action arbitration.
@@ -540,6 +542,26 @@ Selection rules:
 - if a subsystem declares an exclusive slot, the host enforces it before kernel startup
 
 This is why `capability.runtime-backend` must be a first-class family.
+
+The same model should be available for other subsystem runtimes discovered during migration:
+
+- embeddings
+- audio transcription
+- image understanding
+- video understanding
+- text-to-speech
+
+Selection rules for these subsystem runtimes should preserve the useful parts of provider-capability prototypes:
+
+- capability-based selection
+- normalized provider ids
+- explicit built-in fallback policy
+- typed host-injected request envelopes
+
+Architecture rule:
+
+- keep those selection and envelope rules inside host-owned subsystem runtime registries or typed backend families
+- do not widen provider-integration or legacy plugin-provider APIs into a universal surface for unrelated runtime subsystems
 
 ## Catalog Publication
 
@@ -584,6 +606,7 @@ Capability selection must emit structured events for:
 - channel capabilities from `extensions/discord/src/channel.ts:74`, `extensions/slack/src/channel.ts:107`, and `extensions/telegram/src/channel.ts:120` collapse into canonical messaging action families
 - diffs becomes an agent-visible tool family plus a host-managed route surface from `extensions/diffs/index.ts:27`
 - provider integration from `extensions/google-gemini-cli-auth/index.ts:24` becomes operator-visible setup and auth capabilities
+- embedding, media-understanding, and TTS provider overrides should become runtime-internal subsystem registries rather than remaining part of a universal plugin-provider API
 - voice-call from `extensions/voice-call/index.ts:230` becomes a mix of agent-visible actions, runtime providers, and operator surfaces
 - ACP backend registration from `extensions/acpx/src/service.ts:55` becomes runtime-internal backend arbitration
 - context-engine registration becomes runtime-internal slot arbitration from `src/context-engine/registry.ts:60`
@@ -599,6 +622,7 @@ Capability selection must emit structured events for:
 6. Migrate the existing provider auth and setup selection path onto host-owned setup catalogs and canonical provider metadata.
 7. Add provider selection logic for the broader messaging action family before migrating all channels.
 8. Add runtime-backend and context-engine arbitration using the same rank and slot model where appropriate.
-9. Ensure lightweight setup catalogs can be built from static descriptors alone.
-10. Add a reviewed core registry for canonical action families and document how new ids are introduced.
-11. Record catalog and arbitration parity for `thread-ownership` first and `telegram` second before broader rollout.
+9. Add host-owned embedding, media-understanding, and TTS subsystem registries with explicit capability routing and built-in fallback policy.
+10. Ensure lightweight setup catalogs can be built from static descriptors alone.
+11. Add a reviewed core registry for canonical action families and document how new ids are introduced.
+12. Record catalog and arbitration parity for `thread-ownership` first and `telegram` second before broader rollout.

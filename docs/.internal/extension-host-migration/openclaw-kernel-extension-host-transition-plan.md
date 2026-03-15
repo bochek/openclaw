@@ -548,6 +548,7 @@ Suggested mapping:
 
 - `registerChannel(...)` -> `adapter.runtime` plus lightweight dock metadata and optional `surface.config`, `surface.status`, `surface.setup`
 - `registerProvider(...)` -> `capability.provider-integration` plus optional setup and auth surfaces
+- plugin-provided embeddings, transcription, image or video understanding, and TTS -> typed subsystem runtime contributions or `capability.runtime-backend`, not a widened `registerProvider(...)` end state
 - `registerTool(...)` -> `capability.agent-tool`
 - `registerCommand(...)` -> `capability.control-command`
 - `on(...)` returning context or side effects -> `capability.context-augmenter` or `capability.event-handler`
@@ -564,6 +565,9 @@ Suggested mapping:
 Concrete examples:
 
 - `extensions/google-gemini-cli-auth/index.ts:25` becomes `capability.provider-integration`
+- plugin-provided embeddings become a host-owned embedding runtime contribution
+- plugin-provided transcription, image understanding, and video understanding become host-owned media runtime contributions
+- plugin-provided TTS becomes a host-owned TTS runtime contribution
 - `extensions/diffs/index.ts:27` becomes `capability.agent-tool`
 - `extensions/diffs/index.ts:28` becomes a host-managed route or interaction surface
 - `extensions/diffs/index.ts:38` becomes `capability.context-augmenter`
@@ -822,6 +826,25 @@ Provider integration contributions need host-injected capabilities for:
 - onboarding and wizard metadata
 - token refresh or credential renewal
 - model-selected lifecycle hooks
+
+Scope rule:
+
+- `capability.provider-integration` is for chat or model-provider discovery, setup, auth, and post-selection lifecycle
+- embeddings, transcription, image understanding, video understanding, and TTS should not be folded into that family just because they also use remote providers
+- those subsystem runtimes should use host-owned capability routing and typed runtime registries or runtime-backend families instead
+
+Useful ideas harvested from provider-capability validation:
+
+- capability-based selection is good
+- typed request envelopes with host-injected `apiKey`, `baseUrl`, `headers`, `timeoutMs`, and `fetchFn` are good
+- provider-id normalization is good
+- graceful built-in fallback is good
+
+Architecture rule:
+
+- harvest those behaviors into host-owned subsystem runtime contracts
+- do not widen legacy `registerProvider(...)` into a universal plugin API for unrelated runtime subsystems
+- do not make `src/plugins/runtime.ts` capability filters or global active-registry reads the long-term selection surface for embeddings, media understanding, or TTS
 
 Example:
 

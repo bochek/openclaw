@@ -136,6 +136,7 @@ What is still pending from this spec:
 - broader extension-host lifecycle ownership beyond the loader state machine, service-lifecycle boundary, CLI-lifecycle boundary, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes
 - activation pipeline ownership
 - host-owned registries for setup, CLI, routes, services, slots, and backends
+- host-owned subsystem runtime registries for embeddings, media understanding, and TTS, including explicit fallback and override policy instead of plugin-era capability reads
 - permission-mode enforcement
 - per-extension state ownership and migration
 - provenance, reload, and hardening parity tracking
@@ -733,9 +734,10 @@ The host must emit structured telemetry for:
 4. Add a policy evaluator that understands advisory versus enforced permission modes.
 5. Add host-owned credential and per-extension state boundaries for extension services.
 6. Generalize backend registration into a host-managed `capability.runtime-backend` registry.
-7. Add slot-backed provider management for context engines and other exclusive runtime providers.
-8. Preserve provenance, origin precedence, and current workspace and bundled enablement rules in host policy.
-9. Preserve prompt-mutation policy gates and add explicit state migration handling.
-10. Add explicit host registries and typed contracts for extension-owned hooks, channels, providers, tools, commands, CLI, setup flows, config surfaces, and status surfaces.
-11. Preserve config redaction-aware schema behavior and current reload or gateway feature contracts during migration.
-12. Record lifecycle parity for `thread-ownership` first and `telegram` second before broadening the compatibility bridges.
+7. Add host-owned subsystem runtime registries for embeddings, media understanding, and TTS instead of widening `registerProvider(...)`.
+8. Add slot-backed provider management for context engines and other exclusive runtime providers.
+9. Preserve provenance, origin precedence, and current workspace and bundled enablement rules in host policy.
+10. Preserve prompt-mutation policy gates and add explicit state migration handling.
+11. Add explicit host registries and typed contracts for extension-owned hooks, channels, providers, tools, commands, CLI, setup flows, config surfaces, and status surfaces.
+12. Preserve config redaction-aware schema behavior and current reload or gateway feature contracts during migration.
+13. Record lifecycle parity for `thread-ownership` first and `telegram` second before broadening the compatibility bridges.

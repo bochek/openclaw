@@ -217,6 +217,7 @@ What is still missing for these phases:
 - broader lifecycle ownership beyond the loader state machine, service-lifecycle boundary, CLI-lifecycle boundary, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes, remaining policy gate ownership, and broad host-owned registries described for Phase 2
 - minimal SDK compatibility work beyond preserving current behavior indirectly through existing loading
 - host-owned conversation binding, interaction routing, ingress claim, and generic interactive control surfaces identified by external-plugin validation
+- host-owned subsystem runtime registries for embeddings, media understanding, and TTS identified by provider-capability evaluation
 - any pilot migration, event pipeline, canonical catalog, or arbitration implementation
 
 Recent plan refinement from external-plugin validation:
@@ -225,6 +226,8 @@ Recent plan refinement from external-plugin validation:
 - it now explicitly treats interactive callback routing, namespace ownership, dedupe, and fallback behavior as first-class migration surfaces
 - it now explicitly treats inbound claim as a canonical ingress-stage concern rather than a permanent plugin-era hook shape
 - it now explicitly treats Telegram and Discord as the first validated rollout targets for interactive control surfaces while keeping the underlying contracts generic, host-owned, and kernel-agnostic
+- it now explicitly treats embeddings, media understanding, and TTS as host-owned subsystem runtimes with capability routing, typed request envelopes, provider-id normalization, and fallback policy
+- it now explicitly rejects widening the legacy `registerProvider(...)` or `ProviderPlugin` surface into a universal runtime API, even when harvesting useful capability-routing ideas from provider-capability prototypes
 
 ## Implementation Order
 
