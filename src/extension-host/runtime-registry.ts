@@ -17,6 +17,10 @@ const EMPTY_GATEWAY_HANDLERS: Readonly<GatewayRequestHandlers> = Object.freeze({
 const EXTENSION_HOST_RUNTIME_REGISTRY_STATE = Symbol.for("openclaw.extensionHostRuntimeRegistry");
 
 type ExtensionHostRuntimeRegistryState = {
+  cliRegistrars: PluginCliRegistration[];
+  legacyCliRegistrars: PluginCliRegistration[];
+  services: PluginServiceRegistration[];
+  legacyServices: PluginServiceRegistration[];
   httpRoutes: PluginHttpRouteRegistration[];
   legacyHttpRoutes: PluginHttpRouteRegistration[];
   gatewayHandlers: GatewayRequestHandlers;
@@ -25,7 +29,7 @@ type ExtensionHostRuntimeRegistryState = {
 
 type RuntimeRegistryBackedPluginRegistry = Pick<
   PluginRegistry,
-  "httpRoutes" | "gatewayHandlers"
+  "cliRegistrars" | "services" | "httpRoutes" | "gatewayHandlers"
 > & {
   [EXTENSION_HOST_RUNTIME_REGISTRY_STATE]?: ExtensionHostRuntimeRegistryState;
 };
@@ -41,8 +45,16 @@ function ensureExtensionHostRuntimeRegistryState(
   registry.httpRoutes = legacyHttpRoutes;
   const legacyGatewayHandlers = registry.gatewayHandlers ?? {};
   registry.gatewayHandlers = legacyGatewayHandlers;
+  const legacyCliRegistrars = registry.cliRegistrars ?? [];
+  registry.cliRegistrars = legacyCliRegistrars;
+  const legacyServices = registry.services ?? [];
+  registry.services = legacyServices;
 
   const state: ExtensionHostRuntimeRegistryState = {
+    cliRegistrars: [...legacyCliRegistrars],
+    legacyCliRegistrars,
+    services: [...legacyServices],
+    legacyServices,
     httpRoutes: [...legacyHttpRoutes],
     legacyHttpRoutes,
     gatewayHandlers: { ...legacyGatewayHandlers },
@@ -50,6 +62,14 @@ function ensureExtensionHostRuntimeRegistryState(
   };
   registry[EXTENSION_HOST_RUNTIME_REGISTRY_STATE] = state;
   return state;
+}
+
+function syncLegacyCliRegistrars(state: ExtensionHostRuntimeRegistryState): void {
+  state.legacyCliRegistrars.splice(0, state.legacyCliRegistrars.length, ...state.cliRegistrars);
+}
+
+function syncLegacyServices(state: ExtensionHostRuntimeRegistryState): void {
+  state.legacyServices.splice(0, state.legacyServices.length, ...state.services);
 }
 
 function syncLegacyHttpRoutes(state: ExtensionHostRuntimeRegistryState): void {
@@ -94,8 +114,8 @@ export function hasExtensionHostRuntimeEntries(
     registry.providers.length > 0 ||
     Object.keys(getExtensionHostGatewayHandlers(registry)).length > 0 ||
     listExtensionHostHttpRoutes(registry).length > 0 ||
-    registry.cliRegistrars.length > 0 ||
-    registry.services.length > 0 ||
+    listExtensionHostCliRegistrations(registry).length > 0 ||
+    listExtensionHostServiceRegistrations(registry).length > 0 ||
     registry.commands.length > 0 ||
     registry.hooks.length > 0 ||
     registry.typedHooks.length > 0
@@ -115,15 +135,29 @@ export function listExtensionHostToolRegistrations(
 }
 
 export function listExtensionHostServiceRegistrations(
-  registry: Pick<PluginRegistry, "services"> | null | undefined,
+  registry:
+    | Pick<PluginRegistry, "cliRegistrars" | "services" | "httpRoutes" | "gatewayHandlers">
+    | null
+    | undefined,
 ): readonly PluginServiceRegistration[] {
-  return registry?.services ?? EMPTY_SERVICES;
+  if (!registry) {
+    return EMPTY_SERVICES;
+  }
+  return ensureExtensionHostRuntimeRegistryState(registry as RuntimeRegistryBackedPluginRegistry)
+    .services;
 }
 
 export function listExtensionHostCliRegistrations(
-  registry: Pick<PluginRegistry, "cliRegistrars"> | null | undefined,
+  registry:
+    | Pick<PluginRegistry, "cliRegistrars" | "services" | "httpRoutes" | "gatewayHandlers">
+    | null
+    | undefined,
 ): readonly PluginCliRegistration[] {
-  return registry?.cliRegistrars ?? EMPTY_CLI_REGISTRARS;
+  if (!registry) {
+    return EMPTY_CLI_REGISTRARS;
+  }
+  return ensureExtensionHostRuntimeRegistryState(registry as RuntimeRegistryBackedPluginRegistry)
+    .cliRegistrars;
 }
 
 export function listExtensionHostHttpRoutes(
@@ -147,7 +181,7 @@ export function getExtensionHostGatewayHandlers(
 }
 
 export function addExtensionHostHttpRoute(
-  registry: Pick<PluginRegistry, "httpRoutes" | "gatewayHandlers">,
+  registry: Pick<PluginRegistry, "cliRegistrars" | "services" | "httpRoutes" | "gatewayHandlers">,
   entry: PluginHttpRouteRegistration,
 ): void {
   const state = ensureExtensionHostRuntimeRegistryState(
@@ -158,7 +192,7 @@ export function addExtensionHostHttpRoute(
 }
 
 export function replaceExtensionHostHttpRoute(params: {
-  registry: Pick<PluginRegistry, "httpRoutes" | "gatewayHandlers">;
+  registry: Pick<PluginRegistry, "cliRegistrars" | "services" | "httpRoutes" | "gatewayHandlers">;
   index: number;
   entry: PluginHttpRouteRegistration;
 }): void {
@@ -170,7 +204,7 @@ export function replaceExtensionHostHttpRoute(params: {
 }
 
 export function removeExtensionHostHttpRoute(
-  registry: Pick<PluginRegistry, "httpRoutes" | "gatewayHandlers">,
+  registry: Pick<PluginRegistry, "cliRegistrars" | "services" | "httpRoutes" | "gatewayHandlers">,
   entry: PluginHttpRouteRegistration,
 ): void {
   const state = ensureExtensionHostRuntimeRegistryState(
@@ -185,7 +219,7 @@ export function removeExtensionHostHttpRoute(
 }
 
 export function setExtensionHostGatewayHandler(params: {
-  registry: Pick<PluginRegistry, "httpRoutes" | "gatewayHandlers">;
+  registry: Pick<PluginRegistry, "cliRegistrars" | "services" | "httpRoutes" | "gatewayHandlers">;
   method: string;
   handler: GatewayRequestHandlers[string];
 }): void {
@@ -194,4 +228,26 @@ export function setExtensionHostGatewayHandler(params: {
   );
   state.gatewayHandlers[params.method] = params.handler;
   syncLegacyGatewayHandlers(state);
+}
+
+export function addExtensionHostCliRegistration(
+  registry: Pick<PluginRegistry, "cliRegistrars" | "services" | "httpRoutes" | "gatewayHandlers">,
+  entry: PluginCliRegistration,
+): void {
+  const state = ensureExtensionHostRuntimeRegistryState(
+    registry as RuntimeRegistryBackedPluginRegistry,
+  );
+  state.cliRegistrars.push(entry);
+  syncLegacyCliRegistrars(state);
+}
+
+export function addExtensionHostServiceRegistration(
+  registry: Pick<PluginRegistry, "cliRegistrars" | "services" | "httpRoutes" | "gatewayHandlers">,
+  entry: PluginServiceRegistration,
+): void {
+  const state = ensureExtensionHostRuntimeRegistryState(
+    registry as RuntimeRegistryBackedPluginRegistry,
+  );
+  state.services.push(entry);
+  syncLegacyServices(state);
 }

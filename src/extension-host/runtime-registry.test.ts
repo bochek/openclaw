@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import {
+  addExtensionHostCliRegistration,
   addExtensionHostHttpRoute,
+  addExtensionHostServiceRegistration,
   getExtensionHostGatewayHandlers,
   hasExtensionHostRuntimeEntries,
   listExtensionHostCliRegistrations,
@@ -46,6 +48,26 @@ describe("extension host runtime registry accessors", () => {
       handler: vi.fn(),
     });
     expect(hasExtensionHostRuntimeEntries(gatewayRegistry)).toBe(true);
+
+    const cliRegistry = createEmptyPluginRegistry();
+    addExtensionHostCliRegistration(cliRegistry, {
+      pluginId: "cli-demo",
+      source: "test",
+      commands: ["demo"],
+      register: () => undefined,
+    });
+    expect(hasExtensionHostRuntimeEntries(cliRegistry)).toBe(true);
+
+    const serviceRegistry = createEmptyPluginRegistry();
+    addExtensionHostServiceRegistration(serviceRegistry, {
+      pluginId: "svc-demo",
+      source: "test",
+      service: {
+        id: "svc-demo",
+        start: () => undefined,
+      },
+    });
+    expect(hasExtensionHostRuntimeEntries(serviceRegistry)).toBe(true);
   });
 
   it("returns stable empty views for missing registries", () => {
@@ -74,7 +96,7 @@ describe("extension host runtime registry accessors", () => {
         },
       }),
     });
-    registry.services.push({
+    addExtensionHostServiceRegistration(registry, {
       pluginId: "svc-demo",
       source: "test",
       service: {
@@ -82,7 +104,7 @@ describe("extension host runtime registry accessors", () => {
         start: () => undefined,
       },
     });
-    registry.cliRegistrars.push({
+    addExtensionHostCliRegistration(registry, {
       pluginId: "cli-demo",
       source: "test",
       commands: ["demo"],
@@ -104,8 +126,8 @@ describe("extension host runtime registry accessors", () => {
     });
 
     expect(listExtensionHostToolRegistrations(registry)).toBe(registry.tools);
-    expect(listExtensionHostServiceRegistrations(registry)).toBe(registry.services);
-    expect(listExtensionHostCliRegistrations(registry)).toBe(registry.cliRegistrars);
+    expect(listExtensionHostServiceRegistrations(registry)).toEqual(registry.services);
+    expect(listExtensionHostCliRegistrations(registry)).toEqual(registry.cliRegistrars);
     expect(listExtensionHostHttpRoutes(registry)).toEqual(registry.httpRoutes);
     expect(getExtensionHostGatewayHandlers(registry)).toEqual(registry.gatewayHandlers);
     expect(getExtensionHostGatewayHandlers(registry)["demo.echo"]).toBe(handler);
@@ -140,5 +162,31 @@ describe("extension host runtime registry accessors", () => {
     expect(registry.httpRoutes).toHaveLength(1);
     expect(registry.httpRoutes[0]?.handler).toBe(secondHandler);
     expect(getExtensionHostGatewayHandlers(registry)).toEqual(registry.gatewayHandlers);
+  });
+
+  it("keeps legacy CLI and service mirrors synchronized with host-owned state", () => {
+    const registry = createEmptyPluginRegistry();
+    const service = {
+      id: "svc-demo",
+      start: () => undefined,
+    };
+    const register = () => undefined;
+
+    addExtensionHostServiceRegistration(registry, {
+      pluginId: "svc-demo",
+      source: "test",
+      service,
+    });
+    addExtensionHostCliRegistration(registry, {
+      pluginId: "cli-demo",
+      source: "test",
+      commands: ["demo"],
+      register,
+    });
+
+    expect(listExtensionHostServiceRegistrations(registry)).toEqual(registry.services);
+    expect(listExtensionHostCliRegistrations(registry)).toEqual(registry.cliRegistrars);
+    expect(registry.services[0]?.service).toBe(service);
+    expect(registry.cliRegistrars[0]?.register).toBe(register);
   });
 });
