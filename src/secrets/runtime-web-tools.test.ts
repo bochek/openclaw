@@ -1,18 +1,109 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import * as secretResolve from "./resolve.js";
 import { createResolverContext } from "./runtime-shared.js";
+
+const loadOpenClawPlugins = vi.hoisted(() => vi.fn());
+
+vi.mock("../plugins/loader.js", () => ({
+  loadOpenClawPlugins,
+}));
+
 import { resolveRuntimeWebTools } from "./runtime-web-tools.js";
 
 type ProviderUnderTest = "brave" | "gemini" | "grok" | "kimi" | "perplexity";
+
+function createProviderCredentialMetadata(provider: ProviderUnderTest) {
+  const readApiKeyValue = (search: Record<string, unknown> | undefined) => {
+    if (!search) {
+      return undefined;
+    }
+    if (provider === "brave") {
+      return search.apiKey;
+    }
+    const scoped = search[provider];
+    return typeof scoped === "object" && scoped !== null && !Array.isArray(scoped)
+      ? (scoped as Record<string, unknown>).apiKey
+      : undefined;
+  };
+
+  const writeApiKeyValue = (search: Record<string, unknown>, value: unknown) => {
+    if (provider === "brave") {
+      search.apiKey = value;
+      return;
+    }
+    const current = search[provider];
+    if (typeof current === "object" && current !== null && !Array.isArray(current)) {
+      (current as Record<string, unknown>).apiKey = value;
+      return;
+    }
+    search[provider] = { apiKey: value };
+  };
+
+  const envKeys = {
+    brave: ["BRAVE_API_KEY"],
+    gemini: ["GEMINI_API_KEY"],
+    grok: ["XAI_API_KEY"],
+    kimi: ["KIMI_API_KEY", "MOONSHOT_API_KEY"],
+    perplexity: ["PERPLEXITY_API_KEY"],
+  }[provider];
+
+  const apiKeyConfigPath = {
+    brave: "tools.web.search.apiKey",
+    gemini: "tools.web.search.gemini.apiKey",
+    grok: "tools.web.search.grok.apiKey",
+    kimi: "tools.web.search.kimi.apiKey",
+    perplexity: "tools.web.search.perplexity.apiKey",
+  }[provider];
+
+  return {
+    envKeys,
+    apiKeyConfigPath,
+    readApiKeyValue,
+    writeApiKeyValue,
+  };
+}
 
 function asConfig(value: unknown): OpenClawConfig {
   return value as OpenClawConfig;
 }
 
+function withBundledSearchPluginsEnabled(config: OpenClawConfig): OpenClawConfig {
+  return {
+    ...config,
+    plugins: {
+      ...config.plugins,
+      enabled: true,
+      entries: {
+        ...config.plugins?.entries,
+        "search-brave": {
+          ...config.plugins?.entries?.["search-brave"],
+          enabled: true,
+        },
+        "search-gemini": {
+          ...config.plugins?.entries?.["search-gemini"],
+          enabled: true,
+        },
+        "search-grok": {
+          ...config.plugins?.entries?.["search-grok"],
+          enabled: true,
+        },
+        "search-kimi": {
+          ...config.plugins?.entries?.["search-kimi"],
+          enabled: true,
+        },
+        "search-perplexity": {
+          ...config.plugins?.entries?.["search-perplexity"],
+          enabled: true,
+        },
+      },
+    },
+  };
+}
+
 async function runRuntimeWebTools(params: { config: OpenClawConfig; env?: NodeJS.ProcessEnv }) {
-  const sourceConfig = structuredClone(params.config);
-  const resolvedConfig = structuredClone(params.config);
+  const sourceConfig = structuredClone(withBundledSearchPluginsEnabled(params.config));
+  const resolvedConfig = structuredClone(sourceConfig);
   const context = createResolverContext({
     sourceConfig,
     env: params.env ?? {},
@@ -82,6 +173,28 @@ function expectInactiveFirecrawlSecretRef(params: {
     ]),
   );
 }
+
+beforeEach(() => {
+  loadOpenClawPlugins.mockReturnValue({
+    searchProviders: (["brave", "gemini", "grok", "kimi", "perplexity"] as const).map(
+      (provider) => ({
+        pluginId: `search-${provider}`,
+        provider: {
+          id: provider,
+          name: provider,
+          setup: {
+            credentials: createProviderCredentialMetadata(provider),
+          },
+          resolveRuntimeMetadata:
+            provider === "perplexity" ? () => ({ perplexityTransport: "search_api" }) : undefined,
+          search: async () => ({ content: "ok" }),
+        },
+      }),
+    ),
+    plugins: [],
+    typedHooks: [],
+  });
+});
 
 describe("runtime web tools resolution", () => {
   afterEach(() => {

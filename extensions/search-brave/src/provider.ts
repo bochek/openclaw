@@ -1,6 +1,6 @@
 import {
   CacheEntry,
-  createLegacySearchProviderMetadata,
+  createSearchProviderSetupMetadata,
   createMissingSearchKeyPayload,
   formatCliCommand,
   normalizeCacheKey,
@@ -15,7 +15,7 @@ import {
   type SearchProviderContext,
   type SearchProviderErrorResult,
   type SearchProviderExecutionResult,
-  type SearchProviderLegacyUiMetadata,
+  type SearchProviderSetupUiMetadata,
   type SearchProviderPlugin,
   type SearchProviderRequest,
   withTrustedWebToolsEndpoint,
@@ -395,8 +395,8 @@ async function runBraveWebSearch(params: {
   );
 }
 
-export const BRAVE_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata =
-  createLegacySearchProviderMetadata({
+export const BRAVE_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
+  createSearchProviderSetupMetadata({
     provider: "brave",
     label: "Brave Search",
     hint: "Structured results · country/language/time filters",
@@ -414,7 +414,10 @@ export function createBundledBraveSearchProvider(): SearchProviderPlugin {
       "Search the web using Brave Search. Supports web and llm-context modes, region-specific search, and localized search parameters.",
     pluginOwnedExecution: true,
     docsUrl: BRAVE_SEARCH_PROVIDER_METADATA.signupUrl,
-    legacyConfig: BRAVE_SEARCH_PROVIDER_METADATA,
+    setup: {
+      hint: BRAVE_SEARCH_PROVIDER_METADATA.hint,
+      credentials: BRAVE_SEARCH_PROVIDER_METADATA,
+    },
     isAvailable: (config) => {
       const search = config?.tools?.web?.search;
       return Boolean(

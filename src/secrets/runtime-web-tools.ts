@@ -1,12 +1,12 @@
-import {
-  BUILTIN_WEB_SEARCH_PROVIDER_IDS,
-  type BuiltinWebSearchProviderId,
-  normalizeBuiltinWebSearchProvider,
-} from "../agents/tools/web-search-provider-catalog.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { resolveSecretInputRef } from "../config/types.secrets.js";
 import { loadOpenClawPlugins } from "../plugins/loader.js";
-import type { SearchProviderLegacyConfigMetadata, SearchProviderPlugin } from "../plugins/types.js";
+import type {
+  SearchProviderCredentialMetadata,
+  SearchProviderLegacyConfigMetadata,
+  SearchProviderPlugin,
+  SearchProviderSetupMetadata,
+} from "../plugins/types.js";
 import { normalizeSecretInput } from "../utils/normalize-secret-input.js";
 import { secretRefKey } from "./ref-contract.js";
 import { resolveSecretRefValues } from "./resolve.js";
@@ -17,7 +17,7 @@ import {
   type SecretDefaults,
 } from "./runtime-shared.js";
 
-type WebSearchProvider = BuiltinWebSearchProviderId;
+type WebSearchProvider = string;
 
 type SecretResolutionSource = "config" | "secretRef" | "env" | "missing"; // pragma: allowlist secret
 type RuntimeWebProviderSource = "configured" | "auto-detect" | "none";
@@ -79,13 +79,39 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizeProvider(value: unknown): WebSearchProvider | undefined {
-  return normalizeBuiltinWebSearchProvider(value);
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized || undefined;
 }
 
 type RegisteredSearchProviderRuntimeSupport = {
-  legacyConfig: SearchProviderLegacyConfigMetadata;
+  setup?: SearchProviderSetupMetadata;
   resolveRuntimeMetadata?: SearchProviderPlugin["resolveRuntimeMetadata"];
 };
+
+function resolveProviderSetupMetadata(
+  setup?: SearchProviderSetupMetadata,
+  legacyConfig?: SearchProviderLegacyConfigMetadata,
+): SearchProviderSetupMetadata | undefined {
+  if (setup) {
+    return setup;
+  }
+  if (!legacyConfig) {
+    return undefined;
+  }
+  return {
+    hint: legacyConfig.hint,
+    credentials: legacyConfig,
+  };
+}
+
+function resolveProviderCredentialMetadata(
+  setup?: SearchProviderSetupMetadata,
+): SearchProviderCredentialMetadata | undefined {
+  return setup?.credentials;
+}
 
 function resolveRegisteredSearchProviderMetadata(
   config: OpenClawConfig,
@@ -98,19 +124,11 @@ function resolveRegisteredSearchProviderMetadata(
     });
     return new Map(
       registry.searchProviders
-        .filter(
-          (
-            entry,
-          ): entry is typeof entry & {
-            provider: typeof entry.provider & { legacyConfig: SearchProviderLegacyConfigMetadata };
-          } =>
-            normalizeProvider(entry.provider.id) !== undefined &&
-            Boolean(entry.provider.legacyConfig),
-        )
+        .filter((entry) => normalizeProvider(entry.provider.id) !== undefined)
         .map((entry) => [
-          entry.provider.id as WebSearchProvider,
+          entry.provider.id,
           {
-            legacyConfig: entry.provider.legacyConfig,
+            setup: resolveProviderSetupMetadata(entry.provider.setup, entry.provider.legacyConfig),
             resolveRuntimeMetadata: entry.provider.resolveRuntimeMetadata,
           },
         ]),
@@ -270,7 +288,10 @@ function setResolvedWebSearchApiKey(params: {
   const tools = ensureObject(params.resolvedConfig as Record<string, unknown>, "tools");
   const web = ensureObject(tools, "web");
   const search = ensureObject(web, "search");
-  params.metadata.legacyConfig.writeApiKeyValue?.(search, params.value);
+  resolveProviderCredentialMetadata(params.metadata.setup)?.writeApiKeyValue?.(
+    search,
+    params.value,
+  );
 }
 
 function setResolvedFirecrawlApiKey(params: {
@@ -288,7 +309,9 @@ function envVarsForProvider(
   metadataByProvider: Map<WebSearchProvider, RegisteredSearchProviderRuntimeSupport>,
   provider: WebSearchProvider,
 ): string[] {
-  return [...(metadataByProvider.get(provider)?.legacyConfig.envKeys ?? [])];
+  return [
+    ...(resolveProviderCredentialMetadata(metadataByProvider.get(provider)?.setup)?.envKeys ?? []),
+  ];
 }
 
 function resolveProviderKeyValue(
@@ -296,7 +319,9 @@ function resolveProviderKeyValue(
   search: Record<string, unknown>,
   provider: WebSearchProvider,
 ): unknown {
-  return metadataByProvider.get(provider)?.legacyConfig.readApiKeyValue?.(search);
+  return resolveProviderCredentialMetadata(
+    metadataByProvider.get(provider)?.setup,
+  )?.readApiKeyValue?.(search);
 }
 
 function providerConfigPath(
@@ -304,7 +329,8 @@ function providerConfigPath(
   provider: WebSearchProvider,
 ): string {
   return (
-    metadataByProvider.get(provider)?.legacyConfig.apiKeyConfigPath ?? "tools.web.search.provider"
+    resolveProviderCredentialMetadata(metadataByProvider.get(provider)?.setup)?.apiKeyConfigPath ??
+    "tools.web.search.provider"
   );
 }
 
@@ -339,8 +365,12 @@ export async function resolveRuntimeWebTools(params: {
   const rawProvider =
     typeof search?.provider === "string" ? search.provider.trim().toLowerCase() : "";
   const configuredProvider = normalizeProvider(rawProvider);
+  const knownProviders = [...searchProviderMetadata.keys()];
+  const hasConfiguredSelection = Boolean(
+    configuredProvider && searchProviderMetadata.has(configuredProvider),
+  );
 
-  if (rawProvider && !configuredProvider) {
+  if (rawProvider && (!configuredProvider || !searchProviderMetadata.has(configuredProvider))) {
     const diagnostic: RuntimeWebDiagnostic = {
       code: "WEB_SEARCH_PROVIDER_INVALID_AUTODETECT",
       message: `tools.web.search.provider is "${rawProvider}". Falling back to auto-detect precedence.`,
@@ -355,15 +385,18 @@ export async function resolveRuntimeWebTools(params: {
     });
   }
 
-  if (configuredProvider) {
+  if (hasConfiguredSelection && configuredProvider) {
     searchMetadata.providerConfigured = configuredProvider;
     searchMetadata.providerSource = "configured";
   }
 
   if (searchEnabled && search) {
-    const candidates = configuredProvider
-      ? [configuredProvider]
-      : [...BUILTIN_WEB_SEARCH_PROVIDER_IDS];
+    const candidates =
+      hasConfiguredSelection && configuredProvider
+        ? [configuredProvider]
+        : knownProviders.filter((provider) =>
+            Boolean(resolveProviderCredentialMetadata(searchProviderMetadata.get(provider)?.setup)),
+          );
     const unresolvedWithoutFallback: Array<{
       provider: WebSearchProvider;
       path: string;
@@ -410,7 +443,7 @@ export async function resolveRuntimeWebTools(params: {
         });
       }
 
-      if (configuredProvider) {
+      if (hasConfiguredSelection) {
         selectedProvider = provider;
         selectedResolution = resolution;
         if (resolution.value) {
@@ -418,7 +451,7 @@ export async function resolveRuntimeWebTools(params: {
           setResolvedWebSearchApiKey({
             resolvedConfig: params.resolvedConfig,
             provider,
-            metadata: metadata ?? { legacyConfig: {} },
+            metadata: metadata ?? {},
             value: resolution.value,
           });
         }
@@ -432,7 +465,7 @@ export async function resolveRuntimeWebTools(params: {
         setResolvedWebSearchApiKey({
           resolvedConfig: params.resolvedConfig,
           provider,
-          metadata: metadata ?? { legacyConfig: {} },
+          metadata: metadata ?? {},
           value: resolution.value,
         });
         break;
@@ -455,7 +488,7 @@ export async function resolveRuntimeWebTools(params: {
       throw new Error(`[WEB_SEARCH_KEY_UNRESOLVED_NO_FALLBACK] ${unresolved.reason}`);
     };
 
-    if (configuredProvider) {
+    if (hasConfiguredSelection) {
       const unresolved = unresolvedWithoutFallback[0];
       if (unresolved) {
         failUnresolvedSearchNoFallback(unresolved);
@@ -479,7 +512,7 @@ export async function resolveRuntimeWebTools(params: {
     if (selectedProvider) {
       searchMetadata.selectedProvider = selectedProvider;
       searchMetadata.selectedProviderKeySource = selectedResolution?.source;
-      if (!configuredProvider) {
+      if (!hasConfiguredSelection) {
         searchMetadata.providerSource = "auto-detect";
       }
       const runtimeMetadata = searchProviderMetadata
@@ -500,8 +533,8 @@ export async function resolveRuntimeWebTools(params: {
     }
   }
 
-  if (searchEnabled && search && !configuredProvider && searchMetadata.selectedProvider) {
-    for (const provider of BUILTIN_WEB_SEARCH_PROVIDER_IDS) {
+  if (searchEnabled && search && !hasConfiguredSelection && searchMetadata.selectedProvider) {
+    for (const provider of knownProviders) {
       if (provider === searchMetadata.selectedProvider) {
         continue;
       }
@@ -517,7 +550,7 @@ export async function resolveRuntimeWebTools(params: {
       });
     }
   } else if (search && !searchEnabled) {
-    for (const provider of BUILTIN_WEB_SEARCH_PROVIDER_IDS) {
+    for (const provider of knownProviders) {
       const path = providerConfigPath(searchProviderMetadata, provider);
       const value = resolveProviderKeyValue(searchProviderMetadata, search, provider);
       if (!hasConfiguredSecretRef(value, defaults)) {
@@ -531,9 +564,9 @@ export async function resolveRuntimeWebTools(params: {
     }
   }
 
-  if (searchEnabled && search && configuredProvider) {
-    for (const provider of BUILTIN_WEB_SEARCH_PROVIDER_IDS) {
-      if (provider === configuredProvider) {
+  if (searchEnabled && search && hasConfiguredSelection && searchMetadata.providerConfigured) {
+    for (const provider of knownProviders) {
+      if (provider === searchMetadata.providerConfigured) {
         continue;
       }
       const path = providerConfigPath(searchProviderMetadata, provider);
@@ -544,7 +577,7 @@ export async function resolveRuntimeWebTools(params: {
       pushInactiveSurfaceWarning({
         context: params.context,
         path,
-        details: `tools.web.search.provider is "${configuredProvider}".`,
+        details: `tools.web.search.provider is "${searchMetadata.providerConfigured}".`,
       });
     }
   }

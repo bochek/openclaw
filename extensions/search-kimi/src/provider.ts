@@ -1,6 +1,6 @@
 import {
   buildSearchRequestCacheIdentity,
-  createLegacySearchProviderMetadata,
+  createSearchProviderSetupMetadata,
   createMissingSearchKeyPayload,
   normalizeCacheKey,
   normalizeSecretInput,
@@ -10,7 +10,7 @@ import {
   resolveSearchProviderSectionConfig,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
-  type SearchProviderLegacyUiMetadata,
+  type SearchProviderSetupUiMetadata,
   type SearchProviderPlugin,
   withTrustedWebToolsEndpoint,
   wrapWebContent,
@@ -216,8 +216,8 @@ async function runKimiSearch(params: {
   };
 }
 
-export const KIMI_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata =
-  createLegacySearchProviderMetadata({
+export const KIMI_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
+  createSearchProviderSetupMetadata({
     provider: "kimi",
     label: "Kimi (Moonshot)",
     hint: "Moonshot web search",
@@ -234,7 +234,10 @@ export function createBundledKimiSearchProvider(): SearchProviderPlugin {
     description:
       "Search the web using Kimi by Moonshot. Returns AI-synthesized answers with citations from native $web_search.",
     pluginOwnedExecution: true,
-    legacyConfig: KIMI_SEARCH_PROVIDER_METADATA,
+    setup: {
+      hint: KIMI_SEARCH_PROVIDER_METADATA.hint,
+      credentials: KIMI_SEARCH_PROVIDER_METADATA,
+    },
     isAvailable: (config) =>
       Boolean(
         resolveKimiApiKey(

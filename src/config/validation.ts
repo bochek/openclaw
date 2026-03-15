@@ -1,6 +1,5 @@
 import path from "node:path";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
-import { isBuiltinWebSearchProviderId } from "../agents/tools/web-search-provider-catalog.js";
 import { CHANNEL_IDS, normalizeChatChannelId } from "../channels/registry.js";
 import {
   resolveCapabilitySlotConfigPath,
@@ -445,7 +444,7 @@ function validateConfigObjectWithPluginsBase(
       return;
     }
     const normalizedProvider = provider.trim().toLowerCase();
-    if (!normalizedProvider || isBuiltinWebSearchProviderId(normalizedProvider)) {
+    if (!normalizedProvider) {
       return;
     }
 

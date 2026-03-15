@@ -1,6 +1,6 @@
 import {
   buildSearchRequestCacheIdentity,
-  createLegacySearchProviderMetadata,
+  createSearchProviderSetupMetadata,
   createMissingSearchKeyPayload,
   normalizeCacheKey,
   normalizeSecretInput,
@@ -12,7 +12,7 @@ import {
   resolveSearchProviderSectionConfig,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
-  type SearchProviderLegacyUiMetadata,
+  type SearchProviderSetupUiMetadata,
   type SearchProviderPlugin,
   withTrustedWebToolsEndpoint,
   wrapWebContent,
@@ -156,8 +156,8 @@ async function runGeminiSearch(params: {
   );
 }
 
-export const GEMINI_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata =
-  createLegacySearchProviderMetadata({
+export const GEMINI_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
+  createSearchProviderSetupMetadata({
     provider: "gemini",
     label: "Gemini (Google Search)",
     hint: "Google Search grounding · AI-synthesized",
@@ -174,7 +174,10 @@ export function createBundledGeminiSearchProvider(): SearchProviderPlugin {
     description:
       "Search the web using Gemini with Google Search grounding. Returns AI-synthesized answers with citations from Google Search.",
     pluginOwnedExecution: true,
-    legacyConfig: GEMINI_SEARCH_PROVIDER_METADATA,
+    setup: {
+      hint: GEMINI_SEARCH_PROVIDER_METADATA.hint,
+      credentials: GEMINI_SEARCH_PROVIDER_METADATA,
+    },
     isAvailable: (config) =>
       Boolean(
         resolveGeminiApiKey(

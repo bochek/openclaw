@@ -1,4 +1,3 @@
-import { isBuiltinWebSearchProviderId } from "../agents/tools/web-search-provider-catalog.js";
 import type { OpenClawConfig } from "../config/config.js";
 import {
   DEFAULT_SECRET_PROVIDER_ALIAS,
@@ -18,8 +17,9 @@ import { loadPluginManifestRegistry } from "../plugins/manifest-registry.js";
 import { validateJsonSchemaValue } from "../plugins/schema-validator.js";
 import type {
   PluginConfigUiHint,
-  PluginOrigin,
+  SearchProviderCredentialMetadata,
   SearchProviderLegacyConfigMetadata,
+  SearchProviderSetupMetadata,
 } from "../plugins/types.js";
 import type { RuntimeEnv } from "../runtime.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
@@ -53,13 +53,12 @@ type PluginSearchProviderEntry = {
   hint: string;
   configured: boolean;
   pluginId: string;
-  origin: PluginOrigin;
   description: string | undefined;
   docsUrl: string | undefined;
   configFieldOrder?: string[];
   configJsonSchema?: Record<string, unknown>;
   configUiHints?: Record<string, PluginConfigUiHint>;
-  legacyConfig?: SearchProviderLegacyConfigMetadata;
+  setup?: SearchProviderSetupMetadata;
 };
 
 export type SearchProviderPickerEntry = PluginSearchProviderEntry;
@@ -96,7 +95,7 @@ type PluginPromptableField =
 type SearchProviderHookDetails = {
   providerId: string;
   providerLabel: string;
-  providerSource: "builtin" | "plugin";
+  providerSource: "plugin";
   pluginId?: string;
   configured: boolean;
 };
@@ -119,8 +118,26 @@ function humanizeConfigKey(value: string): string {
     .replace(/^\w/, (char) => char.toUpperCase());
 }
 
-function formatPluginSourceHint(origin: PluginOrigin): string {
-  return origin === "bundled" ? "Bundled plugin" : "External plugin";
+function resolveProviderSetupMetadata(
+  setup?: SearchProviderSetupMetadata,
+  legacyConfig?: SearchProviderLegacyConfigMetadata,
+): SearchProviderSetupMetadata | undefined {
+  if (setup) {
+    return setup;
+  }
+  if (!legacyConfig) {
+    return undefined;
+  }
+  return {
+    hint: legacyConfig.hint,
+    credentials: legacyConfig,
+  };
+}
+
+function resolveProviderCredentialMetadata(
+  setup?: SearchProviderSetupMetadata,
+): SearchProviderCredentialMetadata | undefined {
+  return setup?.credentials;
 }
 
 export function resolveInstallableSearchProviderPlugins(
@@ -129,17 +146,11 @@ export function resolveInstallableSearchProviderPlugins(
   const loadedPluginProviderIds = new Set(
     providerEntries.filter((entry) => entry.kind === "plugin").map((entry) => entry.value),
   );
-  return SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG.filter((entry) => {
-    const providerEntry = providerEntries.find(
-      (providerEntry) =>
-        providerEntry.kind === "plugin" && providerEntry.value === entry.providerId,
-    );
-    return providerEntry?.kind !== "plugin" || providerEntry.origin !== "bundled";
-  }).map((entry) => ({
+  return SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG.filter(
+    (entry) => !loadedPluginProviderIds.has(entry.providerId),
+  ).map((entry) => ({
     ...entry,
-    description: loadedPluginProviderIds.has(entry.providerId)
-      ? `${entry.description} Already installed.`
-      : entry.description,
+    description: entry.description,
   }));
 }
 
@@ -534,15 +545,16 @@ export async function resolveSearchProviderPickerEntries(
           configured = false;
         }
 
-        const sourceHint = formatPluginSourceHint(pluginRecord.origin);
+        const setup = resolveProviderSetupMetadata(
+          registration.provider.setup,
+          registration.provider.legacyConfig,
+        );
         const baseHint =
-          registration.provider.legacyConfig?.hint?.trim() ||
+          setup?.hint?.trim() ||
           registration.provider.description?.trim() ||
           pluginRecord.description?.trim() ||
           "Plugin-provided web search";
-        const hint = configured
-          ? `${baseHint} · ${sourceHint} · configured`
-          : `${baseHint} · ${sourceHint}`;
+        const hint = configured ? `${baseHint} · configured` : baseHint;
 
         return {
           kind: "plugin" as const,
@@ -551,13 +563,12 @@ export async function resolveSearchProviderPickerEntries(
           hint,
           configured,
           pluginId: registration.pluginId,
-          origin: pluginRecord.origin,
           description: registration.provider.description,
           docsUrl: registration.provider.docsUrl,
           configFieldOrder: registration.provider.configFieldOrder,
           configJsonSchema: pluginRecord.configJsonSchema,
           configUiHints: pluginRecord.configUiHints,
-          legacyConfig: registration.provider.legacyConfig,
+          setup,
         };
       })
       .filter(Boolean)
@@ -585,7 +596,7 @@ export async function resolveSearchProviderPickerEntries(
     )
       .filter(
         (entry): entry is PluginSearchProviderEntry =>
-          Boolean(entry) && entry.origin === "bundled" && !loadedPluginProviderIds.has(entry.value),
+          Boolean(entry) && !loadedPluginProviderIds.has(entry.value),
       )
       .map((entry) => {
         const pluginConfig = getPluginConfig(config, entry.pluginId);
@@ -624,7 +635,6 @@ function buildPluginSearchProviderEntryFromManifestRecord(pluginRecord: {
   id: string;
   name?: string;
   description?: string;
-  origin: PluginOrigin;
   configSchema?: Record<string, unknown>;
   configUiHints?: Record<string, PluginConfigUiHint>;
   provides: string[];
@@ -634,25 +644,19 @@ function buildPluginSearchProviderEntryFromManifestRecord(pluginRecord: {
     return undefined;
   }
 
-  const hintParts = [
-    pluginRecord.description || "Plugin-provided web search",
-    formatPluginSourceHint(pluginRecord.origin),
-  ];
-
   return {
     kind: "plugin",
     value: providerId,
     label: pluginRecord.name || providerId,
-    hint: hintParts.join(" · "),
+    hint: pluginRecord.description || "Plugin-provided web search",
     configured: false,
     pluginId: pluginRecord.id,
-    origin: pluginRecord.origin,
     description: pluginRecord.description,
     docsUrl: undefined,
     configFieldOrder: undefined,
     configJsonSchema: pluginRecord.configSchema,
     configUiHints: pluginRecord.configUiHints,
-    legacyConfig: undefined,
+    setup: undefined,
   };
 }
 
@@ -851,13 +855,7 @@ function formatPickerEntryHint(params: {
   configuredCount: number;
 }): string {
   const { entry, isActive, configuredCount } = params;
-  const baseParts =
-    entry.kind === "plugin"
-      ? [
-          entry.description?.trim() || "Plugin-provided web search",
-          formatPluginSourceHint(entry.origin),
-        ]
-      : [entry.hint, "Built-in"];
+  const baseParts = [entry.description?.trim() || entry.hint || "Plugin-provided web search"];
 
   if (configuredCount > 1) {
     if (entry.configured) {
@@ -874,11 +872,7 @@ export function buildSearchProviderPickerModel(
   const { config, providerEntries, includeSkipOption, skipHint } = params;
   const existingProvider = resolveCapabilitySlotSelection(config, "providers.search");
   const existingPluginProvider =
-    typeof existingProvider === "string" &&
-    existingProvider.trim() &&
-    !isBuiltinWebSearchProviderId(existingProvider)
-      ? existingProvider
-      : undefined;
+    typeof existingProvider === "string" && existingProvider.trim() ? existingProvider : undefined;
   const loadedExistingPluginProvider =
     existingPluginProvider &&
     providerEntries.some(
@@ -921,7 +915,7 @@ export function buildSearchProviderPickerModel(
           {
             value: SEARCH_PROVIDER_KEEP_CURRENT_SENTINEL as const,
             label: `Keep current provider (${unloadedExistingPluginProvider})`,
-            hint: "Leave the current plugin-managed web_search provider unchanged",
+            hint: "Leave the current web search provider unchanged",
           },
         ]
       : []),
@@ -936,11 +930,11 @@ export function buildSearchProviderPickerModel(
     })),
     {
       value: SEARCH_PROVIDER_INSTALL_SENTINEL as const,
-      label: "Install external provider plugin",
+      label: "Install provider plugin",
       hint:
         installableEntries.length > 0
-          ? "Add an external web search plugin"
-          : "Install an external web search plugin from npm or a local path",
+          ? "Add a web search plugin"
+          : "Install a web search plugin from npm or a local path",
     },
     ...(includeSkipOption
       ? [
@@ -988,15 +982,16 @@ export async function configureSearchProviderSelection(
       intent === "switch-active"
         ? setWebSearchProvider(enabled.config, selectedEntry.value)
         : enabled.config;
-    const legacyConfig = selectedEntry.legacyConfig;
-    const existingKey = legacyConfig ? resolveExistingKey(config, legacyConfig) : undefined;
-    const keyConfigured = legacyConfig ? hasExistingKey(config, legacyConfig) : false;
-    const envAvailable =
-      legacyConfig?.envKeys?.some((key) => Boolean(process.env[key]?.trim())) ?? false;
+    const credentialMetadata = resolveProviderCredentialMetadata(selectedEntry.setup);
+    const existingKey = credentialMetadata
+      ? resolveExistingKey(config, credentialMetadata)
+      : undefined;
+    const keyConfigured = credentialMetadata ? hasExistingKey(config, credentialMetadata) : false;
+    const envAvailable = credentialMetadata ? hasKeyInEnv(credentialMetadata) : false;
 
-    if (legacyConfig && intent === "switch-active" && (keyConfigured || envAvailable)) {
+    if (credentialMetadata && intent === "switch-active" && (keyConfigured || envAvailable)) {
       const result = existingKey
-        ? applySearchKey(config, selectedEntry.value, legacyConfig, existingKey)
+        ? applySearchKey(config, selectedEntry.value, credentialMetadata, existingKey)
         : applyProviderOnly(config, selectedEntry.value);
       const nextConfig = preserveSearchProviderIntent(config, result, intent, selectedEntry.value);
       await runAfterSearchProviderHooks({
@@ -1041,7 +1036,7 @@ export async function configureSearchProviderSelection(
       prompter,
       workspaceDir: opts?.workspaceDir,
     });
-    if (legacyConfig) {
+    if (credentialMetadata) {
       const useSecretRefMode = opts?.secretInputMode === "ref"; // pragma: allowlist secret
       if (useSecretRefMode) {
         if (keyConfigured) {
@@ -1052,7 +1047,7 @@ export async function configureSearchProviderSelection(
             selectedEntry.value,
           );
         }
-        const ref = buildSearchEnvRef(legacyConfig);
+        const ref = buildSearchEnvRef(credentialMetadata);
         await prompter.note(
           [
             "Secret references enabled — OpenClaw will store a reference instead of the API key.",
@@ -1064,7 +1059,7 @@ export async function configureSearchProviderSelection(
         );
         const result = preserveSearchProviderIntent(
           config,
-          applySearchKey(config, selectedEntry.value, legacyConfig, ref),
+          applySearchKey(config, selectedEntry.value, credentialMetadata, ref),
           intent,
           selectedEntry.value,
         );
@@ -1085,20 +1080,20 @@ export async function configureSearchProviderSelection(
           : envAvailable
             ? `${selectedEntry.label} API key (leave blank to use env var)`
             : `${selectedEntry.label} API key`,
-        placeholder: keyConfigured ? "Leave blank to keep current" : legacyConfig.placeholder,
+        placeholder: keyConfigured ? "Leave blank to keep current" : credentialMetadata.placeholder,
       });
 
       const key = keyInput?.trim() ?? "";
       if (key) {
         const secretInput = resolveSearchSecretInput(
           selectedEntry.value,
-          legacyConfig,
+          credentialMetadata,
           key,
           opts?.secretInputMode,
         );
         const result = preserveSearchProviderIntent(
           config,
-          applySearchKey(config, selectedEntry.value, legacyConfig, secretInput),
+          applySearchKey(config, selectedEntry.value, credentialMetadata, secretInput),
           intent,
           selectedEntry.value,
         );
@@ -1116,7 +1111,7 @@ export async function configureSearchProviderSelection(
       if (existingKey) {
         const result = preserveSearchProviderIntent(
           config,
-          applySearchKey(config, selectedEntry.value, legacyConfig, existingKey),
+          applySearchKey(config, selectedEntry.value, credentialMetadata, existingKey),
           intent,
           selectedEntry.value,
         );
@@ -1151,9 +1146,9 @@ export async function configureSearchProviderSelection(
 
       await prompter.note(
         [
-          `Get your key at: ${legacyConfig.signupUrl}`,
+          `Get your key at: ${credentialMetadata.signupUrl}`,
           envAvailable
-            ? `OpenClaw can also use ${legacyConfig.envKeys?.find((k) => Boolean(process.env[k]?.trim()))}.`
+            ? `OpenClaw can also use ${credentialMetadata.envKeys?.find((k) => Boolean(process.env[k]?.trim()))}.`
             : undefined,
         ]
           .filter(Boolean)
@@ -1289,14 +1284,11 @@ export async function promptSearchProviderFlow(params: {
   });
 }
 
-export function hasKeyInEnv(metadata: SearchProviderLegacyConfigMetadata): boolean {
-  return metadata.envKeys.some((key) => Boolean(process.env[key]?.trim()));
+export function hasKeyInEnv(metadata: SearchProviderCredentialMetadata): boolean {
+  return metadata.envKeys?.some((key) => Boolean(process.env[key]?.trim())) ?? false;
 }
 
-function rawKeyValue(
-  config: OpenClawConfig,
-  metadata: SearchProviderLegacyConfigMetadata,
-): unknown {
+function rawKeyValue(config: OpenClawConfig, metadata: SearchProviderCredentialMetadata): unknown {
   const search = config.tools?.web?.search;
   return search && typeof search === "object" && metadata.readApiKeyValue
     ? metadata.readApiKeyValue(search as Record<string, unknown>)
@@ -1306,7 +1298,7 @@ function rawKeyValue(
 /** Returns the plaintext key string, or undefined for SecretRefs/missing. */
 export function resolveExistingKey(
   config: OpenClawConfig,
-  metadata: SearchProviderLegacyConfigMetadata,
+  metadata: SearchProviderCredentialMetadata,
 ): string | undefined {
   return normalizeSecretInputString(rawKeyValue(config, metadata));
 }
@@ -1314,13 +1306,13 @@ export function resolveExistingKey(
 /** Returns true if a key is configured (plaintext string or SecretRef). */
 export function hasExistingKey(
   config: OpenClawConfig,
-  metadata: SearchProviderLegacyConfigMetadata,
+  metadata: SearchProviderCredentialMetadata,
 ): boolean {
   return hasConfiguredSecretInput(rawKeyValue(config, metadata));
 }
 
 /** Build an env-backed SecretRef for a search provider. */
-function buildSearchEnvRef(metadata: SearchProviderLegacyConfigMetadata): SecretRef {
+function buildSearchEnvRef(metadata: SearchProviderCredentialMetadata): SecretRef {
   const envVar =
     metadata.envKeys?.find((k) => Boolean(process.env[k]?.trim())) ?? metadata.envKeys?.[0];
   if (!envVar) {
@@ -1332,7 +1324,7 @@ function buildSearchEnvRef(metadata: SearchProviderLegacyConfigMetadata): Secret
 /** Resolve a plaintext key into the appropriate SecretInput based on mode. */
 function resolveSearchSecretInput(
   provider: SearchProvider,
-  metadata: SearchProviderLegacyConfigMetadata,
+  metadata: SearchProviderCredentialMetadata,
   key: string,
   secretInputMode?: SecretInputMode,
 ): SecretInput {
@@ -1346,7 +1338,7 @@ function resolveSearchSecretInput(
 export function applySearchKey(
   config: OpenClawConfig,
   provider: SearchProvider,
-  metadata: SearchProviderLegacyConfigMetadata,
+  metadata: SearchProviderCredentialMetadata,
   key: SecretInput,
 ): OpenClawConfig {
   const search = { ...config.tools?.web?.search, provider, enabled: true };

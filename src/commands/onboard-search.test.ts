@@ -31,7 +31,7 @@ vi.mock("./onboarding/plugin-install.js", () => ({
   reloadOnboardingPluginRegistry,
 }));
 
-import { SEARCH_PROVIDER_OPTIONS, setupSearch } from "./onboard-search.js";
+import { setupSearch } from "./onboard-search.js";
 
 const runtime: RuntimeEnv = {
   log: vi.fn(),
@@ -174,7 +174,7 @@ describe("setupSearch", () => {
           expect.objectContaining({
             value: "tavily",
             label: "Tavily Search",
-            hint: expect.stringContaining("Plugin search · External plugin"),
+            hint: expect.stringContaining("Plugin search"),
           }),
         ]),
       }),
@@ -233,7 +233,7 @@ describe("setupSearch", () => {
           expect.objectContaining({
             value: "tavily",
             label: "Tavily Search",
-            hint: expect.stringContaining("Bundled plugin"),
+            hint: expect.stringContaining("Search the web using Tavily."),
           }),
         ]),
       }),
@@ -242,7 +242,7 @@ describe("setupSearch", () => {
       expect.arrayContaining([
         expect.objectContaining({
           value: "__install_plugin__",
-          label: "Install external provider plugin",
+          label: "Install provider plugin",
         }),
       ]),
     );
@@ -301,7 +301,7 @@ describe("setupSearch", () => {
           (option: { value?: string }) => option.value === providerId,
         ) ?? [];
       expect(matchingOptions).toHaveLength(1);
-      expect(matchingOptions[0]?.hint).toContain("Bundled plugin");
+      expect(matchingOptions[0]?.hint).toContain(`Bundled ${providerLabel} provider`);
     },
   );
 
@@ -363,7 +363,7 @@ describe("setupSearch", () => {
         options: expect.arrayContaining([
           expect.objectContaining({
             value: "__install_plugin__",
-            label: "Install external provider plugin",
+            label: "Install provider plugin",
           }),
         ]),
       }),
@@ -466,11 +466,11 @@ describe("setupSearch", () => {
     )?.[0]?.options;
     expect(options[0]).toMatchObject({
       value: "tavily",
-      hint: "Plugin search · External plugin · Active now",
+      hint: "Plugin search",
     });
     expect(options[1]).toMatchObject({
-      value: "brave",
-      hint: "Structured results · country/language/time filters · Built-in · Configured",
+      value: "__install_plugin__",
+      hint: "Install a web search plugin from npm or a local path",
     });
   });
 
@@ -539,8 +539,8 @@ describe("setupSearch", () => {
           }),
           expect.objectContaining({
             value: "__install_plugin__",
-            label: "Install external provider plugin",
-            hint: "Add an external web search plugin",
+            label: "Install provider plugin",
+            hint: "Add a web search plugin",
           }),
         ]),
       }),
@@ -1541,9 +1541,28 @@ describe("setupSearch", () => {
     expect(result.tools?.web?.search?.apiKey).toBe("BSA-plain");
   });
 
-  it("exports all 5 providers in SEARCH_PROVIDER_OPTIONS", () => {
-    expect(SEARCH_PROVIDER_OPTIONS).toHaveLength(5);
-    const values = SEARCH_PROVIDER_OPTIONS.map((e) => e.value);
-    expect(values).toEqual(["brave", "gemini", "grok", "kimi", "perplexity"]);
+  it("keeps the install option generic", async () => {
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [],
+      plugins: [],
+      typedHooks: [],
+    });
+    loadPluginManifestRegistry.mockReturnValue({ plugins: [], diagnostics: [] });
+    const { prompter } = createPrompter({ selectValue: "__skip__" });
+
+    await setupSearch({}, runtime, prompter);
+
+    const providerSelectCall = (prompter.select as ReturnType<typeof vi.fn>).mock.calls.find(
+      (call) => call[0]?.message === "Choose active web search provider",
+    );
+    expect(providerSelectCall?.[0]?.options).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          value: "__install_plugin__",
+          label: "Install provider plugin",
+          hint: "Add a web search plugin",
+        }),
+      ]),
+    );
   });
 });

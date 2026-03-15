@@ -1,6 +1,6 @@
 import {
   buildSearchRequestCacheIdentity,
-  createLegacySearchProviderMetadata,
+  createSearchProviderSetupMetadata,
   createMissingSearchKeyPayload,
   createSearchProviderErrorResult,
   normalizeCacheKey,
@@ -14,7 +14,7 @@ import {
   throwWebSearchApiError,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
-  type SearchProviderLegacyUiMetadata,
+  type SearchProviderSetupUiMetadata,
   type SearchProviderPlugin,
   withTrustedWebToolsEndpoint,
   wrapWebContent,
@@ -376,8 +376,8 @@ function createPerplexityPayload(params: {
   return payload;
 }
 
-export const PERPLEXITY_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata =
-  createLegacySearchProviderMetadata({
+export const PERPLEXITY_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
+  createSearchProviderSetupMetadata({
     provider: "perplexity",
     label: "Perplexity Search",
     hint: "Structured results · domain/country/language/time filters",
@@ -399,7 +399,10 @@ export function createBundledPerplexitySearchProvider(): SearchProviderPlugin {
     description:
       "Search the web using Perplexity. Runtime routing decides between native Search API and Sonar chat-completions compatibility. Structured filters are available on the native Search API path.",
     pluginOwnedExecution: true,
-    legacyConfig: PERPLEXITY_SEARCH_PROVIDER_METADATA,
+    setup: {
+      hint: PERPLEXITY_SEARCH_PROVIDER_METADATA.hint,
+      credentials: PERPLEXITY_SEARCH_PROVIDER_METADATA,
+    },
     resolveRuntimeMetadata: PERPLEXITY_SEARCH_PROVIDER_METADATA.resolveRuntimeMetadata,
     isAvailable: (config) =>
       Boolean(

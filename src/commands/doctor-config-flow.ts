@@ -5,7 +5,6 @@ import {
   listTelegramAccountIds,
   resolveTelegramAccount,
 } from "../../extensions/telegram/src/accounts.js";
-import { isBuiltinWebSearchProviderId } from "../agents/tools/web-search-provider-catalog.js";
 import {
   isNumericTelegramUserId,
   normalizeTelegramAllowFromEntry,
@@ -240,7 +239,7 @@ function maybeRepairInvalidPluginConfig(candidate: OpenClawConfig): {
         issue.path === "tools.web.search.provider" &&
         issue.message.startsWith("unknown web search provider:"),
     );
-    if (hasProviderIssue && activeProvider && !isBuiltinWebSearchProviderId(activeProvider)) {
+    if (hasProviderIssue && activeProvider) {
       if (next.tools?.web?.search) {
         delete next.tools.web.search.provider;
         changes.push(

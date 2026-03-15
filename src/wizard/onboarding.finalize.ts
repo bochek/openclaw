@@ -486,7 +486,6 @@ export async function finalizeOnboardingWizard(
   const webSearchEnabled = nextConfig.tools?.web?.search?.enabled;
   if (webSearchProvider) {
     const {
-      SEARCH_PROVIDER_OPTIONS,
       resolveExistingKey,
       hasExistingKey,
       hasKeyInEnv,
@@ -503,43 +502,24 @@ export async function finalizeOnboardingWizard(
       options.workspaceDir,
     );
     const configuredProviderCount = providerEntries.filter((entry) => entry.configured).length;
-    const builtinEntry = SEARCH_PROVIDER_OPTIONS.find((e) => e.value === webSearchProvider);
-    const label = pickerEntry?.label ?? builtinEntry?.label ?? webSearchProvider;
-    const sourceLine =
-      pickerEntry?.kind === "plugin"
-        ? `Source: ${pickerEntry.origin === "bundled" ? "Bundled plugin" : "External plugin"}`
-        : undefined;
-    const storedKey = builtinEntry ? resolveExistingKey(nextConfig, builtinEntry.value) : undefined;
-    const keyConfigured = builtinEntry ? hasExistingKey(nextConfig, builtinEntry.value) : false;
-    const envAvailable = builtinEntry ? hasKeyInEnv(builtinEntry) : false;
+    const label = pickerEntry?.label ?? webSearchProvider;
+    const credentialMetadata = pickerEntry?.setup?.credentials;
+    const storedKey = credentialMetadata
+      ? resolveExistingKey(nextConfig, credentialMetadata)
+      : undefined;
+    const keyConfigured = credentialMetadata
+      ? hasExistingKey(nextConfig, credentialMetadata)
+      : false;
+    const envAvailable = credentialMetadata ? hasKeyInEnv(credentialMetadata) : false;
     const hasKey = keyConfigured || envAvailable;
     const keySource = storedKey
       ? "API key: stored in config."
       : keyConfigured
         ? "API key: configured via secret reference."
         : envAvailable
-          ? `API key: provided via ${builtinEntry?.envKeys.join(" / ")} env var.`
+          ? `API key: provided via ${credentialMetadata?.envKeys?.join(" / ")} env var.`
           : undefined;
-    if (pickerEntry?.kind === "plugin") {
-      await prompter.note(
-        [
-          webSearchEnabled !== false
-            ? "Web search is enabled through a plugin-provided provider."
-            : "Web search is configured through a plugin-provided provider but currently disabled.",
-          "",
-          `Active provider: ${label}`,
-          ...(sourceLine ? [sourceLine] : []),
-          ...(configuredProviderCount > 1
-            ? [
-                "Multiple web search providers are configured; the others remain available to switch to later via configure.",
-              ]
-            : []),
-          "Plugin-managed providers may use plugin config or plugin-specific credentials instead of the built-in API key fields.",
-          "Docs: https://docs.openclaw.ai/tools/web",
-        ].join("\n"),
-        "Web search",
-      );
-    } else if (!builtinEntry) {
+    if (!credentialMetadata) {
       await prompter.note(
         [
           webSearchEnabled !== false
@@ -563,7 +543,6 @@ export async function finalizeOnboardingWizard(
           "Web search is enabled, so your agent can look things up online when needed.",
           "",
           `Active provider: ${label}`,
-          ...(sourceLine ? [sourceLine] : []),
           ...(configuredProviderCount > 1
             ? [
                 "Multiple web search providers are configured; the others remain available to switch to later via configure.",
@@ -581,7 +560,7 @@ export async function finalizeOnboardingWizard(
           "web_search will not work until a key is added.",
           `  ${formatCliCommand("openclaw configure --section web")}`,
           "",
-          `Get your key at: ${builtinEntry?.signupUrl ?? "https://docs.openclaw.ai/tools/web"}`,
+          `Get your key at: ${credentialMetadata.signupUrl ?? "https://docs.openclaw.ai/tools/web"}`,
           "Docs: https://docs.openclaw.ai/tools/web",
         ].join("\n"),
         "Web search",
@@ -600,15 +579,22 @@ export async function finalizeOnboardingWizard(
   } else {
     // Legacy configs may have a working key (e.g. apiKey or BRAVE_API_KEY) without
     // an explicit provider. Runtime auto-detects these, so avoid saying "skipped".
-    const { SEARCH_PROVIDER_OPTIONS, hasExistingKey, hasKeyInEnv } =
+    const { resolveSearchProviderPickerEntries, hasExistingKey, hasKeyInEnv } =
       await import("../commands/onboard-search.js");
-    const legacyDetected = SEARCH_PROVIDER_OPTIONS.find(
-      (e) => hasExistingKey(nextConfig, e.value) || hasKeyInEnv(e),
+    const providerEntries = await resolveSearchProviderPickerEntries(
+      nextConfig,
+      options.workspaceDir,
     );
-    if (legacyDetected) {
+    const detectedEntry = providerEntries.find(
+      (entry) =>
+        Boolean(entry.setup?.credentials) &&
+        (hasExistingKey(nextConfig, entry.setup!.credentials!) ||
+          hasKeyInEnv(entry.setup!.credentials!)),
+    );
+    if (detectedEntry) {
       await prompter.note(
         [
-          `Web search is available via ${legacyDetected.label} (auto-detected).`,
+          `Web search is available via ${detectedEntry.label} (auto-detected).`,
           "Docs: https://docs.openclaw.ai/tools/web",
         ].join("\n"),
         "Web search",

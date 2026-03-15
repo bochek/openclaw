@@ -32,6 +32,17 @@ export type SearchProviderLegacyUiMetadata = {
   writeApiKeyValue?: (search: Record<string, unknown>, value: unknown) => void;
 };
 
+export type SearchProviderSetupUiMetadata = {
+  label: string;
+  hint: string;
+  envKeys: readonly string[];
+  placeholder: string;
+  signupUrl: string;
+  apiKeyConfigPath: string;
+  readApiKeyValue?: (search: Record<string, unknown> | undefined) => unknown;
+  writeApiKeyValue?: (search: Record<string, unknown>, value: unknown) => void;
+};
+
 export type SearchProviderFilterSupport = {
   country?: boolean;
   language?: boolean;
@@ -46,6 +57,8 @@ export type SearchProviderLegacyUiMetadataParams = Omit<
 > & {
   provider: string;
 };
+
+export type SearchProviderSetupUiMetadataParams = SearchProviderLegacyUiMetadataParams;
 
 const WEB_SEARCH_DOCS_URL = "https://docs.openclaw.ai/tools/web";
 
@@ -82,6 +95,12 @@ export function createLegacySearchProviderMetadata(
     writeApiKeyValue: (search, value) =>
       writeSearchProviderApiKeyValue({ search, provider: params.provider, value }),
   };
+}
+
+export function createSearchProviderSetupMetadata(
+  params: SearchProviderSetupUiMetadataParams,
+): SearchProviderSetupUiMetadata {
+  return createLegacySearchProviderMetadata(params);
 }
 
 export function createSearchProviderErrorResult(

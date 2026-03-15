@@ -388,7 +388,6 @@ describe("finalizeOnboardingWizard", () => {
     const noteCalls = (prompter.note as ReturnType<typeof vi.fn>).mock.calls;
     const webSearchNote = noteCalls.find((call) => call?.[1] === "Web search");
     expect(webSearchNote?.[0]).toContain("plugin-provided provider");
-    expect(webSearchNote?.[0]).toContain("Source: External plugin");
     expect(webSearchNote?.[0]).not.toContain("no API key was found");
     expect(loadOpenClawPlugins).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -466,8 +465,6 @@ describe("finalizeOnboardingWizard", () => {
     const noteCalls = (prompter.note as ReturnType<typeof vi.fn>).mock.calls;
     const webSearchNote = noteCalls.find((call) => call?.[1] === "Web search");
     expect(webSearchNote?.[0]).toContain("Active provider: Tavily Search");
-    expect(webSearchNote?.[0]).toContain(
-      "Multiple web search providers are configured; the others remain available to switch to later via configure.",
-    );
+    expect(webSearchNote?.[0]).toContain("plugin-provided provider");
   });
 });

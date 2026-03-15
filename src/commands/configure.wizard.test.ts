@@ -787,11 +787,11 @@ describe("runConfigureWizard", () => {
         if (params.message === "Choose active web search provider") {
           expect(params.options?.[0]).toMatchObject({
             value: "tavily",
-            hint: "Plugin search · External plugin",
+            hint: "Plugin search",
           });
           expect(params.options?.[1]).toMatchObject({
             value: "__install_plugin__",
-            hint: "Add an external web search plugin",
+            hint: "Install a web search plugin from npm or a local path",
           });
           return "tavily";
         }

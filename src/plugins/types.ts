@@ -294,7 +294,7 @@ export type SearchProviderContext = {
   pluginConfig?: Record<string, unknown>;
 };
 
-export type SearchProviderLegacyConfigMetadata = {
+export type SearchProviderCredentialMetadata = {
   hint?: string;
   envKeys?: readonly string[];
   placeholder?: string;
@@ -303,6 +303,20 @@ export type SearchProviderLegacyConfigMetadata = {
   readApiKeyValue?: (search: Record<string, unknown> | undefined) => unknown;
   writeApiKeyValue?: (search: Record<string, unknown>, value: unknown) => void;
 };
+
+export type SearchProviderInstallMetadata = {
+  npmSpec: string;
+  localPath?: string;
+  defaultChoice?: "npm" | "local";
+};
+
+export type SearchProviderSetupMetadata = {
+  hint?: string;
+  credentials?: SearchProviderCredentialMetadata;
+  install?: SearchProviderInstallMetadata;
+};
+
+export type SearchProviderLegacyConfigMetadata = SearchProviderCredentialMetadata;
 
 export type SearchProviderRuntimeMetadata = Record<string, unknown>;
 
@@ -321,6 +335,7 @@ export type SearchProviderPlugin = {
   pluginOwnedExecution?: boolean;
   docsUrl?: string;
   configFieldOrder?: string[];
+  setup?: SearchProviderSetupMetadata;
   legacyConfig?: SearchProviderLegacyConfigMetadata;
   resolveRuntimeMetadata?: SearchProviderRuntimeMetadataResolver;
   isAvailable?: (config?: OpenClawConfig) => boolean;

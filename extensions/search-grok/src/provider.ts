@@ -1,6 +1,6 @@
 import {
   buildSearchRequestCacheIdentity,
-  createLegacySearchProviderMetadata,
+  createSearchProviderSetupMetadata,
   createMissingSearchKeyPayload,
   normalizeCacheKey,
   normalizeSecretInput,
@@ -11,7 +11,7 @@ import {
   throwWebSearchApiError,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
-  type SearchProviderLegacyUiMetadata,
+  type SearchProviderSetupUiMetadata,
   type SearchProviderPlugin,
   withTrustedWebToolsEndpoint,
   wrapWebContent,
@@ -164,8 +164,8 @@ async function runGrokSearch(params: {
   );
 }
 
-export const GROK_SEARCH_PROVIDER_METADATA: SearchProviderLegacyUiMetadata =
-  createLegacySearchProviderMetadata({
+export const GROK_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
+  createSearchProviderSetupMetadata({
     provider: "grok",
     label: "Grok (xAI)",
     hint: "xAI web-grounded responses",
@@ -182,7 +182,10 @@ export function createBundledGrokSearchProvider(): SearchProviderPlugin {
     description:
       "Search the web using xAI Grok. Returns AI-synthesized answers with citations from real-time web search.",
     pluginOwnedExecution: true,
-    legacyConfig: GROK_SEARCH_PROVIDER_METADATA,
+    setup: {
+      hint: GROK_SEARCH_PROVIDER_METADATA.hint,
+      credentials: GROK_SEARCH_PROVIDER_METADATA,
+    },
     isAvailable: (config) =>
       Boolean(
         resolveGrokApiKey(
