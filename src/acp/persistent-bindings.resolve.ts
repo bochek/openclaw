@@ -247,6 +247,9 @@ export function resolveConfiguredAcpBindingSpecBySessionKey(params: {
         channel: "feishu",
         accountId: parsedSessionKey.accountId,
         conversationId: targetParsed.canonicalConversationId,
+        // Session-key recovery deliberately collapses sender-scoped topic bindings onto the
+        // canonical topic conversation id so `group_topic` and `group_topic_sender` reuse
+        // the same configured ACP session identity.
         parentConversationId:
           targetParsed.scope === "group_topic" || targetParsed.scope === "group_topic_sender"
             ? targetParsed.chatId

@@ -45,15 +45,16 @@ function resolveFeishuSenderScopedConversationId(params: {
   threadId?: string;
   senderId?: string;
   sessionKey?: string;
+  parentSessionKey?: string;
 }): string | undefined {
   const parentConversationId = normalizeConversationText(params.parentConversationId);
   const threadId = normalizeConversationText(params.threadId);
   const senderId = normalizeConversationText(params.senderId);
-  const scopedRest = parseAgentSessionKey(params.sessionKey)?.rest?.trim().toLowerCase() ?? "";
   const expectedScopePrefix = `feishu:group:${parentConversationId?.toLowerCase()}:topic:${threadId?.toLowerCase()}:sender:`;
-  const isSenderScopedSession = Boolean(
-    scopedRest && expectedScopePrefix && scopedRest.startsWith(expectedScopePrefix),
-  );
+  const isSenderScopedSession = [params.sessionKey, params.parentSessionKey].some((candidate) => {
+    const scopedRest = parseAgentSessionKey(candidate)?.rest?.trim().toLowerCase() ?? "";
+    return Boolean(scopedRest && expectedScopePrefix && scopedRest.startsWith(expectedScopePrefix));
+  });
   if (!parentConversationId || !threadId || !senderId || !isSenderScopedSession) {
     return undefined;
   }
@@ -123,6 +124,7 @@ export function resolveAcpCommandConversationId(params: HandleCommandsParams): s
         threadId,
         senderId: params.command.senderId ?? params.ctx.SenderId,
         sessionKey: params.sessionKey,
+        parentSessionKey: params.ctx.ParentSessionKey,
       });
       return (
         senderScopedConversationId ??

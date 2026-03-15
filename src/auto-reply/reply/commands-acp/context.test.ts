@@ -174,6 +174,29 @@ describe("commands-acp context", () => {
     );
   });
 
+  it("preserves sender-scoped Feishu topic ids after ACP route takeover via ParentSessionKey", () => {
+    const params = buildCommandTestParams("/acp status", baseCfg, {
+      Provider: "feishu",
+      Surface: "feishu",
+      OriginatingChannel: "feishu",
+      OriginatingTo: "chat:oc_group_chat",
+      MessageThreadId: "om_topic_root",
+      SenderId: "ou_topic_user",
+      AccountId: "work",
+      ParentSessionKey:
+        "agent:main:feishu:group:oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
+    });
+    params.sessionKey = "agent:codex:acp:binding:feishu:work:abc123";
+
+    expect(resolveAcpCommandBindingContext(params)).toEqual({
+      channel: "feishu",
+      accountId: "work",
+      threadId: "om_topic_root",
+      conversationId: "oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
+      parentConversationId: "oc_group_chat",
+    });
+  });
+
   it("resolves Feishu DM conversation ids from user targets", () => {
     const params = buildCommandTestParams("/acp status", baseCfg, {
       Provider: "feishu",

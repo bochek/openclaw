@@ -1262,6 +1262,9 @@ export async function handleFeishuMessage(params: {
       configuredBinding = configuredRoute.configuredBinding;
       route = configuredRoute.route;
 
+      // Bound Feishu conversations intentionally require an exact live conversation-id match.
+      // Sender-scoped topic sessions therefore bind on `chat:topic:root:sender:user`, while
+      // configured ACP bindings may still inherit the shared `chat:topic:root` topic session.
       const threadBinding = getSessionBindingService().resolveByConversation({
         channel: "feishu",
         accountId: account.accountId,
