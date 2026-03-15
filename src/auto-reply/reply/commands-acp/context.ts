@@ -195,6 +195,10 @@ export function resolveAcpCommandParentConversationId(
     );
   }
   if (channel === "feishu") {
+    const threadId = resolveAcpCommandThreadId(params);
+    if (!threadId) {
+      return undefined;
+    }
     return (
       parseFeishuTargetId(params.ctx.OriginatingTo) ??
       parseFeishuTargetId(params.command.to) ??

@@ -13,6 +13,7 @@ import {
   isAcpCommandDiscordChannel,
   resolveAcpCommandBindingContext,
   resolveAcpCommandConversationId,
+  resolveAcpCommandParentConversationId,
 } from "./context.js";
 
 const baseCfg = {
@@ -260,8 +261,27 @@ describe("commands-acp context", () => {
       accountId: "default",
       threadId: undefined,
       conversationId: "ou_sender_1",
-      parentConversationId: "ou_sender_1",
+      parentConversationId: undefined,
     });
     expect(resolveAcpCommandConversationId(params)).toBe("ou_sender_1");
+  });
+
+  it("does not infer a Feishu DM parent conversation id during fallback binding lookup", () => {
+    const params = buildCommandTestParams("/acp status", baseCfg, {
+      Provider: "feishu",
+      Surface: "feishu",
+      OriginatingChannel: "feishu",
+      OriginatingTo: "user:ou_sender_1",
+      AccountId: "work",
+    });
+
+    expect(resolveAcpCommandParentConversationId(params)).toBeUndefined();
+    expect(resolveAcpCommandBindingContext(params)).toEqual({
+      channel: "feishu",
+      accountId: "work",
+      threadId: undefined,
+      conversationId: "ou_sender_1",
+      parentConversationId: undefined,
+    });
   });
 });
