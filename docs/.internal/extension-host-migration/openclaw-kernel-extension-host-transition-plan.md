@@ -247,6 +247,7 @@ Committed implementation slices so far:
 - `fa4f53896e` `TTS: extract runtime setup`
 - `64353a2b16` `TTS: extract preferences`
 - `ed5941ed7e` `TTS: extract payload planning`
+- `454e44242f` `TTS: extract API composition`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
@@ -255,7 +256,7 @@ What has not landed:
 - keeping the cutover inventory current as more surfaces move
 - broader lifecycle ownership beyond the loader state machine, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes, plus remaining policy semantics
 - host-owned registration surfaces beyond the first normalization helpers and low-risk channel, provider, gateway-method, HTTP-route, tool, CLI, service, command, context-engine, and hook compatibility write slices
-- remaining media compatibility-facade cleanup, remaining TTS facade cleanup, plus catalog-backed runtime-family registration for embeddings, media, and TTS
+- remaining media compatibility-facade cleanup, plus catalog-backed runtime-family registration for embeddings, media, and TTS
 - SDK compatibility translation work
 - canonical event stages
 - canonical capability catalogs
