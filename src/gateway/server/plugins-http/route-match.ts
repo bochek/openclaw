@@ -1,3 +1,4 @@
+import { listExtensionHostHttpRoutes } from "../../../extension-host/runtime-registry.js";
 import type { PluginRegistry } from "../../../plugins/registry.js";
 import { canonicalizePathVariant } from "../../security-path.js";
 import {
@@ -23,7 +24,7 @@ export function findMatchingPluginHttpRoutes(
   registry: PluginRegistry,
   context: PluginRoutePathContext,
 ): PluginHttpRouteEntry[] {
-  const routes = registry.httpRoutes ?? [];
+  const routes = listExtensionHostHttpRoutes(registry);
   if (routes.length === 0) {
     return [];
   }

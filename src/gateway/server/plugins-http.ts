@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { listExtensionHostHttpRoutes } from "../../extension-host/runtime-registry.js";
 import type { createSubsystemLogger } from "../../logging/subsystem.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import { withPluginRuntimeGatewayRequestScope } from "../../plugins/runtime/gateway-request-scope.js";
@@ -65,7 +66,7 @@ export function createGatewayPluginRequestHandler(params: {
 }): PluginHttpRequestHandler {
   const { registry, log } = params;
   return async (req, res, providedPathContext, dispatchContext) => {
-    const routes = registry.httpRoutes ?? [];
+    const routes = listExtensionHostHttpRoutes(registry);
     if (routes.length === 0) {
       return false;
     }

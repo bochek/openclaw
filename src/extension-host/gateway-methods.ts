@@ -1,12 +1,13 @@
 import type { GatewayRequestHandlers } from "../gateway/server-methods/types.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { PluginDiagnostic } from "../plugins/types.js";
+import { getExtensionHostGatewayHandlers } from "./runtime-registry.js";
 
 export function resolveExtensionHostGatewayMethods(params: {
   registry: PluginRegistry;
   baseMethods: string[];
 }): string[] {
-  const pluginMethods = Object.keys(params.registry.gatewayHandlers);
+  const pluginMethods = Object.keys(getExtensionHostGatewayHandlers(params.registry));
   return Array.from(new Set([...params.baseMethods, ...pluginMethods]));
 }
 
@@ -14,8 +15,9 @@ export function createExtensionHostGatewayExtraHandlers(params: {
   registry: PluginRegistry;
   extraHandlers?: GatewayRequestHandlers;
 }): GatewayRequestHandlers {
+  const pluginHandlers = getExtensionHostGatewayHandlers(params.registry);
   return {
-    ...params.registry.gatewayHandlers,
+    ...pluginHandlers,
     ...params.extraHandlers,
   };
 }

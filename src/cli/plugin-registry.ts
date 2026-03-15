@@ -1,5 +1,6 @@
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { loadConfig } from "../config/config.js";
+import { hasExtensionHostRuntimeEntries } from "../extension-host/runtime-registry.js";
 import { createSubsystemLogger } from "../logging.js";
 import { loadOpenClawPlugins } from "../plugins/loader.js";
 import { getActivePluginRegistry } from "../plugins/runtime.js";
@@ -14,11 +15,8 @@ export function ensurePluginRegistryLoaded(): void {
   }
   const active = getActivePluginRegistry();
   // Tests (and callers) can pre-seed a registry (e.g. `test/setup.ts`); avoid
-  // doing an expensive load when we already have plugins/channels/tools.
-  if (
-    active &&
-    (active.plugins.length > 0 || active.channels.length > 0 || active.tools.length > 0)
-  ) {
+  // doing an expensive load when we already have runtime entries.
+  if (hasExtensionHostRuntimeEntries(active)) {
     pluginRegistryLoaded = true;
     return;
   }

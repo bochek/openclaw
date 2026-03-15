@@ -3,6 +3,7 @@ import { STATE_DIR } from "../config/paths.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { OpenClawPluginServiceContext, PluginLogger } from "../plugins/types.js";
+import { listExtensionHostServiceRegistrations } from "./runtime-registry.js";
 
 const log = createSubsystemLogger("plugins");
 
@@ -45,7 +46,7 @@ export async function startExtensionHostServices(params: {
     workspaceDir: params.workspaceDir,
   });
 
-  for (const entry of params.registry.services) {
+  for (const entry of listExtensionHostServiceRegistrations(params.registry)) {
     const service = entry.service;
     try {
       await service.start(serviceContext);

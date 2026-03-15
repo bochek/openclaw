@@ -3,6 +3,7 @@ import type { AnyAgentTool } from "../agents/tools/common.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { OpenClawPluginToolContext } from "../plugins/types.js";
+import { listExtensionHostToolRegistrations } from "./runtime-registry.js";
 
 const log = createSubsystemLogger("plugins");
 
@@ -55,7 +56,7 @@ export function resolveExtensionHostPluginTools(params: {
   const allowlist = normalizeAllowlist(params.toolAllowlist);
   const blockedPlugins = new Set<string>();
 
-  for (const entry of params.registry.tools) {
+  for (const entry of listExtensionHostToolRegistrations(params.registry)) {
     if (blockedPlugins.has(entry.pluginId)) {
       continue;
     }

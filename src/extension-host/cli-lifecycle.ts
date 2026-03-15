@@ -2,6 +2,7 @@ import type { Command } from "commander";
 import type { OpenClawConfig } from "../config/config.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { PluginLogger } from "../plugins/types.js";
+import { listExtensionHostCliRegistrations } from "./runtime-registry.js";
 
 export function registerExtensionHostCliCommands(params: {
   program: Command;
@@ -12,7 +13,7 @@ export function registerExtensionHostCliCommands(params: {
 }): void {
   const existingCommands = new Set(params.program.commands.map((cmd) => cmd.name()));
 
-  for (const entry of params.registry.cliRegistrars) {
+  for (const entry of listExtensionHostCliRegistrations(params.registry)) {
     if (entry.commands.length > 0) {
       const overlaps = entry.commands.filter((command) => existingCommands.has(command));
       if (overlaps.length > 0) {

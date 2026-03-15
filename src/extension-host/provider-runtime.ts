@@ -1,10 +1,11 @@
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { ProviderPlugin } from "../plugins/types.js";
+import { listExtensionHostProviderRegistrations } from "./runtime-registry.js";
 
 export function resolveExtensionHostProviders(params: {
   registry: Pick<PluginRegistry, "providers">;
 }): ProviderPlugin[] {
-  return params.registry.providers.map((entry) => ({
+  return listExtensionHostProviderRegistrations(params.registry).map((entry) => ({
     ...entry.provider,
     pluginId: entry.pluginId,
   }));
