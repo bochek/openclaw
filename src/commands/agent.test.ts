@@ -7,6 +7,7 @@ import * as cliRunnerModule from "../agents/cli-runner.js";
 import { FailoverError } from "../agents/failover-error.js";
 import { loadModelCatalog } from "../agents/model-catalog.js";
 import * as modelSelectionModule from "../agents/model-selection.js";
+import type { ClientToolDefinition } from "../agents/pi-embedded-runner/run/params.js";
 import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
 import * as commandSecretGatewayModule from "../cli/command-secret-gateway.js";
 import type { OpenClawConfig } from "../config/config.js";
@@ -420,7 +421,7 @@ describe("agentCommand", () => {
       const store = path.join(home, "sessions.json");
       mockConfig(home, store);
       const onPreflightPassed = vi.fn();
-      const clientTools = [
+      const clientTools: ClientToolDefinition[] = [
         {
           type: "function",
           function: {
