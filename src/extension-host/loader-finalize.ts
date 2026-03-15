@@ -1,7 +1,7 @@
 import type { PluginRegistry } from "../plugins/registry.js";
 import type { PluginLogger } from "../plugins/types.js";
+import { resolveExtensionHostFinalizationPolicy } from "./loader-finalization-policy.js";
 import type { ExtensionHostProvenanceIndex } from "./loader-policy.js";
-import { warnAboutUntrackedLoadedExtensions } from "./loader-policy.js";
 import { markExtensionHostRegistryPluginsReady } from "./loader-state.js";
 
 export function finalizeExtensionHostRegistryLoad(params: {
@@ -16,19 +16,17 @@ export function finalizeExtensionHostRegistryLoad(params: {
   setCachedRegistry: (cacheKey: string, registry: PluginRegistry) => void;
   activateRegistry: (registry: PluginRegistry, cacheKey: string) => void;
 }): PluginRegistry {
-  if (typeof params.memorySlot === "string" && !params.memorySlotMatched) {
-    params.registry.diagnostics.push({
-      level: "warn",
-      message: `memory slot plugin not found or not marked as memory: ${params.memorySlot}`,
-    });
-  }
-
-  warnAboutUntrackedLoadedExtensions({
+  const finalizationPolicy = resolveExtensionHostFinalizationPolicy({
     registry: params.registry,
+    memorySlot: params.memorySlot,
+    memorySlotMatched: params.memorySlotMatched,
     provenance: params.provenance,
-    logger: params.logger,
     env: params.env,
   });
+  params.registry.diagnostics.push(...finalizationPolicy.diagnostics);
+  for (const warning of finalizationPolicy.warningMessages) {
+    params.logger.warn(warning);
+  }
 
   if (params.cacheEnabled) {
     params.setCachedRegistry(params.cacheKey, params.registry);
