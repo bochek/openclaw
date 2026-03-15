@@ -5,6 +5,7 @@ import {
   normalizeChatChannelId,
 } from "../channels/registry.js";
 import { getActiveExtensionHostRegistry } from "../extension-host/active-registry.js";
+import { listExtensionHostChannelRegistrations } from "../extension-host/runtime-registry.js";
 import {
   GATEWAY_CLIENT_MODES,
   GATEWAY_CLIENT_NAMES,
@@ -65,14 +66,16 @@ export function normalizeMessageChannel(raw?: string | null): string | undefined
     return builtIn;
   }
   const registry = getActiveExtensionHostRegistry();
-  const pluginMatch = registry?.channels.find((entry) => {
-    if (entry.plugin.id.toLowerCase() === normalized) {
-      return true;
-    }
-    return (entry.plugin.meta.aliases ?? []).some(
-      (alias) => alias.trim().toLowerCase() === normalized,
-    );
-  });
+  const pluginMatch = registry
+    ? listExtensionHostChannelRegistrations(registry).find((entry) => {
+        if (entry.plugin.id.toLowerCase() === normalized) {
+          return true;
+        }
+        return (entry.plugin.meta.aliases ?? []).some(
+          (alias) => alias.trim().toLowerCase() === normalized,
+        );
+      })
+    : undefined;
   return pluginMatch?.plugin.id ?? normalized;
 }
 
@@ -81,7 +84,7 @@ const listPluginChannelIds = (): string[] => {
   if (!registry) {
     return [];
   }
-  return registry.channels.map((entry) => entry.plugin.id);
+  return listExtensionHostChannelRegistrations(registry).map((entry) => entry.plugin.id);
 };
 
 const listPluginChannelAliases = (): string[] => {
@@ -89,7 +92,9 @@ const listPluginChannelAliases = (): string[] => {
   if (!registry) {
     return [];
   }
-  return registry.channels.flatMap((entry) => entry.plugin.meta.aliases ?? []);
+  return listExtensionHostChannelRegistrations(registry).flatMap(
+    (entry) => entry.plugin.meta.aliases ?? [],
+  );
 };
 
 export const listDeliverableMessageChannels = (): ChannelId[] =>
