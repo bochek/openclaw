@@ -1568,6 +1568,7 @@ export async function runEmbeddedAttempt(
     if (clientToolNameConflicts.length > 0) {
       throw createClientToolNameConflictError(clientToolNameConflicts);
     }
+    await params.onPreflightPassed?.();
     const allowedToolNames = collectAllowedToolNames({
       tools,
       clientTools,

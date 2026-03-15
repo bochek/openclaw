@@ -236,6 +236,7 @@ async function runResponsesAgentCommand(params: {
   message: string;
   images: ImageContent[];
   clientTools: ClientToolDefinition[];
+  onPreflightPassed?: () => void | Promise<void>;
   extraSystemPrompt: string;
   streamParams: { maxTokens: number } | undefined;
   sessionKey: string;
@@ -248,6 +249,7 @@ async function runResponsesAgentCommand(params: {
       message: params.message,
       images: params.images.length > 0 ? params.images : undefined,
       clientTools: params.clientTools.length > 0 ? params.clientTools : undefined,
+      onPreflightPassed: params.onPreflightPassed,
       extraSystemPrompt: params.extraSystemPrompt || undefined,
       streamParams: params.streamParams ?? undefined,
       sessionKey: params.sessionKey,
@@ -534,14 +536,9 @@ export async function handleOpenResponsesHttpRequest(
     } catch (err) {
       logWarn(`openresponses: non-stream response failed: ${String(err)}`);
       if (isClientToolNameConflictError(err)) {
-        const response = createResponseResource({
-          id: responseId,
-          model,
-          status: "failed",
-          output: [],
-          error: { code: "invalid_request_error", message: "invalid tool configuration" },
+        sendJson(res, 400, {
+          error: { message: "invalid tool configuration", type: "invalid_request_error" },
         });
-        sendJson(res, 400, response);
         return true;
       }
       const response = createResponseResource({
@@ -560,14 +557,47 @@ export async function handleOpenResponsesHttpRequest(
   // Streaming mode
   // ─────────────────────────────────────────────────────────────────────────
 
-  setSseHeaders(res);
-
   let accumulatedText = "";
   let sawAssistantDelta = false;
   let closed = false;
+  let sseStarted = false;
   let unsubscribe = () => {};
   let finalUsage: Usage | undefined;
   let finalizeRequested: { status: ResponseResource["status"]; text: string } | null = null;
+  const initialResponse = createResponseResource({
+    id: responseId,
+    model,
+    status: "in_progress",
+    output: [],
+  });
+  const outputItem = createAssistantOutputItem({
+    id: outputItemId,
+    text: "",
+    status: "in_progress",
+  });
+
+  const startStream = () => {
+    if (closed || sseStarted) {
+      return;
+    }
+
+    sseStarted = true;
+    setSseHeaders(res);
+    writeSseEvent(res, { type: "response.created", response: initialResponse });
+    writeSseEvent(res, { type: "response.in_progress", response: initialResponse });
+    writeSseEvent(res, {
+      type: "response.output_item.added",
+      output_index: 0,
+      item: outputItem,
+    });
+    writeSseEvent(res, {
+      type: "response.content_part.added",
+      item_id: outputItemId,
+      output_index: 0,
+      content_index: 0,
+      part: { type: "output_text", text: "" },
+    });
+  };
 
   const maybeFinalize = () => {
     if (closed) {
@@ -579,6 +609,8 @@ export async function handleOpenResponsesHttpRequest(
     if (!finalUsage) {
       return;
     }
+
+    startStream();
     const usage = finalUsage;
 
     closed = true;
@@ -633,39 +665,6 @@ export async function handleOpenResponsesHttpRequest(
     maybeFinalize();
   };
 
-  // Send initial events
-  const initialResponse = createResponseResource({
-    id: responseId,
-    model,
-    status: "in_progress",
-    output: [],
-  });
-
-  writeSseEvent(res, { type: "response.created", response: initialResponse });
-  writeSseEvent(res, { type: "response.in_progress", response: initialResponse });
-
-  // Add output item
-  const outputItem = createAssistantOutputItem({
-    id: outputItemId,
-    text: "",
-    status: "in_progress",
-  });
-
-  writeSseEvent(res, {
-    type: "response.output_item.added",
-    output_index: 0,
-    item: outputItem,
-  });
-
-  // Add content part
-  writeSseEvent(res, {
-    type: "response.content_part.added",
-    item_id: outputItemId,
-    output_index: 0,
-    content_index: 0,
-    part: { type: "output_text", text: "" },
-  });
-
   unsubscribe = onAgentEvent((evt) => {
     if (evt.runId !== responseId) {
       return;
@@ -682,6 +681,7 @@ export async function handleOpenResponsesHttpRequest(
 
       sawAssistantDelta = true;
       accumulatedText += content;
+      startStream();
 
       writeSseEvent(res, {
         type: "response.output_text.delta",
@@ -714,6 +714,7 @@ export async function handleOpenResponsesHttpRequest(
         message: prompt.message,
         images,
         clientTools: resolvedClientTools,
+        onPreflightPassed: startStream,
         extraSystemPrompt,
         streamParams,
         sessionKey,
@@ -740,6 +741,7 @@ export async function handleOpenResponsesHttpRequest(
         if (stopReason === "tool_calls" && pendingToolCalls && pendingToolCalls.length > 0) {
           const functionCall = pendingToolCalls[0];
           const usage = finalUsage ?? createEmptyUsage();
+          startStream();
 
           writeSseEvent(res, {
             type: "response.output_text.done",
@@ -811,6 +813,7 @@ export async function handleOpenResponsesHttpRequest(
 
         accumulatedText = content;
         sawAssistantDelta = true;
+        startStream();
 
         writeSseEvent(res, {
           type: "response.output_text.delta",
@@ -826,7 +829,17 @@ export async function handleOpenResponsesHttpRequest(
         return;
       }
 
+      if (!sseStarted && isClientToolNameConflictError(err)) {
+        closed = true;
+        unsubscribe();
+        sendJson(res, 400, {
+          error: { message: "invalid tool configuration", type: "invalid_request_error" },
+        });
+        return;
+      }
+
       finalUsage = finalUsage ?? createEmptyUsage();
+      startStream();
       if (isClientToolNameConflictError(err)) {
         const errorResponse = createResponseResource({
           id: responseId,

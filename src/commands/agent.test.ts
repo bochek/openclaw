@@ -415,6 +415,20 @@ describe("agentCommand", () => {
     });
   });
 
+  it("passes ingress preflight callbacks through to embedded runs", async () => {
+    await withTempHome(async (home) => {
+      const store = path.join(home, "sessions.json");
+      mockConfig(home, store);
+      const onPreflightPassed = vi.fn();
+      await agentCommandFromIngress(
+        { message: "hi", to: "+1555", senderIsOwner: false, onPreflightPassed },
+        runtime,
+      );
+      const ingressCall = vi.mocked(runEmbeddedPiAgent).mock.calls.at(-1)?.[0];
+      expect(ingressCall?.onPreflightPassed).toBe(onPreflightPassed);
+    });
+  });
+
   it("resumes when session-id is provided", async () => {
     await withTempHome(async (home) => {
       const store = path.join(home, "sessions.json");
