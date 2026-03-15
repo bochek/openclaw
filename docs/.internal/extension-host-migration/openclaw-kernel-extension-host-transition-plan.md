@@ -58,6 +58,7 @@ What has landed:
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader top-level load orchestration now routes through `src/extension-host/loader-orchestrator.ts`
+- loader preflight and cache-hit setup now routes through `src/extension-host/loader-preflight.ts`
 - loader execution setup composition now routes through `src/extension-host/loader-execution.ts`
 - loader discovery and manifest bootstrap now routes through `src/extension-host/loader-bootstrap.ts`
 - loader mutable activation state now routes through `src/extension-host/loader-session.ts`
@@ -103,6 +104,7 @@ How it was done:
 - by adding explicit compatibility `lifecycleState` mapping on loader-owned plugin records before enforcing the loader lifecycle state machine
 - by turning that compatibility `lifecycleState` field into an enforced loader lifecycle state machine with readiness promotion during finalization
 - by moving the remaining top-level loader orchestration into a host-owned module so `src/plugins/loader.ts` becomes a compatibility facade instead of the real owner
+- by extracting test-default application, config normalization, cache-key construction, cache-hit activation, and command-clear setup into a host-owned loader-preflight helper before shrinking the remaining orchestrator surface
 - by extracting runtime creation, registry creation, bootstrap setup, module-loader creation, and session creation into a host-owned loader-execution helper before shrinking the remaining orchestrator surface
 - by moving mutable activation state such as seen-id tracking, memory-slot selection, and finalization inputs into a host-owned loader session instead of leaving them in top-level loader variables
 - by extracting shared provenance path matching and install-rule evaluation into `src/extension-host/loader-provenance.ts` so activation and finalization policy seams reuse one host-owned implementation
@@ -133,6 +135,7 @@ Committed implementation slices so far:
 - `6e187ffb62` `Plugins: extract loader bootstrap`
 - `234a540720` `Plugins: extract loader session runner`
 - `a98443c39d` `Plugins: extract loader execution setup`
+- `c9323aa016` `Plugins: extract loader preflight`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
