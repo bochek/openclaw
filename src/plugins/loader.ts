@@ -1,7 +1,13 @@
 import { createJiti } from "jiti";
 import type { OpenClawConfig } from "../config/config.js";
-import type { PluginInstallRecord } from "../config/types.plugins.js";
 import { activateExtensionHostRegistry } from "../extension-host/activation.js";
+import {
+  buildExtensionHostRegistryCacheKey,
+  clearExtensionHostRegistryCache,
+  getCachedExtensionHostRegistry,
+  MAX_EXTENSION_HOST_REGISTRY_CACHE_ENTRIES,
+  setCachedExtensionHostRegistry,
+} from "../extension-host/loader-cache.js";
 import {
   listPluginSdkAliasCandidates,
   listPluginSdkExportedSubpaths,
@@ -20,19 +26,13 @@ import {
 } from "../extension-host/loader-policy.js";
 import type { GatewayRequestHandler } from "../gateway/server-methods/types.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { resolveUserPath } from "../utils.js";
 import { clearPluginCommands } from "./commands.js";
-import {
-  applyTestPluginDefaults,
-  normalizePluginsConfig,
-  type NormalizedPluginsConfig,
-} from "./config-state.js";
+import { applyTestPluginDefaults, normalizePluginsConfig } from "./config-state.js";
 import { discoverOpenClawPlugins } from "./discovery.js";
 import { initializeGlobalHookRunner } from "./hook-runner-global.js";
 import { clearPluginInteractiveHandlers } from "./interactive.js";
 import { loadPluginManifestRegistry } from "./manifest-registry.js";
 import { createPluginRegistry, type PluginRecord, type PluginRegistry } from "./registry.js";
-import { resolvePluginCacheInputs } from "./roots.js";
 import { createPluginRuntime, type CreatePluginRuntimeOptions } from "./runtime/index.js";
 import type { PluginRuntime } from "./runtime/types.js";
 import { validateJsonSchemaValue } from "./schema-validator.js";
@@ -60,12 +60,10 @@ export type PluginLoadOptions = {
   mode?: "full" | "validate";
 };
 
-const MAX_PLUGIN_REGISTRY_CACHE_ENTRIES = 32;
-const registryCache = new Map<string, PluginRegistry>();
 const openAllowlistWarningCache = new Set<string>();
 
 export function clearPluginLoaderCache(): void {
-  registryCache.clear();
+  clearExtensionHostRegistryCache();
   openAllowlistWarningCache.clear();
 }
 
@@ -216,7 +214,7 @@ export const __testing = {
   resolveExtensionApiAlias,
   resolvePluginSdkAliasCandidateOrder,
   resolvePluginSdkAliasFile,
-  maxPluginRegistryCacheEntries: MAX_PLUGIN_REGISTRY_CACHE_ENTRIES,
+  maxPluginRegistryCacheEntries: MAX_EXTENSION_HOST_REGISTRY_CACHE_ENTRIES,
 };
 
 function getCachedPluginRegistry(cacheKey: string): PluginRegistry | undefined {
@@ -655,7 +653,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
   const logger = options.logger ?? defaultLogger();
   const validateOnly = options.mode === "validate";
   const normalized = normalizePluginsConfig(cfg.plugins);
-  const cacheKey = buildCacheKey({
+  const cacheKey = buildExtensionHostRegistryCacheKey({
     workspaceDir: options.workspaceDir,
     plugins: normalized,
     installs: cfg.plugins?.installs,
@@ -663,7 +661,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
   });
   const cacheEnabled = options.cache !== false;
   if (cacheEnabled) {
-    const cached = getCachedPluginRegistry(cacheKey);
+    const cached = getCachedExtensionHostRegistry(cacheKey);
     if (cached) {
       activateExtensionHostRegistry(cached, cacheKey);
       return cached;
@@ -980,7 +978,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     env,
     cacheEnabled,
     cacheKey,
-    setCachedRegistry: setCachedPluginRegistry,
+    setCachedRegistry: setCachedExtensionHostRegistry,
     activateRegistry: activateExtensionHostRegistry,
   });
 }
