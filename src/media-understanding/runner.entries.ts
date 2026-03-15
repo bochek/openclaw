@@ -12,6 +12,10 @@ import type {
   MediaUnderstandingConfig,
   MediaUnderstandingModelConfig,
 } from "../config/types.tools.js";
+import {
+  getExtensionHostMediaUnderstandingProvider,
+  normalizeExtensionHostMediaProviderId,
+} from "../extension-host/media-runtime-registry.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import { resolveProxyFetchFromEnv } from "../infra/net/proxy-fetch.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
@@ -27,7 +31,6 @@ import { MediaUnderstandingSkipError } from "./errors.js";
 import { fileExists } from "./fs.js";
 import { extractGeminiResponse } from "./output-extract.js";
 import { describeImageWithModel } from "./providers/image.js";
-import { getMediaUnderstandingProvider, normalizeMediaProviderId } from "./providers/index.js";
 import { resolveMaxBytes, resolveMaxChars, resolvePrompt, resolveTimeoutMs } from "./resolve.js";
 import type {
   MediaUnderstandingCapability,
@@ -302,7 +305,9 @@ export function buildModelDecision(params: {
     };
   }
   const providerIdRaw = params.entry.provider?.trim();
-  const providerId = providerIdRaw ? normalizeMediaProviderId(providerIdRaw) : undefined;
+  const providerId = providerIdRaw
+    ? normalizeExtensionHostMediaProviderId(providerIdRaw)
+    : undefined;
   return {
     type: "provider",
     provider: providerId ?? providerIdRaw,
@@ -429,7 +434,7 @@ export async function runProviderEntry(params: {
   if (!providerIdRaw) {
     throw new Error(`Provider entry missing provider for ${capability}`);
   }
-  const providerId = normalizeMediaProviderId(providerIdRaw);
+  const providerId = normalizeExtensionHostMediaProviderId(providerIdRaw);
   const { maxBytes, maxChars, timeoutMs, prompt } = resolveEntryRunOptions({
     capability,
     entry,
@@ -450,7 +455,10 @@ export async function runProviderEntry(params: {
       maxBytes,
       timeoutMs,
     });
-    const provider = getMediaUnderstandingProvider(providerId, params.providerRegistry);
+    const provider = getExtensionHostMediaUnderstandingProvider(
+      providerId,
+      params.providerRegistry,
+    );
     const imageInput = {
       buffer: media.buffer,
       fileName: media.fileName,
@@ -475,7 +483,7 @@ export async function runProviderEntry(params: {
     };
   }
 
-  const provider = getMediaUnderstandingProvider(providerId, params.providerRegistry);
+  const provider = getExtensionHostMediaUnderstandingProvider(providerId, params.providerRegistry);
   if (!provider) {
     throw new Error(`Media provider not available: ${providerId}`);
   }

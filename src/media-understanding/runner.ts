@@ -18,6 +18,11 @@ import type {
   MediaUnderstandingConfig,
   MediaUnderstandingModelConfig,
 } from "../config/types.tools.js";
+import {
+  buildExtensionHostMediaUnderstandingRegistry,
+  getExtensionHostMediaUnderstandingProvider,
+  normalizeExtensionHostMediaProviderId,
+} from "../extension-host/media-runtime-registry.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import {
   mergeInboundPathRoots,
@@ -40,11 +45,6 @@ import {
 import { isMediaUnderstandingSkipError } from "./errors.js";
 import { fileExists } from "./fs.js";
 import { extractGeminiResponse } from "./output-extract.js";
-import {
-  buildMediaUnderstandingRegistry,
-  getMediaUnderstandingProvider,
-  normalizeMediaProviderId,
-} from "./providers/index.js";
 import { resolveModelEntries, resolveScopeDecision } from "./resolve.js";
 import {
   buildModelDecision,
@@ -76,7 +76,7 @@ export type RunCapabilityResult = {
 export function buildProviderRegistry(
   overrides?: Record<string, MediaUnderstandingProvider>,
 ): ProviderRegistry {
-  return buildMediaUnderstandingRegistry(overrides);
+  return buildExtensionHostMediaUnderstandingRegistry(overrides);
 }
 
 export function normalizeMediaAttachments(ctx: MsgContext): MediaAttachment[] {
@@ -349,7 +349,7 @@ async function resolveKeyEntry(params: {
     providerId: string,
     model?: string,
   ): Promise<MediaUnderstandingModelConfig | null> => {
-    const provider = getMediaUnderstandingProvider(providerId, providerRegistry);
+    const provider = getExtensionHostMediaUnderstandingProvider(providerId, providerRegistry);
     if (!provider) {
       return null;
     }
@@ -536,11 +536,11 @@ async function resolveActiveModelEntry(params: {
   if (!activeProviderRaw) {
     return null;
   }
-  const providerId = normalizeMediaProviderId(activeProviderRaw);
+  const providerId = normalizeExtensionHostMediaProviderId(activeProviderRaw);
   if (!providerId) {
     return null;
   }
-  const provider = getMediaUnderstandingProvider(providerId, params.providerRegistry);
+  const provider = getExtensionHostMediaUnderstandingProvider(providerId, params.providerRegistry);
   if (!provider) {
     return null;
   }

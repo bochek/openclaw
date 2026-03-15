@@ -5,6 +5,7 @@ import type {
   MediaUnderstandingModelConfig,
   MediaUnderstandingScopeConfig,
 } from "../config/types.tools.js";
+import { normalizeExtensionHostMediaProviderId } from "../extension-host/media-runtime-registry.js";
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import {
   DEFAULT_MAX_BYTES,
@@ -12,7 +13,6 @@ import {
   DEFAULT_MEDIA_CONCURRENCY,
   DEFAULT_PROMPT,
 } from "./defaults.js";
-import { normalizeMediaProviderId } from "./providers/index.js";
 import { normalizeMediaUnderstandingChatType, resolveMediaUnderstandingScope } from "./scope.js";
 import type { MediaUnderstandingCapability } from "./types.js";
 
@@ -91,7 +91,7 @@ function resolveEntryCapabilities(params: {
   if (entryType === "cli") {
     return undefined;
   }
-  const providerId = normalizeMediaProviderId(params.entry.provider ?? "");
+  const providerId = normalizeExtensionHostMediaProviderId(params.entry.provider ?? "");
   if (!providerId) {
     return undefined;
   }
@@ -169,7 +169,7 @@ export function resolveEntriesWithActiveFallback(params: {
   if (!activeProviderRaw) {
     return entries;
   }
-  const activeProvider = normalizeMediaProviderId(activeProviderRaw);
+  const activeProvider = normalizeExtensionHostMediaProviderId(activeProviderRaw);
   if (!activeProvider) {
     return entries;
   }
