@@ -42,6 +42,7 @@ What has been implemented:
 - loader entry-path opening and module import now route through `src/extension-host/loader-import.ts`
 - loader module-export resolution, config validation, and memory-slot load decisions now route through `src/extension-host/loader-runtime.ts`
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
+- loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`
 
 How it has been implemented:
@@ -59,6 +60,7 @@ How it has been implemented:
 - by moving entry-path opening and module import next while leaving cache wiring and lifecycle orchestration unchanged
 - by moving loader runtime decisions next while preserving the current lazy-load, config-validation, and memory-slot behavior
 - by moving post-import planning and `register(...)` execution next while leaving entry-path and import flow unchanged
+- by composing those seams into one host-owned per-candidate loader orchestrator before moving final lifecycle-state behavior
 - by moving record-state transitions next while leaving the lifecycle state machine itself unimplemented
 
 What is still pending from this spec:

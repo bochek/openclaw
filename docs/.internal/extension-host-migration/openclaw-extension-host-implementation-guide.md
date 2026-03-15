@@ -66,6 +66,7 @@ What has been implemented so far:
 - loader entry-path opening and module import now route through `src/extension-host/loader-import.ts`
 - loader module-export resolution, config validation, and memory-slot load decisions now route through `src/extension-host/loader-runtime.ts`
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
+- loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`
 - runtime registration normalization has started in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registrations
 - several static and lookup consumers now read through the host boundary or resolved-extension model:
@@ -93,6 +94,7 @@ How it has been done:
 - by moving entry-path opening and module import behind host-owned helpers before changing cache wiring or lifecycle orchestration
 - by moving loader runtime decisions behind host-owned helpers while preserving lazy loading, config validation behavior, and memory-slot policy behavior
 - by moving post-import planning and `register(...)` execution behind host-owned helpers before changing entry-path and import flow
+- by composing those seams into one host-owned per-candidate orchestrator before changing cache and lifecycle finalization behavior
 - by moving loader record-state transitions into host-owned helpers before introducing a full lifecycle state machine
 - by moving central readers first, so later lifecycle and compatibility work can land on one boundary instead of many ad hoc call sites
 - by adding focused tests for each extracted seam before widening the boundary further
@@ -104,6 +106,7 @@ Committed implementation slices so far:
 - `7bc3135082` `Plugins: extract loader candidate planning`
 - `3a122c95fa` `Plugins: extract loader register flow`
 - `fc81454038` `Plugins: extract loader import flow`
+- `e1b207f4cf` `Plugins: extract loader candidate orchestration`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
@@ -300,7 +303,7 @@ Current implementation status:
 - the host owns the active registry state
 - the host exposes a resolved-extension registry view for static consumers
 - plugin skills, plugin auto-enable, and config validation indexing now consume host-owned resolved-extension data
-- activation, loader policy, loader candidate planning, loader import flow, loader runtime decisions, loader post-import register flow, and loader record-state helpers now route through `src/extension-host/*`
+- activation, loader policy, loader candidate planning, loader import flow, loader runtime decisions, loader post-import register flow, loader candidate orchestration, and loader record-state helpers now route through `src/extension-host/*`
 - lifecycle state ownership, activation states, policy evaluation, and broad host-owned registries are still not implemented
 
 ### Phase 3: Build compatibility bridges
