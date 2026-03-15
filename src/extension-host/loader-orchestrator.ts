@@ -1,9 +1,9 @@
 import type { OpenClawConfig } from "../config/config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { clearPluginCommands } from "../plugins/commands.js";
 import type { PluginRegistry } from "../plugins/registry.js";
 import { createPluginRuntime, type CreatePluginRuntimeOptions } from "../plugins/runtime/index.js";
 import type { PluginLogger } from "../plugins/types.js";
+import { clearExtensionHostPluginCommands } from "./command-runtime.js";
 import {
   clearExtensionHostLoaderHostState,
   getExtensionHostDiscoveryWarningCache,
@@ -37,7 +37,7 @@ export function loadExtensionHostPluginRegistry(
   const preflight = prepareExtensionHostLoaderPreflight({
     options,
     createDefaultLogger: defaultLogger,
-    clearPluginCommands,
+    clearPluginCommands: clearExtensionHostPluginCommands,
   });
   if (preflight.cacheHit) {
     return preflight.registry;

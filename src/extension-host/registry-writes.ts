@@ -27,6 +27,7 @@ import type {
 import {
   addExtensionHostChannelRegistration,
   addExtensionHostCliRegistration,
+  addExtensionHostCommandRegistration,
   addExtensionHostHttpRoute,
   addExtensionHostProviderRegistration,
   addExtensionHostServiceRegistration,
@@ -156,7 +157,7 @@ export function addExtensionCommandRegistration(params: {
   entry: ExtensionHostCommandRegistration;
 }): void {
   params.record.commands.push(params.commandName);
-  params.registry.commands.push(params.entry as PluginCommandRegistration);
+  addExtensionHostCommandRegistration(params.registry, params.entry as PluginCommandRegistration);
 }
 
 export function addExtensionContextEngineRegistration(params: {

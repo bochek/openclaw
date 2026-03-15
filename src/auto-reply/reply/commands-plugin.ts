@@ -5,7 +5,10 @@
  * This handler is called before built-in command handlers.
  */
 
-import { matchPluginCommand, executePluginCommand } from "../../plugins/commands.js";
+import {
+  executeExtensionHostPluginCommand,
+  matchExtensionHostPluginCommand,
+} from "../../extension-host/command-runtime.js";
 import type { CommandHandler, CommandHandlerResult } from "./commands-types.js";
 
 /**
@@ -24,13 +27,13 @@ export const handlePluginCommand: CommandHandler = async (
   }
 
   // Try to match a plugin command
-  const match = matchPluginCommand(command.commandBodyNormalized);
+  const match = matchExtensionHostPluginCommand(command.commandBodyNormalized);
   if (!match) {
     return null;
   }
 
   // Execute the plugin command (always returns a result)
-  const result = await executePluginCommand({
+  const result = await executeExtensionHostPluginCommand({
     command: match.command,
     args: match.args,
     senderId: command.senderId,

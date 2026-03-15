@@ -20,10 +20,10 @@ import {
   type SessionEntry,
   type SessionScope,
 } from "../config/sessions.js";
+import { listExtensionHostPluginCommands } from "../extension-host/command-runtime.js";
 import { formatTimeAgo } from "../infra/format-time/format-relative.ts";
 import { resolveCommitHash } from "../infra/git-commit.js";
 import type { MediaUnderstandingDecision } from "../media-understanding/types.js";
-import { listPluginCommands } from "../plugins/commands.js";
 import { resolveAgentIdFromSessionKey } from "../routing/session-key.js";
 import {
   getTtsMaxLength,
@@ -865,7 +865,7 @@ export function buildCommandsMessagePaginated(
   const commands = cfg
     ? listChatCommandsForConfig(cfg, { skillCommands })
     : listChatCommands({ skillCommands });
-  const pluginCommands = listPluginCommands();
+  const pluginCommands = listExtensionHostPluginCommands();
   const items = buildCommandItems(commands, pluginCommands);
 
   if (!isTelegram) {

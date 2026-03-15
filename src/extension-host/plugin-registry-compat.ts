@@ -1,4 +1,3 @@
-import { registerPluginCommand } from "../plugins/commands.js";
 import { normalizeRegisteredProvider } from "../plugins/provider-validation.js";
 import type { PluginRecord, PluginRegistry } from "../plugins/registry.js";
 import type {
@@ -6,6 +5,7 @@ import type {
   PluginDiagnostic,
   ProviderPlugin,
 } from "../plugins/types.js";
+import { registerExtensionHostPluginCommand } from "./command-runtime.js";
 import {
   type ExtensionHostCommandRegistration,
   type ExtensionHostProviderRegistration,
@@ -101,7 +101,7 @@ export function resolveExtensionHostCommandCompatibility(params: {
     return { ok: false };
   }
 
-  const result = registerPluginCommand(params.record.id, normalized.entry.command);
+  const result = registerExtensionHostPluginCommand(params.record.id, normalized.entry.command);
   if (!result.ok) {
     pushExtensionHostRegistryDiagnostic({
       registry: params.registry,

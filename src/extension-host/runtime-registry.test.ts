@@ -3,6 +3,7 @@ import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import {
   addExtensionHostChannelRegistration,
   addExtensionHostCliRegistration,
+  addExtensionHostCommandRegistration,
   addExtensionHostHttpRoute,
   addExtensionHostProviderRegistration,
   addExtensionHostServiceRegistration,
@@ -11,6 +12,7 @@ import {
   hasExtensionHostRuntimeEntries,
   listExtensionHostChannelRegistrations,
   listExtensionHostCliRegistrations,
+  listExtensionHostCommandRegistrations,
   listExtensionHostHttpRoutes,
   listExtensionHostProviderRegistrations,
   listExtensionHostServiceRegistrations,
@@ -84,6 +86,18 @@ describe("extension host runtime registry accessors", () => {
     });
     expect(hasExtensionHostRuntimeEntries(cliRegistry)).toBe(true);
 
+    const commandRegistry = createEmptyPluginRegistry();
+    addExtensionHostCommandRegistration(commandRegistry, {
+      pluginId: "cmd-demo",
+      source: "test",
+      command: {
+        name: "demo",
+        description: "Demo command",
+        handler: async () => ({ text: "ok" }),
+      },
+    });
+    expect(hasExtensionHostRuntimeEntries(commandRegistry)).toBe(true);
+
     const serviceRegistry = createEmptyPluginRegistry();
     addExtensionHostServiceRegistration(serviceRegistry, {
       pluginId: "svc-demo",
@@ -103,6 +117,7 @@ describe("extension host runtime registry accessors", () => {
     expect(listExtensionHostToolRegistrations(null)).toEqual([]);
     expect(listExtensionHostServiceRegistrations(null)).toEqual([]);
     expect(listExtensionHostCliRegistrations(null)).toEqual([]);
+    expect(listExtensionHostCommandRegistrations(null)).toEqual([]);
     expect(listExtensionHostHttpRoutes(null)).toEqual([]);
     expect(getExtensionHostGatewayHandlers(null)).toEqual({});
   });
@@ -146,6 +161,15 @@ describe("extension host runtime registry accessors", () => {
       commands: ["demo"],
       register: () => undefined,
     });
+    addExtensionHostCommandRegistration(registry, {
+      pluginId: "cmd-demo",
+      source: "test",
+      command: {
+        name: "demo",
+        description: "Demo command",
+        handler: async () => ({ text: "ok" }),
+      },
+    });
     addExtensionHostHttpRoute(registry, {
       path: "/plugins/demo",
       handler: vi.fn(),
@@ -186,6 +210,7 @@ describe("extension host runtime registry accessors", () => {
     expect(listExtensionHostProviderRegistrations(registry)).toEqual(registry.providers);
     expect(listExtensionHostServiceRegistrations(registry)).toEqual(registry.services);
     expect(listExtensionHostCliRegistrations(registry)).toEqual(registry.cliRegistrars);
+    expect(listExtensionHostCommandRegistrations(registry)).toEqual(registry.commands);
     expect(listExtensionHostHttpRoutes(registry)).toEqual(registry.httpRoutes);
     expect(getExtensionHostGatewayHandlers(registry)).toEqual(registry.gatewayHandlers);
     expect(getExtensionHostGatewayHandlers(registry)["demo.echo"]).toBe(handler);
@@ -229,6 +254,11 @@ describe("extension host runtime registry accessors", () => {
       start: () => undefined,
     };
     const register = () => undefined;
+    const command = {
+      name: "demo",
+      description: "Demo command",
+      handler: async () => ({ text: "ok" }),
+    };
 
     addExtensionHostServiceRegistration(registry, {
       pluginId: "svc-demo",
@@ -241,11 +271,18 @@ describe("extension host runtime registry accessors", () => {
       commands: ["demo"],
       register,
     });
+    addExtensionHostCommandRegistration(registry, {
+      pluginId: "cmd-demo",
+      source: "test",
+      command,
+    });
 
     expect(listExtensionHostServiceRegistrations(registry)).toEqual(registry.services);
     expect(listExtensionHostCliRegistrations(registry)).toEqual(registry.cliRegistrars);
+    expect(listExtensionHostCommandRegistrations(registry)).toEqual(registry.commands);
     expect(registry.services[0]?.service).toBe(service);
     expect(registry.cliRegistrars[0]?.register).toBe(register);
+    expect(registry.commands[0]?.command).toBe(command);
   });
 
   it("keeps legacy tool and provider mirrors synchronized with host-owned state", () => {
