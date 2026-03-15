@@ -49,6 +49,7 @@ What has been implemented:
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader top-level load orchestration now routes through `src/extension-host/loader-orchestrator.ts`
 - loader preflight and cache-hit setup now routes through `src/extension-host/loader-preflight.ts`
+- loader post-preflight pipeline composition now routes through `src/extension-host/loader-pipeline.ts`
 - loader execution setup composition now routes through `src/extension-host/loader-execution.ts`
 - loader discovery and manifest bootstrap now routes through `src/extension-host/loader-bootstrap.ts`
 - loader mutable activation state now routes through `src/extension-host/loader-session.ts`
@@ -72,6 +73,7 @@ How it has been implemented:
 - by extracting candidate iteration, manifest lookup, per-candidate session processing, and finalization handoff into a host-owned loader-run helper before catalog publication work
 - by converting the compatibility record-state layer into an enforced loader lifecycle state machine before catalog publication work
 - by extracting test-default application, config normalization, cache-key construction, cache-hit activation, and command-clear setup into a host-owned loader-preflight helper before catalog publication work
+- by extracting post-preflight execution setup and session-run composition into a host-owned loader-pipeline helper before catalog publication work
 - by extracting runtime creation, registry creation, bootstrap setup, module-loader creation, and session creation into a host-owned loader-execution helper before catalog publication work
 - by moving mutable activation state into a host-owned loader session before catalog publication work
 - by extracting shared provenance path matching and install-rule evaluation into `src/extension-host/loader-provenance.ts` so activation and finalization policy seams reuse one host-owned implementation
