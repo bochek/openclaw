@@ -53,6 +53,7 @@ What has been implemented:
 - provider matching, auth-method selection, config-patch merging, and default-model application now delegate through `src/extension-host/provider-auth.ts`
 - provider onboarding option building, model-picker entry building, and provider-method choice resolution now delegate through `src/extension-host/provider-wizard.ts`
 - loaded-provider auth application, plugin-enable gating, auth-method execution, and post-auth default-model handling now delegate through `src/extension-host/provider-auth-flow.ts`
+- provider post-selection hook lookup and invocation now delegate through `src/extension-host/provider-model-selection.ts`
 - loader alias-wired module loader creation now routes through `src/extension-host/loader-module-loader.ts`
 - loader cache key construction and registry cache control now route through `src/extension-host/loader-cache.ts`
 - loader lazy runtime proxy creation now routes through `src/extension-host/loader-runtime-proxy.ts`
@@ -126,6 +127,7 @@ How it has been implemented:
 - by extracting provider matching, auth-method selection, config-patch merging, and default-model application into a host-owned provider-auth helper while `src/commands/provider-auth-helpers.ts` remains the command-facing compatibility facade
 - by extracting provider onboarding option building, model-picker entry building, and provider-method choice resolution into a host-owned provider-wizard helper while `src/plugins/provider-wizard.ts` remains the compatibility facade around loader-backed provider access and post-selection hooks
 - by extracting loaded-provider auth application, plugin-enable gating, auth-method execution, and post-auth default-model handling into a host-owned provider-auth-flow helper while `src/commands/auth-choice.apply.plugin-provider.ts` remains the compatibility entry point
+- by extracting provider post-selection hook lookup and invocation into a host-owned provider-model-selection helper while `src/plugins/provider-wizard.ts` remains the compatibility facade and existing command consumers continue migrating onto the host-owned surface
 - by extracting provider-id normalization into `src/agents/provider-id.ts` so provider-only host seams do not inherit the heavier agent and browser dependency graph from `src/agents/model-selection.ts`
 - by extracting model-ref parsing into `src/agents/model-ref.ts` and Google model-id normalization into `src/agents/google-model-id.ts` so provider auth and setup seams can be tested without pulling the heavier provider-loader and browser dependency graph
 

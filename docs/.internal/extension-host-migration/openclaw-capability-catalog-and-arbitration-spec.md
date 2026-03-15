@@ -75,6 +75,7 @@ What has been implemented:
 - provider matching, auth-method selection, config-patch merging, and default-model application now route through `src/extension-host/provider-auth.ts` ahead of broader catalog-backed provider-auth ownership
 - provider onboarding option building, model-picker entry building, and provider-method choice resolution now route through `src/extension-host/provider-wizard.ts` ahead of broader catalog-backed provider-setup ownership
 - loaded-provider auth application, plugin-enable gating, auth-method execution, and post-auth default-model handling now route through `src/extension-host/provider-auth-flow.ts` ahead of broader catalog-backed provider-setup ownership
+- provider post-selection hook lookup and invocation now route through `src/extension-host/provider-model-selection.ts` ahead of broader catalog-backed provider-setup ownership
 
 How it has been implemented:
 
@@ -112,6 +113,7 @@ How it has been implemented:
 - by extracting provider matching, auth-method selection, config-patch merging, and default-model application into a host-owned provider-auth helper before broader catalog-backed provider-auth ownership
 - by extracting provider onboarding option building, model-picker entry building, and provider-method choice resolution into a host-owned provider-wizard helper before broader catalog-backed provider-setup ownership
 - by extracting loaded-provider auth application, plugin-enable gating, auth-method execution, and post-auth default-model handling into a host-owned provider-auth-flow helper before broader catalog-backed provider-setup ownership
+- by extracting provider post-selection hook lookup and invocation into a host-owned provider-model-selection helper before broader catalog-backed provider-setup ownership
 - by extracting provider-id normalization into `src/agents/provider-id.ts` so provider-only host seams do not inherit the heavier agent and browser dependency graph from `src/agents/model-selection.ts`
 - by extracting model-ref parsing into `src/agents/model-ref.ts` and Google model-id normalization into `src/agents/google-model-id.ts` so provider auth and setup seams can be tested without pulling the heavier provider-loader and browser dependency graph
 
