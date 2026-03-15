@@ -124,6 +124,8 @@ export async function verifyDeviceBootstrapToken(params: {
     }
     if (Array.isArray(entry.scopes)) {
       const allowedScopes = normalizeDeviceAuthScopes(entry.scopes);
+      // Both arrays are normalized through normalizeDeviceAuthScopes, which
+      // sorts and deduplicates them before comparison.
       if (
         allowedScopes.length !== requestedScopes.length ||
         allowedScopes.some((value, index) => value !== requestedScopes[index])

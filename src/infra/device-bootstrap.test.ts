@@ -238,6 +238,26 @@ describe("device bootstrap tokens", () => {
     ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
   });
 
+  it("accepts constrained tokens when the requested role and scopes match", async () => {
+    const baseDir = await createTempDir();
+    const issued = await issueDeviceBootstrapToken({
+      baseDir,
+      role: "node",
+      scopes: [],
+    });
+
+    await expect(
+      verifyDeviceBootstrapToken({
+        token: issued.token,
+        deviceId: "device-123",
+        publicKey: "public-key-123",
+        role: "node",
+        scopes: [],
+        baseDir,
+      }),
+    ).resolves.toEqual({ ok: true });
+  });
+
   it("rejects scopes that do not match the issued pairing profile", async () => {
     const baseDir = await createTempDir();
     const issued = await issueDeviceBootstrapToken({
