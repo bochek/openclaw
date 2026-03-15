@@ -1,0 +1,165 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { listExtensionHostEmbeddingRemoteRuntimeBackendIds } from "../policy/embedding-runtime-policy.js";
+
+vi.mock("./embedding-runtime-backends.js", () => ({
+  EXTENSION_HOST_EMBEDDING_RUNTIME_BACKEND_IDS: [
+    "local",
+    "openai",
+    "gemini",
+    "voyage",
+    "mistral",
+    "ollama",
+  ],
+  EXTENSION_HOST_REMOTE_EMBEDDING_PROVIDER_IDS: ["openai", "gemini", "voyage", "mistral"],
+  isExtensionHostEmbeddingRuntimeBackendAutoSelectable: vi.fn(
+    (backendId: string) => backendId !== "ollama",
+  ),
+  resolveExtensionHostEmbeddingRuntimeDefaultModel: vi.fn((backendId: string) =>
+    backendId === "local" ? "local-model.gguf" : `${backendId}-default-model`,
+  ),
+}));
+
+vi.mock("./media-runtime-backends.js", () => ({
+  buildExtensionHostMediaRuntimeSelectorKeys: vi.fn((id: string) =>
+    id === "google" ? ["google", "gemini"] : [id],
+  ),
+  listExtensionHostMediaAutoRuntimeBackendSeedIds: vi.fn(
+    (capability: "audio" | "image" | "video") =>
+      ({
+        audio: ["deepgram"],
+        image: ["openai", "google"],
+        video: ["openai"],
+      })[capability],
+  ),
+  listExtensionHostMediaRuntimeBackendIds: vi.fn(
+    (capability: "audio" | "image" | "video") =>
+      ({
+        audio: ["deepgram"],
+        image: ["openai", "google"],
+        video: ["openai"],
+      })[capability],
+  ),
+  normalizeExtensionHostMediaProviderId: vi.fn((id: string) =>
+    id.trim().toLowerCase() === "gemini" ? "google" : id.trim().toLowerCase(),
+  ),
+  resolveExtensionHostMediaRuntimeDefaultModelMetadata: vi.fn(
+    (params: { capability: "audio" | "image" | "video"; backendId: string }) =>
+      params.capability === "image" && params.backendId === "openai" ? "gpt-5-mini" : undefined,
+  ),
+}));
+
+vi.mock("./tts-runtime-backends.js", () => ({
+  listExtensionHostTtsRuntimeBackends: vi.fn(() => [
+    { id: "openai", supportsTelephony: true },
+    { id: "elevenlabs", supportsTelephony: true },
+    { id: "edge", supportsTelephony: false },
+  ]),
+}));
+
+describe("runtime-backend-catalog", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("publishes embedding backends as host-owned runtime-backend catalog entries", async () => {
+    const catalog = await import("./runtime-backend-catalog.js");
+    const entries = catalog.listExtensionHostEmbeddingRuntimeBackendCatalogEntries();
+
+    expect(entries.map((entry) => entry.backendId)).toEqual([
+      "local",
+      "openai",
+      "gemini",
+      "voyage",
+      "mistral",
+      "ollama",
+    ]);
+    expect(
+      entries.every((entry) => entry.family === catalog.EXTENSION_HOST_RUNTIME_BACKEND_FAMILY),
+    ).toBe(true);
+    expect(entries.every((entry) => entry.subsystemId === "embedding")).toBe(true);
+    expect(entries[0]?.capabilities).toContain("embed.query");
+    expect(entries[0]?.metadata).toMatchObject({
+      autoSelectable: true,
+      defaultModel: "local-model.gguf",
+    });
+    expect(entries.at(-1)?.metadata).toMatchObject({
+      autoSelectable: false,
+      defaultModel: "ollama-default-model",
+    });
+  });
+
+  it("splits media providers into subsystem-specific runtime-backend catalog entries", async () => {
+    const catalog = await import("./runtime-backend-catalog.js");
+    const entries = catalog.listExtensionHostMediaRuntimeBackendCatalogEntries();
+
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          subsystemId: "media.image",
+          backendId: "openai",
+          capabilities: ["image"],
+        }),
+        expect.objectContaining({
+          subsystemId: "media.audio",
+          backendId: "deepgram",
+          capabilities: ["audio"],
+        }),
+      ]),
+    );
+    expect(entries.find((entry) => entry.backendId === "google")?.selectorKeys).toContain("gemini");
+    expect(catalog.listExtensionHostMediaAutoRuntimeBackendIds("image")).toEqual([
+      "openai",
+      "google",
+    ]);
+    expect(
+      catalog.resolveExtensionHostMediaRuntimeDefaultModel({
+        capability: "image",
+        backendId: "openai",
+      }),
+    ).toBe("gpt-5-mini");
+  });
+
+  it("publishes TTS backends with telephony capability metadata", async () => {
+    const catalog = await import("./runtime-backend-catalog.js");
+    const entries = catalog.listExtensionHostTtsRuntimeBackendCatalogEntries();
+
+    expect(entries.map((entry) => entry.backendId)).toEqual(["openai", "elevenlabs", "edge"]);
+    expect(entries.find((entry) => entry.backendId === "openai")?.capabilities).toContain(
+      "tts.telephony",
+    );
+    expect(entries.find((entry) => entry.backendId === "edge")?.capabilities).toEqual([
+      "tts.synthesis",
+    ]);
+    expect(catalog.listExtensionHostTtsRuntimeBackendIds()).toEqual([
+      "openai",
+      "elevenlabs",
+      "edge",
+    ]);
+    expect(catalog.resolveExtensionHostTtsRuntimeBackendOrder("edge")).toEqual([
+      "edge",
+      "openai",
+      "elevenlabs",
+    ]);
+  });
+
+  it("aggregates runtime-backend catalog entries across subsystem families", async () => {
+    const catalog = await import("./runtime-backend-catalog.js");
+    const entries = catalog.listExtensionHostRuntimeBackendCatalogEntries();
+    const ids = new Set(entries.map((entry) => entry.id));
+
+    expect(ids.size).toBe(entries.length);
+    expect(
+      catalog.getExtensionHostRuntimeBackendCatalogEntry({ subsystemId: "tts", backendId: "edge" }),
+    ).toMatchObject({
+      id: `${catalog.EXTENSION_HOST_RUNTIME_BACKEND_FAMILY}:tts:edge`,
+      subsystemId: "tts",
+      backendId: "edge",
+    });
+    expect(listExtensionHostEmbeddingRemoteRuntimeBackendIds()).toEqual([
+      "openai",
+      "gemini",
+      "voyage",
+      "mistral",
+    ]);
+  });
+});
