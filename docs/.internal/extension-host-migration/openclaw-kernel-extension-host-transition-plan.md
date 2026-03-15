@@ -84,6 +84,7 @@ What has landed:
 - plugin provider discovery filtering, order grouping, and result normalization now route through `src/extension-host/provider-discovery.ts`
 - provider matching, auth-method selection, config-patch merging, and default-model application now route through `src/extension-host/provider-auth.ts`
 - provider onboarding option building, model-picker entry building, and provider-method choice resolution now route through `src/extension-host/provider-wizard.ts`
+- loaded-provider auth application, plugin-enable gating, auth-method execution, and post-auth default-model handling now route through `src/extension-host/provider-auth-flow.ts`
 - several existing consumers now read host-owned normalized data instead of plugin-era manifest or runtime state directly:
   - channel and dock lookup surfaces
   - message-channel normalization
@@ -143,6 +144,7 @@ How it was done:
 - by extracting provider discovery filtering, order grouping, and result normalization into a host-owned provider-discovery helper while `src/plugins/provider-discovery.ts` remains the compatibility facade around the legacy provider loader path
 - by extracting provider matching, auth-method selection, config-patch merging, and default-model application into a host-owned provider-auth helper while `src/commands/provider-auth-helpers.ts` remains the command-facing compatibility facade
 - by extracting provider onboarding option building, model-picker entry building, and provider-method choice resolution into a host-owned provider-wizard helper while `src/plugins/provider-wizard.ts` remains the compatibility facade around loader-backed provider access and post-selection hooks
+- by extracting loaded-provider auth application, plugin-enable gating, auth-method execution, and post-auth default-model handling into a host-owned provider-auth-flow helper while `src/commands/auth-choice.apply.plugin-provider.ts` remains the compatibility entry point
 - by extracting provider-id normalization into `src/agents/provider-id.ts` so provider-only host seams do not inherit the heavier agent and browser dependency graph from `src/agents/model-selection.ts`
 - by extracting model-ref parsing into `src/agents/model-ref.ts` and Google model-id normalization into `src/agents/google-model-id.ts` so provider auth and setup seams can be tested without pulling the heavier provider-loader and browser dependency graph
 - by moving static and lookup-heavy consumers first, where the ownership boundary matters but runtime risk is lower
@@ -187,6 +189,7 @@ Committed implementation slices so far:
 - `19087405d2` `Plugins: extract provider runtime`
 - `1303419471` `Plugins: extract provider discovery`
 - `afb6e4b185` `Plugins: extract provider auth and wizard flows`
+- `cc3d59d59e` `Plugins: extract provider auth application flow`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
