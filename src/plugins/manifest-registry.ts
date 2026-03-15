@@ -41,7 +41,7 @@ export type PluginManifestRecord = {
   configSchema?: Record<string, unknown>;
   configUiHints?: Record<string, PluginConfigUiHint>;
   defaultEnabledWhenBundled?: boolean;
-  packageInstall?: PluginPackageInstall;
+  install?: PluginPackageInstall;
 };
 
 export type PluginManifestRegistry = {
@@ -141,7 +141,7 @@ function buildRecord(params: {
     configSchema: params.configSchema,
     configUiHints: params.manifest.uiHints,
     defaultEnabledWhenBundled: params.manifest.defaultEnabledWhenBundled,
-    packageInstall: params.candidate.packageManifest?.install,
+    install: params.candidate.packageManifest?.install,
   };
 }
 

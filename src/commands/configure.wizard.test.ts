@@ -509,7 +509,7 @@ describe("runConfigureWizard", () => {
           provides: ["providers.search.tavily"],
           origin: "bundled",
           source: "/tmp/bundled/tavily-search",
-          packageInstall: {
+          install: {
             npmSpec: "@openclaw/tavily-search",
             localPath: "extensions/tavily-search",
             defaultChoice: "local",

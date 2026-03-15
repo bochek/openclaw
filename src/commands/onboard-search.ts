@@ -162,7 +162,7 @@ export function resolveInstallableSearchProviderPlugins(params: {
   return registry.plugins
     .map((plugin) => {
       const providerId = searchProviderIdFromProvides(plugin.provides);
-      const install = normalizeInstallMetadata(plugin.packageInstall);
+      const install = normalizeInstallMetadata(plugin.install);
       if (!providerId || !install?.npmSpec || loadedPluginProviderIds.has(providerId)) {
         return undefined;
       }
@@ -655,7 +655,7 @@ function buildPluginSearchProviderEntryFromManifestRecord(pluginRecord: {
   configSchema?: Record<string, unknown>;
   configUiHints?: Record<string, PluginConfigUiHint>;
   provides: string[];
-  packageInstall?: {
+  install?: {
     npmSpec?: string;
     localPath?: string;
     defaultChoice?: "npm" | "local";
@@ -679,7 +679,7 @@ function buildPluginSearchProviderEntryFromManifestRecord(pluginRecord: {
     configJsonSchema: pluginRecord.configSchema,
     configUiHints: pluginRecord.configUiHints,
     setup: (() => {
-      const install = normalizeInstallMetadata(pluginRecord.packageInstall);
+      const install = normalizeInstallMetadata(pluginRecord.install);
       return install ? { install } : undefined;
     })(),
   };

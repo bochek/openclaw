@@ -242,7 +242,7 @@ describe("loadPluginManifestRegistry", () => {
       }),
     ]);
 
-    expect(registry.plugins[0]?.packageInstall).toEqual({
+    expect(registry.plugins[0]?.install).toEqual({
       npmSpec: "@openclaw/tavily-search",
       localPath: "extensions/tavily-search",
       defaultChoice: "local",
