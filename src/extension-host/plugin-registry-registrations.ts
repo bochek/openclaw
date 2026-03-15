@@ -44,6 +44,7 @@ import {
   resolveExtensionTypedHookRegistration,
 } from "./runtime-registrations.js";
 import {
+  listExtensionHostChannelRegistrations,
   getExtensionHostGatewayHandlers,
   listExtensionHostHttpRoutes,
 } from "./runtime-registry.js";
@@ -182,7 +183,7 @@ export function createExtensionHostPluginRegistrationActions(params: {
     registration: OpenClawPluginChannelRegistration | ChannelPlugin,
   ) => {
     const result = resolveExtensionChannelRegistration({
-      existing: registry.channels,
+      existing: [...listExtensionHostChannelRegistrations(registry)],
       ownerPluginId: record.id,
       ownerSource: record.source,
       registration,

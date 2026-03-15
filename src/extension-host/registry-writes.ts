@@ -25,6 +25,7 @@ import type {
   ExtensionHostToolRegistration,
 } from "./runtime-registrations.js";
 import {
+  addExtensionHostChannelRegistration,
   addExtensionHostCliRegistration,
   addExtensionHostHttpRoute,
   addExtensionHostProviderRegistration,
@@ -78,7 +79,7 @@ export function addExtensionChannelRegistration(params: {
   entry: ExtensionHostChannelRegistration;
 }): void {
   params.record.channelIds.push(params.channelId);
-  params.registry.channels.push(params.entry as PluginChannelRegistration);
+  addExtensionHostChannelRegistration(params.registry, params.entry as PluginChannelRegistration);
 }
 
 export function addExtensionProviderRegistration(params: {

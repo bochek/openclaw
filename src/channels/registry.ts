@@ -1,4 +1,5 @@
 import { requireActiveExtensionHostRegistry } from "../extension-host/active-registry.js";
+import { listExtensionHostChannelRegistrations } from "../extension-host/runtime-registry.js";
 import type { ChannelMeta } from "./plugins/types.js";
 import type { ChannelId } from "./plugins/types.js";
 
@@ -170,7 +171,7 @@ export function normalizeAnyChannelId(raw?: string | null): ChannelId | null {
   }
 
   const registry = requireActiveExtensionHostRegistry();
-  const hit = registry.channels.find((entry) => {
+  const hit = listExtensionHostChannelRegistrations(registry).find((entry) => {
     const id = String(entry.plugin.id ?? "")
       .trim()
       .toLowerCase();

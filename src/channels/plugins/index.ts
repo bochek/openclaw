@@ -2,6 +2,7 @@ import {
   getActiveExtensionHostRegistryVersion,
   requireActiveExtensionHostRegistry,
 } from "../../extension-host/active-registry.js";
+import { listExtensionHostChannelRegistrations } from "../../extension-host/runtime-registry.js";
 import { CHAT_CHANNEL_ORDER, type ChatChannelId, normalizeAnyChannelId } from "../registry.js";
 import type { ChannelId, ChannelPlugin } from "./types.js";
 
@@ -47,7 +48,9 @@ function resolveCachedChannelPlugins(): CachedChannelPlugins {
     return cached;
   }
 
-  const sorted = dedupeChannels(registry.channels.map((entry) => entry.plugin)).toSorted((a, b) => {
+  const sorted = dedupeChannels(
+    listExtensionHostChannelRegistrations(registry).map((entry) => entry.plugin),
+  ).toSorted((a, b) => {
     const indexA = CHAT_CHANNEL_ORDER.indexOf(a.id as ChatChannelId);
     const indexB = CHAT_CHANNEL_ORDER.indexOf(b.id as ChatChannelId);
     const orderA = a.meta.order ?? (indexA === -1 ? 999 : indexA);

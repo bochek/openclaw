@@ -1,4 +1,5 @@
 import { getActiveExtensionHostRegistry } from "../../extension-host/active-registry.js";
+import { listExtensionHostChannelRegistrations } from "../../extension-host/runtime-registry.js";
 import type { PluginChannelRegistration, PluginRegistry } from "../../plugins/registry.js";
 import type { ChannelId } from "./types.js";
 
@@ -22,7 +23,9 @@ export function createChannelRegistryLoader<TValue>(
     if (cached) {
       return cached;
     }
-    const pluginEntry = registry?.channels.find((entry) => entry.plugin.id === id);
+    const pluginEntry = registry
+      ? listExtensionHostChannelRegistrations(registry).find((entry) => entry.plugin.id === id)
+      : undefined;
     if (!pluginEntry) {
       return undefined;
     }

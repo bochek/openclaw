@@ -9,6 +9,7 @@ import {
   resolveChannelGroupToolsPolicy,
 } from "../config/group-policy.js";
 import { requireActiveExtensionHostRegistry } from "../extension-host/active-registry.js";
+import { listExtensionHostChannelRegistrations } from "../extension-host/runtime-registry.js";
 import {
   formatAllowFromLowercase,
   formatNormalizedAllowFromEntries,
@@ -585,7 +586,7 @@ function listPluginDockEntries(): Array<{ id: ChannelId; dock: ChannelDock; orde
   const registry = requireActiveExtensionHostRegistry();
   const entries: Array<{ id: ChannelId; dock: ChannelDock; order?: number }> = [];
   const seen = new Set<string>();
-  for (const entry of registry.channels) {
+  for (const entry of listExtensionHostChannelRegistrations(registry)) {
     const plugin = entry.plugin;
     const id = String(plugin.id).trim();
     if (!id || seen.has(id)) {
@@ -628,7 +629,9 @@ export function getChannelDock(id: ChannelId): ChannelDock | undefined {
     return core;
   }
   const registry = requireActiveExtensionHostRegistry();
-  const pluginEntry = registry.channels.find((entry) => entry.plugin.id === id);
+  const pluginEntry = listExtensionHostChannelRegistrations(registry).find(
+    (entry) => entry.plugin.id === id,
+  );
   if (!pluginEntry) {
     return undefined;
   }

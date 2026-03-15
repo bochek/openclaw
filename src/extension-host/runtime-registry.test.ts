@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createEmptyPluginRegistry } from "../plugins/registry.js";
 import {
+  addExtensionHostChannelRegistration,
   addExtensionHostCliRegistration,
   addExtensionHostHttpRoute,
   addExtensionHostProviderRegistration,
@@ -8,6 +9,7 @@ import {
   addExtensionHostToolRegistration,
   getExtensionHostGatewayHandlers,
   hasExtensionHostRuntimeEntries,
+  listExtensionHostChannelRegistrations,
   listExtensionHostCliRegistrations,
   listExtensionHostHttpRoutes,
   listExtensionHostProviderRegistrations,
@@ -43,6 +45,28 @@ describe("extension host runtime registry accessors", () => {
     });
     expect(hasExtensionHostRuntimeEntries(routeRegistry)).toBe(true);
 
+    const channelRegistry = createEmptyPluginRegistry();
+    addExtensionHostChannelRegistration(channelRegistry, {
+      pluginId: "channel-demo",
+      source: "test",
+      plugin: {
+        id: "channel-demo",
+        meta: {
+          id: "channel-demo",
+          label: "Channel Demo",
+          selectionLabel: "Channel Demo",
+          docsPath: "/channels/channel-demo",
+          blurb: "demo",
+        },
+        capabilities: { chatTypes: ["direct"] },
+        config: {
+          listAccountIds: () => [],
+          resolveAccount: () => ({}),
+        },
+      },
+    });
+    expect(hasExtensionHostRuntimeEntries(channelRegistry)).toBe(true);
+
     const gatewayRegistry = createEmptyPluginRegistry();
     setExtensionHostGatewayHandler({
       registry: gatewayRegistry,
@@ -75,6 +99,7 @@ describe("extension host runtime registry accessors", () => {
   it("returns stable empty views for missing registries", () => {
     expect(hasExtensionHostRuntimeEntries(null)).toBe(false);
     expect(listExtensionHostProviderRegistrations(null)).toEqual([]);
+    expect(listExtensionHostChannelRegistrations(null)).toEqual([]);
     expect(listExtensionHostToolRegistrations(null)).toEqual([]);
     expect(listExtensionHostServiceRegistrations(null)).toEqual([]);
     expect(listExtensionHostCliRegistrations(null)).toEqual([]);
@@ -136,6 +161,27 @@ describe("extension host runtime registry accessors", () => {
       handler,
     });
 
+    addExtensionHostChannelRegistration(registry, {
+      pluginId: "channel-demo",
+      source: "test",
+      plugin: {
+        id: "channel-demo",
+        meta: {
+          id: "channel-demo",
+          label: "Channel Demo",
+          selectionLabel: "Channel Demo",
+          docsPath: "/channels/channel-demo",
+          blurb: "demo",
+        },
+        capabilities: { chatTypes: ["direct"] },
+        config: {
+          listAccountIds: () => [],
+          resolveAccount: () => ({}),
+        },
+      },
+    });
+
+    expect(listExtensionHostChannelRegistrations(registry)).toEqual(registry.channels);
     expect(listExtensionHostToolRegistrations(registry)).toEqual(registry.tools);
     expect(listExtensionHostProviderRegistrations(registry)).toEqual(registry.providers);
     expect(listExtensionHostServiceRegistrations(registry)).toEqual(registry.services);
@@ -228,5 +274,33 @@ describe("extension host runtime registry accessors", () => {
     expect(listExtensionHostProviderRegistrations(registry)).toEqual(registry.providers);
     expect(registry.tools[0]?.factory).toBe(factory);
     expect(registry.providers[0]?.provider).toBe(provider);
+  });
+
+  it("keeps legacy channel mirrors synchronized with host-owned state", () => {
+    const registry = createEmptyPluginRegistry();
+    const plugin = {
+      id: "channel-demo",
+      meta: {
+        id: "channel-demo",
+        label: "Channel Demo",
+        selectionLabel: "Channel Demo",
+        docsPath: "/channels/channel-demo",
+        blurb: "demo",
+      },
+      capabilities: { chatTypes: ["direct"] as const },
+      config: {
+        listAccountIds: () => [],
+        resolveAccount: () => ({}),
+      },
+    };
+
+    addExtensionHostChannelRegistration(registry, {
+      pluginId: "channel-demo",
+      source: "test",
+      plugin,
+    });
+
+    expect(listExtensionHostChannelRegistrations(registry)).toEqual(registry.channels);
+    expect(registry.channels[0]?.plugin).toBe(plugin);
   });
 });
