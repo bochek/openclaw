@@ -520,7 +520,8 @@ describe("node.invoke APNs wake path", () => {
 
   it("drops queued actions that are no longer allowed at pull time", async () => {
     mocks.loadApnsRegistration.mockResolvedValue(null);
-    mocks.resolveNodeCommandAllowlist.mockReturnValue(new Set(["canvas.navigate"]));
+    const allowlistedCommands = new Set(["camera.snap", "canvas.navigate"]);
+    mocks.resolveNodeCommandAllowlist.mockImplementation(() => new Set(allowlistedCommands));
     mocks.isNodeCommandAllowed.mockImplementation(
       ({
         command,
@@ -565,6 +566,8 @@ describe("node.invoke APNs wake path", () => {
         idempotencyKey: "idem-policy",
       },
     });
+
+    allowlistedCommands.delete("camera.snap");
 
     const pullRespond = await pullPending("ios-node-policy");
     const pullCall = pullRespond.mock.calls[0] as RespondCall | undefined;
