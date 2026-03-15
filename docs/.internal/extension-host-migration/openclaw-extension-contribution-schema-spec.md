@@ -536,7 +536,7 @@ Scope rule:
 - this family is specifically for chat or model-provider discovery, setup, auth, and post-selection lifecycle
 - agent-visible search should not be folded into this family only because it may call remote providers under the hood
 - non-chat subsystem providers such as embeddings, transcription, image understanding, video understanding, and TTS should not be folded into this family only because they also use remote providers
-- those subsystem runtimes should use typed runtime contributions or `capability.runtime-backend` with subsystem-specific capability metadata
+- those subsystem runtimes should use typed runtime contributions registered in host-owned runtime registries, usually under `capability.runtime-backend` with subsystem-specific capability metadata
 
 ### `capability.memory`
 
@@ -642,8 +642,8 @@ Required descriptor metadata:
 
 First-cut constraint:
 
-- the first interactive runtime cut may be validated on Telegram and Discord because those are the immediate proven needs
-- that is a rollout choice only; the contract itself must stay generic, host-owned, and kernel-agnostic rather than becoming Telegram- or Discord-specific handler APIs
+- the first interactive runtime cut should be validated on Telegram and Discord if they remain the highest-priority channels for parity
+- that is rollout order only; the contract itself must stay generic, host-owned, and kernel-agnostic rather than becoming Telegram- or Discord-specific handler APIs
 
 Ownership rule:
 
@@ -707,7 +707,7 @@ Required metadata for these subsystem runtimes:
 - fallback policy
 - override policy when a built-in implementation already exists
 
-Useful harvested behavior:
+Retained behavior requirements:
 
 - capability-based routing is worth keeping
 - typed host-injected request fields such as `apiKey`, `baseUrl`, `headers`, `timeoutMs`, and `fetchFn` are worth keeping

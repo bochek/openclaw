@@ -548,9 +548,9 @@ Suggested mapping:
 
 - `registerChannel(...)` -> `adapter.runtime` plus lightweight dock metadata and optional `surface.config`, `surface.status`, `surface.setup`
 - `registerProvider(...)` -> `capability.provider-integration` plus optional setup and auth surfaces
-- plugin-provided embeddings, transcription, image or video understanding, and TTS -> typed subsystem runtime contributions or `capability.runtime-backend`, not a widened `registerProvider(...)` end state
+- plugin-provided embeddings, transcription, image or video understanding, and TTS -> typed subsystem runtime contributions registered in host-owned runtime registries, usually under `capability.runtime-backend`, not a widened `registerProvider(...)` end state
 - extension-backed search exposed to the agent -> `capability.agent-tool`
-- extension-backed search consumed only by a host or subsystem -> typed runtime contribution or `capability.runtime-backend`
+- extension-backed search consumed only by a host or subsystem -> typed runtime contribution registered in a host-owned runtime registry, usually under `capability.runtime-backend`
 - `registerTool(...)` -> `capability.agent-tool`
 - `registerCommand(...)` -> `capability.control-command`
 - `on(...)` returning context or side effects -> `capability.context-augmenter` or `capability.event-handler`
@@ -588,7 +588,7 @@ Additional migration rule:
 
 - conversation binding, interactive callback routing, and inbound claim are real runtime needs, but they must not be solved by turning `src/plugins/*` into the permanent public architecture
 - bind approvals, callback namespace routing, and bound-ingress short-circuit behavior belong to host-owned surfaces and canonical pipeline stages
-- first-cut interactive channel controls may be validated first on Telegram and Discord, but the long-term contract must remain generic, adapter-runtime, host-owned, and kernel-agnostic rather than product-shaped kernel APIs
+- first-cut interactive channel controls should be validated first on Telegram and Discord if they remain the highest-priority parity targets, but the long-term contract must remain generic, adapter-runtime, host-owned, and kernel-agnostic rather than product-shaped kernel APIs
 
 ## 1d. Lightweight descriptors and distribution metadata
 
@@ -835,9 +835,9 @@ Scope rule:
 - `capability.provider-integration` is for chat or model-provider discovery, setup, auth, and post-selection lifecycle
 - agent-visible search should not be folded into that family only because it may call remote services
 - embeddings, transcription, image understanding, video understanding, and TTS should not be folded into that family just because they also use remote providers
-- those subsystem runtimes should use host-owned capability routing and typed runtime registries or runtime-backend families instead
+- those subsystem runtimes should use host-owned capability routing plus typed runtime contributions registered in host-owned runtime registries, usually under `capability.runtime-backend`
 
-Useful ideas harvested from provider-capability validation:
+Retained behavior requirements for subsystem runtimes:
 
 - capability-based selection is good
 - typed request envelopes with host-injected `apiKey`, `baseUrl`, `headers`, `timeoutMs`, and `fetchFn` are good
