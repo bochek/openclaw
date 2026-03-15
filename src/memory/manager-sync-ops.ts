@@ -12,6 +12,10 @@ import {
   resolveEmbeddingManagerBatchConfig,
 } from "../extension-host/embedding-manager-runtime.js";
 import {
+  resetExtensionHostEmbeddingIndexStore,
+  runExtensionHostEmbeddingReindexBody,
+} from "../extension-host/embedding-reindex-execution.js";
+import {
   type EmbeddingProvider,
   type EmbeddingProviderId,
   type GeminiEmbeddingClient,
@@ -1103,40 +1107,43 @@ export abstract class MemoryManagerSyncOps {
         { reason: params.reason, force: params.force },
         true,
       );
-
-      if (shouldSyncMemory) {
-        await this.syncMemoryFiles({ needsFullReindex: true, progress: params.progress });
-        this.dirty = false;
-      }
-
-      if (shouldSyncSessions) {
-        await this.syncSessionFiles({ needsFullReindex: true, progress: params.progress });
-        this.sessionsDirty = false;
-        this.sessionsDirtyFiles.clear();
-      } else if (this.sessionsDirtyFiles.size > 0) {
-        this.sessionsDirty = true;
-      } else {
-        this.sessionsDirty = false;
-      }
-
-      nextMeta = buildEmbeddingIndexMeta({
-        provider: this.provider,
-        providerKey: this.providerKey,
-        configuredSources: this.resolveConfiguredSourcesForMeta(),
-        configuredScopeHash: this.resolveConfiguredScopeHash(),
-        chunkTokens: this.settings.chunking.tokens,
-        chunkOverlap: this.settings.chunking.overlap,
+      nextMeta = await runExtensionHostEmbeddingReindexBody({
+        shouldSyncMemory,
+        shouldSyncSessions,
+        hasDirtySessionFiles: this.sessionsDirtyFiles.size > 0,
+        progress: params.progress,
+        syncMemoryFiles: async (syncParams) => {
+          await this.syncMemoryFiles(syncParams);
+        },
+        syncSessionFiles: async (syncParams) => {
+          await this.syncSessionFiles(syncParams);
+        },
+        setDirty: (value) => {
+          this.dirty = value;
+        },
+        setSessionsDirty: (value) => {
+          this.sessionsDirty = value;
+        },
+        clearAllSessionDirtyFiles: () => {
+          this.sessionsDirtyFiles.clear();
+        },
+        buildNextMeta: () =>
+          buildEmbeddingIndexMeta({
+            provider: this.provider,
+            providerKey: this.providerKey,
+            configuredSources: this.resolveConfiguredSourcesForMeta(),
+            configuredScopeHash: this.resolveConfiguredScopeHash(),
+            chunkTokens: this.settings.chunking.tokens,
+            chunkOverlap: this.settings.chunking.overlap,
+          }),
+        vectorDims: this.vector.available && this.vector.dims ? this.vector.dims : undefined,
+        writeMeta: (meta) => {
+          this.writeMeta(meta);
+        },
+        pruneEmbeddingCacheIfNeeded: () => {
+          this.pruneEmbeddingCacheIfNeeded?.();
+        },
       });
-      if (!nextMeta) {
-        throw new Error("Failed to compute memory index metadata for reindexing.");
-      }
-
-      if (this.vector.available && this.vector.dims) {
-        nextMeta.vectorDims = this.vector.dims;
-      }
-
-      this.writeMeta(nextMeta);
-      this.pruneEmbeddingCacheIfNeeded?.();
 
       this.db.close();
       originalDb.close();
@@ -1174,49 +1181,63 @@ export abstract class MemoryManagerSyncOps {
       { reason: params.reason, force: params.force },
       true,
     );
-
-    if (shouldSyncMemory) {
-      await this.syncMemoryFiles({ needsFullReindex: true, progress: params.progress });
-      this.dirty = false;
-    }
-
-    if (shouldSyncSessions) {
-      await this.syncSessionFiles({ needsFullReindex: true, progress: params.progress });
-      this.sessionsDirty = false;
-      this.sessionsDirtyFiles.clear();
-    } else if (this.sessionsDirtyFiles.size > 0) {
-      this.sessionsDirty = true;
-    } else {
-      this.sessionsDirty = false;
-    }
-
-    const nextMeta = buildEmbeddingIndexMeta({
-      provider: this.provider,
-      providerKey: this.providerKey,
-      configuredSources: this.resolveConfiguredSourcesForMeta(),
-      configuredScopeHash: this.resolveConfiguredScopeHash(),
-      chunkTokens: this.settings.chunking.tokens,
-      chunkOverlap: this.settings.chunking.overlap,
+    await runExtensionHostEmbeddingReindexBody({
+      shouldSyncMemory,
+      shouldSyncSessions,
+      hasDirtySessionFiles: this.sessionsDirtyFiles.size > 0,
+      progress: params.progress,
+      syncMemoryFiles: async (syncParams) => {
+        await this.syncMemoryFiles(syncParams);
+      },
+      syncSessionFiles: async (syncParams) => {
+        await this.syncSessionFiles(syncParams);
+      },
+      setDirty: (value) => {
+        this.dirty = value;
+      },
+      setSessionsDirty: (value) => {
+        this.sessionsDirty = value;
+      },
+      clearAllSessionDirtyFiles: () => {
+        this.sessionsDirtyFiles.clear();
+      },
+      buildNextMeta: () =>
+        buildEmbeddingIndexMeta({
+          provider: this.provider,
+          providerKey: this.providerKey,
+          configuredSources: this.resolveConfiguredSourcesForMeta(),
+          configuredScopeHash: this.resolveConfiguredScopeHash(),
+          chunkTokens: this.settings.chunking.tokens,
+          chunkOverlap: this.settings.chunking.overlap,
+        }),
+      vectorDims: this.vector.available && this.vector.dims ? this.vector.dims : undefined,
+      writeMeta: (meta) => {
+        this.writeMeta(meta);
+      },
+      pruneEmbeddingCacheIfNeeded: () => {
+        this.pruneEmbeddingCacheIfNeeded?.();
+      },
     });
-    if (this.vector.available && this.vector.dims) {
-      nextMeta.vectorDims = this.vector.dims;
-    }
-
-    this.writeMeta(nextMeta);
-    this.pruneEmbeddingCacheIfNeeded?.();
   }
 
   private resetIndex() {
-    this.db.exec(`DELETE FROM files`);
-    this.db.exec(`DELETE FROM chunks`);
-    if (this.fts.enabled && this.fts.available) {
-      try {
-        this.db.exec(`DELETE FROM ${FTS_TABLE}`);
-      } catch {}
-    }
-    this.dropVectorTable();
-    this.vector.dims = undefined;
-    this.sessionsDirtyFiles.clear();
+    resetExtensionHostEmbeddingIndexStore({
+      execSql: (sql) => {
+        this.db.exec(sql);
+      },
+      ftsEnabled: this.fts.enabled,
+      ftsAvailable: this.fts.available,
+      ftsTable: FTS_TABLE,
+      dropVectorTable: () => {
+        this.dropVectorTable();
+      },
+      clearVectorDims: () => {
+        this.vector.dims = undefined;
+      },
+      clearAllSessionDirtyFiles: () => {
+        this.sessionsDirtyFiles.clear();
+      },
+    });
   }
 
   protected readMeta(): EmbeddingIndexMeta | null {
