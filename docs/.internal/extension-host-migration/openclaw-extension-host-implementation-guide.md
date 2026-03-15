@@ -68,6 +68,7 @@ What has been implemented so far:
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`
+- loader final cache, warning, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 - runtime registration normalization has started in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registrations
 - several static and lookup consumers now read through the host boundary or resolved-extension model:
   - channel registry and dock lookups
@@ -96,6 +97,7 @@ How it has been done:
 - by moving post-import planning and `register(...)` execution behind host-owned helpers before changing entry-path and import flow
 - by composing those seams into one host-owned per-candidate orchestrator before changing cache and lifecycle finalization behavior
 - by moving loader record-state transitions into host-owned helpers before introducing a full lifecycle state machine
+- by moving cache writes, provenance warnings, final memory-slot warnings, and activation into a host-owned loader finalizer before introducing an explicit lifecycle state machine
 - by moving central readers first, so later lifecycle and compatibility work can land on one boundary instead of many ad hoc call sites
 - by adding focused tests for each extracted seam before widening the boundary further
 
@@ -107,13 +109,14 @@ Committed implementation slices so far:
 - `3a122c95fa` `Plugins: extract loader register flow`
 - `fc81454038` `Plugins: extract loader import flow`
 - `e1b207f4cf` `Plugins: extract loader candidate orchestration`
+- `0c44d8049b` `Plugins: extract loader finalization`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
 What is still missing for these phases:
 
 - keeping the cutover inventory current as more surfaces move
-- the lifecycle state machine, remaining cache and final registry orchestration flow, policy gate, and broad host-owned registries described for Phase 2
+- the lifecycle state machine, remaining explicit activation-state ownership, policy gate, and broad host-owned registries described for Phase 2
 - minimal SDK compatibility work beyond preserving current behavior indirectly through existing loading
 - any pilot migration, event pipeline, canonical catalog, or arbitration implementation
 

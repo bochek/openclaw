@@ -53,6 +53,7 @@ What has landed:
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`
+- loader final cache, warning, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 - runtime registration normalization has started in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registrations
 - several existing consumers now read host-owned normalized data instead of plugin-era manifest or runtime state directly:
   - channel and dock lookup surfaces
@@ -82,6 +83,7 @@ How it was done:
 - by moving post-import planning and `register(...)` execution behind host-owned helpers before changing entry-path and import flow
 - by composing those seams into one host-owned per-candidate orchestrator before changing cache and lifecycle finalization behavior
 - by moving loader record-state transitions into host-owned helpers before introducing a full lifecycle state machine
+- by moving cache writes, provenance warnings, final memory-slot warnings, and activation into a host-owned loader finalizer before introducing an explicit lifecycle state machine
 - by moving static and lookup-heavy consumers first, where the ownership boundary matters but runtime risk is lower
 
 Committed implementation slices so far:
@@ -92,14 +94,14 @@ Committed implementation slices so far:
 - `3a122c95fa` `Plugins: extract loader register flow`
 - `fc81454038` `Plugins: extract loader import flow`
 - `e1b207f4cf` `Plugins: extract loader candidate orchestration`
+- `0c44d8049b` `Plugins: extract loader finalization`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
 What has not landed:
 
 - keeping the cutover inventory current as more surfaces move
-- the lifecycle state machine and remaining loader orchestration
-- the remaining cache wiring and final registry orchestration in the loader
+- the lifecycle state machine and remaining explicit activation-state ownership
 - host-owned registration surfaces beyond the first channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook helper slices
 - SDK compatibility translation work
 - canonical event stages
