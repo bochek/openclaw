@@ -103,7 +103,7 @@ What has been implemented so far:
 - plugin provider discovery filtering, order grouping, and result normalization now route through `src/extension-host/provider-discovery.ts`
 - provider matching, auth-method selection, config-patch merging, and default-model application now route through `src/extension-host/provider-auth.ts`
 - embedding-provider auto-selection, provider creation, local-setup guidance, and primary and fallback routing now route through `src/extension-host/embedding-runtime-registry.ts` while `src/memory/embeddings.ts` remains the compatibility facade
-- media-provider normalization, built-in registry construction, override merging, and runtime lookup now route through `src/extension-host/media-runtime-registry.ts`, and provider and CLI entry execution, output parsing, provider query normalization, provider auth/context shaping, and proxy-aware fetch handling now route through `src/extension-host/media-runtime-execution.ts` while `src/media-understanding/providers/index.ts` and `src/media-understanding/runner.entries.ts` remain compatibility facades
+- media-provider normalization, built-in registry construction, override merging, and runtime lookup now route through `src/extension-host/media-runtime-registry.ts`; provider and CLI entry execution, output parsing, provider query normalization, provider auth/context shaping, and proxy-aware fetch handling now route through `src/extension-host/media-runtime-execution.ts`; and local-binary probing, auto-entry selection, active-model fallback, and top-level capability orchestration now route through `src/extension-host/media-runtime-auto.ts` and `src/extension-host/media-runtime-orchestration.ts` while `src/media-understanding/providers/index.ts`, `src/media-understanding/runner.entries.ts`, and `src/media-understanding/runner.ts` remain compatibility facades
 - TTS provider metadata, provider ordering, API-key resolution, configuration checks, and telephony support now route through `src/extension-host/tts-runtime-registry.ts`, provider execution loops, output-format selection, telephony synthesis, and provider-error shaping now route through `src/extension-host/tts-runtime-execution.ts`, provider selection plus request setup now route through `src/extension-host/tts-runtime-setup.ts`, prefs-path resolution, auto-mode policy, and persisted TTS preference reads and writes now route through `src/extension-host/tts-preferences.ts`, and auto-TTS gating, directive cleanup, truncation, summarization, and payload planning now route through `src/extension-host/tts-payload.ts` while `src/tts/tts.ts` remains the compatibility facade plus config and attempt-status surface
 - provider onboarding option building, model-picker entry building, and provider-method choice resolution now route through `src/extension-host/provider-wizard.ts`
 - loaded-provider auth application, plugin-enable gating, auth-method execution, and post-auth default-model handling now route through `src/extension-host/provider-auth-flow.ts`
@@ -184,6 +184,7 @@ How it has been done:
 - by extracting model-ref parsing into `src/agents/model-ref.ts` and Google model-id normalization into `src/agents/google-model-id.ts` so provider auth and setup seams can be tested without pulling the heavier provider-loader and browser dependency graph
 - by introducing host-owned runtime-registry accessors for low-risk runtime consumers first, then moving channel, provider, tool, command, HTTP-route, gateway-method, CLI, and service storage into that host-owned state while keeping mirrored legacy compatibility arrays and handler maps
 - by tightening the CLI pre-load fast path to treat any host-known runtime entry surface as already loaded rather than only plugins, channels, or tools
+- by extracting media local-binary probing and auto-entry selection into `src/extension-host/media-runtime-auto.ts`, then moving top-level media capability orchestration into `src/extension-host/media-runtime-orchestration.ts` so `src/media-understanding/runner.ts` can collapse to a compatibility facade
 - by moving central readers first, so later lifecycle and compatibility work can land on one boundary instead of many ad hoc call sites
 - by adding focused tests for each extracted seam before widening the boundary further
 
@@ -245,6 +246,7 @@ Committed implementation slices so far:
 - `df0cb8193c` `Memory: extract embedding runtime registry`
 - `e592f60fa7` `Media: extract runtime provider registry`
 - `9305a235b3` `Media: extract runtime execution`
+- `37ee04e9b0` `Media: extract runtime auto and orchestration`
 - `36711383f6` `TTS: extract runtime registry`
 - `f36f8f9e2d` `TTS: extract runtime execution`
 - `fa4f53896e` `TTS: extract runtime setup`
@@ -259,7 +261,7 @@ What is still missing for these phases:
 - broader lifecycle ownership beyond the loader state machine, service-lifecycle boundary, CLI-lifecycle boundary, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes, remaining policy gate ownership, and broad host-owned registries described for Phase 2
 - minimal SDK compatibility work beyond preserving current behavior indirectly through existing loading
 - host-owned conversation binding, interaction routing, ingress claim, and generic interactive control surfaces
-- broader embedding-runtime execution and fallback ownership, plus remaining media auto-entry, active-model fallback, and orchestration ownership, plus remaining TTS config/status and facade cleanup
+- broader embedding-runtime execution and fallback ownership, remaining media facade and config-helper cleanup, plus remaining TTS config/status and facade cleanup
 - explicit support for extension-backed search, with a generic split between agent-visible tool publication and optional runtime-internal search backends
 - any pilot migration, event pipeline, canonical catalog, or arbitration implementation
 
@@ -269,7 +271,7 @@ Recent plan refinements:
 - it now explicitly treats interactive callback routing, namespace ownership, dedupe, and fallback behavior as first-class migration surfaces
 - it now explicitly treats inbound claim as a canonical ingress-stage concern rather than a permanent plugin-era hook shape
 - it now explicitly treats Telegram and Discord as the first validated rollout targets for interactive control surfaces while keeping the underlying contracts generic, host-owned, and kernel-agnostic
-- it now explicitly treats embeddings, media understanding, and TTS as in-progress host-owned subsystem runtimes, with embedding selection and fallback now extracted, media execution now partially extracted, TTS execution, request setup, preferences, and payload planning now partially extracted, and the remaining embedding execution, media auto-entry and orchestration ownership, plus TTS config/status cleanup still pending, all with capability routing, typed request envelopes, provider-id normalization, and fallback policy
+- it now explicitly treats embeddings, media understanding, and TTS as in-progress host-owned subsystem runtimes, with embedding selection and fallback now extracted, media registry, execution, auto-entry selection, active-model fallback, and orchestration now extracted, TTS execution, request setup, preferences, and payload planning now partially extracted, and the remaining embedding execution, media facade and config-helper cleanup, plus TTS config/status cleanup still pending, all with capability routing, typed request envelopes, provider-id normalization, and fallback policy
 - it now explicitly rejects widening the legacy `registerProvider(...)` or `ProviderPlugin` surface into a universal runtime API while retaining capability routing, typed request envelopes, provider-id normalization, and fallback behavior where those are part of the target model
 - it now explicitly treats extension-backed search as either a canonical tool contribution or a host-owned runtime backend depending on whether the search surface is agent-visible
 
