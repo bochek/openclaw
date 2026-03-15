@@ -76,7 +76,7 @@ What has landed:
 - compatibility plugin-registry facade ownership now routes through `src/extension-host/plugin-registry.ts`
 - compatibility plugin-registry policy now routes through `src/extension-host/plugin-registry-compat.ts`
 - compatibility plugin-registry registration actions now route through `src/extension-host/plugin-registry-registrations.ts`
-- host-owned runtime registry read accessors now route through `src/extension-host/runtime-registry.ts`
+- host-owned runtime registry accessors now route through `src/extension-host/runtime-registry.ts`, and the HTTP-route and gateway-method slices now keep host-owned storage there with mirrored legacy compatibility views
 - service startup, stop ordering, service-context creation, and failure logging now route through `src/extension-host/service-lifecycle.ts`
 - CLI duplicate detection, registrar invocation, and async failure logging now route through `src/extension-host/cli-lifecycle.ts`
 - gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition now route through `src/extension-host/gateway-methods.ts`
@@ -104,6 +104,7 @@ What has landed:
   - CLI registration
   - gateway method aggregation
   - gateway plugin HTTP route matching
+- the HTTP-route and gateway-method slices now also keep host-owned runtime-registry storage with mirrored legacy compatibility arrays and handler maps
 - `src/cli/plugin-registry.ts` now treats any pre-seeded runtime entry surface as already loaded, not just plugins, channels, or tools
 
 How it was done:
@@ -158,7 +159,7 @@ How it was done:
 - by extracting provider post-selection hook lookup and invocation into a host-owned provider-model-selection helper while `src/plugins/provider-wizard.ts` remains the compatibility facade and existing command consumers continue migrating onto the host-owned surface
 - by extracting provider-id normalization into `src/agents/provider-id.ts` so provider-only host seams do not inherit the heavier agent and browser dependency graph from `src/agents/model-selection.ts`
 - by extracting model-ref parsing into `src/agents/model-ref.ts` and Google model-id normalization into `src/agents/google-model-id.ts` so provider auth and setup seams can be tested without pulling the heavier provider-loader and browser dependency graph
-- by introducing host-owned runtime-registry read accessors for low-risk runtime consumers before attempting broader registry replacement
+- by introducing host-owned runtime-registry accessors for low-risk runtime consumers first, then moving HTTP-route and gateway-method storage into that host-owned state while keeping mirrored legacy compatibility arrays and handler maps
 - by tightening the CLI pre-load fast path to treat any host-known runtime entry surface as already loaded rather than only plugins, channels, or tools
 - by moving static and lookup-heavy consumers first, where the ownership boundary matters but runtime risk is lower
 
@@ -204,6 +205,7 @@ Committed implementation slices so far:
 - `afb6e4b185` `Plugins: extract provider auth and wizard flows`
 - `cc3d59d59e` `Plugins: extract provider auth application flow`
 - `e6cd834f8e` `Plugins: extract provider model selection hook`
+- `11cbe08ec6` `Plugins: add host-owned route and gateway storage`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
