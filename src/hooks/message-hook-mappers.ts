@@ -187,23 +187,34 @@ function deriveConversationId(canonical: CanonicalInboundMessageHookContext): st
       : rawSender?.startsWith("discord:")
         ? rawSender.slice("discord:".length)
         : undefined;
+    const senderChannelId = rawSender?.startsWith("discord:channel:")
+      ? rawSender.slice("discord:channel:".length)
+      : rawSender?.startsWith("discord:group:")
+        ? rawSender.slice("discord:group:".length)
+        : undefined;
+    if (rawTarget?.startsWith("discord:channel:")) {
+      return `channel:${rawTarget.slice("discord:channel:".length)}`;
+    }
+    if (rawTarget?.startsWith("discord:group:")) {
+      return `channel:${rawTarget.slice("discord:group:".length)}`;
+    }
+    if (rawTarget?.startsWith("channel:") && (canonical.isGroup || senderChannelId)) {
+      return rawTarget;
+    }
     if (!canonical.isGroup && senderUserId) {
       return `user:${senderUserId}`;
     }
     if (!rawTarget) {
       return undefined;
     }
-    if (rawTarget.startsWith("discord:channel:")) {
-      return `channel:${rawTarget.slice("discord:channel:".length)}`;
-    }
     if (rawTarget.startsWith("discord:user:")) {
       return `user:${rawTarget.slice("discord:user:".length)}`;
     }
+    if (rawTarget.startsWith("user:")) {
+      return rawTarget;
+    }
     if (rawTarget.startsWith("discord:")) {
       return `user:${rawTarget.slice("discord:".length)}`;
-    }
-    if (rawTarget.startsWith("channel:") || rawTarget.startsWith("user:")) {
-      return rawTarget;
     }
   }
   const baseConversationId = stripChannelPrefix(
