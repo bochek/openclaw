@@ -1,6 +1,6 @@
 import type { OpenClawConfig } from "../config/config.js";
 import type { ContextEngine } from "../context-engine/types.js";
-import { defaultSlotIdForKey } from "../plugins/slots.js";
+import { getExtensionHostDefaultSlotId } from "./slot-arbitration.js";
 
 export type ExtensionHostContextEngineFactory = () => ContextEngine | Promise<ContextEngine>;
 
@@ -46,7 +46,7 @@ export async function resolveExtensionHostContextEngine(
   const engineId =
     typeof slotValue === "string" && slotValue.trim()
       ? slotValue.trim()
-      : defaultSlotIdForKey("contextEngine");
+      : getExtensionHostDefaultSlotId("contextEngine");
 
   const factory = getExtensionHostContextEngineRuntimeState().engines.get(engineId);
   if (!factory) {
