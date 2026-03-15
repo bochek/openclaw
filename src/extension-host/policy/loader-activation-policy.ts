@@ -1,4 +1,5 @@
 import type { OpenClawConfig } from "../../config/config.js";
+import type { NormalizedPluginsConfig } from "../../plugins/config-state.js";
 import type { PluginCandidate } from "../../plugins/discovery.js";
 import type { PluginManifestRecord } from "../../plugins/manifest-registry.js";
 import type { PluginRecord } from "../../plugins/registry.js";
@@ -45,21 +46,7 @@ export type ExtensionHostActivationPolicyOutcome =
 export function resolveExtensionHostActivationPolicy(params: {
   candidate: PluginCandidate;
   manifestRecord: PluginManifestRecord;
-  normalizedConfig: {
-    entries: Record<
-      string,
-      {
-        enabled?: boolean;
-        hooks?: {
-          allowPromptInjection?: boolean;
-        };
-        config?: unknown;
-      }
-    >;
-    slots: {
-      memory?: string | null;
-    };
-  };
+  normalizedConfig: NormalizedPluginsConfig;
   rootConfig: OpenClawConfig;
   seenIds: Map<string, PluginRecord["origin"]>;
   selectedMemoryPluginId: string | null;

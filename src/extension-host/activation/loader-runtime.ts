@@ -87,7 +87,7 @@ export function resolveExtensionHostEarlyMemoryDecision(params: {
   origin: PluginRecord["origin"];
   manifestKind?: PluginRecord["kind"];
   recordId: string;
-  memorySlot?: string;
+  memorySlot?: string | null;
   selectedMemoryPluginId: string | null;
 }): { enabled: boolean; reason?: string } {
   if (params.origin !== "bundled" || params.manifestKind !== "memory") {
@@ -108,7 +108,7 @@ export function resolveExtensionHostEarlyMemoryDecision(params: {
 export function resolveExtensionHostMemoryDecision(params: {
   recordId: string;
   recordKind?: PluginRecord["kind"];
-  memorySlot?: string;
+  memorySlot?: string | null;
   selectedMemoryPluginId: string | null;
 }): { enabled: boolean; selected: boolean; reason?: string } {
   const decision = resolveMemorySlotDecision({
@@ -119,7 +119,7 @@ export function resolveExtensionHostMemoryDecision(params: {
   });
   return {
     enabled: decision.enabled,
-    selected: decision.selected,
+    selected: decision.selected === true,
     ...(decision.enabled ? {} : { reason: decision.reason }),
   };
 }

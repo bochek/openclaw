@@ -20,6 +20,10 @@ type ChromeMcpToolResult = {
   isError?: boolean;
 };
 
+type ChromeMcpToolListEntry = {
+  name?: string;
+};
+
 type ChromeMcpSession = {
   client: Client;
   transport: StdioClientTransport;
@@ -186,7 +190,7 @@ async function createRealSession(profileName: string): Promise<ChromeMcpSession>
     try {
       await client.connect(transport);
       const tools = await client.listTools();
-      if (!tools.tools.some((tool) => tool.name === "list_pages")) {
+      if (!tools.tools.some((tool: ChromeMcpToolListEntry) => tool.name === "list_pages")) {
         throw new Error("Chrome MCP server did not expose the expected navigation tools.");
       }
     } catch (err) {

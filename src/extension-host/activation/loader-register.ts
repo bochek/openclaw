@@ -4,7 +4,6 @@ import type { PluginRecord } from "../../plugins/registry.js";
 import type {
   OpenClawPluginApi,
   OpenClawPluginDefinition,
-  OpenClawPluginHookOptions,
   PluginDiagnostic,
 } from "../../plugins/types.js";
 import {
@@ -105,10 +104,11 @@ export function planExtensionHostLoadedPlugin(params: {
     value: params.entryConfig,
   });
   if (!validatedConfig.ok) {
+    const errors = validatedConfig.errors ?? ["invalid config"];
     return {
       kind: "invalid-config",
-      message: `invalid config: ${validatedConfig.errors.join(", ")}`,
-      errors: validatedConfig.errors,
+      message: `invalid config: ${errors.join(", ")}`,
+      errors,
       memorySlotMatched,
       selectedMemoryPluginId: nextSelectedMemoryPluginId,
     };
@@ -147,13 +147,13 @@ export function runExtensionHostPluginRegister(params: {
     options: {
       config: OpenClawConfig;
       pluginConfig?: Record<string, unknown>;
-      hookPolicy?: OpenClawPluginHookOptions;
+      hookPolicy?: { allowPromptInjection?: boolean };
     },
   ) => OpenClawPluginApi;
   record: PluginRecord;
   config: OpenClawConfig;
   pluginConfig?: Record<string, unknown>;
-  hookPolicy?: OpenClawPluginHookOptions;
+  hookPolicy?: { allowPromptInjection?: boolean };
   diagnostics: PluginDiagnostic[];
 }):
   | {

@@ -1,4 +1,5 @@
 import type { OpenClawConfig } from "../../config/config.js";
+import type { NormalizedPluginsConfig } from "../../plugins/config-state.js";
 import type { PluginRecord } from "../../plugins/registry.js";
 import type { OpenClawPluginApi, OpenClawPluginModule } from "../../plugins/types.js";
 import type { ExtensionHostLoaderSession } from "./loader-session.js";
@@ -13,21 +14,7 @@ export function runExtensionHostLoaderSession(params: {
     rootDir: string;
   }>;
   manifestByRoot: Map<string, { rootDir: string }>;
-  normalizedConfig: {
-    entries: Record<
-      string,
-      {
-        enabled?: boolean;
-        hooks?: {
-          allowPromptInjection?: boolean;
-        };
-        config?: unknown;
-      }
-    >;
-    slots: {
-      memory?: string | null;
-    };
-  };
+  normalizedConfig: NormalizedPluginsConfig;
   rootConfig: OpenClawConfig;
   validateOnly: boolean;
   createApi: (

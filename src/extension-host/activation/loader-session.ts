@@ -1,9 +1,10 @@
 import type { OpenClawConfig } from "../../config/config.js";
+import type { NormalizedPluginsConfig } from "../../plugins/config-state.js";
 import type { PluginCandidate } from "../../plugins/discovery.js";
 import type { PluginManifestRecord } from "../../plugins/manifest-registry.js";
 import type { PluginRecord, PluginRegistry } from "../../plugins/registry.js";
 import type { OpenClawPluginApi, OpenClawPluginModule, PluginLogger } from "../../plugins/types.js";
-import type { ExtensionHostProvenanceIndex } from "../policy/loader-policy.js";
+import type { ExtensionHostProvenanceIndex } from "../policy/loader-provenance.js";
 import { finalizeExtensionHostRegistryLoad } from "./loader-finalize.js";
 import { processExtensionHostPluginCandidate } from "./loader-flow.js";
 
@@ -53,21 +54,7 @@ export function processExtensionHostLoaderSessionCandidate(params: {
   session: ExtensionHostLoaderSession;
   candidate: PluginCandidate;
   manifestRecord: PluginManifestRecord;
-  normalizedConfig: {
-    entries: Record<
-      string,
-      {
-        enabled?: boolean;
-        hooks?: {
-          allowPromptInjection?: boolean;
-        };
-        config?: unknown;
-      }
-    >;
-    slots: {
-      memory?: string | null;
-    };
-  };
+  normalizedConfig: NormalizedPluginsConfig;
   rootConfig: OpenClawConfig;
   validateOnly: boolean;
   createApi: (

@@ -56,7 +56,7 @@ export function prepareExtensionHostLoaderExecution(params: {
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
-    warningCacheKey: params.cacheKey,
+    cacheKey: params.cacheKey,
     warningCache: params.warningCache,
     cache: params.cache,
     normalizedConfig: params.normalizedConfig,

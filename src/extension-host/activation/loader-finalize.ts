@@ -1,7 +1,7 @@
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { PluginLogger } from "../../plugins/types.js";
 import { resolveExtensionHostFinalizationPolicy } from "../policy/loader-finalization-policy.js";
-import type { ExtensionHostProvenanceIndex } from "../policy/loader-policy.js";
+import type { ExtensionHostProvenanceIndex } from "../policy/loader-provenance.js";
 import { markExtensionHostRegistryPluginsReady } from "./loader-state.js";
 
 export function finalizeExtensionHostRegistryLoad(params: {
