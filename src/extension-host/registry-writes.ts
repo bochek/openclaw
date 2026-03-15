@@ -1,4 +1,3 @@
-import { registerContextEngine, type ContextEngineFactory } from "../context-engine/registry.js";
 import type { GatewayRequestHandler } from "../gateway/server-methods/types.js";
 import type {
   PluginChannelRegistration,
@@ -13,6 +12,10 @@ import type {
   PluginToolRegistration,
 } from "../plugins/registry.js";
 import type { PluginHookRegistration as TypedPluginHookRegistration } from "../plugins/types.js";
+import {
+  registerExtensionHostContextEngine,
+  type ExtensionHostContextEngineFactory,
+} from "./context-engine-runtime.js";
 import type {
   ExtensionHostChannelRegistration,
   ExtensionHostCliRegistration,
@@ -162,8 +165,8 @@ export function addExtensionCommandRegistration(params: {
 
 export function addExtensionContextEngineRegistration(params: {
   entry: ExtensionHostContextEngineRegistration;
-  registerEngine?: (engineId: string, factory: ContextEngineFactory) => void;
+  registerEngine?: (engineId: string, factory: ExtensionHostContextEngineFactory) => void;
 }): void {
-  const registerEngine = params.registerEngine ?? registerContextEngine;
+  const registerEngine = params.registerEngine ?? registerExtensionHostContextEngine;
   registerEngine(params.entry.engineId, params.entry.factory);
 }

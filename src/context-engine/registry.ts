@@ -1,5 +1,10 @@
-import type { OpenClawConfig } from "../config/config.js";
-import { defaultSlotIdForKey } from "../plugins/slots.js";
+import {
+  getExtensionHostContextEngineFactory,
+  listExtensionHostContextEngineIds,
+  registerExtensionHostContextEngine,
+  resolveExtensionHostContextEngine,
+  type ExtensionHostContextEngineFactory,
+} from "../extension-host/context-engine-runtime.js";
 import type { ContextEngine } from "./types.js";
 
 /**
@@ -97,18 +102,12 @@ export function registerContextEngine(
   return registerContextEngineForOwner(id, factory, PUBLIC_CONTEXT_ENGINE_OWNER);
 }
 
-/**
- * Return the factory for a registered engine, or undefined.
- */
 export function getContextEngineFactory(id: string): ContextEngineFactory | undefined {
   return getContextEngineRegistryState().engines.get(id)?.factory;
 }
 
-/**
- * List all registered engine ids.
- */
 export function listContextEngineIds(): string[] {
-  return [...getContextEngineRegistryState().engines.keys()];
+  return listExtensionHostContextEngineIds();
 }
 
 // ---------------------------------------------------------------------------

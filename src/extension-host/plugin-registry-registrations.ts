@@ -1,6 +1,5 @@
 import type { AnyAgentTool } from "../agents/tools/common.js";
 import type { ChannelPlugin } from "../channels/plugins/types.js";
-import { registerContextEngine as registerLegacyContextEngine } from "../context-engine/registry.js";
 import type { GatewayRequestHandler } from "../gateway/server-methods/types.js";
 import { registerInternalHook } from "../hooks/internal-hooks.js";
 import type { PluginRecord, PluginRegistry } from "../plugins/registry.js";
@@ -16,6 +15,7 @@ import type {
   OpenClawPluginToolFactory,
   PluginHookRegistration as TypedPluginHookRegistration,
 } from "../plugins/types.js";
+import { registerExtensionHostContextEngine } from "./context-engine-runtime.js";
 import {
   applyExtensionHostTypedHookPolicy,
   bridgeExtensionHostLegacyHooks,
@@ -307,7 +307,7 @@ export function createExtensionHostPluginRegistrationActions(params: {
   const registerContextEngine = (
     record: PluginRecord,
     engineId: string,
-    factory: Parameters<typeof registerLegacyContextEngine>[1],
+    factory: Parameters<typeof registerExtensionHostContextEngine>[1],
   ) => {
     const result = resolveExtensionContextEngineRegistration({
       engineId,
@@ -325,7 +325,7 @@ export function createExtensionHostPluginRegistrationActions(params: {
     }
     addExtensionContextEngineRegistration({
       entry: result.entry,
-      registerEngine: registerLegacyContextEngine,
+      registerEngine: registerExtensionHostContextEngine,
     });
   };
 
