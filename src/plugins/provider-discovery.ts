@@ -1,6 +1,10 @@
-import { normalizeProviderId } from "../agents/model-selection.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { ModelProviderConfig } from "../config/types.js";
+import {
+  groupExtensionHostDiscoveryProvidersByOrder,
+  normalizeExtensionHostDiscoveryResult,
+  resolveExtensionHostDiscoveryProviders,
+} from "../extension-host/provider-discovery.js";
 import { resolvePluginProviders } from "./providers.js";
 import type { ProviderDiscoveryOrder, ProviderPlugin } from "./types.js";
 
@@ -51,24 +55,7 @@ export function normalizePluginDiscoveryResult(params: {
     | null
     | undefined;
 }): Record<string, ModelProviderConfig> {
-  const result = params.result;
-  if (!result) {
-    return {};
-  }
-
-  if ("provider" in result) {
-    return { [normalizeProviderId(params.provider.id)]: result.provider };
-  }
-
-  const normalized: Record<string, ModelProviderConfig> = {};
-  for (const [key, value] of Object.entries(result.providers)) {
-    const normalizedKey = normalizeProviderId(key);
-    if (!normalizedKey || !value) {
-      continue;
-    }
-    normalized[normalizedKey] = value;
-  }
-  return normalized;
+  return normalizeExtensionHostDiscoveryResult(params);
 }
 
 export function runProviderCatalog(params: {

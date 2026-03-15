@@ -60,45 +60,6 @@ export function legacyModelKey(provider: string, model: string): string | null {
   return rawKey === canonicalKey ? null : rawKey;
 }
 
-export function normalizeProviderId(provider: string): string {
-  const normalized = provider.trim().toLowerCase();
-  if (normalized === "z.ai" || normalized === "z-ai") {
-    return "zai";
-  }
-  if (normalized === "opencode-zen") {
-    return "opencode";
-  }
-  if (normalized === "opencode-go-auth") {
-    return "opencode-go";
-  }
-  if (normalized === "qwen") {
-    return "qwen-portal";
-  }
-  if (normalized === "kimi-code") {
-    return "kimi-coding";
-  }
-  if (normalized === "bedrock" || normalized === "aws-bedrock") {
-    return "amazon-bedrock";
-  }
-  // Backward compatibility for older provider naming.
-  if (normalized === "bytedance" || normalized === "doubao") {
-    return "volcengine";
-  }
-  return normalized;
-}
-
-/** Normalize provider ID for auth lookup. Coding-plan variants share auth with base. */
-export function normalizeProviderIdForAuth(provider: string): string {
-  const normalized = normalizeProviderId(provider);
-  if (normalized === "volcengine-plan") {
-    return "volcengine";
-  }
-  if (normalized === "byteplus-plan") {
-    return "byteplus";
-  }
-  return normalized;
-}
-
 export function findNormalizedProviderValue<T>(
   entries: Record<string, T> | undefined,
   provider: string,
