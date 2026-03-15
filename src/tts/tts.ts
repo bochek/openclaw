@@ -1,6 +1,3 @@
-import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync, renameSync, unlinkSync } from "node:fs";
-import path from "node:path";
 import type { ReplyPayload } from "../auto-reply/types.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { normalizeResolvedSecretInputString } from "../config/types.secrets.js";
@@ -11,6 +8,19 @@ import type {
   TtsProvider,
   TtsModelOverrideConfig,
 } from "../config/types.tts.js";
+import {
+  getExtensionHostTtsMaxLength,
+  isExtensionHostTtsEnabled,
+  isExtensionHostTtsSummarizationEnabled,
+  normalizeExtensionHostTtsAutoMode,
+  resolveExtensionHostTtsAutoMode,
+  resolveExtensionHostTtsPrefsPath,
+  setExtensionHostTtsAutoMode,
+  setExtensionHostTtsEnabled,
+  setExtensionHostTtsMaxLength,
+  setExtensionHostTtsProvider,
+  setExtensionHostTtsSummarizationEnabled,
+} from "../extension-host/tts-preferences.js";
 import {
   executeExtensionHostTextToSpeech,
   executeExtensionHostTextToSpeechTelephony,
@@ -30,7 +40,6 @@ import {
 } from "../extension-host/tts-runtime-setup.js";
 import { logVerbose } from "../globals.js";
 import { stripMarkdown } from "../line/markdown-to-line.js";
-import { CONFIG_DIR, resolveUserPath } from "../utils.js";
 import {
   DEFAULT_OPENAI_BASE_URL,
   isValidOpenAIModel,
@@ -45,8 +54,6 @@ import {
 export { OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from "./tts-core.js";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_TTS_MAX_LENGTH = 1500;
-const DEFAULT_TTS_SUMMARIZE = true;
 const DEFAULT_MAX_TEXT_LENGTH = 4096;
 
 const DEFAULT_ELEVENLABS_BASE_URL = "https://api.elevenlabs.io";
@@ -65,8 +72,6 @@ const DEFAULT_ELEVENLABS_VOICE_SETTINGS = {
   useSpeakerBoost: true,
   speed: 1.0,
 };
-
-const TTS_AUTO_MODES = new Set<TtsAutoMode>(["off", "always", "inbound", "tagged"]);
 
 export type ResolvedTtsConfig = {
   auto: TtsAutoMode;
@@ -115,16 +120,6 @@ export type ResolvedTtsConfig = {
   prefsPath?: string;
   maxTextLength: number;
   timeoutMs: number;
-};
-
-type TtsUserPrefs = {
-  tts?: {
-    auto?: TtsAutoMode;
-    enabled?: boolean;
-    provider?: TtsProvider;
-    maxLength?: number;
-    summarize?: boolean;
-  };
 };
 
 export type ResolvedTtsModelOverrides = {
@@ -195,16 +190,7 @@ type TtsStatusEntry = {
 
 let lastTtsAttempt: TtsStatusEntry | undefined;
 
-export function normalizeTtsAutoMode(value: unknown): TtsAutoMode | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-  const normalized = value.trim().toLowerCase();
-  if (TTS_AUTO_MODES.has(normalized as TtsAutoMode)) {
-    return normalized as TtsAutoMode;
-  }
-  return undefined;
-}
+export const normalizeTtsAutoMode = normalizeExtensionHostTtsAutoMode;
 
 function resolveModelOverridePolicy(
   overrides: TtsModelOverrideConfig | undefined,
@@ -307,43 +293,9 @@ export function resolveTtsConfig(cfg: OpenClawConfig): ResolvedTtsConfig {
   };
 }
 
-export function resolveTtsPrefsPath(config: ResolvedTtsConfig): string {
-  if (config.prefsPath?.trim()) {
-    return resolveUserPath(config.prefsPath.trim());
-  }
-  const envPath = process.env.OPENCLAW_TTS_PREFS?.trim();
-  if (envPath) {
-    return resolveUserPath(envPath);
-  }
-  return path.join(CONFIG_DIR, "settings", "tts.json");
-}
+export const resolveTtsPrefsPath = resolveExtensionHostTtsPrefsPath;
 
-function resolveTtsAutoModeFromPrefs(prefs: TtsUserPrefs): TtsAutoMode | undefined {
-  const auto = normalizeTtsAutoMode(prefs.tts?.auto);
-  if (auto) {
-    return auto;
-  }
-  if (typeof prefs.tts?.enabled === "boolean") {
-    return prefs.tts.enabled ? "always" : "off";
-  }
-  return undefined;
-}
-
-export function resolveTtsAutoMode(params: {
-  config: ResolvedTtsConfig;
-  prefsPath: string;
-  sessionAuto?: string;
-}): TtsAutoMode {
-  const sessionAuto = normalizeTtsAutoMode(params.sessionAuto);
-  if (sessionAuto) {
-    return sessionAuto;
-  }
-  const prefsAuto = resolveTtsAutoModeFromPrefs(readPrefs(params.prefsPath));
-  if (prefsAuto) {
-    return prefsAuto;
-  }
-  return params.config.auto;
-}
+export const resolveTtsAutoMode = resolveExtensionHostTtsAutoMode;
 
 export function buildTtsSystemPromptHint(cfg: OpenClawConfig): string | undefined {
   const config = resolveTtsConfig(cfg);
@@ -352,8 +304,8 @@ export function buildTtsSystemPromptHint(cfg: OpenClawConfig): string | undefine
   if (autoMode === "off") {
     return undefined;
   }
-  const maxLength = getTtsMaxLength(prefsPath);
-  const summarize = isSummarizationEnabled(prefsPath) ? "on" : "off";
+  const maxLength = getExtensionHostTtsMaxLength(prefsPath);
+  const summarize = isExtensionHostTtsSummarizationEnabled(prefsPath) ? "on" : "off";
   const autoHint =
     autoMode === "inbound"
       ? "Only use TTS when the user's last message includes audio/voice."
@@ -370,89 +322,23 @@ export function buildTtsSystemPromptHint(cfg: OpenClawConfig): string | undefine
     .join("\n");
 }
 
-function readPrefs(prefsPath: string): TtsUserPrefs {
-  try {
-    if (!existsSync(prefsPath)) {
-      return {};
-    }
-    return JSON.parse(readFileSync(prefsPath, "utf8")) as TtsUserPrefs;
-  } catch {
-    return {};
-  }
-}
+export const isTtsEnabled = isExtensionHostTtsEnabled;
 
-function atomicWriteFileSync(filePath: string, content: string): void {
-  const tmpPath = `${filePath}.tmp.${Date.now()}.${randomBytes(8).toString("hex")}`;
-  writeFileSync(tmpPath, content, { mode: 0o600 });
-  try {
-    renameSync(tmpPath, filePath);
-  } catch (err) {
-    try {
-      unlinkSync(tmpPath);
-    } catch {
-      // ignore
-    }
-    throw err;
-  }
-}
+export const setTtsAutoMode = setExtensionHostTtsAutoMode;
 
-function updatePrefs(prefsPath: string, update: (prefs: TtsUserPrefs) => void): void {
-  const prefs = readPrefs(prefsPath);
-  update(prefs);
-  mkdirSync(path.dirname(prefsPath), { recursive: true });
-  atomicWriteFileSync(prefsPath, JSON.stringify(prefs, null, 2));
-}
-
-export function isTtsEnabled(
-  config: ResolvedTtsConfig,
-  prefsPath: string,
-  sessionAuto?: string,
-): boolean {
-  return resolveTtsAutoMode({ config, prefsPath, sessionAuto }) !== "off";
-}
-
-export function setTtsAutoMode(prefsPath: string, mode: TtsAutoMode): void {
-  updatePrefs(prefsPath, (prefs) => {
-    const next = { ...prefs.tts };
-    delete next.enabled;
-    next.auto = mode;
-    prefs.tts = next;
-  });
-}
-
-export function setTtsEnabled(prefsPath: string, enabled: boolean): void {
-  setTtsAutoMode(prefsPath, enabled ? "always" : "off");
-}
+export const setTtsEnabled = setExtensionHostTtsEnabled;
 
 export const getTtsProvider = resolveExtensionHostTtsProvider;
 
-export function setTtsProvider(prefsPath: string, provider: TtsProvider): void {
-  updatePrefs(prefsPath, (prefs) => {
-    prefs.tts = { ...prefs.tts, provider };
-  });
-}
+export const setTtsProvider = setExtensionHostTtsProvider;
 
-export function getTtsMaxLength(prefsPath: string): number {
-  const prefs = readPrefs(prefsPath);
-  return prefs.tts?.maxLength ?? DEFAULT_TTS_MAX_LENGTH;
-}
+export const getTtsMaxLength = getExtensionHostTtsMaxLength;
 
-export function setTtsMaxLength(prefsPath: string, maxLength: number): void {
-  updatePrefs(prefsPath, (prefs) => {
-    prefs.tts = { ...prefs.tts, maxLength };
-  });
-}
+export const setTtsMaxLength = setExtensionHostTtsMaxLength;
 
-export function isSummarizationEnabled(prefsPath: string): boolean {
-  const prefs = readPrefs(prefsPath);
-  return prefs.tts?.summarize ?? DEFAULT_TTS_SUMMARIZE;
-}
+export const isSummarizationEnabled = isExtensionHostTtsSummarizationEnabled;
 
-export function setSummarizationEnabled(prefsPath: string, enabled: boolean): void {
-  updatePrefs(prefsPath, (prefs) => {
-    prefs.tts = { ...prefs.tts, summarize: enabled };
-  });
-}
+export const setSummarizationEnabled = setExtensionHostTtsSummarizationEnabled;
 
 export function getLastTtsAttempt(): TtsStatusEntry | undefined {
   return lastTtsAttempt;
