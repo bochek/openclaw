@@ -24,6 +24,7 @@ export type ResolvedContributionKind =
   | "capability.context-engine"
   | "capability.memory"
   | "capability.provider-integration"
+  | "capability.runtime-backend"
   | "surface.channel-catalog"
   | "surface.config"
   | "surface.install";
