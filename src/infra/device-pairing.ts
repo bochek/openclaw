@@ -71,6 +71,11 @@ export type DevicePairingList = {
   paired: PairedDevice[];
 };
 
+export type ApproveDevicePairingResult =
+  | { status: "approved"; requestId: string; device: PairedDevice }
+  | { status: "forbidden"; missingScope: string }
+  | null;
+
 type DevicePairingStateFile = {
   pendingById: Record<string, DevicePairingPendingRequest>;
   pairedByDeviceId: Record<string, PairedDevice>;
@@ -237,6 +242,25 @@ function scopesWithinApprovedDeviceBaseline(params: {
   });
 }
 
+function resolveMissingRequestedScope(params: {
+  role: string;
+  requestedScopes: readonly string[];
+  callerScopes: readonly string[];
+}): string | null {
+  for (const scope of params.requestedScopes) {
+    if (
+      !roleScopesAllow({
+        role: params.role,
+        requestedScopes: [scope],
+        allowedScopes: params.callerScopes,
+      })
+    ) {
+      return scope;
+    }
+  }
+  return null;
+}
+
 export async function listDevicePairing(baseDir?: string): Promise<DevicePairingList> {
   const state = await loadState(baseDir);
   const pending = Object.values(state.pendingById).toSorted((a, b) => b.ts - a.ts);
@@ -312,13 +336,24 @@ export async function requestDevicePairing(
 
 export async function approveDevicePairing(
   requestId: string,
+  options?: { callerScopes?: readonly string[] },
   baseDir?: string,
-): Promise<{ requestId: string; device: PairedDevice } | null> {
+): Promise<ApproveDevicePairingResult> {
   return await withLock(async () => {
     const state = await loadState(baseDir);
     const pending = state.pendingById[requestId];
     if (!pending) {
       return null;
+    }
+    if (pending.role && options?.callerScopes) {
+      const missingScope = resolveMissingRequestedScope({
+        role: pending.role,
+        requestedScopes: normalizeDeviceAuthScopes(pending.scopes),
+        callerScopes: options.callerScopes,
+      });
+      if (missingScope) {
+        return { status: "forbidden", missingScope };
+      }
     }
     const now = Date.now();
     const existing = state.pairedByDeviceId[pending.deviceId];
@@ -372,7 +407,7 @@ export async function approveDevicePairing(
     delete state.pendingById[requestId];
     state.pairedByDeviceId[device.deviceId] = device;
     await persistState(state, baseDir);
-    return { requestId, device };
+    return { status: "approved", requestId, device };
   });
 }
 

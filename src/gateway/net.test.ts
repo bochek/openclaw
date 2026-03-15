@@ -224,6 +224,13 @@ describe("resolveClientIp", () => {
       expected: undefined,
     },
     {
+      name: "fails closed when all non-loopback X-Forwarded-For hops are trusted proxies",
+      remoteAddr: "10.0.0.50",
+      forwardedFor: "10.0.0.2, 10.0.0.1",
+      trustedProxies: ["10.0.0.0/8"],
+      expected: undefined,
+    },
+    {
       name: "fails closed when trusted proxy omits forwarding headers",
       remoteAddr: "127.0.0.1",
       trustedProxies: ["127.0.0.1"],
