@@ -1,3 +1,4 @@
+import { resolveExtensionHostProviders } from "../extension-host/provider-runtime.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { loadOpenClawPlugins, type PluginLoadOptions } from "./loader.js";
 import { createPluginLoaderLogger } from "./logger.js";
@@ -82,8 +83,5 @@ export function resolvePluginProviders(params: {
     logger: createPluginLoaderLogger(log),
   });
 
-  return registry.providers.map((entry) => ({
-    ...entry.provider,
-    pluginId: entry.pluginId,
-  }));
+  return resolveExtensionHostProviders({ registry });
 }
