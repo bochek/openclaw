@@ -198,4 +198,89 @@ describe("registerPluginCommand", () => {
       }),
     );
   });
+
+  it("returns a safe error payload when a runtime plugin command returns undefined", async () => {
+    const handler = async () => undefined as unknown as { text: string };
+    const command = {
+      name: "unsafe",
+      description: "Demo command",
+      acceptsArgs: false,
+      handler,
+      pluginId: "demo-plugin",
+    };
+
+    const result = await executePluginCommand({
+      command,
+      channel: "discord",
+      senderId: "U123",
+      isAuthorizedSender: true,
+      commandBody: "/unsafe",
+      config: {} as never,
+    });
+
+    expect(result).toEqual({
+      text: "⚠️ Command failed. Please try again later.",
+      isError: true,
+    });
+  });
+
+  it("returns a safe error payload when a runtime plugin command returns an empty object", async () => {
+    const handler = async () => ({}) as { text: string };
+    const command = {
+      name: "empty",
+      description: "Demo command",
+      acceptsArgs: false,
+      handler,
+      pluginId: "demo-plugin",
+    };
+
+    const result = await executePluginCommand({
+      command,
+      channel: "discord",
+      senderId: "U123",
+      isAuthorizedSender: true,
+      commandBody: "/empty",
+      config: {} as never,
+    });
+
+    expect(result).toEqual({
+      text: "⚠️ Command failed. Please try again later.",
+      isError: true,
+    });
+  });
+
+  it("preserves channelData-only plugin replies", async () => {
+    const handler = async () =>
+      ({
+        channelData: {
+          discord: {
+            components: [{ type: 1, components: [] }],
+          },
+        },
+      }) as unknown as { text: string };
+    const command = {
+      name: "interactive",
+      description: "Demo command",
+      acceptsArgs: false,
+      handler,
+      pluginId: "demo-plugin",
+    };
+
+    const result = await executePluginCommand({
+      command,
+      channel: "discord",
+      senderId: "U123",
+      isAuthorizedSender: true,
+      commandBody: "/interactive",
+      config: {} as never,
+    });
+
+    expect(result).toEqual({
+      channelData: {
+        discord: {
+          components: [{ type: 1, components: [] }],
+        },
+      },
+    });
+  });
 });
