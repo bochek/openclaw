@@ -49,6 +49,7 @@ What has been implemented:
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader top-level load orchestration now routes through `src/extension-host/loader-orchestrator.ts`
 - loader mutable activation state now routes through `src/extension-host/loader-session.ts`
+- loader activation policy outcomes now route through `src/extension-host/loader-activation-policy.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`, which now enforces an explicit loader lifecycle state machine while preserving compatibility `PluginRecord.status` values
 - loader final cache, warning, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 
@@ -63,6 +64,7 @@ How it has been implemented:
 - by making the first loader compatibility, candidate-planning, import-flow, runtime-decision, register-flow, candidate-orchestration, top-level load orchestration, record-state with compatibility lifecycle mapping, and finalization helpers explicit host-owned seams before introducing a versioned compatibility layer
 - by turning the compatibility record-state layer into an enforced loader lifecycle state machine before broadening the schema-driven host lifecycle model
 - by moving mutable activation state into a host-owned loader session before broadening the schema-driven host lifecycle model
+- by moving duplicate precedence, config enablement, and early memory-slot gating into explicit host-owned activation-policy outcomes before broadening the schema-driven host lifecycle model
 
 What remains pending:
 

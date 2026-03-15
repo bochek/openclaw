@@ -55,6 +55,7 @@ What has landed:
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader top-level load orchestration now routes through `src/extension-host/loader-orchestrator.ts`
 - loader mutable activation state now routes through `src/extension-host/loader-session.ts`
+- loader activation policy outcomes now route through `src/extension-host/loader-activation-policy.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`, which now enforces an explicit loader lifecycle state machine while preserving compatibility `PluginRecord.status` values
 - loader final cache, warning, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 - runtime registration normalization has started in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registrations
@@ -92,6 +93,7 @@ How it was done:
 - by turning that compatibility `lifecycleState` field into an enforced loader lifecycle state machine with readiness promotion during finalization
 - by moving the remaining top-level loader orchestration into a host-owned module so `src/plugins/loader.ts` becomes a compatibility facade instead of the real owner
 - by moving mutable activation state such as seen-id tracking, memory-slot selection, and finalization inputs into a host-owned loader session instead of leaving them in top-level loader variables
+- by moving duplicate precedence, config enablement, and early memory-slot gating into explicit host-owned activation-policy outcomes instead of leaving them inline in the loader flow
 - by moving static and lookup-heavy consumers first, where the ownership boundary matters but runtime risk is lower
 
 Committed implementation slices so far:
@@ -108,13 +110,14 @@ Committed implementation slices so far:
 - `c8d82a8f19` `Plugins: extract loader orchestration`
 - `d32f65eb5e` `Plugins: add loader lifecycle state machine`
 - `da9aad0c0f` `Plugins: add loader activation session`
+- `fc51ce2867` `Plugins: add loader activation policy`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
 What has not landed:
 
 - keeping the cutover inventory current as more surfaces move
-- broader lifecycle ownership beyond the loader state machine and session-owned activation state, plus remaining policy semantics
+- broader lifecycle ownership beyond the loader state machine, session-owned activation state, and explicit activation-policy outcomes, plus remaining policy semantics
 - host-owned registration surfaces beyond the first channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook helper slices
 - SDK compatibility translation work
 - canonical event stages
@@ -1330,7 +1333,7 @@ Current implementation status:
 - partially implemented in a compatibility-preserving form
 - the host now owns active registry state
 - the host now exposes resolved static registries for static consumers
-- activation, loader cache control, loader policy, loader runtime decisions, loader top-level load orchestration, loader session state, loader record-state helpers, and loader finalization now route through `src/extension-host/*`
+- activation, loader cache control, loader policy, loader activation-policy outcomes, loader runtime decisions, loader top-level load orchestration, loader session state, loader record-state helpers, and loader finalization now route through `src/extension-host/*`
 - broader lifecycle ownership beyond the loader state machine, registration surfaces, policy gates, and activation-state management are still pending
 
 ## Phase 3: Broader Legacy Compatibility Bridges

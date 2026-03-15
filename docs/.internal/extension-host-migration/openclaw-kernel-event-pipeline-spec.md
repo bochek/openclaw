@@ -45,6 +45,7 @@ Relevant prerequisite work that has landed:
 - loader per-candidate orchestration now has a host-owned helper boundary
 - loader top-level load orchestration now has a host-owned helper boundary
 - loader mutable activation state now has a host-owned helper boundary
+- loader activation policy outcomes now have a host-owned helper boundary
 - loader record-state transitions now have a host-owned helper boundary and enforced loader lifecycle state machine, while still preserving compatibility `PluginRecord.status` values
 - loader final cache, warning, and activation finalization now has a host-owned helper boundary
 
