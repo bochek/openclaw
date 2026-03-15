@@ -470,7 +470,7 @@ Before implementation starts, write and maintain a cutover inventory for every c
 - conversation binding ownership, approval persistence, and restore-on-restart behavior
 - interactive callback routing, namespace ownership, and dedupe
 - ingress claim and bound-route short-circuit behavior
-- bounded interactive channel-control helpers needed by external interactive agents
+- generic interactive control contracts needed by external interactive agents
 - slot selection and existing arbitration paths
 - status, reload, install, update, and diagnostics surfaces
 
@@ -581,7 +581,7 @@ Additional migration rule from external-plugin validation:
 
 - conversation binding, interactive callback routing, and inbound claim are real runtime needs, but they must not be solved by turning `src/plugins/*` into the permanent public architecture
 - bind approvals, callback namespace routing, and bound-ingress short-circuit behavior belong to host-owned surfaces and canonical pipeline stages
-- first-cut interactive channel controls may be parity-driven around Telegram and Discord, but the long-term contract must remain adapter-runtime and host-owned rather than product-shaped kernel APIs
+- first-cut interactive channel controls may be validated first on Telegram and Discord, but the long-term contract must remain generic, adapter-runtime, host-owned, and kernel-agnostic rather than product-shaped kernel APIs
 
 ## 1d. Lightweight descriptors and distribution metadata
 

@@ -633,8 +633,8 @@ Required descriptor metadata:
 
 First-cut constraint:
 
-- the first interactive runtime cut may stay limited to Telegram and Discord because those are the validated immediate needs
-- that limitation is a rollout choice, not a reason to encode Telegram- or Discord-specific handler APIs as the permanent kernel contract
+- the first interactive runtime cut may be validated on Telegram and Discord because those are the immediate proven needs
+- that is a rollout choice only; the contract itself must stay generic, host-owned, and kernel-agnostic rather than becoming Telegram- or Discord-specific handler APIs
 
 Ownership rule:
 

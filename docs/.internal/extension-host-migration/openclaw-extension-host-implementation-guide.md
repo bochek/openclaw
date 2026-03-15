@@ -216,7 +216,7 @@ What is still missing for these phases:
 - keeping the cutover inventory current as more surfaces move
 - broader lifecycle ownership beyond the loader state machine, service-lifecycle boundary, CLI-lifecycle boundary, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes, remaining policy gate ownership, and broad host-owned registries described for Phase 2
 - minimal SDK compatibility work beyond preserving current behavior indirectly through existing loading
-- host-owned conversation binding, interaction routing, ingress claim, and bounded interactive channel-control surfaces identified by external-plugin validation
+- host-owned conversation binding, interaction routing, ingress claim, and generic interactive control surfaces identified by external-plugin validation
 - any pilot migration, event pipeline, canonical catalog, or arbitration implementation
 
 Recent plan refinement from external-plugin validation:
@@ -224,7 +224,7 @@ Recent plan refinement from external-plugin validation:
 - the plan now explicitly treats conversation binding ownership, approval persistence, restore-on-restart behavior, and detached-binding cleanup as first-class migration surfaces
 - it now explicitly treats interactive callback routing, namespace ownership, dedupe, and fallback behavior as first-class migration surfaces
 - it now explicitly treats inbound claim as a canonical ingress-stage concern rather than a permanent plugin-era hook shape
-- it now explicitly limits the first-cut interactive channel-control surface to a bounded set of Telegram and Discord capabilities, but models them as host-owned adapter-runtime contracts rather than permanent product-shaped kernel APIs
+- it now explicitly treats Telegram and Discord as the first validated rollout targets for interactive control surfaces while keeping the underlying contracts generic, host-owned, and kernel-agnostic
 
 ## Implementation Order
 
