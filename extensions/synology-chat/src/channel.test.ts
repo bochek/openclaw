@@ -375,5 +375,46 @@ describe("createSynologyChatPlugin", () => {
         expect.stringContaining("Each enabled account must use a unique webhookPath."),
       );
     });
+
+    it("ignores accounts with a shared path when they are missing incomingUrl", async () => {
+      const registerMock = registerPluginHttpRouteMock;
+      registerMock.mockClear();
+      const plugin = createSynologyChatPlugin();
+      const abortController = new AbortController();
+      const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+      const result = plugin.gateway.startAccount({
+        cfg: {
+          channels: {
+            "synology-chat": {
+              enabled: true,
+              token: "base-token",
+              incomingUrl: "https://nas/incoming",
+              webhookPath: "/webhook/synology/shared",
+              dmPolicy: "allowlist",
+              allowedUserIds: ["owner-a"],
+              accounts: {
+                alerts: {
+                  enabled: true,
+                  token: "alerts-token",
+                  incomingUrl: "",
+                  webhookPath: "/webhook/synology/shared",
+                  dmPolicy: "open",
+                },
+              },
+            },
+          },
+        },
+        accountId: "default",
+        log,
+        abortSignal: abortController.signal,
+      });
+
+      await expectPendingStartAccountPromise(result, abortController);
+      expect(registerMock).toHaveBeenCalledTimes(1);
+      expect(log.error).not.toHaveBeenCalledWith(
+        expect.stringContaining("Each enabled account must use a unique webhookPath."),
+      );
+    });
   });
 });

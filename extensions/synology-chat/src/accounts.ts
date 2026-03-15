@@ -98,7 +98,7 @@ export function resolveAccount(cfg: any, accountId?: string | null): ResolvedSyn
 export function findConflictingWebhookPathAccountIds(cfg: any, accountId: string): string[] {
   const current = resolveAccount(cfg, accountId);
   const currentPath = current.webhookPath.trim();
-  if (!current.enabled || !current.token.trim() || !currentPath) {
+  if (!current.enabled || !current.token.trim() || !current.incomingUrl.trim() || !currentPath) {
     return [];
   }
 
@@ -107,7 +107,10 @@ export function findConflictingWebhookPathAccountIds(cfg: any, accountId: string
     .map((candidateId) => resolveAccount(cfg, candidateId))
     .filter(
       (candidate) =>
-        candidate.enabled && candidate.token.trim() && candidate.webhookPath.trim() === currentPath,
+        candidate.enabled &&
+        candidate.token.trim() &&
+        candidate.incomingUrl.trim() &&
+        candidate.webhookPath.trim() === currentPath,
     )
     .map((candidate) => candidate.accountId);
 }
