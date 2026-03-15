@@ -23,14 +23,14 @@ import {
   createVoyageEmbeddingProvider,
   type VoyageEmbeddingClient,
 } from "../memory/embeddings-voyage.js";
+import { importNodeLlamaCpp } from "../memory/node-llama.js";
+import { resolveUserPath } from "../utils.js";
 import type {
   EmbeddingProvider,
   EmbeddingProviderId,
   EmbeddingProviderOptions,
   EmbeddingProviderResult,
-} from "../memory/embeddings.js";
-import { importNodeLlamaCpp } from "../memory/node-llama.js";
-import { resolveUserPath } from "../utils.js";
+} from "./embedding-runtime-types.js";
 
 export type {
   GeminiEmbeddingClient,

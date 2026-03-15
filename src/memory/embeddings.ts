@@ -1,73 +1,17 @@
-import type { OpenClawConfig } from "../config/config.js";
-import type { SecretInput } from "../config/types.secrets.js";
-import {
-  DEFAULT_EXTENSION_HOST_LOCAL_EMBEDDING_MODEL,
-  createExtensionHostEmbeddingProvider,
-} from "../extension-host/embedding-runtime-registry.js";
-import type { EmbeddingInput } from "./embedding-inputs.js";
-import { type GeminiEmbeddingClient, type GeminiTaskType } from "./embeddings-gemini.js";
-import { type MistralEmbeddingClient } from "./embeddings-mistral.js";
-import type { OllamaEmbeddingClient } from "./embeddings-ollama.js";
-import type { OpenAiEmbeddingClient } from "./embeddings-openai.js";
-import type { VoyageEmbeddingClient } from "./embeddings-voyage.js";
-
-export type { GeminiEmbeddingClient } from "./embeddings-gemini.js";
-export type { MistralEmbeddingClient } from "./embeddings-mistral.js";
-export type { OpenAiEmbeddingClient } from "./embeddings-openai.js";
-export type { VoyageEmbeddingClient } from "./embeddings-voyage.js";
-export type { OllamaEmbeddingClient } from "./embeddings-ollama.js";
-
-export type EmbeddingProvider = {
-  id: string;
-  model: string;
-  maxInputTokens?: number;
-  embedQuery: (text: string) => Promise<number[]>;
-  embedBatch: (texts: string[]) => Promise<number[][]>;
-  embedBatchInputs?: (inputs: EmbeddingInput[]) => Promise<number[][]>;
-};
-
-export type EmbeddingProviderId = "openai" | "local" | "gemini" | "voyage" | "mistral" | "ollama";
-export type EmbeddingProviderRequest = EmbeddingProviderId | "auto";
-export type EmbeddingProviderFallback = EmbeddingProviderId | "none";
-
-export type EmbeddingProviderResult = {
-  provider: EmbeddingProvider | null;
-  requestedProvider: EmbeddingProviderRequest;
-  fallbackFrom?: EmbeddingProviderId;
-  fallbackReason?: string;
-  providerUnavailableReason?: string;
-  openAi?: OpenAiEmbeddingClient;
-  gemini?: GeminiEmbeddingClient;
-  voyage?: VoyageEmbeddingClient;
-  mistral?: MistralEmbeddingClient;
-  ollama?: OllamaEmbeddingClient;
-};
-
-export type EmbeddingProviderOptions = {
-  config: OpenClawConfig;
-  agentDir?: string;
-  provider: EmbeddingProviderRequest;
-  remote?: {
-    baseUrl?: string;
-    apiKey?: SecretInput;
-    headers?: Record<string, string>;
-  };
-  model: string;
-  fallback: EmbeddingProviderFallback;
-  local?: {
-    modelPath?: string;
-    modelCacheDir?: string;
-  };
-  /** Gemini embedding-2: output vector dimensions (768, 1536, or 3072). */
-  outputDimensionality?: number;
-  /** Gemini: override the default task type sent with embedding requests. */
-  taskType?: GeminiTaskType;
-};
-
-export const DEFAULT_LOCAL_MODEL = DEFAULT_EXTENSION_HOST_LOCAL_EMBEDDING_MODEL;
-
-export async function createEmbeddingProvider(
-  options: EmbeddingProviderOptions,
-): Promise<EmbeddingProviderResult> {
-  return createExtensionHostEmbeddingProvider(options);
-}
+export {
+  createEmbeddingProvider,
+  DEFAULT_LOCAL_EMBEDDING_MODEL as DEFAULT_LOCAL_MODEL,
+} from "../extension-host/embedding-runtime.js";
+export type {
+  EmbeddingProvider,
+  EmbeddingProviderFallback,
+  EmbeddingProviderId,
+  EmbeddingProviderOptions,
+  EmbeddingProviderRequest,
+  EmbeddingProviderResult,
+  GeminiEmbeddingClient,
+  MistralEmbeddingClient,
+  OllamaEmbeddingClient,
+  OpenAiEmbeddingClient,
+  VoyageEmbeddingClient,
+} from "../extension-host/embedding-runtime.js";

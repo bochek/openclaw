@@ -4,8 +4,8 @@ import { resolveMemorySearchConfig } from "../agents/memory-search.js";
 import { resolveApiKeyForProvider } from "../agents/model-auth.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import type { OpenClawConfig } from "../config/config.js";
+import { DEFAULT_LOCAL_EMBEDDING_MODEL } from "../extension-host/embedding-runtime.js";
 import { resolveMemoryBackendConfig } from "../memory/backend-config.js";
-import { DEFAULT_LOCAL_MODEL } from "../memory/embeddings.js";
 import { hasConfiguredMemorySecretInput } from "../memory/secret-input.js";
 import { note } from "../terminal/note.js";
 import { resolveUserPath } from "../utils.js";
@@ -160,7 +160,7 @@ export async function noteMemorySearchHealth(
  *
  * When `useDefaultFallback` is true (explicit `provider: "local"`), an empty
  * modelPath is treated as available because the runtime falls back to
- * DEFAULT_LOCAL_MODEL (an auto-downloaded HuggingFace model).
+ * DEFAULT_LOCAL_EMBEDDING_MODEL (an auto-downloaded HuggingFace model).
  *
  * When false (provider: "auto"), we only consider local available if the user
  * explicitly configured a local file path — matching `canAutoSelectLocal()`
@@ -168,7 +168,7 @@ export async function noteMemorySearchHealth(
  */
 function hasLocalEmbeddings(local: { modelPath?: string }, useDefaultFallback = false): boolean {
   const modelPath =
-    local.modelPath?.trim() || (useDefaultFallback ? DEFAULT_LOCAL_MODEL : undefined);
+    local.modelPath?.trim() || (useDefaultFallback ? DEFAULT_LOCAL_EMBEDDING_MODEL : undefined);
   if (!modelPath) {
     return false;
   }

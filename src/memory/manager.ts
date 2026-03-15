@@ -6,7 +6,6 @@ import { resolveAgentDir, resolveAgentWorkspaceDir } from "../agents/agent-scope
 import type { ResolvedMemorySearchConfig } from "../agents/memory-search.js";
 import { resolveMemorySearchConfig } from "../agents/memory-search.js";
 import type { OpenClawConfig } from "../config/config.js";
-import { createSubsystemLogger } from "../logging/subsystem.js";
 import {
   createEmbeddingProvider,
   type EmbeddingProvider,
@@ -16,7 +15,8 @@ import {
   type OllamaEmbeddingClient,
   type OpenAiEmbeddingClient,
   type VoyageEmbeddingClient,
-} from "./embeddings.js";
+} from "../extension-host/embedding-runtime.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
 import { isFileMissingError, statRegularFile } from "./fs-utils.js";
 import { bm25RankToScore, buildFtsQuery, mergeHybridResults } from "./hybrid.js";
 import { isMemoryPath, normalizeExtraMemoryPaths } from "./internal.js";
