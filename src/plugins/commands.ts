@@ -7,6 +7,8 @@
 
 import { parseDiscordTarget } from "../../extensions/discord/src/targets.js";
 import { parseTelegramTarget } from "../../extensions/telegram/src/targets.js";
+import { isRenderablePayload } from "../auto-reply/reply/reply-payloads.js";
+import type { ReplyPayload } from "../auto-reply/types.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { logVerbose } from "../globals.js";
 import {
@@ -34,6 +36,10 @@ let registryLocked = false;
 
 // Maximum allowed length for command arguments (defense in depth)
 const MAX_ARGS_LENGTH = 4096;
+const SAFE_COMMAND_FAILURE_REPLY: PluginCommandResult = {
+  text: "⚠️ Command failed. Please try again later.",
+  isError: true,
+};
 
 /**
  * Reserved command names that plugins cannot override.
@@ -309,6 +315,52 @@ function resolveBindingConversationFromCommand(params: {
   return null;
 }
 
+function normalizePluginCommandResult(result: unknown): ReplyPayload | null {
+  if (!result || typeof result !== "object" || Array.isArray(result)) {
+    return null;
+  }
+
+  const payload = result as Record<string, unknown>;
+  const mediaUrls = Array.isArray(payload.mediaUrls)
+    ? payload.mediaUrls
+        .filter((entry): entry is string => typeof entry === "string")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+    : undefined;
+  const btw =
+    payload.btw && typeof payload.btw === "object" && !Array.isArray(payload.btw)
+      ? (payload.btw as { question?: unknown })
+      : undefined;
+  const channelData =
+    payload.channelData &&
+    typeof payload.channelData === "object" &&
+    !Array.isArray(payload.channelData)
+      ? (payload.channelData as Record<string, unknown>)
+      : undefined;
+
+  const normalized: ReplyPayload = {
+    text: typeof payload.text === "string" ? payload.text : undefined,
+    mediaUrl: typeof payload.mediaUrl === "string" ? payload.mediaUrl : undefined,
+    mediaUrls,
+    btw:
+      btw && typeof btw.question === "string"
+        ? {
+            question: btw.question,
+          }
+        : undefined,
+    replyToId: typeof payload.replyToId === "string" ? payload.replyToId : undefined,
+    replyToTag: typeof payload.replyToTag === "boolean" ? payload.replyToTag : undefined,
+    replyToCurrent:
+      typeof payload.replyToCurrent === "boolean" ? payload.replyToCurrent : undefined,
+    audioAsVoice: typeof payload.audioAsVoice === "boolean" ? payload.audioAsVoice : undefined,
+    isError: typeof payload.isError === "boolean" ? payload.isError : undefined,
+    isReasoning: typeof payload.isReasoning === "boolean" ? payload.isReasoning : undefined,
+    channelData,
+  };
+
+  return isRenderablePayload(normalized) ? normalized : null;
+}
+
 /**
  * Execute a plugin command handler.
  *
@@ -401,7 +453,11 @@ export async function executePluginCommand(params: {
   // Lock registry during execution to prevent concurrent modifications
   registryLocked = true;
   try {
-    const result = await command.handler(ctx);
+    const result = normalizePluginCommandResult(await command.handler(ctx));
+    if (!result) {
+      logVerbose(`Plugin command /${command.name} returned an invalid reply payload`);
+      return SAFE_COMMAND_FAILURE_REPLY;
+    }
     logVerbose(
       `Plugin command /${command.name} executed successfully for ${senderId || "unknown"}`,
     );
@@ -410,7 +466,7 @@ export async function executePluginCommand(params: {
     const error = err as Error;
     logVerbose(`Plugin command /${command.name} error: ${error.message}`);
     // Don't leak internal error details - return a safe generic message
-    return { text: "⚠️ Command failed. Please try again later." };
+    return SAFE_COMMAND_FAILURE_REPLY;
   } finally {
     registryLocked = false;
   }
