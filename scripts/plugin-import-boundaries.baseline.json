@@ -169,31 +169,31 @@
   },
   {
     "path": "extensions/discord/src/actions/handle-action.ts",
-    "line": 6,
+    "line": 7,
     "specifier": "../../../../src/agents/tools/common.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/actions/handle-action.ts",
-    "line": 7,
+    "line": 8,
     "specifier": "../../../../src/agents/tools/discord-actions-shared.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/actions/handle-action.ts",
-    "line": 8,
+    "line": 9,
     "specifier": "../../../../src/agents/tools/discord-actions.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/actions/handle-action.ts",
-    "line": 9,
+    "line": 10,
     "specifier": "../../../../src/channels/plugins/actions/reaction-message-id.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/actions/handle-action.ts",
-    "line": 10,
+    "line": 11,
     "specifier": "../../../../src/channels/plugins/types.js",
     "reason": "relative_escape"
   },
@@ -601,13 +601,13 @@
   },
   {
     "path": "extensions/discord/src/monitor/allow-list.ts",
-    "line": 2,
+    "line": 3,
     "specifier": "../../../../src/channels/allowlist-match.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/monitor/allow-list.ts",
-    "line": 8,
+    "line": 9,
     "specifier": "../../../../src/channels/channel-config.js",
     "reason": "relative_escape"
   },
@@ -805,19 +805,19 @@
   },
   {
     "path": "extensions/discord/src/monitor/inbound-worker.ts",
-    "line": 1,
+    "line": 2,
     "specifier": "../../../../src/channels/run-state-machine.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/monitor/inbound-worker.ts",
-    "line": 2,
+    "line": 3,
     "specifier": "../../../../src/globals.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/monitor/inbound-worker.ts",
-    "line": 3,
+    "line": 4,
     "specifier": "../../../../src/infra/format-time/format-duration.ts",
     "reason": "relative_escape"
   },
@@ -1309,31 +1309,31 @@
   },
   {
     "path": "extensions/discord/src/monitor/model-picker-preferences.ts",
-    "line": 3,
+    "line": 4,
     "specifier": "../../../../src/agents/model-selection.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/monitor/model-picker-preferences.ts",
-    "line": 4,
+    "line": 5,
     "specifier": "../../../../src/config/paths.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/monitor/model-picker-preferences.ts",
-    "line": 5,
+    "line": 6,
     "specifier": "../../../../src/infra/file-lock.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/monitor/model-picker-preferences.ts",
-    "line": 6,
+    "line": 7,
     "specifier": "../../../../src/infra/home-dir.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/discord/src/monitor/model-picker-preferences.ts",
-    "line": 11,
+    "line": 8,
     "specifier": "../../../../src/routing/account-id.js",
     "reason": "relative_escape"
   },
@@ -4729,14 +4729,8 @@
   },
   {
     "path": "extensions/slack/src/monitor/media.ts",
-    "line": 2,
-    "specifier": "../../../../src/infra/net/hostname.js",
-    "reason": "relative_escape"
-  },
-  {
-    "path": "extensions/slack/src/monitor/media.ts",
     "line": 3,
-    "specifier": "../../../../src/media/fetch.js",
+    "specifier": "../../../../src/infra/net/hostname.js",
     "reason": "relative_escape"
   },
   {
@@ -4748,6 +4742,12 @@
   {
     "path": "extensions/slack/src/monitor/media.ts",
     "line": 5,
+    "specifier": "../../../../src/media/fetch.js",
+    "reason": "relative_escape"
+  },
+  {
+    "path": "extensions/slack/src/monitor/media.ts",
+    "line": 6,
     "specifier": "../../../../src/media/store.js",
     "reason": "relative_escape"
   },
@@ -5533,25 +5533,25 @@
   },
   {
     "path": "extensions/telegram/src/account-inspect.ts",
-    "line": 1,
+    "line": 2,
     "specifier": "../../../src/config/config.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/account-inspect.ts",
-    "line": 6,
+    "line": 7,
     "specifier": "../../../src/config/types.secrets.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/account-inspect.ts",
-    "line": 7,
+    "line": 8,
     "specifier": "../../../src/config/types.telegram.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/account-inspect.ts",
-    "line": 8,
+    "line": 9,
     "specifier": "../../../src/infra/secret-file.js",
     "reason": "relative_escape"
   },
@@ -5587,31 +5587,31 @@
   },
   {
     "path": "extensions/telegram/src/accounts.ts",
-    "line": 2,
+    "line": 6,
     "specifier": "../../../src/channels/plugins/account-action-gate.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/accounts.ts",
-    "line": 3,
+    "line": 7,
     "specifier": "../../../src/config/config.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/accounts.ts",
-    "line": 4,
+    "line": 8,
     "specifier": "../../../src/config/types.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/accounts.ts",
-    "line": 5,
+    "line": 9,
     "specifier": "../../../src/infra/env.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/accounts.ts",
-    "line": 6,
+    "line": 10,
     "specifier": "../../../src/logging/subsystem.js",
     "reason": "relative_escape"
   },
@@ -7117,37 +7117,37 @@
   },
   {
     "path": "extensions/telegram/src/channel-actions.ts",
-    "line": 6,
+    "line": 8,
     "specifier": "../../../src/agents/tools/common.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/channel-actions.ts",
-    "line": 7,
+    "line": 9,
     "specifier": "../../../src/agents/tools/telegram-actions.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/channel-actions.ts",
-    "line": 8,
+    "line": 10,
     "specifier": "../../../src/channels/plugins/actions/reaction-message-id.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/channel-actions.ts",
-    "line": 12,
+    "line": 14,
     "specifier": "../../../src/channels/plugins/actions/shared.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/channel-actions.ts",
-    "line": 16,
+    "line": 18,
     "specifier": "../../../src/channels/plugins/types.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/channel-actions.ts",
-    "line": 17,
+    "line": 19,
     "specifier": "../../../src/config/types.telegram.js",
     "reason": "relative_escape"
   },
@@ -7465,25 +7465,25 @@
   },
   {
     "path": "extensions/telegram/src/group-access.ts",
-    "line": 1,
+    "line": 2,
     "specifier": "../../../src/config/config.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/group-access.ts",
-    "line": 2,
+    "line": 3,
     "specifier": "../../../src/config/group-policy.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/group-access.ts",
-    "line": 3,
+    "line": 4,
     "specifier": "../../../src/config/runtime-group-policy.js",
     "reason": "relative_escape"
   },
   {
     "path": "extensions/telegram/src/group-access.ts",
-    "line": 9,
+    "line": 10,
     "specifier": "../../../src/config/types.js",
     "reason": "relative_escape"
   },
