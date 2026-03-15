@@ -245,10 +245,7 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       source: record.source,
       rootDir: record.rootDir,
     });
-    if (result.names.length > 0) {
-      record.toolNames.push(...result.names);
-    }
-    registry.tools.push(result.entry);
+    addExtensionToolRegistration({ registry, record, names: result.names, entry: result.entry });
   };
 
   const registerHook = (
@@ -508,8 +505,12 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       source: record.source,
       rootDir: record.rootDir,
     });
-    record.cliCommands.push(...result.commands);
-    registry.cliRegistrars.push(result.entry);
+    addExtensionCliRegistration({
+      registry,
+      record,
+      commands: result.commands,
+      entry: result.entry,
+    });
   };
 
   const registerService = (record: PluginRecord, service: OpenClawPluginService) => {
