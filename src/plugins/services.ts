@@ -1,35 +1,10 @@
 import type { OpenClawConfig } from "../config/config.js";
-import { STATE_DIR } from "../config/paths.js";
-import { createSubsystemLogger } from "../logging/subsystem.js";
+import {
+  startExtensionHostServices,
+  type ExtensionHostServicesHandle,
+} from "../extension-host/service-lifecycle.js";
 import type { PluginRegistry } from "./registry.js";
-import type { OpenClawPluginServiceContext, PluginLogger } from "./types.js";
-
-const log = createSubsystemLogger("plugins");
-
-function createPluginLogger(): PluginLogger {
-  return {
-    info: (msg) => log.info(msg),
-    warn: (msg) => log.warn(msg),
-    error: (msg) => log.error(msg),
-    debug: (msg) => log.debug(msg),
-  };
-}
-
-function createServiceContext(params: {
-  config: OpenClawConfig;
-  workspaceDir?: string;
-}): OpenClawPluginServiceContext {
-  return {
-    config: params.config,
-    workspaceDir: params.workspaceDir,
-    stateDir: STATE_DIR,
-    logger: createPluginLogger(),
-  };
-}
-
-export type PluginServicesHandle = {
-  stop: () => Promise<void>;
-};
+export type PluginServicesHandle = ExtensionHostServicesHandle;
 
 export async function startPluginServices(params: {
   registry: PluginRegistry;
