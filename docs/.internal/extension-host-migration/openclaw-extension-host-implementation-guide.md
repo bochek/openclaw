@@ -91,7 +91,7 @@ What has been implemented so far:
 - compatibility plugin-registry facade ownership now routes through `src/extension-host/plugin-registry.ts`
 - compatibility plugin-registry policy now routes through `src/extension-host/plugin-registry-compat.ts`
 - compatibility plugin-registry registration actions now route through `src/extension-host/plugin-registry-registrations.ts`
-- host-owned runtime registry accessors now route through `src/extension-host/runtime-registry.ts`, and the channel, provider, tool, HTTP-route, gateway-method, CLI, and service slices now keep host-owned storage there with mirrored legacy compatibility views
+- host-owned runtime registry accessors now route through `src/extension-host/runtime-registry.ts`, and the channel, provider, tool, command, HTTP-route, gateway-method, CLI, and service slices now keep host-owned storage there with mirrored legacy compatibility views
 - service startup, stop ordering, service-context creation, and failure logging now route through `src/extension-host/service-lifecycle.ts`
 - CLI duplicate detection, registrar invocation, and async failure logging now route through `src/extension-host/cli-lifecycle.ts`
 - gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition now route through `src/extension-host/gateway-methods.ts`
@@ -118,9 +118,11 @@ What has been implemented so far:
   - tool resolution
   - service lifecycle startup
   - CLI registration
+  - command runtime entry detection
   - gateway method aggregation
   - gateway plugin HTTP route matching
-- the channel, provider, tool, HTTP-route, gateway-method, CLI, and service slices now also keep host-owned runtime-registry storage with mirrored legacy compatibility arrays and handler maps
+- plugin command execution and command-status listing now read through `src/extension-host/command-runtime.ts` instead of the legacy `src/plugins/commands.ts` implementation
+- the channel, provider, tool, command, HTTP-route, gateway-method, CLI, and service slices now also keep host-owned runtime-registry storage with mirrored legacy compatibility arrays and handler maps
 - `src/cli/plugin-registry.ts` now treats any pre-seeded runtime entry surface as already loaded, not just plugins, channels, or tools
 
 How it has been done:
@@ -130,8 +132,8 @@ How it has been done:
 - by introducing normalized static records before touching heavy runtime activation paths
 - by converting one static consumer at a time so each call site can move without forcing a loader rewrite
 - by extracting low-risk runtime registration helpers next and letting `src/plugins/registry.ts` delegate to them as a compatibility facade
-- by starting actual low-risk runtime write ownership next for channel, provider, gateway-method, HTTP-route, tool, CLI, service, command, context-engine, and hook registrations while keeping duplicate enforcement and lifecycle semantics in legacy owners where that behavior still lives
-- by keeping duplicate enforcement in legacy subsystems only where that logic has not moved yet, such as plugin commands
+- by starting actual low-risk runtime write ownership next for channel, provider, gateway-method, HTTP-route, tool, CLI, service, command, context-engine, and hook registrations while keeping lifecycle semantics in legacy owners where that behavior still lives
+- by moving plugin command duplicate enforcement, registration, matching, execution, listing, native command-spec projection, and loader reload clearing behind `src/extension-host/command-runtime.ts` while keeping `src/plugins/commands.ts` as the compatibility facade
 - by starting loader and lifecycle migration with compatibility helpers for activation and SDK alias resolution before changing discovery or policy behavior
 - by moving cache-key construction, cache reads, cache writes, and cache clearing behind host-owned helpers before changing activation-state ownership
 - by extracting lazy runtime proxy creation and alias-wired Jiti module-loader creation into host-owned helpers before broader bootstrap or lifecycle ownership changes
@@ -174,7 +176,7 @@ How it has been done:
 - by extracting provider post-selection hook lookup and invocation into a host-owned provider-model-selection helper while `src/plugins/provider-wizard.ts` remains the compatibility facade and existing command consumers continue migrating onto the host-owned surface
 - by extracting provider-id normalization into `src/agents/provider-id.ts` so provider-only host seams do not inherit the heavier agent and browser dependency graph from `src/agents/model-selection.ts`
 - by extracting model-ref parsing into `src/agents/model-ref.ts` and Google model-id normalization into `src/agents/google-model-id.ts` so provider auth and setup seams can be tested without pulling the heavier provider-loader and browser dependency graph
-- by introducing host-owned runtime-registry accessors for low-risk runtime consumers first, then moving channel, provider, tool, HTTP-route, gateway-method, CLI, and service storage into that host-owned state while keeping mirrored legacy compatibility arrays and handler maps
+- by introducing host-owned runtime-registry accessors for low-risk runtime consumers first, then moving channel, provider, tool, command, HTTP-route, gateway-method, CLI, and service storage into that host-owned state while keeping mirrored legacy compatibility arrays and handler maps
 - by tightening the CLI pre-load fast path to treat any host-known runtime entry surface as already loaded rather than only plugins, channels, or tools
 - by moving central readers first, so later lifecycle and compatibility work can land on one boundary instead of many ad hoc call sites
 - by adding focused tests for each extracted seam before widening the boundary further
@@ -222,9 +224,15 @@ Committed implementation slices so far:
 - `cc3d59d59e` `Plugins: extract provider auth application flow`
 - `e6cd834f8e` `Plugins: extract provider model selection hook`
 - `11cbe08ec6` `Plugins: add host-owned route and gateway storage`
+- `89e6b38152` `Docs: refresh runtime registry storage status`
 - `ad0c235d16` `Plugins: add host-owned CLI and service storage`
+- `d34a5aa870` `Docs: refresh runtime registry storage progress`
 - `2be54e9861` `Plugins: add host-owned tool and provider storage`
+- `235021766c` `Docs: refresh tool and provider storage status`
 - `e109d5ef1b` `Plugins: add host-owned channel storage`
+- `24fca48453` `Docs: refresh channel storage status`
+- `961015f08c` `Channels: finish message-channel host lookup`
+- `4c7f62649b` `Plugins: extract command runtime`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 

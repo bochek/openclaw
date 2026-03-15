@@ -51,7 +51,8 @@ What has been implemented:
 - plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking now route through `src/extension-host/tool-runtime.ts`
 - plugin provider projection from registry entries into runtime provider objects now route through `src/extension-host/provider-runtime.ts`
 - channel registrations now also keep host-owned runtime-registry storage with mirrored legacy compatibility views, and channel readers now consume the same host-owned boundary
-- provider and tool registrations now also keep host-owned runtime-registry storage with mirrored legacy compatibility views
+- provider, tool, and command registrations now also keep host-owned runtime-registry storage with mirrored legacy compatibility views
+- plugin command registration, matching, execution, listing, and native command-spec projection now route through `src/extension-host/command-runtime.ts` while `src/plugins/commands.ts` remains the compatibility facade
 - plugin provider discovery filtering, order grouping, and result normalization now route through `src/extension-host/provider-discovery.ts`
 - provider matching, auth-method selection, config-patch merging, and default-model application now route through `src/extension-host/provider-auth.ts`
 - provider onboarding option building, model-picker entry building, and provider-method choice resolution now route through `src/extension-host/provider-wizard.ts`
@@ -498,7 +499,7 @@ Represents operator-facing commands that bypass the agent.
 Examples today:
 
 - `extensions/phone-control/index.ts:330`
-- current plugin command registrations in `src/plugins/commands.ts:1`
+- current plugin command registrations routed through `src/extension-host/command-runtime.ts:1` with `src/plugins/commands.ts:1` kept as the compatibility facade
 
 Required descriptor metadata:
 
@@ -513,7 +514,7 @@ Behavior rule:
 
 - if a command does not accept arguments and arguments are supplied, the host should treat that invocation as a non-match and allow normal built-in or agent handling to continue
 
-This preserves current behavior in `src/plugins/commands.ts:163`.
+This preserves current behavior in `src/extension-host/command-runtime.ts:127`.
 
 These are not agent tools.
 

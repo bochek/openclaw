@@ -44,7 +44,8 @@ What has been implemented:
 - compatibility plugin-registry facade ownership now delegates through `src/extension-host/plugin-registry.ts`
 - compatibility plugin-registry policy now delegates through `src/extension-host/plugin-registry-compat.ts`
 - compatibility plugin-registry registration actions now delegate through `src/extension-host/plugin-registry-registrations.ts`
-- host-owned runtime registry accessors now delegate through `src/extension-host/runtime-registry.ts`, and the channel, provider, tool, HTTP-route, gateway-method, CLI, and service slices now keep host-owned storage there with mirrored legacy compatibility views
+- host-owned runtime registry accessors now delegate through `src/extension-host/runtime-registry.ts`, and the channel, provider, tool, command, HTTP-route, gateway-method, CLI, and service slices now keep host-owned storage there with mirrored legacy compatibility views
+- plugin command registration, matching, execution, listing, native command-spec projection, and loader reload clearing now delegate through `src/extension-host/command-runtime.ts`
 - service startup, stop ordering, service-context creation, and failure logging now delegate through `src/extension-host/service-lifecycle.ts`
 - CLI duplicate detection, registrar invocation, and async failure logging now delegate through `src/extension-host/cli-lifecycle.ts`
 - gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition now delegate through `src/extension-host/gateway-methods.ts`
@@ -131,7 +132,8 @@ How it has been implemented:
 - by extracting provider post-selection hook lookup and invocation into a host-owned provider-model-selection helper while `src/plugins/provider-wizard.ts` remains the compatibility facade and existing command consumers continue migrating onto the host-owned surface
 - by extracting provider-id normalization into `src/agents/provider-id.ts` so provider-only host seams do not inherit the heavier agent and browser dependency graph from `src/agents/model-selection.ts`
 - by extracting model-ref parsing into `src/agents/model-ref.ts` and Google model-id normalization into `src/agents/google-model-id.ts` so provider auth and setup seams can be tested without pulling the heavier provider-loader and browser dependency graph
-- by introducing host-owned runtime-registry accessors for channel, provider, tool, service, CLI, gateway-method, and HTTP-route consumers first, then moving channel, provider, tool, HTTP-route, gateway-method, CLI, and service storage into that host-owned state while keeping mirrored legacy compatibility arrays and handler maps
+- by introducing host-owned runtime-registry accessors for channel, provider, tool, service, CLI, command, gateway-method, and HTTP-route consumers first, then moving channel, provider, tool, command, HTTP-route, gateway-method, CLI, and service storage into that host-owned state while keeping mirrored legacy compatibility arrays and handler maps
+- by moving plugin command duplicate enforcement, registration, matching, execution, listing, native command-spec projection, and loader reload clearing into `src/extension-host/command-runtime.ts` while keeping the legacy command module as a compatibility facade
 - by tightening the CLI pre-load fast path to treat any host-known runtime entry surface as already loaded rather than only plugins, channels, or tools
 
 What is still pending from this spec:

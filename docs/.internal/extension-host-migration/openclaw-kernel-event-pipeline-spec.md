@@ -65,7 +65,8 @@ Relevant prerequisite work that has landed:
 - compatibility plugin-registry facade ownership now has a host-owned helper boundary in `src/extension-host/plugin-registry.ts`
 - compatibility plugin-registry policy now has a host-owned helper boundary in `src/extension-host/plugin-registry-compat.ts`
 - compatibility plugin-registry registration actions now have a host-owned helper boundary in `src/extension-host/plugin-registry-registrations.ts`
-- host-owned runtime registry accessors now have a host-owned helper boundary in `src/extension-host/runtime-registry.ts`, and the channel, provider, tool, HTTP-route, gateway-method, CLI, and service slices now keep host-owned storage there with mirrored legacy compatibility views
+- host-owned runtime registry accessors now have a host-owned helper boundary in `src/extension-host/runtime-registry.ts`, and the channel, provider, tool, command, HTTP-route, gateway-method, CLI, and service slices now keep host-owned storage there with mirrored legacy compatibility views
+- plugin command registration, matching, execution, listing, native command-spec projection, and loader reload clearing now have a host-owned helper boundary in `src/extension-host/command-runtime.ts`
 - service startup, stop ordering, service-context creation, and failure logging now have a host-owned helper boundary in `src/extension-host/service-lifecycle.ts`
 - CLI duplicate detection, registrar invocation, and async failure logging now have a host-owned helper boundary in `src/extension-host/cli-lifecycle.ts`
 - gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition now have a host-owned helper boundary in `src/extension-host/gateway-methods.ts`
@@ -80,7 +81,7 @@ Relevant prerequisite work that has landed:
 Why this matters for this spec:
 
 - event work should land on top of a host-owned boundary and normalized contribution model rather than on top of more plugin-era runtime seams
-- the current implementation has deliberately not started canonical bridge or stage work before those earlier boundaries were in place, including the first loader-runtime, record-state, discovery-policy, activation-policy, finalization-policy, low-risk registry-write, hook-compat, plugin-api, plugin-registry, plugin-registry-compat, plugin-registry-registrations, runtime-registry storage and accessors, service-lifecycle, CLI-lifecycle, gateway-methods, tool-runtime, provider-runtime, provider-discovery, provider-auth, provider-wizard, provider-auth-flow, and provider-model-selection seams
+- the current implementation has deliberately not started canonical bridge or stage work before those earlier boundaries were in place, including the first loader-runtime, record-state, discovery-policy, activation-policy, finalization-policy, low-risk registry-write, hook-compat, plugin-api, plugin-registry, plugin-registry-compat, plugin-registry-registrations, runtime-registry storage and accessors, command-runtime, service-lifecycle, CLI-lifecycle, gateway-methods, tool-runtime, provider-runtime, provider-discovery, provider-auth, provider-wizard, provider-auth-flow, and provider-model-selection seams
 
 ## Design Goals
 
