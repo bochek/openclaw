@@ -1,5 +1,6 @@
 import { rm } from "node:fs/promises";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { buildPluginBindingApprovalCustomId } from "../../../src/plugins/conversation-binding.js";
 import {
   clearPluginInteractiveHandlers,
   registerPluginInteractiveHandler,
@@ -273,6 +274,97 @@ describe("createTelegramBot", () => {
     // The callback should be processed (not silently blocked)
     expect(editMessageTextSpy).toHaveBeenCalledTimes(1);
     expect(answerCallbackQuerySpy).toHaveBeenCalledWith("cbq-group-1");
+  });
+
+  it("passes false auth to plugin Telegram callbacks for group users outside the allowlist", async () => {
+    onSpy.mockClear();
+    replySpy.mockClear();
+    const seenAuth = vi.fn();
+    registerPluginInteractiveHandler("codex-plugin", {
+      channel: "telegram",
+      namespace: "codex",
+      handler: async ({
+        auth,
+        conversationId,
+        threadId,
+      }: PluginInteractiveTelegramHandlerContext) => {
+        seenAuth({ isAuthorizedSender: auth.isAuthorizedSender, conversationId, threadId });
+        return { handled: true };
+      },
+    });
+
+    createTelegramBot({
+      token: "tok",
+      config: {
+        channels: {
+          telegram: {
+            dmPolicy: "open",
+            allowFrom: [],
+            capabilities: { inlineButtons: "group" },
+            groupPolicy: "open",
+            groups: { "*": { requireMention: false } },
+          },
+        },
+      },
+    });
+    const callbackHandler = getOnHandler("callback_query") as (
+      ctx: Record<string, unknown>,
+    ) => Promise<void>;
+
+    await callbackHandler({
+      callbackQuery: {
+        id: "cbq-plugin-auth-1",
+        data: "codex:resume:thread-1",
+        from: { id: 42, first_name: "Ada", username: "ada_bot" },
+        message: {
+          chat: { id: -100999, type: "supergroup", title: "Test Group" },
+          date: 1736380800,
+          message_id: 20,
+        },
+      },
+      me: { username: "openclaw_bot" },
+      getFile: async () => ({ download: async () => new Uint8Array() }),
+    });
+
+    expect(seenAuth).toHaveBeenCalledWith({
+      isAuthorizedSender: false,
+      conversationId: "-100999",
+      threadId: undefined,
+    });
+  });
+
+  it("keeps plugin bind approval buttons when the approval is already expired", async () => {
+    onSpy.mockClear();
+    editMessageReplyMarkupSpy.mockClear();
+    replySpy.mockClear();
+
+    createTelegramBot({ token: "tok" });
+    const callbackHandler = getOnHandler("callback_query") as (
+      ctx: Record<string, unknown>,
+    ) => Promise<void>;
+
+    await callbackHandler({
+      callbackQuery: {
+        id: "cbq-pluginbind-expired",
+        data: buildPluginBindingApprovalCustomId("missing-approval", "allow-once"),
+        from: { id: 9, first_name: "Ada", username: "ada_bot" },
+        message: {
+          chat: { id: 1234, type: "private" },
+          date: 1736380800,
+          message_id: 24,
+          text: "Plugin bind approval",
+        },
+      },
+      me: { username: "openclaw_bot" },
+      getFile: async () => ({ download: async () => new Uint8Array() }),
+    });
+
+    expect(editMessageReplyMarkupSpy).not.toHaveBeenCalled();
+    expect(sendMessageSpy).toHaveBeenCalledWith(
+      1234,
+      "That plugin bind approval expired. Retry the bind command.",
+      undefined,
+    );
   });
 
   it("clears approval buttons without re-editing callback message text", async () => {
