@@ -106,7 +106,7 @@ function resolveToolNameForPermission(params: RequestPermissionRequest): string 
   const fromTitle = parseToolNameFromTitle(toolCall?.title);
   const metaName = fromMeta ? normalizeToolName(fromMeta) : undefined;
   const rawInputName = fromRawInput ? normalizeToolName(fromRawInput) : undefined;
-  const titleName = fromTitle ? normalizeToolName(fromTitle) : undefined;
+  const titleName = fromTitle;
   if ((fromMeta && !metaName) || (fromRawInput && !rawInputName)) {
     return undefined;
   }
@@ -119,7 +119,7 @@ function resolveToolNameForPermission(params: RequestPermissionRequest): string 
   if (rawInputName && titleName && rawInputName !== titleName) {
     return undefined;
   }
-  return metaName ?? titleName;
+  return metaName ?? titleName ?? rawInputName;
 }
 
 function extractPathFromToolTitle(
