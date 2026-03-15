@@ -251,6 +251,7 @@ Committed implementation slices so far:
 - `ed5941ed7e` `TTS: extract payload planning`
 - `454e44242f` `TTS: extract API composition`
 - `6240fb31b5` `TTS: adopt runtime backend catalog`
+- `cfb6779ac2` `Runtime: adopt backend catalog consumers`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
