@@ -14,6 +14,10 @@ enum CronCustomSessionTarget: Codable, Equatable {
     case predefined(CronSessionTarget)
     case session(id: String)
 
+    static let main: CronCustomSessionTarget = .predefined(.main)
+    static let isolated: CronCustomSessionTarget = .predefined(.isolated)
+    static let current: CronCustomSessionTarget = .predefined(.current)
+
     var rawValue: String {
         switch self {
         case .predefined(let target):
