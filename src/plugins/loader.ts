@@ -1,12 +1,40 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
 import type { OpenClawConfig } from "../config/config.js";
 import type { PluginInstallRecord } from "../config/types.plugins.js";
+import { activateExtensionHostRegistry } from "../extension-host/activation.js";
+import {
+  listPluginSdkAliasCandidates,
+  listPluginSdkExportedSubpaths,
+  resolvePluginSdkAlias,
+  resolvePluginSdkAliasCandidateOrder,
+  resolvePluginSdkAliasFile,
+  resolvePluginSdkScopedAliasMap,
+} from "../extension-host/loader-compat.js";
+import {
+  buildExtensionHostProvenanceIndex,
+  compareExtensionHostDuplicateCandidateOrder,
+  createExtensionHostPluginRecord,
+  pushExtensionHostDiagnostics,
+  recordExtensionHostPluginError,
+  warnAboutUntrackedLoadedExtensions,
+  warnWhenExtensionAllowlistIsOpen,
+} from "../extension-host/loader-policy.js";
+import {
+  applyExtensionHostDefinitionToRecord,
+  resolveExtensionHostEarlyMemoryDecision,
+  resolveExtensionHostMemoryDecision,
+  resolveExtensionHostModuleExport,
+  validateExtensionHostConfig,
+} from "../extension-host/loader-runtime.js";
+import {
+  appendExtensionHostPluginRecord,
+  setExtensionHostPluginRecordDisabled,
+  setExtensionHostPluginRecordError,
+} from "../extension-host/loader-state.js";
 import type { GatewayRequestHandler } from "../gateway/server-methods/types.js";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
-import { resolveOpenClawPackageRootSync } from "../infra/openclaw-root.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveUserPath } from "../utils.js";
 import { clearPluginCommands } from "./commands.js";
@@ -14,17 +42,14 @@ import {
   applyTestPluginDefaults,
   normalizePluginsConfig,
   resolveEffectiveEnableState,
-  resolveMemorySlotDecision,
   type NormalizedPluginsConfig,
 } from "./config-state.js";
 import { discoverOpenClawPlugins } from "./discovery.js";
 import { initializeGlobalHookRunner } from "./hook-runner-global.js";
 import { clearPluginInteractiveHandlers } from "./interactive.js";
 import { loadPluginManifestRegistry } from "./manifest-registry.js";
-import { isPathInside, safeStatSync } from "./path-safety.js";
 import { createPluginRegistry, type PluginRecord, type PluginRegistry } from "./registry.js";
 import { resolvePluginCacheInputs } from "./roots.js";
-import { setActivePluginRegistry } from "./runtime.js";
 import { createPluginRuntime, type CreatePluginRuntimeOptions } from "./runtime/index.js";
 import type { PluginRuntime } from "./runtime/types.js";
 import { validateJsonSchemaValue } from "./schema-validator.js";
@@ -657,7 +682,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
   if (cacheEnabled) {
     const cached = getCachedPluginRegistry(cacheKey);
     if (cached) {
-      activatePluginRegistry(cached, cacheKey);
+      activateExtensionHostRegistry(cached, cacheKey);
       return cached;
     }
   }
@@ -719,19 +744,20 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     candidates: discovery.candidates,
     diagnostics: discovery.diagnostics,
   });
-  pushDiagnostics(registry.diagnostics, manifestRegistry.diagnostics);
-  warnWhenAllowlistIsOpen({
+  pushExtensionHostDiagnostics(registry.diagnostics, manifestRegistry.diagnostics);
+  warnWhenExtensionAllowlistIsOpen({
     logger,
     pluginsEnabled: normalized.enabled,
     allow: normalized.allow,
     warningCacheKey: cacheKey,
+    warningCache: openAllowlistWarningCache,
     discoverablePlugins: manifestRegistry.plugins.map((plugin) => ({
       id: plugin.id,
       source: plugin.source,
       origin: plugin.origin,
     })),
   });
-  const provenance = buildProvenanceIndex({
+  const provenance = buildExtensionHostProvenanceIndex({
     config: cfg,
     normalizedLoadPaths: normalized.loadPaths,
     env,
@@ -766,7 +792,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     manifestRegistry.plugins.map((record) => [record.rootDir, record]),
   );
   const orderedCandidates = [...discovery.candidates].toSorted((left, right) => {
-    return compareDuplicateCandidateOrder({
+    return compareExtensionHostDuplicateCandidateOrder({
       left,
       right,
       manifestByRoot,
@@ -788,7 +814,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     const pluginId = manifestRecord.id;
     const existingOrigin = seenIds.get(pluginId);
     if (existingOrigin) {
-      const record = createPluginRecord({
+      const record = createExtensionHostPluginRecord({
         id: pluginId,
         name: manifestRecord.name ?? pluginId,
         description: manifestRecord.description,
@@ -803,9 +829,8 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
         enabled: false,
         configSchema: Boolean(manifestRecord.configSchema),
       });
-      record.status = "disabled";
-      record.error = `overridden by ${existingOrigin} plugin`;
-      registry.plugins.push(record);
+      setExtensionHostPluginRecordDisabled(record, `overridden by ${existingOrigin} plugin`);
+      appendExtensionHostPluginRecord({ registry, record });
       continue;
     }
 
@@ -816,7 +841,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       rootConfig: cfg,
     });
     const entry = normalized.entries[pluginId];
-    const record = createPluginRecord({
+    const record = createExtensionHostPluginRecord({
       id: pluginId,
       name: manifestRecord.name ?? pluginId,
       description: manifestRecord.description,
@@ -835,10 +860,14 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     record.configUiHints = manifestRecord.configUiHints;
     record.configJsonSchema = manifestRecord.configSchema;
     const pushPluginLoadError = (message: string) => {
-      record.status = "error";
-      record.error = message;
-      registry.plugins.push(record);
-      seenIds.set(pluginId, candidate.origin);
+      setExtensionHostPluginRecordError(record, message);
+      appendExtensionHostPluginRecord({
+        registry,
+        record,
+        seenIds,
+        pluginId,
+        origin: candidate.origin,
+      });
       registry.diagnostics.push({
         level: "error",
         pluginId: record.id,
@@ -848,10 +877,14 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     };
 
     if (!enableState.enabled) {
-      record.status = "disabled";
-      record.error = enableState.reason;
-      registry.plugins.push(record);
-      seenIds.set(pluginId, candidate.origin);
+      setExtensionHostPluginRecordDisabled(record, enableState.reason);
+      appendExtensionHostPluginRecord({
+        registry,
+        record,
+        seenIds,
+        pluginId,
+        origin: candidate.origin,
+      });
       continue;
     }
 
@@ -881,21 +914,23 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
 
     // Fast-path bundled memory plugins that are guaranteed disabled by slot policy.
     // This avoids opening/importing heavy memory plugin modules that will never register.
-    if (candidate.origin === "bundled" && manifestRecord.kind === "memory") {
-      const earlyMemoryDecision = resolveMemorySlotDecision({
-        id: record.id,
-        kind: "memory",
-        slot: memorySlot,
-        selectedId: selectedMemoryPluginId,
+    const earlyMemoryDecision = resolveExtensionHostEarlyMemoryDecision({
+      origin: candidate.origin,
+      manifestKind: manifestRecord.kind,
+      recordId: record.id,
+      memorySlot,
+      selectedMemoryPluginId,
+    });
+    if (!earlyMemoryDecision.enabled) {
+      setExtensionHostPluginRecordDisabled(record, earlyMemoryDecision.reason);
+      appendExtensionHostPluginRecord({
+        registry,
+        record,
+        seenIds,
+        pluginId,
+        origin: candidate.origin,
       });
-      if (!earlyMemoryDecision.enabled) {
-        record.enabled = false;
-        record.status = "disabled";
-        record.error = earlyMemoryDecision.reason;
-        registry.plugins.push(record);
-        seenIds.set(pluginId, candidate.origin);
-        continue;
-      }
+      continue;
     }
 
     if (!manifestRecord.configSchema) {
@@ -922,7 +957,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     try {
       mod = getJiti()(safeSource) as OpenClawPluginModule;
     } catch (err) {
-      recordPluginError({
+      recordExtensionHostPluginError({
         logger,
         registry,
         record,
@@ -936,49 +971,40 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       continue;
     }
 
-    const resolved = resolvePluginModuleExport(mod);
+    const resolved = resolveExtensionHostModuleExport(mod);
     const definition = resolved.definition;
     const register = resolved.register;
 
-    if (definition?.id && definition.id !== record.id) {
-      pushPluginLoadError(
-        `plugin id mismatch (config uses "${record.id}", export uses "${definition.id}")`,
-      );
+    const definitionResult = applyExtensionHostDefinitionToRecord({
+      record,
+      definition,
+      diagnostics: registry.diagnostics,
+    });
+    if (!definitionResult.ok) {
+      pushPluginLoadError(definitionResult.message);
       continue;
     }
-
-    record.name = definition?.name ?? record.name;
-    record.description = definition?.description ?? record.description;
-    record.version = definition?.version ?? record.version;
-    const manifestKind = record.kind as string | undefined;
-    const exportKind = definition?.kind as string | undefined;
-    if (manifestKind && exportKind && exportKind !== manifestKind) {
-      registry.diagnostics.push({
-        level: "warn",
-        pluginId: record.id,
-        source: record.source,
-        message: `plugin kind mismatch (manifest uses "${manifestKind}", export uses "${exportKind}")`,
-      });
-    }
-    record.kind = definition?.kind ?? record.kind;
 
     if (record.kind === "memory" && memorySlot === record.id) {
       memorySlotMatched = true;
     }
 
-    const memoryDecision = resolveMemorySlotDecision({
-      id: record.id,
-      kind: record.kind,
-      slot: memorySlot,
-      selectedId: selectedMemoryPluginId,
+    const memoryDecision = resolveExtensionHostMemoryDecision({
+      recordId: record.id,
+      recordKind: record.kind,
+      memorySlot,
+      selectedMemoryPluginId,
     });
 
     if (!memoryDecision.enabled) {
-      record.enabled = false;
-      record.status = "disabled";
-      record.error = memoryDecision.reason;
-      registry.plugins.push(record);
-      seenIds.set(pluginId, candidate.origin);
+      setExtensionHostPluginRecordDisabled(record, memoryDecision.reason);
+      appendExtensionHostPluginRecord({
+        registry,
+        record,
+        seenIds,
+        pluginId,
+        origin: candidate.origin,
+      });
       continue;
     }
 
@@ -986,7 +1012,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       selectedMemoryPluginId = record.id;
     }
 
-    const validatedConfig = validatePluginConfig({
+    const validatedConfig = validateExtensionHostConfig({
       schema: manifestRecord.configSchema,
       cacheKey: manifestRecord.schemaCacheKey,
       value: entry?.config,
@@ -999,8 +1025,13 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     }
 
     if (validateOnly) {
-      registry.plugins.push(record);
-      seenIds.set(pluginId, candidate.origin);
+      appendExtensionHostPluginRecord({
+        registry,
+        record,
+        seenIds,
+        pluginId,
+        origin: candidate.origin,
+      });
       continue;
     }
 
@@ -1026,10 +1057,15 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
           message: "plugin register returned a promise; async registration is ignored",
         });
       }
-      registry.plugins.push(record);
-      seenIds.set(pluginId, candidate.origin);
+      appendExtensionHostPluginRecord({
+        registry,
+        record,
+        seenIds,
+        pluginId,
+        origin: candidate.origin,
+      });
     } catch (err) {
-      recordPluginError({
+      recordExtensionHostPluginError({
         logger,
         registry,
         record,
@@ -1050,7 +1086,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     });
   }
 
-  warnAboutUntrackedLoadedPlugins({
+  warnAboutUntrackedLoadedExtensions({
     registry,
     provenance,
     logger,
@@ -1060,7 +1096,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
   if (cacheEnabled) {
     setCachedPluginRegistry(cacheKey, registry);
   }
-  activatePluginRegistry(registry, cacheKey);
+  activateExtensionHostRegistry(registry, cacheKey);
   return registry;
 }
 
