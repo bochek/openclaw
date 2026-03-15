@@ -12,7 +12,6 @@ import type {
 import { logVerbose, shouldLogVerbose } from "../globals.js";
 import { MediaAttachmentCache, selectAttachments } from "../media-understanding/attachments.js";
 import { isMediaUnderstandingSkipError } from "../media-understanding/errors.js";
-import { runCliEntry, runProviderEntry } from "../media-understanding/runner.entries.js";
 import type {
   MediaAttachment,
   MediaUnderstandingCapability,
@@ -24,6 +23,10 @@ import type {
 import { resolveAutoEntries, type ActiveMediaModel } from "./media-runtime-auto.js";
 import { resolveModelEntries, resolveScopeDecision } from "./media-runtime-config.js";
 import { buildModelDecision, formatDecisionSummary } from "./media-runtime-decision.js";
+import {
+  runExtensionHostMediaCliEntry,
+  runExtensionHostMediaProviderEntry,
+} from "./media-runtime-entrypoints.js";
 
 type ProviderRegistry = Map<string, MediaUnderstandingProvider>;
 
@@ -53,7 +56,7 @@ async function runAttachmentEntries(params: {
     try {
       const result =
         entryType === "cli"
-          ? await runCliEntry({
+          ? await runExtensionHostMediaCliEntry({
               capability,
               entry,
               cfg: params.cfg,
@@ -62,7 +65,7 @@ async function runAttachmentEntries(params: {
               cache: params.cache,
               config: params.config,
             })
-          : await runProviderEntry({
+          : await runExtensionHostMediaProviderEntry({
               capability,
               entry,
               cfg: params.cfg,
