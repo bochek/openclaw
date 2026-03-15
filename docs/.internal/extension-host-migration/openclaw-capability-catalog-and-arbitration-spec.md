@@ -64,6 +64,7 @@ What has been implemented:
 - context-engine registration and runtime resolution now route through `src/extension-host/context-engine-runtime.ts` ahead of broader catalog-backed ownership
 - exclusive-slot selection and default-slot resolution now route through `src/extension-host/slot-arbitration.ts` ahead of broader catalog-backed arbitration ownership
 - ACP backend registration and runtime resolution now route through `src/extension-host/acp-runtime-backend-registry.ts` ahead of broader catalog-backed backend ownership
+- media-provider normalization, built-in registry construction, override merging, and runtime lookup now route through `src/extension-host/media-runtime-registry.ts` while `src/media-understanding/providers/index.ts` remains the compatibility facade
 - legacy internal-hook bridging and typed prompt-injection compatibility policy now route through `src/extension-host/hook-compat.ts` ahead of broader catalog-backed registry ownership
 - compatibility `OpenClawPluginApi` composition and logger shaping now route through `src/extension-host/plugin-api.ts` ahead of broader catalog-backed registry ownership
 - compatibility plugin-registry facade ownership now routes through `src/extension-host/plugin-registry.ts` ahead of broader catalog-backed registry ownership
@@ -615,7 +616,7 @@ Capability selection must emit structured events for:
 - channel capabilities from `extensions/discord/src/channel.ts:74`, `extensions/slack/src/channel.ts:107`, and `extensions/telegram/src/channel.ts:120` collapse into canonical messaging action families
 - diffs becomes an agent-visible tool family plus a host-managed route surface from `extensions/diffs/index.ts:27`
 - provider integration from `extensions/google-gemini-cli-auth/index.ts:24` becomes operator-visible setup and auth capabilities
-- embedding, media-understanding, and TTS provider overrides should become runtime-internal subsystem registries rather than remaining part of a universal plugin-provider API
+- embedding and TTS provider overrides, plus broader media-runtime fallback ownership, should become runtime-internal subsystem registries rather than remaining part of a universal plugin-provider API
 - extension-backed web search should become an agent-visible tool family unless it is only a runtime-internal backend feeding another host-owned surface
 - voice-call from `extensions/voice-call/index.ts:230` becomes a mix of agent-visible actions, runtime providers, and operator surfaces
 - ACP backend registration from `extensions/acpx/src/service.ts:55` becomes runtime-internal backend arbitration
@@ -632,7 +633,7 @@ Capability selection must emit structured events for:
 6. Migrate the existing provider auth and setup selection path onto host-owned setup catalogs and canonical provider metadata.
 7. Add provider selection logic for the broader messaging action family before migrating all channels.
 8. Add runtime-backend and context-engine arbitration using the same rank and slot model where appropriate.
-9. Add host-owned embedding, media-understanding, and TTS subsystem registries with explicit capability routing and built-in fallback policy.
+9. Finish the media runtime-registry migration and add host-owned embedding and TTS subsystem registries with explicit capability routing and built-in fallback policy.
 10. Decide whether extension-backed search needs only canonical tool publication or also a host-owned runtime registry for internal search backends, and keep those two cases distinct.
 11. Ensure lightweight setup catalogs can be built from static descriptors alone.
 12. Add a reviewed core registry for canonical action families and document how new ids are introduced.

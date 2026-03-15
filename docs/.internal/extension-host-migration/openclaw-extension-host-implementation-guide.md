@@ -102,6 +102,7 @@ What has been implemented so far:
 - plugin provider projection from registry entries into runtime provider objects now routes through `src/extension-host/provider-runtime.ts`
 - plugin provider discovery filtering, order grouping, and result normalization now route through `src/extension-host/provider-discovery.ts`
 - provider matching, auth-method selection, config-patch merging, and default-model application now route through `src/extension-host/provider-auth.ts`
+- media-provider normalization, built-in registry construction, override merging, and runtime lookup now route through `src/extension-host/media-runtime-registry.ts` while `src/media-understanding/providers/index.ts` remains the compatibility facade
 - provider onboarding option building, model-picker entry building, and provider-method choice resolution now route through `src/extension-host/provider-wizard.ts`
 - loaded-provider auth application, plugin-enable gating, auth-method execution, and post-auth default-model handling now route through `src/extension-host/provider-auth-flow.ts`
 - provider post-selection hook lookup and invocation now route through `src/extension-host/provider-model-selection.ts`
@@ -237,6 +238,9 @@ Committed implementation slices so far:
 - `961015f08c` `Channels: finish message-channel host lookup`
 - `4c7f62649b` `Plugins: extract command runtime`
 - `17b7f6a3e4` `Context: extract extension host engine runtime`
+- `871086537b` `Plugins: extract slot arbitration`
+- `b7868d06ba` `ACP: extract runtime backend registry`
+- `e592f60fa7` `Media: extract runtime provider registry`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
@@ -246,7 +250,7 @@ What is still missing for these phases:
 - broader lifecycle ownership beyond the loader state machine, service-lifecycle boundary, CLI-lifecycle boundary, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes, remaining policy gate ownership, and broad host-owned registries described for Phase 2
 - minimal SDK compatibility work beyond preserving current behavior indirectly through existing loading
 - host-owned conversation binding, interaction routing, ingress claim, and generic interactive control surfaces
-- host-owned subsystem runtime registries for embeddings, media understanding, and TTS
+- host-owned subsystem runtime registries for embeddings and TTS, plus broader media-runtime fallback ownership
 - explicit support for extension-backed search, with a generic split between agent-visible tool publication and optional runtime-internal search backends
 - any pilot migration, event pipeline, canonical catalog, or arbitration implementation
 
@@ -256,7 +260,7 @@ Recent plan refinements:
 - it now explicitly treats interactive callback routing, namespace ownership, dedupe, and fallback behavior as first-class migration surfaces
 - it now explicitly treats inbound claim as a canonical ingress-stage concern rather than a permanent plugin-era hook shape
 - it now explicitly treats Telegram and Discord as the first validated rollout targets for interactive control surfaces while keeping the underlying contracts generic, host-owned, and kernel-agnostic
-- it now explicitly treats embeddings, media understanding, and TTS as host-owned subsystem runtimes with capability routing, typed request envelopes, provider-id normalization, and fallback policy
+- it now explicitly treats embeddings and TTS as host-owned subsystem runtimes and media understanding as an in-progress host-owned media runtime, all with capability routing, typed request envelopes, provider-id normalization, and fallback policy
 - it now explicitly rejects widening the legacy `registerProvider(...)` or `ProviderPlugin` surface into a universal runtime API while retaining capability routing, typed request envelopes, provider-id normalization, and fallback behavior where those are part of the target model
 - it now explicitly treats extension-backed search as either a canonical tool contribution or a host-owned runtime backend depending on whether the search surface is agent-visible
 
