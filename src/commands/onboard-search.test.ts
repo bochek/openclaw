@@ -31,7 +31,7 @@ vi.mock("./onboarding/plugin-install.js", () => ({
   reloadOnboardingPluginRegistry,
 }));
 
-import { setupSearch } from "./onboard-search.js";
+import { configureSearchProviderSelection, setupSearch } from "./onboard-search.js";
 
 const runtime: RuntimeEnv = {
   log: vi.fn(),
@@ -550,6 +550,93 @@ describe("setupSearch", () => {
         ]),
       }),
     );
+  });
+
+  it("reopens config when selecting an already configured provider in configure flow", async () => {
+    loadOpenClawPlugins.mockReturnValue({
+      searchProviders: [
+        {
+          pluginId: "tavily-search",
+          provider: {
+            id: "tavily",
+            name: "Tavily Search",
+            description: "Search the web using Tavily.",
+            setup: {
+              install: {
+                npmSpec: "@openclaw/tavily-search",
+              },
+            },
+            search: async () => ({ content: "ok" }),
+          },
+        },
+      ],
+      plugins: [
+        {
+          id: "tavily-search",
+          name: "Tavily Search",
+          description: "Search the web using Tavily.",
+          origin: "bundled",
+          source: "/tmp/bundled/tavily-search",
+          configJsonSchema: {
+            type: "object",
+            required: ["apiKey"],
+            properties: {
+              apiKey: { type: "string", minLength: 1 },
+            },
+          },
+          configUiHints: {
+            apiKey: {
+              label: "Tavily API key",
+              sensitive: true,
+              placeholder: "tvly-...",
+            },
+          },
+        },
+      ],
+      typedHooks: [],
+    });
+
+    const cfg: OpenClawConfig = {
+      tools: {
+        web: {
+          search: {
+            provider: "tavily",
+            enabled: true,
+          },
+        },
+      },
+      plugins: {
+        entries: {
+          "tavily-search": {
+            config: {
+              apiKey: "tvly-old",
+            },
+          },
+        },
+      },
+    };
+    const { prompter } = createPrompter({ textValue: "tvly-new" });
+
+    const result = await configureSearchProviderSelection(
+      cfg,
+      "tavily",
+      prompter,
+      "configure-provider",
+    );
+
+    expect((prompter.text as ReturnType<typeof vi.fn>).mock.calls).toEqual(
+      expect.arrayContaining([
+        [
+          expect.objectContaining({
+            message: "Tavily API key",
+          }),
+        ],
+      ]),
+    );
+    expect(result.plugins?.entries?.["tavily-search"]?.config).toEqual({
+      apiKey: "tvly-new",
+    });
+    expect(result.tools?.web?.search?.provider).toBe("tavily");
   });
 
   it("sets provider and key for perplexity", async () => {

@@ -1017,7 +1017,7 @@ export async function configureSearchProviderSelection(
       });
       return nextConfig;
     }
-    if (selectedEntry.configured) {
+    if (selectedEntry.configured && intent === "switch-active") {
       const result = preserveSearchProviderIntent(config, next, intent, selectedEntry.value);
       await runAfterSearchProviderHooks({
         hookRunner,
