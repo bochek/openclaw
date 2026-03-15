@@ -44,6 +44,7 @@ What has been implemented:
 - compatibility `OpenClawPluginApi` composition and logger shaping now route through `src/extension-host/plugin-api.ts`
 - compatibility plugin-registry facade ownership now routes through `src/extension-host/plugin-registry.ts`
 - compatibility plugin-registry policy now routes through `src/extension-host/plugin-registry-compat.ts`
+- compatibility plugin-registry registration actions now route through `src/extension-host/plugin-registry-registrations.ts`
 - plugin SDK alias resolution now routes through `src/extension-host/loader-compat.ts`
 - loader alias-wired module loader creation now routes through `src/extension-host/loader-module-loader.ts`
 - loader cache key construction and registry cache control now route through `src/extension-host/loader-cache.ts`
@@ -96,6 +97,7 @@ How it has been implemented:
 - by extracting compatibility `OpenClawPluginApi` composition and logger shaping into a host-owned plugin-api helper while keeping the concrete registration callbacks in the legacy registry surface
 - by extracting the remaining compatibility plugin-registry facade into a host-owned helper so `src/plugins/registry.ts` becomes a thin wrapper instead of the real owner
 - by extracting provider normalization, command duplicate enforcement, and registry-local diagnostic shaping into a host-owned registry-compat helper while leaving the underlying provider-validation and plugin-command subsystems unchanged
+- by extracting low-risk registry registration actions into a host-owned registry-registrations helper so the compatibility facade composes host-owned actions instead of implementing them inline
 
 What remains pending:
 
