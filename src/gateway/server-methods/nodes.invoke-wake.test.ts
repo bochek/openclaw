@@ -518,6 +518,63 @@ describe("node.invoke APNs wake path", () => {
     });
   });
 
+  it("drops queued actions that are no longer allowed at pull time", async () => {
+    mocks.loadApnsRegistration.mockResolvedValue(null);
+    mocks.resolveNodeCommandAllowlist.mockReturnValue(new Set(["canvas.navigate"]));
+    mocks.isNodeCommandAllowed.mockImplementation(
+      ({
+        command,
+        declaredCommands,
+        allowlist,
+      }: {
+        command: string;
+        declaredCommands: string[];
+        allowlist: Set<string>;
+      }) => {
+        if (!allowlist.has(command)) {
+          return { ok: false, reason: "command not allowlisted" };
+        }
+        if (!declaredCommands.includes(command)) {
+          return { ok: false, reason: "command not declared by node" };
+        }
+        return { ok: true };
+      },
+    );
+
+    const nodeRegistry = {
+      get: vi.fn(() => ({
+        nodeId: "ios-node-policy",
+        commands: ["camera.snap", "canvas.navigate"],
+        platform: "iOS 26.4.0",
+      })),
+      invoke: vi.fn().mockResolvedValue({
+        ok: false,
+        error: {
+          code: "NODE_BACKGROUND_UNAVAILABLE",
+          message: "NODE_BACKGROUND_UNAVAILABLE: canvas/camera/screen commands require foreground",
+        },
+      }),
+    };
+
+    await invokeNode({
+      nodeRegistry,
+      requestParams: {
+        nodeId: "ios-node-policy",
+        command: "camera.snap",
+        params: { facing: "front" },
+        idempotencyKey: "idem-policy",
+      },
+    });
+
+    const pullRespond = await pullPending("ios-node-policy");
+    const pullCall = pullRespond.mock.calls[0] as RespondCall | undefined;
+    expect(pullCall?.[0]).toBe(true);
+    expect(pullCall?.[1]).toMatchObject({
+      nodeId: "ios-node-policy",
+      actions: [],
+    });
+  });
+
   it("dedupes queued foreground actions by idempotency key", async () => {
     mocks.loadApnsRegistration.mockResolvedValue(null);
 
