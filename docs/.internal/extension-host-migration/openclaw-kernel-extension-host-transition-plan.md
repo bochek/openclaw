@@ -74,6 +74,7 @@ What has landed:
 - legacy internal-hook bridging and typed prompt-injection compatibility policy now route through `src/extension-host/hook-compat.ts`
 - compatibility `OpenClawPluginApi` composition and logger shaping now route through `src/extension-host/plugin-api.ts`
 - compatibility plugin-registry facade ownership now routes through `src/extension-host/plugin-registry.ts`
+- compatibility plugin-registry policy now routes through `src/extension-host/plugin-registry-compat.ts`
 - several existing consumers now read host-owned normalized data instead of plugin-era manifest or runtime state directly:
   - channel and dock lookup surfaces
   - message-channel normalization
@@ -123,6 +124,7 @@ How it was done:
 - by extracting legacy internal-hook bridging and typed prompt-injection compatibility policy into a host-owned hook-compat helper while leaving actual hook execution ownership unchanged
 - by extracting compatibility `OpenClawPluginApi` composition and logger shaping into a host-owned plugin-api helper while keeping the concrete registration callbacks in the legacy registry surface
 - by extracting the remaining compatibility plugin-registry facade into a host-owned helper so `src/plugins/registry.ts` becomes a thin wrapper instead of the real owner
+- by extracting provider normalization, command duplicate enforcement, and registry-local diagnostic shaping into a host-owned registry-compat helper while leaving the underlying provider-validation and plugin-command subsystems unchanged
 - by moving static and lookup-heavy consumers first, where the ownership boundary matters but runtime risk is lower
 
 Committed implementation slices so far:
@@ -156,6 +158,7 @@ Committed implementation slices so far:
 - `b407d7f476` `Plugins: extract hook compatibility`
 - `a1e1dcc01a` `Plugins: extract plugin api facade`
 - `0e190d64d4` `Plugins: extract registry compatibility facade`
+- `944d787df1` `Plugins: extract registry compatibility policy`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
