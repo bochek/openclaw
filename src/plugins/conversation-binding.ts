@@ -100,6 +100,8 @@ type PluginBindingResolveResult =
     };
 
 const pendingRequests = new Map<string, PendingPluginBindingRequest>();
+const PENDING_REQUEST_TTL_MS = 30 * 60_000;
+const MAX_PENDING_REQUESTS = 512;
 
 type PluginBindingGlobalState = {
   fallbackNoticeBindingIds: Set<string>;
@@ -117,6 +119,21 @@ function getPluginBindingGlobalState(): PluginBindingGlobalState {
   return (globalStore[pluginBindingGlobalStateKey] ??= {
     fallbackNoticeBindingIds: new Set<string>(),
   });
+}
+
+function prunePendingRequests(now = Date.now()): void {
+  for (const [id, request] of pendingRequests.entries()) {
+    if (now - request.requestedAt >= PENDING_REQUEST_TTL_MS) {
+      pendingRequests.delete(id);
+    }
+  }
+  while (pendingRequests.size > MAX_PENDING_REQUESTS) {
+    const oldest = pendingRequests.entries().next().value;
+    if (!oldest) {
+      break;
+    }
+    pendingRequests.delete(oldest[0]);
+  }
 }
 
 class PluginBindingApprovalButton extends Button {
@@ -622,6 +639,16 @@ export async function requestPluginConversationBinding(params: {
 }): Promise<PluginConversationBindingRequestResult> {
   const conversation = normalizeConversation(params.conversation);
   const ref = toConversationRef(conversation);
+  const capabilities = getSessionBindingService().getCapabilities({
+    channel: ref.channel,
+    accountId: ref.accountId,
+  });
+  if (!capabilities.bindSupported) {
+    return {
+      status: "error",
+      message: "This channel does not support plugin conversation binding.",
+    };
+  }
   const existing = getSessionBindingService().resolveByConversation(ref);
   const existingPluginBinding = toPluginConversationBinding(existing);
   const existingLegacyPluginBinding = isLegacyPluginBindingRecord({
@@ -687,6 +714,7 @@ export async function requestPluginConversationBinding(params: {
     return { status: "bound", binding: bound };
   }
 
+  prunePendingRequests();
   const request: PendingPluginBindingRequest = {
     id: createApprovalRequestId(),
     pluginId: params.pluginId,
@@ -752,6 +780,7 @@ export async function resolvePluginConversationBindingApproval(params: {
   decision: PluginBindingApprovalDecision;
   senderId?: string;
 }): Promise<PluginBindingResolveResult> {
+  prunePendingRequests();
   const request = pendingRequests.get(params.approvalId);
   if (!request) {
     return { status: "expired" };
