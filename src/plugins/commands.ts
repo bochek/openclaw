@@ -296,9 +296,11 @@ function resolveBindingConversationFromCommand(params: {
     const source = params.from ?? params.to;
     const rawTarget = source?.startsWith("discord:channel:")
       ? stripPrefix(source, "discord:")
-      : source?.startsWith("discord:user:")
-        ? stripPrefix(source, "discord:")
-        : source;
+      : source?.startsWith("discord:group:")
+        ? `channel:${stripPrefix(source, "discord:group:")}`
+        : source?.startsWith("discord:user:")
+          ? stripPrefix(source, "discord:")
+          : source;
     if (!rawTarget || rawTarget.startsWith("slash:")) {
       return null;
     }
