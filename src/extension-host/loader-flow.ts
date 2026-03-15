@@ -3,21 +3,17 @@ import type { PluginCandidate } from "../plugins/discovery.js";
 import type { PluginManifestRecord } from "../plugins/manifest-registry.js";
 import type { PluginRecord, PluginRegistry } from "../plugins/registry.js";
 import type { OpenClawPluginApi, OpenClawPluginModule, PluginLogger } from "../plugins/types.js";
+import { resolveExtensionHostActivationPolicy } from "./loader-activation-policy.js";
 import { importExtensionHostPluginModule } from "./loader-import.js";
 import { recordExtensionHostPluginError } from "./loader-policy.js";
-import { prepareExtensionHostPluginCandidate } from "./loader-records.js";
 import {
   planExtensionHostLoadedPlugin,
   runExtensionHostPluginRegister,
 } from "./loader-register.js";
-import {
-  resolveExtensionHostEarlyMemoryDecision,
-  resolveExtensionHostModuleExport,
-} from "./loader-runtime.js";
+import { resolveExtensionHostModuleExport } from "./loader-runtime.js";
 import {
   appendExtensionHostPluginRecord,
   setExtensionHostPluginRecordLifecycleState,
-  setExtensionHostPluginRecordDisabled,
   setExtensionHostPluginRecordError,
 } from "./loader-state.js";
 
@@ -56,18 +52,18 @@ export function processExtensionHostPluginCandidate(params: {
   loadModule: (safeSource: string) => OpenClawPluginModule;
 }): { selectedMemoryPluginId: string | null; memorySlotMatched: boolean } {
   const { candidate, manifestRecord } = params;
-  const pluginId = manifestRecord.id;
-  const preparedCandidate = prepareExtensionHostPluginCandidate({
+  const activationPolicy = resolveExtensionHostActivationPolicy({
     candidate,
     manifestRecord,
     normalizedConfig: params.normalizedConfig,
     rootConfig: params.rootConfig,
     seenIds: params.seenIds,
+    selectedMemoryPluginId: params.selectedMemoryPluginId,
   });
-  if (preparedCandidate.kind === "duplicate") {
+  if (activationPolicy.kind === "duplicate") {
     appendExtensionHostPluginRecord({
       registry: params.registry,
-      record: preparedCandidate.record,
+      record: activationPolicy.record,
     });
     return {
       selectedMemoryPluginId: params.selectedMemoryPluginId,
@@ -75,7 +71,7 @@ export function processExtensionHostPluginCandidate(params: {
     };
   }
 
-  const { record, entry, enableState } = preparedCandidate;
+  const { pluginId, record, entry } = activationPolicy;
   const pushPluginLoadError = (message: string) => {
     setExtensionHostPluginRecordError(record, message);
     appendExtensionHostPluginRecord({
@@ -93,30 +89,7 @@ export function processExtensionHostPluginCandidate(params: {
     });
   };
 
-  if (!enableState.enabled) {
-    setExtensionHostPluginRecordDisabled(record, enableState.reason);
-    appendExtensionHostPluginRecord({
-      registry: params.registry,
-      record,
-      seenIds: params.seenIds,
-      pluginId,
-      origin: candidate.origin,
-    });
-    return {
-      selectedMemoryPluginId: params.selectedMemoryPluginId,
-      memorySlotMatched: false,
-    };
-  }
-
-  const earlyMemoryDecision = resolveExtensionHostEarlyMemoryDecision({
-    origin: candidate.origin,
-    manifestKind: manifestRecord.kind,
-    recordId: record.id,
-    memorySlot: params.normalizedConfig.slots.memory,
-    selectedMemoryPluginId: params.selectedMemoryPluginId,
-  });
-  if (!earlyMemoryDecision.enabled) {
-    setExtensionHostPluginRecordDisabled(record, earlyMemoryDecision.reason);
+  if (activationPolicy.kind === "disabled") {
     appendExtensionHostPluginRecord({
       registry: params.registry,
       record,
