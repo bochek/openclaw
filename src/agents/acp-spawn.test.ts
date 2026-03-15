@@ -1148,6 +1148,7 @@ describe("spawnAcpDirect", () => {
       status: "forbidden",
       error: "agentId is not allowed for sessions_spawn (allowed: research)",
     });
+    expect(hoisted.callGatewayMock).not.toHaveBeenCalled();
     expect(hoisted.initializeSessionMock).not.toHaveBeenCalled();
   });
 });
