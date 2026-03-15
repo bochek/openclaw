@@ -7,7 +7,6 @@ import type {
   GatewayRequestHandlers,
 } from "../gateway/server-methods/types.js";
 import { registerInternalHook } from "../hooks/internal-hooks.js";
-import { resolveUserPath } from "../utils.js";
 import { registerPluginCommand } from "./commands.js";
 import { normalizePluginHttpPath } from "./http-path.js";
 import { findOverlappingPluginHttpRoute } from "./http-route-overlap.js";
@@ -641,13 +640,6 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
     });
   };
 
-  const normalizeLogger = (logger: PluginLogger): PluginLogger => ({
-    info: logger.info,
-    warn: logger.warn,
-    error: logger.error,
-    debug: logger.debug,
-  });
-
   const createApi = (
     record: PluginRecord,
     params: {
@@ -665,13 +657,11 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       rootDir: record.rootDir,
       config: params.config,
       pluginConfig: params.pluginConfig,
-      runtime: registryParams.runtime,
-      logger: normalizeLogger(registryParams.logger),
       registerTool: (tool, opts) => registerTool(record, tool, opts),
       registerHook: (events, handler, opts) =>
         registerHook(record, events, handler, opts, params.config),
-      registerHttpRoute: (params) => registerHttpRoute(record, params),
-      registerChannel: (registration) => registerChannel(record, registration),
+      registerHttpRoute: (routeParams) => registerHttpRoute(record, routeParams),
+      registerChannel: (registration) => registerChannel(record, registration as never),
       registerProvider: (provider) => registerProvider(record, provider),
       registerGatewayMethod: (method, handler) => registerGatewayMethod(record, method, handler),
       registerCli: (registrar, opts) => registerCli(record, registrar, opts),
@@ -713,10 +703,9 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
           });
         }
       },
-      resolvePath: (input: string) => resolveUserPath(input),
       on: (hookName, handler, opts) =>
         registerTypedHook(record, hookName, handler, opts, params.hookPolicy),
-    };
+    });
   };
 
   return {
