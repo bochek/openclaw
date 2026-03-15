@@ -1,3 +1,4 @@
+import { parseFeishuConversationId } from "../../extensions/feishu/src/conversation-id.js";
 import { listAcpBindings } from "../config/bindings.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { AgentAcpBinding } from "../config/types.js";
@@ -21,7 +22,7 @@ import {
 
 function normalizeBindingChannel(value: string | undefined): ConfiguredAcpBindingChannel | null {
   const normalized = (value ?? "").trim().toLowerCase();
-  if (normalized === "discord" || normalized === "telegram") {
+  if (normalized === "discord" || normalized === "telegram" || normalized === "feishu") {
     return normalized;
   }
   return null;
@@ -228,6 +229,40 @@ export function resolveConfiguredAcpBindingSpecBySessionKey(params: {
       }
       continue;
     }
+    if (channel === "feishu") {
+      const targetParsed = parseFeishuConversationId({
+        conversationId: targetConversationId,
+      });
+      if (
+        !targetParsed ||
+        (targetParsed.scope !== "group_topic" &&
+          targetParsed.scope !== "group_topic_sender" &&
+          !targetParsed.canonicalConversationId.startsWith("ou_") &&
+          !targetParsed.canonicalConversationId.startsWith("on_"))
+      ) {
+        continue;
+      }
+      const spec = toConfiguredBindingSpec({
+        cfg: params.cfg,
+        channel: "feishu",
+        accountId: parsedSessionKey.accountId,
+        conversationId: targetParsed.canonicalConversationId,
+        parentConversationId:
+          targetParsed.scope === "group_topic" || targetParsed.scope === "group_topic_sender"
+            ? targetParsed.chatId
+            : undefined,
+        binding,
+      });
+      if (buildConfiguredAcpSessionKey(spec) === sessionKey) {
+        if (accountMatchPriority === 2) {
+          return spec;
+        }
+        if (!wildcardMatch) {
+          wildcardMatch = spec;
+        }
+      }
+      continue;
+    }
     const parsedTopic = parseTelegramTopicConversation({
       conversationId: targetConversationId,
     });
@@ -329,6 +364,65 @@ export function resolveConfiguredAcpBindingRecord(params: {
         return {
           conversationId: parsed.canonicalConversationId,
           parentConversationId: parsed.chatId,
+        };
+      },
+    });
+  }
+
+  if (channel === "feishu") {
+    const parsed = parseFeishuConversationId({
+      conversationId,
+      parentConversationId,
+    });
+    if (
+      !parsed ||
+      (parsed.scope !== "group_topic" &&
+        parsed.scope !== "group_topic_sender" &&
+        !parsed.canonicalConversationId.startsWith("ou_") &&
+        !parsed.canonicalConversationId.startsWith("on_"))
+    ) {
+      return null;
+    }
+    return resolveConfiguredBindingRecord({
+      cfg: params.cfg,
+      bindings: listAcpBindings(params.cfg),
+      channel: "feishu",
+      accountId,
+      selectConversation: (binding) => {
+        const targetConversationId = resolveBindingConversationId(binding);
+        if (!targetConversationId) {
+          return null;
+        }
+        const targetParsed = parseFeishuConversationId({
+          conversationId: targetConversationId,
+        });
+        if (
+          !targetParsed ||
+          (targetParsed.scope !== "group_topic" &&
+            targetParsed.scope !== "group_topic_sender" &&
+            !targetParsed.canonicalConversationId.startsWith("ou_") &&
+            !targetParsed.canonicalConversationId.startsWith("on_"))
+        ) {
+          return null;
+        }
+        const matchesCanonicalConversation =
+          targetParsed.canonicalConversationId === parsed.canonicalConversationId;
+        const matchesParentTopicForSenderScopedConversation =
+          parsed.scope === "group_topic_sender" &&
+          targetParsed.scope === "group_topic" &&
+          parsed.chatId === targetParsed.chatId &&
+          parsed.topicId === targetParsed.topicId;
+        if (!matchesCanonicalConversation && !matchesParentTopicForSenderScopedConversation) {
+          return null;
+        }
+        return {
+          conversationId: matchesParentTopicForSenderScopedConversation
+            ? targetParsed.canonicalConversationId
+            : parsed.canonicalConversationId,
+          parentConversationId:
+            parsed.scope === "group_topic" || parsed.scope === "group_topic_sender"
+              ? parsed.chatId
+              : undefined,
         };
       },
     });

@@ -126,4 +126,69 @@ describe("commands-acp context", () => {
     });
     expect(resolveAcpCommandConversationId(params)).toBe("123456789");
   });
+
+  it("builds Feishu topic conversation ids from chat target + root message id", () => {
+    const params = buildCommandTestParams("/acp status", baseCfg, {
+      Provider: "feishu",
+      Surface: "feishu",
+      OriginatingChannel: "feishu",
+      OriginatingTo: "chat:oc_group_chat",
+      MessageThreadId: "om_topic_root",
+      SenderId: "ou_topic_user",
+      AccountId: "work",
+    });
+
+    expect(resolveAcpCommandBindingContext(params)).toEqual({
+      channel: "feishu",
+      accountId: "work",
+      threadId: "om_topic_root",
+      conversationId: "oc_group_chat:topic:om_topic_root",
+      parentConversationId: "oc_group_chat",
+    });
+    expect(resolveAcpCommandConversationId(params)).toBe("oc_group_chat:topic:om_topic_root");
+  });
+
+  it("builds sender-scoped Feishu topic conversation ids when current session is sender-scoped", () => {
+    const params = buildCommandTestParams("/acp status", baseCfg, {
+      Provider: "feishu",
+      Surface: "feishu",
+      OriginatingChannel: "feishu",
+      OriginatingTo: "chat:oc_group_chat",
+      MessageThreadId: "om_topic_root",
+      SenderId: "ou_topic_user",
+      AccountId: "work",
+      SessionKey: "agent:main:feishu:group:oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
+    });
+    params.sessionKey =
+      "agent:main:feishu:group:oc_group_chat:topic:om_topic_root:sender:ou_topic_user";
+
+    expect(resolveAcpCommandBindingContext(params)).toEqual({
+      channel: "feishu",
+      accountId: "work",
+      threadId: "om_topic_root",
+      conversationId: "oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
+      parentConversationId: "oc_group_chat",
+    });
+    expect(resolveAcpCommandConversationId(params)).toBe(
+      "oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
+    );
+  });
+
+  it("resolves Feishu DM conversation ids from user targets", () => {
+    const params = buildCommandTestParams("/acp status", baseCfg, {
+      Provider: "feishu",
+      Surface: "feishu",
+      OriginatingChannel: "feishu",
+      OriginatingTo: "user:ou_sender_1",
+    });
+
+    expect(resolveAcpCommandBindingContext(params)).toEqual({
+      channel: "feishu",
+      accountId: "default",
+      threadId: undefined,
+      conversationId: "ou_sender_1",
+      parentConversationId: "ou_sender_1",
+    });
+    expect(resolveAcpCommandConversationId(params)).toBe("ou_sender_1");
+  });
 });

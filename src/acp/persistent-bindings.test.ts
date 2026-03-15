@@ -90,6 +90,27 @@ function createTelegramGroupBinding(params: {
   } as ConfiguredBinding;
 }
 
+function createFeishuBinding(params: {
+  agentId: string;
+  conversationId: string;
+  accountId?: string;
+  acp?: Record<string, unknown>;
+}): ConfiguredBinding {
+  return {
+    type: "acp",
+    agentId: params.agentId,
+    match: {
+      channel: "feishu",
+      accountId: params.accountId ?? defaultDiscordAccountId,
+      peer: {
+        kind: params.conversationId.includes(":topic:") ? "group" : "direct",
+        id: params.conversationId,
+      },
+    },
+    ...(params.acp ? { acp: params.acp } : {}),
+  } as ConfiguredBinding;
+}
+
 function resolveBindingRecord(cfg: OpenClawConfig, overrides: Partial<BindingRecordInput> = {}) {
   return resolveConfiguredAcpBindingRecord({
     cfg,
@@ -281,6 +302,108 @@ describe("resolveConfiguredAcpBindingRecord", () => {
       accountId: "default",
       conversationId: "123456789:topic:42",
     });
+    expect(resolved).toBeNull();
+  });
+
+  it("resolves Feishu DM bindings using direct peer ids", () => {
+    const cfg = createCfgWithBindings([
+      createFeishuBinding({
+        agentId: "codex",
+        conversationId: "ou_user_1",
+      }),
+    ]);
+
+    const resolved = resolveConfiguredAcpBindingRecord({
+      cfg,
+      channel: "feishu",
+      accountId: "default",
+      conversationId: "ou_user_1",
+    });
+
+    expect(resolved?.spec.channel).toBe("feishu");
+    expect(resolved?.spec.conversationId).toBe("ou_user_1");
+    expect(resolved?.record.targetSessionKey).toContain("agent:codex:acp:binding:feishu:default:");
+  });
+
+  it("resolves Feishu topic bindings with parent chat ids", () => {
+    const cfg = createCfgWithBindings([
+      createFeishuBinding({
+        agentId: "claude",
+        conversationId: "oc_group_chat:topic:om_topic_root",
+        acp: { backend: "acpx" },
+      }),
+    ]);
+
+    const resolved = resolveConfiguredAcpBindingRecord({
+      cfg,
+      channel: "feishu",
+      accountId: "default",
+      conversationId: "oc_group_chat:topic:om_topic_root",
+      parentConversationId: "oc_group_chat",
+    });
+
+    expect(resolved?.spec.conversationId).toBe("oc_group_chat:topic:om_topic_root");
+    expect(resolved?.spec.agentId).toBe("claude");
+    expect(resolved?.record.conversation.parentConversationId).toBe("oc_group_chat");
+  });
+
+  it("inherits configured Feishu topic bindings for sender-scoped topic conversations", () => {
+    const cfg = createCfgWithBindings([
+      createFeishuBinding({
+        agentId: "claude",
+        conversationId: "oc_group_chat:topic:om_topic_root",
+        acp: { backend: "acpx" },
+      }),
+    ]);
+
+    const resolved = resolveConfiguredAcpBindingRecord({
+      cfg,
+      channel: "feishu",
+      accountId: "default",
+      conversationId: "oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
+      parentConversationId: "oc_group_chat",
+    });
+
+    expect(resolved?.spec.conversationId).toBe("oc_group_chat:topic:om_topic_root");
+    expect(resolved?.spec.agentId).toBe("claude");
+    expect(resolved?.spec.backend).toBe("acpx");
+    expect(resolved?.record.conversation.conversationId).toBe("oc_group_chat:topic:om_topic_root");
+  });
+
+  it("rejects non-matching Feishu topic roots", () => {
+    const cfg = createCfgWithBindings([
+      createFeishuBinding({
+        agentId: "claude",
+        conversationId: "oc_group_chat:topic:om_topic_root",
+      }),
+    ]);
+
+    const resolved = resolveConfiguredAcpBindingRecord({
+      cfg,
+      channel: "feishu",
+      accountId: "default",
+      conversationId: "oc_group_chat:topic:om_other_root",
+      parentConversationId: "oc_group_chat",
+    });
+
+    expect(resolved).toBeNull();
+  });
+
+  it("rejects Feishu non-topic group ACP bindings", () => {
+    const cfg = createCfgWithBindings([
+      createFeishuBinding({
+        agentId: "claude",
+        conversationId: "oc_group_chat",
+      }),
+    ]);
+
+    const resolved = resolveConfiguredAcpBindingRecord({
+      cfg,
+      channel: "feishu",
+      accountId: "default",
+      conversationId: "oc_group_chat",
+    });
+
     expect(resolved).toBeNull();
   });
 
