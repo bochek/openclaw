@@ -72,6 +72,8 @@ What has been implemented:
 - plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking now route through `src/extension-host/tool-runtime.ts` ahead of broader catalog-backed tool ownership
 - plugin provider projection from registry entries into runtime provider objects now routes through `src/extension-host/provider-runtime.ts` ahead of broader catalog-backed provider ownership
 - plugin provider discovery filtering, order grouping, and result normalization now route through `src/extension-host/provider-discovery.ts` ahead of broader catalog-backed provider-discovery ownership
+- provider matching, auth-method selection, config-patch merging, and default-model application now route through `src/extension-host/provider-auth.ts` ahead of broader catalog-backed provider-auth ownership
+- provider onboarding option building, model-picker entry building, and provider-method choice resolution now route through `src/extension-host/provider-wizard.ts` ahead of broader catalog-backed provider-setup ownership
 
 How it has been implemented:
 
@@ -106,7 +108,10 @@ How it has been implemented:
 - by extracting plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking into a host-owned tool-runtime helper before broader catalog-backed tool ownership
 - by extracting provider projection from registry entries into runtime provider objects into a host-owned provider-runtime helper before broader catalog-backed provider ownership
 - by extracting provider discovery filtering, order grouping, and result normalization into a host-owned provider-discovery helper before broader catalog-backed provider-discovery ownership
+- by extracting provider matching, auth-method selection, config-patch merging, and default-model application into a host-owned provider-auth helper before broader catalog-backed provider-auth ownership
+- by extracting provider onboarding option building, model-picker entry building, and provider-method choice resolution into a host-owned provider-wizard helper before broader catalog-backed provider-setup ownership
 - by extracting provider-id normalization into `src/agents/provider-id.ts` so provider-only host seams do not inherit the heavier agent and browser dependency graph from `src/agents/model-selection.ts`
+- by extracting model-ref parsing into `src/agents/model-ref.ts` and Google model-id normalization into `src/agents/google-model-id.ts` so provider auth and setup seams can be tested without pulling the heavier provider-loader and browser dependency graph
 
 What remains pending:
 

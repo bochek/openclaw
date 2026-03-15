@@ -71,11 +71,13 @@ Relevant prerequisite work that has landed:
 - plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking now have a host-owned helper boundary in `src/extension-host/tool-runtime.ts`
 - plugin provider projection from registry entries into runtime provider objects now have a host-owned helper boundary in `src/extension-host/provider-runtime.ts`
 - plugin provider discovery filtering, order grouping, and result normalization now have a host-owned helper boundary in `src/extension-host/provider-discovery.ts`
+- provider matching, auth-method selection, config-patch merging, and default-model application now have a host-owned helper boundary in `src/extension-host/provider-auth.ts`
+- provider onboarding option building, model-picker entry building, and provider-method choice resolution now have a host-owned helper boundary in `src/extension-host/provider-wizard.ts`
 
 Why this matters for this spec:
 
 - event work should land on top of a host-owned boundary and normalized contribution model rather than on top of more plugin-era runtime seams
-- the current implementation has deliberately not started canonical bridge or stage work before those earlier boundaries were in place, including the first loader-runtime, record-state, discovery-policy, activation-policy, finalization-policy, low-risk registry-write, hook-compat, plugin-api, plugin-registry, plugin-registry-compat, plugin-registry-registrations, service-lifecycle, CLI-lifecycle, gateway-methods, tool-runtime, provider-runtime, and provider-discovery seams
+- the current implementation has deliberately not started canonical bridge or stage work before those earlier boundaries were in place, including the first loader-runtime, record-state, discovery-policy, activation-policy, finalization-policy, low-risk registry-write, hook-compat, plugin-api, plugin-registry, plugin-registry-compat, plugin-registry-registrations, service-lifecycle, CLI-lifecycle, gateway-methods, tool-runtime, provider-runtime, provider-discovery, provider-auth, and provider-wizard seams
 
 ## Design Goals
 
