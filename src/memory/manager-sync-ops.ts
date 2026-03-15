@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -24,6 +23,7 @@ import {
   type OpenAiEmbeddingClient,
   type VoyageEmbeddingClient,
 } from "../extension-host/embedding-runtime.js";
+import { runExtensionHostEmbeddingSafeReindex } from "../extension-host/embedding-safe-reindex.js";
 import { runExtensionHostEmbeddingSync } from "../extension-host/embedding-sync-execution.js";
 import {
   buildEmbeddingIndexMeta,
@@ -322,38 +322,6 @@ export abstract class MemoryManagerSyncOps {
       } catch {}
       throw err;
     }
-  }
-
-  private async swapIndexFiles(targetPath: string, tempPath: string): Promise<void> {
-    const backupPath = `${targetPath}.backup-${randomUUID()}`;
-    await this.moveIndexFiles(targetPath, backupPath);
-    try {
-      await this.moveIndexFiles(tempPath, targetPath);
-    } catch (err) {
-      await this.moveIndexFiles(backupPath, targetPath);
-      throw err;
-    }
-    await this.removeIndexFiles(backupPath);
-  }
-
-  private async moveIndexFiles(sourceBase: string, targetBase: string): Promise<void> {
-    const suffixes = ["", "-wal", "-shm"];
-    for (const suffix of suffixes) {
-      const source = `${sourceBase}${suffix}`;
-      const target = `${targetBase}${suffix}`;
-      try {
-        await fs.rename(source, target);
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-          throw err;
-        }
-      }
-    }
-  }
-
-  private async removeIndexFiles(basePath: string): Promise<void> {
-    const suffixes = ["", "-wal", "-shm"];
-    await Promise.all(suffixes.map((suffix) => fs.rm(`${basePath}${suffix}`, { force: true })));
   }
 
   protected ensureSchema() {
@@ -1061,110 +1029,103 @@ export abstract class MemoryManagerSyncOps {
     progress?: MemorySyncProgressState;
   }): Promise<void> {
     const dbPath = resolveUserPath(this.settings.store.path);
-    const tempDbPath = `${dbPath}.tmp-${randomUUID()}`;
-    const tempDb = this.openDatabaseAtPath(tempDbPath);
-
-    const originalDb = this.db;
-    let originalDbClosed = false;
-    const originalState = {
-      ftsAvailable: this.fts.available,
-      ftsError: this.fts.loadError,
-      vectorAvailable: this.vector.available,
-      vectorLoadError: this.vector.loadError,
-      vectorDims: this.vector.dims,
-      vectorReady: this.vectorReady,
-    };
-
-    const restoreOriginalState = () => {
-      if (originalDbClosed) {
-        this.db = this.openDatabaseAtPath(dbPath);
-      } else {
-        this.db = originalDb;
-      }
-      this.fts.available = originalState.ftsAvailable;
-      this.fts.loadError = originalState.ftsError;
-      this.vector.available = originalDbClosed ? null : originalState.vectorAvailable;
-      this.vector.loadError = originalState.vectorLoadError;
-      this.vector.dims = originalState.vectorDims;
-      this.vectorReady = originalDbClosed ? null : originalState.vectorReady;
-    };
-
-    this.db = tempDb;
-    this.vectorReady = null;
-    this.vector.available = null;
-    this.vector.loadError = undefined;
-    this.vector.dims = undefined;
-    this.fts.available = false;
-    this.fts.loadError = undefined;
-    this.ensureSchema();
-
-    let nextMeta: EmbeddingIndexMeta | null = null;
-
-    try {
-      this.seedEmbeddingCache(originalDb);
-      const shouldSyncMemory = this.sources.has("memory");
-      const shouldSyncSessions = this.shouldSyncSessions(
-        { reason: params.reason, force: params.force },
-        true,
-      );
-      nextMeta = await runExtensionHostEmbeddingReindexBody({
-        shouldSyncMemory,
-        shouldSyncSessions,
-        hasDirtySessionFiles: this.sessionsDirtyFiles.size > 0,
-        progress: params.progress,
-        syncMemoryFiles: async (syncParams) => {
-          await this.syncMemoryFiles(syncParams);
-        },
-        syncSessionFiles: async (syncParams) => {
-          await this.syncSessionFiles(syncParams);
-        },
-        setDirty: (value) => {
-          this.dirty = value;
-        },
-        setSessionsDirty: (value) => {
-          this.sessionsDirty = value;
-        },
-        clearAllSessionDirtyFiles: () => {
-          this.sessionsDirtyFiles.clear();
-        },
-        buildNextMeta: () =>
-          buildEmbeddingIndexMeta({
-            provider: this.provider,
-            providerKey: this.providerKey,
-            configuredSources: this.resolveConfiguredSourcesForMeta(),
-            configuredScopeHash: this.resolveConfiguredScopeHash(),
-            chunkTokens: this.settings.chunking.tokens,
-            chunkOverlap: this.settings.chunking.overlap,
-          }),
-        vectorDims: this.vector.available && this.vector.dims ? this.vector.dims : undefined,
-        writeMeta: (meta) => {
-          this.writeMeta(meta);
-        },
-        pruneEmbeddingCacheIfNeeded: () => {
-          this.pruneEmbeddingCacheIfNeeded?.();
-        },
-      });
-
-      this.db.close();
-      originalDb.close();
-      originalDbClosed = true;
-
-      await this.swapIndexFiles(dbPath, tempDbPath);
-
-      this.db = this.openDatabaseAtPath(dbPath);
-      this.vectorReady = null;
-      this.vector.available = null;
-      this.vector.loadError = undefined;
-      this.ensureSchema();
-      this.vector.dims = nextMeta?.vectorDims;
-    } catch (err) {
-      try {
-        this.db.close();
-      } catch {}
-      await this.removeIndexFiles(tempDbPath);
-      restoreOriginalState();
-      throw err;
-    }
+    await runExtensionHostEmbeddingSafeReindex({
+      dbPath,
+      currentDb: this.db,
+      openDatabaseAtPath: (openedPath) => this.openDatabaseAtPath(openedPath),
+      closeDatabase: (db) => db.close(),
+      captureOriginalState: () => ({
+        ftsAvailable: this.fts.available,
+        ftsError: this.fts.loadError,
+        vectorAvailable: this.vector.available,
+        vectorLoadError: this.vector.loadError,
+        vectorDims: this.vector.dims,
+        vectorReady: this.vectorReady,
+      }),
+      restoreOriginalState: ({
+        originalDb,
+        originalState,
+        originalDbClosed,
+        dbPath: reopenPath,
+      }) => {
+        if (originalDbClosed) {
+          this.db = this.openDatabaseAtPath(reopenPath);
+        } else {
+          this.db = originalDb;
+        }
+        this.fts.available = originalState.ftsAvailable;
+        this.fts.loadError = originalState.ftsError;
+        this.vector.available = originalDbClosed ? null : originalState.vectorAvailable;
+        this.vector.loadError = originalState.vectorLoadError;
+        this.vector.dims = originalState.vectorDims;
+        this.vectorReady = originalDbClosed ? null : originalState.vectorReady;
+      },
+      prepareTempDb: (tempDb) => {
+        this.db = tempDb;
+        this.vectorReady = null;
+        this.vector.available = null;
+        this.vector.loadError = undefined;
+        this.vector.dims = undefined;
+        this.fts.available = false;
+        this.fts.loadError = undefined;
+        this.ensureSchema();
+      },
+      seedEmbeddingCache: (sourceDb) => {
+        this.seedEmbeddingCache(sourceDb);
+      },
+      runReindexBody: async () => {
+        const shouldSyncMemory = this.sources.has("memory");
+        const shouldSyncSessions = this.shouldSyncSessions(
+          { reason: params.reason, force: params.force },
+          true,
+        );
+        return await runExtensionHostEmbeddingReindexBody({
+          shouldSyncMemory,
+          shouldSyncSessions,
+          hasDirtySessionFiles: this.sessionsDirtyFiles.size > 0,
+          progress: params.progress,
+          syncMemoryFiles: async (syncParams) => {
+            await this.syncMemoryFiles(syncParams);
+          },
+          syncSessionFiles: async (syncParams) => {
+            await this.syncSessionFiles(syncParams);
+          },
+          setDirty: (value) => {
+            this.dirty = value;
+          },
+          setSessionsDirty: (value) => {
+            this.sessionsDirty = value;
+          },
+          clearAllSessionDirtyFiles: () => {
+            this.sessionsDirtyFiles.clear();
+          },
+          buildNextMeta: () =>
+            buildEmbeddingIndexMeta({
+              provider: this.provider,
+              providerKey: this.providerKey,
+              configuredSources: this.resolveConfiguredSourcesForMeta(),
+              configuredScopeHash: this.resolveConfiguredScopeHash(),
+              chunkTokens: this.settings.chunking.tokens,
+              chunkOverlap: this.settings.chunking.overlap,
+            }),
+          vectorDims: this.vector.available && this.vector.dims ? this.vector.dims : undefined,
+          writeMeta: (meta) => {
+            this.writeMeta(meta);
+          },
+          pruneEmbeddingCacheIfNeeded: () => {
+            this.pruneEmbeddingCacheIfNeeded?.();
+          },
+        });
+      },
+      reopenAfterSwap: (reopenPath, nextMeta) => {
+        this.db = this.openDatabaseAtPath(reopenPath);
+        this.vectorReady = null;
+        this.vector.available = null;
+        this.vector.loadError = undefined;
+        this.ensureSchema();
+        this.vector.dims = nextMeta.vectorDims;
+      },
+    });
   }
 
   private async runUnsafeReindex(params: {
