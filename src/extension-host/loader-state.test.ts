@@ -3,6 +3,7 @@ import type { PluginRegistry } from "../plugins/registry.js";
 import { createExtensionHostPluginRecord } from "./loader-policy.js";
 import {
   appendExtensionHostPluginRecord,
+  markExtensionHostRegistryPluginsReady,
   setExtensionHostPluginRecordLifecycleState,
   setExtensionHostPluginRecordDisabled,
   setExtensionHostPluginRecordError,
@@ -35,6 +36,10 @@ describe("extension host loader state", () => {
       configSchema: true,
     });
 
+    expect(setExtensionHostPluginRecordLifecycleState(record, "imported")).toMatchObject({
+      lifecycleState: "imported",
+      status: "loaded",
+    });
     expect(setExtensionHostPluginRecordLifecycleState(record, "validated")).toMatchObject({
       lifecycleState: "validated",
       status: "loaded",
@@ -43,6 +48,20 @@ describe("extension host loader state", () => {
       lifecycleState: "registered",
       status: "loaded",
     });
+  });
+
+  it("rejects invalid lifecycle jumps", () => {
+    const record = createExtensionHostPluginRecord({
+      id: "demo",
+      source: "/plugins/demo.js",
+      origin: "workspace",
+      enabled: true,
+      configSchema: true,
+    });
+
+    expect(() => setExtensionHostPluginRecordLifecycleState(record, "registered")).toThrow(
+      "invalid extension host lifecycle transition: prepared -> registered",
+    );
   });
 
   it("marks plugin records disabled", () => {
@@ -99,5 +118,28 @@ describe("extension host loader state", () => {
 
     expect(registry.plugins).toEqual([record]);
     expect(seenIds.get("demo")).toBe("workspace");
+  });
+
+  it("promotes registered plugins to ready during finalization", () => {
+    const registry = createRegistry();
+    const record = createExtensionHostPluginRecord({
+      id: "demo",
+      source: "/plugins/demo.js",
+      origin: "workspace",
+      enabled: true,
+      configSchema: true,
+    });
+
+    setExtensionHostPluginRecordLifecycleState(record, "imported");
+    setExtensionHostPluginRecordLifecycleState(record, "validated");
+    setExtensionHostPluginRecordLifecycleState(record, "registered");
+    registry.plugins.push(record);
+
+    markExtensionHostRegistryPluginsReady(registry);
+
+    expect(record).toMatchObject({
+      lifecycleState: "ready",
+      status: "loaded",
+    });
   });
 });

@@ -205,4 +205,52 @@ describe("extension host loader flow", () => {
     expect(registry.plugins[0]?.lifecycleState).toBe("error");
     expect(registry.diagnostics[0]?.message).toContain("failed to load plugin");
   });
+
+  it("records fully registered plugins before final readiness promotion", () => {
+    const { rootDir, entryPath } = createTempPluginFixture();
+    const registry = createRegistry();
+
+    processExtensionHostPluginCandidate({
+      candidate: createCandidate(rootDir, entryPath),
+      manifestRecord: createManifestRecord(rootDir, entryPath),
+      normalizedConfig: normalizePluginsConfig({
+        entries: {
+          demo: {
+            enabled: true,
+            config: { enabled: true },
+          },
+        },
+      }),
+      rootConfig: {
+        plugins: {
+          entries: {
+            demo: {
+              enabled: true,
+              config: { enabled: true },
+            },
+          },
+        },
+      },
+      validateOnly: false,
+      logger: {
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+      },
+      registry,
+      seenIds: new Map(),
+      selectedMemoryPluginId: null,
+      createApi: () => ({}) as never,
+      loadModule: () =>
+        ({
+          default: {
+            id: "demo",
+            register: () => {},
+          },
+        }) as never,
+    });
+
+    expect(registry.plugins[0]?.lifecycleState).toBe("registered");
+    expect(registry.plugins[0]?.status).toBe("loaded");
+  });
 });

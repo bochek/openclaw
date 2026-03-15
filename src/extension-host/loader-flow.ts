@@ -169,6 +169,7 @@ export function processExtensionHostPluginCandidate(params: {
     };
   }
 
+  setExtensionHostPluginRecordLifecycleState(record, "imported");
   const resolved = resolveExtensionHostModuleExport(moduleImport.module);
   const loadedPlan = planExtensionHostLoadedPlugin({
     record,
@@ -214,8 +215,8 @@ export function processExtensionHostPluginCandidate(params: {
     };
   }
 
+  setExtensionHostPluginRecordLifecycleState(record, "validated");
   if (loadedPlan.kind === "validate-only") {
-    setExtensionHostPluginRecordLifecycleState(record, "validated");
     appendExtensionHostPluginRecord({
       registry: params.registry,
       record,

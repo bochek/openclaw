@@ -2,6 +2,7 @@ import type { PluginRegistry } from "../plugins/registry.js";
 import type { PluginLogger } from "../plugins/types.js";
 import type { ExtensionHostProvenanceIndex } from "./loader-policy.js";
 import { warnAboutUntrackedLoadedExtensions } from "./loader-policy.js";
+import { markExtensionHostRegistryPluginsReady } from "./loader-state.js";
 
 export function finalizeExtensionHostRegistryLoad(params: {
   registry: PluginRegistry;
@@ -32,6 +33,7 @@ export function finalizeExtensionHostRegistryLoad(params: {
   if (params.cacheEnabled) {
     params.setCachedRegistry(params.cacheKey, params.registry);
   }
+  markExtensionHostRegistryPluginsReady(params.registry);
   params.activateRegistry(params.registry, params.cacheKey);
   return params.registry;
 }

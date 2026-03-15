@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { PluginRegistry } from "../plugins/registry.js";
 import { finalizeExtensionHostRegistryLoad } from "./loader-finalize.js";
+import { createExtensionHostPluginRecord } from "./loader-policy.js";
+import { setExtensionHostPluginRecordLifecycleState } from "./loader-state.js";
 
 function createRegistry(): PluginRegistry {
   return {
@@ -23,6 +25,17 @@ describe("extension host loader finalize", () => {
   it("adds missing memory-slot warnings and runs cache plus activation", () => {
     const registry = createRegistry();
     const calls: string[] = [];
+    const record = createExtensionHostPluginRecord({
+      id: "demo",
+      source: "/plugins/demo.js",
+      origin: "workspace",
+      enabled: true,
+      configSchema: true,
+    });
+    setExtensionHostPluginRecordLifecycleState(record, "imported");
+    setExtensionHostPluginRecordLifecycleState(record, "validated");
+    setExtensionHostPluginRecordLifecycleState(record, "registered");
+    registry.plugins.push(record);
 
     const result = finalizeExtensionHostRegistryLoad({
       registry,
@@ -56,6 +69,7 @@ describe("extension host loader finalize", () => {
       level: "warn",
       message: "memory slot plugin not found or not marked as memory: memory-a",
     });
+    expect(registry.plugins[0]?.lifecycleState).toBe("ready");
     expect(calls).toEqual(["cache:cache-key:true", "activate:cache-key:true"]);
   });
 
