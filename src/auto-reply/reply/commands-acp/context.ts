@@ -66,8 +66,7 @@ function resolveFeishuSenderScopedConversationId(params: {
       .find((binding) => {
         if (
           binding.conversation.channel !== "feishu" ||
-          binding.conversation.accountId !== params.accountId ||
-          binding.conversation.parentConversationId !== parentConversationId
+          binding.conversation.accountId !== params.accountId
         ) {
           return false;
         }
