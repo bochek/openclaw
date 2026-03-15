@@ -59,7 +59,7 @@ Relevant prerequisite work that has landed:
 - loader record-state transitions now have a host-owned helper boundary and enforced loader lifecycle state machine, while still preserving compatibility `PluginRecord.status` values
 - loader finalization policy outcomes now have a host-owned helper boundary
 - loader final cache, readiness promotion, and activation finalization now has a host-owned helper boundary
-- low-risk channel, provider, gateway-method, HTTP-route, tool, CLI, service, and command compatibility writes now have a host-owned helper boundary in `src/extension-host/registry-writes.ts`
+- low-risk channel, provider, gateway-method, HTTP-route, tool, CLI, service, command, context-engine, and hook compatibility writes now have a host-owned helper boundary in `src/extension-host/registry-writes.ts`
 
 Why this matters for this spec:
 
