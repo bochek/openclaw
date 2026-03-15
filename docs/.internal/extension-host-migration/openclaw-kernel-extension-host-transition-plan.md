@@ -584,7 +584,7 @@ Concrete examples:
 - `extensions/phone-control/index.ts:330` becomes `capability.control-command`
 - `extensions/thread-ownership/index.ts:63` becomes `capability.route-augmenter`
 
-Additional migration rule from external-plugin validation:
+Additional migration rule:
 
 - conversation binding, interactive callback routing, and inbound claim are real runtime needs, but they must not be solved by turning `src/plugins/*` into the permanent public architecture
 - bind approvals, callback namespace routing, and bound-ingress short-circuit behavior belong to host-owned surfaces and canonical pipeline stages

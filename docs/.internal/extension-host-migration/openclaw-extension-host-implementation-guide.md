@@ -216,12 +216,12 @@ What is still missing for these phases:
 - keeping the cutover inventory current as more surfaces move
 - broader lifecycle ownership beyond the loader state machine, service-lifecycle boundary, CLI-lifecycle boundary, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes, remaining policy gate ownership, and broad host-owned registries described for Phase 2
 - minimal SDK compatibility work beyond preserving current behavior indirectly through existing loading
-- host-owned conversation binding, interaction routing, ingress claim, and generic interactive control surfaces identified by external-plugin validation
-- host-owned subsystem runtime registries for embeddings, media understanding, and TTS identified by provider-capability evaluation
+- host-owned conversation binding, interaction routing, ingress claim, and generic interactive control surfaces
+- host-owned subsystem runtime registries for embeddings, media understanding, and TTS
 - explicit support for extension-backed search, with a generic split between agent-visible tool publication and optional runtime-internal search backends
 - any pilot migration, event pipeline, canonical catalog, or arbitration implementation
 
-Recent plan refinement from external-plugin validation:
+Recent plan refinements:
 
 - the plan now explicitly treats conversation binding ownership, approval persistence, restore-on-restart behavior, and detached-binding cleanup as first-class migration surfaces
 - it now explicitly treats interactive callback routing, namespace ownership, dedupe, and fallback behavior as first-class migration surfaces
@@ -252,7 +252,7 @@ This order matters because each layer depends on the previous one:
 - migrated hooks depend on the canonical event pipeline
 - install, onboarding, and status flows depend on static metadata before runtime activation
 - catalogs and arbitration already exist in partial forms, so their phases are migrations, not greenfield work
-- useful ideas from external-plugin validation should be harvested as parity requirements and host-owned capabilities, not by broadening legacy `src/plugins/*` or `src/plugin-sdk/*` surfaces as the target architecture
+- useful ideas from implementation review should be harvested as parity requirements and host-owned capabilities, not by broadening legacy `src/plugins/*` or `src/plugin-sdk/*` surfaces as the target architecture
 - safe removal of legacy paths depends on compatibility coverage and parity checks
 
 ## Implementation Guardrails
