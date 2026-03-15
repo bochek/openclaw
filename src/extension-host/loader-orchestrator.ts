@@ -21,12 +21,9 @@ import type { PluginLogger } from "../plugins/types.js";
 import { bootstrapExtensionHostPluginLoad } from "./loader-bootstrap.js";
 import { resolveExtensionHostDiscoveryPolicy } from "./loader-discovery-policy.js";
 import { createExtensionHostModuleLoader } from "./loader-module-loader.js";
+import { runExtensionHostLoaderSession } from "./loader-run.js";
 import { createExtensionHostLazyRuntime } from "./loader-runtime-proxy.js";
-import {
-  createExtensionHostLoaderSession,
-  finalizeExtensionHostLoaderSession,
-  processExtensionHostLoaderSessionCandidate,
-} from "./loader-session.js";
+import { createExtensionHostLoaderSession } from "./loader-session.js";
 
 export type ExtensionHostPluginLoadOptions = {
   config?: OpenClawConfig;
@@ -116,22 +113,14 @@ export function loadExtensionHostPluginRegistry(
     activateRegistry: activateExtensionHostRegistry,
   });
 
-  for (const candidate of bootstrap.orderedCandidates) {
-    const manifestRecord = bootstrap.manifestByRoot.get(candidate.rootDir);
-    if (!manifestRecord) {
-      continue;
-    }
-    processExtensionHostLoaderSessionCandidate({
-      session,
-      candidate,
-      manifestRecord,
-      normalizedConfig: normalized,
-      rootConfig: cfg,
-      validateOnly,
-      createApi,
-      loadModule,
-    });
-  }
-
-  return finalizeExtensionHostLoaderSession(session);
+  return runExtensionHostLoaderSession({
+    session,
+    orderedCandidates: bootstrap.orderedCandidates,
+    manifestByRoot: bootstrap.manifestByRoot,
+    normalizedConfig: normalized,
+    rootConfig: cfg,
+    validateOnly,
+    createApi,
+    loadModule,
+  });
 }
