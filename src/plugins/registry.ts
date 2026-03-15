@@ -1,4 +1,3 @@
-import type { AnyAgentTool } from "../agents/tools/common.js";
 import type { ChannelDock } from "../channels/dock.js";
 import type { ChannelPlugin } from "../channels/plugins/types.js";
 import { registerContextEngineForOwner } from "../context-engine/registry.js";
@@ -19,15 +18,11 @@ import {
   stripPromptMutationFieldsFromLegacyHookResult,
 } from "./types.js";
 import type {
-  OpenClawPluginApi,
-  OpenClawPluginChannelRegistration,
   OpenClawPluginCliRegistrar,
   OpenClawPluginCommandDefinition,
   OpenClawPluginHttpRouteAuth,
   OpenClawPluginHttpRouteMatch,
   OpenClawPluginHttpRouteHandler,
-  OpenClawPluginHttpRouteParams,
-  OpenClawPluginHookOptions,
   ProviderPlugin,
   OpenClawPluginService,
   OpenClawPluginToolFactory,
@@ -38,8 +33,6 @@ import type {
   PluginLogger,
   PluginOrigin,
   PluginKind,
-  PluginHookName,
-  PluginHookHandlerMap,
   PluginHookRegistration as TypedPluginHookRegistration,
 } from "./types.js";
 
@@ -172,10 +165,6 @@ export type PluginRegistryParams = {
   logger: PluginLogger;
   coreGatewayHandlers?: GatewayRequestHandlers;
   runtime: PluginRuntime;
-};
-
-type PluginTypedHookPolicy = {
-  allowPromptInjection?: boolean;
 };
 
 export function createEmptyPluginRegistry(): PluginRegistry {
