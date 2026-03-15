@@ -1,3 +1,7 @@
+import {
+  isExtensionHostTtsProviderConfigured,
+  resolveExtensionHostTtsApiKey,
+} from "../../extension-host/tts-runtime-registry.js";
 import { logVerbose } from "../../globals.js";
 import {
   getLastTtsAttempt,
@@ -5,8 +9,6 @@ import {
   getTtsProvider,
   isSummarizationEnabled,
   isTtsEnabled,
-  isTtsProviderConfigured,
-  resolveTtsApiKey,
   resolveTtsConfig,
   resolveTtsPrefsPath,
   setLastTtsAttempt,
@@ -159,9 +161,9 @@ export const handleTtsCommands: CommandHandler = async (params, allowTextCommand
   if (action === "provider") {
     const currentProvider = getTtsProvider(config, prefsPath);
     if (!args.trim()) {
-      const hasOpenAI = Boolean(resolveTtsApiKey(config, "openai"));
-      const hasElevenLabs = Boolean(resolveTtsApiKey(config, "elevenlabs"));
-      const hasEdge = isTtsProviderConfigured(config, "edge");
+      const hasOpenAI = Boolean(resolveExtensionHostTtsApiKey(config, "openai"));
+      const hasElevenLabs = Boolean(resolveExtensionHostTtsApiKey(config, "elevenlabs"));
+      const hasEdge = isExtensionHostTtsProviderConfigured(config, "edge");
       return {
         shouldContinue: false,
         reply: {
@@ -249,7 +251,7 @@ export const handleTtsCommands: CommandHandler = async (params, allowTextCommand
   if (action === "status") {
     const enabled = isTtsEnabled(config, prefsPath);
     const provider = getTtsProvider(config, prefsPath);
-    const hasKey = isTtsProviderConfigured(config, provider);
+    const hasKey = isExtensionHostTtsProviderConfigured(config, provider);
     const maxLength = getTtsMaxLength(prefsPath);
     const summarize = isSummarizationEnabled(prefsPath);
     const last = getLastTtsAttempt();

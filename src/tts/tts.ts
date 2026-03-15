@@ -22,6 +22,13 @@ import type {
   TtsProvider,
   TtsModelOverrideConfig,
 } from "../config/types.tts.js";
+import {
+  EXTENSION_HOST_TTS_PROVIDER_IDS,
+  isExtensionHostTtsProviderConfigured,
+  resolveExtensionHostTtsApiKey,
+  resolveExtensionHostTtsProviderOrder,
+  supportsExtensionHostTtsTelephony,
+} from "../extension-host/tts-runtime-registry.js";
 import { logVerbose } from "../globals.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { stripMarkdown } from "../line/markdown-to-line.js";
@@ -518,31 +525,13 @@ function resolveEdgeOutputFormat(config: ResolvedTtsConfig): string {
   return config.edge.outputFormat;
 }
 
-export function resolveTtsApiKey(
-  config: ResolvedTtsConfig,
-  provider: TtsProvider,
-): string | undefined {
-  if (provider === "elevenlabs") {
-    return config.elevenlabs.apiKey || process.env.ELEVENLABS_API_KEY || process.env.XI_API_KEY;
-  }
-  if (provider === "openai") {
-    return config.openai.apiKey || process.env.OPENAI_API_KEY;
-  }
-  return undefined;
-}
+export const TTS_PROVIDERS = EXTENSION_HOST_TTS_PROVIDER_IDS;
 
-export const TTS_PROVIDERS = ["openai", "elevenlabs", "edge"] as const;
+export const resolveTtsApiKey = resolveExtensionHostTtsApiKey;
 
-export function resolveTtsProviderOrder(primary: TtsProvider): TtsProvider[] {
-  return [primary, ...TTS_PROVIDERS.filter((provider) => provider !== primary)];
-}
+export const resolveTtsProviderOrder = resolveExtensionHostTtsProviderOrder;
 
-export function isTtsProviderConfigured(config: ResolvedTtsConfig, provider: TtsProvider): boolean {
-  if (provider === "edge") {
-    return config.edge.enabled;
-  }
-  return Boolean(resolveTtsApiKey(config, provider));
-}
+export const isTtsProviderConfigured = isExtensionHostTtsProviderConfigured;
 
 function formatTtsProviderError(provider: TtsProvider, err: unknown): string {
   const error = err instanceof Error ? err : new Error(String(err));
@@ -584,7 +573,7 @@ function resolveTtsRequestSetup(params: {
   const provider = params.providerOverride ?? userProvider;
   return {
     config,
-    providers: resolveTtsProviderOrder(provider),
+    providers: resolveExtensionHostTtsProviderOrder(provider),
   };
 }
 
@@ -684,7 +673,7 @@ export async function textToSpeech(params: {
         };
       }
 
-      const apiKey = resolveTtsApiKey(config, provider);
+      const apiKey = resolveExtensionHostTtsApiKey(config, provider);
       if (!apiKey) {
         errors.push(`${provider}: no API key`);
         continue;
@@ -776,12 +765,12 @@ export async function textToSpeechTelephony(params: {
   for (const provider of providers) {
     const providerStart = Date.now();
     try {
-      if (provider === "edge") {
+      if (!supportsExtensionHostTtsTelephony(provider)) {
         errors.push("edge: unsupported for telephony");
         continue;
       }
 
-      const apiKey = resolveTtsApiKey(config, provider);
+      const apiKey = resolveExtensionHostTtsApiKey(config, provider);
       if (!apiKey) {
         errors.push(`${provider}: no API key`);
         continue;

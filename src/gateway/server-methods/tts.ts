@@ -1,15 +1,17 @@
 import { loadConfig } from "../../config/config.js";
 import {
+  isExtensionHostTtsProviderConfigured,
+  resolveExtensionHostTtsApiKey,
+  resolveExtensionHostTtsProviderOrder,
+} from "../../extension-host/tts-runtime-registry.js";
+import {
   OPENAI_TTS_MODELS,
   OPENAI_TTS_VOICES,
   getTtsProvider,
   isTtsEnabled,
-  isTtsProviderConfigured,
   resolveTtsAutoMode,
-  resolveTtsApiKey,
   resolveTtsConfig,
   resolveTtsPrefsPath,
-  resolveTtsProviderOrder,
   setTtsEnabled,
   setTtsProvider,
   textToSpeech,
@@ -26,9 +28,9 @@ export const ttsHandlers: GatewayRequestHandlers = {
       const prefsPath = resolveTtsPrefsPath(config);
       const provider = getTtsProvider(config, prefsPath);
       const autoMode = resolveTtsAutoMode({ config, prefsPath });
-      const fallbackProviders = resolveTtsProviderOrder(provider)
+      const fallbackProviders = resolveExtensionHostTtsProviderOrder(provider)
         .slice(1)
-        .filter((candidate) => isTtsProviderConfigured(config, candidate));
+        .filter((candidate) => isExtensionHostTtsProviderConfigured(config, candidate));
       respond(true, {
         enabled: isTtsEnabled(config, prefsPath),
         auto: autoMode,
@@ -36,9 +38,9 @@ export const ttsHandlers: GatewayRequestHandlers = {
         fallbackProvider: fallbackProviders[0] ?? null,
         fallbackProviders,
         prefsPath,
-        hasOpenAIKey: Boolean(resolveTtsApiKey(config, "openai")),
-        hasElevenLabsKey: Boolean(resolveTtsApiKey(config, "elevenlabs")),
-        edgeEnabled: isTtsProviderConfigured(config, "edge"),
+        hasOpenAIKey: Boolean(resolveExtensionHostTtsApiKey(config, "openai")),
+        hasElevenLabsKey: Boolean(resolveExtensionHostTtsApiKey(config, "elevenlabs")),
+        edgeEnabled: isExtensionHostTtsProviderConfigured(config, "edge"),
       });
     } catch (err) {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, formatForLog(err)));
@@ -131,20 +133,20 @@ export const ttsHandlers: GatewayRequestHandlers = {
           {
             id: "openai",
             name: "OpenAI",
-            configured: Boolean(resolveTtsApiKey(config, "openai")),
+            configured: Boolean(resolveExtensionHostTtsApiKey(config, "openai")),
             models: [...OPENAI_TTS_MODELS],
             voices: [...OPENAI_TTS_VOICES],
           },
           {
             id: "elevenlabs",
             name: "ElevenLabs",
-            configured: Boolean(resolveTtsApiKey(config, "elevenlabs")),
+            configured: Boolean(resolveExtensionHostTtsApiKey(config, "elevenlabs")),
             models: ["eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_monolingual_v1"],
           },
           {
             id: "edge",
             name: "Edge TTS",
-            configured: isTtsProviderConfigured(config, "edge"),
+            configured: isExtensionHostTtsProviderConfigured(config, "edge"),
             models: [],
           },
         ],
