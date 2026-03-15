@@ -46,7 +46,7 @@ Current status against this guide:
 
 - Phase 0 has started but is not complete.
 - Phase 1 has started but is not complete.
-- Phase 2 has started in a narrow, compatibility-preserving form but is not complete.
+- Phase 2 has started in a broad, compatibility-preserving form but is not complete.
 - Phases 3 through 7 have not started in a meaningful way yet.
 
 What has been implemented so far:
@@ -85,6 +85,7 @@ What has been implemented so far:
 - loader finalization policy results now route through `src/extension-host/loader-finalization-policy.ts`
 - loader final cache, readiness promotion, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 - runtime registration normalization has started in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registrations
+- low-risk runtime compatibility writes for tool, CLI, service, and command registrations now route through `src/extension-host/registry-writes.ts`
 - several static and lookup consumers now read through the host boundary or resolved-extension model:
   - channel registry and dock lookups
   - message-channel normalization
@@ -103,6 +104,7 @@ How it has been done:
 - by introducing normalized static records before touching heavy runtime activation paths
 - by converting one static consumer at a time so each call site can move without forcing a loader rewrite
 - by extracting low-risk runtime registration helpers next and letting `src/plugins/registry.ts` delegate to them as a compatibility facade
+- by starting actual low-risk runtime write ownership next for tool, CLI, service, and command registrations while keeping duplicate enforcement and lifecycle semantics in legacy owners where that behavior still lives
 - by keeping duplicate enforcement in legacy subsystems only where that logic has not moved yet, such as plugin commands
 - by starting loader and lifecycle migration with compatibility helpers for activation and SDK alias resolution before changing discovery or policy behavior
 - by moving cache-key construction, cache reads, cache writes, and cache clearing behind host-owned helpers before changing activation-state ownership

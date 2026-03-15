@@ -70,6 +70,7 @@ What has landed:
 - loader finalization policy results now route through `src/extension-host/loader-finalization-policy.ts`
 - loader final cache, readiness promotion, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 - runtime registration normalization has started in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registrations
+- low-risk runtime compatibility writes for tool, CLI, service, and command registrations now route through `src/extension-host/registry-writes.ts`
 - several existing consumers now read host-owned normalized data instead of plugin-era manifest or runtime state directly:
   - channel and dock lookup surfaces
   - message-channel normalization
@@ -89,6 +90,7 @@ How it was done:
 - by letting the legacy manifest registry project into a host-owned resolved-extension shape so existing call sites could migrate incrementally
 - by migrating static consumers one by one onto resolved-extension data instead of forcing a single cutover
 - by moving the first low-risk runtime writes behind host-owned helpers while keeping `src/plugins/registry.ts` as the compatibility call surface
+- by starting actual low-risk runtime write ownership for tool, CLI, service, and command registrations once normalization helpers were already in place, while keeping duplicate enforcement and lifecycle semantics in legacy owners where they still apply
 - by leaving duplicate enforcement in legacy subsystems only where that behavior has not been migrated yet, such as plugin commands
 - by moving the first loader-owned compatibility pieces behind host-owned helpers before changing discovery, enablement, or policy flow
 - by moving cache-key construction, cache reads, cache writes, and cache clearing behind host-owned helpers before changing activation-state ownership
@@ -142,6 +144,7 @@ Committed implementation slices so far:
 - `c9323aa016` `Plugins: extract loader preflight`
 - `0df51ae6b4` `Plugins: extract loader pipeline`
 - `e557b39cb2` `Plugins: extract loader host state`
+- `07c3ae9c87` `Plugins: extract low-risk registry writes`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
@@ -149,7 +152,7 @@ What has not landed:
 
 - keeping the cutover inventory current as more surfaces move
 - broader lifecycle ownership beyond the loader state machine, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes, plus remaining policy semantics
-- host-owned registration surfaces beyond the first channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook helper slices
+- host-owned registration surfaces beyond the first normalization helpers and low-risk tool, CLI, service, and command compatibility write slices
 - SDK compatibility translation work
 - canonical event stages
 - canonical capability catalogs

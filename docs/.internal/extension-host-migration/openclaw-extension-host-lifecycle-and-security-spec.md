@@ -38,6 +38,7 @@ What has been implemented:
 - a host-owned resolved-extension registry exists for static consumers
 - static config-baseline generation now reads bundled extension metadata through the host-owned resolved-extension registry
 - channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registration normalization now delegates through `src/extension-host/runtime-registrations.ts`
+- low-risk runtime compatibility writes for tool, CLI, service, and command registrations now delegate through `src/extension-host/registry-writes.ts`
 - loader alias-wired module loader creation now routes through `src/extension-host/loader-module-loader.ts`
 - loader cache key construction and registry cache control now route through `src/extension-host/loader-cache.ts`
 - loader lazy runtime proxy creation now routes through `src/extension-host/loader-runtime-proxy.ts`
@@ -69,6 +70,7 @@ How it has been implemented:
 - by moving low-risk readers first, such as channel lookup, dock lookup, message-channel lookup, and default HTTP route registry access
 - by extending that same host-owned boundary into static consumers instead of introducing separate one-off metadata loaders
 - by starting runtime-registry migration with low-risk validation and normalization helpers while leaving lifecycle ordering and activation behavior unchanged
+- by starting actual low-risk runtime write ownership for tool, CLI, service, and command registrations only after normalization helpers existed, while leaving lifecycle ordering and activation behavior unchanged
 - by leaving start/stop ordering and duplicate-enforcement behavior in legacy subsystems where those subsystems are still the real owner
 - by treating hook execution and hook registration as separate migration concerns so event-pipeline work does not get conflated with record normalization
 - by starting loader/lifecycle migration with activation and SDK alias compatibility helpers while leaving discovery and policy flow unchanged

@@ -60,6 +60,7 @@ What has been implemented:
 - loader finalization policy results now route through `src/extension-host/loader-finalization-policy.ts`
 - loader final cache, readiness promotion, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 - channel, provider, gateway-method, tool, CLI, service, command, context-engine, and hook registration normalization now has a host-owned helper boundary for future catalog migration
+- low-risk runtime compatibility writes for tool, CLI, service, and command registrations now route through `src/extension-host/registry-writes.ts` ahead of broader catalog-backed registry ownership
 
 How it has been implemented:
 
@@ -67,6 +68,7 @@ How it has been implemented:
 - by keeping the existing catalog behavior intact while shifting metadata ownership into normalized host-owned records
 - by reusing the resolved-extension registry for static operator/documentation surfaces instead of creating separate metadata caches
 - by beginning runtime registration migration with host-owned normalization helpers before attempting full canonical catalog publication
+- by beginning actual low-risk runtime write ownership for tool, CLI, service, and command registrations before attempting full canonical catalog publication
 - by moving cache-key construction and registry cache control behind host-owned helpers before attempting canonical catalog publication
 - by beginning loader-path migration with host-owned compatibility, candidate-planning, import-flow, policy, runtime, register-flow, candidate-orchestration, top-level load orchestration, record-state with compatibility lifecycle mapping, and finalization helpers before attempting canonical catalog publication
 - by extracting lazy runtime proxy creation and alias-wired Jiti module-loader creation into host-owned helpers before catalog publication work
