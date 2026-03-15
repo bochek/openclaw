@@ -71,6 +71,7 @@ What has been implemented:
 - gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition now route through `src/extension-host/gateway-methods.ts` ahead of broader catalog-backed gateway ownership
 - plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking now route through `src/extension-host/tool-runtime.ts` ahead of broader catalog-backed tool ownership
 - plugin provider projection from registry entries into runtime provider objects now routes through `src/extension-host/provider-runtime.ts` ahead of broader catalog-backed provider ownership
+- plugin provider discovery filtering, order grouping, and result normalization now route through `src/extension-host/provider-discovery.ts` ahead of broader catalog-backed provider-discovery ownership
 
 How it has been implemented:
 
@@ -104,6 +105,8 @@ How it has been implemented:
 - by extracting gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition into a host-owned gateway-methods helper before broader catalog-backed gateway ownership
 - by extracting plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking into a host-owned tool-runtime helper before broader catalog-backed tool ownership
 - by extracting provider projection from registry entries into runtime provider objects into a host-owned provider-runtime helper before broader catalog-backed provider ownership
+- by extracting provider discovery filtering, order grouping, and result normalization into a host-owned provider-discovery helper before broader catalog-backed provider-discovery ownership
+- by extracting provider-id normalization into `src/agents/provider-id.ts` so provider-only host seams do not inherit the heavier agent and browser dependency graph from `src/agents/model-selection.ts`
 
 What remains pending:
 

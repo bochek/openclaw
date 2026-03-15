@@ -50,6 +50,7 @@ What has been implemented:
 - gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition now route through `src/extension-host/gateway-methods.ts`
 - plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking now route through `src/extension-host/tool-runtime.ts`
 - plugin provider projection from registry entries into runtime provider objects now route through `src/extension-host/provider-runtime.ts`
+- plugin provider discovery filtering, order grouping, and result normalization now route through `src/extension-host/provider-discovery.ts`
 - plugin SDK alias resolution now routes through `src/extension-host/loader-compat.ts`
 - loader alias-wired module loader creation now routes through `src/extension-host/loader-module-loader.ts`
 - loader cache key construction and registry cache control now route through `src/extension-host/loader-cache.ts`
@@ -108,6 +109,8 @@ How it has been implemented:
 - by extracting gateway method-id aggregation, plugin diagnostic shaping, and extra-handler composition into a host-owned gateway-methods helper while request dispatch semantics remain in the gateway server code
 - by extracting plugin tool resolution, conflict handling, optional-tool gating, and plugin-tool metadata tracking into a host-owned tool-runtime helper while `src/plugins/tools.ts` remains the loader and config-normalization facade
 - by extracting provider projection from registry entries into runtime provider objects into a host-owned provider-runtime helper while `src/plugins/providers.ts` remains the loader and config-normalization facade
+- by extracting provider discovery filtering, order grouping, and result normalization into a host-owned provider-discovery helper while `src/plugins/provider-discovery.ts` remains the compatibility facade around the legacy provider loader path
+- by extracting provider-id normalization into `src/agents/provider-id.ts` so provider-only host seams do not inherit the heavier agent and browser dependency graph from `src/agents/model-selection.ts`
 
 What remains pending:
 
