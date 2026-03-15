@@ -24,6 +24,10 @@ import {
   resolveExtensionHostTtsApiKey,
   resolveExtensionHostTtsProviderOrder,
 } from "../extension-host/tts-runtime-registry.js";
+import {
+  resolveExtensionHostTtsProvider,
+  resolveExtensionHostTtsRequestSetup,
+} from "../extension-host/tts-runtime-setup.js";
 import { logVerbose } from "../globals.js";
 import { stripMarkdown } from "../line/markdown-to-line.js";
 import { CONFIG_DIR, resolveUserPath } from "../utils.js";
@@ -420,23 +424,7 @@ export function setTtsEnabled(prefsPath: string, enabled: boolean): void {
   setTtsAutoMode(prefsPath, enabled ? "always" : "off");
 }
 
-export function getTtsProvider(config: ResolvedTtsConfig, prefsPath: string): TtsProvider {
-  const prefs = readPrefs(prefsPath);
-  if (prefs.tts?.provider) {
-    return prefs.tts.provider;
-  }
-  if (config.providerSource === "config") {
-    return config.provider;
-  }
-
-  if (resolveTtsApiKey(config, "openai")) {
-    return "openai";
-  }
-  if (resolveTtsApiKey(config, "elevenlabs")) {
-    return "elevenlabs";
-  }
-  return "edge";
-}
+export const getTtsProvider = resolveExtensionHostTtsProvider;
 
 export function setTtsProvider(prefsPath: string, provider: TtsProvider): void {
   updatePrefs(prefsPath, (prefs) => {
@@ -482,35 +470,6 @@ export const resolveTtsProviderOrder = resolveExtensionHostTtsProviderOrder;
 
 export const isTtsProviderConfigured = isExtensionHostTtsProviderConfigured;
 
-function resolveTtsRequestSetup(params: {
-  text: string;
-  cfg: OpenClawConfig;
-  prefsPath?: string;
-  providerOverride?: TtsProvider;
-}):
-  | {
-      config: ResolvedTtsConfig;
-      providers: TtsProvider[];
-    }
-  | {
-      error: string;
-    } {
-  const config = resolveTtsConfig(params.cfg);
-  const prefsPath = params.prefsPath ?? resolveTtsPrefsPath(config);
-  if (params.text.length > config.maxTextLength) {
-    return {
-      error: `Text too long (${params.text.length} chars, max ${config.maxTextLength})`,
-    };
-  }
-
-  const userProvider = getTtsProvider(config, prefsPath);
-  const provider = params.providerOverride ?? userProvider;
-  return {
-    config,
-    providers: resolveExtensionHostTtsProviderOrder(provider),
-  };
-}
-
 export async function textToSpeech(params: {
   text: string;
   cfg: OpenClawConfig;
@@ -518,10 +477,12 @@ export async function textToSpeech(params: {
   channel?: string;
   overrides?: TtsDirectiveOverrides;
 }): Promise<TtsResult> {
-  const setup = resolveTtsRequestSetup({
+  const config = resolveTtsConfig(params.cfg);
+  const prefsPath = params.prefsPath ?? resolveTtsPrefsPath(config);
+  const setup = resolveExtensionHostTtsRequestSetup({
     text: params.text,
-    cfg: params.cfg,
-    prefsPath: params.prefsPath,
+    config,
+    prefsPath,
     providerOverride: params.overrides?.provider,
   });
   if ("error" in setup) {
@@ -542,10 +503,12 @@ export async function textToSpeechTelephony(params: {
   cfg: OpenClawConfig;
   prefsPath?: string;
 }): Promise<TtsTelephonyResult> {
-  const setup = resolveTtsRequestSetup({
+  const config = resolveTtsConfig(params.cfg);
+  const prefsPath = params.prefsPath ?? resolveTtsPrefsPath(config);
+  const setup = resolveExtensionHostTtsRequestSetup({
     text: params.text,
-    cfg: params.cfg,
-    prefsPath: params.prefsPath,
+    config,
+    prefsPath,
   });
   if ("error" in setup) {
     return { success: false, error: setup.error };
