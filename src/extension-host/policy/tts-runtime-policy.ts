@@ -2,10 +2,10 @@ import type { TtsProvider } from "../../config/types.tts.js";
 import {
   listExtensionHostTtsRuntimeBackendCatalogEntries,
   type ExtensionHostRuntimeBackendCatalogEntry,
-} from "./runtime-backend-catalog.js";
+} from "../runtime-backend-catalog.js";
+import type { ResolvedTtsConfig } from "../tts-config.js";
+import { isExtensionHostTtsProviderConfigured } from "../tts-runtime-registry.js";
 import { resolveExtensionHostRuntimeBackendIdsByPolicy } from "./runtime-backend-policy.js";
-import type { ResolvedTtsConfig } from "./tts-config.js";
-import { isExtensionHostTtsProviderConfigured } from "./tts-runtime-registry.js";
 
 function isConfiguredTtsRuntimeBackend(
   config: ResolvedTtsConfig,

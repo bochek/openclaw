@@ -1,11 +1,11 @@
+import type {
+  ExtensionHostRuntimeBackendCatalogEntry,
+  ExtensionHostRuntimeBackendSubsystemId,
+} from "../runtime-backend-catalog.js";
 import {
   resolveExtensionHostDefaultRuntimeBackendIdByArbitration,
   resolveExtensionHostRuntimeBackendFallbackChainByArbitration,
 } from "./runtime-backend-arbitration.js";
-import type {
-  ExtensionHostRuntimeBackendCatalogEntry,
-  ExtensionHostRuntimeBackendSubsystemId,
-} from "./runtime-backend-catalog.js";
 
 type ExtensionHostRuntimeBackendPolicyPredicate = (
   entry: ExtensionHostRuntimeBackendCatalogEntry,

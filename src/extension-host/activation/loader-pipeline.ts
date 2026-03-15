@@ -2,7 +2,7 @@ import type { GatewayRequestHandler } from "../../gateway/server-methods/types.j
 import type { PluginRegistry } from "../../plugins/registry.js";
 import type { CreatePluginRuntimeOptions } from "../../plugins/runtime/index.js";
 import type { PluginRuntime } from "../../plugins/runtime/types.js";
-import { activateExtensionHostRegistry } from "./activation.js";
+import { activateExtensionHostRegistry } from "../activation.js";
 import { setCachedExtensionHostRegistry } from "./loader-cache.js";
 import { prepareExtensionHostLoaderExecution } from "./loader-execution.js";
 import type { ExtensionHostLoaderPreflightReady } from "./loader-preflight.js";
