@@ -5,6 +5,7 @@ import { resolveApiKeyForProvider } from "../agents/model-auth.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { DEFAULT_LOCAL_EMBEDDING_MODEL } from "../extension-host/embedding-runtime.js";
+import { listExtensionHostEmbeddingRemoteRuntimeBackendIds } from "../extension-host/runtime-backend-catalog.js";
 import { resolveMemoryBackendConfig } from "../memory/backend-config.js";
 import { hasConfiguredMemorySecretInput } from "../memory/secret-input.js";
 import { note } from "../terminal/note.js";
@@ -118,7 +119,8 @@ export async function noteMemorySearchHealth(
   if (hasLocalEmbeddings(resolved.local)) {
     return;
   }
-  for (const provider of ["openai", "gemini", "voyage", "mistral"] as const) {
+  const autoRemoteProviders = listExtensionHostEmbeddingRemoteRuntimeBackendIds();
+  for (const provider of autoRemoteProviders) {
     if (hasRemoteApiKey || (await hasApiKeyForProvider(provider, cfg, agentDir))) {
       return;
     }
@@ -144,7 +146,7 @@ export async function noteMemorySearchHealth(
       gatewayProbeWarning ? gatewayProbeWarning : null,
       "",
       "Fix (pick one):",
-      "- Set OPENAI_API_KEY, GEMINI_API_KEY, VOYAGE_API_KEY, or MISTRAL_API_KEY in your environment",
+      `- Set ${formatProviderEnvVarList(autoRemoteProviders.map(providerEnvVar))} in your environment`,
       `- Configure credentials: ${formatCliCommand("openclaw configure --section model")}`,
       `- For local embeddings: configure agents.defaults.memorySearch.provider and local model path`,
       `- To disable: ${formatCliCommand("openclaw config set agents.defaults.memorySearch.enabled false")}`,
@@ -212,6 +214,21 @@ function providerEnvVar(provider: string): string {
     default:
       return `${provider.toUpperCase()}_API_KEY`;
   }
+}
+
+function formatProviderEnvVarList(envVars: readonly string[]): string {
+  if (envVars.length === 0) {
+    return "an embedding provider API key";
+  }
+  if (envVars.length === 1) {
+    return envVars[0] ?? "an embedding provider API key";
+  }
+  if (envVars.length === 2) {
+    return `${envVars[0]} or ${envVars[1]}`;
+  }
+  const head = envVars.slice(0, -1).join(", ");
+  const tail = envVars.at(-1);
+  return tail ? `${head}, or ${tail}` : head;
 }
 
 function buildGatewayProbeWarning(

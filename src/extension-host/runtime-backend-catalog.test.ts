@@ -89,6 +89,16 @@ describe("runtime-backend-catalog", () => {
       ]),
     );
     expect(entries.find((entry) => entry.backendId === "google")?.selectorKeys).toContain("gemini");
+    expect(catalog.listExtensionHostMediaAutoRuntimeBackendIds("image")).toEqual([
+      "openai",
+      "google",
+    ]);
+    expect(
+      catalog.resolveExtensionHostMediaRuntimeDefaultModel({
+        capability: "image",
+        backendId: "openai",
+      }),
+    ).toBe("gpt-5-mini");
   });
 
   it("publishes TTS backends with telephony capability metadata", async () => {
@@ -122,5 +132,11 @@ describe("runtime-backend-catalog", () => {
       subsystemId: "tts",
       backendId: "edge",
     });
+    expect(catalog.listExtensionHostEmbeddingRemoteRuntimeBackendIds()).toEqual([
+      "openai",
+      "gemini",
+      "voyage",
+      "mistral",
+    ]);
   });
 });

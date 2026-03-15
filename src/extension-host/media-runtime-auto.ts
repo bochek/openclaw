@@ -14,16 +14,14 @@ import {
   normalizeExtensionHostMediaProviderId,
   type ExtensionHostMediaUnderstandingProviderRegistry,
 } from "../extension-host/media-runtime-registry.js";
-import {
-  AUTO_AUDIO_KEY_PROVIDERS,
-  AUTO_IMAGE_KEY_PROVIDERS,
-  AUTO_VIDEO_KEY_PROVIDERS,
-  DEFAULT_IMAGE_MODELS,
-} from "../media-understanding/defaults.js";
 import { fileExists } from "../media-understanding/fs.js";
 import { extractGeminiResponse } from "../media-understanding/output-extract.js";
 import type { MediaUnderstandingCapability } from "../media-understanding/types.js";
 import { runExec } from "../process/exec.js";
+import {
+  listExtensionHostMediaAutoRuntimeBackendIds,
+  resolveExtensionHostMediaRuntimeDefaultModel,
+} from "./runtime-backend-catalog.js";
 
 export type ActiveMediaModel = {
   provider: string;
@@ -351,8 +349,11 @@ async function resolveKeyEntry(params: {
         return activeEntry;
       }
     }
-    for (const providerId of AUTO_IMAGE_KEY_PROVIDERS) {
-      const model = DEFAULT_IMAGE_MODELS[providerId];
+    for (const providerId of listExtensionHostMediaAutoRuntimeBackendIds("image")) {
+      const model = resolveExtensionHostMediaRuntimeDefaultModel({
+        capability: "image",
+        backendId: providerId,
+      });
       const entry = await checkProvider(providerId, model);
       if (entry) {
         return entry;
@@ -369,7 +370,7 @@ async function resolveKeyEntry(params: {
         return activeEntry;
       }
     }
-    for (const providerId of AUTO_VIDEO_KEY_PROVIDERS) {
+    for (const providerId of listExtensionHostMediaAutoRuntimeBackendIds("video")) {
       const entry = await checkProvider(providerId, undefined);
       if (entry) {
         return entry;
@@ -385,7 +386,7 @@ async function resolveKeyEntry(params: {
       return activeEntry;
     }
   }
-  for (const providerId of AUTO_AUDIO_KEY_PROVIDERS) {
+  for (const providerId of listExtensionHostMediaAutoRuntimeBackendIds("audio")) {
     const entry = await checkProvider(providerId, undefined);
     if (entry) {
       return entry;
@@ -471,7 +472,12 @@ export async function resolveAutoImageModel(params: {
     if (!provider) {
       return null;
     }
-    const model = entry.model ?? DEFAULT_IMAGE_MODELS[provider];
+    const model =
+      entry.model ??
+      resolveExtensionHostMediaRuntimeDefaultModel({
+        capability: "image",
+        backendId: provider,
+      });
     if (!model) {
       return null;
     }

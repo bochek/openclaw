@@ -8,6 +8,9 @@ const resolveAgentDir = vi.hoisted(() => vi.fn(() => "/tmp/agent-default"));
 const resolveMemorySearchConfig = vi.hoisted(() => vi.fn());
 const resolveApiKeyForProvider = vi.hoisted(() => vi.fn());
 const resolveMemoryBackendConfig = vi.hoisted(() => vi.fn());
+const listExtensionHostEmbeddingRemoteRuntimeBackendIds = vi.hoisted(() =>
+  vi.fn(() => ["openai", "gemini", "voyage", "mistral"]),
+);
 
 vi.mock("../terminal/note.js", () => ({
   note,
@@ -28,6 +31,10 @@ vi.mock("../agents/model-auth.js", () => ({
 
 vi.mock("../memory/backend-config.js", () => ({
   resolveMemoryBackendConfig,
+}));
+
+vi.mock("../extension-host/runtime-backend-catalog.js", () => ({
+  listExtensionHostEmbeddingRemoteRuntimeBackendIds,
 }));
 
 import { noteMemorySearchHealth } from "./doctor-memory-search.js";
@@ -58,6 +65,7 @@ describe("noteMemorySearchHealth", () => {
     resolveApiKeyForProvider.mockRejectedValue(new Error("missing key"));
     resolveMemoryBackendConfig.mockReset();
     resolveMemoryBackendConfig.mockReturnValue({ backend: "builtin", citations: "auto" });
+    listExtensionHostEmbeddingRemoteRuntimeBackendIds.mockClear();
   });
 
   it("does not warn when local provider is set with no explicit modelPath (default model fallback)", async () => {
@@ -264,6 +272,7 @@ describe("noteMemorySearchHealth", () => {
     expect(note).toHaveBeenCalledTimes(1);
     const message = String(note.mock.calls[0]?.[0] ?? "");
     expect(message).toContain("openclaw configure --section model");
+    expect(message).toContain("OPENAI_API_KEY, GEMINI_API_KEY, VOYAGE_API_KEY, or MISTRAL_API_KEY");
   });
 
   it("still warns in auto mode when only ollama credentials exist", async () => {
@@ -289,6 +298,7 @@ describe("noteMemorySearchHealth", () => {
     const providerCalls = resolveApiKeyForProvider.mock.calls as Array<[{ provider: string }]>;
     const providersChecked = providerCalls.map(([arg]) => arg.provider);
     expect(providersChecked).toEqual(["openai", "google", "voyage", "mistral"]);
+    expect(listExtensionHostEmbeddingRemoteRuntimeBackendIds).toHaveBeenCalledTimes(1);
   });
 });
 

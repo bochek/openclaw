@@ -22,7 +22,6 @@ import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { MediaAttachmentCache } from "../media-understanding/attachments.js";
 import {
   CLI_OUTPUT_MAX_BUFFER,
-  DEFAULT_AUDIO_MODELS,
   DEFAULT_TIMEOUT_SECONDS,
   MIN_AUDIO_FILE_BYTES,
 } from "../media-understanding/defaults.js";
@@ -42,6 +41,7 @@ import {
   resolvePrompt,
   resolveTimeoutMs,
 } from "./media-runtime-config.js";
+import { resolveExtensionHostMediaRuntimeDefaultModel } from "./runtime-backend-catalog.js";
 
 export type ProviderRegistry = Map<string, MediaUnderstandingProvider>;
 
@@ -466,7 +466,13 @@ export async function runProviderEntry(params: {
       config: params.config,
       entry,
     });
-    const model = entry.model?.trim() || DEFAULT_AUDIO_MODELS[providerId] || entry.model;
+    const model =
+      entry.model?.trim() ||
+      resolveExtensionHostMediaRuntimeDefaultModel({
+        capability: "audio",
+        backendId: providerId,
+      }) ||
+      entry.model;
     const result = await executeWithApiKeyRotation({
       provider: providerId,
       apiKeys,
