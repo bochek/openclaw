@@ -73,6 +73,7 @@ What has been implemented so far:
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader top-level load orchestration now routes through `src/extension-host/loader-orchestrator.ts`
+- loader discovery and manifest bootstrap now routes through `src/extension-host/loader-bootstrap.ts`
 - loader mutable activation state now routes through `src/extension-host/loader-session.ts`
 - loader activation policy outcomes now route through `src/extension-host/loader-activation-policy.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`, which now enforces an explicit loader lifecycle state machine while preserving compatibility `PluginRecord.status` values
@@ -101,6 +102,7 @@ How it has been done:
 - by starting loader and lifecycle migration with compatibility helpers for activation and SDK alias resolution before changing discovery or policy behavior
 - by moving cache-key construction, cache reads, cache writes, and cache clearing behind host-owned helpers before changing activation-state ownership
 - by extracting lazy runtime proxy creation and alias-wired Jiti module-loader creation into host-owned helpers before broader bootstrap or lifecycle ownership changes
+- by extracting discovery, manifest loading, manifest diagnostics, discovery-policy logging, provenance building, and candidate ordering into a host-owned loader-bootstrap helper before broader lifecycle ownership changes
 - by moving loader-owned policy helpers next, while keeping module loading and enablement flow behavior unchanged
 - by moving initial candidate planning and record construction behind host-owned helpers before changing import and registration flow
 - by moving entry-path opening and module import behind host-owned helpers before changing cache wiring or lifecycle orchestration
@@ -139,6 +141,7 @@ Committed implementation slices so far:
 - `97e2af7f97` `Plugins: add loader discovery policy`
 - `83b18eab72` `Plugins: share loader provenance helpers`
 - `52495d23d5` `Plugins: extract loader runtime factories`
+- `6e187ffb62` `Plugins: extract loader bootstrap`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
