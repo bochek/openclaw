@@ -399,6 +399,9 @@ The host must track both:
 - `agent.tool.expose`
 - `control.command.expose`
 - `interaction.handle`
+- `conversation.bind`
+- `conversation.bind.approve`
+- `conversation.control`
 - `rpc.expose`
 - `service.background`
 - `http.route.gateway`
@@ -432,6 +435,8 @@ Examples:
 - prompt mutation or prompt injection behavior
 - sync transcript-write participation
 - fail-open versus fail-closed route augmentation
+- whether an extension may bind conversations without per-request operator approval
+- whether an interaction handler may invoke conversation-control verbs
 
 This preserves the intent of current controls such as `plugins.entries.<id>.hooks.allowPromptInjection`.
 
@@ -441,6 +446,8 @@ These should require explicit operator approval or a strong default policy:
 
 - `runtime.veto-send`
 - `runtime.route-augment`
+- `conversation.bind`
+- `conversation.bind.approve`
 - `runtime.backend-register`
 - `credentials.write`
 - `process.spawn`
@@ -448,6 +455,29 @@ These should require explicit operator approval or a strong default policy:
 - `filesystem.workspace.write`
 
 High-risk permissions should still matter in `advisory` mode because they drive operator trust decisions even before real isolation exists.
+
+### Binding and interaction ownership
+
+Conversation binding and interactive callback routing should be treated as host-owned lifecycle surfaces.
+
+The host must own:
+
+- namespace registration and dedupe for interactive callbacks
+- approval persistence for extension-requested conversation binds
+- restore-on-restart behavior for approved bindings
+- cleanup behavior for detached or stale bindings
+- channel-surface gating for first-cut conversation-control verbs
+
+Extensions may own:
+
+- the logic that decides whether to request a bind
+- the interaction payload semantics
+- channel-specific presentation details that fit inside the host-owned adapter contract
+
+Important migration rule:
+
+- do not turn `src/plugins/conversation-binding.ts` or `src/plugins/interactive.ts` into the permanent architecture target
+- those behaviors should migrate into host-owned lifecycle and policy surfaces, with compatibility bridges only where needed
 
 ## Persistence Ownership
 

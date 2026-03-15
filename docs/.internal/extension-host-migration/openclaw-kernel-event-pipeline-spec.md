@@ -120,6 +120,7 @@ Recommended families:
 - `account.stopped`
 - `ingress.received`
 - `ingress.normalized`
+- `ingress.claiming`
 - `routing.resolving`
 - `routing.resolved`
 - `session.starting`
@@ -150,6 +151,12 @@ Recommended families:
 - `subagent.completed`
 
 These families intentionally cover the behavior currently spread across `src/plugins/hooks.ts:1`, `src/hooks/internal-hooks.ts:13`, `src/infra/agent-events.ts:3`, and channel monitors.
+
+`ingress.claiming` exists to absorb behavior that is currently tempting to model as plugin-specific hooks or direct dispatch short-circuits:
+
+- bound conversation ownership
+- first-claim-wins plugin or extension routing
+- future route-claim or veto decisions that must run before command or agent dispatch
 
 ## Canonical Event Envelope
 
@@ -225,6 +232,15 @@ Examples today:
 - subagent delivery target selection in `extensions/discord/src/subagent-hooks.ts:103`
 
 Only `veto` and `resolver` handlers may influence routing or delivery decisions.
+
+`ingress.claiming` is the first concrete place where a resolver-like route claim is expected to matter during migration.
+
+First-cut parity rule for `ingress.claiming`:
+
+- claim handlers run sequentially in deterministic order
+- the first successful claim wins ownership of the inbound turn
+- passive observers still run in their own stages instead of being skipped accidentally
+- the migration bridge may target a single extension when a host-owned binding already resolved the owner
 
 ## Execution Modes
 

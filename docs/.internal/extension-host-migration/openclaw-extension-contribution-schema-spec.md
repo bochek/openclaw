@@ -599,9 +599,47 @@ Required descriptor metadata:
 - fail-open or fail-closed behavior
 - whether the handler must run on a sync hot path
 
+Additional first-cut cases that should be modeled here:
+
+- ingress claim or bound-route ownership decisions
+- explicit conversation binding requests or detaches
+- send veto decisions
+
+Additional metadata when binding or ingress claim is involved:
+
+- binding mode (`claim-only`, `bind`, `detach`, or `mixed`)
+- whether operator approval is required before a bind can take effect
+- persistence mode for approved or detached bindings
+- restore-on-restart behavior
+- whether the handler is allowed to short-circuit downstream command or agent dispatch
+
+Important migration rule:
+
+- do not preserve `inbound_claim` as a permanent plugin-era hook name in the final model
+- bridge it during migration if needed, but normalize it into canonical ingress-stage route-augmentation behavior
+
 ### `capability.interaction`
 
 Represents canonical interaction handlers such as slash commands, buttons, form submissions, or modal actions.
+
+Required descriptor metadata:
+
+- interaction namespace or routing key
+- supported interaction classes
+- supported channels or adapter families
+- dedupe class or id strategy when callbacks may be retried
+- fallback policy when no handler claims the interaction
+- whether the handler may request conversation binding or detachment
+
+First-cut constraint:
+
+- the first interactive runtime cut may stay limited to Telegram and Discord because those are the validated immediate needs
+- that limitation is a rollout choice, not a reason to encode Telegram- or Discord-specific handler APIs as the permanent kernel contract
+
+Ownership rule:
+
+- extensions may own interaction logic and channel-specific rendering details
+- the host owns namespace registration, dedupe, callback routing, approval persistence, and binding policy
 
 ### `capability.rpc`
 
@@ -633,6 +671,23 @@ Required descriptor metadata:
 - exclusivity or parallelism policy
 
 This family exists because not all runtime providers are user-facing adapters.
+
+### Adapter-runtime helper contracts
+
+Some interactive and bound-conversation extensions need a bounded set of runtime helper contracts from the active adapter.
+
+Examples of first-cut helpers:
+
+- typing leases
+- message edit or delete
+- component or reply-markup updates
+- pin or unpin
+- thread or topic rename when already supported by the adapter
+
+Important rule:
+
+- these helpers should be modeled as adapter-runtime contracts or host-injected capabilities
+- they should not be frozen into permanent Telegram- or Discord-shaped kernel APIs
 
 ### `service.background`
 

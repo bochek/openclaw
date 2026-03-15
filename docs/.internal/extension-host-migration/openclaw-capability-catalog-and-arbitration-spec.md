@@ -267,6 +267,11 @@ Includes:
 - voice or telephony actions
 - selected interaction or workflow actions
 
+Important interaction rule:
+
+- interaction-driven actions must be filtered by the current binding and route context
+- a bound conversation should only surface interaction actions that are valid for the owning extension and current adapter capabilities
+
 ### Operator-visible
 
 Used for admin, control, setup, CLI, and diagnostic surfaces.
@@ -417,6 +422,12 @@ When the agent or runtime needs one provider for a canonical action, selection s
 7. deterministic fallback by extension id and contribution id
 
 This is especially important for `message.send` and `message.reply`.
+
+It also applies to interaction and conversation-control actions, which should prefer:
+
+- current binding owner
+- current adapter support
+- explicit target selection only when ownership or adapter support is ambiguous
 
 ## Messaging Example
 
