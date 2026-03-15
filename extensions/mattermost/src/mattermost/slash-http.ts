@@ -209,8 +209,6 @@ async function authorizeSlashInvocation(params: {
 export function createSlashCommandHttpHandler(params: SlashHttpHandlerParams) {
   const { account, cfg, runtime, commandTokens, triggerMap, log } = params;
 
-  const MAX_BODY_BYTES = 64 * 1024; // 64KB
-
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "POST") {
       res.statusCode = 405;

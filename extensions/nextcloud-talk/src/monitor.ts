@@ -173,6 +173,8 @@ export function readNextcloudTalkWebhookBody(
   maxBodyBytes: number,
 ): Promise<string> {
   return readRequestBodyWithLimit(req, {
+    // This read happens before signature verification, so keep the unauthenticated
+    // body budget bounded even if the operator-configured post-parse limit is larger.
     maxBytes: Math.min(maxBodyBytes, PREAUTH_WEBHOOK_MAX_BODY_BYTES),
     timeoutMs: PREAUTH_WEBHOOK_BODY_TIMEOUT_MS,
   });
