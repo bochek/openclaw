@@ -558,15 +558,10 @@ describe("discord component interactions", () => {
     expect(resolveDiscordModalEntry({ id: "mdl_1", consume: false })).not.toBeNull();
   });
 
-  it("passes false auth to plugin Discord interactions for non-allowlisted guild users", async () => {
+  it("blocks plugin Discord interactions for non-allowlisted guild users", async () => {
     registerDiscordComponentEntries({
       entries: [createButtonEntry({ callbackData: "codex:approve" })],
       modals: [],
-    });
-    dispatchPluginInteractiveHandlerMock.mockResolvedValue({
-      matched: true,
-      handled: true,
-      duplicate: false,
     });
 
     const button = createDiscordComponentButton(
@@ -590,13 +585,11 @@ describe("discord component interactions", () => {
 
     await button.run(interaction, { cid: "btn_1" } as ComponentData);
 
-    expect(dispatchPluginInteractiveHandlerMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        ctx: expect.objectContaining({
-          auth: { isAuthorizedSender: false },
-        }),
-      }),
-    );
+    expect(dispatchPluginInteractiveHandlerMock).not.toHaveBeenCalled();
+    expect(interaction.reply).toHaveBeenCalledWith({
+      content: "You are not authorized to use this button.",
+      ephemeral: true,
+    });
     expect(dispatchReplyMock).not.toHaveBeenCalled();
   });
 
@@ -747,6 +740,39 @@ describe("discord component interactions", () => {
     expect(update).toHaveBeenCalledWith({ components: [] });
     expect(followUp).toHaveBeenCalledWith({
       content: "Binding approved.",
+      ephemeral: true,
+    });
+    expect(dispatchReplyMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps plugin binding approval controls when the approval is already expired", async () => {
+    resolvePluginConversationBindingApprovalMock.mockResolvedValue({ status: "expired" });
+    buildPluginBindingResolvedTextMock.mockReturnValue(
+      "That plugin bind approval expired. Retry the bind command.",
+    );
+    registerDiscordComponentEntries({
+      entries: [
+        createButtonEntry({
+          callbackData: buildPluginBindingApprovalCustomId("approval-expired", "allow-once"),
+        }),
+      ],
+      modals: [],
+    });
+    const button = createDiscordComponentButton(createComponentContext());
+    const update = vi.fn().mockResolvedValue(undefined);
+    const followUp = vi.fn().mockResolvedValue(undefined);
+    const interaction = {
+      ...(createComponentButtonInteraction().interaction as any),
+      update,
+      followUp,
+    } as ButtonInteraction;
+
+    await button.run(interaction, { cid: "btn_1" } as ComponentData);
+
+    expect(resolvePluginConversationBindingApprovalMock).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+    expect(followUp).toHaveBeenCalledWith({
+      content: "That plugin bind approval expired. Retry the bind command.",
       ephemeral: true,
     });
     expect(dispatchReplyMock).not.toHaveBeenCalled();
