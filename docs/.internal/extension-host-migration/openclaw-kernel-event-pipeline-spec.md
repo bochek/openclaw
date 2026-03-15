@@ -42,13 +42,13 @@ Relevant prerequisite work that has landed:
 - loader module-export resolution, config validation, and memory-slot load decisions now have a host-owned helper boundary
 - loader post-import planning and `register(...)` execution now have a host-owned helper boundary
 - loader per-candidate orchestration now has a host-owned helper boundary
-- loader record-state transitions now have a host-owned helper boundary
+- loader record-state transitions now have a host-owned helper boundary, including explicit compatibility `lifecycleState` mapping
 - loader final cache, warning, and activation finalization now has a host-owned helper boundary
 
 Why this matters for this spec:
 
 - event work should land on top of a host-owned boundary and normalized contribution model rather than on top of more plugin-era runtime seams
-- the current implementation has deliberately not started bridge or stage work before those earlier boundaries were in place, including the first loader-runtime and record-state seams
+- the current implementation has deliberately not started bridge or stage work before those earlier boundaries were in place, including the first loader-runtime, record-state, and finalization seams
 
 ## Design Goals
 

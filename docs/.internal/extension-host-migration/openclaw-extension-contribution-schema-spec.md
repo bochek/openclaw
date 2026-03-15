@@ -46,7 +46,7 @@ What has been implemented:
 - loader module-export resolution, config validation, and memory-slot load decisions now route through `src/extension-host/loader-runtime.ts`
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
-- loader record-state transitions now route through `src/extension-host/loader-state.ts`
+- loader record-state transitions now route through `src/extension-host/loader-state.ts`, including explicit compatibility `lifecycleState` mapping
 - loader final cache, warning, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 
 How it has been implemented:
@@ -56,7 +56,7 @@ How it has been implemented:
 - by moving static metadata consumers onto the normalized model before attempting runtime contribution migration
 - by keeping legacy manifest records available only as compatibility projections while new readers move to the normalized shape
 - by starting runtime contribution migration with normalization helpers that preserve the legacy plugin API surface
-- by making the first loader compatibility, candidate-planning, import-flow, runtime-decision, register-flow, candidate-orchestration, record-state, and finalization helpers explicit host-owned seams before introducing a versioned compatibility layer
+- by making the first loader compatibility, candidate-planning, import-flow, runtime-decision, register-flow, candidate-orchestration, record-state with compatibility lifecycle mapping, and finalization helpers explicit host-owned seams before introducing a versioned compatibility layer
 
 What remains pending:
 

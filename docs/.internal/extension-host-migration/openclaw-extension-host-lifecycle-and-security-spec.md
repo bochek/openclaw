@@ -43,7 +43,7 @@ What has been implemented:
 - loader module-export resolution, config validation, and memory-slot load decisions now route through `src/extension-host/loader-runtime.ts`
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
-- loader record-state transitions now route through `src/extension-host/loader-state.ts`
+- loader record-state transitions now route through `src/extension-host/loader-state.ts`, including explicit compatibility `lifecycleState` mapping
 - loader final cache, warning, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 
 How it has been implemented:
@@ -64,10 +64,11 @@ How it has been implemented:
 - by composing those seams into one host-owned per-candidate loader orchestrator before moving final lifecycle-state behavior
 - by moving record-state transitions next while leaving the lifecycle state machine itself unimplemented
 - by moving cache writes, provenance warnings, final memory-slot warnings, and activation into a host-owned loader finalizer before introducing an explicit lifecycle state machine
+- by adding explicit compatibility `lifecycleState` mapping on loader-owned plugin records before introducing the full lifecycle state machine
 
 What is still pending from this spec:
 
-- the lifecycle state machine
+- the full lifecycle state machine
 - activation pipeline ownership
 - host-owned registries for setup, CLI, routes, services, slots, and backends
 - permission-mode enforcement
