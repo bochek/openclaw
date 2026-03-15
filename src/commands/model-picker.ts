@@ -401,7 +401,7 @@ export async function promptDefaultModel(
       workspaceDir: params.workspaceDir,
     });
     if (applied.defaultModel) {
-      await runProviderModelSelectedHook({
+      await runExtensionHostProviderModelSelectedHook({
         config: applied.config,
         model: applied.defaultModel,
         prompter: params.prompter,
