@@ -54,7 +54,7 @@ What has landed:
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader top-level load orchestration now routes through `src/extension-host/loader-orchestrator.ts`
-- loader record-state transitions now route through `src/extension-host/loader-state.ts`, including explicit compatibility `lifecycleState` mapping
+- loader record-state transitions now route through `src/extension-host/loader-state.ts`, which now enforces an explicit loader lifecycle state machine while preserving compatibility `PluginRecord.status` values
 - loader final cache, warning, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 - runtime registration normalization has started in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registrations
 - several existing consumers now read host-owned normalized data instead of plugin-era manifest or runtime state directly:
@@ -85,9 +85,10 @@ How it was done:
 - by moving loader runtime decisions next, while preserving lazy loading, config validation behavior, and memory-slot policy behavior
 - by moving post-import planning and `register(...)` execution behind host-owned helpers before changing entry-path and import flow
 - by composing those seams into one host-owned per-candidate orchestrator before changing cache and lifecycle finalization behavior
-- by moving loader record-state transitions into host-owned helpers before introducing a full lifecycle state machine
+- by moving loader record-state transitions into host-owned helpers before enforcing them as a loader lifecycle state machine
 - by moving cache writes, provenance warnings, final memory-slot warnings, and activation into a host-owned loader finalizer before introducing an explicit lifecycle state machine
-- by adding explicit compatibility `lifecycleState` mapping on loader-owned plugin records before introducing a full lifecycle state machine
+- by adding explicit compatibility `lifecycleState` mapping on loader-owned plugin records before enforcing the loader lifecycle state machine
+- by turning that compatibility `lifecycleState` field into an enforced loader lifecycle state machine with readiness promotion during finalization
 - by moving the remaining top-level loader orchestration into a host-owned module so `src/plugins/loader.ts` becomes a compatibility facade instead of the real owner
 - by moving static and lookup-heavy consumers first, where the ownership boundary matters but runtime risk is lower
 
@@ -103,13 +104,14 @@ Committed implementation slices so far:
 - `33ef55a9ee` `Plugins: add loader lifecycle state mapping`
 - `6590e19095` `Plugins: extract loader cache control`
 - `c8d82a8f19` `Plugins: extract loader orchestration`
+- `d32f65eb5e` `Plugins: add loader lifecycle state machine`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
 What has not landed:
 
 - keeping the cutover inventory current as more surfaces move
-- the full lifecycle state machine and remaining explicit activation-state and policy semantics
+- broader lifecycle ownership beyond the loader state machine, plus remaining explicit activation-state and policy semantics
 - host-owned registration surfaces beyond the first channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook helper slices
 - SDK compatibility translation work
 - canonical event stages
@@ -1326,7 +1328,7 @@ Current implementation status:
 - the host now owns active registry state
 - the host now exposes resolved static registries for static consumers
 - activation, loader cache control, loader policy, loader runtime decisions, loader top-level load orchestration, loader record-state helpers, and loader finalization now route through `src/extension-host/*`
-- broader lifecycle ownership, registration surfaces, policy gates, and activation-state management are still pending
+- broader lifecycle ownership beyond the loader state machine, registration surfaces, policy gates, and activation-state management are still pending
 
 ## Phase 3: Broader Legacy Compatibility Bridges
 

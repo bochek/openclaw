@@ -14,7 +14,7 @@ The kernel does not participate in these concerns directly.
 
 - [x] Write the initial boundary cutover inventory for every current plugin-owned surface.
 - [ ] Keep the boundary cutover inventory updated as surfaces move.
-- [ ] Implement the extension lifecycle state machine and document the concrete runtime states in code.
+- [ ] Extend the loader lifecycle state machine into full extension-host lifecycle ownership and document the concrete runtime states in code.
 - [ ] Implement advisory versus enforced permission handling exactly as specified here.
 - [ ] Implement host-owned registries for config, setup, CLI, routes, services, slots, and backends.
 - [ ] Implement per-extension state ownership and migration from current shared plugin state.
@@ -26,7 +26,8 @@ The kernel does not participate in these concerns directly.
 Current status against this spec:
 
 - registry ownership and the first compatibility-preserving loader slices have landed
-- lifecycle orchestration, policy gates, and activation-state management have not landed
+- a loader-scoped lifecycle state machine has landed
+- broader lifecycle orchestration, policy gates, and activation-state management have not landed
 
 What has been implemented:
 
@@ -45,8 +46,8 @@ What has been implemented:
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader top-level load orchestration now routes through `src/extension-host/loader-orchestrator.ts`
-- loader record-state transitions now route through `src/extension-host/loader-state.ts`, including explicit compatibility `lifecycleState` mapping
-- loader final cache, warning, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
+- loader record-state transitions now route through `src/extension-host/loader-state.ts`, which now enforces an explicit loader lifecycle state machine while preserving compatibility `PluginRecord.status` values
+- loader final cache, warning, and activation finalization now routes through `src/extension-host/loader-finalize.ts`, including readiness promotion for successfully registered plugins
 
 How it has been implemented:
 
@@ -65,14 +66,15 @@ How it has been implemented:
 - by moving loader runtime decisions next while preserving the current lazy-load, config-validation, and memory-slot behavior
 - by moving post-import planning and `register(...)` execution next while leaving entry-path and import flow unchanged
 - by composing those seams into one host-owned per-candidate loader orchestrator before moving final lifecycle-state behavior
-- by moving the remaining top-level loader orchestration into a host-owned module while leaving the full lifecycle state machine itself unimplemented
-- by moving record-state transitions next while leaving the lifecycle state machine itself unimplemented
+- by moving the remaining top-level loader orchestration into a host-owned module before enforcing the loader lifecycle state machine
+- by moving record-state transitions first into a compatibility layer and then into an enforced loader lifecycle state machine
 - by moving cache writes, provenance warnings, final memory-slot warnings, and activation into a host-owned loader finalizer before introducing an explicit lifecycle state machine
-- by adding explicit compatibility `lifecycleState` mapping on loader-owned plugin records before introducing the full lifecycle state machine
+- by adding explicit compatibility `lifecycleState` mapping on loader-owned plugin records before enforcing the loader lifecycle state machine
+- by promoting successfully registered plugins to `ready` during host-owned finalization while leaving broader activation-state semantics for later phases
 
 What is still pending from this spec:
 
-- the full lifecycle state machine
+- broader extension-host lifecycle ownership beyond the loader state machine
 - activation pipeline ownership
 - host-owned registries for setup, CLI, routes, services, slots, and backends
 - permission-mode enforcement

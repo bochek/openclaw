@@ -44,7 +44,7 @@ What has been implemented:
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader per-candidate orchestration now routes through `src/extension-host/loader-flow.ts`
 - loader top-level load orchestration now routes through `src/extension-host/loader-orchestrator.ts`
-- loader record-state transitions now route through `src/extension-host/loader-state.ts`, including explicit compatibility `lifecycleState` mapping
+- loader record-state transitions now route through `src/extension-host/loader-state.ts`, which now enforces an explicit loader lifecycle state machine while preserving compatibility `PluginRecord.status` values
 - loader final cache, warning, and activation finalization now routes through `src/extension-host/loader-finalize.ts`
 - channel, provider, gateway-method, tool, CLI, service, command, context-engine, and hook registration normalization now has a host-owned helper boundary for future catalog migration
 
@@ -56,6 +56,7 @@ How it has been implemented:
 - by beginning runtime registration migration with host-owned normalization helpers before attempting full canonical catalog publication
 - by moving cache-key construction and registry cache control behind host-owned helpers before attempting canonical catalog publication
 - by beginning loader-path migration with host-owned compatibility, candidate-planning, import-flow, policy, runtime, register-flow, candidate-orchestration, top-level load orchestration, record-state with compatibility lifecycle mapping, and finalization helpers before attempting canonical catalog publication
+- by converting the compatibility record-state layer into an enforced loader lifecycle state machine before catalog publication work
 
 What remains pending:
 
