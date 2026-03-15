@@ -186,7 +186,7 @@ describe("setupSearch", () => {
     );
   });
 
-  it("shows bundled plugin providers directly in the picker while keeping the external install path available", async () => {
+  it("shows manifest-discovered providers directly in the picker while keeping install available", async () => {
     loadOpenClawPlugins.mockReturnValue({
       searchProviders: [],
       plugins: [],
@@ -201,6 +201,11 @@ describe("setupSearch", () => {
           provides: ["providers.search.tavily"],
           origin: "bundled",
           source: "/tmp/bundled/tavily-search",
+          packageInstall: {
+            npmSpec: "@openclaw/tavily-search",
+            localPath: "extensions/tavily-search",
+            defaultChoice: "local",
+          },
           configSchema: {
             type: "object",
             required: ["apiKey"],
@@ -255,7 +260,7 @@ describe("setupSearch", () => {
     ["kimi", "Kimi (Moonshot)"],
     ["perplexity", "Perplexity Search"],
   ] as const)(
-    "does not duplicate built-in provider %s when a bundled search plugin registers the same provider id",
+    "does not duplicate registered provider %s when a search plugin registers the same provider id",
     async (providerId, providerLabel) => {
       loadOpenClawPlugins.mockReturnValue({
         searchProviders: [
@@ -534,13 +539,13 @@ describe("setupSearch", () => {
       expect.objectContaining({
         options: expect.arrayContaining([
           expect.objectContaining({
-            value: "brave",
-            label: "Brave Search [Active]",
+            value: "__keep_current__",
+            label: "Keep current provider (brave)",
           }),
           expect.objectContaining({
             value: "__install_plugin__",
             label: "Install provider plugin",
-            hint: "Add a web search plugin",
+            hint: "Install a web search plugin from npm or a local path",
           }),
         ]),
       }),
@@ -675,7 +680,7 @@ describe("setupSearch", () => {
     );
   });
 
-  it("shows a provider setup note from before_search_provider_configure hooks", async () => {
+  it("shows a provider setup note from before_provider_configure hooks", async () => {
     loadOpenClawPlugins.mockReturnValue({
       searchProviders: [
         {
@@ -719,13 +724,6 @@ describe("setupSearch", () => {
           source: "/tmp/tavily-search",
           handler: () => ({ note: "Generic provider guidance." }),
         },
-        {
-          pluginId: "tavily-search",
-          hookName: "before_search_provider_configure",
-          priority: 0,
-          source: "/tmp/tavily-search",
-          handler: () => ({ note: "Read the provider docs before entering your key." }),
-        },
       ],
     });
 
@@ -746,8 +744,7 @@ describe("setupSearch", () => {
     );
   });
 
-  it("fires after_search_provider_activate only when the active provider changes", async () => {
-    const afterActivate = vi.fn();
+  it("fires after_provider_activate only when the active provider changes", async () => {
     const afterProviderActivate = vi.fn();
     loadOpenClawPlugins.mockReturnValue({
       searchProviders: [
@@ -780,13 +777,6 @@ describe("setupSearch", () => {
           priority: 0,
           source: "/tmp/tavily-search",
           handler: afterProviderActivate,
-        },
-        {
-          pluginId: "tavily-search",
-          hookName: "after_search_provider_activate",
-          priority: 0,
-          source: "/tmp/tavily-search",
-          handler: afterActivate,
         },
       ],
     });
@@ -825,85 +815,6 @@ describe("setupSearch", () => {
       expect.objectContaining({
         providerKind: "search",
         slot: "providers.search",
-        providerId: "tavily",
-        previousProviderId: "brave",
-        intent: "switch-active",
-      }),
-      expect.objectContaining({
-        workspaceDir: undefined,
-      }),
-    );
-    expect(afterActivate).not.toHaveBeenCalled();
-  });
-
-  it("fires legacy after_search_provider_activate hooks when no generic provider hook is registered", async () => {
-    const afterActivate = vi.fn();
-    loadOpenClawPlugins.mockReturnValue({
-      searchProviders: [
-        {
-          pluginId: "tavily-search",
-          provider: {
-            id: "tavily",
-            name: "Tavily Search",
-            description: "Plugin search",
-            isAvailable: () => true,
-            search: async () => ({ content: "ok" }),
-          },
-        },
-      ],
-      plugins: [
-        {
-          id: "tavily-search",
-          name: "Tavily Search",
-          description: "External Tavily plugin",
-          origin: "workspace",
-          source: "/tmp/tavily-search",
-          configJsonSchema: undefined,
-          configUiHints: undefined,
-        },
-      ],
-      typedHooks: [
-        {
-          pluginId: "tavily-search",
-          hookName: "after_search_provider_activate",
-          priority: 0,
-          source: "/tmp/tavily-search",
-          handler: afterActivate,
-        },
-      ],
-    });
-
-    const cfg: OpenClawConfig = {
-      tools: {
-        web: {
-          search: {
-            provider: "brave",
-            enabled: true,
-            apiKey: "BSA-test-key",
-          },
-        },
-      },
-      plugins: {
-        entries: {
-          "tavily-search": {
-            enabled: true,
-            config: {
-              apiKey: "tvly-existing-key",
-            },
-          },
-        },
-      },
-    };
-
-    const { prompter } = createPrompter({
-      selectValue: "tavily",
-    });
-
-    const result = await setupSearch(cfg, runtime, prompter);
-
-    expect(result.tools?.web?.search?.provider).toBe("tavily");
-    expect(afterActivate).toHaveBeenCalledWith(
-      expect.objectContaining({
         providerId: "tavily",
         previousProviderId: "brave",
         intent: "switch-active",
@@ -1146,7 +1057,7 @@ describe("setupSearch", () => {
     });
   });
 
-  it("installs an external search plugin and continues provider setup for the discovered provider", async () => {
+  it("installs a search plugin and continues provider setup for the discovered provider", async () => {
     loadOpenClawPlugins.mockImplementation(({ config }: { config: OpenClawConfig }) => {
       const enabled = config.plugins?.entries?.["external-search"]?.enabled === true;
       return enabled

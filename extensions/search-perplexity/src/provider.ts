@@ -1,3 +1,4 @@
+import { Type } from "@sinclair/typebox";
 import {
   buildSearchRequestCacheIdentity,
   createSearchProviderSetupMetadata,
@@ -14,7 +15,7 @@ import {
   throwWebSearchApiError,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
-  type SearchProviderSetupUiMetadata,
+  type SearchProviderSetupMetadata,
   type SearchProviderPlugin,
   withTrustedWebToolsEndpoint,
   wrapWebContent,
@@ -29,6 +30,7 @@ const PERPLEXITY_KEY_PREFIXES = ["pplx-"];
 const OPENROUTER_KEY_PREFIXES = ["sk-or-"];
 const PERPLEXITY_RECENCY_VALUES = new Set(["day", "week", "month", "year"]);
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const MAX_SEARCH_COUNT = 10;
 
 const PERPLEXITY_SEARCH_CACHE = new Map<
   string,
@@ -376,7 +378,7 @@ function createPerplexityPayload(params: {
   return payload;
 }
 
-export const PERPLEXITY_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
+export const PERPLEXITY_SEARCH_PROVIDER_METADATA: SearchProviderSetupMetadata =
   createSearchProviderSetupMetadata({
     provider: "perplexity",
     label: "Perplexity Search",
@@ -390,7 +392,98 @@ export const PERPLEXITY_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata 
         resolvePerplexityConfig(resolveSearchConfig<WebSearchConfig>(params.search)),
       ).transport,
     }),
+    autodetectPriority: 50,
+    resolveRequestSchema: (params) => {
+      const runtimeTransport =
+        params.runtimeMetadata && typeof params.runtimeMetadata.perplexityTransport === "string"
+          ? params.runtimeMetadata.perplexityTransport
+          : undefined;
+      return runtimeTransport === "chat_completions"
+        ? createPerplexityChatSchema()
+        : createPerplexitySearchApiSchema();
+    },
   });
+
+function createPerplexitySearchApiSchema() {
+  return Type.Object({
+    query: Type.String({ description: "Search query string." }),
+    count: Type.Optional(
+      Type.Number({
+        description: "Number of results to return (1-10).",
+        minimum: 1,
+        maximum: MAX_SEARCH_COUNT,
+      }),
+    ),
+    freshness: Type.Optional(
+      Type.String({
+        description: "Filter by time: 'day' (24h), 'week', 'month', or 'year'.",
+      }),
+    ),
+    country: Type.Optional(
+      Type.String({
+        description:
+          "Native Perplexity Search API only. 2-letter country code for region-specific results (e.g., 'DE', 'US', 'ALL'). Default: 'US'.",
+      }),
+    ),
+    language: Type.Optional(
+      Type.String({
+        description:
+          "Native Perplexity Search API only. ISO 639-1 language code for results (e.g., 'en', 'de', 'fr').",
+      }),
+    ),
+    date_after: Type.Optional(
+      Type.String({
+        description:
+          "Native Perplexity Search API only. Only results published after this date (YYYY-MM-DD).",
+      }),
+    ),
+    date_before: Type.Optional(
+      Type.String({
+        description:
+          "Native Perplexity Search API only. Only results published before this date (YYYY-MM-DD).",
+      }),
+    ),
+    domain_filter: Type.Optional(
+      Type.Array(Type.String(), {
+        description:
+          "Native Perplexity Search API only. Domain filter (max 20). Allowlist: ['nature.com'] or denylist: ['-reddit.com']. Cannot mix.",
+      }),
+    ),
+    max_tokens: Type.Optional(
+      Type.Number({
+        description:
+          "Native Perplexity Search API only. Total content budget across all results (default: 25000, max: 1000000).",
+        minimum: 1,
+        maximum: 1000000,
+      }),
+    ),
+    max_tokens_per_page: Type.Optional(
+      Type.Number({
+        description:
+          "Native Perplexity Search API only. Max tokens extracted per page (default: 2048).",
+        minimum: 1,
+      }),
+    ),
+  });
+}
+
+function createPerplexityChatSchema() {
+  return Type.Object({
+    query: Type.String({ description: "Search query string." }),
+    count: Type.Optional(
+      Type.Number({
+        description: "Number of results to return (1-10).",
+        minimum: 1,
+        maximum: MAX_SEARCH_COUNT,
+      }),
+    ),
+    freshness: Type.Optional(
+      Type.String({
+        description: "Filter by time: 'day' (24h), 'week', 'month', or 'year'.",
+      }),
+    ),
+  });
+}
 
 export function createBundledPerplexitySearchProvider(): SearchProviderPlugin {
   return {
@@ -399,11 +492,8 @@ export function createBundledPerplexitySearchProvider(): SearchProviderPlugin {
     description:
       "Search the web using Perplexity. Runtime routing decides between native Search API and Sonar chat-completions compatibility. Structured filters are available on the native Search API path.",
     pluginOwnedExecution: true,
-    setup: {
-      hint: PERPLEXITY_SEARCH_PROVIDER_METADATA.hint,
-      credentials: PERPLEXITY_SEARCH_PROVIDER_METADATA,
-    },
-    resolveRuntimeMetadata: PERPLEXITY_SEARCH_PROVIDER_METADATA.resolveRuntimeMetadata,
+    setup: PERPLEXITY_SEARCH_PROVIDER_METADATA,
+    resolveRuntimeMetadata: PERPLEXITY_SEARCH_PROVIDER_METADATA.credentials?.resolveRuntimeMetadata,
     isAvailable: (config) =>
       Boolean(
         resolvePerplexityApiKey(

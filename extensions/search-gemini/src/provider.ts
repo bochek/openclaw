@@ -1,3 +1,4 @@
+import { Type } from "@sinclair/typebox";
 import {
   buildSearchRequestCacheIdentity,
   createSearchProviderSetupMetadata,
@@ -12,7 +13,7 @@ import {
   resolveSearchProviderSectionConfig,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
-  type SearchProviderSetupUiMetadata,
+  type SearchProviderSetupMetadata,
   type SearchProviderPlugin,
   withTrustedWebToolsEndpoint,
   wrapWebContent,
@@ -26,6 +27,7 @@ const GEMINI_SEARCH_CACHE = new Map<
   string,
   { value: Record<string, unknown>; expiresAt: number }
 >();
+const MAX_SEARCH_COUNT = 10;
 
 type WebSearchConfig = NonNullable<OpenClawConfig["tools"]>["web"] extends infer Web
   ? Web extends { search?: infer Search }
@@ -156,7 +158,7 @@ async function runGeminiSearch(params: {
   );
 }
 
-export const GEMINI_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
+export const GEMINI_SEARCH_PROVIDER_METADATA: SearchProviderSetupMetadata =
   createSearchProviderSetupMetadata({
     provider: "gemini",
     label: "Gemini (Google Search)",
@@ -165,6 +167,11 @@ export const GEMINI_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
     placeholder: "AIza...",
     signupUrl: "https://aistudio.google.com/apikey",
     apiKeyConfigPath: "tools.web.search.gemini.apiKey",
+    autodetectPriority: 20,
+    requestSchema: Type.Object({
+      query: Type.String({ description: "Search query string." }),
+      count: Type.Optional(Type.Number({ minimum: 1, maximum: MAX_SEARCH_COUNT })),
+    }),
   });
 
 export function createBundledGeminiSearchProvider(): SearchProviderPlugin {
@@ -174,10 +181,7 @@ export function createBundledGeminiSearchProvider(): SearchProviderPlugin {
     description:
       "Search the web using Gemini with Google Search grounding. Returns AI-synthesized answers with citations from Google Search.",
     pluginOwnedExecution: true,
-    setup: {
-      hint: GEMINI_SEARCH_PROVIDER_METADATA.hint,
-      credentials: GEMINI_SEARCH_PROVIDER_METADATA,
-    },
+    setup: GEMINI_SEARCH_PROVIDER_METADATA,
     isAvailable: (config) =>
       Boolean(
         resolveGeminiApiKey(

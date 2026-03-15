@@ -2,7 +2,7 @@
   "name": "@openclaw/search-perplexity",
   "version": "2026.3.12",
   "private": true,
-  "description": "OpenClaw bundled Perplexity search provider plugin",
+  "description": "OpenClaw Perplexity search plugin",
   "type": "module",
   "openclaw": {
     "extensions": [

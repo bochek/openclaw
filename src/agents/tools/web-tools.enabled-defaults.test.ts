@@ -234,7 +234,7 @@ describe("web tools defaults", () => {
     expect(tool?.name).toBe("web_search");
   });
 
-  it("uses the configured built-in web_search provider from config", async () => {
+  it("uses the configured web_search provider from config", async () => {
     const mockFetch = installMockFetch(createProviderSuccessPayload("brave"));
     const tool = createWebSearchTool({
       config: {
@@ -263,7 +263,7 @@ describe("web tools defaults", () => {
 
 describe("web_search plugin providers", () => {
   it.each(["brave", "perplexity", "grok", "gemini", "kimi"] as const)(
-    "resolves configured built-in provider %s through bundled plugin registrations when available",
+    "resolves configured provider %s through plugin registrations when available",
     async (providerId) => {
       const registry = createEmptyPluginRegistry();
       const bundledProvider = BUNDLED_PROVIDER_CREATORS[providerId]();
@@ -328,7 +328,7 @@ describe("web_search plugin providers", () => {
     },
   );
 
-  it("prefers an explicitly configured plugin provider over a built-in provider with the same id", async () => {
+  it("prefers an explicitly configured plugin provider over another registered provider with the same id", async () => {
     const searchMock = vi.fn(async () => ({
       results: [
         {
@@ -386,7 +386,7 @@ describe("web_search plugin providers", () => {
     expect(details?.results?.[0]?.url).toBe("https://example.com/plugin");
   });
 
-  it("keeps an explicitly configured plugin provider even when built-in credentials are also present", async () => {
+  it("keeps an explicitly configured plugin provider even when other provider credentials are also present", async () => {
     const searchMock = vi.fn(async () => ({
       content: "Plugin-configured answer",
       citations: ["https://example.com/plugin-configured"],
@@ -437,7 +437,7 @@ describe("web_search plugin providers", () => {
     expect(details?.citations).toEqual(["https://example.com/plugin-configured"]);
   });
 
-  it("auto-detects plugin providers before built-in API key detection", async () => {
+  it("auto-detects registered providers before falling back to later detection candidates", async () => {
     vi.stubEnv("BRAVE_API_KEY", "test-brave-key"); // pragma: allowlist secret
     const searchMock = vi.fn(async () => ({
       content: "Plugin answer",

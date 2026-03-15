@@ -18,7 +18,6 @@ import { validateJsonSchemaValue } from "../plugins/schema-validator.js";
 import type {
   PluginConfigUiHint,
   SearchProviderCredentialMetadata,
-  SearchProviderLegacyConfigMetadata,
   SearchProviderSetupMetadata,
 } from "../plugins/types.js";
 import type { RuntimeEnv } from "../runtime.js";
@@ -28,15 +27,12 @@ import {
   ensureGenericOnboardingPluginInstalled,
   reloadOnboardingPluginRegistry,
 } from "./onboarding/plugin-install.js";
+import type { InstallablePluginCatalogEntry } from "./onboarding/plugin-install.js";
 import {
   buildProviderSelectionOptions,
   promptProviderManagementIntent,
   type ProviderManagementIntent,
 } from "./provider-management.js";
-import {
-  SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG,
-  type InstallableSearchProviderPluginCatalogEntry,
-} from "./search-provider-plugin-catalog.js";
 
 export type SearchProvider = string;
 
@@ -65,6 +61,11 @@ export type SearchProviderPickerEntry = PluginSearchProviderEntry;
 
 type SearchProviderPickerChoice = string;
 type SearchProviderFlowIntent = ProviderManagementIntent;
+
+type InstallableSearchProviderPluginCatalogEntry = InstallablePluginCatalogEntry & {
+  providerId: string;
+  description: string;
+};
 
 type PluginPromptableField =
   | {
@@ -120,18 +121,8 @@ function humanizeConfigKey(value: string): string {
 
 function resolveProviderSetupMetadata(
   setup?: SearchProviderSetupMetadata,
-  legacyConfig?: SearchProviderLegacyConfigMetadata,
 ): SearchProviderSetupMetadata | undefined {
-  if (setup) {
-    return setup;
-  }
-  if (!legacyConfig) {
-    return undefined;
-  }
-  return {
-    hint: legacyConfig.hint,
-    credentials: legacyConfig,
-  };
+  return setup;
 }
 
 function resolveProviderCredentialMetadata(
@@ -140,18 +131,52 @@ function resolveProviderCredentialMetadata(
   return setup?.credentials;
 }
 
-export function resolveInstallableSearchProviderPlugins(
-  providerEntries: SearchProviderPickerEntry[],
-): InstallableSearchProviderPluginCatalogEntry[] {
+function normalizeInstallMetadata(install?: {
+  npmSpec?: string;
+  localPath?: string;
+  defaultChoice?: "npm" | "local";
+}): InstallablePluginCatalogEntry["install"] | undefined {
+  if (!install?.npmSpec) {
+    return undefined;
+  }
+  return {
+    npmSpec: install.npmSpec,
+    ...(install.localPath ? { localPath: install.localPath } : {}),
+    ...(install.defaultChoice ? { defaultChoice: install.defaultChoice } : {}),
+  };
+}
+
+export function resolveInstallableSearchProviderPlugins(params: {
+  config: OpenClawConfig;
+  providerEntries: SearchProviderPickerEntry[];
+  workspaceDir?: string;
+}): InstallableSearchProviderPluginCatalogEntry[] {
   const loadedPluginProviderIds = new Set(
-    providerEntries.filter((entry) => entry.kind === "plugin").map((entry) => entry.value),
+    params.providerEntries.filter((entry) => entry.kind === "plugin").map((entry) => entry.value),
   );
-  return SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG.filter(
-    (entry) => !loadedPluginProviderIds.has(entry.providerId),
-  ).map((entry) => ({
-    ...entry,
-    description: entry.description,
-  }));
+  const registry = loadPluginManifestRegistry({
+    config: params.config,
+    workspaceDir: params.workspaceDir,
+    cache: false,
+  });
+  return registry.plugins
+    .map((plugin) => {
+      const providerId = searchProviderIdFromProvides(plugin.provides);
+      const install = normalizeInstallMetadata(plugin.packageInstall);
+      if (!providerId || !install?.npmSpec || loadedPluginProviderIds.has(providerId)) {
+        return undefined;
+      }
+      return {
+        id: plugin.id,
+        providerId,
+        meta: {
+          label: plugin.name || providerId,
+        },
+        description: plugin.description || "Install a web search provider plugin.",
+        install,
+      } satisfies InstallableSearchProviderPluginCatalogEntry;
+    })
+    .filter((entry): entry is InstallableSearchProviderPluginCatalogEntry => Boolean(entry));
 }
 
 function normalizePluginConfigObject(value: unknown): Record<string, unknown> {
@@ -545,10 +570,7 @@ export async function resolveSearchProviderPickerEntries(
           configured = false;
         }
 
-        const setup = resolveProviderSetupMetadata(
-          registration.provider.setup,
-          registration.provider.legacyConfig,
-        );
+        const setup = resolveProviderSetupMetadata(registration.provider.setup);
         const baseHint =
           setup?.hint?.trim() ||
           registration.provider.description?.trim() ||
@@ -581,19 +603,14 @@ export async function resolveSearchProviderPickerEntries(
   }
 
   try {
-    loadPluginManifestRegistry({
+    const registry = loadPluginManifestRegistry({
       config,
       workspaceDir,
       cache: false,
     });
     const loadedPluginProviderIds = new Set(pluginEntries.map((entry) => entry.value));
-    const bundledManifestEntries = SEARCH_PROVIDER_PLUGIN_INSTALL_CATALOG.map((installEntry) =>
-      buildPluginSearchProviderEntryFromManifest({
-        config,
-        installEntry,
-        workspaceDir,
-      }),
-    )
+    const manifestEntries = registry.plugins
+      .map((plugin) => buildPluginSearchProviderEntryFromManifestRecord(plugin))
       .filter(
         (entry): entry is PluginSearchProviderEntry =>
           Boolean(entry) && !loadedPluginProviderIds.has(entry.value),
@@ -606,7 +623,7 @@ export async function resolveSearchProviderPickerEntries(
           configured: validation.ok,
         };
       });
-    pluginEntries = [...pluginEntries, ...bundledManifestEntries].toSorted((left, right) =>
+    pluginEntries = [...pluginEntries, ...manifestEntries].toSorted((left, right) =>
       left.label.localeCompare(right.label),
     );
   } catch {
@@ -638,6 +655,11 @@ function buildPluginSearchProviderEntryFromManifestRecord(pluginRecord: {
   configSchema?: Record<string, unknown>;
   configUiHints?: Record<string, PluginConfigUiHint>;
   provides: string[];
+  packageInstall?: {
+    npmSpec?: string;
+    localPath?: string;
+    defaultChoice?: "npm" | "local";
+  };
 }): PluginSearchProviderEntry | undefined {
   const providerId = searchProviderIdFromProvides(pluginRecord.provides);
   if (!providerId) {
@@ -656,25 +678,11 @@ function buildPluginSearchProviderEntryFromManifestRecord(pluginRecord: {
     configFieldOrder: undefined,
     configJsonSchema: pluginRecord.configSchema,
     configUiHints: pluginRecord.configUiHints,
-    setup: undefined,
+    setup: (() => {
+      const install = normalizeInstallMetadata(pluginRecord.packageInstall);
+      return install ? { install } : undefined;
+    })(),
   };
-}
-
-function buildPluginSearchProviderEntryFromManifest(params: {
-  config: OpenClawConfig;
-  installEntry: InstallableSearchProviderPluginCatalogEntry;
-  workspaceDir?: string;
-}): PluginSearchProviderEntry | undefined {
-  const registry = loadPluginManifestRegistry({
-    config: params.config,
-    workspaceDir: params.workspaceDir,
-    cache: false,
-  });
-  const pluginRecord = registry.plugins.find((plugin) => plugin.id === params.installEntry.id);
-  if (!pluginRecord) {
-    return undefined;
-  }
-  return buildPluginSearchProviderEntryFromManifestRecord(pluginRecord);
 }
 
 async function installSearchProviderPlugin(params: {
@@ -838,6 +846,7 @@ type SearchProviderPickerModelParams = {
   providerEntries: SearchProviderPickerEntry[];
   includeSkipOption: boolean;
   skipHint?: string;
+  workspaceDir?: string;
 };
 
 type SearchProviderPickerModel = {
@@ -869,7 +878,7 @@ function formatPickerEntryHint(params: {
 export function buildSearchProviderPickerModel(
   params: SearchProviderPickerModelParams,
 ): SearchProviderPickerModel {
-  const { config, providerEntries, includeSkipOption, skipHint } = params;
+  const { config, providerEntries, includeSkipOption, skipHint, workspaceDir } = params;
   const existingProvider = resolveCapabilitySlotSelection(config, "providers.search");
   const existingPluginProvider =
     typeof existingProvider === "string" && existingProvider.trim() ? existingProvider : undefined;
@@ -908,7 +917,11 @@ export function buildSearchProviderPickerModel(
     sortedEntries[0]?.value ??
     SEARCH_PROVIDER_SKIP_SENTINEL;
 
-  const installableEntries = resolveInstallableSearchProviderPlugins(providerEntries);
+  const installableEntries = resolveInstallableSearchProviderPlugins({
+    config,
+    providerEntries,
+    workspaceDir,
+  });
   const options: Array<{ value: SearchProviderPickerChoice; label: string; hint?: string }> = [
     ...(unloadedExistingPluginProvider
       ? [
@@ -1228,6 +1241,7 @@ export async function promptSearchProviderFlow(params: {
     providerEntries,
     includeSkipOption: params.includeSkipOption,
     skipHint: params.skipHint,
+    workspaceDir: params.opts?.workspaceDir,
   });
   const action = await promptProviderManagementIntent({
     prompter: params.prompter,

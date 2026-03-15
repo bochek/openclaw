@@ -1,6 +1,9 @@
+import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
+import { createSearchProviderSetupMetadata } from "openclaw/plugin-sdk/web-search";
 
 const TAVILY_SEARCH_ENDPOINT = "https://api.tavily.com/search";
+const MAX_SEARCH_COUNT = 10;
 
 type TavilyPluginConfig = {
   apiKey?: string;
@@ -69,15 +72,52 @@ function resolveFreshnessDays(freshness?: string): number | undefined {
 const plugin = {
   id: "tavily-search",
   name: "Tavily Search",
-  description: "External Tavily web_search provider plugin",
+  description: "Tavily web_search plugin",
   register(api: OpenClawPluginApi) {
     api.registerSearchProvider({
       id: "tavily",
       name: "Tavily Search",
       description:
-        "Search the web using Tavily via an external plugin provider. Returns structured results and an AI-synthesized answer when available.",
+        "Search the web using Tavily. Returns structured results and an AI-synthesized answer when available.",
       docsUrl: "https://docs.tavily.com/",
       configFieldOrder: ["apiKey", "searchDepth"],
+      setup: createSearchProviderSetupMetadata({
+        provider: "tavily",
+        label: "Tavily Search",
+        hint: "Plugin search with structured results and optional AI answer synthesis.",
+        envKeys: ["TAVILY_API_KEY"],
+        placeholder: "tvly-...",
+        signupUrl: "https://app.tavily.com/home",
+        apiKeyConfigPath: "plugins.entries.tavily-search.config.apiKey",
+        install: {
+          npmSpec: "@openclaw/tavily-search",
+          localPath: "extensions/tavily-search",
+          defaultChoice: "local",
+        },
+        requestSchema: Type.Object(
+          {
+            query: Type.String({ description: "Search query string." }),
+            count: Type.Optional(
+              Type.Number({
+                description: "Number of results to return (1-10).",
+                minimum: 1,
+                maximum: MAX_SEARCH_COUNT,
+              }),
+            ),
+            country: Type.Optional(
+              Type.String({
+                description: "Optional 2-letter country code for region-specific results.",
+              }),
+            ),
+            freshness: Type.Optional(
+              Type.String({
+                description: "Filter by time: 'day', 'week', 'month', or 'year'.",
+              }),
+            ),
+          },
+          { additionalProperties: true },
+        ),
+      }),
       isAvailable: (config) =>
         Boolean(resolveApiKey(resolveRootPluginConfig(config ?? {}, api.id))),
       search: async (params, ctx) => {

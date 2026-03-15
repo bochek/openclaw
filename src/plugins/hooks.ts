@@ -8,8 +8,6 @@
 import { concatOptionalTextSegments } from "../shared/text/join-segments.js";
 import type { PluginRegistry } from "./registry.js";
 import type {
-  PluginHookAfterSearchProviderActivateEvent,
-  PluginHookAfterSearchProviderConfigureEvent,
   PluginHookAfterProviderActivateEvent,
   PluginHookAfterProviderConfigureEvent,
   PluginHookAfterCompactionEvent,
@@ -18,8 +16,6 @@ import type {
   PluginHookAgentEndEvent,
   PluginHookBeforeAgentStartEvent,
   PluginHookBeforeAgentStartResult,
-  PluginHookBeforeSearchProviderConfigureEvent,
-  PluginHookBeforeSearchProviderConfigureResult,
   PluginHookBeforeProviderConfigureEvent,
   PluginHookBeforeProviderConfigureResult,
   PluginHookBeforeModelResolveEvent,
@@ -66,8 +62,6 @@ export type {
   PluginHookAgentContext,
   PluginHookBeforeAgentStartEvent,
   PluginHookBeforeAgentStartResult,
-  PluginHookBeforeSearchProviderConfigureEvent,
-  PluginHookBeforeSearchProviderConfigureResult,
   PluginHookBeforeProviderConfigureEvent,
   PluginHookBeforeProviderConfigureResult,
   PluginHookBeforeModelResolveEvent,
@@ -108,8 +102,6 @@ export type {
   PluginHookGatewayContext,
   PluginHookGatewayStartEvent,
   PluginHookGatewayStopEvent,
-  PluginHookAfterSearchProviderConfigureEvent,
-  PluginHookAfterSearchProviderActivateEvent,
   PluginHookAfterProviderConfigureEvent,
   PluginHookAfterProviderActivateEvent,
 };
@@ -137,87 +129,6 @@ function getHooksForName<K extends PluginHookName>(
     .filter((h) => h.hookName === hookName)
     .toSorted((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
 }
-
-function getHooksForNameWithoutPluginIds<K extends PluginHookName>(params: {
-  registry: PluginRegistry;
-  hookName: K;
-  excludedPluginIds: ReadonlySet<string>;
-}): PluginHookRegistration<K>[] {
-  return getHooksForName(params.registry, params.hookName).filter(
-    (hook) => !params.excludedPluginIds.has(hook.pluginId),
-  );
-}
-
-type SearchBeforeProviderAliasDescriptor = {
-  genericHookName: "before_provider_configure";
-  legacyHookName: "before_search_provider_configure";
-  toLegacyEvent: (
-    event: PluginHookBeforeProviderConfigureEvent,
-  ) => PluginHookBeforeSearchProviderConfigureEvent;
-};
-
-type SearchAfterProviderConfigureAliasDescriptor = {
-  genericHookName: "after_provider_configure";
-  legacyHookName: "after_search_provider_configure";
-  toLegacyEvent: (
-    event: PluginHookAfterProviderConfigureEvent,
-  ) => PluginHookAfterSearchProviderConfigureEvent;
-};
-
-type SearchAfterProviderActivateAliasDescriptor = {
-  genericHookName: "after_provider_activate";
-  legacyHookName: "after_search_provider_activate";
-  toLegacyEvent: (
-    event: PluginHookAfterProviderActivateEvent,
-  ) => PluginHookAfterSearchProviderActivateEvent;
-};
-
-const SEARCH_PROVIDER_ALIAS_HOOKS = {
-  beforeConfigure: {
-    genericHookName: "before_provider_configure",
-    legacyHookName: "before_search_provider_configure",
-    toLegacyEvent: (
-      event: PluginHookBeforeProviderConfigureEvent,
-    ): PluginHookBeforeSearchProviderConfigureEvent => ({
-      providerId: event.providerId,
-      providerLabel: event.providerLabel,
-      providerSource: event.providerSource,
-      pluginId: event.pluginId,
-      intent: event.intent,
-      activeProviderId: event.activeProviderId,
-      configured: event.configured,
-    }),
-  } satisfies SearchBeforeProviderAliasDescriptor,
-  afterConfigure: {
-    genericHookName: "after_provider_configure",
-    legacyHookName: "after_search_provider_configure",
-    toLegacyEvent: (
-      event: PluginHookAfterProviderConfigureEvent,
-    ): PluginHookAfterSearchProviderConfigureEvent => ({
-      providerId: event.providerId,
-      providerLabel: event.providerLabel,
-      providerSource: event.providerSource,
-      pluginId: event.pluginId,
-      intent: event.intent,
-      activeProviderId: event.activeProviderId,
-      configured: event.configured,
-    }),
-  } satisfies SearchAfterProviderConfigureAliasDescriptor,
-  afterActivate: {
-    genericHookName: "after_provider_activate",
-    legacyHookName: "after_search_provider_activate",
-    toLegacyEvent: (
-      event: PluginHookAfterProviderActivateEvent,
-    ): PluginHookAfterSearchProviderActivateEvent => ({
-      providerId: event.providerId,
-      providerLabel: event.providerLabel,
-      providerSource: event.providerSource,
-      pluginId: event.pluginId,
-      previousProviderId: event.previousProviderId,
-      intent: event.intent,
-    }),
-  } satisfies SearchAfterProviderActivateAliasDescriptor,
-} as const;
 
 /**
  * Create a hook runner for a specific registry.
@@ -279,16 +190,6 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     }
     return next;
   };
-
-  const mergeBeforeSearchProviderConfigure = (
-    acc: PluginHookBeforeSearchProviderConfigureResult | undefined,
-    next: PluginHookBeforeSearchProviderConfigureResult,
-  ): PluginHookBeforeSearchProviderConfigureResult => ({
-    note: concatOptionalTextSegments({
-      left: acc?.note,
-      right: next.note,
-    }),
-  });
 
   const mergeBeforeProviderConfigure = (
     acc: PluginHookBeforeProviderConfigureResult | undefined,
@@ -401,21 +302,6 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     return result;
   }
 
-  function getSearchProviderLegacyHooks(
-    descriptor:
-      | SearchBeforeProviderAliasDescriptor
-      | SearchAfterProviderConfigureAliasDescriptor
-      | SearchAfterProviderActivateAliasDescriptor,
-  ) {
-    const genericHooks = getHooksForName(registry, descriptor.genericHookName);
-    const genericPluginIds = new Set(genericHooks.map((hook) => hook.pluginId));
-    return getHooksForNameWithoutPluginIds({
-      registry,
-      hookName: descriptor.legacyHookName,
-      excludedPluginIds: genericPluginIds,
-    });
-  }
-
   // =========================================================================
   // Agent Hooks
   // =========================================================================
@@ -471,98 +357,30 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     );
   }
 
-  async function runBeforeSearchProviderConfigure(
-    event: PluginHookBeforeSearchProviderConfigureEvent,
-    ctx: PluginHookSearchProviderContext,
-  ): Promise<PluginHookBeforeSearchProviderConfigureResult | undefined> {
-    return runModifyingHook<
-      "before_search_provider_configure",
-      PluginHookBeforeSearchProviderConfigureResult
-    >("before_search_provider_configure", event, ctx, mergeBeforeSearchProviderConfigure);
-  }
-
   async function runBeforeProviderConfigure(
     event: PluginHookBeforeProviderConfigureEvent,
     ctx: PluginHookSearchProviderContext,
   ): Promise<PluginHookBeforeProviderConfigureResult | undefined> {
-    const aliasDescriptor = SEARCH_PROVIDER_ALIAS_HOOKS.beforeConfigure;
-    const genericResult = await runModifyingHook<
+    return runModifyingHook<"before_provider_configure", PluginHookBeforeProviderConfigureResult>(
       "before_provider_configure",
-      PluginHookBeforeProviderConfigureResult
-    >("before_provider_configure", event, ctx, mergeBeforeProviderConfigure);
-    if (event.providerKind !== "search") {
-      return genericResult;
-    }
-
-    const legacyHooks = getSearchProviderLegacyHooks(aliasDescriptor);
-    const searchResult = await runModifyingHookRegistrations<
-      "before_search_provider_configure",
-      PluginHookBeforeSearchProviderConfigureResult
-    >(
-      aliasDescriptor.legacyHookName,
-      legacyHooks as PluginHookRegistration<"before_search_provider_configure">[],
-      aliasDescriptor.toLegacyEvent(event),
+      event,
       ctx,
-      mergeBeforeSearchProviderConfigure,
+      mergeBeforeProviderConfigure,
     );
-    if (!searchResult) {
-      return genericResult;
-    }
-    return mergeBeforeProviderConfigure(genericResult, {
-      note: searchResult.note,
-    });
   }
 
   async function runAfterProviderConfigure(
     event: PluginHookAfterProviderConfigureEvent,
     ctx: PluginHookSearchProviderContext,
   ): Promise<void> {
-    const aliasDescriptor = SEARCH_PROVIDER_ALIAS_HOOKS.afterConfigure;
     await runVoidHook("after_provider_configure", event, ctx);
-    if (event.providerKind !== "search") {
-      return;
-    }
-
-    const legacyHooks = getSearchProviderLegacyHooks(aliasDescriptor);
-    await runVoidHookRegistrations(
-      aliasDescriptor.legacyHookName,
-      legacyHooks as PluginHookRegistration<"after_search_provider_configure">[],
-      aliasDescriptor.toLegacyEvent(event),
-      ctx,
-    );
   }
 
   async function runAfterProviderActivate(
     event: PluginHookAfterProviderActivateEvent,
     ctx: PluginHookSearchProviderContext,
   ): Promise<void> {
-    const aliasDescriptor = SEARCH_PROVIDER_ALIAS_HOOKS.afterActivate;
     await runVoidHook("after_provider_activate", event, ctx);
-    if (event.providerKind !== "search") {
-      return;
-    }
-
-    const legacyHooks = getSearchProviderLegacyHooks(aliasDescriptor);
-    await runVoidHookRegistrations(
-      aliasDescriptor.legacyHookName,
-      legacyHooks as PluginHookRegistration<"after_search_provider_activate">[],
-      aliasDescriptor.toLegacyEvent(event),
-      ctx,
-    );
-  }
-
-  async function runAfterSearchProviderConfigure(
-    event: PluginHookAfterSearchProviderConfigureEvent,
-    ctx: PluginHookSearchProviderContext,
-  ): Promise<void> {
-    return runVoidHook("after_search_provider_configure", event, ctx);
-  }
-
-  async function runAfterSearchProviderActivate(
-    event: PluginHookAfterSearchProviderActivateEvent,
-    ctx: PluginHookSearchProviderContext,
-  ): Promise<void> {
-    return runVoidHook("after_search_provider_activate", event, ctx);
   }
 
   /**
@@ -970,26 +788,13 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
   }
 
   function hasProviderConfigureHooks(providerKind?: string): boolean {
-    if (hasHooks("before_provider_configure") || hasHooks("after_provider_configure")) {
-      return true;
-    }
-    if (providerKind !== "search") {
-      return false;
-    }
-    return (
-      hasHooks(SEARCH_PROVIDER_ALIAS_HOOKS.beforeConfigure.legacyHookName) ||
-      hasHooks(SEARCH_PROVIDER_ALIAS_HOOKS.afterConfigure.legacyHookName)
-    );
+    void providerKind;
+    return hasHooks("before_provider_configure") || hasHooks("after_provider_configure");
   }
 
   function hasProviderActivationHooks(providerKind?: string): boolean {
-    if (hasHooks("after_provider_activate")) {
-      return true;
-    }
-    if (providerKind !== "search") {
-      return false;
-    }
-    return hasHooks(SEARCH_PROVIDER_ALIAS_HOOKS.afterActivate.legacyHookName);
+    void providerKind;
+    return hasHooks("after_provider_activate");
   }
 
   return {
@@ -998,11 +803,8 @@ export function createHookRunner(registry: PluginRegistry, options: HookRunnerOp
     runBeforePromptBuild,
     runBeforeAgentStart,
     runBeforeProviderConfigure,
-    runBeforeSearchProviderConfigure,
     runAfterProviderConfigure,
-    runAfterSearchProviderConfigure,
     runAfterProviderActivate,
-    runAfterSearchProviderActivate,
     runLlmInput,
     runLlmOutput,
     runAgentEnd,

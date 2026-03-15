@@ -454,7 +454,7 @@ describe("runConfigureWizard", () => {
     );
   });
 
-  it("configures a bundled plugin search provider from configure without the external install step", async () => {
+  it("configures a manifest-discovered search provider from configure without a separate install step", async () => {
     loadOpenClawPlugins.mockImplementation(({ config }: { config: OpenClawConfig }) => {
       const enabled = config.plugins?.entries?.["tavily-search"]?.enabled === true;
       return enabled
@@ -509,6 +509,11 @@ describe("runConfigureWizard", () => {
           provides: ["providers.search.tavily"],
           origin: "bundled",
           source: "/tmp/bundled/tavily-search",
+          packageInstall: {
+            npmSpec: "@openclaw/tavily-search",
+            localPath: "extensions/tavily-search",
+            defaultChoice: "local",
+          },
           configSchema: {
             type: "object",
             required: ["apiKey"],

@@ -1,7 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import { formatCliCommand as _formatCliCommand } from "../../cli/command-format.js";
 import type { OpenClawConfig } from "../../config/config.js";
-import { normalizeResolvedSecretInputString } from "../../config/types.secrets.js";
 import { logVerbose } from "../../globals.js";
 import { resolveCapabilitySlotSelection } from "../../plugins/capability-slots.js";
 import { loadOpenClawPlugins } from "../../plugins/loader.js";
@@ -15,15 +14,10 @@ import type {
 } from "../../plugins/types.js";
 import type { RuntimeWebSearchMetadata } from "../../secrets/runtime-web-tools.js";
 import { wrapWebContent } from "../../security/external-content.js";
-import { normalizeSecretInput } from "../../utils/normalize-secret-input.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readNumberParam, readStringArrayParam, readStringParam } from "./common.js";
 import { withTrustedWebToolsEndpoint } from "./web-guarded-fetch.js";
 import { resolveCitationRedirectUrl } from "./web-search-citation-redirect.js";
-import {
-  type BuiltinWebSearchProviderId,
-  isBuiltinWebSearchProviderId as isBuiltinWebSearchProviderIdFromCatalog,
-} from "./web-search-provider-catalog.js";
 import {
   CacheEntry,
   DEFAULT_CACHE_TTL_MINUTES,
@@ -38,105 +32,18 @@ import {
 
 const DEFAULT_SEARCH_COUNT = 5;
 const MAX_SEARCH_COUNT = 10;
-const DEFAULT_PROVIDER = "brave";
 
 const _BRAVE_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
 const _BRAVE_LLM_CONTEXT_ENDPOINT = "https://api.search.brave.com/res/v1/llm/context";
-const DEFAULT_PERPLEXITY_BASE_URL = "https://openrouter.ai/api/v1";
-const PERPLEXITY_DIRECT_BASE_URL = "https://api.perplexity.ai";
 const PERPLEXITY_SEARCH_ENDPOINT = "https://api.perplexity.ai/search";
-const DEFAULT_PERPLEXITY_MODEL = "perplexity/sonar-pro";
-const PERPLEXITY_KEY_PREFIXES = ["pplx-"];
-const OPENROUTER_KEY_PREFIXES = ["sk-or-"];
 
 const XAI_API_ENDPOINT = "https://api.x.ai/v1/responses";
-const DEFAULT_GROK_MODEL = "grok-4-1-fast";
-const DEFAULT_KIMI_BASE_URL = "https://api.moonshot.ai/v1";
-const DEFAULT_KIMI_MODEL = "moonshot-v1-128k";
 const KIMI_WEB_SEARCH_TOOL = {
   type: "builtin_function",
   function: { name: "$web_search" },
 } as const;
 
 const SEARCH_CACHE = new Map<string, CacheEntry<Record<string, unknown>>>();
-const BRAVE_FRESHNESS_SHORTCUTS = new Set(["pd", "pw", "pm", "py"]);
-const BRAVE_FRESHNESS_RANGE = /^(\d{4}-\d{2}-\d{2})to(\d{4}-\d{2}-\d{2})$/;
-const BRAVE_SEARCH_LANG_CODES = new Set([
-  "ar",
-  "eu",
-  "bn",
-  "bg",
-  "ca",
-  "zh-hans",
-  "zh-hant",
-  "hr",
-  "cs",
-  "da",
-  "nl",
-  "en",
-  "en-gb",
-  "et",
-  "fi",
-  "fr",
-  "gl",
-  "de",
-  "el",
-  "gu",
-  "he",
-  "hi",
-  "hu",
-  "is",
-  "it",
-  "jp",
-  "kn",
-  "ko",
-  "lv",
-  "lt",
-  "ms",
-  "ml",
-  "mr",
-  "nb",
-  "pl",
-  "pt-br",
-  "pt-pt",
-  "pa",
-  "ro",
-  "ru",
-  "sr",
-  "sk",
-  "sl",
-  "es",
-  "sv",
-  "ta",
-  "te",
-  "th",
-  "tr",
-  "uk",
-  "vi",
-]);
-const BRAVE_SEARCH_LANG_ALIASES: Record<string, string> = {
-  ja: "jp",
-  zh: "zh-hans",
-  "zh-cn": "zh-hans",
-  "zh-hk": "zh-hant",
-  "zh-sg": "zh-hans",
-  "zh-tw": "zh-hant",
-};
-const BRAVE_UI_LANG_LOCALE = /^([a-z]{2})-([a-z]{2})$/i;
-const PERPLEXITY_RECENCY_VALUES = new Set(["day", "week", "month", "year"]);
-
-const FRESHNESS_TO_RECENCY: Record<string, string> = {
-  pd: "day",
-  pw: "week",
-  pm: "month",
-  py: "year",
-};
-const RECENCY_TO_FRESHNESS: Record<string, string> = {
-  day: "pd",
-  week: "pw",
-  month: "pm",
-  year: "py",
-};
 
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 const PERPLEXITY_DATE_PATTERN = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
@@ -211,15 +118,6 @@ const SEARCH_PLUGIN_EXTENSION_FIELDS = {
   ),
 } as const;
 
-function isoToPerplexityDate(iso: string): string | undefined {
-  const match = iso.match(ISO_DATE_PATTERN);
-  if (!match) {
-    return undefined;
-  }
-  const [, year, month, day] = match;
-  return `${parseInt(month, 10)}/${parseInt(day, 10)}/${year}`;
-}
-
 function normalizeToIsoDate(value: string): string | undefined {
   const trimmed = value.trim();
   if (ISO_DATE_PATTERN.test(trimmed)) {
@@ -232,98 +130,6 @@ function normalizeToIsoDate(value: string): string | undefined {
     return isValidIsoDate(iso) ? iso : undefined;
   }
   return undefined;
-}
-
-function createWebSearchSchema(params: {
-  provider: BuiltinWebSearchProviderId;
-  perplexityTransport?: PerplexityTransport;
-}) {
-  const perplexityStructuredFilterSchema = {
-    country: Type.Optional(
-      Type.String({
-        description:
-          "Native Perplexity Search API only. 2-letter country code for region-specific results (e.g., 'DE', 'US', 'ALL'). Default: 'US'.",
-      }),
-    ),
-    language: Type.Optional(
-      Type.String({
-        description:
-          "Native Perplexity Search API only. ISO 639-1 language code for results (e.g., 'en', 'de', 'fr').",
-      }),
-    ),
-    date_after: Type.Optional(
-      Type.String({
-        description:
-          "Native Perplexity Search API only. Only results published after this date (YYYY-MM-DD).",
-      }),
-    ),
-    date_before: Type.Optional(
-      Type.String({
-        description:
-          "Native Perplexity Search API only. Only results published before this date (YYYY-MM-DD).",
-      }),
-    ),
-  } as const;
-
-  if (params.provider === "brave") {
-    return Type.Object({
-      ...SEARCH_QUERY_SCHEMA_FIELDS,
-      ...SEARCH_FILTER_SCHEMA_FIELDS,
-      search_lang: Type.Optional(
-        Type.String({
-          description:
-            "Brave language code for search results (e.g., 'en', 'de', 'en-gb', 'zh-hans', 'zh-hant', 'pt-br').",
-        }),
-      ),
-      ui_lang: Type.Optional(
-        Type.String({
-          description:
-            "Locale code for UI elements in language-region format (e.g., 'en-US', 'de-DE', 'fr-FR', 'tr-TR'). Must include region subtag.",
-        }),
-      ),
-    });
-  }
-
-  if (params.provider === "perplexity") {
-    if (params.perplexityTransport === "chat_completions") {
-      return Type.Object({
-        ...SEARCH_QUERY_SCHEMA_FIELDS,
-        freshness: SEARCH_FILTER_SCHEMA_FIELDS.freshness,
-      });
-    }
-    return Type.Object({
-      ...SEARCH_QUERY_SCHEMA_FIELDS,
-      freshness: SEARCH_FILTER_SCHEMA_FIELDS.freshness,
-      ...perplexityStructuredFilterSchema,
-      domain_filter: Type.Optional(
-        Type.Array(Type.String(), {
-          description:
-            "Native Perplexity Search API only. Domain filter (max 20). Allowlist: ['nature.com'] or denylist: ['-reddit.com']. Cannot mix.",
-        }),
-      ),
-      max_tokens: Type.Optional(
-        Type.Number({
-          description:
-            "Native Perplexity Search API only. Total content budget across all results (default: 25000, max: 1000000).",
-          minimum: 1,
-          maximum: 1000000,
-        }),
-      ),
-      max_tokens_per_page: Type.Optional(
-        Type.Number({
-          description:
-            "Native Perplexity Search API only. Max tokens extracted per page (default: 2048).",
-          minimum: 1,
-        }),
-      ),
-    });
-  }
-
-  // grok, gemini, kimi, etc.
-  return Type.Object({
-    ...SEARCH_QUERY_SCHEMA_FIELDS,
-    ...SEARCH_FILTER_SCHEMA_FIELDS,
-  });
 }
 
 type WebSearchConfig = NonNullable<OpenClawConfig["tools"]>["web"] extends infer Web
@@ -349,32 +155,6 @@ type BraveLlmContextResult = { url: string; title: string; snippets: string[] };
 type BraveLlmContextResponse = {
   grounding: { generic?: BraveLlmContextResult[] };
   sources?: { url?: string; hostname?: string; date?: string }[];
-};
-
-type BraveConfig = {
-  mode?: string;
-};
-
-type PerplexityConfig = {
-  apiKey?: string;
-  baseUrl?: string;
-  model?: string;
-};
-
-type PerplexityApiKeySource = "config" | "perplexity_env" | "openrouter_env" | "none";
-type PerplexityTransport = "search_api" | "chat_completions";
-type PerplexityBaseUrlHint = "direct" | "openrouter";
-
-type GrokConfig = {
-  apiKey?: string;
-  model?: string;
-  inlineCitations?: boolean;
-};
-
-type KimiConfig = {
-  apiKey?: string;
-  baseUrl?: string;
-  model?: string;
 };
 
 type GrokSearchResponse = {
@@ -539,11 +319,6 @@ function extractGrokContent(data: GrokSearchResponse): {
   return { text, annotationCitations: [] };
 }
 
-type GeminiConfig = {
-  apiKey?: string;
-  model?: string;
-};
-
 type GeminiGroundingResponse = {
   candidates?: Array<{
     content?: {
@@ -592,166 +367,6 @@ function resolveSearchEnabled(params: { search?: WebSearchConfig; sandboxed?: bo
   return true;
 }
 
-function resolveSearchApiKey(search?: WebSearchConfig): string | undefined {
-  const fromConfigRaw =
-    search && "apiKey" in search
-      ? normalizeResolvedSecretInputString({
-          value: search.apiKey,
-          path: "tools.web.search.apiKey",
-        })
-      : undefined;
-  const fromConfig = normalizeSecretInput(fromConfigRaw);
-  const fromEnv = normalizeSecretInput(process.env.BRAVE_API_KEY);
-  return fromConfig || fromEnv || undefined;
-}
-
-function resolveBuiltinSearchProvider(search?: WebSearchConfig): BuiltinWebSearchProviderId {
-  const raw =
-    search && "provider" in search && typeof search.provider === "string"
-      ? search.provider.trim().toLowerCase()
-      : "";
-  if (isBuiltinSearchProviderId(raw)) {
-    return raw;
-  }
-
-  // Auto-detect provider from available API keys (alphabetical order)
-  if (raw === "") {
-    // Brave
-    if (resolveSearchApiKey(search)) {
-      logVerbose(
-        'web_search: no provider configured, auto-detected "brave" from available API keys',
-      );
-      return "brave";
-    }
-    // Gemini
-    const geminiConfig = resolveGeminiConfig(search);
-    if (resolveGeminiApiKey(geminiConfig)) {
-      logVerbose(
-        'web_search: no provider configured, auto-detected "gemini" from available API keys',
-      );
-      return "gemini";
-    }
-    // Grok
-    const grokConfig = resolveGrokConfig(search);
-    if (resolveGrokApiKey(grokConfig)) {
-      logVerbose(
-        'web_search: no provider configured, auto-detected "grok" from available API keys',
-      );
-      return "grok";
-    }
-    // Kimi
-    const kimiConfig = resolveKimiConfig(search);
-    if (resolveKimiApiKey(kimiConfig)) {
-      logVerbose(
-        'web_search: no provider configured, auto-detected "kimi" from available API keys',
-      );
-      return "kimi";
-    }
-    // Perplexity
-    const perplexityConfig = resolvePerplexityConfig(search);
-    const { apiKey: perplexityKey } = resolvePerplexityApiKey(perplexityConfig);
-    if (perplexityKey) {
-      logVerbose(
-        'web_search: no provider configured, auto-detected "perplexity" from available API keys',
-      );
-      return "perplexity";
-    }
-  }
-
-  return "brave";
-}
-
-function resolveBraveMode(brave: BraveConfig): "web" | "llm-context" {
-  return brave.mode === "llm-context" ? "llm-context" : "web";
-}
-
-function resolvePerplexityConfig(search?: WebSearchConfig): PerplexityConfig {
-  if (!search || typeof search !== "object") {
-    return {};
-  }
-  const perplexity = "perplexity" in search ? search.perplexity : undefined;
-  if (!perplexity || typeof perplexity !== "object") {
-    return {};
-  }
-  return perplexity as PerplexityConfig;
-}
-
-function resolvePerplexityApiKey(perplexity?: PerplexityConfig): {
-  apiKey?: string;
-  source: PerplexityApiKeySource;
-} {
-  const fromConfig = normalizeApiKey(perplexity?.apiKey);
-  if (fromConfig) {
-    return { apiKey: fromConfig, source: "config" };
-  }
-
-  const fromEnvPerplexity = normalizeApiKey(process.env.PERPLEXITY_API_KEY);
-  if (fromEnvPerplexity) {
-    return { apiKey: fromEnvPerplexity, source: "perplexity_env" };
-  }
-
-  const fromEnvOpenRouter = normalizeApiKey(process.env.OPENROUTER_API_KEY);
-  if (fromEnvOpenRouter) {
-    return { apiKey: fromEnvOpenRouter, source: "openrouter_env" };
-  }
-
-  return { apiKey: undefined, source: "none" };
-}
-
-function normalizeApiKey(key: unknown): string {
-  return normalizeSecretInput(key);
-}
-
-function inferPerplexityBaseUrlFromApiKey(apiKey?: string): PerplexityBaseUrlHint | undefined {
-  if (!apiKey) {
-    return undefined;
-  }
-  const normalized = apiKey.toLowerCase();
-  if (PERPLEXITY_KEY_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
-    return "direct";
-  }
-  if (OPENROUTER_KEY_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
-    return "openrouter";
-  }
-  return undefined;
-}
-
-function resolvePerplexityBaseUrl(
-  perplexity?: PerplexityConfig,
-  authSource: PerplexityApiKeySource = "none", // pragma: allowlist secret
-  configuredKey?: string,
-): string {
-  const fromConfig =
-    perplexity && "baseUrl" in perplexity && typeof perplexity.baseUrl === "string"
-      ? perplexity.baseUrl.trim()
-      : "";
-  if (fromConfig) {
-    return fromConfig;
-  }
-  if (authSource === "perplexity_env") {
-    return PERPLEXITY_DIRECT_BASE_URL;
-  }
-  if (authSource === "openrouter_env") {
-    return DEFAULT_PERPLEXITY_BASE_URL;
-  }
-  if (authSource === "config") {
-    const inferred = inferPerplexityBaseUrlFromApiKey(configuredKey);
-    if (inferred === "openrouter") {
-      return DEFAULT_PERPLEXITY_BASE_URL;
-    }
-    return PERPLEXITY_DIRECT_BASE_URL;
-  }
-  return DEFAULT_PERPLEXITY_BASE_URL;
-}
-
-function resolvePerplexityModel(perplexity?: PerplexityConfig): string {
-  const fromConfig =
-    perplexity && "model" in perplexity && typeof perplexity.model === "string"
-      ? perplexity.model.trim()
-      : "";
-  return fromConfig || DEFAULT_PERPLEXITY_MODEL;
-}
-
 function isDirectPerplexityBaseUrl(baseUrl: string): boolean {
   const trimmed = baseUrl.trim();
   if (!trimmed) {
@@ -769,125 +384,6 @@ function resolvePerplexityRequestModel(baseUrl: string, model: string): string {
     return model;
   }
   return model.startsWith("perplexity/") ? model.slice("perplexity/".length) : model;
-}
-
-function resolvePerplexityTransport(perplexity?: PerplexityConfig): {
-  apiKey?: string;
-  source: PerplexityApiKeySource;
-  baseUrl: string;
-  model: string;
-  transport: PerplexityTransport;
-} {
-  const auth = resolvePerplexityApiKey(perplexity);
-  const baseUrl = resolvePerplexityBaseUrl(perplexity, auth.source, auth.apiKey);
-  const model = resolvePerplexityModel(perplexity);
-  const hasLegacyOverride = Boolean(
-    (perplexity?.baseUrl && perplexity.baseUrl.trim()) ||
-    (perplexity?.model && perplexity.model.trim()),
-  );
-  return {
-    ...auth,
-    baseUrl,
-    model,
-    transport:
-      hasLegacyOverride || !isDirectPerplexityBaseUrl(baseUrl) ? "chat_completions" : "search_api",
-  };
-}
-
-function resolvePerplexitySchemaTransportHint(
-  perplexity?: PerplexityConfig,
-): PerplexityTransport | undefined {
-  const hasLegacyOverride = Boolean(
-    (perplexity?.baseUrl && perplexity.baseUrl.trim()) ||
-    (perplexity?.model && perplexity.model.trim()),
-  );
-  return hasLegacyOverride ? "chat_completions" : undefined;
-}
-
-function resolveGrokConfig(search?: WebSearchConfig): GrokConfig {
-  if (!search || typeof search !== "object") {
-    return {};
-  }
-  const grok = "grok" in search ? search.grok : undefined;
-  if (!grok || typeof grok !== "object") {
-    return {};
-  }
-  return grok as GrokConfig;
-}
-
-function resolveGrokApiKey(grok?: GrokConfig): string | undefined {
-  const fromConfig = normalizeApiKey(grok?.apiKey);
-  if (fromConfig) {
-    return fromConfig;
-  }
-  const fromEnv = normalizeApiKey(process.env.XAI_API_KEY);
-  return fromEnv || undefined;
-}
-
-function resolveGrokModel(grok?: GrokConfig): string {
-  const fromConfig =
-    grok && "model" in grok && typeof grok.model === "string" ? grok.model.trim() : "";
-  return fromConfig || DEFAULT_GROK_MODEL;
-}
-
-function resolveGrokInlineCitations(grok?: GrokConfig): boolean {
-  return grok?.inlineCitations === true;
-}
-
-function resolveKimiConfig(search?: WebSearchConfig): KimiConfig {
-  if (!search || typeof search !== "object") {
-    return {};
-  }
-  const kimi = "kimi" in search ? search.kimi : undefined;
-  if (!kimi || typeof kimi !== "object") {
-    return {};
-  }
-  return kimi as KimiConfig;
-}
-
-function resolveKimiApiKey(kimi?: KimiConfig): string | undefined {
-  const fromConfig = normalizeApiKey(kimi?.apiKey);
-  if (fromConfig) {
-    return fromConfig;
-  }
-  const fromEnvKimi = normalizeApiKey(process.env.KIMI_API_KEY);
-  if (fromEnvKimi) {
-    return fromEnvKimi;
-  }
-  const fromEnvMoonshot = normalizeApiKey(process.env.MOONSHOT_API_KEY);
-  return fromEnvMoonshot || undefined;
-}
-
-function resolveKimiModel(kimi?: KimiConfig): string {
-  const fromConfig =
-    kimi && "model" in kimi && typeof kimi.model === "string" ? kimi.model.trim() : "";
-  return fromConfig || DEFAULT_KIMI_MODEL;
-}
-
-function resolveKimiBaseUrl(kimi?: KimiConfig): string {
-  const fromConfig =
-    kimi && "baseUrl" in kimi && typeof kimi.baseUrl === "string" ? kimi.baseUrl.trim() : "";
-  return fromConfig || DEFAULT_KIMI_BASE_URL;
-}
-
-function resolveGeminiConfig(search?: WebSearchConfig): GeminiConfig {
-  if (!search || typeof search !== "object") {
-    return {};
-  }
-  const gemini = "gemini" in search ? search.gemini : undefined;
-  if (!gemini || typeof gemini !== "object") {
-    return {};
-  }
-  return gemini as GeminiConfig;
-}
-
-function resolveGeminiApiKey(gemini?: GeminiConfig): string | undefined {
-  const fromConfig = normalizeApiKey(gemini?.apiKey);
-  if (fromConfig) {
-    return fromConfig;
-  }
-  const fromEnv = normalizeApiKey(process.env.GEMINI_API_KEY);
-  return fromEnv || undefined;
 }
 
 async function withTrustedWebSearchEndpoint<T>(
@@ -1000,107 +496,6 @@ function resolveSearchCount(value: unknown, fallback: number): number {
   const parsed = typeof value === "number" && Number.isFinite(value) ? value : fallback;
   const clamped = Math.max(1, Math.min(MAX_SEARCH_COUNT, Math.floor(parsed)));
   return clamped;
-}
-
-function normalizeBraveSearchLang(value: string | undefined): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-  const canonical = BRAVE_SEARCH_LANG_ALIASES[trimmed.toLowerCase()] ?? trimmed.toLowerCase();
-  if (!BRAVE_SEARCH_LANG_CODES.has(canonical)) {
-    return undefined;
-  }
-  return canonical;
-}
-
-function normalizeBraveUiLang(value: string | undefined): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-  const match = trimmed.match(BRAVE_UI_LANG_LOCALE);
-  if (!match) {
-    return undefined;
-  }
-  const [, language, region] = match;
-  return `${language.toLowerCase()}-${region.toUpperCase()}`;
-}
-
-function normalizeBraveLanguageParams(params: { search_lang?: string; ui_lang?: string }): {
-  search_lang?: string;
-  ui_lang?: string;
-  invalidField?: "search_lang" | "ui_lang";
-} {
-  const rawSearchLang = params.search_lang?.trim() || undefined;
-  const rawUiLang = params.ui_lang?.trim() || undefined;
-  let searchLangCandidate = rawSearchLang;
-  let uiLangCandidate = rawUiLang;
-
-  // Recover common LLM mix-up: locale in search_lang + short code in ui_lang.
-  if (normalizeBraveUiLang(rawSearchLang) && normalizeBraveSearchLang(rawUiLang)) {
-    searchLangCandidate = rawUiLang;
-    uiLangCandidate = rawSearchLang;
-  }
-
-  const search_lang = normalizeBraveSearchLang(searchLangCandidate);
-  if (searchLangCandidate && !search_lang) {
-    return { invalidField: "search_lang" };
-  }
-
-  const ui_lang = normalizeBraveUiLang(uiLangCandidate);
-  if (uiLangCandidate && !ui_lang) {
-    return { invalidField: "ui_lang" };
-  }
-
-  return { search_lang, ui_lang };
-}
-
-/**
- * Normalizes freshness shortcut to the provider's expected format.
- * Accepts both Brave format (pd/pw/pm/py) and Perplexity format (day/week/month/year).
- * For Brave, also accepts date ranges (YYYY-MM-DDtoYYYY-MM-DD).
- */
-function normalizeFreshness(
-  value: string | undefined,
-  provider: BuiltinWebSearchProviderId,
-): string | undefined {
-  if (!value) {
-    return undefined;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return undefined;
-  }
-
-  const lower = trimmed.toLowerCase();
-
-  if (BRAVE_FRESHNESS_SHORTCUTS.has(lower)) {
-    return provider === "brave" ? lower : FRESHNESS_TO_RECENCY[lower];
-  }
-
-  if (PERPLEXITY_RECENCY_VALUES.has(lower)) {
-    return provider === "perplexity" ? lower : RECENCY_TO_FRESHNESS[lower];
-  }
-
-  // Brave date range support
-  if (provider === "brave") {
-    const match = trimmed.match(BRAVE_FRESHNESS_RANGE);
-    if (match) {
-      const [, start, end] = match;
-      if (isValidIsoDate(start) && isValidIsoDate(end) && start <= end) {
-        return `${start}to${end}`;
-      }
-    }
-  }
-
-  return undefined;
 }
 
 function isValidIsoDate(value: string): boolean {
@@ -1556,10 +951,6 @@ function normalizeSearchProviderId(value: string | undefined): string {
   return value?.trim().toLowerCase() ?? "";
 }
 
-function isBuiltinSearchProviderId(value: string): value is BuiltinWebSearchProviderId {
-  return isBuiltinWebSearchProviderIdFromCatalog(value);
-}
-
 function stableSerializeForCache(value: unknown): string {
   if (value === null || value === undefined) {
     return String(value);
@@ -1677,7 +1068,7 @@ function executePluginSearchProvider(params: {
     ? stableSerializeForCache(params.context.pluginConfig)
     : "no-plugin-config";
   const cacheKey = normalizeCacheKey(
-    `${params.provider.id}:${params.provider.pluginId || "builtin"}:${pluginConfigKey}:${buildSearchRequestCacheIdentity(
+    `${params.provider.id}:${params.provider.pluginId || "unregistered"}:${pluginConfigKey}:${buildSearchRequestCacheIdentity(
       {
         query: params.request.query,
         count: params.request.count,
@@ -1800,13 +1191,6 @@ function getRegisteredSearchProviders(config?: OpenClawConfig): SearchProviderPl
   return registry.searchProviders.map((entry) => entry.provider);
 }
 
-function resolveBuiltinSchemaProviderId(
-  provider: SearchProviderPlugin,
-): BuiltinWebSearchProviderId | undefined {
-  const candidate = normalizeSearchProviderId(provider.id);
-  return isBuiltinSearchProviderId(candidate) ? candidate : undefined;
-}
-
 function resolveConfiguredSearchProviderId(params: {
   config?: OpenClawConfig;
   search?: WebSearchConfig;
@@ -1823,36 +1207,15 @@ function resolveConfiguredSearchProviderId(params: {
   );
 }
 
-function resolvePreferredBuiltinSearchProvider(params: {
-  search?: WebSearchConfig;
-  runtimeWebSearch?: RuntimeWebSearchMetadata;
-  config?: OpenClawConfig;
-}): BuiltinWebSearchProviderId {
-  const configuredProviderId = normalizeSearchProviderId(
-    resolveConfiguredSearchProviderId({
-      config: params.config,
-      search: params.search,
-    }) ?? undefined,
-  );
-  if (isBuiltinSearchProviderId(configuredProviderId)) {
-    return configuredProviderId;
-  }
-
-  if (
-    params.runtimeWebSearch?.providerConfigured &&
-    params.runtimeWebSearch.providerConfigured === configuredProviderId
-  ) {
-    return params.runtimeWebSearch.providerConfigured;
-  }
-
-  if (
-    params.runtimeWebSearch?.selectedProvider &&
-    params.runtimeWebSearch.providerSource !== "none"
-  ) {
-    return params.runtimeWebSearch.selectedProvider;
-  }
-
-  return resolveBuiltinSearchProvider(params.search);
+function sortRegisteredSearchProviders(providers: SearchProviderPlugin[]): SearchProviderPlugin[] {
+  return [...providers].toSorted((left, right) => {
+    const leftPriority = left.setup?.autodetectPriority ?? Number.MAX_SAFE_INTEGER;
+    const rightPriority = right.setup?.autodetectPriority ?? Number.MAX_SAFE_INTEGER;
+    if (leftPriority !== rightPriority) {
+      return leftPriority - rightPriority;
+    }
+    return left.id.localeCompare(right.id);
+  });
 }
 
 function resolveRegisteredSearchProvider(params: {
@@ -1867,7 +1230,7 @@ function resolveRegisteredSearchProvider(params: {
     }) ?? undefined,
   );
   const registeredProviders = new Map(
-    getRegisteredSearchProviders(params.config).map((provider) => [
+    sortRegisteredSearchProviders(getRegisteredSearchProviders(params.config)).map((provider) => [
       normalizeSearchProviderId(provider.id),
       provider,
     ]),
@@ -1901,16 +1264,11 @@ function resolveRegisteredSearchProvider(params: {
       }
     }
   }
-  const preferredBuiltinProvider = resolvePreferredBuiltinSearchProvider({
-    config: params.config,
-    search: params.search,
-    runtimeWebSearch: params.runtimeWebSearch,
-  });
-  return (
-    registeredProviders.get(preferredBuiltinProvider) ??
-    registeredProviders.get(DEFAULT_PROVIDER) ??
-    createMissingSearchProviderPlugin(preferredBuiltinProvider)
-  );
+  const firstRegisteredProvider = registeredProviders.values().next().value;
+  if (firstRegisteredProvider) {
+    return firstRegisteredProvider;
+  }
+  return createMissingSearchProviderPlugin(configuredProviderId || "web-search");
 }
 
 function createSearchProviderSchema(params: {
@@ -1918,16 +1276,16 @@ function createSearchProviderSchema(params: {
   search?: WebSearchConfig;
   runtimeWebSearch?: RuntimeWebSearchMetadata;
 }) {
-  const providerId = resolveBuiltinSchemaProviderId(params.provider);
-  if (providerId) {
-    const perplexityTransport =
-      params.runtimeWebSearch?.selectedProvider === "perplexity"
-        ? params.runtimeWebSearch.perplexityTransport
-        : resolvePerplexitySchemaTransportHint(resolvePerplexityConfig(params.search));
-    return createWebSearchSchema({
-      provider: providerId,
-      perplexityTransport: providerId === "perplexity" ? perplexityTransport : undefined,
+  if (params.provider.setup?.resolveRequestSchema) {
+    return params.provider.setup.resolveRequestSchema({
+      config: params.search
+        ? ({ tools: { web: { search: params.search } } } as OpenClawConfig)
+        : undefined,
+      runtimeMetadata: params.runtimeWebSearch as Record<string, unknown> | undefined,
     });
+  }
+  if (params.provider.setup?.requestSchema) {
+    return params.provider.setup.requestSchema;
   }
   return createExtensibleWebSearchSchema();
 }
@@ -1986,7 +1344,7 @@ function formatWebSearchExecutionLog(provider: SearchProviderPlugin): string {
   if (provider.pluginId) {
     return `web_search: executing plugin provider "${provider.id}" from "${provider.pluginId}"`;
   }
-  return `web_search: executing built-in provider "${provider.id}"`;
+  return `web_search: executing registered provider "${provider.id}"`;
 }
 
 export function createWebSearchTool(options?: {
@@ -2073,31 +1431,9 @@ export function createWebSearchTool(options?: {
 }
 
 export const __testing = {
-  resolveSearchProvider: resolveBuiltinSearchProvider,
+  resolveSearchProvider: resolveRegisteredSearchProvider,
   resolveRegisteredSearchProvider,
-  inferPerplexityBaseUrlFromApiKey,
-  resolvePerplexityBaseUrl,
-  resolvePerplexityModel,
-  resolvePerplexityTransport,
-  isDirectPerplexityBaseUrl,
-  resolvePerplexityRequestModel,
-  resolvePerplexityApiKey,
-  normalizeBraveLanguageParams,
-  normalizeFreshness,
   normalizeToIsoDate,
-  isoToPerplexityDate,
   SEARCH_CACHE,
-  FRESHNESS_TO_RECENCY,
-  RECENCY_TO_FRESHNESS,
-  resolveGrokApiKey,
-  resolveGrokModel,
-  resolveGrokInlineCitations,
-  extractGrokContent,
-  resolveKimiApiKey,
-  resolveKimiModel,
-  resolveKimiBaseUrl,
-  extractKimiCitations,
   resolveRedirectUrl: resolveCitationRedirectUrl,
-  resolveBraveMode,
-  mapBraveLlmContextResults,
 } as const;

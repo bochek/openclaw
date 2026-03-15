@@ -1,5 +1,7 @@
 {
   "id": "tavily-search",
+  "name": "Tavily Search",
+  "description": "Search the web using Tavily.",
   "provides": ["providers.search.tavily"],
   "uiHints": {
     "apiKey": {

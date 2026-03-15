@@ -1,3 +1,4 @@
+import { Type } from "@sinclair/typebox";
 import {
   buildSearchRequestCacheIdentity,
   createSearchProviderSetupMetadata,
@@ -10,7 +11,7 @@ import {
   resolveSearchProviderSectionConfig,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
-  type SearchProviderSetupUiMetadata,
+  type SearchProviderSetupMetadata,
   type SearchProviderPlugin,
   withTrustedWebToolsEndpoint,
   wrapWebContent,
@@ -25,6 +26,7 @@ const KIMI_WEB_SEARCH_TOOL = {
 } as const;
 
 const KIMI_SEARCH_CACHE = new Map<string, { value: Record<string, unknown>; expiresAt: number }>();
+const MAX_SEARCH_COUNT = 10;
 
 type WebSearchConfig = NonNullable<OpenClawConfig["tools"]>["web"] extends infer Web
   ? Web extends { search?: infer Search }
@@ -216,7 +218,7 @@ async function runKimiSearch(params: {
   };
 }
 
-export const KIMI_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
+export const KIMI_SEARCH_PROVIDER_METADATA: SearchProviderSetupMetadata =
   createSearchProviderSetupMetadata({
     provider: "kimi",
     label: "Kimi (Moonshot)",
@@ -225,6 +227,11 @@ export const KIMI_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
     placeholder: "sk-...",
     signupUrl: "https://platform.moonshot.cn/",
     apiKeyConfigPath: "tools.web.search.kimi.apiKey",
+    autodetectPriority: 40,
+    requestSchema: Type.Object({
+      query: Type.String({ description: "Search query string." }),
+      count: Type.Optional(Type.Number({ minimum: 1, maximum: MAX_SEARCH_COUNT })),
+    }),
   });
 
 export function createBundledKimiSearchProvider(): SearchProviderPlugin {
@@ -234,10 +241,7 @@ export function createBundledKimiSearchProvider(): SearchProviderPlugin {
     description:
       "Search the web using Kimi by Moonshot. Returns AI-synthesized answers with citations from native $web_search.",
     pluginOwnedExecution: true,
-    setup: {
-      hint: KIMI_SEARCH_PROVIDER_METADATA.hint,
-      credentials: KIMI_SEARCH_PROVIDER_METADATA,
-    },
+    setup: KIMI_SEARCH_PROVIDER_METADATA,
     isAvailable: (config) =>
       Boolean(
         resolveKimiApiKey(

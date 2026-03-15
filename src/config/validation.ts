@@ -645,6 +645,7 @@ function validateConfigObjectWithPluginsBase(
       origin: record.origin,
       config: normalizedPlugins,
       rootConfig: config,
+      defaultEnabledWhenBundled: record.defaultEnabledWhenBundled,
     });
     let enabled = enableState.enabled;
     let reason = enableState.reason;

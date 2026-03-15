@@ -6,6 +6,7 @@ import {
   clearPluginManifestRegistryCache,
   loadPluginManifestRegistry,
 } from "./manifest-registry.js";
+import type { OpenClawPackageManifest } from "./manifest.js";
 import { cleanupTrackedTempDirs, makeTrackedTempDir } from "./test-helpers/fs-fixtures.js";
 
 const tempDirs: string[] = [];
@@ -36,12 +37,14 @@ function createPluginCandidate(params: {
   rootDir: string;
   sourceName?: string;
   origin: "bundled" | "global" | "workspace" | "config";
+  packageManifest?: OpenClawPackageManifest;
 }): PluginCandidate {
   return {
     idHint: params.idHint,
     source: path.join(params.rootDir, params.sourceName ?? "index.ts"),
     rootDir: params.rootDir,
     origin: params.origin,
+    packageManifest: params.packageManifest,
   };
 }
 
@@ -213,6 +216,37 @@ describe("loadPluginManifestRegistry", () => {
     ];
 
     expect(countDuplicateWarnings(loadRegistry(candidates))).toBe(0);
+  });
+
+  it("surfaces package install metadata on manifest records", () => {
+    const dir = makeTempDir();
+    writeManifest(dir, {
+      id: "tavily-search",
+      name: "Tavily Search",
+      provides: ["providers.search.tavily"],
+      configSchema: { type: "object" },
+    });
+
+    const registry = loadRegistry([
+      createPluginCandidate({
+        idHint: "tavily-search",
+        rootDir: dir,
+        origin: "bundled",
+        packageManifest: {
+          install: {
+            npmSpec: "@openclaw/tavily-search",
+            localPath: "extensions/tavily-search",
+            defaultChoice: "local",
+          },
+        },
+      }),
+    ]);
+
+    expect(registry.plugins[0]?.packageInstall).toEqual({
+      npmSpec: "@openclaw/tavily-search",
+      localPath: "extensions/tavily-search",
+      defaultChoice: "local",
+    });
   });
 
   it("prefers higher-precedence origins for the same physical directory (config > workspace > global > bundled)", () => {

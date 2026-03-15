@@ -1,5 +1,6 @@
 {
   "id": "search-brave",
+  "defaultEnabledWhenBundled": true,
   "configSchema": {
     "type": "object",
     "properties": {}

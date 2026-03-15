@@ -1,5 +1,6 @@
 {
   "id": "search-perplexity",
+  "defaultEnabledWhenBundled": true,
   "configSchema": {
     "type": "object",
     "properties": {}

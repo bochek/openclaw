@@ -1,5 +1,6 @@
 {
   "id": "search-kimi",
+  "defaultEnabledWhenBundled": true,
   "configSchema": {
     "type": "object",
     "properties": {}

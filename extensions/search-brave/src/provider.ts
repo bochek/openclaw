@@ -1,3 +1,4 @@
+import { Type } from "@sinclair/typebox";
 import {
   CacheEntry,
   createSearchProviderSetupMetadata,
@@ -8,14 +9,13 @@ import {
   normalizeSecretInput,
   readCache,
   readResponseText,
-  readSearchProviderApiKeyValue,
   resolveSearchConfig,
   resolveSiteName,
   type OpenClawConfig,
   type SearchProviderContext,
   type SearchProviderErrorResult,
   type SearchProviderExecutionResult,
-  type SearchProviderSetupUiMetadata,
+  type SearchProviderSetupMetadata,
   type SearchProviderPlugin,
   type SearchProviderRequest,
   withTrustedWebToolsEndpoint,
@@ -91,6 +91,7 @@ const BRAVE_SEARCH_LANG_ALIASES: Record<string, string> = {
   "zh-tw": "zh-hant",
 };
 const BRAVE_UI_LANG_LOCALE = /^([a-z]{2})-([a-z]{2})$/i;
+const MAX_SEARCH_COUNT = 10;
 
 type BraveSearchResult = {
   title?: string;
@@ -136,7 +137,7 @@ function resolveBraveMode(brave: BraveConfig): "web" | "llm-context" {
 function resolveBraveApiKey(search?: WebSearchConfig): string | undefined {
   const fromConfigRaw = search
     ? normalizeResolvedSecretInputString({
-        value: readSearchProviderApiKeyValue(search as Record<string, unknown>, "brave"),
+        value: search.apiKey,
         path: "tools.web.search.apiKey",
       })
     : undefined;
@@ -395,7 +396,7 @@ async function runBraveWebSearch(params: {
   );
 }
 
-export const BRAVE_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
+export const BRAVE_SEARCH_PROVIDER_METADATA: SearchProviderSetupMetadata =
   createSearchProviderSetupMetadata({
     provider: "brave",
     label: "Brave Search",
@@ -404,20 +405,34 @@ export const BRAVE_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
     placeholder: "BSA...",
     signupUrl: "https://brave.com/search/api/",
     apiKeyConfigPath: "tools.web.search.apiKey",
+    autodetectPriority: 10,
+    requestSchema: Type.Object({
+      query: Type.String({ description: "Search query string." }),
+      count: Type.Optional(Type.Number({ minimum: 1, maximum: MAX_SEARCH_COUNT })),
+      country: Type.Optional(Type.String()),
+      language: Type.Optional(Type.String()),
+      freshness: Type.Optional(Type.String()),
+      date_after: Type.Optional(Type.String()),
+      date_before: Type.Optional(Type.String()),
+      search_lang: Type.Optional(Type.String()),
+      ui_lang: Type.Optional(Type.String()),
+    }),
+    readApiKeyValue: (search) =>
+      search && typeof search === "object" && !Array.isArray(search) ? search.apiKey : undefined,
+    writeApiKeyValue: (search, value) => {
+      search.apiKey = value;
+    },
   });
 
 export function createBundledBraveSearchProvider(): SearchProviderPlugin {
   return {
     id: "brave",
-    name: BRAVE_SEARCH_PROVIDER_METADATA.label,
+    name: "Brave Search",
     description:
       "Search the web using Brave Search. Supports web and llm-context modes, region-specific search, and localized search parameters.",
     pluginOwnedExecution: true,
-    docsUrl: BRAVE_SEARCH_PROVIDER_METADATA.signupUrl,
-    setup: {
-      hint: BRAVE_SEARCH_PROVIDER_METADATA.hint,
-      credentials: BRAVE_SEARCH_PROVIDER_METADATA,
-    },
+    docsUrl: "https://brave.com/search/api/",
+    setup: BRAVE_SEARCH_PROVIDER_METADATA,
     isAvailable: (config) => {
       const search = config?.tools?.web?.search;
       return Boolean(

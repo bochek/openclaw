@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { getBlockedNetworkModeReason } from "../agents/sandbox/network-mode.js";
-import { BUILTIN_WEB_SEARCH_PROVIDER_IDS } from "../agents/tools/web-search-provider-catalog.js";
 import { parseDurationMs } from "../cli/parse-duration.js";
 import { AgentModelSchema } from "./zod-schema.agent-model.js";
 import {
@@ -264,10 +263,8 @@ export const ToolsWebSearchSchema = z
   .object({
     enabled: z.boolean().optional(),
     provider: z
-      .union([
-        z.enum(BUILTIN_WEB_SEARCH_PROVIDER_IDS),
-        z.string().regex(/^[a-z][a-z0-9_-]*$/, "custom provider id"),
-      ])
+      .string()
+      .regex(/^[a-z][a-z0-9_-]*$/, "provider id")
       .optional(),
     apiKey: SecretInputSchema.optional().register(sensitive),
     maxResults: z.number().int().positive().optional(),

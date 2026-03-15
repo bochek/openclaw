@@ -201,7 +201,7 @@ Notes:
 
 - Where to host SDK types: separate package or core export?
 - Runtime type distribution: in SDK (types only) or in core?
-- How to expose docs links for bundled vs external plugins?
+- How to expose docs links from one plugin-owned metadata path regardless of provenance?
 - Do we allow limited direct core imports for in-repo plugins during transition?
 
 ## Success criteria

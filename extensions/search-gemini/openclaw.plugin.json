@@ -1,5 +1,6 @@
 {
   "id": "search-gemini",
+  "defaultEnabledWhenBundled": true,
   "configSchema": {
     "type": "object",
     "properties": {}

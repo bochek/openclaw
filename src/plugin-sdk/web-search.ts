@@ -10,6 +10,7 @@ export type {
   SearchProviderRequest,
   SearchProviderPlugin,
   SearchProviderRuntimeMetadataResolver,
+  SearchProviderSetupMetadata,
   SearchProviderSuccessResult,
 } from "../plugins/types.js";
 export {
@@ -21,24 +22,23 @@ export {
 export { withTrustedWebToolsEndpoint } from "../agents/tools/web-guarded-fetch.js";
 export { resolveCitationRedirectUrl } from "../agents/tools/web-search-citation-redirect.js";
 
-export type SearchProviderLegacyUiMetadata = {
+export type SearchProviderSetupParams = {
   label: string;
   hint: string;
   envKeys: readonly string[];
   placeholder: string;
   signupUrl: string;
   apiKeyConfigPath: string;
-  readApiKeyValue?: (search: Record<string, unknown> | undefined) => unknown;
-  writeApiKeyValue?: (search: Record<string, unknown>, value: unknown) => void;
-};
-
-export type SearchProviderSetupUiMetadata = {
-  label: string;
-  hint: string;
-  envKeys: readonly string[];
-  placeholder: string;
-  signupUrl: string;
-  apiKeyConfigPath: string;
+  install?: SearchProviderSetupMetadata["install"];
+  autodetectPriority?: SearchProviderSetupMetadata["autodetectPriority"];
+  requestSchema?: SearchProviderSetupMetadata["requestSchema"];
+  resolveRequestSchema?: SearchProviderSetupMetadata["resolveRequestSchema"];
+  resolveRuntimeMetadata?: (params: {
+    search: Record<string, unknown> | undefined;
+    keyValue?: string;
+    keySource: "config" | "secretRef" | "env" | "missing";
+    fallbackEnvVar?: string;
+  }) => Record<string, unknown>;
   readApiKeyValue?: (search: Record<string, unknown> | undefined) => unknown;
   writeApiKeyValue?: (search: Record<string, unknown>, value: unknown) => void;
 };
@@ -50,15 +50,6 @@ export type SearchProviderFilterSupport = {
   date?: boolean;
   domainFilter?: boolean;
 };
-
-export type SearchProviderLegacyUiMetadataParams = Omit<
-  SearchProviderLegacyUiMetadata,
-  "readApiKeyValue" | "writeApiKeyValue"
-> & {
-  provider: string;
-};
-
-export type SearchProviderSetupUiMetadataParams = SearchProviderLegacyUiMetadataParams;
 
 const WEB_SEARCH_DOCS_URL = "https://docs.openclaw.ai/tools/web";
 
@@ -80,27 +71,34 @@ export function resolveSearchProviderSectionConfig<T>(
   return scoped as T;
 }
 
-export function createLegacySearchProviderMetadata(
-  params: SearchProviderLegacyUiMetadataParams,
-): SearchProviderLegacyUiMetadata {
-  return {
-    label: params.label,
-    hint: params.hint,
-    envKeys: params.envKeys,
-    placeholder: params.placeholder,
-    signupUrl: params.signupUrl,
-    apiKeyConfigPath: params.apiKeyConfigPath,
-    resolveRuntimeMetadata: params.resolveRuntimeMetadata,
-    readApiKeyValue: (search) => readSearchProviderApiKeyValue(search, params.provider),
-    writeApiKeyValue: (search, value) =>
-      writeSearchProviderApiKeyValue({ search, provider: params.provider, value }),
-  };
-}
-
 export function createSearchProviderSetupMetadata(
-  params: SearchProviderSetupUiMetadataParams,
-): SearchProviderSetupUiMetadata {
-  return createLegacySearchProviderMetadata(params);
+  params: SearchProviderSetupParams & { provider: string },
+): SearchProviderSetupMetadata {
+  return {
+    hint: params.hint,
+    credentials: {
+      label: params.label,
+      hint: params.hint,
+      envKeys: params.envKeys,
+      placeholder: params.placeholder,
+      signupUrl: params.signupUrl,
+      apiKeyConfigPath: params.apiKeyConfigPath,
+      resolveRuntimeMetadata: params.resolveRuntimeMetadata,
+      readApiKeyValue:
+        params.readApiKeyValue ??
+        ((search) => readSearchProviderApiKeyValue(search, params.provider)),
+      writeApiKeyValue:
+        params.writeApiKeyValue ??
+        ((search, value) =>
+          writeSearchProviderApiKeyValue({ search, provider: params.provider, value })),
+    },
+    ...(params.install ? { install: params.install } : {}),
+    ...(params.autodetectPriority !== undefined
+      ? { autodetectPriority: params.autodetectPriority }
+      : {}),
+    ...(params.requestSchema ? { requestSchema: params.requestSchema } : {}),
+    ...(params.resolveRequestSchema ? { resolveRequestSchema: params.resolveRequestSchema } : {}),
+  };
 }
 
 export function createSearchProviderErrorResult(
@@ -130,31 +128,31 @@ export function rejectUnsupportedSearchFilters(params: {
   if (params.request.country && params.support.country !== true) {
     return createSearchProviderErrorResult(
       "unsupported_country",
-      `country filtering is not supported by the ${provider} provider. Only Brave and Perplexity support country filtering.`,
+      `country filtering is not supported by the ${provider} provider.`,
     );
   }
   if (params.request.language && params.support.language !== true) {
     return createSearchProviderErrorResult(
       "unsupported_language",
-      `language filtering is not supported by the ${provider} provider. Only Brave and Perplexity support language filtering.`,
+      `language filtering is not supported by the ${provider} provider.`,
     );
   }
   if (params.request.freshness && params.support.freshness !== true) {
     return createSearchProviderErrorResult(
       "unsupported_freshness",
-      `freshness filtering is not supported by the ${provider} provider. Only Brave and Perplexity support freshness.`,
+      `freshness filtering is not supported by the ${provider} provider.`,
     );
   }
   if ((params.request.dateAfter || params.request.dateBefore) && params.support.date !== true) {
     return createSearchProviderErrorResult(
       "unsupported_date_filter",
-      `date_after/date_before filtering is not supported by the ${provider} provider. Only Brave and Perplexity support date filtering.`,
+      `date_after/date_before filtering is not supported by the ${provider} provider.`,
     );
   }
   if (params.request.domainFilter?.length && params.support.domainFilter !== true) {
     return createSearchProviderErrorResult(
       "unsupported_domain_filter",
-      `domain_filter is not supported by the ${provider} provider. Only Perplexity supports domain filtering.`,
+      `domain_filter is not supported by the ${provider} provider.`,
     );
   }
   return undefined;
@@ -238,9 +236,6 @@ function getScopedSearchConfig(
   search: Record<string, unknown>,
   provider: string,
 ): Record<string, unknown> | undefined {
-  if (provider === "brave") {
-    return search;
-  }
   const scoped = search[provider];
   return typeof scoped === "object" && scoped !== null && !Array.isArray(scoped)
     ? (scoped as Record<string, unknown>)
@@ -262,10 +257,6 @@ export function writeSearchProviderApiKeyValue(params: {
   provider: string;
   value: unknown;
 }): void {
-  if (params.provider === "brave") {
-    params.search.apiKey = params.value;
-    return;
-  }
   const current = getScopedSearchConfig(params.search, params.provider);
   if (current) {
     current.apiKey = params.value;

@@ -1,11 +1,16 @@
 {
   "name": "@openclaw/tavily-search",
   "version": "2026.3.9",
-  "description": "OpenClaw Tavily external search provider plugin",
+  "description": "OpenClaw Tavily search plugin",
   "type": "module",
   "openclaw": {
     "extensions": [
       "./index.ts"
-    ]
+    ],
+    "install": {
+      "npmSpec": "@openclaw/tavily-search",
+      "localPath": "extensions/tavily-search",
+      "defaultChoice": "local"
+    }
   }
 }

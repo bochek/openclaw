@@ -3,7 +3,6 @@ import { resolveSecretInputRef } from "../config/types.secrets.js";
 import { loadOpenClawPlugins } from "../plugins/loader.js";
 import type {
   SearchProviderCredentialMetadata,
-  SearchProviderLegacyConfigMetadata,
   SearchProviderPlugin,
   SearchProviderSetupMetadata,
 } from "../plugins/types.js";
@@ -93,18 +92,8 @@ type RegisteredSearchProviderRuntimeSupport = {
 
 function resolveProviderSetupMetadata(
   setup?: SearchProviderSetupMetadata,
-  legacyConfig?: SearchProviderLegacyConfigMetadata,
 ): SearchProviderSetupMetadata | undefined {
-  if (setup) {
-    return setup;
-  }
-  if (!legacyConfig) {
-    return undefined;
-  }
-  return {
-    hint: legacyConfig.hint,
-    credentials: legacyConfig,
-  };
+  return setup;
 }
 
 function resolveProviderCredentialMetadata(
@@ -128,7 +117,7 @@ function resolveRegisteredSearchProviderMetadata(
         .map((entry) => [
           entry.provider.id,
           {
-            setup: resolveProviderSetupMetadata(entry.provider.setup, entry.provider.legacyConfig),
+            setup: resolveProviderSetupMetadata(entry.provider.setup),
             resolveRuntimeMetadata: entry.provider.resolveRuntimeMetadata,
           },
         ]),

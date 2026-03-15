@@ -2,7 +2,7 @@
   "name": "@openclaw/search-brave",
   "version": "2026.3.12",
   "private": true,
-  "description": "OpenClaw bundled Brave search provider plugin",
+  "description": "OpenClaw Brave search plugin",
   "type": "module",
   "openclaw": {
     "extensions": [

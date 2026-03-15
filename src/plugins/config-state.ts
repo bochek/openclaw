@@ -1,4 +1,3 @@
-import { MIGRATED_BUNDLED_WEB_SEARCH_PLUGIN_IDS } from "../agents/tools/web-search-provider-catalog.js";
 import { normalizeChatChannelId } from "../channels/registry.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { PluginRecord } from "./registry.js";
@@ -29,7 +28,6 @@ export const BUNDLED_ENABLED_BY_DEFAULT = new Set<string>([
   "ollama",
   "phone-control",
   "sglang",
-  ...MIGRATED_BUNDLED_WEB_SEARCH_PLUGIN_IDS,
   "talk-voice",
   "vllm",
 ]);
@@ -195,6 +193,7 @@ export function resolveEnableState(
   id: string,
   origin: PluginRecord["origin"],
   config: NormalizedPluginsConfig,
+  defaultEnabledWhenBundled = false,
 ): { enabled: boolean; reason?: string } {
   if (!config.enabled) {
     return { enabled: false, reason: "plugins disabled" };
@@ -219,7 +218,7 @@ export function resolveEnableState(
   if (entry?.enabled === true) {
     return { enabled: true };
   }
-  if (origin === "bundled" && BUNDLED_ENABLED_BY_DEFAULT.has(id)) {
+  if (origin === "bundled" && (BUNDLED_ENABLED_BY_DEFAULT.has(id) || defaultEnabledWhenBundled)) {
     return { enabled: true };
   }
   if (origin === "bundled") {
@@ -252,8 +251,14 @@ export function resolveEffectiveEnableState(params: {
   origin: PluginRecord["origin"];
   config: NormalizedPluginsConfig;
   rootConfig?: OpenClawConfig;
+  defaultEnabledWhenBundled?: boolean;
 }): { enabled: boolean; reason?: string } {
-  const base = resolveEnableState(params.id, params.origin, params.config);
+  const base = resolveEnableState(
+    params.id,
+    params.origin,
+    params.config,
+    params.defaultEnabledWhenBundled,
+  );
   if (
     !base.enabled &&
     base.reason === "bundled (disabled by default)" &&

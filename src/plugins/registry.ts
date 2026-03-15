@@ -155,6 +155,7 @@ export type PluginRecord = {
   configSchema: boolean;
   configUiHints?: Record<string, PluginConfigUiHint>;
   configJsonSchema?: Record<string, unknown>;
+  defaultEnabledWhenBundled?: boolean;
 };
 
 export type PluginRegistry = {

@@ -1,5 +1,6 @@
 {
   "id": "search-grok",
+  "defaultEnabledWhenBundled": true,
   "configSchema": {
     "type": "object",
     "properties": {}

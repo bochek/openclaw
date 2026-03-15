@@ -21,6 +21,7 @@ export type PluginManifest = {
   name?: string;
   description?: string;
   version?: string;
+  defaultEnabledWhenBundled?: boolean;
   uiHints?: Record<string, PluginConfigUiHint>;
 };
 
@@ -106,6 +107,9 @@ export function loadPluginManifest(
     uiHints = raw.uiHints as Record<string, PluginConfigUiHint>;
   }
 
+  const defaultEnabledWhenBundled =
+    typeof raw.defaultEnabledWhenBundled === "boolean" ? raw.defaultEnabledWhenBundled : undefined;
+
   return {
     ok: true,
     manifest: {
@@ -121,6 +125,7 @@ export function loadPluginManifest(
       name,
       description,
       version,
+      defaultEnabledWhenBundled,
       uiHints,
     },
     manifestPath,

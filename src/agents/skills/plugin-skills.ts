@@ -43,6 +43,7 @@ export function resolvePluginSkillDirs(params: {
       origin: record.origin,
       config: normalizedPlugins,
       rootConfig: params.config,
+      defaultEnabledWhenBundled: record.defaultEnabledWhenBundled,
     });
     if (!enableState.enabled) {
       continue;

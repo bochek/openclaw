@@ -2,7 +2,7 @@ import fs from "node:fs";
 import type { OpenClawConfig } from "../config/config.js";
 import { normalizePluginsConfig, type NormalizedPluginsConfig } from "./config-state.js";
 import { discoverOpenClawPlugins, type PluginCandidate } from "./discovery.js";
-import { loadPluginManifest, type PluginManifest } from "./manifest.js";
+import { loadPluginManifest, type PluginManifest, type PluginPackageInstall } from "./manifest.js";
 import { safeRealpathSync } from "./path-safety.js";
 import { resolvePluginCacheInputs } from "./roots.js";
 import type { PluginConfigUiHint, PluginDiagnostic, PluginKind, PluginOrigin } from "./types.js";
@@ -40,6 +40,8 @@ export type PluginManifestRecord = {
   schemaCacheKey?: string;
   configSchema?: Record<string, unknown>;
   configUiHints?: Record<string, PluginConfigUiHint>;
+  defaultEnabledWhenBundled?: boolean;
+  packageInstall?: PluginPackageInstall;
 };
 
 export type PluginManifestRegistry = {
@@ -138,6 +140,8 @@ function buildRecord(params: {
     schemaCacheKey: params.schemaCacheKey,
     configSchema: params.configSchema,
     configUiHints: params.manifest.uiHints,
+    defaultEnabledWhenBundled: params.manifest.defaultEnabledWhenBundled,
+    packageInstall: params.candidate.packageManifest?.install,
   };
 }
 

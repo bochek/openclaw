@@ -1,3 +1,4 @@
+import { Type } from "@sinclair/typebox";
 import {
   buildSearchRequestCacheIdentity,
   createSearchProviderSetupMetadata,
@@ -11,7 +12,7 @@ import {
   throwWebSearchApiError,
   type OpenClawConfig,
   type SearchProviderExecutionResult,
-  type SearchProviderSetupUiMetadata,
+  type SearchProviderSetupMetadata,
   type SearchProviderPlugin,
   withTrustedWebToolsEndpoint,
   wrapWebContent,
@@ -22,6 +23,7 @@ const XAI_API_ENDPOINT = "https://api.x.ai/v1/responses";
 const DEFAULT_GROK_MODEL = "grok-4-1-fast";
 
 const GROK_SEARCH_CACHE = new Map<string, { value: Record<string, unknown>; expiresAt: number }>();
+const MAX_SEARCH_COUNT = 10;
 
 type WebSearchConfig = NonNullable<OpenClawConfig["tools"]>["web"] extends infer Web
   ? Web extends { search?: infer Search }
@@ -164,7 +166,7 @@ async function runGrokSearch(params: {
   );
 }
 
-export const GROK_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
+export const GROK_SEARCH_PROVIDER_METADATA: SearchProviderSetupMetadata =
   createSearchProviderSetupMetadata({
     provider: "grok",
     label: "Grok (xAI)",
@@ -173,6 +175,11 @@ export const GROK_SEARCH_PROVIDER_METADATA: SearchProviderSetupUiMetadata =
     placeholder: "xai-...",
     signupUrl: "https://console.x.ai/",
     apiKeyConfigPath: "tools.web.search.grok.apiKey",
+    autodetectPriority: 30,
+    requestSchema: Type.Object({
+      query: Type.String({ description: "Search query string." }),
+      count: Type.Optional(Type.Number({ minimum: 1, maximum: MAX_SEARCH_COUNT })),
+    }),
   });
 
 export function createBundledGrokSearchProvider(): SearchProviderPlugin {
@@ -182,10 +189,7 @@ export function createBundledGrokSearchProvider(): SearchProviderPlugin {
     description:
       "Search the web using xAI Grok. Returns AI-synthesized answers with citations from real-time web search.",
     pluginOwnedExecution: true,
-    setup: {
-      hint: GROK_SEARCH_PROVIDER_METADATA.hint,
-      credentials: GROK_SEARCH_PROVIDER_METADATA,
-    },
+    setup: GROK_SEARCH_PROVIDER_METADATA,
     isAvailable: (config) =>
       Boolean(
         resolveGrokApiKey(

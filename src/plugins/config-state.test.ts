@@ -115,7 +115,7 @@ describe("resolveEffectiveEnableState", () => {
     expect(state).toEqual({ enabled: false, reason: "disabled in config" });
   });
 
-  it("enables bundled search provider plugins by default", () => {
+  it("enables plugins marked defaultEnabledWhenBundled by default", () => {
     const normalized = normalizePluginsConfig({
       enabled: true,
     });
@@ -124,11 +124,12 @@ describe("resolveEffectiveEnableState", () => {
       origin: "bundled",
       config: normalized,
       rootConfig: {},
+      defaultEnabledWhenBundled: true,
     });
     expect(state).toEqual({ enabled: true });
   });
 
-  it("enables other migrated bundled search provider plugins by default", () => {
+  it("applies defaultEnabledWhenBundled consistently across plugin ids", () => {
     const normalized = normalizePluginsConfig({
       enabled: true,
     });
@@ -137,6 +138,7 @@ describe("resolveEffectiveEnableState", () => {
       origin: "bundled",
       config: normalized,
       rootConfig: {},
+      defaultEnabledWhenBundled: true,
     });
     expect(state).toEqual({ enabled: true });
   });

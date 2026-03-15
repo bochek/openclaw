@@ -827,6 +827,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       origin: candidate.origin,
       config: normalized,
       rootConfig: cfg,
+      defaultEnabledWhenBundled: manifestRecord.defaultEnabledWhenBundled,
     });
     const entry = normalized.entries[pluginId];
     const record = createPluginRecord({
@@ -843,6 +844,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     record.kind = manifestRecord.kind;
     record.configUiHints = manifestRecord.configUiHints;
     record.configJsonSchema = manifestRecord.configSchema;
+    record.defaultEnabledWhenBundled = manifestRecord.defaultEnabledWhenBundled;
     record.declaredCapabilities = [...manifestRecord.provides];
     record.requiredCapabilities = [...manifestRecord.requires];
     record.conflictingCapabilities = [...manifestRecord.conflicts];
