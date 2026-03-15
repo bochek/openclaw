@@ -14,8 +14,15 @@ import {
 } from "./agent-scope.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "./defaults.js";
 import type { ModelCatalogEntry } from "./model-catalog.js";
-import { normalizeGoogleModelId } from "./model-id-normalization.js";
 import { splitTrailingAuthProfile } from "./model-ref-profile.js";
+import {
+  legacyModelKey,
+  modelKey,
+  normalizeModelRef,
+  parseModelRef,
+  type ModelRef,
+} from "./model-ref.js";
+import { normalizeProviderId, normalizeProviderIdForAuth } from "./provider-id.js";
 
 const log = createSubsystemLogger("model-selection");
 
@@ -588,3 +595,13 @@ export function normalizeModelSelection(value: unknown): string | undefined {
   }
   return undefined;
 }
+
+export {
+  legacyModelKey,
+  modelKey,
+  normalizeModelRef,
+  normalizeProviderId,
+  normalizeProviderIdForAuth,
+  parseModelRef,
+};
+export type { ModelRef };

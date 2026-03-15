@@ -44,7 +44,18 @@ function isOptionalToolAllowed(params: {
 }
 
 export function resolveExtensionHostPluginTools(params: {
-  registry: Pick<PluginRegistry, "tools" | "diagnostics">;
+  registry: Pick<
+    PluginRegistry,
+    | "channels"
+    | "tools"
+    | "providers"
+    | "cliRegistrars"
+    | "commands"
+    | "services"
+    | "httpRoutes"
+    | "gatewayHandlers"
+    | "diagnostics"
+  >;
   context: OpenClawPluginToolContext;
   existingToolNames?: Set<string>;
   toolAllowlist?: string[];

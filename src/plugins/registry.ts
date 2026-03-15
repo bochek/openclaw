@@ -12,18 +12,12 @@ import { findOverlappingPluginHttpRoute } from "./http-route-overlap.js";
 import { registerPluginInteractiveHandler } from "./interactive.js";
 import { normalizeRegisteredProvider } from "./provider-validation.js";
 import type { PluginRuntime } from "./runtime/types.js";
-import { defaultSlotIdForKey } from "./slots.js";
-import {
-  isPromptInjectionHookName,
-  stripPromptMutationFieldsFromLegacyHookResult,
-} from "./types.js";
 import type {
   OpenClawPluginCliRegistrar,
   OpenClawPluginCommandDefinition,
   OpenClawPluginHttpRouteAuth,
-  OpenClawPluginHttpRouteMatch,
   OpenClawPluginHttpRouteHandler,
-  ProviderPlugin,
+  OpenClawPluginHttpRouteMatch,
   OpenClawPluginService,
   OpenClawPluginToolFactory,
   PluginConfigUiHint,
@@ -32,8 +26,8 @@ import type {
   PluginFormat,
   PluginLogger,
   PluginOrigin,
-  PluginKind,
   PluginHookRegistration as TypedPluginHookRegistration,
+  ProviderPlugin,
 } from "./types.js";
 
 export type PluginToolRegistration = {

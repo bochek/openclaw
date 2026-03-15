@@ -110,10 +110,13 @@ export function resolveExtensionToolRegistration(params: {
     names.push(params.tool.name);
   }
   const normalizedNames = normalizeNameList(names);
-  const factory: OpenClawPluginToolFactory =
-    typeof params.tool === "function"
-      ? params.tool
-      : (_ctx: OpenClawPluginToolContext) => params.tool;
+  let factory: OpenClawPluginToolFactory;
+  if (typeof params.tool === "function") {
+    factory = params.tool;
+  } else {
+    const tool = params.tool;
+    factory = (_ctx: OpenClawPluginToolContext) => tool;
+  }
 
   return {
     names: normalizedNames,

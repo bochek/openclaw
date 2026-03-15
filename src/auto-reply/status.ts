@@ -799,7 +799,7 @@ type CommandsListItem = {
 
 function buildCommandItems(
   commands: ChatCommandDefinition[],
-  pluginCommands: ReturnType<typeof listPluginCommands>,
+  pluginCommands: ReturnType<typeof listExtensionHostPluginCommands>,
 ): CommandsListItem[] {
   const grouped = groupCommandsByCategory(commands);
   const items: CommandsListItem[] = [];

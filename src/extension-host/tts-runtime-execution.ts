@@ -18,7 +18,7 @@ import {
   supportsExtensionHostTtsTelephony,
 } from "./tts-runtime-registry.js";
 
-const TELEGRAM_OUTPUT = {
+const TELEGRAM_OUTPUT: ExtensionHostTtsOutputFormat = {
   openai: "opus" as const,
   // ElevenLabs output formats use codec_sample_rate_bitrate naming.
   // Opus @ 48kHz/64kbps is a good voice-note tradeoff for Telegram.
@@ -27,7 +27,7 @@ const TELEGRAM_OUTPUT = {
   voiceCompatible: true,
 };
 
-const DEFAULT_OUTPUT = {
+const DEFAULT_OUTPUT: ExtensionHostTtsOutputFormat = {
   openai: "mp3" as const,
   elevenlabs: "mp3_44100_128",
   extension: ".mp3",

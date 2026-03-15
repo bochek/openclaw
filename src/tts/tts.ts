@@ -21,6 +21,7 @@ import {
 import {
   getExtensionHostTtsMaxLength,
   isExtensionHostTtsEnabled,
+  resolveExtensionHostTtsAutoMode,
   isExtensionHostTtsSummarizationEnabled,
   resolveExtensionHostTtsPrefsPath,
   setExtensionHostTtsAutoMode,
@@ -49,6 +50,7 @@ import {
   summarizeText,
 } from "./tts-core.js";
 export { OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from "./tts-core.js";
+export type { ResolvedTtsConfig } from "../extension-host/tts-config.js";
 
 export type TtsDirectiveOverrides = {
   ttsText?: string;
@@ -102,6 +104,8 @@ export const normalizeTtsAutoMode = normalizeExtensionHostTtsConfigAutoMode;
 export const resolveTtsConfig = resolveExtensionHostTtsConfig;
 
 export const resolveTtsPrefsPath = resolveExtensionHostTtsPrefsPath;
+
+export const resolveTtsAutoMode = resolveExtensionHostTtsAutoMode;
 
 export const buildTtsSystemPromptHint = buildExtensionHostTtsSystemPromptHint;
 

@@ -3,7 +3,17 @@ import type { ProviderPlugin } from "../plugins/types.js";
 import { listExtensionHostProviderRegistrations } from "./runtime-registry.js";
 
 export function resolveExtensionHostProviders(params: {
-  registry: Pick<PluginRegistry, "providers">;
+  registry: Pick<
+    PluginRegistry,
+    | "channels"
+    | "tools"
+    | "providers"
+    | "cliRegistrars"
+    | "commands"
+    | "services"
+    | "httpRoutes"
+    | "gatewayHandlers"
+  >;
 }): ProviderPlugin[] {
   return listExtensionHostProviderRegistrations(params.registry).map((entry) => ({
     ...entry.provider,

@@ -1,3 +1,4 @@
+import type { AnyAgentTool } from "../../agents/tools/common.js";
 import type { PluginRecord } from "../../plugins/registry.js";
 import type { PluginRuntime } from "../../plugins/runtime/types.js";
 import type {
@@ -31,7 +32,7 @@ export function createExtensionHostPluginApi(params: {
   config: OpenClawPluginApi["config"];
   pluginConfig?: Record<string, unknown>;
   registerTool: (
-    tool: OpenClawPluginToolFactory | { name: string },
+    tool: OpenClawPluginToolFactory | AnyAgentTool,
     opts?: { name?: string; names?: string[]; optional?: boolean },
   ) => void;
   registerHook: (

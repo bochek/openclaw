@@ -24,7 +24,13 @@ export const EXTENSION_HOST_EMBEDDING_RUNTIME_BACKEND_IDS = [
 export function isExtensionHostEmbeddingRuntimeBackendAutoSelectable(
   backendId: EmbeddingProviderId,
 ): boolean {
-  return backendId === "local" || EXTENSION_HOST_REMOTE_EMBEDDING_PROVIDER_IDS.includes(backendId);
+  return (
+    backendId === "local" ||
+    backendId === "openai" ||
+    backendId === "gemini" ||
+    backendId === "voyage" ||
+    backendId === "mistral"
+  );
 }
 
 export function resolveExtensionHostEmbeddingRuntimeDefaultModel(
