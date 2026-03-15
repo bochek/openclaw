@@ -90,7 +90,7 @@ What has landed:
 - provider matching, auth-method selection, config-patch merging, and default-model application now route through `src/extension-host/provider-auth.ts`
 - embedding-provider auto-selection, provider creation, local-setup guidance, and primary and fallback routing now route through `src/extension-host/embedding-runtime-registry.ts` while `src/memory/embeddings.ts` remains the compatibility facade
 - media-provider normalization, built-in registry construction, override merging, and runtime lookup now route through `src/extension-host/media-runtime-registry.ts` while `src/media-understanding/providers/index.ts` remains the compatibility facade
-- TTS provider metadata, provider ordering, API-key resolution, configuration checks, and telephony support now route through `src/extension-host/tts-runtime-registry.ts` while `src/tts/tts.ts` remains the synthesis execution owner
+- TTS provider metadata, provider ordering, API-key resolution, configuration checks, and telephony support now route through `src/extension-host/tts-runtime-registry.ts`, and provider execution loops, output-format selection, telephony synthesis, and provider-error shaping now route through `src/extension-host/tts-runtime-execution.ts` while `src/tts/tts.ts` remains the compatibility facade and request-setup surface
 - provider onboarding option building, model-picker entry building, and provider-method choice resolution now route through `src/extension-host/provider-wizard.ts`
 - loaded-provider auth application, plugin-enable gating, auth-method execution, and post-auth default-model handling now route through `src/extension-host/provider-auth-flow.ts`
 - provider post-selection hook lookup and invocation now route through `src/extension-host/provider-model-selection.ts`
@@ -231,6 +231,7 @@ Committed implementation slices so far:
 - `df0cb8193c` `Memory: extract embedding runtime registry`
 - `e592f60fa7` `Media: extract runtime provider registry`
 - `36711383f6` `TTS: extract runtime registry`
+- `f36f8f9e2d` `TTS: extract runtime execution`
 - `89414ed857` `Docs: track extension host migration internally`
 - `d8af1eceaf` `Docs: refresh extension host migration status`
 
@@ -239,7 +240,7 @@ What has not landed:
 - keeping the cutover inventory current as more surfaces move
 - broader lifecycle ownership beyond the loader state machine, session-owned activation state, and explicit discovery-policy, activation-policy, and finalization-policy outcomes, plus remaining policy semantics
 - host-owned registration surfaces beyond the first normalization helpers and low-risk channel, provider, gateway-method, HTTP-route, tool, CLI, service, command, context-engine, and hook compatibility write slices
-- broader embedding-, media-, and TTS-runtime execution and fallback ownership
+- broader embedding- and media-runtime execution and fallback ownership, plus remaining TTS request-setup and facade cleanup
 - SDK compatibility translation work
 - canonical event stages
 - canonical capability catalogs
