@@ -42,6 +42,7 @@ What has been implemented:
 - plugin SDK alias resolution now routes through `src/extension-host/loader-compat.ts`
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
 - loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
+- loader entry-path opening and module import now route through `src/extension-host/loader-import.ts`
 - loader module-export resolution, config validation, and memory-slot load decisions now route through `src/extension-host/loader-runtime.ts`
 - loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`
@@ -53,7 +54,7 @@ How it has been implemented:
 - by moving static metadata consumers onto the normalized model before attempting runtime contribution migration
 - by keeping legacy manifest records available only as compatibility projections while new readers move to the normalized shape
 - by starting runtime contribution migration with normalization helpers that preserve the legacy plugin API surface
-- by making the first loader compatibility, candidate-planning, runtime-decision, and register-flow helpers explicit host-owned seams before introducing a versioned compatibility layer
+- by making the first loader compatibility, candidate-planning, import-flow, runtime-decision, and register-flow helpers explicit host-owned seams before introducing a versioned compatibility layer
 
 What remains pending:
 
