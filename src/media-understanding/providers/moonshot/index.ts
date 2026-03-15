@@ -1,10 +1,16 @@
 import type { MediaUnderstandingProvider } from "../../types.js";
-import { describeImageWithModel } from "../image.js";
 import { describeMoonshotVideo } from "./video.js";
+
+const describeImage = async (
+  ...args: Parameters<NonNullable<MediaUnderstandingProvider["describeImage"]>>
+) => {
+  const { describeImageWithModel } = await import("../image.js");
+  return describeImageWithModel(...args);
+};
 
 export const moonshotProvider: MediaUnderstandingProvider = {
   id: "moonshot",
   capabilities: ["image", "video"],
-  describeImage: describeImageWithModel,
+  describeImage,
   describeVideo: describeMoonshotVideo,
 };
