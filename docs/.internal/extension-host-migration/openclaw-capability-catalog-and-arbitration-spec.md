@@ -503,6 +503,7 @@ The selected provider integration may also contribute:
 - model-selected hooks
 
 It should not silently absorb unrelated subsystem runtimes such as embeddings, transcription, media understanding, or TTS.
+It should also not silently absorb agent-visible search surfaces, which belong in the agent-tool catalog even when they call remote search services.
 
 ## Memory Arbitration
 
@@ -562,6 +563,7 @@ Architecture rule:
 
 - keep those selection and envelope rules inside host-owned subsystem runtime registries or typed backend families
 - do not widen provider-integration or legacy plugin-provider APIs into a universal surface for unrelated runtime subsystems
+- if search is agent-visible, publish it through canonical tool catalogs; reserve runtime-backend modeling for search backends that are consumed internally by the host or another subsystem
 
 ## Catalog Publication
 
@@ -607,6 +609,7 @@ Capability selection must emit structured events for:
 - diffs becomes an agent-visible tool family plus a host-managed route surface from `extensions/diffs/index.ts:27`
 - provider integration from `extensions/google-gemini-cli-auth/index.ts:24` becomes operator-visible setup and auth capabilities
 - embedding, media-understanding, and TTS provider overrides should become runtime-internal subsystem registries rather than remaining part of a universal plugin-provider API
+- extension-backed web search should become an agent-visible tool family unless it is only an internal backend feeding another host-owned surface
 - voice-call from `extensions/voice-call/index.ts:230` becomes a mix of agent-visible actions, runtime providers, and operator surfaces
 - ACP backend registration from `extensions/acpx/src/service.ts:55` becomes runtime-internal backend arbitration
 - context-engine registration becomes runtime-internal slot arbitration from `src/context-engine/registry.ts:60`
@@ -623,6 +626,7 @@ Capability selection must emit structured events for:
 7. Add provider selection logic for the broader messaging action family before migrating all channels.
 8. Add runtime-backend and context-engine arbitration using the same rank and slot model where appropriate.
 9. Add host-owned embedding, media-understanding, and TTS subsystem registries with explicit capability routing and built-in fallback policy.
-10. Ensure lightweight setup catalogs can be built from static descriptors alone.
-11. Add a reviewed core registry for canonical action families and document how new ids are introduced.
-12. Record catalog and arbitration parity for `thread-ownership` first and `telegram` second before broader rollout.
+10. Decide whether extension-backed search needs only canonical tool publication or also a host-owned internal search-backend registry, and keep those two cases distinct.
+11. Ensure lightweight setup catalogs can be built from static descriptors alone.
+12. Add a reviewed core registry for canonical action families and document how new ids are introduced.
+13. Record catalog and arbitration parity for `thread-ownership` first and `telegram` second before broader rollout.

@@ -218,6 +218,7 @@ What is still missing for these phases:
 - minimal SDK compatibility work beyond preserving current behavior indirectly through existing loading
 - host-owned conversation binding, interaction routing, ingress claim, and generic interactive control surfaces identified by external-plugin validation
 - host-owned subsystem runtime registries for embeddings, media understanding, and TTS identified by provider-capability evaluation
+- explicit support for extension-backed search, with a generic split between agent-visible tool publication and optional runtime-internal search backends
 - any pilot migration, event pipeline, canonical catalog, or arbitration implementation
 
 Recent plan refinement from external-plugin validation:
@@ -228,6 +229,7 @@ Recent plan refinement from external-plugin validation:
 - it now explicitly treats Telegram and Discord as the first validated rollout targets for interactive control surfaces while keeping the underlying contracts generic, host-owned, and kernel-agnostic
 - it now explicitly treats embeddings, media understanding, and TTS as host-owned subsystem runtimes with capability routing, typed request envelopes, provider-id normalization, and fallback policy
 - it now explicitly rejects widening the legacy `registerProvider(...)` or `ProviderPlugin` surface into a universal runtime API, even when harvesting useful capability-routing ideas from provider-capability prototypes
+- it now explicitly treats extension-backed search as either a canonical tool contribution or a host-owned runtime backend depending on whether the search surface is agent-visible
 
 ## Implementation Order
 

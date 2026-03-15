@@ -476,6 +476,8 @@ The lightweight dock contract should be specific enough to preserve current host
 
 Represents an agent-visible action.
 
+This is the correct family for extension-backed search when the search surface is directly exposed to the agent, for example a canonical `web.search` or workspace-search action.
+
 Required descriptor metadata:
 
 - canonical action id
@@ -528,6 +530,13 @@ Required descriptor metadata:
 - optional model-selected lifecycle hooks
 
 This family exists because today's provider plugin contract includes more than auth, as shown in `src/plugins/types.ts:158`.
+
+Scope rule:
+
+- this family is specifically for chat or model-provider discovery, setup, auth, and post-selection lifecycle
+- agent-visible search should not be folded into this family only because it may call remote providers under the hood
+- non-chat subsystem providers such as embeddings, transcription, image understanding, video understanding, and TTS should not be folded into this family only because they also use remote providers
+- those subsystem runtimes should use typed runtime contributions or `capability.runtime-backend` with subsystem-specific capability metadata
 
 ### `capability.memory`
 
@@ -677,6 +686,38 @@ Required descriptor metadata:
 - exclusivity or parallelism policy
 
 This family exists because not all runtime providers are user-facing adapters.
+
+This family is also the right home for plugin-provided subsystem runtimes when the runtime is consumed by a host or subsystem rather than directly by the agent.
+
+Examples to support during migration:
+
+- embeddings
+- audio transcription
+- image understanding
+- video understanding
+- text-to-speech
+- search backends only when they are runtime-internal and not directly exposed as agent tools
+
+Required metadata for these subsystem runtimes:
+
+- subsystem id such as `embedding`, `media.audio`, `media.image`, `media.video`, or `tts`
+- supported capability list
+- typed request envelope contract
+- provider-id normalization rules
+- fallback policy
+- override policy when a built-in implementation already exists
+
+Useful harvested behavior:
+
+- capability-based routing is worth keeping
+- typed host-injected request fields such as `apiKey`, `baseUrl`, `headers`, `timeoutMs`, and `fetchFn` are worth keeping
+- graceful fallback to built-in implementations is worth keeping
+
+Important rule:
+
+- keep these as host-owned runtime registries or backend families
+- do not widen `registerProvider(...)` into the permanent universal surface for every runtime subsystem
+- if search is directly agent-visible, model it as `capability.agent-tool` instead of treating it as a generic provider family
 
 ### Adapter-runtime helper contracts
 

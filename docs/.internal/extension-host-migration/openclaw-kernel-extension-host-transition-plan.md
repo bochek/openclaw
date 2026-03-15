@@ -549,6 +549,8 @@ Suggested mapping:
 - `registerChannel(...)` -> `adapter.runtime` plus lightweight dock metadata and optional `surface.config`, `surface.status`, `surface.setup`
 - `registerProvider(...)` -> `capability.provider-integration` plus optional setup and auth surfaces
 - plugin-provided embeddings, transcription, image or video understanding, and TTS -> typed subsystem runtime contributions or `capability.runtime-backend`, not a widened `registerProvider(...)` end state
+- extension-backed search exposed to the agent -> `capability.agent-tool`
+- extension-backed search consumed only by a host or subsystem -> typed runtime contribution or `capability.runtime-backend`
 - `registerTool(...)` -> `capability.agent-tool`
 - `registerCommand(...)` -> `capability.control-command`
 - `on(...)` returning context or side effects -> `capability.context-augmenter` or `capability.event-handler`
@@ -568,6 +570,7 @@ Concrete examples:
 - plugin-provided embeddings become a host-owned embedding runtime contribution
 - plugin-provided transcription, image understanding, and video understanding become host-owned media runtime contributions
 - plugin-provided TTS becomes a host-owned TTS runtime contribution
+- extension-backed web search becomes a canonical search tool contribution unless it is only a runtime-internal backend
 - `extensions/diffs/index.ts:27` becomes `capability.agent-tool`
 - `extensions/diffs/index.ts:28` becomes a host-managed route or interaction surface
 - `extensions/diffs/index.ts:38` becomes `capability.context-augmenter`
@@ -830,6 +833,7 @@ Provider integration contributions need host-injected capabilities for:
 Scope rule:
 
 - `capability.provider-integration` is for chat or model-provider discovery, setup, auth, and post-selection lifecycle
+- agent-visible search should not be folded into that family only because it may call remote services
 - embeddings, transcription, image understanding, video understanding, and TTS should not be folded into that family just because they also use remote providers
 - those subsystem runtimes should use host-owned capability routing and typed runtime registries or runtime-backend families instead
 
@@ -839,6 +843,7 @@ Useful ideas harvested from provider-capability validation:
 - typed request envelopes with host-injected `apiKey`, `baseUrl`, `headers`, `timeoutMs`, and `fetchFn` are good
 - provider-id normalization is good
 - graceful built-in fallback is good
+- the same host-owned routing pattern is useful for runtime-internal search backends, but agent-visible search should still surface as a tool family rather than a universal provider API
 
 Architecture rule:
 
