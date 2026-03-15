@@ -1,23 +1,9 @@
-import { createJiti } from "jiti";
-import type { OpenClawConfig } from "../config/config.js";
-import { activateExtensionHostRegistry } from "../extension-host/activation.js";
-import {
-  buildExtensionHostRegistryCacheKey,
-  clearExtensionHostRegistryCache,
-  getCachedExtensionHostRegistry,
-  MAX_EXTENSION_HOST_REGISTRY_CACHE_ENTRIES,
-  setCachedExtensionHostRegistry,
-} from "../extension-host/loader-cache.js";
 import {
   listPluginSdkAliasCandidates,
   listPluginSdkExportedSubpaths,
-  resolvePluginSdkAlias,
   resolvePluginSdkAliasCandidateOrder,
   resolvePluginSdkAliasFile,
-  resolvePluginSdkScopedAliasMap,
 } from "../extension-host/loader-compat.js";
-import { finalizeExtensionHostRegistryLoad } from "../extension-host/loader-finalize.js";
-import { processExtensionHostPluginCandidate } from "../extension-host/loader-flow.js";
 import {
   buildExtensionHostProvenanceIndex,
   compareExtensionHostDuplicateCandidateOrder,
@@ -47,24 +33,10 @@ import type {
 
 export type PluginLoadResult = PluginRegistry;
 
-export type PluginLoadOptions = {
-  config?: OpenClawConfig;
-  workspaceDir?: string;
-  // Allows callers to resolve plugin roots and load paths against an explicit env
-  // instead of the process-global environment.
-  env?: NodeJS.ProcessEnv;
-  logger?: PluginLogger;
-  coreGatewayHandlers?: Record<string, GatewayRequestHandler>;
-  runtimeOptions?: CreatePluginRuntimeOptions;
-  cache?: boolean;
-  mode?: "full" | "validate";
-};
-
-const openAllowlistWarningCache = new Set<string>();
+export type PluginLoadOptions = ExtensionHostPluginLoadOptions;
 
 export function clearPluginLoaderCache(): void {
-  clearExtensionHostRegistryCache();
-  openAllowlistWarningCache.clear();
+  clearExtensionHostLoaderState();
 }
 
 const defaultLogger = () => createSubsystemLogger("plugins");
