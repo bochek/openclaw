@@ -20,7 +20,7 @@ import {
   type SessionEntry,
   type SessionScope,
 } from "../config/sessions.js";
-import { listExtensionHostPluginCommands } from "../extension-host/command-runtime.js";
+import { listExtensionHostPluginCommands } from "../extension-host/contributions/command-runtime.js";
 import { formatTimeAgo } from "../infra/format-time/format-relative.ts";
 import { resolveCommitHash } from "../infra/git-commit.js";
 import type { MediaUnderstandingDecision } from "../media-understanding/types.js";

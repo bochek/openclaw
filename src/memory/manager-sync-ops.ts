@@ -9,11 +9,11 @@ import { resolveSessionTranscriptsDirForAgent } from "../config/sessions/paths.j
 import {
   activateEmbeddingManagerFallbackProvider,
   resolveEmbeddingManagerBatchConfig,
-} from "../extension-host/embedding-manager-runtime.js";
+} from "../extension-host/contributions/embedding-manager-runtime.js";
 import {
   resetExtensionHostEmbeddingIndexStore,
   runExtensionHostEmbeddingReindexBody,
-} from "../extension-host/embedding-reindex-execution.js";
+} from "../extension-host/contributions/embedding-reindex-execution.js";
 import {
   type EmbeddingProvider,
   type EmbeddingProviderId,
@@ -22,16 +22,16 @@ import {
   type OllamaEmbeddingClient,
   type OpenAiEmbeddingClient,
   type VoyageEmbeddingClient,
-} from "../extension-host/embedding-runtime.js";
-import { runExtensionHostEmbeddingSafeReindex } from "../extension-host/embedding-safe-reindex.js";
-import { runExtensionHostEmbeddingSync } from "../extension-host/embedding-sync-execution.js";
+} from "../extension-host/contributions/embedding-runtime.js";
+import { runExtensionHostEmbeddingSafeReindex } from "../extension-host/contributions/embedding-safe-reindex.js";
+import { runExtensionHostEmbeddingSync } from "../extension-host/contributions/embedding-sync-execution.js";
 import {
   buildEmbeddingIndexMeta,
   type EmbeddingIndexMeta,
   metaSourcesDiffer as extensionHostMetaSourcesDiffer,
   normalizeEmbeddingMetaSources,
   shouldUseUnsafeEmbeddingReindex,
-} from "../extension-host/embedding-sync-planning.js";
+} from "../extension-host/contributions/embedding-sync-planning.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { onSessionTranscriptUpdate } from "../sessions/transcript-events.js";
 import { resolveUserPath } from "../utils.js";

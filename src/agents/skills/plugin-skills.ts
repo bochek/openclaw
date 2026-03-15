@@ -4,7 +4,7 @@ import type { OpenClawConfig } from "../../config/config.js";
 import {
   loadResolvedExtensionRegistry,
   type ResolvedExtensionRegistry,
-} from "../../extension-host/resolved-registry.js";
+} from "../../extension-host/manifests/resolved-registry.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import {
   normalizePluginsConfig,

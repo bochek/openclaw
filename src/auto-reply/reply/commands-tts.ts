@@ -1,7 +1,7 @@
 import {
   formatExtensionHostTtsStatusText,
   resolveExtensionHostTtsStatusSnapshot,
-} from "../../extension-host/tts-status.js";
+} from "../../extension-host/contributions/tts-status.js";
 import { logVerbose } from "../../globals.js";
 import {
   getTtsMaxLength,

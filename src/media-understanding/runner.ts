@@ -9,7 +9,7 @@ export {
   type ActiveMediaModel,
   type ExtensionHostMediaProviderRegistry as ProviderRegistry,
   type RunCapabilityResult,
-} from "../extension-host/media-runtime-api.js";
+} from "../extension-host/contributions/media-runtime-api.js";
 export type {
   MediaAttachment,
   MediaUnderstandingCapability,

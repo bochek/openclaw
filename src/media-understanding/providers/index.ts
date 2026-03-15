@@ -3,4 +3,4 @@ export {
   getExtensionHostMediaUnderstandingProvider as getMediaUnderstandingProvider,
   normalizeExtensionHostMediaProviderId as normalizeMediaProviderId,
   type ExtensionHostMediaUnderstandingProviderRegistry as MediaUnderstandingProviderRegistry,
-} from "../../extension-host/media-runtime-registry.js";
+} from "../../extension-host/contributions/media-runtime-registry.js";

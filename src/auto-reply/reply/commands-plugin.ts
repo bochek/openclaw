@@ -8,7 +8,7 @@
 import {
   executeExtensionHostPluginCommand,
   matchExtensionHostPluginCommand,
-} from "../../extension-host/command-runtime.js";
+} from "../../extension-host/contributions/command-runtime.js";
 import type { CommandHandler, CommandHandlerResult } from "./commands-types.js";
 
 /**

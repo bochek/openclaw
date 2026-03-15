@@ -4,7 +4,7 @@ import { resolveMemorySearchConfig } from "../agents/memory-search.js";
 import { resolveApiKeyForProvider } from "../agents/model-auth.js";
 import { formatCliCommand } from "../cli/command-format.js";
 import type { OpenClawConfig } from "../config/config.js";
-import { DEFAULT_LOCAL_EMBEDDING_MODEL } from "../extension-host/embedding-runtime.js";
+import { DEFAULT_LOCAL_EMBEDDING_MODEL } from "../extension-host/contributions/embedding-runtime.js";
 import { listExtensionHostEmbeddingRemoteRuntimeBackendIds } from "../extension-host/policy/embedding-runtime-policy.js";
 import { resolveMemoryBackendConfig } from "../memory/backend-config.js";
 import { hasConfiguredMemorySecretInput } from "../memory/secret-input.js";

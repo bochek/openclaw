@@ -3,8 +3,8 @@ import type { OpenClawConfig } from "../config/config.js";
 import {
   buildResolvedExtensionRecord,
   type ResolvedExtensionRecord,
-} from "../extension-host/manifest-registry.js";
-import { resolveLegacyExtensionDescriptor } from "../extension-host/schema.js";
+} from "../extension-host/manifests/manifest-registry.js";
+import { resolveLegacyExtensionDescriptor } from "../extension-host/manifests/schema.js";
 import { resolveUserPath } from "../utils.js";
 import { loadBundleManifest } from "./bundle-manifest.js";
 import { normalizePluginsConfig, type NormalizedPluginsConfig } from "./config-state.js";

@@ -1,6 +1,6 @@
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { loadConfig } from "../config/config.js";
-import { hasExtensionHostRuntimeEntries } from "../extension-host/runtime-registry.js";
+import { hasExtensionHostRuntimeEntries } from "../extension-host/contributions/runtime-registry.js";
 import { createSubsystemLogger } from "../logging.js";
 import { loadOpenClawPlugins } from "../plugins/loader.js";
 import { getActivePluginRegistry } from "../plugins/runtime.js";

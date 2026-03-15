@@ -3,7 +3,7 @@ import {
   getExtensionHostPluginToolMeta,
   resolveExtensionHostPluginTools,
   type ExtensionHostPluginToolMeta,
-} from "../extension-host/tool-runtime.js";
+} from "../extension-host/contributions/tool-runtime.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { applyTestPluginDefaults, normalizePluginsConfig } from "./config-state.js";
 import { loadOpenClawPlugins } from "./loader.js";

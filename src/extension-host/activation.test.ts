@@ -5,7 +5,7 @@ import { activateExtensionHostRegistry } from "./activation.js";
 import {
   getActiveExtensionHostRegistry,
   getActiveExtensionHostRegistryKey,
-} from "./active-registry.js";
+} from "./static/active-registry.js";
 
 describe("extension host activation", () => {
   beforeEach(() => {

@@ -1,6 +1,6 @@
 import { loadConfig } from "../../config/config.js";
-import { isExtensionHostTtsProviderConfigured } from "../../extension-host/tts-runtime-registry.js";
-import { resolveExtensionHostTtsStatusSnapshot } from "../../extension-host/tts-status.js";
+import { isExtensionHostTtsProviderConfigured } from "../../extension-host/contributions/tts-runtime-registry.js";
+import { resolveExtensionHostTtsStatusSnapshot } from "../../extension-host/contributions/tts-status.js";
 import {
   OPENAI_TTS_MODELS,
   OPENAI_TTS_VOICES,

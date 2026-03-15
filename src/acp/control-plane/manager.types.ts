@@ -5,7 +5,7 @@ import type {
   SessionAcpMeta,
   SessionEntry,
 } from "../../config/sessions/types.js";
-import { requireExtensionHostAcpRuntimeBackend } from "../../extension-host/acp-runtime-backend-registry.js";
+import { requireExtensionHostAcpRuntimeBackend } from "../../extension-host/contributions/acp-runtime-backend-registry.js";
 import type { AcpRuntimeError } from "../runtime/errors.js";
 import {
   listAcpSessionEntries,

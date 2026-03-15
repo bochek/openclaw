@@ -4,7 +4,7 @@ import {
   resolveExtensionHostTtsFallbackProviders,
 } from "./tts-runtime-policy.js";
 
-vi.mock("../runtime-backend-catalog.js", () => ({
+vi.mock("../static/runtime-backend-catalog.js", () => ({
   listExtensionHostTtsRuntimeBackendCatalogEntries: vi.fn(() => [
     {
       id: "capability.runtime-backend:tts:openai",
@@ -39,7 +39,7 @@ vi.mock("../runtime-backend-catalog.js", () => ({
   ]),
 }));
 
-vi.mock("../tts-runtime-registry.js", () => ({
+vi.mock("../contributions/tts-runtime-registry.js", () => ({
   isExtensionHostTtsProviderConfigured: vi.fn(
     (
       config: {

@@ -10,7 +10,7 @@ import type { SlackProbe } from "../../../extensions/slack/src/probe.js";
 import type { TelegramProbe } from "../../../extensions/telegram/src/probe.js";
 import type { TelegramTokenResolution } from "../../../extensions/telegram/src/token.js";
 import type { OpenClawConfig } from "../../config/config.js";
-import { addExtensionHostChannelRegistration } from "../../extension-host/runtime-registry.js";
+import { addExtensionHostChannelRegistration } from "../../extension-host/contributions/runtime-registry.js";
 import type { LineProbeResult } from "../../line/types.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
 import {

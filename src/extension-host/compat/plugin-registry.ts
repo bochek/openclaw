@@ -10,7 +10,7 @@ import type {
 import {
   addExtensionCommandRegistration,
   addExtensionProviderRegistration,
-} from "../registry-writes.js";
+} from "../contributions/registry-writes.js";
 import { createExtensionHostPluginApi } from "./plugin-api.js";
 import {
   resolveExtensionHostCommandCompatibility,

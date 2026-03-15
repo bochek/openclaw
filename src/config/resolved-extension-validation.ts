@@ -1,4 +1,4 @@
-import type { ResolvedExtensionRegistry } from "../extension-host/resolved-registry.js";
+import type { ResolvedExtensionRegistry } from "../extension-host/manifests/resolved-registry.js";
 
 export type ResolvedExtensionValidationEntry = {
   id: string;

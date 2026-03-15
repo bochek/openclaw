@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   resolveExtensionEntryCandidates,
   type PackageManifest as PluginPackageManifest,
-} from "../extension-host/schema.js";
+} from "../extension-host/manifests/schema.js";
 import { fileExists, readJsonFile, resolveArchiveKind } from "../infra/archive.js";
 import { writeFileFromPathWithinRoot } from "../infra/fs-safe.js";
 import { resolveExistingInstallPath, withExtractedArchiveRoot } from "../infra/install-flow.js";

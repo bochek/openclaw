@@ -1,5 +1,5 @@
-import { getActiveExtensionHostRegistry } from "../../extension-host/active-registry.js";
-import { listExtensionHostChannelRegistrations } from "../../extension-host/runtime-registry.js";
+import { listExtensionHostChannelRegistrations } from "../../extension-host/contributions/runtime-registry.js";
+import { getActiveExtensionHostRegistry } from "../../extension-host/static/active-registry.js";
 import type { PluginChannelRegistration, PluginRegistry } from "../../plugins/registry.js";
 import type { ChannelId } from "./types.js";
 

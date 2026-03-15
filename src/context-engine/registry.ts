@@ -1,5 +1,5 @@
 import type { OpenClawConfig } from "../config/config.js";
-import { listExtensionHostContextEngineIds } from "../extension-host/context-engine-runtime.js";
+import { listExtensionHostContextEngineIds } from "../extension-host/contributions/context-engine-runtime.js";
 import { defaultSlotIdForKey } from "../plugins/slots.js";
 import type { ContextEngine } from "./types.js";
 

@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { listExtensionHostHttpRoutes } from "../../extension-host/runtime-registry.js";
+import { listExtensionHostHttpRoutes } from "../../extension-host/contributions/runtime-registry.js";
 import type { createSubsystemLogger } from "../../logging/subsystem.js";
 import type { PluginRegistry } from "../../plugins/registry.js";
 import { withPluginRuntimeGatewayRequestScope } from "../../plugins/runtime/gateway-request-scope.js";

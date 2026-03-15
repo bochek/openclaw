@@ -6,7 +6,7 @@ import {
   type CreatePluginRuntimeOptions,
 } from "../../plugins/runtime/index.js";
 import type { PluginLogger } from "../../plugins/types.js";
-import { clearExtensionHostPluginCommands } from "../command-runtime.js";
+import { clearExtensionHostPluginCommands } from "../contributions/command-runtime.js";
 import {
   clearExtensionHostLoaderHostState,
   getExtensionHostDiscoveryWarningCache,

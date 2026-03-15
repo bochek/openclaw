@@ -5,7 +5,7 @@ import {
   requireExtensionHostAcpRuntimeBackend,
   unregisterExtensionHostAcpRuntimeBackend,
   type ExtensionHostAcpRuntimeBackend,
-} from "../../extension-host/acp-runtime-backend-registry.js";
+} from "../../extension-host/contributions/acp-runtime-backend-registry.js";
 
 export type AcpRuntimeBackend = ExtensionHostAcpRuntimeBackend;
 

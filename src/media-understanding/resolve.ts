@@ -8,4 +8,4 @@ export {
   resolveModelEntries,
   resolveConcurrency,
   resolveEntriesWithActiveFallback,
-} from "../extension-host/media-runtime-config.js";
+} from "../extension-host/contributions/media-runtime-config.js";

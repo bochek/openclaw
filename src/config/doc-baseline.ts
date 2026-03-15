@@ -6,7 +6,7 @@ import type { ChannelPlugin } from "../channels/plugins/index.js";
 import {
   loadResolvedExtensionRegistry,
   type ResolvedExtensionRegistry,
-} from "../extension-host/resolved-registry.js";
+} from "../extension-host/manifests/resolved-registry.js";
 import { resolveOpenClawPackageRootSync } from "../infra/openclaw-root.js";
 import { FIELD_HELP } from "./schema.help.js";
 import { buildConfigSchema, type ConfigSchemaResponse } from "./schema.js";

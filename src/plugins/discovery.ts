@@ -5,7 +5,7 @@ import {
   resolveExtensionEntryCandidates,
   type PackageManifest,
   type OpenClawPackageManifest,
-} from "../extension-host/schema.js";
+} from "../extension-host/manifests/schema.js";
 import { openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import { resolveUserPath } from "../utils.js";
 import { detectBundleManifestFormat, loadBundleManifest } from "./bundle-manifest.js";

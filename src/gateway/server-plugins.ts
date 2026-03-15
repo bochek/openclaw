@@ -3,7 +3,7 @@ import type { loadConfig } from "../config/config.js";
 import {
   logExtensionHostPluginDiagnostics,
   resolveExtensionHostGatewayMethods,
-} from "../extension-host/gateway-methods.js";
+} from "../extension-host/contributions/gateway-methods.js";
 import { loadOpenClawPlugins } from "../plugins/loader.js";
 import { getPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
 import type { PluginRuntime } from "../plugins/runtime/types.js";

@@ -16,7 +16,7 @@ import {
   DEFAULT_OPENAI_BASE_URL,
   type ResolvedTtsConfig,
   type ResolvedTtsModelOverrides,
-} from "../extension-host/tts-config.js";
+} from "../extension-host/contributions/tts-config.js";
 import type { TtsDirectiveOverrides, TtsDirectiveParseResult } from "./tts.js";
 
 const DEFAULT_ELEVENLABS_BASE_URL = "https://api.elevenlabs.io";

@@ -15,7 +15,7 @@ import type {
   OpenClawPluginToolFactory,
   PluginHookRegistration as TypedPluginHookRegistration,
 } from "../../plugins/types.js";
-import { registerExtensionHostContextEngine } from "../context-engine-runtime.js";
+import { registerExtensionHostContextEngine } from "../contributions/context-engine-runtime.js";
 import {
   addExtensionChannelRegistration,
   addExtensionCliRegistration,
@@ -26,7 +26,7 @@ import {
   addExtensionServiceRegistration,
   addExtensionToolRegistration,
   addExtensionTypedHookRegistration,
-} from "../registry-writes.js";
+} from "../contributions/registry-writes.js";
 import {
   resolveExtensionChannelRegistration,
   resolveExtensionCliRegistration,
@@ -37,12 +37,12 @@ import {
   resolveExtensionServiceRegistration,
   resolveExtensionToolRegistration,
   resolveExtensionTypedHookRegistration,
-} from "../runtime-registrations.js";
+} from "../contributions/runtime-registrations.js";
 import {
   listExtensionHostChannelRegistrations,
   getExtensionHostGatewayHandlers,
   listExtensionHostHttpRoutes,
-} from "../runtime-registry.js";
+} from "../contributions/runtime-registry.js";
 import {
   applyExtensionHostTypedHookPolicy,
   bridgeExtensionHostLegacyHooks,

@@ -1,9 +1,9 @@
 import type { MediaUnderstandingCapability } from "../../media-understanding/types.js";
-import { normalizeExtensionHostMediaProviderId } from "../media-runtime-registry.js";
+import { normalizeExtensionHostMediaProviderId } from "../contributions/media-runtime-registry.js";
 import {
   listExtensionHostMediaRuntimeBackendCatalogEntries,
   resolveExtensionHostMediaRuntimeDefaultModel,
-} from "../runtime-backend-catalog.js";
+} from "../static/runtime-backend-catalog.js";
 import { resolveExtensionHostRuntimeBackendIdsByPolicy } from "./runtime-backend-policy.js";
 
 export type ExtensionHostMediaActiveModel = {

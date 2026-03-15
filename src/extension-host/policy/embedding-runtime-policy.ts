@@ -1,10 +1,10 @@
-import { resolveExtensionHostEmbeddingRuntimeDefaultModel } from "../embedding-runtime-backends.js";
 import type {
   EmbeddingProviderFallback,
   EmbeddingProviderId,
   EmbeddingProviderRequest,
-} from "../embedding-runtime-types.js";
-import { listExtensionHostEmbeddingRuntimeBackendCatalogEntries } from "../runtime-backend-catalog.js";
+} from "../contributions/embedding-runtime-types.js";
+import { resolveExtensionHostEmbeddingRuntimeDefaultModel } from "../static/embedding-runtime-backends.js";
+import { listExtensionHostEmbeddingRuntimeBackendCatalogEntries } from "../static/runtime-backend-catalog.js";
 import { resolveExtensionHostRuntimeBackendIdsByPolicy } from "./runtime-backend-policy.js";
 
 export function listExtensionHostEmbeddingRemoteRuntimeBackendIds(): readonly EmbeddingProviderId[] {

@@ -5,14 +5,14 @@ import type {
   PluginDiagnostic,
   ProviderPlugin,
 } from "../../plugins/types.js";
-import { registerExtensionHostPluginCommand } from "../command-runtime.js";
+import { registerExtensionHostPluginCommand } from "../contributions/command-runtime.js";
 import {
   type ExtensionHostCommandRegistration,
   type ExtensionHostProviderRegistration,
   resolveExtensionCommandRegistration,
   resolveExtensionProviderRegistration,
-} from "../runtime-registrations.js";
-import { listExtensionHostProviderRegistrations } from "../runtime-registry.js";
+} from "../contributions/runtime-registrations.js";
+import { listExtensionHostProviderRegistrations } from "../contributions/runtime-registry.js";
 
 export function pushExtensionHostRegistryDiagnostic(params: {
   registry: PluginRegistry;

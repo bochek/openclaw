@@ -1,7 +1,7 @@
 import type {
   ExtensionHostRuntimeBackendCatalogEntry,
   ExtensionHostRuntimeBackendSubsystemId,
-} from "../runtime-backend-catalog.js";
+} from "../static/runtime-backend-catalog.js";
 
 type ExtensionHostRuntimeBackendArbitrationPredicate = (
   entry: ExtensionHostRuntimeBackendCatalogEntry,

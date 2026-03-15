@@ -7,7 +7,7 @@ import type { SessionEntry } from "../../../config/sessions/types.js";
 import {
   getExtensionHostAcpRuntimeBackend,
   requireExtensionHostAcpRuntimeBackend,
-} from "../../../extension-host/acp-runtime-backend-registry.js";
+} from "../../../extension-host/contributions/acp-runtime-backend-registry.js";
 import { getSessionBindingService } from "../../../infra/outbound/session-binding-service.js";
 import type { CommandHandlerResult, HandleCommandsParams } from "../commands-types.js";
 import { resolveAcpCommandBindingContext } from "./context.js";

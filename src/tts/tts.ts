@@ -1,9 +1,5 @@
 import type { TtsProvider } from "../config/types.tts.js";
 import {
-  listExtensionHostTtsRuntimeBackendIds,
-  resolveExtensionHostTtsRuntimeBackendOrder,
-} from "../extension-host/runtime-backend-catalog.js";
-import {
   applyExtensionHostTtsToPayload,
   buildExtensionHostTtsSystemPromptHint,
   resolveExtensionHostEdgeOutputFormat,
@@ -12,12 +8,12 @@ import {
   runExtensionHostTextToSpeech,
   runExtensionHostTextToSpeechTelephony,
   type ExtensionHostTtsStatusEntry,
-} from "../extension-host/tts-api.js";
+} from "../extension-host/contributions/tts-api.js";
 import {
   normalizeExtensionHostTtsConfigAutoMode,
   resolveExtensionHostTtsConfig,
   type ResolvedTtsConfig,
-} from "../extension-host/tts-config.js";
+} from "../extension-host/contributions/tts-config.js";
 import {
   getExtensionHostTtsMaxLength,
   isExtensionHostTtsEnabled,
@@ -29,16 +25,20 @@ import {
   setExtensionHostTtsMaxLength,
   setExtensionHostTtsProvider,
   setExtensionHostTtsSummarizationEnabled,
-} from "../extension-host/tts-preferences.js";
+} from "../extension-host/contributions/tts-preferences.js";
 import {
   isExtensionHostTtsProviderConfigured,
   resolveExtensionHostTtsApiKey,
-} from "../extension-host/tts-runtime-registry.js";
-import { resolveExtensionHostTtsProvider } from "../extension-host/tts-runtime-setup.js";
+} from "../extension-host/contributions/tts-runtime-registry.js";
+import { resolveExtensionHostTtsProvider } from "../extension-host/contributions/tts-runtime-setup.js";
 import {
   getExtensionHostLastTtsAttempt,
   setExtensionHostLastTtsAttempt,
-} from "../extension-host/tts-status.js";
+} from "../extension-host/contributions/tts-status.js";
+import {
+  listExtensionHostTtsRuntimeBackendIds,
+  resolveExtensionHostTtsRuntimeBackendOrder,
+} from "../extension-host/static/runtime-backend-catalog.js";
 import {
   isValidOpenAIModel,
   isValidOpenAIVoice,
@@ -50,7 +50,7 @@ import {
   summarizeText,
 } from "./tts-core.js";
 export { OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from "./tts-core.js";
-export type { ResolvedTtsConfig } from "../extension-host/tts-config.js";
+export type { ResolvedTtsConfig } from "../extension-host/contributions/tts-config.js";
 
 export type TtsDirectiveOverrides = {
   ttsText?: string;

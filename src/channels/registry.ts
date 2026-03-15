@@ -1,5 +1,5 @@
-import { requireActiveExtensionHostRegistry } from "../extension-host/active-registry.js";
-import { listExtensionHostChannelRegistrations } from "../extension-host/runtime-registry.js";
+import { listExtensionHostChannelRegistrations } from "../extension-host/contributions/runtime-registry.js";
+import { requireActiveExtensionHostRegistry } from "../extension-host/static/active-registry.js";
 import type { ChannelMeta } from "./plugins/types.js";
 import type { ChannelId } from "./plugins/types.js";
 

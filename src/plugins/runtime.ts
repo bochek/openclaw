@@ -5,7 +5,7 @@ import {
   requireActiveExtensionHostRegistry,
   setActiveExtensionHostRegistry,
   type ExtensionHostRegistry,
-} from "../extension-host/active-registry.js";
+} from "../extension-host/static/active-registry.js";
 
 export type PluginRegistry = ExtensionHostRegistry;
 
