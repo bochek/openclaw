@@ -755,6 +755,32 @@ export const registerTelegramHandlers = ({
     return { allowed: true };
   };
 
+  const isTelegramEventCommandAuthorized = (params: {
+    isGroup: boolean;
+    senderId: string;
+    senderUsername: string;
+    context: TelegramEventAuthorizationContext;
+  }): boolean => {
+    const { isGroup, senderId, senderUsername, context } = params;
+    const { dmPolicy, storeAllowFrom, groupAllowOverride, effectiveGroupAllow } = context;
+    if (!isGroup) {
+      if (dmPolicy === "disabled") {
+        return false;
+      }
+      if (dmPolicy === "open") {
+        return true;
+      }
+      const dmAllowFrom = groupAllowOverride ?? allowFrom;
+      const effectiveDmAllow = normalizeDmAllowFromWithStore({
+        allowFrom: dmAllowFrom,
+        storeAllowFrom,
+        dmPolicy,
+      });
+      return isAllowlistAuthorized(effectiveDmAllow, senderId, senderUsername);
+    }
+    return isAllowlistAuthorized(effectiveGroupAllow, senderId, senderUsername);
+  };
+
   // Handle emoji reactions to messages.
   bot.on("message_reaction", async (ctx) => {
     try {
@@ -1225,8 +1251,15 @@ export const registerTelegramHandlers = ({
         return;
       }
 
+      const conversationThreadId = resolvedThreadId ?? dmThreadId;
       const callbackConversationId =
-        messageThreadId != null ? `${chatId}:topic:${messageThreadId}` : String(chatId);
+        conversationThreadId != null ? `${chatId}:topic:${conversationThreadId}` : String(chatId);
+      const isCommandAuthorized = isTelegramEventCommandAuthorized({
+        isGroup,
+        senderId,
+        senderUsername,
+        context: eventAuthContext,
+      });
       const pluginBindingApproval = parsePluginBindingApprovalCustomId(data);
       if (pluginBindingApproval) {
         const resolved = await resolvePluginConversationBindingApproval({
@@ -1234,7 +1267,9 @@ export const registerTelegramHandlers = ({
           decision: pluginBindingApproval.decision,
           senderId: senderId || undefined,
         });
-        await clearCallbackButtons();
+        if (resolved.status !== "expired") {
+          await clearCallbackButtons();
+        }
         await replyToCallbackChat(buildPluginBindingResolvedText(resolved));
         return;
       }
@@ -1246,14 +1281,14 @@ export const registerTelegramHandlers = ({
           accountId,
           callbackId: callback.id,
           conversationId: callbackConversationId,
-          parentConversationId: messageThreadId != null ? String(chatId) : undefined,
+          parentConversationId: conversationThreadId != null ? String(chatId) : undefined,
           senderId: senderId || undefined,
           senderUsername: senderUsername || undefined,
-          threadId: messageThreadId,
+          threadId: conversationThreadId,
           isGroup,
           isForum,
           auth: {
-            isAuthorizedSender: true,
+            isAuthorizedSender: isCommandAuthorized,
           },
           callbackMessage: {
             messageId: callbackMessage.message_id,
