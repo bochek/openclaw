@@ -22,20 +22,16 @@ import {
 import {
   resolveExtensionChannelRegistration,
   resolveExtensionCliRegistration,
-  resolveExtensionCommandRegistration,
   resolveExtensionContextEngineRegistration,
   resolveExtensionGatewayMethodRegistration,
   resolveExtensionLegacyHookRegistration,
   resolveExtensionHttpRouteRegistration,
-  resolveExtensionProviderRegistration,
   resolveExtensionServiceRegistration,
   resolveExtensionToolRegistration,
   resolveExtensionTypedHookRegistration,
 } from "../extension-host/runtime-registrations.js";
 import type { GatewayRequestHandler } from "../gateway/server-methods/types.js";
 import { registerInternalHook } from "../hooks/internal-hooks.js";
-import { registerPluginCommand } from "../plugins/commands.js";
-import { normalizeRegisteredProvider } from "../plugins/provider-validation.js";
 import type { PluginRecord, PluginRegistry, PluginRegistryParams } from "../plugins/registry.js";
 import type {
   PluginDiagnostic,
@@ -52,25 +48,15 @@ import type {
   ProviderPlugin,
   PluginHookRegistration as TypedPluginHookRegistration,
 } from "../plugins/types.js";
+import {
+  pushExtensionHostRegistryDiagnostic,
+  resolveExtensionHostCommandCompatibility,
+  resolveExtensionHostProviderCompatibility,
+} from "./plugin-registry-compat.js";
 
 type PluginTypedHookPolicy = {
   allowPromptInjection?: boolean;
 };
-
-function pushExtensionHostRegistryDiagnostic(params: {
-  registry: PluginRegistry;
-  level: PluginDiagnostic["level"];
-  pluginId: string;
-  source: string;
-  message: string;
-}) {
-  params.registry.diagnostics.push({
-    level: params.level,
-    pluginId: params.pluginId,
-    source: params.source,
-    message: params.message,
-  });
-}
 
 export function createExtensionHostPluginRegistry(params: {
   registry: PluginRegistry;
@@ -78,7 +64,6 @@ export function createExtensionHostPluginRegistry(params: {
 }) {
   const { registry, registryParams } = params;
   const coreGatewayMethods = new Set(Object.keys(registryParams.coreGatewayHandlers ?? {}));
-
   const pushDiagnostic = (diag: PluginDiagnostic) => {
     registry.diagnostics.push(diag);
   };
@@ -231,29 +216,12 @@ export function createExtensionHostPluginRegistry(params: {
   };
 
   const registerProvider = (record: PluginRecord, provider: ProviderPlugin) => {
-    const normalizedProvider = normalizeRegisteredProvider({
-      pluginId: record.id,
-      source: record.source,
+    const result = resolveExtensionHostProviderCompatibility({
+      registry,
+      record,
       provider,
-      pushDiagnostic,
-    });
-    if (!normalizedProvider) {
-      return;
-    }
-    const result = resolveExtensionProviderRegistration({
-      existing: registry.providers,
-      ownerPluginId: record.id,
-      ownerSource: record.source,
-      provider: normalizedProvider,
     });
     if (!result.ok) {
-      pushExtensionHostRegistryDiagnostic({
-        registry,
-        level: "error",
-        pluginId: record.id,
-        source: record.source,
-        message: result.message,
-      });
       return;
     }
     addExtensionProviderRegistration({
@@ -301,34 +269,10 @@ export function createExtensionHostPluginRegistry(params: {
   };
 
   const registerCommand = (record: PluginRecord, command: OpenClawPluginCommandDefinition) => {
-    const normalized = resolveExtensionCommandRegistration({
-      ownerPluginId: record.id,
-      ownerSource: record.source,
-      command,
-    });
+    const normalized = resolveExtensionHostCommandCompatibility({ registry, record, command });
     if (!normalized.ok) {
-      pushExtensionHostRegistryDiagnostic({
-        registry,
-        level: "error",
-        pluginId: record.id,
-        source: record.source,
-        message: normalized.message,
-      });
       return;
     }
-
-    const result = registerPluginCommand(record.id, normalized.entry.command);
-    if (!result.ok) {
-      pushExtensionHostRegistryDiagnostic({
-        registry,
-        level: "error",
-        pluginId: record.id,
-        source: record.source,
-        message: `command registration failed: ${result.error}`,
-      });
-      return;
-    }
-
     addExtensionCommandRegistration({
       registry,
       record,
