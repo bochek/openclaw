@@ -90,13 +90,13 @@ const AcpBindingSchema = z
     }
     if (
       channel === "feishu" &&
-      !/^(ou_[^:]+|on_[^:]+|oc_[^:]+:topic:[^:]+(?::sender:[^:]+)?)$/.test(peerId)
+      !/^(ou_[^:]+|oc_[^:]+:topic:[^:]+(?::sender:[^:]+)?)$/.test(peerId)
     ) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ["match", "peer", "id"],
         message:
-          "Feishu ACP bindings require canonical DM IDs (ou_xxx/on_xxx) or topic IDs in the form oc_group:topic:om_root[:sender:ou_xxx].",
+          "Feishu ACP bindings require canonical DM IDs (ou_xxx) or topic IDs in the form oc_group:topic:om_root[:sender:ou_xxx].",
       });
     }
   });

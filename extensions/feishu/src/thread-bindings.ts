@@ -22,6 +22,8 @@ type FeishuThreadBindingRecord = {
   accountId: string;
   conversationId: string;
   parentConversationId?: string;
+  deliveryTo?: string;
+  deliveryThreadId?: string;
   targetKind: FeishuBindingTargetKind;
   targetSessionKey: string;
   agentId?: string;
@@ -108,6 +110,8 @@ function toSessionBindingRecord(
       agentId: record.agentId,
       label: record.label,
       boundBy: record.boundBy,
+      deliveryTo: record.deliveryTo,
+      deliveryThreadId: record.deliveryThreadId,
       lastActivityAt: record.lastActivityAt,
       idleTimeoutMs: defaults.idleTimeoutMs,
       maxAgeMs: defaults.maxAgeMs,
@@ -160,6 +164,14 @@ export function createFeishuThreadBindingManager(params: {
         accountId,
         conversationId: normalizedConversationId,
         parentConversationId: parentConversationId?.trim() || undefined,
+        deliveryTo:
+          typeof metadata?.deliveryTo === "string" && metadata.deliveryTo.trim()
+            ? metadata.deliveryTo.trim()
+            : undefined,
+        deliveryThreadId:
+          typeof metadata?.deliveryThreadId === "string" && metadata.deliveryThreadId.trim()
+            ? metadata.deliveryThreadId.trim()
+            : undefined,
         targetKind: toFeishuTargetKind(targetKind),
         targetSessionKey: targetSessionKey.trim(),
         agentId:
