@@ -64,6 +64,7 @@ What has been implemented so far:
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
 - loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
 - loader module-export resolution, config validation, and memory-slot load decisions now route through `src/extension-host/loader-runtime.ts`
+- loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`
 - runtime registration normalization has started in `src/extension-host/runtime-registrations.ts` for channel, provider, HTTP-route, gateway-method, tool, CLI, service, command, context-engine, and hook registrations
 - several static and lookup consumers now read through the host boundary or resolved-extension model:
@@ -89,6 +90,7 @@ How it has been done:
 - by moving loader-owned policy helpers next, while keeping module loading and enablement flow behavior unchanged
 - by moving initial candidate planning and record construction behind host-owned helpers before changing import and registration flow
 - by moving loader runtime decisions behind host-owned helpers while preserving lazy loading, config validation behavior, and memory-slot policy behavior
+- by moving post-import planning and `register(...)` execution behind host-owned helpers before changing entry-path and import flow
 - by moving loader record-state transitions into host-owned helpers before introducing a full lifecycle state machine
 - by moving central readers first, so later lifecycle and compatibility work can land on one boundary instead of many ad hoc call sites
 - by adding focused tests for each extracted seam before widening the boundary further
@@ -98,12 +100,14 @@ Committed implementation slices so far:
 - `6abf6750ee` `Plugins: add extension host registry boundary`
 - `1aab89e820` `Plugins: extract loader host seams`
 - `7bc3135082` `Plugins: extract loader candidate planning`
+- `3a122c95fa` `Plugins: extract loader register flow`
 - `89414ed857` `Docs: track extension host migration internally`
+- `d8af1eceaf` `Docs: refresh extension host migration status`
 
 What is still missing for these phases:
 
 - keeping the cutover inventory current as more surfaces move
-- the lifecycle state machine, remaining per-plugin import and registration flow, policy gate, and broad host-owned registries described for Phase 2
+- the lifecycle state machine, remaining entry-path and import flow, policy gate, and broad host-owned registries described for Phase 2
 - minimal SDK compatibility work beyond preserving current behavior indirectly through existing loading
 - any pilot migration, event pipeline, canonical catalog, or arbitration implementation
 
@@ -293,7 +297,7 @@ Current implementation status:
 - the host owns the active registry state
 - the host exposes a resolved-extension registry view for static consumers
 - plugin skills, plugin auto-enable, and config validation indexing now consume host-owned resolved-extension data
-- activation, loader policy, loader candidate planning, loader runtime decisions, and loader record-state helpers now route through `src/extension-host/*`
+- activation, loader policy, loader candidate planning, loader runtime decisions, loader post-import register flow, and loader record-state helpers now route through `src/extension-host/*`
 - lifecycle state ownership, activation states, policy evaluation, and broad host-owned registries are still not implemented
 
 ### Phase 3: Build compatibility bridges

@@ -39,6 +39,7 @@ What has been implemented:
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
 - loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
 - loader module-export resolution, config validation, and memory-slot load decisions now route through `src/extension-host/loader-runtime.ts`
+- loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`
 - channel, provider, gateway-method, tool, CLI, service, command, context-engine, and hook registration normalization now has a host-owned helper boundary for future catalog migration
 
@@ -48,7 +49,7 @@ How it has been implemented:
 - by keeping the existing catalog behavior intact while shifting metadata ownership into normalized host-owned records
 - by reusing the resolved-extension registry for static operator/documentation surfaces instead of creating separate metadata caches
 - by beginning runtime registration migration with host-owned normalization helpers before attempting full canonical catalog publication
-- by beginning loader-path migration with host-owned compatibility, candidate-planning, policy, runtime, and record-state helpers before attempting canonical catalog publication
+- by beginning loader-path migration with host-owned compatibility, candidate-planning, policy, runtime, register-flow, and record-state helpers before attempting canonical catalog publication
 
 What remains pending:
 

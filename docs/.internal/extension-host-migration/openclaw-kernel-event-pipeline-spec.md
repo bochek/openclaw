@@ -39,6 +39,7 @@ Relevant prerequisite work that has landed:
 - loader provenance and duplicate-order policy now have a host-owned helper boundary
 - loader initial candidate planning and record creation now have a host-owned helper boundary
 - loader module-export resolution, config validation, and memory-slot load decisions now have a host-owned helper boundary
+- loader post-import planning and `register(...)` execution now have a host-owned helper boundary
 - loader record-state transitions now have a host-owned helper boundary
 
 Why this matters for this spec:

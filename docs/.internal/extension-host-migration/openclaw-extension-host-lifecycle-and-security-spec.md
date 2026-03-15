@@ -40,6 +40,7 @@ What has been implemented:
 - loader provenance, duplicate-order, and warning policy now route through `src/extension-host/loader-policy.ts`
 - loader initial candidate planning and record creation now route through `src/extension-host/loader-records.ts`
 - loader module-export resolution, config validation, and memory-slot load decisions now route through `src/extension-host/loader-runtime.ts`
+- loader post-import planning and `register(...)` execution now route through `src/extension-host/loader-register.ts`
 - loader record-state transitions now route through `src/extension-host/loader-state.ts`
 
 How it has been implemented:
@@ -55,6 +56,7 @@ How it has been implemented:
 - by moving provenance and duplicate-order policy next, so lifecycle migration can land on host-owned policy helpers instead of loader-local utilities
 - by moving initial candidate planning and record construction next while leaving module import and registration flow unchanged
 - by moving loader runtime decisions next while preserving the current lazy-load, config-validation, and memory-slot behavior
+- by moving post-import planning and `register(...)` execution next while leaving entry-path and import flow unchanged
 - by moving record-state transitions next while leaving the lifecycle state machine itself unimplemented
 
 What is still pending from this spec:
