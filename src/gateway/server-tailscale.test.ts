@@ -73,7 +73,7 @@ const modeCases = [
 ];
 
 describe.each(modeCases)(
-  "startGatewayTailscaleExposure (%s)",
+  "startGatewayTailscaleExposure ($mode)",
   ({ mode, enableMock, disableMock }) => {
     beforeEach(() => {
       vi.restoreAllMocks();
@@ -193,6 +193,40 @@ describe.each(modeCases)(
       );
 
       await cleanupB?.();
+      expect(disableMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("falls back to unguarded cleanup when the ownership guard cannot claim", async () => {
+      const logTailscale = {
+        info: vi.fn(),
+        warn: vi.fn(),
+      };
+
+      const cleanup = await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore: {
+          async claim() {
+            throw new Error("lock dir unavailable");
+          },
+          async replaceIfCurrent() {
+            return false;
+          },
+          async runCleanupIfCurrentOwner() {
+            return false;
+          },
+        },
+      });
+
+      expect(cleanup).not.toBeNull();
+      expect(enableMock).toHaveBeenCalledTimes(1);
+      expect(logTailscale.warn).toHaveBeenCalledWith(
+        `${mode} ownership guard unavailable: lock dir unavailable`,
+      );
+
+      await cleanup?.();
       expect(disableMock).toHaveBeenCalledTimes(1);
     });
   },

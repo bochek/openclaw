@@ -79,9 +79,15 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
       if (Date.now() - stat.mtimeMs < lockStaleMs) {
         return;
       }
-      // All lock holders only perform short file I/O plus the Tailscale CLI calls,
-      // and those helpers already time out after 15s. If the lock still exists after
-      // the wider stale window, assume the holder is wedged and break it.
+      try {
+        const raw = await fs.readFile(ownerLockPath, "utf8");
+        const parsed = JSON.parse(raw) as { pid?: unknown };
+        if (typeof parsed.pid === "number" && isPidAlive(parsed.pid)) {
+          return;
+        }
+      } catch {
+        // Unreadable lock state is treated as stale so a dead holder cannot block recovery.
+      }
       await fs.unlink(ownerLockPath).catch(() => {});
     } catch (err) {
       if ((err as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
@@ -153,15 +159,19 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
       });
     },
     async runCleanupIfCurrentOwner(token, cleanup) {
-      return await withOwnerLock(async () => {
+      const shouldRunCleanup = await withOwnerLock(async () => {
         const current = await readOwner();
         if (current?.token !== token) {
           return false;
         }
-        await cleanup();
         await deleteOwnerFile();
         return true;
       });
+      if (!shouldRunCleanup) {
+        return false;
+      }
+      await cleanup();
+      return true;
     },
   };
 }
@@ -179,7 +189,16 @@ export async function startGatewayTailscaleExposure(params: {
   }
 
   const ownerStore = params.ownerStore ?? createTailscaleExposureOwnerStore();
-  const { owner, previousOwner } = await ownerStore.claim(params.tailscaleMode, params.port);
+  let owner: TailscaleExposureOwnerRecord | null = null;
+  let previousOwner: TailscaleExposureOwnerRecord | null = null;
+
+  try {
+    ({ owner, previousOwner } = await ownerStore.claim(params.tailscaleMode, params.port));
+  } catch (err) {
+    params.logTailscale.warn(
+      `${params.tailscaleMode} ownership guard unavailable: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   try {
     if (params.tailscaleMode === "serve") {
@@ -197,13 +216,15 @@ export async function startGatewayTailscaleExposure(params: {
       params.logTailscale.info(`${params.tailscaleMode} enabled`);
     }
   } catch (err) {
-    const nextOwner =
-      previousOwner && isPidAlive(previousOwner.pid)
-        ? previousOwner
-        : params.resetOnExit
-          ? owner
-          : null;
-    await ownerStore.replaceIfCurrent(owner.token, nextOwner).catch(() => {});
+    if (owner) {
+      const nextOwner =
+        previousOwner && isPidAlive(previousOwner.pid)
+          ? previousOwner
+          : params.resetOnExit
+            ? owner
+            : null;
+      await ownerStore.replaceIfCurrent(owner.token, nextOwner).catch(() => {});
+    }
     params.logTailscale.warn(
       `${params.tailscaleMode} failed: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -215,15 +236,26 @@ export async function startGatewayTailscaleExposure(params: {
 
   return async () => {
     try {
-      const cleanedUp = await ownerStore.runCleanupIfCurrentOwner(owner.token, async () => {
-        if (params.tailscaleMode === "serve") {
-          await disableTailscaleServe();
-        } else {
-          await disableTailscaleFunnel();
+      if (owner) {
+        const cleanedUp = await ownerStore.runCleanupIfCurrentOwner(owner.token, async () => {
+          if (params.tailscaleMode === "serve") {
+            await disableTailscaleServe();
+          } else {
+            await disableTailscaleFunnel();
+          }
+        });
+        if (!cleanedUp) {
+          params.logTailscale.info(
+            `${params.tailscaleMode} cleanup skipped: not the current owner`,
+          );
         }
-      });
-      if (!cleanedUp) {
-        params.logTailscale.info(`${params.tailscaleMode} cleanup skipped: not the current owner`);
+        return;
+      }
+
+      if (params.tailscaleMode === "serve") {
+        await disableTailscaleServe();
+      } else {
+        await disableTailscaleFunnel();
       }
     } catch (err) {
       params.logTailscale.warn(
