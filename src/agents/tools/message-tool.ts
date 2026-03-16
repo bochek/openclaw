@@ -2,6 +2,8 @@ import { Type } from "@sinclair/typebox";
 import { BLUEBUBBLES_GROUP_ACTIONS } from "../../channels/plugins/bluebubbles-actions.js";
 import { listChannelPlugins } from "../../channels/plugins/index.js";
 import {
+  supportsChannelMessageInteractive,
+  supportsChannelMessageInteractiveForChannel,
   listChannelMessageActions,
   supportsChannelMessageButtons,
   supportsChannelMessageButtonsForChannel,
@@ -161,7 +163,37 @@ const discordComponentMessageSchema = Type.Object(
   },
 );
 
+const interactiveOptionSchema = Type.Object({
+  label: Type.String(),
+  value: Type.String(),
+});
+
+const interactiveButtonSchema = Type.Object({
+  label: Type.String(),
+  value: Type.String(),
+  style: Type.Optional(stringEnum(["primary", "secondary", "success", "danger"])),
+});
+
+const interactiveBlockSchema = Type.Object({
+  type: stringEnum(["text", "buttons", "select"]),
+  text: Type.Optional(Type.String()),
+  buttons: Type.Optional(Type.Array(interactiveButtonSchema)),
+  placeholder: Type.Optional(Type.String()),
+  options: Type.Optional(Type.Array(interactiveOptionSchema)),
+});
+
+const interactiveMessageSchema = Type.Object(
+  {
+    blocks: Type.Array(interactiveBlockSchema),
+  },
+  {
+    description:
+      "Shared interactive message payload for buttons and selects. Channels render this into their native components when supported.",
+  },
+);
+
 function buildSendSchema(options: {
+  includeInteractive: boolean;
   includeButtons: boolean;
   includeCards: boolean;
   includeComponents: boolean;
@@ -206,6 +238,7 @@ function buildSendSchema(options: {
         description: "Send image/GIF as document to avoid Telegram compression (Telegram only).",
       }),
     ),
+    interactive: Type.Optional(interactiveMessageSchema),
     buttons: Type.Optional(
       Type.Array(
         Type.Array(
@@ -233,6 +266,9 @@ function buildSendSchema(options: {
   };
   if (!options.includeButtons) {
     delete props.buttons;
+  }
+  if (!options.includeInteractive) {
+    delete props.interactive;
   }
   if (!options.includeCards) {
     delete props.card;
@@ -445,6 +481,7 @@ function buildChannelManagementSchema() {
 }
 
 function buildMessageToolSchemaProps(options: {
+  includeInteractive: boolean;
   includeButtons: boolean;
   includeCards: boolean;
   includeComponents: boolean;
@@ -470,6 +507,7 @@ function buildMessageToolSchemaProps(options: {
 function buildMessageToolSchemaFromActions(
   actions: readonly string[],
   options: {
+    includeInteractive: boolean;
     includeButtons: boolean;
     includeCards: boolean;
     includeComponents: boolean;
@@ -484,6 +522,7 @@ function buildMessageToolSchemaFromActions(
 }
 
 const MessageToolSchema = buildMessageToolSchemaFromActions(AllMessageActions, {
+  includeInteractive: true,
   includeButtons: true,
   includeCards: true,
   includeComponents: true,
@@ -549,6 +588,20 @@ function resolveIncludeComponents(params: {
   return listChannelSupportedActions({ cfg: params.cfg, channel: "discord" }).length > 0;
 }
 
+function resolveIncludeInteractive(params: {
+  cfg: OpenClawConfig;
+  currentChannelProvider?: string;
+}): boolean {
+  const currentChannel = normalizeMessageChannel(params.currentChannelProvider);
+  if (currentChannel) {
+    return supportsChannelMessageInteractiveForChannel({
+      cfg: params.cfg,
+      channel: currentChannel,
+    });
+  }
+  return supportsChannelMessageInteractive(params.cfg);
+}
+
 function resolveIncludeTelegramPollExtras(params: {
   cfg: OpenClawConfig;
   currentChannelProvider?: string;
@@ -566,6 +619,7 @@ function buildMessageToolSchema(params: {
 }) {
   const currentChannel = normalizeMessageChannel(params.currentChannelProvider);
   const actions = resolveMessageToolSchemaActions(params);
+  const includeInteractive = resolveIncludeInteractive(params);
   const includeButtons = currentChannel
     ? supportsChannelMessageButtonsForChannel({ cfg: params.cfg, channel: currentChannel })
     : supportsChannelMessageButtons(params.cfg);
@@ -575,6 +629,7 @@ function buildMessageToolSchema(params: {
   const includeComponents = resolveIncludeComponents(params);
   const includeTelegramPollExtras = resolveIncludeTelegramPollExtras(params);
   return buildMessageToolSchemaFromActions(actions.length > 0 ? actions : ["send"], {
+    includeInteractive,
     includeButtons,
     includeCards,
     includeComponents,
