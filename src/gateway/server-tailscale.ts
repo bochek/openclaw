@@ -32,6 +32,15 @@ type TailscaleExposureOwnerStore = {
   runCleanupIfCurrentOwner(token: string, cleanup: () => Promise<void>): Promise<boolean>;
 };
 
+function isPidAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return (err as NodeJS.ErrnoException | undefined)?.code !== "ESRCH";
+  }
+}
+
 function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
   const ownerFilePath = path.join(resolveGatewayLockDir(), "tailscale-exposure-owner.json");
   const ownerLockPath = path.join(resolveGatewayLockDir(), "tailscale-exposure-owner.lock");
@@ -64,29 +73,15 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
-  function isPidAlive(pid: number): boolean {
-    try {
-      process.kill(pid, 0);
-      return true;
-    } catch (err) {
-      return (err as NodeJS.ErrnoException | undefined)?.code !== "ESRCH";
-    }
-  }
-
   async function breakStaleLock() {
     try {
-      const [raw, stat] = await Promise.all([
-        fs.readFile(ownerLockPath, "utf8").catch(() => null),
-        fs.stat(ownerLockPath),
-      ]);
+      const stat = await fs.stat(ownerLockPath);
       if (Date.now() - stat.mtimeMs < lockStaleMs) {
         return;
       }
-      const parsed = raw ? JSON.parse(raw) : null;
-      const pid = typeof parsed?.pid === "number" ? parsed.pid : null;
-      if (pid !== null && isPidAlive(pid)) {
-        return;
-      }
+      // All lock holders only perform short file I/O plus the Tailscale CLI calls,
+      // and those helpers already time out after 15s. If the lock still exists after
+      // the wider stale window, assume the holder is wedged and break it.
       await fs.unlink(ownerLockPath).catch(() => {});
     } catch (err) {
       if ((err as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
@@ -202,7 +197,13 @@ export async function startGatewayTailscaleExposure(params: {
       params.logTailscale.info(`${params.tailscaleMode} enabled`);
     }
   } catch (err) {
-    await ownerStore.replaceIfCurrent(owner.token, previousOwner).catch(() => {});
+    const nextOwner =
+      previousOwner && isPidAlive(previousOwner.pid)
+        ? previousOwner
+        : params.resetOnExit
+          ? owner
+          : null;
+    await ownerStore.replaceIfCurrent(owner.token, nextOwner).catch(() => {});
     params.logTailscale.warn(
       `${params.tailscaleMode} failed: ${err instanceof Error ? err.message : String(err)}`,
     );

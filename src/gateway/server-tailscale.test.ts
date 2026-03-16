@@ -59,74 +59,141 @@ function createOwnerStore() {
   };
 }
 
-describe("startGatewayTailscaleExposure", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+const modeCases = [
+  {
+    mode: "serve" as const,
+    enableMock: tailscaleState.enableServe,
+    disableMock: tailscaleState.disableServe,
+  },
+  {
+    mode: "funnel" as const,
+    enableMock: tailscaleState.enableFunnel,
+    disableMock: tailscaleState.disableFunnel,
+  },
+];
 
-  it("skips stale serve cleanup after a newer gateway takes ownership", async () => {
-    const ownerStore = createOwnerStore();
-    const logTailscale = {
-      info: vi.fn(),
-      warn: vi.fn(),
-    };
-
-    const cleanupA = await startGatewayTailscaleExposure({
-      tailscaleMode: "serve",
-      resetOnExit: true,
-      port: 18789,
-      logTailscale,
-      ownerStore,
-    });
-    const cleanupB = await startGatewayTailscaleExposure({
-      tailscaleMode: "serve",
-      resetOnExit: true,
-      port: 18789,
-      logTailscale,
-      ownerStore,
+describe.each(modeCases)(
+  "startGatewayTailscaleExposure (%s)",
+  ({ mode, enableMock, disableMock }) => {
+    beforeEach(() => {
+      vi.restoreAllMocks();
+      vi.clearAllMocks();
     });
 
-    await cleanupA?.();
-    expect(tailscaleState.disableServe).not.toHaveBeenCalled();
-    expect(logTailscale.info).toHaveBeenCalledWith("serve cleanup skipped: not the current owner");
+    it("skips stale cleanup after a newer gateway takes ownership", async () => {
+      const ownerStore = createOwnerStore();
+      const logTailscale = {
+        info: vi.fn(),
+        warn: vi.fn(),
+      };
 
-    await cleanupB?.();
-    expect(tailscaleState.disableServe).toHaveBeenCalledTimes(1);
-  });
+      const cleanupA = await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore,
+      });
+      const cleanupB = await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore,
+      });
 
-  it("restores the previous owner after a takeover startup failure", async () => {
-    const ownerStore = createOwnerStore();
-    const logTailscale = {
-      info: vi.fn(),
-      warn: vi.fn(),
-    };
+      await cleanupA?.();
+      expect(disableMock).not.toHaveBeenCalled();
+      expect(logTailscale.info).toHaveBeenCalledWith(
+        `${mode} cleanup skipped: not the current owner`,
+      );
 
-    const cleanupA = await startGatewayTailscaleExposure({
-      tailscaleMode: "serve",
-      resetOnExit: true,
-      port: 18789,
-      logTailscale,
-      ownerStore,
+      await cleanupB?.();
+      expect(disableMock).toHaveBeenCalledTimes(1);
     });
 
-    tailscaleState.enableServe.mockRejectedValueOnce(new Error("boom"));
+    it("restores the previous live owner after a takeover startup failure", async () => {
+      const ownerStore = createOwnerStore();
+      const logTailscale = {
+        info: vi.fn(),
+        warn: vi.fn(),
+      };
 
-    const cleanupB = await startGatewayTailscaleExposure({
-      tailscaleMode: "serve",
-      resetOnExit: true,
-      port: 18789,
-      logTailscale,
-      ownerStore,
+      const cleanupA = await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore,
+      });
+
+      enableMock.mockRejectedValueOnce(new Error("boom"));
+
+      const cleanupB = await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore,
+      });
+
+      expect(cleanupB).not.toBeNull();
+      expect(logTailscale.warn).toHaveBeenCalledWith(`${mode} failed: boom`);
+
+      await cleanupB?.();
+      expect(disableMock).not.toHaveBeenCalled();
+      expect(logTailscale.info).toHaveBeenCalledWith(
+        `${mode} cleanup skipped: not the current owner`,
+      );
+
+      await cleanupA?.();
+      expect(disableMock).toHaveBeenCalledTimes(1);
     });
 
-    expect(cleanupB).not.toBeNull();
-    expect(logTailscale.warn).toHaveBeenCalledWith("serve failed: boom");
+    it("keeps the failed owner when the previous owner is already gone", async () => {
+      const ownerStore = createOwnerStore();
+      const logTailscale = {
+        info: vi.fn(),
+        warn: vi.fn(),
+      };
 
-    await cleanupB?.();
-    expect(tailscaleState.disableServe).not.toHaveBeenCalled();
-    expect(logTailscale.info).toHaveBeenCalledWith("serve cleanup skipped: not the current owner");
+      const cleanupA = await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore,
+      });
 
-    await cleanupA?.();
-    expect(tailscaleState.disableServe).toHaveBeenCalledTimes(1);
-  });
-});
+      vi.spyOn(process, "kill").mockImplementation(((pid: number) => {
+        if (pid === 1) {
+          const err = new Error("gone") as NodeJS.ErrnoException;
+          err.code = "ESRCH";
+          throw err;
+        }
+        return true;
+      }) as typeof process.kill);
+      enableMock.mockRejectedValueOnce(new Error("boom"));
+
+      const cleanupB = await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore,
+      });
+
+      expect(cleanupB).not.toBeNull();
+      expect(logTailscale.warn).toHaveBeenCalledWith(`${mode} failed: boom`);
+
+      await cleanupA?.();
+      expect(disableMock).not.toHaveBeenCalled();
+      expect(logTailscale.info).toHaveBeenCalledWith(
+        `${mode} cleanup skipped: not the current owner`,
+      );
+
+      await cleanupB?.();
+      expect(disableMock).toHaveBeenCalledTimes(1);
+    });
+  },
+);
