@@ -24,13 +24,19 @@ type TailscaleExposureOwnerStore = {
   claim(
     mode: Exclude<GatewayTailscaleMode, "off">,
     port: number,
-  ): Promise<TailscaleExposureOwnerRecord>;
-  isCurrentOwner(token: string): Promise<boolean>;
-  clearIfCurrentOwner(token: string): Promise<void>;
+  ): Promise<{
+    owner: TailscaleExposureOwnerRecord;
+    previousOwner: TailscaleExposureOwnerRecord | null;
+  }>;
+  replaceIfCurrent(token: string, nextOwner: TailscaleExposureOwnerRecord | null): Promise<boolean>;
+  runCleanupIfCurrentOwner(token: string, cleanup: () => Promise<void>): Promise<boolean>;
 };
 
 function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
   const ownerFilePath = path.join(resolveGatewayLockDir(), "tailscale-exposure-owner.json");
+  const ownerLockPath = path.join(resolveGatewayLockDir(), "tailscale-exposure-owner.lock");
+  const lockRetryMs = 25;
+  const lockStaleMs = 60_000;
 
   async function readOwner(): Promise<TailscaleExposureOwnerRecord | null> {
     try {
@@ -47,42 +53,120 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
       ) {
         return parsed as TailscaleExposureOwnerRecord;
       }
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
-        // Ignore malformed or unreadable ownership state and continue.
-      }
+    } catch {
+      // ENOENT means the file does not exist yet. Any other parse/read error is
+      // also ignored so the ownership guard remains best-effort and non-fatal.
     }
     return null;
   }
 
-  return {
-    async claim(mode, port) {
-      const record: TailscaleExposureOwnerRecord = {
-        token: randomUUID(),
-        mode,
-        port,
-        pid: process.pid,
-        claimedAt: new Date().toISOString(),
-      };
-      await fs.mkdir(path.dirname(ownerFilePath), { recursive: true });
-      await fs.writeFile(ownerFilePath, JSON.stringify(record), "utf8");
-      return record;
-    },
-    async isCurrentOwner(token) {
-      const current = await readOwner();
-      return current?.token === token;
-    },
-    async clearIfCurrentOwner(token) {
-      if (!(await this.isCurrentOwner(token))) {
+  async function sleep(ms: number) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function isPidAlive(pid: number): boolean {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch (err) {
+      return (err as NodeJS.ErrnoException | undefined)?.code !== "ESRCH";
+    }
+  }
+
+  async function breakStaleLock() {
+    try {
+      const [raw, stat] = await Promise.all([
+        fs.readFile(ownerLockPath, "utf8").catch(() => null),
+        fs.stat(ownerLockPath),
+      ]);
+      if (Date.now() - stat.mtimeMs < lockStaleMs) {
         return;
       }
+      const parsed = raw ? JSON.parse(raw) : null;
+      const pid = typeof parsed?.pid === "number" ? parsed.pid : null;
+      if (pid !== null && isPidAlive(pid)) {
+        return;
+      }
+      await fs.unlink(ownerLockPath).catch(() => {});
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
+        // Ignore malformed or unreadable lock state and retry.
+      }
+    }
+  }
+
+  async function withOwnerLock<T>(fn: () => Promise<T>): Promise<T> {
+    await fs.mkdir(path.dirname(ownerLockPath), { recursive: true });
+
+    while (true) {
       try {
-        await fs.unlink(ownerFilePath);
+        const handle = await fs.open(ownerLockPath, "wx");
+        try {
+          await handle.writeFile(
+            JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString() }),
+          );
+          return await fn();
+        } finally {
+          await handle.close().catch(() => {});
+          await fs.unlink(ownerLockPath).catch(() => {});
+        }
       } catch (err) {
-        if ((err as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
+        if ((err as NodeJS.ErrnoException | undefined)?.code !== "EEXIST") {
           throw err;
         }
+        await breakStaleLock();
+        await sleep(lockRetryMs);
       }
+    }
+  }
+
+  async function deleteOwnerFile() {
+    await fs.unlink(ownerFilePath).catch((err: unknown) => {
+      if ((err as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
+        throw err;
+      }
+    });
+  }
+
+  return {
+    async claim(mode, port) {
+      return await withOwnerLock(async () => {
+        const previousOwner = await readOwner();
+        const owner: TailscaleExposureOwnerRecord = {
+          token: randomUUID(),
+          mode,
+          port,
+          pid: process.pid,
+          claimedAt: new Date().toISOString(),
+        };
+        await fs.writeFile(ownerFilePath, JSON.stringify(owner), "utf8");
+        return { owner, previousOwner };
+      });
+    },
+    async replaceIfCurrent(token, nextOwner) {
+      return await withOwnerLock(async () => {
+        const current = await readOwner();
+        if (current?.token !== token) {
+          return false;
+        }
+        if (nextOwner) {
+          await fs.writeFile(ownerFilePath, JSON.stringify(nextOwner), "utf8");
+        } else {
+          await deleteOwnerFile();
+        }
+        return true;
+      });
+    },
+    async runCleanupIfCurrentOwner(token, cleanup) {
+      return await withOwnerLock(async () => {
+        const current = await readOwner();
+        if (current?.token !== token) {
+          return false;
+        }
+        await cleanup();
+        await deleteOwnerFile();
+        return true;
+      });
     },
   };
 }
@@ -100,7 +184,7 @@ export async function startGatewayTailscaleExposure(params: {
   }
 
   const ownerStore = params.ownerStore ?? createTailscaleExposureOwnerStore();
-  const owner = await ownerStore.claim(params.tailscaleMode, params.port);
+  const { owner, previousOwner } = await ownerStore.claim(params.tailscaleMode, params.port);
 
   try {
     if (params.tailscaleMode === "serve") {
@@ -118,7 +202,7 @@ export async function startGatewayTailscaleExposure(params: {
       params.logTailscale.info(`${params.tailscaleMode} enabled`);
     }
   } catch (err) {
-    await ownerStore.clearIfCurrentOwner(owner.token).catch(() => {});
+    await ownerStore.replaceIfCurrent(owner.token, previousOwner).catch(() => {});
     params.logTailscale.warn(
       `${params.tailscaleMode} failed: ${err instanceof Error ? err.message : String(err)}`,
     );
@@ -130,18 +214,16 @@ export async function startGatewayTailscaleExposure(params: {
 
   return async () => {
     try {
-      if (!(await ownerStore.isCurrentOwner(owner.token))) {
-        params.logTailscale.info(
-          `${params.tailscaleMode} cleanup skipped: newer gateway owns Tailscale exposure`,
-        );
-        return;
+      const cleanedUp = await ownerStore.runCleanupIfCurrentOwner(owner.token, async () => {
+        if (params.tailscaleMode === "serve") {
+          await disableTailscaleServe();
+        } else {
+          await disableTailscaleFunnel();
+        }
+      });
+      if (!cleanedUp) {
+        params.logTailscale.info(`${params.tailscaleMode} cleanup skipped: not the current owner`);
       }
-      if (params.tailscaleMode === "serve") {
-        await disableTailscaleServe();
-      } else {
-        await disableTailscaleFunnel();
-      }
-      await ownerStore.clearIfCurrentOwner(owner.token);
     } catch (err) {
       params.logTailscale.warn(
         `${params.tailscaleMode} cleanup failed: ${err instanceof Error ? err.message : String(err)}`,
