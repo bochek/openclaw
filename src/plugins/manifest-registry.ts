@@ -1,10 +1,15 @@
 import fs from "node:fs";
 import type { OpenClawConfig } from "../config/config.js";
+import {
+  buildResolvedExtensionRecord,
+  type ResolvedExtensionRecord,
+} from "../extension-host/manifests/manifest-registry.js";
+import { resolveLegacyExtensionDescriptor } from "../extension-host/manifests/schema.js";
 import { resolveUserPath } from "../utils.js";
 import { loadBundleManifest } from "./bundle-manifest.js";
 import { normalizePluginsConfig, type NormalizedPluginsConfig } from "./config-state.js";
 import { discoverOpenClawPlugins, type PluginCandidate } from "./discovery.js";
-import { loadPluginManifest, type PluginManifest } from "./manifest.js";
+import { loadPluginManifest, type PackageManifest, type PluginManifest } from "./manifest.js";
 import { isPathInside, safeRealpathSync } from "./path-safety.js";
 import { resolvePluginCacheInputs } from "./roots.js";
 import type {
@@ -52,6 +57,7 @@ export type PluginManifestRecord = {
   schemaCacheKey?: string;
   configSchema?: Record<string, unknown>;
   configUiHints?: Record<string, PluginConfigUiHint>;
+  resolvedExtension: ResolvedExtensionRecord["extension"];
 };
 
 export type PluginManifestRegistry = {
@@ -129,6 +135,7 @@ function buildRecord(params: {
   schemaCacheKey?: string;
   configSchema?: Record<string, unknown>;
 }): PluginManifestRecord {
+  const resolved = buildResolvedExtensionRecord(params);
   return {
     id: params.manifest.id,
     name: normalizeManifestLabel(params.manifest.name) ?? params.candidate.packageName,
@@ -151,6 +158,7 @@ function buildRecord(params: {
     schemaCacheKey: params.schemaCacheKey,
     configSchema: params.configSchema,
     configUiHints: params.manifest.uiHints,
+    resolvedExtension: resolved.extension,
   };
 }
 
@@ -168,6 +176,35 @@ function buildBundleRecord(params: {
   candidate: PluginCandidate;
   manifestPath: string;
 }): PluginManifestRecord {
+  const packageManifest =
+    params.candidate.packageManifest ||
+    params.candidate.packageName ||
+    params.candidate.packageVersion ||
+    params.candidate.packageDescription
+      ? ({
+          openclaw: params.candidate.packageManifest,
+          name: params.candidate.packageName,
+          version: params.candidate.packageVersion,
+          description: params.candidate.packageDescription,
+        } as PackageManifest)
+      : undefined;
+  const resolvedExtension = resolveLegacyExtensionDescriptor({
+    manifest: {
+      id: params.manifest.id,
+      configSchema: {},
+      channels: [],
+      providers: [],
+      skills: params.manifest.skills ?? [],
+      name: params.manifest.name,
+      description: params.manifest.description,
+      version: params.manifest.version,
+    },
+    packageManifest,
+    origin: params.candidate.origin,
+    rootDir: params.candidate.rootDir,
+    source: params.candidate.source,
+    workspaceDir: params.candidate.workspaceDir,
+  });
   return {
     id: params.manifest.id,
     name: normalizeManifestLabel(params.manifest.name) ?? params.candidate.idHint,
@@ -189,6 +226,7 @@ function buildBundleRecord(params: {
     schemaCacheKey: undefined,
     configSchema: undefined,
     configUiHints: undefined,
+    resolvedExtension,
   };
 }
 

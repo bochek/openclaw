@@ -4,6 +4,8 @@ import {
   listChatChannelAliases,
   normalizeChatChannelId,
 } from "../channels/registry.js";
+import { listExtensionHostChannelRegistrations } from "../extension-host/contributions/runtime-registry.js";
+import { getActiveExtensionHostRegistry } from "../extension-host/static/active-registry.js";
 import {
   GATEWAY_CLIENT_MODES,
   GATEWAY_CLIENT_NAMES,
@@ -12,7 +14,6 @@ import {
   normalizeGatewayClientMode,
   normalizeGatewayClientName,
 } from "../gateway/protocol/client-info.js";
-import { getActivePluginRegistry } from "../plugins/runtime.js";
 
 export const INTERNAL_MESSAGE_CHANNEL = "webchat" as const;
 export type InternalMessageChannel = typeof INTERNAL_MESSAGE_CHANNEL;
@@ -64,32 +65,36 @@ export function normalizeMessageChannel(raw?: string | null): string | undefined
   if (builtIn) {
     return builtIn;
   }
-  const registry = getActivePluginRegistry();
-  const pluginMatch = registry?.channels.find((entry) => {
-    if (entry.plugin.id.toLowerCase() === normalized) {
-      return true;
-    }
-    return (entry.plugin.meta.aliases ?? []).some(
-      (alias) => alias.trim().toLowerCase() === normalized,
-    );
-  });
+  const registry = getActiveExtensionHostRegistry();
+  const pluginMatch = registry
+    ? listExtensionHostChannelRegistrations(registry).find((entry) => {
+        if (entry.plugin.id.toLowerCase() === normalized) {
+          return true;
+        }
+        return (entry.plugin.meta.aliases ?? []).some(
+          (alias) => alias.trim().toLowerCase() === normalized,
+        );
+      })
+    : undefined;
   return pluginMatch?.plugin.id ?? normalized;
 }
 
 const listPluginChannelIds = (): string[] => {
-  const registry = getActivePluginRegistry();
+  const registry = getActiveExtensionHostRegistry();
   if (!registry) {
     return [];
   }
-  return registry.channels.map((entry) => entry.plugin.id);
+  return listExtensionHostChannelRegistrations(registry).map((entry) => entry.plugin.id);
 };
 
 const listPluginChannelAliases = (): string[] => {
-  const registry = getActivePluginRegistry();
+  const registry = getActiveExtensionHostRegistry();
   if (!registry) {
     return [];
   }
-  return registry.channels.flatMap((entry) => entry.plugin.meta.aliases ?? []);
+  return listExtensionHostChannelRegistrations(registry).flatMap(
+    (entry) => entry.plugin.meta.aliases ?? [],
+  );
 };
 
 export const listDeliverableMessageChannels = (): ChannelId[] =>

@@ -1,7 +1,8 @@
+import { listExtensionHostChannelRegistrations } from "../../extension-host/contributions/runtime-registry.js";
 import {
-  getActivePluginRegistryVersion,
-  requireActivePluginRegistry,
-} from "../../plugins/runtime.js";
+  getActiveExtensionHostRegistryVersion,
+  requireActiveExtensionHostRegistry,
+} from "../../extension-host/static/active-registry.js";
 import { CHAT_CHANNEL_ORDER, type ChatChannelId, normalizeAnyChannelId } from "../registry.js";
 import type { ChannelId, ChannelPlugin } from "./types.js";
 
@@ -40,14 +41,16 @@ const EMPTY_CHANNEL_PLUGIN_CACHE: CachedChannelPlugins = {
 let cachedChannelPlugins = EMPTY_CHANNEL_PLUGIN_CACHE;
 
 function resolveCachedChannelPlugins(): CachedChannelPlugins {
-  const registry = requireActivePluginRegistry();
-  const registryVersion = getActivePluginRegistryVersion();
+  const registry = requireActiveExtensionHostRegistry();
+  const registryVersion = getActiveExtensionHostRegistryVersion();
   const cached = cachedChannelPlugins;
   if (cached.registryVersion === registryVersion) {
     return cached;
   }
 
-  const sorted = dedupeChannels(registry.channels.map((entry) => entry.plugin)).toSorted((a, b) => {
+  const sorted = dedupeChannels(
+    listExtensionHostChannelRegistrations(registry).map((entry) => entry.plugin),
+  ).toSorted((a, b) => {
     const indexA = CHAT_CHANNEL_ORDER.indexOf(a.id as ChatChannelId);
     const indexB = CHAT_CHANNEL_ORDER.indexOf(b.id as ChatChannelId);
     const orderA = a.meta.order ?? (indexA === -1 ? 999 : indexA);
