@@ -27,6 +27,7 @@ function createOwnerStore() {
     claimedAt: string;
     phase: "active" | "cleaning";
     cleanupStartedAt?: string;
+    alive: boolean;
   } = null;
   let nextPid = process.pid - 1;
 
@@ -40,6 +41,7 @@ function createOwnerStore() {
         pid: nextPid,
         claimedAt: new Date(0).toISOString(),
         phase: "active" as const,
+        alive: true,
       };
       currentOwner = owner;
       return { owner, previousOwner };
@@ -52,7 +54,10 @@ function createOwnerStore() {
       return true;
     },
     async runCleanupIfCurrentOwner(token: string, cleanup: () => Promise<void>) {
-      if (currentOwner?.token !== token) {
+      if (!currentOwner) {
+        return false;
+      }
+      if (currentOwner.token !== token && currentOwner.alive) {
         return false;
       }
       currentOwner = {
@@ -63,6 +68,11 @@ function createOwnerStore() {
       await cleanup();
       currentOwner = null;
       return true;
+    },
+    markCurrentOwnerDead() {
+      if (currentOwner) {
+        currentOwner = { ...currentOwner, alive: false };
+      }
     },
   };
 }
@@ -204,6 +214,36 @@ describe.each(modeCases)(
       expect(disableMock).toHaveBeenCalledTimes(1);
     });
 
+    it("reclaims cleanup from a dead newer owner before exit", async () => {
+      const ownerStore = createOwnerStore();
+      const logTailscale = {
+        info: vi.fn(),
+        warn: vi.fn(),
+      };
+
+      const cleanupA = await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore,
+      });
+      await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore,
+      });
+      ownerStore.markCurrentOwnerDead();
+
+      await cleanupA?.();
+      expect(disableMock).toHaveBeenCalledTimes(1);
+      expect(logTailscale.info).not.toHaveBeenCalledWith(
+        `${mode} cleanup skipped: not the current owner`,
+      );
+    });
+
     it("falls back to unguarded cleanup when the ownership guard cannot claim", async () => {
       const logTailscale = {
         info: vi.fn(),
@@ -269,6 +309,50 @@ describe.each(modeCases)(
       expect(disableMock).not.toHaveBeenCalled();
       expect(logTailscale.warn).toHaveBeenCalledWith(
         `${mode} ownership cleanup still in progress; skipping external exposure`,
+      );
+    });
+
+    it("falls back to a direct reset when guarded cleanup bookkeeping fails", async () => {
+      const logTailscale = {
+        info: vi.fn(),
+        warn: vi.fn(),
+      };
+
+      const cleanup = await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore: {
+          async claim() {
+            return {
+              owner: {
+                token: "owner-1",
+                mode,
+                port: 18789,
+                pid: process.pid,
+                claimedAt: new Date(0).toISOString(),
+                phase: "active" as const,
+              },
+              previousOwner: null,
+            };
+          },
+          async replaceIfCurrent() {
+            return true;
+          },
+          async runCleanupIfCurrentOwner() {
+            throw new Error("lock dir unavailable");
+          },
+        },
+      });
+
+      await cleanup?.();
+      expect(disableMock).toHaveBeenCalledTimes(1);
+      expect(logTailscale.warn).toHaveBeenCalledWith(
+        `${mode} cleanup failed: lock dir unavailable`,
+      );
+      expect(logTailscale.warn).toHaveBeenCalledWith(
+        `${mode} cleanup guard failed; applied direct reset fallback`,
       );
     });
   },

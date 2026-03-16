@@ -160,17 +160,12 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
 
   return {
     async claim(mode, port) {
+      const claimDeadline = Date.now() + cleanupClaimWaitMs;
       while (true) {
         const result = await withOwnerLock(async () => {
           const previousOwner = await readOwner();
           if (previousOwner?.phase === "cleaning" && isPidAlive(previousOwner.pid)) {
-            const cleanupStartedAtMs = Date.parse(
-              previousOwner.cleanupStartedAt ?? previousOwner.claimedAt,
-            );
-            const cleanupAgeMs = Number.isFinite(cleanupStartedAtMs)
-              ? Date.now() - cleanupStartedAtMs
-              : Number.POSITIVE_INFINITY;
-            if (cleanupAgeMs < cleanupClaimWaitMs) {
+            if (Date.now() < claimDeadline) {
               return { type: "wait" as const };
             }
             return { type: "blocked" as const, previousOwner };
@@ -214,9 +209,14 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
     async runCleanupIfCurrentOwner(token, cleanup) {
       const cleanupOwner = await withOwnerLock(async () => {
         const current = await readOwner();
-        if (current?.token !== token) {
+        if (!current) {
           return null;
         }
+        if (current.token !== token && isPidAlive(current.pid)) {
+          return null;
+        }
+        // If a newer owner died without cleaning up, reclaim its stale exposure
+        // before this older process exits so resetOnExit still clears Tailscale.
         // Mark cleanup in progress before releasing the lock so overlapping
         // startups cannot claim exposure until this reset finishes or fails.
         const nextOwner: TailscaleExposureOwnerRecord = {
@@ -314,6 +314,9 @@ export async function startGatewayTailscaleExposure(params: {
     }
   } catch (err) {
     if (owner) {
+      // Restore the previous owner's original token so its own cleanup hook can
+      // still prove ownership later, or keep this failed owner if it needs to
+      // reset any partial/orphaned Tailscale state on exit.
       const nextOwner =
         previousOwner && isPidAlive(previousOwner.pid)
           ? previousOwner
@@ -331,15 +334,21 @@ export async function startGatewayTailscaleExposure(params: {
     return null;
   }
 
+  const disableExposure = async () => {
+    if (params.tailscaleMode === "serve") {
+      await disableTailscaleServe();
+    } else {
+      await disableTailscaleFunnel();
+    }
+  };
+
   return async () => {
     try {
       if (owner) {
+        // A failed enable can still leave behind partial or orphaned Tailscale
+        // config, so shutdown cleanup intentionally re-runs the global reset.
         const cleanedUp = await ownerStore.runCleanupIfCurrentOwner(owner.token, async () => {
-          if (params.tailscaleMode === "serve") {
-            await disableTailscaleServe();
-          } else {
-            await disableTailscaleFunnel();
-          }
+          await disableExposure();
         });
         if (!cleanedUp) {
           params.logTailscale.info(
@@ -349,15 +358,22 @@ export async function startGatewayTailscaleExposure(params: {
         return;
       }
 
-      if (params.tailscaleMode === "serve") {
-        await disableTailscaleServe();
-      } else {
-        await disableTailscaleFunnel();
-      }
+      await disableExposure();
     } catch (err) {
       params.logTailscale.warn(
         `${params.tailscaleMode} cleanup failed: ${err instanceof Error ? err.message : String(err)}`,
       );
+      if (!owner) {
+        return;
+      }
+      try {
+        await disableExposure();
+        params.logTailscale.warn(
+          `${params.tailscaleMode} cleanup guard failed; applied direct reset fallback`,
+        );
+      } catch {
+        // The direct reset failed too; keep the original warning above.
+      }
     }
   };
 }
