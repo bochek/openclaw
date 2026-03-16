@@ -21,7 +21,7 @@ import {
 import { formatConfigIssueLines } from "../config/issue-format.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import { resolveMainSessionKey } from "../config/sessions.js";
-import { createExtensionHostGatewayExtraHandlers } from "../extension-host/gateway-methods.js";
+import { createExtensionHostGatewayExtraHandlers } from "../extension-host/contributions/gateway-methods.js";
 import { clearAgentRunContext, onAgentEvent } from "../infra/agent-events.js";
 import {
   ensureControlUiAssetsBuilt,

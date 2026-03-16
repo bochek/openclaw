@@ -1,7 +1,7 @@
 import path from "node:path";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import { CHANNEL_IDS, normalizeChatChannelId } from "../channels/registry.js";
-import { loadResolvedExtensionRegistry } from "../extension-host/resolved-registry.js";
+import { loadResolvedExtensionRegistry } from "../extension-host/manifests/resolved-registry.js";
 import {
   normalizePluginsConfig,
   resolveEffectiveEnableState,

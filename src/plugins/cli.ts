@@ -2,7 +2,7 @@ import type { Command } from "commander";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { loadConfig } from "../config/config.js";
-import { registerExtensionHostCliCommands } from "../extension-host/cli-lifecycle.js";
+import { registerExtensionHostCliCommands } from "../extension-host/contributions/cli-lifecycle.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { loadOpenClawPlugins } from "./loader.js";
 import type { PluginLogger } from "./types.js";

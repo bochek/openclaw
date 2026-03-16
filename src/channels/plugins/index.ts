@@ -1,8 +1,8 @@
+import { listExtensionHostChannelRegistrations } from "../../extension-host/contributions/runtime-registry.js";
 import {
   getActiveExtensionHostRegistryVersion,
   requireActiveExtensionHostRegistry,
-} from "../../extension-host/active-registry.js";
-import { listExtensionHostChannelRegistrations } from "../../extension-host/runtime-registry.js";
+} from "../../extension-host/static/active-registry.js";
 import { CHAT_CHANNEL_ORDER, type ChatChannelId, normalizeAnyChannelId } from "../registry.js";
 import type { ChannelId, ChannelPlugin } from "./types.js";
 

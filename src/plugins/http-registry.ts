@@ -1,11 +1,11 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { requireActiveExtensionHostRegistry } from "../extension-host/active-registry.js";
 import {
   addExtensionHostHttpRoute,
   listExtensionHostHttpRoutes,
   removeExtensionHostHttpRoute,
   replaceExtensionHostHttpRoute,
-} from "../extension-host/runtime-registry.js";
+} from "../extension-host/contributions/runtime-registry.js";
+import { requireActiveExtensionHostRegistry } from "../extension-host/static/active-registry.js";
 import { normalizePluginHttpPath } from "./http-path.js";
 import { findOverlappingPluginHttpRoute } from "./http-route-overlap.js";
 import type { PluginHttpRouteRegistration, PluginRegistry } from "./registry.js";

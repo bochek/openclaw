@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   resolveExtensionEntryCandidates,
   type PackageManifest as PluginPackageManifest,
-} from "../extension-host/schema.js";
+} from "../extension-host/manifests/schema.js";
 import { fileExists, readJsonFile, resolveArchiveKind } from "../infra/archive.js";
 import { writeFileFromPathWithinRoot } from "../infra/fs-safe.js";
 import { resolveExistingInstallPath, withExtractedArchiveRoot } from "../infra/install-flow.js";
@@ -36,11 +36,7 @@ import { extensionUsesSkippedScannerPath, isPathInside } from "../security/scan-
 import * as skillScanner from "../security/skill-scanner.js";
 import { CONFIG_DIR, resolveUserPath } from "../utils.js";
 import { detectBundleManifestFormat, loadBundleManifest } from "./bundle-manifest.js";
-import {
-  loadPluginManifest,
-  resolvePackageExtensionEntries,
-  type PackageManifest as PluginPackageManifest,
-} from "./manifest.js";
+import { loadPluginManifest } from "./manifest.js";
 
 type PluginInstallLogger = {
   info?: (message: string) => void;

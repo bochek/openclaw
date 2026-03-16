@@ -1,8 +1,5 @@
 import type { OpenClawConfig } from "../config/config.js";
-import {
-  startExtensionHostServices,
-  type ExtensionHostServicesHandle,
-} from "../extension-host/service-lifecycle.js";
+import type { ExtensionHostServicesHandle } from "../extension-host/contributions/service-lifecycle.js";
 import type { PluginRegistry } from "./registry.js";
 export type PluginServicesHandle = ExtensionHostServicesHandle;
 

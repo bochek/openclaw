@@ -4,7 +4,7 @@ import {
   mergeExtensionHostConfigPatch,
   pickExtensionHostAuthMethod,
   resolveExtensionHostProviderMatch,
-} from "../extension-host/provider-auth.js";
+} from "../extension-host/contributions/provider-auth.js";
 import type { ProviderAuthMethod, ProviderPlugin } from "../plugins/types.js";
 
 export function resolveProviderMatch(

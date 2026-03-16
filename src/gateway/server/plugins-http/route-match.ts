@@ -1,4 +1,4 @@
-import { listExtensionHostHttpRoutes } from "../../../extension-host/runtime-registry.js";
+import { listExtensionHostHttpRoutes } from "../../../extension-host/contributions/runtime-registry.js";
 import type { PluginRegistry } from "../../../plugins/registry.js";
 import { canonicalizePathVariant } from "../../security-path.js";
 import {

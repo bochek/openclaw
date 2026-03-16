@@ -20,7 +20,7 @@ const runExtensionHostProviderModelSelectedHook = vi.hoisted(() => vi.fn(async (
 vi.mock("../plugins/provider-wizard.js", () => ({
   resolveProviderPluginChoice,
 }));
-vi.mock("../extension-host/provider-model-selection.js", () => ({
+vi.mock("../extension-host/contributions/provider-model-selection.js", () => ({
   runExtensionHostProviderModelSelectedHook,
 }));
 

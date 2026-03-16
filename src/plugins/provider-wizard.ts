@@ -1,11 +1,11 @@
 import type { OpenClawConfig } from "../config/config.js";
-import { runExtensionHostProviderModelSelectedHook } from "../extension-host/provider-model-selection.js";
+import { runExtensionHostProviderModelSelectedHook } from "../extension-host/contributions/provider-model-selection.js";
 import {
   buildExtensionHostProviderMethodChoice,
   resolveExtensionHostProviderChoice,
   resolveExtensionHostProviderModelPickerEntries,
   resolveExtensionHostProviderWizardOptions,
-} from "../extension-host/provider-wizard.js";
+} from "../extension-host/contributions/provider-wizard.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import { resolvePluginProviders } from "./providers.js";
 import type { ProviderAuthMethod, ProviderPlugin } from "./types.js";

@@ -13,7 +13,7 @@ import {
   loadResolvedExtensionRegistry,
   resolvedExtensionRegistryFromPluginManifestRegistry,
   type ResolvedExtensionRegistry,
-} from "../extension-host/resolved-registry.js";
+} from "../extension-host/manifests/resolved-registry.js";
 import { type PluginManifestRegistry } from "../plugins/manifest-registry.js";
 import { isRecord } from "../utils.js";
 import type { OpenClawConfig } from "./config.js";

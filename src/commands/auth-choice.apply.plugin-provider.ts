@@ -3,7 +3,7 @@ import {
   applyExtensionHostPluginProvider,
   runExtensionHostProviderAuthMethod,
   type ExtensionHostPluginProviderAuthChoiceOptions,
-} from "../extension-host/provider-auth-flow.js";
+} from "../extension-host/contributions/provider-auth-flow.js";
 import type { ApplyAuthChoiceParams, ApplyAuthChoiceResult } from "./auth-choice.apply.js";
 
 export type PluginProviderAuthChoiceOptions = ExtensionHostPluginProviderAuthChoiceOptions;

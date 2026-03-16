@@ -1,10 +1,6 @@
 import type { OpenClawConfig } from "../config/config.js";
 import type { ModelProviderConfig } from "../config/types.js";
-import {
-  groupExtensionHostDiscoveryProvidersByOrder,
-  normalizeExtensionHostDiscoveryResult,
-  resolveExtensionHostDiscoveryProviders,
-} from "../extension-host/provider-discovery.js";
+import { normalizeExtensionHostDiscoveryResult } from "../extension-host/contributions/provider-discovery.js";
 import { resolvePluginProviders } from "./providers.js";
 import type { ProviderDiscoveryOrder, ProviderPlugin } from "./types.js";
 

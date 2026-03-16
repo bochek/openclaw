@@ -4,7 +4,7 @@ import {
   getExtensionPackageMetadata,
   type OpenClawPackageManifest,
   type PackageManifest,
-} from "../../extension-host/schema.js";
+} from "../../extension-host/manifests/schema.js";
 import { discoverOpenClawPlugins } from "../../plugins/discovery.js";
 import type { PluginOrigin } from "../../plugins/types.js";
 import { isRecord, resolveConfigDir, resolveUserPath } from "../../utils.js";

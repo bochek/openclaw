@@ -1,4 +1,4 @@
-import { resolveExtensionHostProviders } from "../extension-host/provider-runtime.js";
+import { resolveExtensionHostProviders } from "../extension-host/contributions/provider-runtime.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { loadOpenClawPlugins, type PluginLoadOptions } from "./loader.js";
 import { createPluginLoaderLogger } from "./logger.js";
