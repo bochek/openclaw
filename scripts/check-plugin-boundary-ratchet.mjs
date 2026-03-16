@@ -70,7 +70,10 @@ export function classifyPluginBoundaryImport(specifier, filePath, options = {}) 
     return null;
   }
 
-  if (normalizedSpecifier.includes("plugin-sdk-internal")) {
+  if (
+    normalizedSpecifier === "openclaw/plugin-sdk-internal" ||
+    normalizedSpecifier.startsWith("openclaw/plugin-sdk-internal/")
+  ) {
     return {
       kind: "plugin-sdk-internal",
       reason: "imports non-public plugin-sdk-internal surface",
@@ -314,13 +317,16 @@ export async function collectCurrentViolations(options = {}) {
 
   const deduped = [...new Map(violations.map((entry) => [toBaselineKey(entry), entry])).values()];
 
-  return deduped.toSorted((left, right) => {
-    const pathCompare = left.path.localeCompare(right.path);
-    if (pathCompare !== 0) {
-      return pathCompare;
-    }
-    return left.specifier.localeCompare(right.specifier);
-  });
+  return {
+    files,
+    violations: deduped.toSorted((left, right) => {
+      const pathCompare = left.path.localeCompare(right.path);
+      if (pathCompare !== 0) {
+        return pathCompare;
+      }
+      return left.specifier.localeCompare(right.specifier);
+    }),
+  };
 }
 
 function printViolations(header, violations) {
@@ -337,8 +343,7 @@ function printViolations(header, violations) {
 }
 
 async function main() {
-  const files = await collectBundledPluginSourceFiles(repoRoot);
-  const currentViolations = await collectCurrentViolations({ repoRoot });
+  const { files, violations: currentViolations } = await collectCurrentViolations({ repoRoot });
   const baseline = await loadViolationBaseline();
   const { newViolations, resolvedViolations } = compareViolationBaseline(
     currentViolations,
@@ -353,7 +358,7 @@ async function main() {
     if (resolvedViolations.length > 0) {
       console.error("");
       console.error(
-        `Note: ${resolvedViolations.length} baseline violation(s) were removed; delete them from ${path.relative(repoRoot, baselinePath)} after this change lands.`,
+        `Note: ${resolvedViolations.length} baseline violation(s) are already resolved. While fixing the above, also remove them from ${path.relative(repoRoot, baselinePath)}.`,
       );
     }
     console.error("");

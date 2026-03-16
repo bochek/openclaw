@@ -36,6 +36,12 @@ describe("check-plugin-boundary-ratchet", () => {
     });
   });
 
+  it("does not reject same-plugin files that merely contain plugin-sdk-internal in the filename", () => {
+    expect(
+      classifyPluginBoundaryImport("./plugin-sdk-internal-fixture.js", extensionFile, { repoRoot }),
+    ).toBeNull();
+  });
+
   it("rejects direct core src imports", () => {
     expect(
       classifyPluginBoundaryImport(
@@ -87,7 +93,7 @@ describe("check-plugin-boundary-ratchet", () => {
         line: 3,
         preferredReplacement:
           "Use openclaw/plugin-sdk/* or openclaw/plugin-sdk/compat temporarily.",
-        reason: "imports non-public plugin-sdk-internal surface",
+        reason: "reaches into non-public plugin-sdk-internal implementation",
         specifier: "../../../src/plugin-sdk-internal/discord.js",
       },
       {
@@ -125,7 +131,7 @@ describe("check-plugin-boundary-ratchet", () => {
         line: 3,
         preferredReplacement:
           "Use openclaw/plugin-sdk/* or openclaw/plugin-sdk/compat temporarily.",
-        reason: "imports non-public plugin-sdk-internal surface",
+        reason: "reaches into non-public plugin-sdk-internal implementation",
         specifier: "../../../src/plugin-sdk-internal/discord.js",
       },
       {
