@@ -25,18 +25,21 @@ function createOwnerStore() {
     port: number;
     pid: number;
     claimedAt: string;
+    phase: "active" | "cleaning";
+    cleanupStartedAt?: string;
   } = null;
-  let nextId = 0;
+  let nextPid = process.pid - 1;
 
   return {
     async claim(mode: "serve" | "funnel", port: number) {
       const previousOwner = currentOwner;
       const owner = {
-        token: `owner-${++nextId}`,
+        token: `owner-${++nextPid}`,
         mode,
         port,
-        pid: nextId,
+        pid: nextPid,
         claimedAt: new Date(0).toISOString(),
+        phase: "active" as const,
       };
       currentOwner = owner;
       return { owner, previousOwner };
@@ -52,6 +55,11 @@ function createOwnerStore() {
       if (currentOwner?.token !== token) {
         return false;
       }
+      currentOwner = {
+        ...currentOwner,
+        phase: "cleaning",
+        cleanupStartedAt: new Date(0).toISOString(),
+      };
       await cleanup();
       currentOwner = null;
       return true;
@@ -166,7 +174,7 @@ describe.each(modeCases)(
       });
 
       vi.spyOn(process, "kill").mockImplementation(((pid: number) => {
-        if (pid === 1) {
+        if (pid === process.pid) {
           const err = new Error("gone") as NodeJS.ErrnoException;
           err.code = "ESRCH";
           throw err;
@@ -228,6 +236,40 @@ describe.each(modeCases)(
 
       await cleanup?.();
       expect(disableMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("skips unguarded fallback while a previous cleanup is still in progress", async () => {
+      const logTailscale = {
+        info: vi.fn(),
+        warn: vi.fn(),
+      };
+
+      const cleanup = await startGatewayTailscaleExposure({
+        tailscaleMode: mode,
+        resetOnExit: true,
+        port: 18789,
+        logTailscale,
+        ownerStore: {
+          async claim() {
+            const err = new Error("busy");
+            err.name = "TailscaleExposureCleanupInProgressError";
+            throw err;
+          },
+          async replaceIfCurrent() {
+            return false;
+          },
+          async runCleanupIfCurrentOwner() {
+            return false;
+          },
+        },
+      });
+
+      expect(cleanup).toBeNull();
+      expect(enableMock).not.toHaveBeenCalled();
+      expect(disableMock).not.toHaveBeenCalled();
+      expect(logTailscale.warn).toHaveBeenCalledWith(
+        `${mode} ownership cleanup still in progress; skipping external exposure`,
+      );
     });
   },
 );

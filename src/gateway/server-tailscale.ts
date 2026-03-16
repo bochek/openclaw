@@ -18,6 +18,8 @@ type TailscaleExposureOwnerRecord = {
   port: number;
   pid: number;
   claimedAt: string;
+  phase: "active" | "cleaning";
+  cleanupStartedAt?: string;
 };
 
 type TailscaleExposureOwnerStore = {
@@ -41,11 +43,22 @@ function isPidAlive(pid: number): boolean {
   }
 }
 
+function createCleanupInProgressError(pid: number): Error {
+  const err = new Error(`previous cleanup still in progress (pid ${pid})`);
+  err.name = "TailscaleExposureCleanupInProgressError";
+  return err;
+}
+
+function isCleanupInProgressError(err: unknown): err is Error {
+  return err instanceof Error && err.name === "TailscaleExposureCleanupInProgressError";
+}
+
 function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
   const ownerFilePath = path.join(resolveGatewayLockDir(), "tailscale-exposure-owner.json");
   const ownerLockPath = path.join(resolveGatewayLockDir(), "tailscale-exposure-owner.lock");
   const lockRetryMs = 25;
   const lockStaleMs = 60_000;
+  const cleanupClaimWaitMs = 20_000;
 
   async function readOwner(): Promise<TailscaleExposureOwnerRecord | null> {
     try {
@@ -60,7 +73,12 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
         typeof parsed.pid === "number" &&
         typeof parsed.claimedAt === "string"
       ) {
-        return parsed as TailscaleExposureOwnerRecord;
+        return {
+          ...(parsed as Omit<TailscaleExposureOwnerRecord, "phase">),
+          phase: parsed.phase === "cleaning" ? "cleaning" : "active",
+          cleanupStartedAt:
+            typeof parsed.cleanupStartedAt === "string" ? parsed.cleanupStartedAt : undefined,
+        };
       }
     } catch {
       // ENOENT means the file does not exist yet. Any other parse/read error is
@@ -89,10 +107,8 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
         // Unreadable lock state is treated as stale so a dead holder cannot block recovery.
       }
       await fs.unlink(ownerLockPath).catch(() => {});
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException | undefined)?.code !== "ENOENT") {
-        // Ignore malformed or unreadable lock state and retry.
-      }
+    } catch {
+      // Ignore malformed or unreadable lock state and retry.
     }
   }
 
@@ -131,18 +147,42 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
 
   return {
     async claim(mode, port) {
-      return await withOwnerLock(async () => {
-        const previousOwner = await readOwner();
-        const owner: TailscaleExposureOwnerRecord = {
-          token: randomUUID(),
-          mode,
-          port,
-          pid: process.pid,
-          claimedAt: new Date().toISOString(),
-        };
-        await fs.writeFile(ownerFilePath, JSON.stringify(owner), "utf8");
-        return { owner, previousOwner };
-      });
+      while (true) {
+        const result = await withOwnerLock(async () => {
+          const previousOwner = await readOwner();
+          if (previousOwner?.phase === "cleaning" && isPidAlive(previousOwner.pid)) {
+            const cleanupStartedAtMs = Date.parse(
+              previousOwner.cleanupStartedAt ?? previousOwner.claimedAt,
+            );
+            const cleanupAgeMs = Number.isFinite(cleanupStartedAtMs)
+              ? Date.now() - cleanupStartedAtMs
+              : Number.POSITIVE_INFINITY;
+            if (cleanupAgeMs < cleanupClaimWaitMs) {
+              return { type: "wait" as const };
+            }
+            return { type: "blocked" as const, previousOwner };
+          }
+
+          const owner: TailscaleExposureOwnerRecord = {
+            token: randomUUID(),
+            mode,
+            port,
+            pid: process.pid,
+            claimedAt: new Date().toISOString(),
+            phase: "active",
+          };
+          await fs.writeFile(ownerFilePath, JSON.stringify(owner), "utf8");
+          return { type: "claimed" as const, owner, previousOwner };
+        });
+
+        if (result.type === "claimed") {
+          return result;
+        }
+        if (result.type === "blocked") {
+          throw createCleanupInProgressError(result.previousOwner.pid);
+        }
+        await sleep(lockRetryMs);
+      }
     },
     async replaceIfCurrent(token, nextOwner) {
       return await withOwnerLock(async () => {
@@ -159,18 +199,53 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
       });
     },
     async runCleanupIfCurrentOwner(token, cleanup) {
-      const shouldRunCleanup = await withOwnerLock(async () => {
+      const cleanupOwner = await withOwnerLock(async () => {
         const current = await readOwner();
         if (current?.token !== token) {
-          return false;
+          return null;
         }
-        await deleteOwnerFile();
-        return true;
+        // Mark cleanup in progress before releasing the lock so overlapping
+        // startups cannot claim exposure until this reset finishes or fails.
+        const nextOwner: TailscaleExposureOwnerRecord = {
+          ...current,
+          phase: "cleaning",
+          cleanupStartedAt: new Date().toISOString(),
+        };
+        await fs.writeFile(ownerFilePath, JSON.stringify(nextOwner), "utf8");
+        return nextOwner;
       });
-      if (!shouldRunCleanup) {
+      if (!cleanupOwner) {
         return false;
       }
-      await cleanup();
+
+      try {
+        await cleanup();
+      } catch (err) {
+        await withOwnerLock(async () => {
+          const current = await readOwner();
+          if (current?.token !== token || current.phase !== "cleaning") {
+            return;
+          }
+          await fs.writeFile(
+            ownerFilePath,
+            JSON.stringify({
+              ...cleanupOwner,
+              phase: "active",
+              cleanupStartedAt: undefined,
+            }),
+            "utf8",
+          );
+        }).catch(() => {});
+        throw err;
+      }
+
+      await withOwnerLock(async () => {
+        const current = await readOwner();
+        if (current?.token !== token || current.phase !== "cleaning") {
+          return;
+        }
+        await deleteOwnerFile();
+      });
       return true;
     },
   };
@@ -195,6 +270,12 @@ export async function startGatewayTailscaleExposure(params: {
   try {
     ({ owner, previousOwner } = await ownerStore.claim(params.tailscaleMode, params.port));
   } catch (err) {
+    if (isCleanupInProgressError(err)) {
+      params.logTailscale.warn(
+        `${params.tailscaleMode} ownership cleanup still in progress; skipping external exposure`,
+      );
+      return null;
+    }
     params.logTailscale.warn(
       `${params.tailscaleMode} ownership guard unavailable: ${err instanceof Error ? err.message : String(err)}`,
     );
