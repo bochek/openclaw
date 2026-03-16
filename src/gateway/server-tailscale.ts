@@ -59,6 +59,7 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
   const lockRetryMs = 25;
   const lockStaleMs = 60_000;
   const cleanupClaimWaitMs = 20_000;
+  let ensureLockDirReady: Promise<void> | null = null;
 
   async function readOwner(): Promise<TailscaleExposureOwnerRecord | null> {
     try {
@@ -91,6 +92,18 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
     await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  function ensureLockDir() {
+    if (!ensureLockDirReady) {
+      ensureLockDirReady = fs
+        .mkdir(path.dirname(ownerLockPath), { recursive: true })
+        .catch((err: unknown) => {
+          ensureLockDirReady = null;
+          throw err;
+        });
+    }
+    return ensureLockDirReady;
+  }
+
   async function breakStaleLock() {
     try {
       const stat = await fs.stat(ownerLockPath);
@@ -113,7 +126,7 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
   }
 
   async function withOwnerLock<T>(fn: () => Promise<T>): Promise<T> {
-    await fs.mkdir(path.dirname(ownerLockPath), { recursive: true });
+    await ensureLockDir();
 
     while (true) {
       try {
@@ -245,6 +258,9 @@ function createTailscaleExposureOwnerStore(): TailscaleExposureOwnerStore {
           return;
         }
         await deleteOwnerFile();
+      }).catch(() => {
+        // Tailscale cleanup already succeeded. If owner-file deletion fails, leave
+        // the stale cleaning record for best-effort recovery after this process exits.
       });
       return true;
     },
