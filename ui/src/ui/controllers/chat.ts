@@ -38,6 +38,7 @@ export type ChatState = {
   chatLoading: boolean;
   chatMessages: unknown[];
   chatThinkingLevel: string | null;
+  chatHistoryTruncated?: boolean;
   chatSending: boolean;
   chatMessage: string;
   chatAttachments: ChatAttachment[];
@@ -88,8 +89,10 @@ export async function loadChatHistory(state: ChatState) {
     state.chatStream = null;
     state.chatStreamStartedAt = null;
     state.chatMessages = filtered;
+    state.chatHistoryTruncated = filtered.length >= CHAT_HISTORY_REQUEST_LIMIT;
   } catch (err) {
     state.lastError = String(err);
+    state.chatHistoryTruncated = false;
   } finally {
     state.chatLoading = false;
   }
