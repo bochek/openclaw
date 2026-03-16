@@ -2,6 +2,7 @@ export {
   buildBytePlusCodingProvider,
   buildBytePlusProvider,
 } from "../../extensions/byteplus/provider-catalog.js";
+export { buildDeepSeekProvider } from "../../extensions/deepseek/provider-catalog.js";
 export { buildKimiCodingProvider } from "../../extensions/kimi-coding/provider-catalog.js";
 export { buildKilocodeProvider } from "../../extensions/kilocode/provider-catalog.js";
 export {
