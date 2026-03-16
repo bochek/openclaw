@@ -89,7 +89,7 @@ export async function loadChatHistory(state: ChatState) {
     state.chatStream = null;
     state.chatStreamStartedAt = null;
     state.chatMessages = filtered;
-    state.chatHistoryTruncated = filtered.length >= CHAT_HISTORY_REQUEST_LIMIT;
+    state.chatHistoryTruncated = messages.length >= CHAT_HISTORY_REQUEST_LIMIT;
   } catch (err) {
     state.lastError = String(err);
     state.chatHistoryTruncated = false;
