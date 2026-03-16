@@ -443,6 +443,9 @@ jobs:
 
   secrets:
     runs-on: blacksmith-16vcpu-ubuntu-2404
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout
         uses: actions/checkout@v6
