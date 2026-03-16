@@ -1,11 +1,25 @@
 import { describe, expect, it } from "vitest";
 import "../styles.css";
+import { inferBasePathFromPathname } from "./navigation.ts";
 import { mountApp as mountTestApp, registerAppMountHooks } from "./test-helpers/app-mount.ts";
 
 registerAppMountHooks();
 
 function mountApp(pathname: string) {
   return mountTestApp(pathname);
+}
+
+function normalizeScopedUrl(url: string): string {
+  const parsed = new URL(url);
+  const pathname =
+    parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "") || parsed.pathname;
+  return `${parsed.protocol}//${parsed.host}${pathname}`;
+}
+
+function currentSettingsKey() {
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  const basePath = inferBasePathFromPathname(window.location.pathname);
+  return `openclaw.control.settings.v1:${normalizeScopedUrl(`${proto}//${window.location.host}${basePath}`)}`;
 }
 
 function nextFrame() {
@@ -320,9 +334,7 @@ describe("control UI routing", () => {
     await app.updateComplete;
 
     expect(app.settings.token).toBe("");
-    expect(JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}").token).toBe(
-      undefined,
-    );
+    expect(JSON.parse(localStorage.getItem(currentSettingsKey()) ?? "{}").token).toBe(undefined);
     expect(window.location.pathname).toBe("/ui/overview");
     expect(window.location.search).toBe("");
   });
@@ -345,12 +357,10 @@ describe("control UI routing", () => {
     await app.updateComplete;
 
     expect(app.settings.token).toBe("abc123");
-    expect(JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}")).toMatchObject({
+    expect(JSON.parse(localStorage.getItem(currentSettingsKey()) ?? "{}")).toMatchObject({
       gatewayUrl: "wss://gateway.example/openclaw",
     });
-    expect(JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}").token).toBe(
-      undefined,
-    );
+    expect(JSON.parse(localStorage.getItem(currentSettingsKey()) ?? "{}").token).toBe(undefined);
     expect(window.location.pathname).toBe("/ui/overview");
     expect(window.location.hash).toBe("");
   });
@@ -360,9 +370,7 @@ describe("control UI routing", () => {
     await app.updateComplete;
 
     expect(app.settings.token).toBe("abc123");
-    expect(JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}").token).toBe(
-      undefined,
-    );
+    expect(JSON.parse(localStorage.getItem(currentSettingsKey()) ?? "{}").token).toBe(undefined);
     expect(window.location.pathname).toBe("/ui/overview");
     expect(window.location.hash).toBe("");
   });
@@ -414,8 +422,6 @@ describe("control UI routing", () => {
     await refreshed.updateComplete;
 
     expect(refreshed.settings.token).toBe("abc123");
-    expect(JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}").token).toBe(
-      undefined,
-    );
+    expect(JSON.parse(localStorage.getItem(currentSettingsKey()) ?? "{}").token).toBe(undefined);
   });
 });

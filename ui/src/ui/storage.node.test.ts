@@ -62,6 +62,18 @@ function expectedGatewayUrl(basePath: string): string {
   return `${proto}://${location.host}${basePath}`;
 }
 
+function normalizeScopedUrl(url: string): string {
+  const parsed = new URL(url);
+  const pathname =
+    parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "") || parsed.pathname;
+  return `${parsed.protocol}//${parsed.host}${pathname}`;
+}
+
+function expectedSettingsStorageKey(basePath: string): string {
+  const normalizedBasePath = basePath === "/" ? "" : basePath;
+  return `openclaw.control.settings.v1:${normalizeScopedUrl(expectedGatewayUrl(normalizedBasePath))}`;
+}
+
 describe("loadSettings default gateway URL derivation", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -124,7 +136,7 @@ describe("loadSettings default gateway URL derivation", () => {
       token: "",
       sessionKey: "agent",
     });
-    expect(JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}")).toEqual({
+    expect(JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/")) ?? "{}")).toEqual({
       gatewayUrl: "wss://gateway.example:8443/openclaw",
       theme: "claw",
       themeMode: "system",
@@ -182,23 +194,12 @@ describe("loadSettings default gateway URL derivation", () => {
       pathname: "/",
     });
 
-    const { loadSettings, saveSettings } = await import("./storage.ts");
-    saveSettings({
-      gatewayUrl: "wss://gateway.example:8443/openclaw",
-      token: "gateway-a-token",
-      sessionKey: "main",
-      lastActiveSessionKey: "main",
-      theme: "claw",
-      themeMode: "system",
-      chatFocusMode: false,
-      chatShowThinking: true,
-      chatShowToolCalls: true,
-      splitRatio: 0.6,
-      navCollapsed: false,
-      navWidth: 220,
-      navGroupsCollapsed: {},
-    });
+    sessionStorage.setItem(
+      "openclaw.control.token.v1:wss://gateway.example:8443/openclaw",
+      "gateway-a-token",
+    );
 
+    const { loadSettings } = await import("./storage.ts");
     localStorage.setItem(
       "openclaw.control.settings.v1",
       JSON.stringify({
@@ -221,6 +222,17 @@ describe("loadSettings default gateway URL derivation", () => {
       gatewayUrl: "wss://other-gateway.example:8443/openclaw",
       token: "",
     });
+    expect(JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/")) ?? "{}")).toMatchObject(
+      {
+        gatewayUrl: "wss://other-gateway.example:8443/openclaw",
+        sessionsByGateway: {
+          "wss://other-gateway.example:8443/openclaw": {
+            sessionKey: "main",
+            lastActiveSessionKey: "main",
+          },
+        },
+      },
+    );
   });
 
   it("does not persist gateway tokens when saving settings", async () => {
@@ -251,7 +263,7 @@ describe("loadSettings default gateway URL derivation", () => {
       token: "memory-only-token",
     });
 
-    expect(JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}")).toEqual({
+    expect(JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/")) ?? "{}")).toEqual({
       gatewayUrl: "wss://gateway.example:8443/openclaw",
       theme: "claw",
       themeMode: "system",
@@ -270,6 +282,51 @@ describe("loadSettings default gateway URL derivation", () => {
       },
     });
     expect(sessionStorage.length).toBe(1);
+  });
+
+  it("migrates tokenless legacy settings on first load", async () => {
+    setTestLocation({
+      protocol: "https:",
+      host: "gateway.example:8443",
+      pathname: "/gateway-a/chat",
+    });
+
+    localStorage.setItem(
+      "openclaw.control.settings.v1",
+      JSON.stringify({
+        gatewayUrl: "wss://custom-gateway.example:8443/openclaw",
+        sessionKey: "agent",
+        lastActiveSessionKey: "agent",
+        theme: "claw",
+        themeMode: "system",
+        chatFocusMode: false,
+        chatShowThinking: true,
+        chatShowToolCalls: true,
+        splitRatio: 0.6,
+        navCollapsed: false,
+        navWidth: 220,
+        navGroupsCollapsed: {},
+      }),
+    );
+
+    const { loadSettings } = await import("./storage.ts");
+
+    expect(loadSettings()).toMatchObject({
+      gatewayUrl: "wss://custom-gateway.example:8443/openclaw",
+      sessionKey: "agent",
+      lastActiveSessionKey: "agent",
+    });
+    expect(
+      JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/gateway-a")) ?? "{}"),
+    ).toMatchObject({
+      gatewayUrl: "wss://custom-gateway.example:8443/openclaw",
+      sessionsByGateway: {
+        "wss://custom-gateway.example:8443/openclaw": {
+          sessionKey: "agent",
+          lastActiveSessionKey: "agent",
+        },
+      },
+    });
   });
 
   it("clears the current-tab token when saving an empty token", async () => {
@@ -339,11 +396,13 @@ describe("loadSettings default gateway URL derivation", () => {
       navGroupsCollapsed: {},
     });
 
-    expect(JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}")).toMatchObject({
-      theme: "dash",
-      themeMode: "light",
-      navWidth: 320,
-    });
+    expect(JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/")) ?? "{}")).toMatchObject(
+      {
+        theme: "dash",
+        themeMode: "light",
+        navWidth: 320,
+      },
+    );
   });
 
   it("scopes persisted session selection per gateway", async () => {
@@ -388,9 +447,9 @@ describe("loadSettings default gateway URL derivation", () => {
     });
 
     localStorage.setItem(
-      "openclaw.control.settings.v1",
+      expectedSettingsStorageKey("/"),
       JSON.stringify({
-        ...JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}"),
+        ...JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/")) ?? "{}"),
         gatewayUrl: "wss://gateway-a.example:8443/openclaw",
       }),
     );
@@ -402,9 +461,9 @@ describe("loadSettings default gateway URL derivation", () => {
     });
 
     localStorage.setItem(
-      "openclaw.control.settings.v1",
+      expectedSettingsStorageKey("/"),
       JSON.stringify({
-        ...JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}"),
+        ...JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/")) ?? "{}"),
         gatewayUrl: "wss://gateway-b.example:8443/openclaw",
       }),
     );
@@ -443,12 +502,129 @@ describe("loadSettings default gateway URL derivation", () => {
       });
     }
 
-    const persisted = JSON.parse(localStorage.getItem("openclaw.control.settings.v1") ?? "{}");
+    const persisted = JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/")) ?? "{}");
     const scopes = Object.keys(persisted.sessionsByGateway ?? {});
 
     expect(scopes).toHaveLength(10);
     expect(scopes).not.toContain("wss://gateway-0.example:8443/openclaw");
     expect(scopes).not.toContain("wss://gateway-1.example:8443/openclaw");
     expect(scopes).toContain("wss://gateway-11.example:8443/openclaw");
+  });
+
+  it("scopes page settings separately even when gatewayUrl matches", async () => {
+    setTestLocation({
+      protocol: "https:",
+      host: "gateway.example:8443",
+      pathname: "/gateway-a/chat",
+    });
+
+    const { loadSettings, saveSettings } = await import("./storage.ts");
+
+    saveSettings({
+      gatewayUrl: "wss://shared-gateway.example:8443/openclaw",
+      token: "",
+      sessionKey: "main",
+      lastActiveSessionKey: "main",
+      theme: "dash",
+      themeMode: "light",
+      chatFocusMode: false,
+      chatShowThinking: true,
+      chatShowToolCalls: true,
+      splitRatio: 0.55,
+      navCollapsed: false,
+      navWidth: 240,
+      navGroupsCollapsed: {},
+    });
+
+    setTestLocation({
+      protocol: "https:",
+      host: "gateway.example:8443",
+      pathname: "/gateway-b/chat",
+    });
+
+    saveSettings({
+      gatewayUrl: "wss://shared-gateway.example:8443/openclaw",
+      token: "",
+      sessionKey: "main",
+      lastActiveSessionKey: "main",
+      theme: "claw",
+      themeMode: "system",
+      chatFocusMode: false,
+      chatShowThinking: true,
+      chatShowToolCalls: true,
+      splitRatio: 0.6,
+      navCollapsed: true,
+      navWidth: 220,
+      navGroupsCollapsed: {},
+    });
+
+    expect(
+      JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/gateway-a")) ?? "{}"),
+    ).toMatchObject({
+      theme: "dash",
+      themeMode: "light",
+      splitRatio: 0.55,
+    });
+    expect(
+      JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/gateway-b")) ?? "{}"),
+    ).toMatchObject({
+      theme: "claw",
+      themeMode: "system",
+      navCollapsed: true,
+    });
+
+    setTestLocation({
+      protocol: "https:",
+      host: "gateway.example:8443",
+      pathname: "/gateway-a/chat",
+    });
+    expect(loadSettings()).toMatchObject({
+      gatewayUrl: "wss://shared-gateway.example:8443/openclaw",
+      theme: "dash",
+      themeMode: "light",
+      splitRatio: 0.55,
+    });
+  });
+
+  it("keeps a custom gatewayUrl across reloads on the same page scope", async () => {
+    setTestLocation({
+      protocol: "https:",
+      host: "gateway.example:8443",
+      pathname: "/gateway-a/chat",
+    });
+
+    const { loadSettings, saveSettings } = await import("./storage.ts");
+    saveSettings({
+      gatewayUrl: "wss://custom-gateway.example:8443/openclaw",
+      token: "",
+      sessionKey: "agent:custom:main",
+      lastActiveSessionKey: "agent:custom:main",
+      theme: "claw",
+      themeMode: "system",
+      chatFocusMode: false,
+      chatShowThinking: true,
+      chatShowToolCalls: true,
+      splitRatio: 0.6,
+      navCollapsed: false,
+      navWidth: 220,
+      navGroupsCollapsed: {},
+    });
+
+    expect(loadSettings()).toMatchObject({
+      gatewayUrl: "wss://custom-gateway.example:8443/openclaw",
+      sessionKey: "agent:custom:main",
+      lastActiveSessionKey: "agent:custom:main",
+    });
+    expect(
+      JSON.parse(localStorage.getItem(expectedSettingsStorageKey("/gateway-a")) ?? "{}"),
+    ).toMatchObject({
+      gatewayUrl: "wss://custom-gateway.example:8443/openclaw",
+      sessionsByGateway: {
+        "wss://custom-gateway.example:8443/openclaw": {
+          sessionKey: "agent:custom:main",
+          lastActiveSessionKey: "agent:custom:main",
+        },
+      },
+    });
   });
 });
