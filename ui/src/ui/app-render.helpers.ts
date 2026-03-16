@@ -518,11 +518,44 @@ function resolveActiveSessionRow(state: AppViewState) {
   return state.sessionsResult?.sessions?.find((row) => row.key === state.sessionKey);
 }
 
+function buildQualifiedModelValue(model: string, provider?: string | null): string {
+  const trimmedModel = model.trim();
+  if (!trimmedModel) {
+    return "";
+  }
+  const trimmedProvider = provider?.trim();
+  return trimmedProvider ? `${trimmedProvider}/${trimmedModel}` : trimmedModel;
+}
+
+function normalizeModelOptionValue(rawValue: string, catalog: ModelCatalogEntry[]): string {
+  const trimmed = rawValue.trim();
+  if (!trimmed || trimmed.includes("/")) {
+    return trimmed;
+  }
+
+  let matchedValue = "";
+  for (const entry of catalog) {
+    if (entry.id.trim().toLowerCase() !== trimmed.toLowerCase()) {
+      continue;
+    }
+    const candidate = buildQualifiedModelValue(entry.id, entry.provider);
+    if (!matchedValue) {
+      matchedValue = candidate;
+      continue;
+    }
+    if (matchedValue.toLowerCase() !== candidate.toLowerCase()) {
+      return trimmed;
+    }
+  }
+
+  return matchedValue || trimmed;
+}
+
 function resolveModelOverrideValue(state: AppViewState): string {
   // Prefer the local cache — it reflects in-flight patches before sessionsResult refreshes.
   const cached = state.chatModelOverrides[state.sessionKey];
   if (typeof cached === "string") {
-    return cached.trim();
+    return normalizeModelOptionValue(cached, state.chatModelCatalog ?? []);
   }
   // cached === null means explicitly cleared to default.
   if (cached === null) {
@@ -532,9 +565,7 @@ function resolveModelOverrideValue(state: AppViewState): string {
   // Include provider prefix so the value matches option keys (provider/model).
   const activeRow = resolveActiveSessionRow(state);
   if (activeRow && typeof activeRow.model === "string" && activeRow.model.trim()) {
-    const provider = activeRow.modelProvider?.trim();
-    const model = activeRow.model.trim();
-    return provider ? `${provider}/${model}` : model;
+    return buildQualifiedModelValue(activeRow.model, activeRow.modelProvider);
   }
   return "";
 }
@@ -545,8 +576,7 @@ function resolveDefaultModelValue(state: AppViewState): string {
   if (typeof model !== "string" || !model.trim()) {
     return "";
   }
-  const provider = defaults?.modelProvider?.trim();
-  return provider ? `${provider}/${model.trim()}` : model.trim();
+  return buildQualifiedModelValue(model, defaults?.modelProvider);
 }
 
 function buildChatModelOptions(
@@ -571,7 +601,7 @@ function buildChatModelOptions(
 
   for (const entry of catalog) {
     const provider = entry.provider?.trim();
-    const value = provider ? `${provider}/${entry.id}` : entry.id;
+    const value = buildQualifiedModelValue(entry.id, provider);
     addOption(value, provider ? `${entry.id} · ${provider}` : entry.id);
   }
 

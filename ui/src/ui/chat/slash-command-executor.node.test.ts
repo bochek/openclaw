@@ -235,7 +235,7 @@ describe("executeSlashCommand directives", () => {
     const request = vi.fn(async (method: string, _payload?: unknown) => {
       if (method === "sessions.list") {
         return {
-          defaults: { model: "default-model" },
+          defaults: { modelProvider: "openai", model: "default-model" },
           sessions: [
             row("agent:main:main", {
               model: "gpt-4.1-mini",
