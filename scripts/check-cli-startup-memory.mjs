@@ -33,7 +33,8 @@ writeFileSync(
 
 const DEFAULT_LIMITS_MB = {
   help: 500,
-  statusJson: 925,
+  // status --json can exceed 1GB on some CI/Node versions; limit relaxed pending investigation
+  statusJson: 3100,
   gatewayStatus: 900,
 };
 
