@@ -15,34 +15,24 @@ read_when:
 
 ## Quick start
 
-1. Set the API key (recommended: store it for the Gateway):
+Set the API key (recommended: store it for the Gateway):
 
 ```bash
-openclaw setup --wizard --auth-choice deepseek-api-key
+openclaw onboard --auth-choice deepseek-api-key
 ```
 
-2. Set a default model:
-
-```json5
-{
-  agents: {
-    defaults: {
-      model: { primary: "deepseek/deepseek-chat" },
-    },
-  },
-}
-```
+This will prompt for your API key and set `deepseek/deepseek-chat` as the default model.
 
 ## Non-interactive example
 
 ```bash
-openclaw setup --wizard --non-interactive \
+openclaw onboard --non-interactive \
   --mode local \
   --auth-choice deepseek-api-key \
-  --deepseek-api-key "$DEEPSEEK_API_KEY"
+  --deepseek-api-key "$DEEPSEEK_API_KEY" \
+  --skip-health \
+  --accept-risk
 ```
-
-This will set `deepseek/deepseek-chat` as the default model.
 
 ## Environment note
 
