@@ -81,6 +81,7 @@ describe("loadEnabledBundleMcpConfig", () => {
       const loadedServer = loaded.config.mcpServers.bundleProbe;
       const loadedArgs = getServerArgs(loadedServer);
       const loadedServerPath = typeof loadedArgs?.[0] === "string" ? loadedArgs[0] : undefined;
+      const resolvedPluginRoot = await fs.realpath(pluginRoot);
 
       expect(loaded.diagnostics).toEqual([]);
       expect(isRecord(loadedServer) ? loadedServer.command : undefined).toBe("node");
@@ -90,6 +91,7 @@ describe("loadEnabledBundleMcpConfig", () => {
         throw new Error("expected bundled MCP args to include the server path");
       }
       expect(await fs.realpath(loadedServerPath)).toBe(resolvedServerPath);
+      expect(loadedServer.cwd).toBe(resolvedPluginRoot);
     } finally {
       env.restore();
     }
