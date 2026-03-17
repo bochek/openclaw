@@ -8,6 +8,7 @@ import { resolveProviderAuths, type ProviderAuth } from "./provider-usage.auth.j
 describe("resolveProviderAuths key normalization", () => {
   let suiteRoot = "";
   let suiteCase = 0;
+  const previousFastEnv = process.env.OPENCLAW_TEST_FAST;
   const EMPTY_PROVIDER_ENV = {
     ZAI_API_KEY: undefined,
     Z_AI_API_KEY: undefined,
@@ -17,11 +18,17 @@ describe("resolveProviderAuths key normalization", () => {
   } satisfies Record<string, string | undefined>;
 
   beforeAll(async () => {
+    process.env.OPENCLAW_TEST_FAST = "1";
     suiteRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-provider-auth-suite-"));
   });
 
   afterAll(async () => {
     await fs.rm(suiteRoot, { recursive: true, force: true });
+    if (previousFastEnv === undefined) {
+      delete process.env.OPENCLAW_TEST_FAST;
+    } else {
+      process.env.OPENCLAW_TEST_FAST = previousFastEnv;
+    }
     suiteRoot = "";
     suiteCase = 0;
   });
