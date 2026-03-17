@@ -13,6 +13,9 @@ type BundleMcpServerLaunchConfig = {
   env?: Record<string, string>;
   cwd?: string;
 };
+type BundleMcpServerLaunchResult =
+  | { ok: true; config: BundleMcpServerLaunchConfig }
+  | { ok: false; reason: string };
 
 type BundleMcpToolRuntime = {
   tools: AnyAgentTool[];
@@ -56,9 +59,18 @@ function toStringArray(value: unknown): string[] | undefined {
   return entries.length > 0 ? entries : [];
 }
 
-function resolveLaunchConfig(raw: unknown): BundleMcpServerLaunchConfig | null {
-  if (!isRecord(raw) || typeof raw.command !== "string" || raw.command.trim().length === 0) {
-    return null;
+function resolveLaunchConfig(raw: unknown): BundleMcpServerLaunchResult {
+  if (!isRecord(raw)) {
+    return { ok: false, reason: "server config must be an object" };
+  }
+  if (typeof raw.command !== "string" || raw.command.trim().length === 0) {
+    if (typeof raw.url === "string" && raw.url.trim().length > 0) {
+      return {
+        ok: false,
+        reason: "only stdio bundle MCP servers are supported right now",
+      };
+    }
+    return { ok: false, reason: "its command is missing" };
   }
   const cwd =
     typeof raw.cwd === "string" && raw.cwd.trim().length > 0
@@ -67,10 +79,13 @@ function resolveLaunchConfig(raw: unknown): BundleMcpServerLaunchConfig | null {
         ? raw.workingDirectory
         : undefined;
   return {
-    command: raw.command,
-    args: toStringArray(raw.args),
-    env: toStringRecord(raw.env),
-    cwd,
+    ok: true,
+    config: {
+      command: raw.command,
+      args: toStringArray(raw.args),
+      env: toStringRecord(raw.env),
+      cwd,
+    },
   };
 }
 
@@ -194,11 +209,12 @@ export async function createBundleMcpToolRuntime(params: {
 
   try {
     for (const [serverName, rawServer] of Object.entries(loaded.config.mcpServers)) {
-      const launchConfig = resolveLaunchConfig(rawServer);
-      if (!launchConfig) {
-        logWarn(`bundle-mcp: skipped server "${serverName}" because its command is missing.`);
+      const launch = resolveLaunchConfig(rawServer);
+      if (!launch.ok) {
+        logWarn(`bundle-mcp: skipped server "${serverName}" because ${launch.reason}.`);
         continue;
       }
+      const launchConfig = launch.config;
 
       const transport = new StdioClientTransport({
         command: launchConfig.command,

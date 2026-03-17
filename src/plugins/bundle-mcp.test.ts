@@ -166,4 +166,67 @@ describe("loadEnabledBundleMcpConfig", () => {
       env.restore();
     }
   });
+
+  it("resolves inline Claude MCP paths from the plugin root and expands CLAUDE_PLUGIN_ROOT", async () => {
+    const env = captureEnv(["HOME", "USERPROFILE", "OPENCLAW_HOME", "OPENCLAW_STATE_DIR"]);
+    try {
+      const homeDir = await createTempDir("openclaw-bundle-inline-placeholder-home-");
+      const workspaceDir = await createTempDir("openclaw-bundle-inline-placeholder-workspace-");
+      process.env.HOME = homeDir;
+      process.env.USERPROFILE = homeDir;
+      delete process.env.OPENCLAW_HOME;
+      delete process.env.OPENCLAW_STATE_DIR;
+
+      const pluginRoot = path.join(homeDir, ".openclaw", "extensions", "inline-claude");
+      await fs.mkdir(path.join(pluginRoot, ".claude-plugin"), { recursive: true });
+      await fs.writeFile(
+        path.join(pluginRoot, ".claude-plugin", "plugin.json"),
+        `${JSON.stringify(
+          {
+            name: "inline-claude",
+            mcpServers: {
+              inlineProbe: {
+                command: "${CLAUDE_PLUGIN_ROOT}/bin/server.sh",
+                args: ["${CLAUDE_PLUGIN_ROOT}/servers/probe.mjs", "./local-probe.mjs"],
+                cwd: "${CLAUDE_PLUGIN_ROOT}",
+                env: {
+                  PLUGIN_ROOT: "${CLAUDE_PLUGIN_ROOT}",
+                },
+              },
+            },
+          },
+          null,
+          2,
+        )}\n`,
+        "utf-8",
+      );
+
+      const loaded = loadEnabledBundleMcpConfig({
+        workspaceDir,
+        cfg: {
+          plugins: {
+            entries: {
+              "inline-claude": { enabled: true },
+            },
+          },
+        },
+      });
+      const resolvedPluginRoot = await fs.realpath(pluginRoot);
+
+      expect(loaded.diagnostics).toEqual([]);
+      expect(loaded.config.mcpServers.inlineProbe).toEqual({
+        command: path.join(resolvedPluginRoot, "bin", "server.sh"),
+        args: [
+          path.join(resolvedPluginRoot, "servers", "probe.mjs"),
+          path.join(resolvedPluginRoot, "local-probe.mjs"),
+        ],
+        cwd: resolvedPluginRoot,
+        env: {
+          PLUGIN_ROOT: resolvedPluginRoot,
+        },
+      });
+    } finally {
+      env.restore();
+    }
+  });
 });

@@ -110,7 +110,7 @@ loader. Cursor command markdown works through the same path.
 - OpenClaw merges bundle MCP config into the effective embedded Pi settings as
   `mcpServers`
 - OpenClaw also exposes supported bundle MCP tools during embedded Pi agent
-  turns by launching the declared MCP servers as subprocesses
+  turns by launching supported stdio MCP servers as subprocesses
 - project-local Pi settings still apply after bundle defaults, so workspace
   settings can override bundle MCP entries when needed
 
@@ -157,7 +157,7 @@ Current exceptions:
 - Claude `settings` is considered supported because it maps to embedded Pi settings
 - Cursor `commands` is considered supported because it maps to skills
 - bundle MCP is considered supported because it maps into embedded Pi settings
-  and exposes tools to embedded Pi
+  and exposes supported stdio tools to embedded Pi
 - Codex `hooks` is considered supported only for OpenClaw hook-pack layouts
 
 ## Format differences
@@ -199,7 +199,8 @@ Claude-specific notes:
 
 - `commands/` is treated like skill content
 - `settings.json` is imported into embedded Pi settings
-- `.mcp.json` and manifest `mcpServers` can expose tools to embedded Pi
+- `.mcp.json` and manifest `mcpServers` can expose supported stdio tools to
+  embedded Pi
 - `hooks/hooks.json` is detected, but not executed as Claude automation
 
 ### Cursor
@@ -251,8 +252,8 @@ Current behavior:
 - bundle discovery reads files inside the plugin root with boundary checks
 - skills and hook-pack paths must stay inside the plugin root
 - bundle settings files are read with the same boundary checks
-- supported bundle MCP servers may be launched as subprocesses for embedded Pi
-  tool calls
+- supported stdio bundle MCP servers may be launched as subprocesses for
+  embedded Pi tool calls
 - OpenClaw does not load arbitrary bundle runtime modules in-process
 
 This makes bundle support safer by default than native plugin modules, but you
