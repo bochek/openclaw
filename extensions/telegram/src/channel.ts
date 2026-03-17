@@ -28,10 +28,10 @@ import {
   resolveTelegramGroupToolPolicy,
   TelegramConfigSchema,
   type ChannelMessageActionAdapter,
-  type ChannelPlugin,
   type OpenClawConfig,
 } from "openclaw/plugin-sdk/telegram";
 import { parseTelegramTopicConversation } from "../../../src/acp/conversation-id.js";
+import type { ChannelPlugin } from "../../../src/channels/plugins/types.js";
 import { resolveExecApprovalCommandDisplay } from "../../../src/infra/exec-approval-command-display.js";
 import { buildExecApprovalPendingReplyPayload } from "../../../src/infra/exec-approval-reply.js";
 import {

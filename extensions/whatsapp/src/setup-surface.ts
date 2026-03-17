@@ -1,7 +1,7 @@
 import path from "node:path";
 import {
   DEFAULT_ACCOUNT_ID,
-  type DmPolicy,
+  type ChannelSetupDmPolicy,
   formatCliCommand,
   formatDocsLink,
   normalizeAccountId,
@@ -18,10 +18,14 @@ import { loginWeb } from "./login.js";
 import { whatsappSetupAdapter } from "./setup-core.js";
 
 const channel = "whatsapp" as const;
+type WhatsAppConfig = NonNullable<NonNullable<OpenClawConfig["channels"]>["whatsapp"]>;
+type WhatsAppDmPolicy = ChannelSetupDmPolicy["getCurrent"] extends (...args: never[]) => infer T
+  ? T
+  : never;
 
 function mergeWhatsAppConfig(
   cfg: OpenClawConfig,
-  patch: Partial<NonNullable<OpenClawConfig["channels"]>["whatsapp"]>,
+  patch: Partial<WhatsAppConfig>,
   options?: { unsetOnUndefined?: string[] },
 ): OpenClawConfig {
   const base = { ...(cfg.channels?.whatsapp ?? {}) } as Record<string, unknown>;
@@ -43,7 +47,7 @@ function mergeWhatsAppConfig(
   };
 }
 
-function setWhatsAppDmPolicy(cfg: OpenClawConfig, dmPolicy: DmPolicy): OpenClawConfig {
+function setWhatsAppDmPolicy(cfg: OpenClawConfig, dmPolicy: WhatsAppDmPolicy): OpenClawConfig {
   return mergeWhatsAppConfig(cfg, { dmPolicy });
 }
 
@@ -202,7 +206,7 @@ async function promptWhatsAppDmAccess(params: {
       { value: "open", label: "Open (public inbound DMs)" },
       { value: "disabled", label: "Disabled (ignore WhatsApp DMs)" },
     ],
-  })) as DmPolicy;
+  })) as WhatsAppDmPolicy;
 
   let next = setWhatsAppSelfChatMode(params.cfg, false);
   next = setWhatsAppDmPolicy(next, policy);

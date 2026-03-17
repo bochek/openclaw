@@ -8,9 +8,9 @@ import {
   getChatChannelMeta,
   normalizeAccountId,
   TelegramConfigSchema,
-  type ChannelPlugin,
   type OpenClawConfig,
 } from "openclaw/plugin-sdk/telegram";
+import type { ChannelPlugin } from "../../../src/channels/plugins/types.js";
 import { inspectTelegramAccount } from "./account-inspect.js";
 import {
   listTelegramAccountIds,
