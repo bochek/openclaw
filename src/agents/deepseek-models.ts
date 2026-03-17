@@ -27,7 +27,7 @@ export const DEEPSEEK_MODEL_CATALOG: ModelDefinitionConfig[] = [
     reasoning: true,
     input: ["text"],
     contextWindow: 131072,
-    maxTokens: 8192,
+    maxTokens: 65536,
     cost: DEEPSEEK_DEFAULT_COST,
   },
 ];
