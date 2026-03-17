@@ -56,7 +56,9 @@ describe("loadEnabledBundleMcpConfig", () => {
         throw new Error("expected bundled MCP args to include the server path");
       }
       expect(await fs.realpath(loadedServerPath)).toBe(resolvedServerPath);
-      expect(loadedServer.cwd).toBe(resolvedPluginRoot);
+      const loadedCwd =
+        isRecord(loadedServer) && typeof loadedServer.cwd === "string" ? loadedServer.cwd : "";
+      expect(await fs.realpath(loadedCwd)).toBe(resolvedPluginRoot);
     } finally {
       env.restore();
     }
@@ -181,17 +183,25 @@ describe("loadEnabledBundleMcpConfig", () => {
       const resolvedPluginRoot = await fs.realpath(pluginRoot);
 
       expect(loaded.diagnostics).toEqual([]);
-      expect(loaded.config.mcpServers.inlineProbe).toEqual({
-        command: path.join(resolvedPluginRoot, "bin", "server.sh"),
-        args: [
-          path.join(resolvedPluginRoot, "servers", "probe.mjs"),
-          path.join(resolvedPluginRoot, "local-probe.mjs"),
-        ],
-        cwd: resolvedPluginRoot,
-        env: {
-          PLUGIN_ROOT: resolvedPluginRoot,
-        },
-      });
+      const probe = loaded.config.mcpServers.inlineProbe;
+      expect(isRecord(probe) ? await fs.realpath(String(probe.command)) : "").toBe(
+        path.join(resolvedPluginRoot, "bin", "server.sh"),
+      );
+      const probeArgs = getServerArgs(probe);
+      expect(probeArgs).toHaveLength(2);
+      expect(await fs.realpath(String(probeArgs?.[0]))).toBe(
+        path.join(resolvedPluginRoot, "servers", "probe.mjs"),
+      );
+      expect(await fs.realpath(String(probeArgs?.[1]))).toBe(
+        path.join(resolvedPluginRoot, "local-probe.mjs"),
+      );
+      expect(
+        isRecord(probe) && typeof probe.cwd === "string" ? await fs.realpath(probe.cwd) : "",
+      ).toBe(resolvedPluginRoot);
+      const probeEnv = isRecord(probe) && isRecord(probe.env) ? probe.env : {};
+      expect(
+        typeof probeEnv.PLUGIN_ROOT === "string" ? await fs.realpath(probeEnv.PLUGIN_ROOT) : "",
+      ).toBe(resolvedPluginRoot);
     } finally {
       env.restore();
     }
