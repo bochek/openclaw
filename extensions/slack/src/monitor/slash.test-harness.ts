@@ -1,9 +1,5 @@
 import { vi } from "vitest";
 
-vi.hoisted(() => {
-  vi.resetModules();
-});
-
 const mocks = vi.hoisted(() => ({
   dispatchMock: vi.fn(),
   readAllowFromStoreMock: vi.fn(),

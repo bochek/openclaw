@@ -3,10 +3,6 @@ import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 
-vi.hoisted(() => {
-  vi.resetModules();
-});
-
 const getMessageContentMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@line/bot-sdk", () => ({

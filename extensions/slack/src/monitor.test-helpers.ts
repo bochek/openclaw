@@ -1,9 +1,5 @@
 import { Mock, vi } from "vitest";
 
-vi.hoisted(() => {
-  vi.resetModules();
-});
-
 type SlackHandler = (args: unknown) => Promise<void>;
 type SlackProviderMonitor = (params: {
   botToken: string;

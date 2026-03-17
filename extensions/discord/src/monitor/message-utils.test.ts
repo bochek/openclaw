@@ -2,10 +2,6 @@ import { ChannelType, type Client, type Message } from "@buape/carbon";
 import { StickerFormatType } from "discord-api-types/v10";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.hoisted(() => {
-  vi.resetModules();
-});
-
 const fetchRemoteMedia = vi.fn();
 const saveMediaBuffer = vi.fn();
 

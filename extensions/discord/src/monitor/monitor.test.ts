@@ -46,10 +46,6 @@ import {
   resolveDiscordReplyDeliveryPlan,
 } from "./threading.js";
 
-vi.hoisted(() => {
-  vi.resetModules();
-});
-
 const readAllowFromStoreMock = vi.hoisted(() => vi.fn());
 const upsertPairingRequestMock = vi.hoisted(() => vi.fn());
 const enqueueSystemEventMock = vi.hoisted(() => vi.fn());
