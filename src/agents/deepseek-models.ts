@@ -2,6 +2,8 @@ import type { ModelDefinitionConfig } from "../config/types.models.js";
 
 export const DEEPSEEK_BASE_URL = "https://api.deepseek.com";
 
+// TODO: fill in actual DeepSeek API pricing
+// https://api-docs.deepseek.com/quick_start/pricing
 const DEEPSEEK_DEFAULT_COST = {
   input: 0,
   output: 0,
@@ -34,13 +36,7 @@ export function buildDeepSeekModelDefinition(
   model: (typeof DEEPSEEK_MODEL_CATALOG)[number],
 ): ModelDefinitionConfig {
   return {
-    id: model.id,
-    name: model.name,
+    ...model,
     api: "openai-completions",
-    reasoning: model.reasoning,
-    input: model.input,
-    cost: model.cost,
-    contextWindow: model.contextWindow,
-    maxTokens: model.maxTokens,
   };
 }
