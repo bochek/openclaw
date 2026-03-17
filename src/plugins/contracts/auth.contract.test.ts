@@ -238,7 +238,7 @@ describe("provider auth contract", () => {
             },
           },
         ],
-        defaultModel: "github-copilot/gpt-4o",
+        defaultModel: "github-copilot/gpt-5.4",
       });
     } finally {
       if (previousIsTTYDescriptor) {

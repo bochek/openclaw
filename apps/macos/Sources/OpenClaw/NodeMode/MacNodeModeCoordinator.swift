@@ -42,9 +42,11 @@ final class MacNodeModeCoordinator {
                 continue
             }
 
+            let root = OpenClawConfigFile.loadDict()
             let onboardingComplete = Self.shouldConnectNodeMode(
                 onboardingSeen: defaults.bool(forKey: onboardingSeenKey),
-                onboardingVersion: defaults.integer(forKey: onboardingVersionKey))
+                onboardingVersion: defaults.integer(forKey: onboardingVersionKey),
+                root: root)
             if !onboardingComplete {
                 if !lastBlockedOnOnboarding {
                     self.logger.info("mac node waiting for onboarding completion")
@@ -131,8 +133,18 @@ final class MacNodeModeCoordinator {
         }
     }
 
-    static func shouldConnectNodeMode(onboardingSeen: Bool, onboardingVersion: Int) -> Bool {
-        onboardingSeen && onboardingVersion >= currentOnboardingVersion
+    static func shouldConnectNodeMode(
+        onboardingSeen: Bool,
+        onboardingVersion: Int,
+        root: [String: Any]
+    ) -> Bool {
+        if onboardingSeen && onboardingVersion >= currentOnboardingVersion {
+            return true
+        }
+
+        // Preserve runtime connectivity for existing local installs when a newer
+        // app build refreshes onboarding copy or flow.
+        return OnboardingWizardModel.hasExistingLocalSetup(root: root)
     }
 
     private func currentCaps() -> [String] {

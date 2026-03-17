@@ -196,11 +196,34 @@ final class OnboardingWizardModel {
         return Self.shouldSkipWizard(root: root)
     }
 
-    static func shouldSkipWizard(root: [String: Any]) -> Bool {
+    static func hasExistingLocalSetup(root: [String: Any]) -> Bool {
         if let wizard = root["wizard"] as? [String: Any], !wizard.isEmpty {
             return true
         }
+        if let gateway = root["gateway"] as? [String: Any],
+           let auth = gateway["auth"] as? [String: Any]
+        {
+            if let mode = auth["mode"] as? String,
+               !mode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            {
+                return true
+            }
+            if let token = auth["token"] as? String,
+               !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            {
+                return true
+            }
+            if let password = auth["password"] as? String,
+               !password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            {
+                return true
+            }
+        }
         return false
+    }
+
+    static func shouldSkipWizard(root: [String: Any]) -> Bool {
+        Self.hasExistingLocalSetup(root: root)
     }
 }
 
