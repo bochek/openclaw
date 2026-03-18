@@ -37,48 +37,54 @@ const MAX_ARGS_LENGTH = 4096;
 /**
  * Reserved command names that plugins cannot override.
  * These are built-in commands from commands-registry.data.ts.
+ *
+ * Lazily initialized to avoid TDZ errors when the bundler places this
+ * module's body after call sites within the same output chunk.
  */
-const RESERVED_COMMANDS = new Set([
-  // Core commands
-  "help",
-  "commands",
-  "status",
-  "whoami",
-  "context",
-  "btw",
-  // Session management
-  "stop",
-  "restart",
-  "reset",
-  "new",
-  "compact",
-  // Configuration
-  "config",
-  "debug",
-  "allowlist",
-  "activation",
-  // Agent control
-  "skill",
-  "subagents",
-  "kill",
-  "steer",
-  "tell",
-  "model",
-  "models",
-  "queue",
-  // Messaging
-  "send",
-  // Execution
-  "bash",
-  "exec",
-  // Mode toggles
-  "think",
-  "verbose",
-  "reasoning",
-  "elevated",
-  // Billing
-  "usage",
-]);
+let _reservedCommands: Set<string> | undefined;
+function getReservedCommands(): Set<string> {
+  return (_reservedCommands ??= new Set([
+    // Core commands
+    "help",
+    "commands",
+    "status",
+    "whoami",
+    "context",
+    "btw",
+    // Session management
+    "stop",
+    "restart",
+    "reset",
+    "new",
+    "compact",
+    // Configuration
+    "config",
+    "debug",
+    "allowlist",
+    "activation",
+    // Agent control
+    "skill",
+    "subagents",
+    "kill",
+    "steer",
+    "tell",
+    "model",
+    "models",
+    "queue",
+    // Messaging
+    "send",
+    // Execution
+    "bash",
+    "exec",
+    // Mode toggles
+    "think",
+    "verbose",
+    "reasoning",
+    "elevated",
+    // Billing
+    "usage",
+  ]));
+}
 
 /**
  * Validate a command name.
@@ -98,7 +104,7 @@ export function validateCommandName(name: string): string | null {
   }
 
   // Check reserved commands
-  if (RESERVED_COMMANDS.has(trimmed)) {
+  if (getReservedCommands().has(trimmed)) {
     return `Command name "${trimmed}" is reserved by a built-in command`;
   }
 
