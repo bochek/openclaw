@@ -273,7 +273,11 @@ describe("plugin-sdk subpath exports", () => {
     expect(typeof discordSdk.listDiscordDirectoryGroupsLive).toBe("function");
     expect(typeof discordSdk.listDiscordDirectoryPeersLive).toBe("function");
     expect(typeof discordSdk.fetchChannelInfoDiscord).toBe("function");
+    expect(typeof discordSdk.fetchVoiceStatusDiscord).toBe("function");
+    expect(typeof discordSdk.getGateway).toBe("function");
+    expect(typeof discordSdk.getPresence).toBe("function");
     expect(typeof discordSdk.listThreadsDiscord).toBe("function");
+    expect(typeof discordSdk.monitorDiscordProvider).toBe("function");
     expect(typeof discordSdk.normalizeDiscordOutboundTarget).toBe("function");
     expect(typeof discordSdk.readMessagesDiscord).toBe("function");
     expect(typeof discordSdk.resolveDiscordChannelId).toBe("function");
