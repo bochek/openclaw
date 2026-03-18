@@ -1,12 +1,27 @@
 import type {
+  ThreadBindingManager,
+  ThreadBindingRecord,
+  ThreadBindingTargetKind,
+} from "../../extensions/discord/runtime-api.js";
+import {
+  autoBindSpawnedDiscordSubagent,
+  getThreadBindingManager,
+  listThreadBindingsBySessionKey,
+  resolveThreadBindingIdleTimeoutMs,
+  resolveThreadBindingInactivityExpiresAt,
+  resolveThreadBindingMaxAgeExpiresAt,
+  resolveThreadBindingMaxAgeMs,
+  setThreadBindingIdleTimeoutBySessionKey,
+  setThreadBindingMaxAgeBySessionKey,
+  unbindThreadBindingsBySessionKey,
+} from "../../extensions/discord/runtime-api.js";
+import { normalizeExplicitDiscordSessionKey } from "../../extensions/discord/session-key-api.js";
+import type {
   DiscordPluralKitConfig,
   DiscordSendComponents,
   DiscordSendEmbeds,
   InspectedDiscordAccount,
   ResolvedDiscordAccount,
-  ThreadBindingManager,
-  ThreadBindingRecord,
-  ThreadBindingTargetKind,
 } from "../channels/discord/plugin-sdk-bridge.js";
 import {
   collectDiscordStatusIssues,
@@ -25,7 +40,6 @@ import {
 import {
   addRoleDiscord,
   auditDiscordChannelPermissions,
-  autoBindSpawnedDiscordSubagent,
   banMemberDiscord,
   collectDiscordAuditChannelIds,
   createChannelDiscord,
@@ -47,7 +61,6 @@ import {
   fetchVoiceStatusDiscord,
   getGateway,
   getPresence,
-  getThreadBindingManager,
   hasAnyGuildPermissionDiscord,
   kickMemberDiscord,
   listDiscordDirectoryGroupsLive,
@@ -56,7 +69,6 @@ import {
   listGuildEmojisDiscord,
   listPinsDiscord,
   listScheduledEventsDiscord,
-  listThreadBindingsBySessionKey,
   listThreadsDiscord,
   monitorDiscordProvider,
   moveChannelDiscord,
@@ -70,10 +82,6 @@ import {
   removeRoleDiscord,
   resolveDiscordChannelAllowlist,
   resolveDiscordUserAllowlist,
-  resolveThreadBindingIdleTimeoutMs,
-  resolveThreadBindingInactivityExpiresAt,
-  resolveThreadBindingMaxAgeExpiresAt,
-  resolveThreadBindingMaxAgeMs,
   searchMessagesDiscord,
   sendDiscordComponentMessage,
   sendMessageDiscord,
@@ -82,16 +90,12 @@ import {
   sendTypingDiscord,
   sendVoiceMessageDiscord,
   setChannelPermissionDiscord,
-  setThreadBindingIdleTimeoutBySessionKey,
-  setThreadBindingMaxAgeBySessionKey,
   timeoutMemberDiscord,
-  unbindThreadBindingsBySessionKey,
   unpinMessageDiscord,
   uploadEmojiDiscord,
   uploadStickerDiscord,
   listDiscordDirectoryGroupsFromConfig,
   listDiscordDirectoryPeersFromConfig,
-  normalizeExplicitDiscordSessionKey,
 } from "../channels/discord/plugin-sdk-bridge.js";
 
 export type {

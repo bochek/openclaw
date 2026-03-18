@@ -5,11 +5,6 @@ export type {
   InspectedDiscordAccount,
   ResolvedDiscordAccount,
 } from "../../../extensions/discord/api.js";
-export type {
-  ThreadBindingManager,
-  ThreadBindingRecord,
-  ThreadBindingTargetKind,
-} from "../../../extensions/discord/runtime-api.js";
 
 export {
   collectDiscordStatusIssues,
@@ -29,7 +24,6 @@ export {
 export {
   addRoleDiscord,
   auditDiscordChannelPermissions,
-  autoBindSpawnedDiscordSubagent,
   banMemberDiscord,
   collectDiscordAuditChannelIds,
   createChannelDiscord,
@@ -51,7 +45,6 @@ export {
   fetchVoiceStatusDiscord,
   getGateway,
   getPresence,
-  getThreadBindingManager,
   hasAnyGuildPermissionDiscord,
   kickMemberDiscord,
   listDiscordDirectoryGroupsLive,
@@ -60,7 +53,6 @@ export {
   listGuildEmojisDiscord,
   listPinsDiscord,
   listScheduledEventsDiscord,
-  listThreadBindingsBySessionKey,
   listThreadsDiscord,
   monitorDiscordProvider,
   moveChannelDiscord,
@@ -74,10 +66,6 @@ export {
   removeRoleDiscord,
   resolveDiscordChannelAllowlist,
   resolveDiscordUserAllowlist,
-  resolveThreadBindingIdleTimeoutMs,
-  resolveThreadBindingInactivityExpiresAt,
-  resolveThreadBindingMaxAgeExpiresAt,
-  resolveThreadBindingMaxAgeMs,
   searchMessagesDiscord,
   sendDiscordComponentMessage,
   sendMessageDiscord,
@@ -86,15 +74,11 @@ export {
   sendTypingDiscord,
   sendVoiceMessageDiscord,
   setChannelPermissionDiscord,
-  setThreadBindingIdleTimeoutBySessionKey,
-  setThreadBindingMaxAgeBySessionKey,
   timeoutMemberDiscord,
-  unbindThreadBindingsBySessionKey,
   unpinMessageDiscord,
   uploadEmojiDiscord,
   uploadStickerDiscord,
 } from "../../../extensions/discord/runtime-api.js";
-export { normalizeExplicitDiscordSessionKey } from "../../../extensions/discord/session-key-api.js";
 export {
   listDiscordDirectoryGroupsFromConfig,
   listDiscordDirectoryPeersFromConfig,
