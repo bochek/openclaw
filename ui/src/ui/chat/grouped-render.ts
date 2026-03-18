@@ -661,7 +661,7 @@ function renderGroupedMessage(
   const reasoningMarkdown = extractedThinking ? formatReasoningMarkdown(extractedThinking) : null;
   const markdown = markdownBase;
   const canCopyMarkdown = role === "assistant" && Boolean(markdown?.trim());
-  const canExpand = Boolean(onOpenSidebar && markdown?.trim());
+  const canExpand = role === "assistant" && Boolean(onOpenSidebar && markdown?.trim());
 
   // Detect pure-JSON messages and render as collapsible block
   const jsonResult = markdown && !opts.isStreaming ? detectJson(markdown) : null;
