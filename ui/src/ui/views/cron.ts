@@ -1754,7 +1754,17 @@ function renderRun(
         }
         ${
           chatUrl
-            ? html`<div><a class="session-link" href=${chatUrl} @click=${(e: Event) => {
+            ? html`<div><a class="session-link" href=${chatUrl} @click=${(e: MouseEvent) => {
+                if (
+                  e.defaultPrevented ||
+                  e.button !== 0 ||
+                  e.metaKey ||
+                  e.ctrlKey ||
+                  e.shiftKey ||
+                  e.altKey
+                ) {
+                  return;
+                }
                 if (onNavigateToChat && entry.sessionKey) {
                   e.preventDefault();
                   onNavigateToChat(entry.sessionKey);
