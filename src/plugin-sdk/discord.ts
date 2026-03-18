@@ -1,5 +1,6 @@
 import {
   createDiscordActionGate,
+  collectDiscordStatusIssues,
   listDiscordDirectoryGroupsFromConfig,
   listDiscordDirectoryPeersFromConfig,
   looksLikeDiscordTargetId,
@@ -59,6 +60,9 @@ import {
   resolveThreadBindingInactivityExpiresAt,
   resolveThreadBindingMaxAgeExpiresAt,
   resolveThreadBindingMaxAgeMs,
+  DISCORD_DEFAULT_INBOUND_WORKER_TIMEOUT_MS,
+  DISCORD_DEFAULT_LISTENER_TIMEOUT_MS,
+  probeDiscord,
   sendMessageDiscord,
   sendDiscordComponentMessage,
   sendPollDiscord,
@@ -84,7 +88,6 @@ import type {
   ResolvedDiscordAccount,
 } from "../channels/discord/plugin-sdk-bridge.js";
 import {
-  collectDiscordStatusIssues,
   inspectDiscordAccount,
   listDiscordAccountIds,
   resolveDefaultDiscordAccountId,
@@ -92,11 +95,8 @@ import {
   resolveDiscordGroupToolPolicy,
 } from "../channels/discord/plugin-sdk-bridge.js";
 import {
-  DISCORD_DEFAULT_INBOUND_WORKER_TIMEOUT_MS,
-  DISCORD_DEFAULT_LISTENER_TIMEOUT_MS,
   hasAnyGuildPermissionDiscord,
   kickMemberDiscord,
-  probeDiscord,
   unpinMessageDiscord,
 } from "../channels/discord/plugin-sdk-bridge.js";
 

@@ -279,6 +279,7 @@ describe("plugin-sdk subpath exports", () => {
     expect(typeof discordSdk.listThreadsDiscord).toBe("function");
     expect(typeof discordSdk.monitorDiscordProvider).toBe("function");
     expect(typeof discordSdk.normalizeDiscordOutboundTarget).toBe("function");
+    expect(typeof discordSdk.probeDiscord).toBe("function");
     expect(typeof discordSdk.readMessagesDiscord).toBe("function");
     expect(typeof discordSdk.resolveDiscordChannelId).toBe("function");
     expect(typeof discordSdk.sendMessageDiscord).toBe("function");
