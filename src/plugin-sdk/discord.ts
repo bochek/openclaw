@@ -1,3 +1,103 @@
+import type {
+  DiscordPluralKitConfig,
+  DiscordSendComponents,
+  DiscordSendEmbeds,
+  InspectedDiscordAccount,
+  ResolvedDiscordAccount,
+} from "../../extensions/discord/api.js";
+import {
+  createDiscordActionGate,
+  inspectDiscordAccount,
+  listDiscordAccountIds,
+  looksLikeDiscordTargetId,
+  normalizeDiscordMessagingTarget,
+  normalizeDiscordOutboundTarget,
+  readDiscordComponentSpec,
+  resolveDefaultDiscordAccountId,
+  resolveDiscordChannelId,
+  resolveDiscordGroupRequireMention,
+  resolveDiscordGroupToolPolicy,
+  collectDiscordStatusIssues,
+} from "../../extensions/discord/api.js";
+import type {
+  ThreadBindingManager,
+  ThreadBindingRecord,
+  ThreadBindingTargetKind,
+} from "../../extensions/discord/runtime-api.js";
+import {
+  addRoleDiscord,
+  auditDiscordChannelPermissions,
+  autoBindSpawnedDiscordSubagent,
+  banMemberDiscord,
+  collectDiscordAuditChannelIds,
+  createChannelDiscord,
+  createScheduledEventDiscord,
+  createThreadDiscord,
+  deleteChannelDiscord,
+  deleteMessageDiscord,
+  DISCORD_DEFAULT_INBOUND_WORKER_TIMEOUT_MS,
+  DISCORD_DEFAULT_LISTENER_TIMEOUT_MS,
+  discordMessageActions,
+  editChannelDiscord,
+  editMessageDiscord,
+  fetchChannelInfoDiscord,
+  fetchChannelPermissionsDiscord,
+  fetchMemberInfoDiscord,
+  fetchMessageDiscord,
+  fetchReactionsDiscord,
+  fetchRoleInfoDiscord,
+  fetchVoiceStatusDiscord,
+  getGateway,
+  getPresence,
+  getThreadBindingManager,
+  hasAnyGuildPermissionDiscord,
+  kickMemberDiscord,
+  listDiscordDirectoryGroupsLive,
+  listDiscordDirectoryPeersLive,
+  listGuildChannelsDiscord,
+  listGuildEmojisDiscord,
+  listPinsDiscord,
+  listScheduledEventsDiscord,
+  listThreadBindingsBySessionKey,
+  listThreadsDiscord,
+  monitorDiscordProvider,
+  moveChannelDiscord,
+  pinMessageDiscord,
+  probeDiscord,
+  reactMessageDiscord,
+  readMessagesDiscord,
+  removeChannelPermissionDiscord,
+  removeOwnReactionsDiscord,
+  removeReactionDiscord,
+  removeRoleDiscord,
+  resolveDiscordChannelAllowlist,
+  resolveDiscordUserAllowlist,
+  resolveThreadBindingIdleTimeoutMs,
+  resolveThreadBindingInactivityExpiresAt,
+  resolveThreadBindingMaxAgeExpiresAt,
+  resolveThreadBindingMaxAgeMs,
+  searchMessagesDiscord,
+  sendDiscordComponentMessage,
+  sendMessageDiscord,
+  sendPollDiscord,
+  sendStickerDiscord,
+  sendTypingDiscord,
+  sendVoiceMessageDiscord,
+  setChannelPermissionDiscord,
+  setThreadBindingIdleTimeoutBySessionKey,
+  setThreadBindingMaxAgeBySessionKey,
+  timeoutMemberDiscord,
+  unbindThreadBindingsBySessionKey,
+  unpinMessageDiscord,
+  uploadEmojiDiscord,
+  uploadStickerDiscord,
+} from "../../extensions/discord/runtime-api.js";
+import { normalizeExplicitDiscordSessionKey } from "../../extensions/discord/session-key-api.js";
+import {
+  listDiscordDirectoryGroupsFromConfig,
+  listDiscordDirectoryPeersFromConfig,
+} from "../../extensions/discord/src/directory-config.js";
+
 export type {
   ChannelAccountSnapshot,
   ChannelGatewayContext,
@@ -6,15 +106,16 @@ export type {
 export type { OpenClawConfig } from "../config/config.js";
 export type { DiscordAccountConfig, DiscordActionConfig } from "../config/types.js";
 export type { DiscordConfig } from "../config/types.discord.js";
-export type { DiscordPluralKitConfig } from "../../extensions/discord/api.js";
-export type { InspectedDiscordAccount } from "../../extensions/discord/api.js";
-export type { ResolvedDiscordAccount } from "../../extensions/discord/api.js";
-export type { DiscordSendComponents, DiscordSendEmbeds } from "../../extensions/discord/api.js";
 export type {
+  DiscordPluralKitConfig,
+  DiscordSendComponents,
+  DiscordSendEmbeds,
+  InspectedDiscordAccount,
+  ResolvedDiscordAccount,
   ThreadBindingManager,
   ThreadBindingRecord,
   ThreadBindingTargetKind,
-} from "../../extensions/discord/runtime-api.js";
+};
 export type {
   ChannelConfiguredBindingProvider,
   ChannelConfiguredBindingConversationRef,
@@ -49,14 +150,8 @@ export {
   resolveDefaultGroupPolicy,
   resolveOpenProviderRuntimeGroupPolicy,
 } from "../config/runtime-group-policy.js";
-export {
-  listDiscordDirectoryGroupsFromConfig,
-  listDiscordDirectoryPeersFromConfig,
-} from "../../extensions/discord/src/directory-config.js";
-export {
-  resolveDiscordGroupRequireMention,
-  resolveDiscordGroupToolPolicy,
-} from "../../extensions/discord/api.js";
+export { listDiscordDirectoryGroupsFromConfig, listDiscordDirectoryPeersFromConfig };
+export { resolveDiscordGroupRequireMention, resolveDiscordGroupToolPolicy };
 export { DiscordConfigSchema } from "../config/zod-schema.providers-core.js";
 
 export {
@@ -65,48 +160,21 @@ export {
 } from "./status-helpers.js";
 
 export {
-  createDiscordActionGate,
-  listDiscordAccountIds,
-  resolveDefaultDiscordAccountId,
-} from "../../extensions/discord/api.js";
-export { inspectDiscordAccount } from "../../extensions/discord/api.js";
-export {
-  looksLikeDiscordTargetId,
-  normalizeDiscordMessagingTarget,
-  normalizeDiscordOutboundTarget,
-} from "../../extensions/discord/api.js";
-export { collectDiscordAuditChannelIds } from "../../extensions/discord/runtime-api.js";
-export { collectDiscordStatusIssues } from "../../extensions/discord/api.js";
-export {
-  DISCORD_DEFAULT_INBOUND_WORKER_TIMEOUT_MS,
-  DISCORD_DEFAULT_LISTENER_TIMEOUT_MS,
-} from "../../extensions/discord/runtime-api.js";
-export { normalizeExplicitDiscordSessionKey } from "../../extensions/discord/session-key-api.js";
-export {
-  autoBindSpawnedDiscordSubagent,
-  getThreadBindingManager,
-  listThreadBindingsBySessionKey,
-  resolveThreadBindingIdleTimeoutMs,
-  resolveThreadBindingInactivityExpiresAt,
-  resolveThreadBindingMaxAgeExpiresAt,
-  resolveThreadBindingMaxAgeMs,
-  setThreadBindingIdleTimeoutBySessionKey,
-  setThreadBindingMaxAgeBySessionKey,
-  unbindThreadBindingsBySessionKey,
-} from "../../extensions/discord/runtime-api.js";
-export { getGateway } from "../../extensions/discord/runtime-api.js";
-export { getPresence } from "../../extensions/discord/runtime-api.js";
-export { readDiscordComponentSpec } from "../../extensions/discord/api.js";
-export { resolveDiscordChannelId } from "../../extensions/discord/api.js";
-export {
   addRoleDiscord,
   auditDiscordChannelPermissions,
+  autoBindSpawnedDiscordSubagent,
   banMemberDiscord,
+  collectDiscordAuditChannelIds,
+  collectDiscordStatusIssues,
   createChannelDiscord,
+  createDiscordActionGate,
   createScheduledEventDiscord,
   createThreadDiscord,
   deleteChannelDiscord,
   deleteMessageDiscord,
+  DISCORD_DEFAULT_INBOUND_WORKER_TIMEOUT_MS,
+  DISCORD_DEFAULT_LISTENER_TIMEOUT_MS,
+  discordMessageActions,
   editChannelDiscord,
   editMessageDiscord,
   fetchChannelInfoDiscord,
@@ -116,38 +184,57 @@ export {
   fetchReactionsDiscord,
   fetchRoleInfoDiscord,
   fetchVoiceStatusDiscord,
+  getGateway,
+  getPresence,
+  getThreadBindingManager,
   hasAnyGuildPermissionDiscord,
+  inspectDiscordAccount,
   kickMemberDiscord,
+  listDiscordAccountIds,
   listDiscordDirectoryGroupsLive,
   listDiscordDirectoryPeersLive,
   listGuildChannelsDiscord,
   listGuildEmojisDiscord,
   listPinsDiscord,
   listScheduledEventsDiscord,
+  listThreadBindingsBySessionKey,
   listThreadsDiscord,
+  looksLikeDiscordTargetId,
   monitorDiscordProvider,
   moveChannelDiscord,
+  normalizeDiscordMessagingTarget,
+  normalizeDiscordOutboundTarget,
+  normalizeExplicitDiscordSessionKey,
   pinMessageDiscord,
   probeDiscord,
   reactMessageDiscord,
+  readDiscordComponentSpec,
   readMessagesDiscord,
   removeChannelPermissionDiscord,
   removeOwnReactionsDiscord,
   removeReactionDiscord,
   removeRoleDiscord,
+  resolveDefaultDiscordAccountId,
   resolveDiscordChannelAllowlist,
+  resolveDiscordChannelId,
   resolveDiscordUserAllowlist,
+  resolveThreadBindingIdleTimeoutMs,
+  resolveThreadBindingInactivityExpiresAt,
+  resolveThreadBindingMaxAgeExpiresAt,
+  resolveThreadBindingMaxAgeMs,
   searchMessagesDiscord,
   sendDiscordComponentMessage,
   sendMessageDiscord,
   sendPollDiscord,
-  sendTypingDiscord,
   sendStickerDiscord,
+  sendTypingDiscord,
   sendVoiceMessageDiscord,
   setChannelPermissionDiscord,
+  setThreadBindingIdleTimeoutBySessionKey,
+  setThreadBindingMaxAgeBySessionKey,
   timeoutMemberDiscord,
+  unbindThreadBindingsBySessionKey,
   unpinMessageDiscord,
   uploadEmojiDiscord,
   uploadStickerDiscord,
-} from "../../extensions/discord/runtime-api.js";
-export { discordMessageActions } from "../../extensions/discord/runtime-api.js";
+};

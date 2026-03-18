@@ -94,29 +94,29 @@ export type PluginRuntimeChannel = {
     shouldHandleTextCommands: typeof import("../../auto-reply/commands-registry.js").shouldHandleTextCommands;
   };
   discord: {
-    messageActions: typeof import("../../../extensions/discord/runtime-api.js").discordMessageActions;
-    auditChannelPermissions: typeof import("../../../extensions/discord/runtime-api.js").auditDiscordChannelPermissions;
-    listDirectoryGroupsLive: typeof import("../../../extensions/discord/runtime-api.js").listDiscordDirectoryGroupsLive;
-    listDirectoryPeersLive: typeof import("../../../extensions/discord/runtime-api.js").listDiscordDirectoryPeersLive;
-    probeDiscord: typeof import("../../../extensions/discord/runtime-api.js").probeDiscord;
-    resolveChannelAllowlist: typeof import("../../../extensions/discord/runtime-api.js").resolveDiscordChannelAllowlist;
-    resolveUserAllowlist: typeof import("../../../extensions/discord/runtime-api.js").resolveDiscordUserAllowlist;
-    sendComponentMessage: typeof import("../../../extensions/discord/runtime-api.js").sendDiscordComponentMessage;
-    sendMessageDiscord: typeof import("../../../extensions/discord/runtime-api.js").sendMessageDiscord;
-    sendPollDiscord: typeof import("../../../extensions/discord/runtime-api.js").sendPollDiscord;
-    monitorDiscordProvider: typeof import("../../../extensions/discord/runtime-api.js").monitorDiscordProvider;
+    messageActions: typeof import("openclaw/plugin-sdk/discord").discordMessageActions;
+    auditChannelPermissions: typeof import("openclaw/plugin-sdk/discord").auditDiscordChannelPermissions;
+    listDirectoryGroupsLive: typeof import("openclaw/plugin-sdk/discord").listDiscordDirectoryGroupsLive;
+    listDirectoryPeersLive: typeof import("openclaw/plugin-sdk/discord").listDiscordDirectoryPeersLive;
+    probeDiscord: typeof import("openclaw/plugin-sdk/discord").probeDiscord;
+    resolveChannelAllowlist: typeof import("openclaw/plugin-sdk/discord").resolveDiscordChannelAllowlist;
+    resolveUserAllowlist: typeof import("openclaw/plugin-sdk/discord").resolveDiscordUserAllowlist;
+    sendComponentMessage: typeof import("openclaw/plugin-sdk/discord").sendDiscordComponentMessage;
+    sendMessageDiscord: typeof import("openclaw/plugin-sdk/discord").sendMessageDiscord;
+    sendPollDiscord: typeof import("openclaw/plugin-sdk/discord").sendPollDiscord;
+    monitorDiscordProvider: typeof import("openclaw/plugin-sdk/discord").monitorDiscordProvider;
     threadBindings: {
-      getManager: typeof import("../../../extensions/discord/runtime-api.js").getThreadBindingManager;
-      resolveIdleTimeoutMs: typeof import("../../../extensions/discord/runtime-api.js").resolveThreadBindingIdleTimeoutMs;
-      resolveInactivityExpiresAt: typeof import("../../../extensions/discord/runtime-api.js").resolveThreadBindingInactivityExpiresAt;
-      resolveMaxAgeMs: typeof import("../../../extensions/discord/runtime-api.js").resolveThreadBindingMaxAgeMs;
-      resolveMaxAgeExpiresAt: typeof import("../../../extensions/discord/runtime-api.js").resolveThreadBindingMaxAgeExpiresAt;
-      setIdleTimeoutBySessionKey: typeof import("../../../extensions/discord/runtime-api.js").setThreadBindingIdleTimeoutBySessionKey;
-      setMaxAgeBySessionKey: typeof import("../../../extensions/discord/runtime-api.js").setThreadBindingMaxAgeBySessionKey;
-      unbindBySessionKey: typeof import("../../../extensions/discord/runtime-api.js").unbindThreadBindingsBySessionKey;
+      getManager: typeof import("openclaw/plugin-sdk/discord").getThreadBindingManager;
+      resolveIdleTimeoutMs: typeof import("openclaw/plugin-sdk/discord").resolveThreadBindingIdleTimeoutMs;
+      resolveInactivityExpiresAt: typeof import("openclaw/plugin-sdk/discord").resolveThreadBindingInactivityExpiresAt;
+      resolveMaxAgeMs: typeof import("openclaw/plugin-sdk/discord").resolveThreadBindingMaxAgeMs;
+      resolveMaxAgeExpiresAt: typeof import("openclaw/plugin-sdk/discord").resolveThreadBindingMaxAgeExpiresAt;
+      setIdleTimeoutBySessionKey: typeof import("openclaw/plugin-sdk/discord").setThreadBindingIdleTimeoutBySessionKey;
+      setMaxAgeBySessionKey: typeof import("openclaw/plugin-sdk/discord").setThreadBindingMaxAgeBySessionKey;
+      unbindBySessionKey: typeof import("openclaw/plugin-sdk/discord").unbindThreadBindingsBySessionKey;
     };
     typing: {
-      pulse: typeof import("../../../extensions/discord/runtime-api.js").sendTypingDiscord;
+      pulse: typeof import("openclaw/plugin-sdk/discord").sendTypingDiscord;
       start: (params: {
         channelId: string;
         accountId?: string;
@@ -128,39 +128,39 @@ export type PluginRuntimeChannel = {
       }>;
     };
     conversationActions: {
-      editMessage: typeof import("../../../extensions/discord/runtime-api.js").editMessageDiscord;
-      deleteMessage: typeof import("../../../extensions/discord/runtime-api.js").deleteMessageDiscord;
-      pinMessage: typeof import("../../../extensions/discord/runtime-api.js").pinMessageDiscord;
-      unpinMessage: typeof import("../../../extensions/discord/runtime-api.js").unpinMessageDiscord;
-      createThread: typeof import("../../../extensions/discord/runtime-api.js").createThreadDiscord;
-      editChannel: typeof import("../../../extensions/discord/runtime-api.js").editChannelDiscord;
+      editMessage: typeof import("openclaw/plugin-sdk/discord").editMessageDiscord;
+      deleteMessage: typeof import("openclaw/plugin-sdk/discord").deleteMessageDiscord;
+      pinMessage: typeof import("openclaw/plugin-sdk/discord").pinMessageDiscord;
+      unpinMessage: typeof import("openclaw/plugin-sdk/discord").unpinMessageDiscord;
+      createThread: typeof import("openclaw/plugin-sdk/discord").createThreadDiscord;
+      editChannel: typeof import("openclaw/plugin-sdk/discord").editChannelDiscord;
     };
   };
   slack: {
-    listDirectoryGroupsLive: typeof import("../../../extensions/slack/runtime-api.js").listSlackDirectoryGroupsLive;
-    listDirectoryPeersLive: typeof import("../../../extensions/slack/runtime-api.js").listSlackDirectoryPeersLive;
-    probeSlack: typeof import("../../../extensions/slack/runtime-api.js").probeSlack;
-    resolveChannelAllowlist: typeof import("../../../extensions/slack/runtime-api.js").resolveSlackChannelAllowlist;
-    resolveUserAllowlist: typeof import("../../../extensions/slack/runtime-api.js").resolveSlackUserAllowlist;
-    sendMessageSlack: typeof import("../../../extensions/slack/runtime-api.js").sendMessageSlack;
-    monitorSlackProvider: typeof import("../../../extensions/slack/runtime-api.js").monitorSlackProvider;
-    handleSlackAction: typeof import("../../../extensions/slack/runtime-api.js").handleSlackAction;
+    listDirectoryGroupsLive: typeof import("openclaw/plugin-sdk/slack").listSlackDirectoryGroupsLive;
+    listDirectoryPeersLive: typeof import("openclaw/plugin-sdk/slack").listSlackDirectoryPeersLive;
+    probeSlack: typeof import("openclaw/plugin-sdk/slack").probeSlack;
+    resolveChannelAllowlist: typeof import("openclaw/plugin-sdk/slack").resolveSlackChannelAllowlist;
+    resolveUserAllowlist: typeof import("openclaw/plugin-sdk/slack").resolveSlackUserAllowlist;
+    sendMessageSlack: typeof import("openclaw/plugin-sdk/slack").sendMessageSlack;
+    monitorSlackProvider: typeof import("openclaw/plugin-sdk/slack").monitorSlackProvider;
+    handleSlackAction: typeof import("openclaw/plugin-sdk/slack").handleSlackAction;
   };
   telegram: {
-    auditGroupMembership: typeof import("../../../extensions/telegram/runtime-api.js").auditTelegramGroupMembership;
-    collectUnmentionedGroupIds: typeof import("../../../extensions/telegram/runtime-api.js").collectTelegramUnmentionedGroupIds;
-    probeTelegram: typeof import("../../../extensions/telegram/runtime-api.js").probeTelegram;
-    resolveTelegramToken: typeof import("../../../extensions/telegram/runtime-api.js").resolveTelegramToken;
-    sendMessageTelegram: typeof import("../../../extensions/telegram/runtime-api.js").sendMessageTelegram;
-    sendPollTelegram: typeof import("../../../extensions/telegram/runtime-api.js").sendPollTelegram;
-    monitorTelegramProvider: typeof import("../../../extensions/telegram/runtime-api.js").monitorTelegramProvider;
-    messageActions: typeof import("../../../extensions/telegram/runtime-api.js").telegramMessageActions;
+    auditGroupMembership: typeof import("openclaw/plugin-sdk/telegram").auditTelegramGroupMembership;
+    collectUnmentionedGroupIds: typeof import("openclaw/plugin-sdk/telegram").collectTelegramUnmentionedGroupIds;
+    probeTelegram: typeof import("openclaw/plugin-sdk/telegram").probeTelegram;
+    resolveTelegramToken: typeof import("openclaw/plugin-sdk/telegram").resolveTelegramToken;
+    sendMessageTelegram: typeof import("openclaw/plugin-sdk/telegram").sendMessageTelegram;
+    sendPollTelegram: typeof import("openclaw/plugin-sdk/telegram").sendPollTelegram;
+    monitorTelegramProvider: typeof import("openclaw/plugin-sdk/telegram").monitorTelegramProvider;
+    messageActions: typeof import("openclaw/plugin-sdk/telegram").telegramMessageActions;
     threadBindings: {
-      setIdleTimeoutBySessionKey: typeof import("../../../extensions/telegram/runtime-api.js").setTelegramThreadBindingIdleTimeoutBySessionKey;
-      setMaxAgeBySessionKey: typeof import("../../../extensions/telegram/runtime-api.js").setTelegramThreadBindingMaxAgeBySessionKey;
+      setIdleTimeoutBySessionKey: typeof import("openclaw/plugin-sdk/telegram").setTelegramThreadBindingIdleTimeoutBySessionKey;
+      setMaxAgeBySessionKey: typeof import("openclaw/plugin-sdk/telegram").setTelegramThreadBindingMaxAgeBySessionKey;
     };
     typing: {
-      pulse: typeof import("../../../extensions/telegram/runtime-api.js").sendTypingTelegram;
+      pulse: typeof import("openclaw/plugin-sdk/telegram").sendTypingTelegram;
       start: (params: {
         to: string;
         accountId?: string;
@@ -173,8 +173,8 @@ export type PluginRuntimeChannel = {
       }>;
     };
     conversationActions: {
-      editMessage: typeof import("../../../extensions/telegram/runtime-api.js").editMessageTelegram;
-      editReplyMarkup: typeof import("../../../extensions/telegram/runtime-api.js").editMessageReplyMarkupTelegram;
+      editMessage: typeof import("openclaw/plugin-sdk/telegram").editMessageTelegram;
+      editReplyMarkup: typeof import("openclaw/plugin-sdk/telegram").editMessageReplyMarkupTelegram;
       clearReplyMarkup: (
         chatIdInput: string | number,
         messageIdInput: string | number,
@@ -187,10 +187,10 @@ export type PluginRuntimeChannel = {
           cfg?: ReturnType<typeof import("../../config/config.js").loadConfig>;
         },
       ) => Promise<{ ok: true; messageId: string; chatId: string }>;
-      deleteMessage: typeof import("../../../extensions/telegram/runtime-api.js").deleteMessageTelegram;
-      renameTopic: typeof import("../../../extensions/telegram/runtime-api.js").renameForumTopicTelegram;
-      pinMessage: typeof import("../../../extensions/telegram/runtime-api.js").pinMessageTelegram;
-      unpinMessage: typeof import("../../../extensions/telegram/runtime-api.js").unpinMessageTelegram;
+      deleteMessage: typeof import("openclaw/plugin-sdk/telegram").deleteMessageTelegram;
+      renameTopic: typeof import("openclaw/plugin-sdk/telegram").renameForumTopicTelegram;
+      pinMessage: typeof import("openclaw/plugin-sdk/telegram").pinMessageTelegram;
+      unpinMessage: typeof import("openclaw/plugin-sdk/telegram").unpinMessageTelegram;
     };
   };
   signal: {

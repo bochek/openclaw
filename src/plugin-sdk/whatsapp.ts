@@ -1,11 +1,57 @@
+import {
+  hasAnyWhatsAppAuth,
+  listEnabledWhatsAppAccounts,
+  resolveWhatsAppAccount,
+  resolveWhatsAppGroupRequireMention,
+  resolveWhatsAppGroupToolPolicy,
+} from "../../extensions/whatsapp/api.js";
+import type {
+  WebChannelStatus,
+  WebInboundMessage,
+  WebListenerCloseReason,
+  WebMonitorTuning,
+} from "../../extensions/whatsapp/runtime-api.js";
+import {
+  createWhatsAppLoginTool,
+  createWaSocket,
+  DEFAULT_WEB_MEDIA_BYTES,
+  extractMediaPlaceholder,
+  extractText,
+  formatError,
+  getActiveWebListener,
+  getDefaultLocalRoots,
+  getStatusCode,
+  getWebAuthAgeMs,
+  HEARTBEAT_PROMPT,
+  HEARTBEAT_TOKEN,
+  loadWebMedia,
+  loadWebMediaRaw,
+  loginWeb,
+  logWebSelfId,
+  logoutWeb,
+  monitorWebChannel,
+  monitorWebInbox,
+  optimizeImageToJpeg,
+  pickWebChannel,
+  readWebSelfId,
+  resolveHeartbeatRecipients,
+  runWebHeartbeatOnce,
+  sendMessageWhatsApp,
+  sendPollWhatsApp,
+  sendReactionWhatsApp,
+  waitForWaConnection,
+  WA_WEB_AUTH_DIR,
+  webAuthExists,
+} from "../../extensions/whatsapp/runtime-api.js";
+import {
+  listWhatsAppDirectoryGroupsFromConfig,
+  listWhatsAppDirectoryPeersFromConfig,
+} from "../../extensions/whatsapp/src/directory-config.js";
+
 export type { ChannelMessageActionName } from "../channels/plugins/types.js";
 export type { OpenClawConfig } from "../config/config.js";
 export type { DmPolicy, GroupPolicy, WhatsAppAccountConfig } from "../config/types.js";
-export type { WebChannelStatus, WebMonitorTuning } from "../../extensions/whatsapp/runtime-api.js";
-export type {
-  WebInboundMessage,
-  WebListenerCloseReason,
-} from "../../extensions/whatsapp/runtime-api.js";
+export type { WebChannelStatus, WebInboundMessage, WebListenerCloseReason, WebMonitorTuning };
 export type {
   ChannelMessageActionContext,
   ChannelPlugin,
@@ -33,10 +79,7 @@ export {
   resolveWhatsAppConfigDefaultTo,
 } from "./channel-config-helpers.js";
 export { normalizeWhatsAppAllowFromEntries } from "../channels/plugins/normalize/whatsapp.js";
-export {
-  listWhatsAppDirectoryGroupsFromConfig,
-  listWhatsAppDirectoryPeersFromConfig,
-} from "../../extensions/whatsapp/src/directory-config.js";
+export { listWhatsAppDirectoryGroupsFromConfig, listWhatsAppDirectoryPeersFromConfig };
 export {
   collectAllowlistProviderGroupPolicyWarnings,
   collectOpenGroupPolicyRouteAllowlistWarnings,
@@ -49,10 +92,7 @@ export {
   resolveAllowlistProviderRuntimeGroupPolicy,
   resolveDefaultGroupPolicy,
 } from "../config/runtime-group-policy.js";
-export {
-  resolveWhatsAppGroupRequireMention,
-  resolveWhatsAppGroupToolPolicy,
-} from "../../extensions/whatsapp/api.js";
+export { resolveWhatsAppGroupRequireMention, resolveWhatsAppGroupToolPolicy };
 export {
   createWhatsAppOutboundBase,
   resolveWhatsAppGroupIntroHint,
@@ -65,50 +105,36 @@ export { createActionGate, readStringParam } from "../agents/tools/common.js";
 export { createPluginRuntimeStore } from "./runtime-store.js";
 export { normalizeE164 } from "../utils.js";
 
+export { hasAnyWhatsAppAuth, listEnabledWhatsAppAccounts, resolveWhatsAppAccount };
 export {
-  hasAnyWhatsAppAuth,
-  listEnabledWhatsAppAccounts,
-  resolveWhatsAppAccount,
-} from "../../extensions/whatsapp/api.js";
-export {
-  getActiveWebListener,
-  getWebAuthAgeMs,
-  WA_WEB_AUTH_DIR,
-  logWebSelfId,
-  logoutWeb,
-  pickWebChannel,
-  readWebSelfId,
-  webAuthExists,
-} from "../../extensions/whatsapp/runtime-api.js";
-export {
+  createWaSocket,
+  createWhatsAppLoginTool,
   DEFAULT_WEB_MEDIA_BYTES,
-  HEARTBEAT_PROMPT,
-  HEARTBEAT_TOKEN,
-  monitorWebChannel,
-  resolveHeartbeatRecipients,
-  runWebHeartbeatOnce,
-} from "../../extensions/whatsapp/runtime-api.js";
-export {
   extractMediaPlaceholder,
   extractText,
-  monitorWebInbox,
-} from "../../extensions/whatsapp/runtime-api.js";
-export { loginWeb } from "../../extensions/whatsapp/runtime-api.js";
-export {
+  formatError,
+  getActiveWebListener,
   getDefaultLocalRoots,
+  getStatusCode,
+  getWebAuthAgeMs,
+  HEARTBEAT_PROMPT,
+  HEARTBEAT_TOKEN,
   loadWebMedia,
   loadWebMediaRaw,
+  loginWeb,
+  logWebSelfId,
+  logoutWeb,
+  monitorWebChannel,
+  monitorWebInbox,
   optimizeImageToJpeg,
-} from "../../extensions/whatsapp/runtime-api.js";
-export {
+  pickWebChannel,
+  readWebSelfId,
+  resolveHeartbeatRecipients,
+  runWebHeartbeatOnce,
   sendMessageWhatsApp,
   sendPollWhatsApp,
   sendReactionWhatsApp,
-} from "../../extensions/whatsapp/runtime-api.js";
-export {
-  createWaSocket,
-  formatError,
-  getStatusCode,
   waitForWaConnection,
-} from "../../extensions/whatsapp/runtime-api.js";
-export { createWhatsAppLoginTool } from "../../extensions/whatsapp/runtime-api.js";
+  WA_WEB_AUTH_DIR,
+  webAuthExists,
+};

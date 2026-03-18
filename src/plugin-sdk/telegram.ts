@@ -1,3 +1,70 @@
+import type {
+  InspectedTelegramAccount,
+  ProviderInfo,
+  ResolvedTelegramAccount,
+  StickerMetadata,
+  TelegramButtonStyle,
+  TelegramInlineButtons,
+} from "../../extensions/telegram/api.js";
+import {
+  buildBrowseProvidersButton,
+  buildModelsKeyboard,
+  buildProviderKeyboard,
+  calculateTotalPages,
+  createTelegramActionGate,
+  fetchTelegramChatId,
+  getCacheStats,
+  getModelsPageSize,
+  inspectTelegramAccount,
+  isNumericTelegramUserId,
+  isTelegramExecApprovalApprover,
+  isTelegramExecApprovalClientEnabled,
+  listTelegramAccountIds,
+  looksLikeTelegramTargetId,
+  normalizeTelegramAllowFromEntry,
+  normalizeTelegramMessagingTarget,
+  parseTelegramReplyToMessageId,
+  parseTelegramThreadId,
+  resolveDefaultTelegramAccountId,
+  resolveTelegramGroupRequireMention,
+  resolveTelegramGroupToolPolicy,
+  resolveTelegramInlineButtonsScope,
+  resolveTelegramPollActionGateState,
+  resolveTelegramReactionLevel,
+  resolveTelegramTargetChatType,
+  searchStickers,
+  sendTelegramPayloadMessages,
+  collectTelegramStatusIssues,
+} from "../../extensions/telegram/api.js";
+import type { TelegramProbe } from "../../extensions/telegram/runtime-api.js";
+import {
+  auditTelegramGroupMembership,
+  collectTelegramUnmentionedGroupIds,
+  createForumTopicTelegram,
+  deleteMessageTelegram,
+  editForumTopicTelegram,
+  editMessageReplyMarkupTelegram,
+  editMessageTelegram,
+  monitorTelegramProvider,
+  pinMessageTelegram,
+  probeTelegram,
+  reactMessageTelegram,
+  renameForumTopicTelegram,
+  resolveTelegramToken,
+  sendMessageTelegram,
+  sendPollTelegram,
+  sendStickerTelegram,
+  sendTypingTelegram,
+  setTelegramThreadBindingIdleTimeoutBySessionKey,
+  setTelegramThreadBindingMaxAgeBySessionKey,
+  telegramMessageActions,
+  unpinMessageTelegram,
+} from "../../extensions/telegram/runtime-api.js";
+import {
+  listTelegramDirectoryGroupsFromConfig,
+  listTelegramDirectoryPeersFromConfig,
+} from "../../extensions/telegram/src/directory-config.js";
+
 export type {
   ChannelAccountSnapshot,
   ChannelGatewayContext,
@@ -17,11 +84,15 @@ export type {
   ChannelConfiguredBindingConversationRef,
   ChannelConfiguredBindingMatch,
 } from "../channels/plugins/types.adapters.js";
-export type { InspectedTelegramAccount } from "../../extensions/telegram/api.js";
-export type { ResolvedTelegramAccount } from "../../extensions/telegram/api.js";
-export type { TelegramProbe } from "../../extensions/telegram/runtime-api.js";
-export type { TelegramButtonStyle, TelegramInlineButtons } from "../../extensions/telegram/api.js";
-export type { StickerMetadata } from "../../extensions/telegram/api.js";
+export type {
+  InspectedTelegramAccount,
+  ProviderInfo,
+  ResolvedTelegramAccount,
+  StickerMetadata,
+  TelegramButtonStyle,
+  TelegramInlineButtons,
+  TelegramProbe,
+};
 
 export { emptyPluginConfigSchema } from "../plugins/config-schema.js";
 export { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
@@ -48,80 +119,58 @@ export {
   resolveAllowlistProviderRuntimeGroupPolicy,
   resolveDefaultGroupPolicy,
 } from "../config/runtime-group-policy.js";
-export {
-  listTelegramDirectoryGroupsFromConfig,
-  listTelegramDirectoryPeersFromConfig,
-} from "../../extensions/telegram/src/directory-config.js";
-export {
-  resolveTelegramGroupRequireMention,
-  resolveTelegramGroupToolPolicy,
-} from "../../extensions/telegram/api.js";
+export { listTelegramDirectoryGroupsFromConfig, listTelegramDirectoryPeersFromConfig };
+export { resolveTelegramGroupRequireMention, resolveTelegramGroupToolPolicy };
 export { TelegramConfigSchema } from "../config/zod-schema.providers-core.js";
 
 export { buildTokenChannelStatusSummary } from "./status-helpers.js";
 
 export {
-  createTelegramActionGate,
-  listTelegramAccountIds,
-  resolveDefaultTelegramAccountId,
-  resolveTelegramPollActionGateState,
-} from "../../extensions/telegram/api.js";
-export { inspectTelegramAccount } from "../../extensions/telegram/api.js";
-export {
-  looksLikeTelegramTargetId,
-  normalizeTelegramMessagingTarget,
-} from "../../extensions/telegram/api.js";
-export {
-  parseTelegramReplyToMessageId,
-  parseTelegramThreadId,
-} from "../../extensions/telegram/api.js";
-export {
-  isNumericTelegramUserId,
-  normalizeTelegramAllowFromEntry,
-} from "../../extensions/telegram/api.js";
-export { fetchTelegramChatId } from "../../extensions/telegram/api.js";
-export {
-  resolveTelegramInlineButtonsScope,
-  resolveTelegramTargetChatType,
-} from "../../extensions/telegram/api.js";
-export { resolveTelegramReactionLevel } from "../../extensions/telegram/api.js";
-export {
   auditTelegramGroupMembership,
-  collectTelegramUnmentionedGroupIds,
-  createForumTopicTelegram,
-  deleteMessageTelegram,
-  editForumTopicTelegram,
-  editMessageReplyMarkupTelegram,
-  editMessageTelegram,
-  monitorTelegramProvider,
-  pinMessageTelegram,
-  reactMessageTelegram,
-  renameForumTopicTelegram,
-  probeTelegram,
-  sendMessageTelegram,
-  sendPollTelegram,
-  sendStickerTelegram,
-  sendTypingTelegram,
-  unpinMessageTelegram,
-} from "../../extensions/telegram/runtime-api.js";
-export { getCacheStats, searchStickers } from "../../extensions/telegram/api.js";
-export { resolveTelegramToken } from "../../extensions/telegram/runtime-api.js";
-export { telegramMessageActions } from "../../extensions/telegram/runtime-api.js";
-export {
-  setTelegramThreadBindingIdleTimeoutBySessionKey,
-  setTelegramThreadBindingMaxAgeBySessionKey,
-} from "../../extensions/telegram/runtime-api.js";
-export { collectTelegramStatusIssues } from "../../extensions/telegram/api.js";
-export { sendTelegramPayloadMessages } from "../../extensions/telegram/api.js";
-export {
   buildBrowseProvidersButton,
   buildModelsKeyboard,
   buildProviderKeyboard,
   calculateTotalPages,
+  collectTelegramStatusIssues,
+  collectTelegramUnmentionedGroupIds,
+  createForumTopicTelegram,
+  createTelegramActionGate,
+  deleteMessageTelegram,
+  editForumTopicTelegram,
+  editMessageReplyMarkupTelegram,
+  editMessageTelegram,
+  fetchTelegramChatId,
+  getCacheStats,
   getModelsPageSize,
-  type ProviderInfo,
-} from "../../extensions/telegram/api.js";
-export {
+  inspectTelegramAccount,
+  isNumericTelegramUserId,
   isTelegramExecApprovalApprover,
   isTelegramExecApprovalClientEnabled,
-} from "../../extensions/telegram/api.js";
+  listTelegramAccountIds,
+  looksLikeTelegramTargetId,
+  monitorTelegramProvider,
+  normalizeTelegramAllowFromEntry,
+  normalizeTelegramMessagingTarget,
+  parseTelegramReplyToMessageId,
+  parseTelegramThreadId,
+  pinMessageTelegram,
+  probeTelegram,
+  reactMessageTelegram,
+  renameForumTopicTelegram,
+  resolveDefaultTelegramAccountId,
+  resolveTelegramInlineButtonsScope,
+  resolveTelegramPollActionGateState,
+  resolveTelegramReactionLevel,
+  resolveTelegramTargetChatType,
+  resolveTelegramToken,
+  searchStickers,
+  sendMessageTelegram,
+  sendPollTelegram,
+  sendStickerTelegram,
+  sendTelegramPayloadMessages,
+  sendTypingTelegram,
+  setTelegramThreadBindingIdleTimeoutBySessionKey,
+  setTelegramThreadBindingMaxAgeBySessionKey,
+  telegramMessageActions,
+  unpinMessageTelegram,
+};

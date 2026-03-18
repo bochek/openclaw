@@ -1,7 +1,53 @@
+import type { InspectedSlackAccount, ResolvedSlackAccount } from "../../extensions/slack/api.js";
+import {
+  buildSlackThreadingToolContext,
+  deleteSlackMessage,
+  downloadSlackFile,
+  editSlackMessage,
+  extractSlackToolSend,
+  getSlackMemberInfo,
+  handleSlackHttpRequest,
+  inspectSlackAccount,
+  isSlackInteractiveRepliesEnabled,
+  listEnabledSlackAccounts,
+  listSlackAccountIds,
+  listSlackEmojis,
+  listSlackMessageActions,
+  listSlackPins,
+  listSlackReactions,
+  parseSlackBlocksInput,
+  pinSlackMessage,
+  reactSlackMessage,
+  readSlackMessages,
+  recordSlackThreadParticipation,
+  removeOwnSlackReactions,
+  removeSlackReaction,
+  resolveDefaultSlackAccountId,
+  resolveSlackGroupRequireMention,
+  resolveSlackGroupToolPolicy,
+  resolveSlackReplyToMode,
+  sendSlackMessage,
+  unpinSlackMessage,
+} from "../../extensions/slack/api.js";
+import type { SlackActionContext } from "../../extensions/slack/runtime-api.js";
+import {
+  handleSlackAction,
+  listSlackDirectoryGroupsLive,
+  listSlackDirectoryPeersLive,
+  monitorSlackProvider,
+  probeSlack,
+  resolveSlackChannelAllowlist,
+  resolveSlackUserAllowlist,
+  sendMessageSlack,
+} from "../../extensions/slack/runtime-api.js";
+import {
+  listSlackDirectoryGroupsFromConfig,
+  listSlackDirectoryPeersFromConfig,
+} from "../../extensions/slack/src/directory-config.js";
+
 export type { OpenClawConfig } from "../config/config.js";
 export type { SlackAccountConfig } from "../config/types.slack.js";
-export type { InspectedSlackAccount } from "../../extensions/slack/api.js";
-export type { ResolvedSlackAccount } from "../../extensions/slack/api.js";
+export type { InspectedSlackAccount, ResolvedSlackAccount, SlackActionContext };
 export type {
   ChannelMessageActionContext,
   ChannelPlugin,
@@ -32,59 +78,51 @@ export {
   looksLikeSlackTargetId,
   normalizeSlackMessagingTarget,
 } from "../channels/plugins/normalize/slack.js";
-export {
-  listSlackDirectoryGroupsFromConfig,
-  listSlackDirectoryPeersFromConfig,
-} from "../../extensions/slack/src/directory-config.js";
+export { listSlackDirectoryGroupsFromConfig, listSlackDirectoryPeersFromConfig };
 export {
   resolveDefaultGroupPolicy,
   resolveOpenProviderRuntimeGroupPolicy,
 } from "../config/runtime-group-policy.js";
-export {
-  resolveSlackGroupRequireMention,
-  resolveSlackGroupToolPolicy,
-} from "../../extensions/slack/api.js";
+export { resolveSlackGroupRequireMention, resolveSlackGroupToolPolicy };
 export { SlackConfigSchema } from "../config/zod-schema.providers-core.js";
 export { buildComputedAccountStatusSnapshot } from "./status-helpers.js";
 
 export {
+  inspectSlackAccount,
+  isSlackInteractiveRepliesEnabled,
   listEnabledSlackAccounts,
   listSlackAccountIds,
   resolveDefaultSlackAccountId,
   resolveSlackReplyToMode,
-} from "../../extensions/slack/api.js";
-export { isSlackInteractiveRepliesEnabled } from "../../extensions/slack/api.js";
-export { inspectSlackAccount } from "../../extensions/slack/api.js";
+};
 export { parseSlackTarget, resolveSlackChannelId } from "./slack-targets.js";
-export { extractSlackToolSend, listSlackMessageActions } from "../../extensions/slack/api.js";
-export { buildSlackThreadingToolContext } from "../../extensions/slack/api.js";
-export { parseSlackBlocksInput } from "../../extensions/slack/api.js";
-export { handleSlackHttpRequest } from "../../extensions/slack/api.js";
 export {
-  handleSlackAction,
-  listSlackDirectoryGroupsLive,
-  listSlackDirectoryPeersLive,
-  monitorSlackProvider,
-  probeSlack,
-  resolveSlackChannelAllowlist,
-  resolveSlackUserAllowlist,
-  sendMessageSlack,
-} from "../../extensions/slack/runtime-api.js";
-export {
+  buildSlackThreadingToolContext,
   deleteSlackMessage,
   downloadSlackFile,
   editSlackMessage,
+  extractSlackToolSend,
   getSlackMemberInfo,
+  handleSlackAction,
+  handleSlackHttpRequest,
+  listSlackDirectoryGroupsLive,
+  listSlackDirectoryPeersLive,
   listSlackEmojis,
+  listSlackMessageActions,
   listSlackPins,
   listSlackReactions,
+  monitorSlackProvider,
+  parseSlackBlocksInput,
   pinSlackMessage,
+  probeSlack,
   reactSlackMessage,
   readSlackMessages,
+  recordSlackThreadParticipation,
   removeOwnSlackReactions,
   removeSlackReaction,
+  resolveSlackChannelAllowlist,
+  resolveSlackUserAllowlist,
+  sendMessageSlack,
   sendSlackMessage,
   unpinSlackMessage,
-} from "../../extensions/slack/api.js";
-export { recordSlackThreadParticipation } from "../../extensions/slack/api.js";
-export type { SlackActionContext } from "../../extensions/slack/runtime-api.js";
+};
