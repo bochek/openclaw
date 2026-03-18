@@ -91,6 +91,7 @@ export type CronProps = {
     cronRunsQuery?: string;
     cronRunsSortDir?: CronSortDir;
   }) => void | Promise<void>;
+  onNavigateToChat?: (sessionKey: string) => void;
 };
 
 function getRunStatusOptions(): Array<{ value: CronRunsStatusValue; label: string }> {
