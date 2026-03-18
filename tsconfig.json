@@ -23,6 +23,21 @@
       "openclaw/plugin-sdk/account-id": ["./src/plugin-sdk/account-id.ts"]
     }
   },
-  "include": ["src/**/*", "ui/**/*", "extensions/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*", "extensions/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "ui",
+    "extensions/acpx",
+    "extensions/diagnostics-otel",
+    "extensions/diffs",
+    "extensions/googlechat",
+    "extensions/matrix",
+    "extensions/memory-lancedb",
+    "extensions/msteams",
+    "extensions/nostr",
+    "extensions/tlon",
+    "extensions/twitch",
+    "extensions/zalouser"
+  ]
 }

@@ -25,6 +25,30 @@ function normalizePath(filePath) {
   return path.relative(repoRoot, filePath).split(path.sep).join("/");
 }
 
+function readDefaultTsconfigFiles() {
+  const tsconfigPath = path.join(repoRoot, "tsconfig.json");
+  const readTsConfigFile = (filePath) => ts.sys.readFile(filePath);
+  const parsedConfig = ts.readConfigFile(tsconfigPath, readTsConfigFile);
+  if (parsedConfig.error) {
+    throw new Error(ts.flattenDiagnosticMessageText(parsedConfig.error.messageText, "\n"));
+  }
+  const resolvedConfig = ts.parseJsonConfigFileContent(
+    parsedConfig.config,
+    ts.sys,
+    repoRoot,
+    undefined,
+    tsconfigPath,
+  );
+  if (resolvedConfig.errors.length > 0) {
+    throw new Error(
+      resolvedConfig.errors
+        .map((error) => ts.flattenDiagnosticMessageText(error.messageText, "\n"))
+        .join("\n"),
+    );
+  }
+  return new Set(resolvedConfig.fileNames.map((fileName) => normalizePath(fileName)));
+}
+
 function isCodeFile(fileName) {
   return /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/.test(fileName);
 }
@@ -337,8 +361,30 @@ function packageClusterMeta(relativePackagePath) {
   };
 }
 
+function workspaceSourcePrefix(relativePackagePath) {
+  if (relativePackagePath === "ui/package.json") {
+    return "ui/";
+  }
+  const cluster = relativePackagePath.split("/")[1];
+  return `extensions/${cluster}/`;
+}
+
 function classifyMissingPackageCluster(params) {
   if (optionalBundledClusterSet.has(params.cluster)) {
+    if (!params.defaultGraphReachable) {
+      if (params.cluster === "ui") {
+        return {
+          decision: "optional",
+          reason:
+            "Private UI workspace is excluded from the default tsconfig graph, so repo-wide check/build does not require UI-only packages by default.",
+        };
+      }
+      return {
+        decision: "optional",
+        reason:
+          "Workspace package is excluded from the default tsconfig graph, so repo-wide check/build does not require its plugin-local dependencies by default.",
+      };
+    }
     if (params.cluster === "ui") {
       return {
         decision: "optional",
@@ -375,6 +421,7 @@ async function buildMissingPackages() {
   ]);
 
   const pluginSdkEntrySources = await walkCodeFiles(path.join(repoRoot, "src", "plugin-sdk"));
+  const defaultTsconfigFiles = readDefaultTsconfigFiles();
   const pluginSdkReachability = new Map();
   for (const filePath of pluginSdkEntrySources) {
     const source = await fs.readFile(filePath, "utf8");
@@ -403,6 +450,9 @@ async function buildMissingPackages() {
       continue;
     }
     const meta = packageClusterMeta(relativePackagePath);
+    const defaultGraphIncludedFileCount = [...defaultTsconfigFiles].filter((filePath) =>
+      filePath.startsWith(workspaceSourcePrefix(relativePackagePath)),
+    ).length;
     const rootDependencyMirrorAllowlist = (
       pkg.openclaw?.releaseChecks?.rootDependencyMirrorAllowlist ?? []
     ).toSorted(compareStrings);
@@ -411,12 +461,15 @@ async function buildMissingPackages() {
     );
     const classification = classifyMissingPackageCluster({
       cluster: meta.cluster,
+      defaultGraphReachable: defaultGraphIncludedFileCount > 0,
       pluginSdkEntries,
     });
     output.push({
       cluster: meta.cluster,
       decision: classification.decision,
       decisionReason: classification.reason,
+      defaultGraphIncludedFileCount,
+      defaultGraphStatus: defaultGraphIncludedFileCount > 0 ? "included" : "excluded",
       packageName: pkg.name ?? meta.packageName,
       packagePath: relativePackagePath,
       npmSpec: pkg.openclaw?.install?.npmSpec ?? null,
