@@ -1,13 +1,25 @@
 import {
   createDiscordActionGate,
   collectDiscordStatusIssues,
+  inspectDiscordAccount,
   listDiscordDirectoryGroupsFromConfig,
   listDiscordDirectoryPeersFromConfig,
+  listDiscordAccountIds,
   looksLikeDiscordTargetId,
   normalizeDiscordMessagingTarget,
   normalizeDiscordOutboundTarget,
   readDiscordComponentSpec,
+  resolveDefaultDiscordAccountId,
   resolveDiscordChannelId,
+  resolveDiscordGroupRequireMention,
+  resolveDiscordGroupToolPolicy,
+} from "../../extensions/discord/api.js";
+import type {
+  DiscordPluralKitConfig,
+  DiscordSendComponents,
+  DiscordSendEmbeds,
+  InspectedDiscordAccount,
+  ResolvedDiscordAccount,
 } from "../../extensions/discord/api.js";
 import type {
   ThreadBindingManager,
@@ -38,6 +50,8 @@ import {
   getGateway,
   getPresence,
   getThreadBindingManager,
+  hasAnyGuildPermissionDiscord,
+  kickMemberDiscord,
   listDiscordDirectoryGroupsLive,
   listDiscordDirectoryPeersLive,
   listThreadBindingsBySessionKey,
@@ -74,31 +88,13 @@ import {
   setChannelPermissionDiscord,
   timeoutMemberDiscord,
   unbindThreadBindingsBySessionKey,
+  unpinMessageDiscord,
   uploadEmojiDiscord,
   uploadStickerDiscord,
   readMessagesDiscord,
   searchMessagesDiscord,
 } from "../../extensions/discord/runtime-api.js";
 import { normalizeExplicitDiscordSessionKey } from "../../extensions/discord/session-key-api.js";
-import type {
-  DiscordPluralKitConfig,
-  DiscordSendComponents,
-  DiscordSendEmbeds,
-  InspectedDiscordAccount,
-  ResolvedDiscordAccount,
-} from "../channels/discord/plugin-sdk-bridge.js";
-import {
-  inspectDiscordAccount,
-  listDiscordAccountIds,
-  resolveDefaultDiscordAccountId,
-  resolveDiscordGroupRequireMention,
-  resolveDiscordGroupToolPolicy,
-} from "../channels/discord/plugin-sdk-bridge.js";
-import {
-  hasAnyGuildPermissionDiscord,
-  kickMemberDiscord,
-  unpinMessageDiscord,
-} from "../channels/discord/plugin-sdk-bridge.js";
 
 export type {
   ChannelAccountSnapshot,

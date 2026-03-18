@@ -1,3 +1,8 @@
+import {
+  resolveDiscordAccount as resolveDiscordAccountImpl,
+  type ResolvedDiscordAccount as DiscordResolvedDiscordAccount,
+} from "../../extensions/discord/account-api.js";
+
 export type { OpenClawConfig } from "../config/config.js";
 
 export { createAccountActionGate } from "../channels/plugins/account-action-gate.js";
@@ -11,10 +16,6 @@ export {
 } from "../routing/session-key.js";
 export { normalizeE164, pathExists, resolveUserPath } from "../utils.js";
 export {
-  resolveDiscordAccount,
-  type ResolvedDiscordAccount,
-} from "../channels/discord/plugin-sdk-bridge.js";
-export {
   resolveSlackAccount,
   type ResolvedSlackAccount,
 } from "../channels/slack/plugin-sdk-bridge.js";
@@ -26,6 +27,14 @@ export {
   resolveSignalAccount,
   type ResolvedSignalAccount,
 } from "../channels/signal/plugin-sdk-bridge.js";
+
+export type ResolvedDiscordAccount = DiscordResolvedDiscordAccount;
+
+export function resolveDiscordAccount(
+  ...args: Parameters<typeof resolveDiscordAccountImpl>
+): ReturnType<typeof resolveDiscordAccountImpl> {
+  return resolveDiscordAccountImpl(...args);
+}
 
 /** Resolve an account by id, then fall back to the default account when the primary lacks credentials. */
 export function resolveAccountWithDefaultFallback<TAccount>(params: {
