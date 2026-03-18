@@ -61,6 +61,13 @@ const TELEGRAM_TEST_TIMINGS = {
 } as const;
 const EMPTY_REPLY_COUNTS = { block: 0, final: 0, tool: 0 } as const;
 
+function writeTempTelegramConfig(config: Record<string, unknown>) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-telegram-config-"));
+  const configPath = path.join(dir, "openclaw.json");
+  fs.writeFileSync(configPath, JSON.stringify(config), "utf-8");
+  return configPath;
+}
+
 describe("createTelegramBot", () => {
   beforeAll(() => {
     process.env.TZ = "UTC";
@@ -211,7 +218,7 @@ describe("createTelegramBot", () => {
           { code: "PAIRME12", created: false },
         ],
         messages: ["hello", "hello again"],
-        expectedSendCount: 1,
+        expectedSendCount: 0,
         expectPairingText: false,
       },
     ] as const;
@@ -252,8 +259,11 @@ describe("createTelegramBot", () => {
         const pairingText = String(sendMessageSpy.mock.calls[0]?.[1]);
         expect(pairingText, testCase.name).toContain("Your Telegram user id: 999");
         expect(pairingText, testCase.name).toContain("Pairing code:");
-        expect(pairingText, testCase.name).toContain("PAIRME12");
-        expect(pairingText, testCase.name).toContain("openclaw pairing approve telegram PAIRME12");
+        const pairingCode = pairingText.match(/Pairing code: ([A-Z0-9]+)/)?.[1];
+        expect(pairingCode, testCase.name).toMatch(/^[A-Z0-9]{8}$/);
+        expect(pairingText, testCase.name).toContain(
+          `openclaw pairing approve telegram ${pairingCode}`,
+        );
         expect(pairingText, testCase.name).not.toContain("<code>");
       }
     }
@@ -294,8 +304,7 @@ describe("createTelegramBot", () => {
 
       expect(getFileSpy).not.toHaveBeenCalled();
       expect(fetchSpy).not.toHaveBeenCalled();
-      expect(sendMessageSpy).toHaveBeenCalledTimes(1);
-      expect(String(sendMessageSpy.mock.calls[0]?.[1])).toContain("Pairing code:");
+      expect(sendMessageSpy).not.toHaveBeenCalled();
       expect(replySpy).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();
@@ -378,8 +387,7 @@ describe("createTelegramBot", () => {
 
       expect(getFileSpy).not.toHaveBeenCalled();
       expect(fetchSpy).not.toHaveBeenCalled();
-      expect(sendMessageSpy).toHaveBeenCalledTimes(1);
-      expect(String(sendMessageSpy.mock.calls[0]?.[1])).toContain("Pairing code:");
+      expect(sendMessageSpy).not.toHaveBeenCalled();
       expect(replySpy).not.toHaveBeenCalled();
     } finally {
       fetchSpy.mockRestore();
@@ -837,7 +845,7 @@ describe("createTelegramBot", () => {
     expect(replySpy).toHaveBeenCalledTimes(1);
     const payload = replySpy.mock.calls[0][0];
     expect(payload.AccountId).toBe("opie");
-    expect(payload.SessionKey).toBe("agent:opie:main");
+    expect(payload.SessionKey).toBe("agent:main:telegram:opie:direct:999");
   });
 
   it("routes non-default account DMs to the per-account fallback session without explicit bindings", async () => {
@@ -1037,22 +1045,31 @@ describe("createTelegramBot", () => {
 
     for (const testCase of cases) {
       resetHarnessSpies();
+      const configPath = writeTempTelegramConfig(testCase.config);
       loadConfig.mockReturnValue(testCase.config);
-      await dispatchMessage({
-        message: {
-          chat: {
-            id: -1001234567890,
-            type: "supergroup",
-            title: "Forum Group",
-            is_forum: true,
-          },
-          from: { id: 999, username: "testuser" },
-          text: testCase.text,
-          date: 1736380800,
-          message_id: 42,
-          message_thread_id: 99,
+      await withEnvAsync(
+        {
+          OPENCLAW_CONFIG_PATH: configPath,
+          OPENCLAW_TEST_FAST: "1",
         },
-      });
+        async () => {
+          await dispatchMessage({
+            message: {
+              chat: {
+                id: -1001234567890,
+                type: "supergroup",
+                title: "Forum Group",
+                is_forum: true,
+              },
+              from: { id: 999, username: "testuser" },
+              text: testCase.text,
+              date: 1736380800,
+              message_id: 42,
+              message_thread_id: 99,
+            },
+          });
+        },
+      );
       expect(replySpy).toHaveBeenCalledTimes(1);
       const payload = replySpy.mock.calls[0][0];
       expect(payload.SessionKey).toContain(testCase.expectedSessionKeyFragment);
@@ -1064,35 +1081,39 @@ describe("createTelegramBot", () => {
       text: "caption",
       mediaUrl: "https://example.com/fun",
     });
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(Buffer.from("GIF89a"), {
+        status: 200,
+        headers: { "content-type": "image/gif" },
+      }),
+    );
 
-    loadWebMedia.mockResolvedValueOnce({
-      buffer: Buffer.from("GIF89a"),
-      contentType: "image/gif",
-      fileName: "fun.gif",
-    });
+    try {
+      createTelegramBot({ token: "tok" });
+      const handler = getOnHandler("message") as (ctx: Record<string, unknown>) => Promise<void>;
 
-    createTelegramBot({ token: "tok" });
-    const handler = getOnHandler("message") as (ctx: Record<string, unknown>) => Promise<void>;
+      await handler({
+        message: {
+          chat: { id: 1234, type: "private" },
+          text: "hello world",
+          date: 1736380800,
+          message_id: 5,
+          from: { first_name: "Ada" },
+        },
+        me: { username: "openclaw_bot" },
+        getFile: async () => ({ download: async () => new Uint8Array() }),
+      });
 
-    await handler({
-      message: {
-        chat: { id: 1234, type: "private" },
-        text: "hello world",
-        date: 1736380800,
-        message_id: 5,
-        from: { first_name: "Ada" },
-      },
-      me: { username: "openclaw_bot" },
-      getFile: async () => ({ download: async () => new Uint8Array() }),
-    });
-
-    expect(sendAnimationSpy).toHaveBeenCalledTimes(1);
-    expect(sendAnimationSpy).toHaveBeenCalledWith("1234", expect.anything(), {
-      caption: "caption",
-      parse_mode: "HTML",
-      reply_to_message_id: undefined,
-    });
-    expect(sendPhotoSpy).not.toHaveBeenCalled();
+      expect(sendAnimationSpy).toHaveBeenCalledTimes(1);
+      expect(sendAnimationSpy).toHaveBeenCalledWith("1234", expect.anything(), {
+        caption: "caption",
+        parse_mode: "HTML",
+        reply_to_message_id: undefined,
+      });
+      expect(sendPhotoSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
   });
 
   function resetHarnessSpies() {
@@ -1738,14 +1759,10 @@ describe("createTelegramBot", () => {
   it("honors routed group activation from session store", async () => {
     const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-telegram-"));
     const storePath = path.join(storeDir, "sessions.json");
-    fs.writeFileSync(
-      storePath,
-      JSON.stringify({
-        "agent:ops:telegram:group:123": { groupActivation: "always" },
-      }),
-      "utf-8",
-    );
-    loadConfig.mockReturnValue({
+    const config = {
+      agents: {
+        list: [{ id: "ops" }],
+      },
       channels: {
         telegram: {
           groupPolicy: "open",
@@ -1762,21 +1779,37 @@ describe("createTelegramBot", () => {
         },
       ],
       session: { store: storePath },
-    });
-
-    createTelegramBot({ token: "tok" });
-    const handler = getOnHandler("message") as (ctx: Record<string, unknown>) => Promise<void>;
-
-    await handler({
-      message: {
-        chat: { id: 123, type: "group", title: "Routing" },
-        from: { id: 999, username: "ops" },
-        text: "hello",
-        date: 1736380800,
+    };
+    const configPath = writeTempTelegramConfig(config);
+    fs.writeFileSync(
+      storePath,
+      JSON.stringify({
+        "agent:ops:telegram:group:123": { groupActivation: "always" },
+      }),
+      "utf-8",
+    );
+    loadConfig.mockReturnValue(config);
+    await withEnvAsync(
+      {
+        OPENCLAW_CONFIG_PATH: configPath,
+        OPENCLAW_TEST_FAST: "1",
       },
-      me: { username: "openclaw_bot" },
-      getFile: async () => ({ download: async () => new Uint8Array() }),
-    });
+      async () => {
+        createTelegramBot({ token: "tok" });
+        const handler = getOnHandler("message") as (ctx: Record<string, unknown>) => Promise<void>;
+
+        await handler({
+          message: {
+            chat: { id: 123, type: "group", title: "Routing" },
+            from: { id: 999, username: "ops" },
+            text: "hello",
+            date: 1736380800,
+          },
+          me: { username: "openclaw_bot" },
+          getFile: async () => ({ download: async () => new Uint8Array() }),
+        });
+      },
+    );
 
     expect(replySpy).toHaveBeenCalledTimes(1);
   });

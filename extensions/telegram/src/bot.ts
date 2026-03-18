@@ -1,27 +1,31 @@
-import { resolveDefaultAgentId } from "openclaw/plugin-sdk/agent-runtime";
+import { resolveDefaultAgentId } from "../../../src/agents/agent-scope.js";
+import { resolveTextChunkLimit } from "../../../src/auto-reply/chunk.js";
+import {
+  DEFAULT_GROUP_HISTORY_LIMIT,
+  type HistoryEntry,
+} from "../../../src/auto-reply/reply/history.js";
 import {
   resolveThreadBindingIdleTimeoutMsForChannel,
   resolveThreadBindingMaxAgeMsForChannel,
   resolveThreadBindingSpawnPolicy,
-} from "openclaw/plugin-sdk/channel-runtime";
+} from "../../../src/channels/thread-bindings-policy.js";
 import {
   isNativeCommandsExplicitlyDisabled,
   resolveNativeCommandsEnabled,
   resolveNativeSkillsEnabled,
-} from "openclaw/plugin-sdk/config-runtime";
-import type { OpenClawConfig, ReplyToMode } from "openclaw/plugin-sdk/config-runtime";
+} from "../../../src/config/commands.js";
+import type { OpenClawConfig, ReplyToMode } from "../../../src/config/config.js";
+import { loadConfig } from "../../../src/config/config.js";
 import {
   resolveChannelGroupPolicy,
   resolveChannelGroupRequireMention,
-} from "openclaw/plugin-sdk/config-runtime";
-import { loadSessionStore, resolveStorePath } from "openclaw/plugin-sdk/config-runtime";
-import { formatUncaughtError } from "openclaw/plugin-sdk/infra-runtime";
-import { resolveTextChunkLimit } from "openclaw/plugin-sdk/reply-runtime";
-import { DEFAULT_GROUP_HISTORY_LIMIT, type HistoryEntry } from "openclaw/plugin-sdk/reply-runtime";
-import { danger, logVerbose, shouldLogVerbose } from "openclaw/plugin-sdk/runtime-env";
-import { getChildLogger } from "openclaw/plugin-sdk/runtime-env";
-import { createSubsystemLogger } from "openclaw/plugin-sdk/runtime-env";
-import { createNonExitingRuntime, type RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
+} from "../../../src/config/group-policy.js";
+import { loadSessionStore, resolveStorePath } from "../../../src/config/sessions.js";
+import { danger, logVerbose, shouldLogVerbose } from "../../../src/globals.js";
+import { formatUncaughtError } from "../../../src/infra/errors.js";
+import { getChildLogger } from "../../../src/logging.js";
+import { createSubsystemLogger } from "../../../src/logging/subsystem.js";
+import { createNonExitingRuntime, type RuntimeEnv } from "../../../src/runtime.js";
 import { resolveTelegramAccount } from "./accounts.js";
 import { defaultTelegramBotDeps, type TelegramBotDeps } from "./bot-deps.js";
 import { registerTelegramHandlers } from "./bot-handlers.js";

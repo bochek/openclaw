@@ -12,7 +12,104 @@ const dispatchReplyWithBufferedBlockDispatcher = vi.hoisted(() => vi.fn());
 const deliverReplies = vi.hoisted(() => vi.fn());
 const editMessageTelegram = vi.hoisted(() => vi.fn());
 const loadSessionStore = vi.hoisted(() => vi.fn());
+const createReplyPrefixOptions = vi.hoisted(() => vi.fn(() => ({ onModelSelected: vi.fn() })));
+const createTypingCallbacks = vi.hoisted(() =>
+  vi.fn(() => ({
+    onReplyStart: vi.fn(async () => undefined),
+    onIdle: vi.fn(),
+    onCleanup: vi.fn(),
+  })),
+);
+const mediaLocalRoots = vi.hoisted(() => {
+  const stateDir =
+    process.env.OPENCLAW_STATE_DIR?.trim() ||
+    process.env.CLAWDBOT_STATE_DIR?.trim() ||
+    `${process.env.HOME}/.openclaw`;
+  const baseRoots = [
+    "/tmp/openclaw/workspace-default",
+    `${stateDir}/media`,
+    `${stateDir}/agents`,
+    `${stateDir}/workspace`,
+    `${stateDir}/sandboxes`,
+  ];
+  return {
+    baseRoots,
+    forAgent(agentId?: string) {
+      if (!agentId?.trim()) {
+        return baseRoots;
+      }
+      return [...baseRoots, `${stateDir}/workspace-${agentId}`];
+    },
+  };
+});
 const resolveStorePath = vi.hoisted(() => vi.fn(() => "/tmp/sessions.json"));
+
+vi.mock("../../../src/agents/agent-scope.js", () => ({
+  resolveAgentDir: vi.fn(() => "/tmp/openclaw-agent"),
+}));
+
+vi.mock("../../../src/agents/model-catalog.js", () => ({
+  findModelInCatalog: vi.fn(() => null),
+  loadModelCatalog: vi.fn(async () => []),
+  modelSupportsVision: vi.fn(() => false),
+}));
+
+vi.mock("../../../src/agents/model-selection.js", () => ({
+  resolveDefaultModelForAgent: vi.fn(() => ({ provider: "openai", model: "gpt-5" })),
+}));
+
+vi.mock("openclaw/plugin-sdk/config-runtime", () => ({
+  isDangerousNameMatchingEnabled: vi.fn(() => false),
+  loadConfig: vi.fn(() => ({})),
+  normalizeResolvedSecretInputString: vi.fn((value?: string | null) => value ?? ""),
+  readSessionUpdatedAt: vi.fn(() => undefined),
+  resolveAgentMaxConcurrent: vi.fn(() => undefined),
+  resolveDefaultGroupPolicy: vi.fn(() => undefined),
+  resolveMarkdownTableMode: vi.fn(() => "code"),
+  resolveOpenProviderRuntimeGroupPolicy: vi.fn(() => undefined),
+  resolveSessionStoreEntry: vi.fn(() => ({ existing: undefined })),
+  resolveStorePath: vi.fn(() => "/tmp/sessions.json"),
+  resolveTelegramPreviewStreamMode: vi.fn(() => "draft"),
+}));
+
+vi.mock("openclaw/plugin-sdk/account-resolution", () => ({
+  DEFAULT_ACCOUNT_ID: "default",
+  createAccountActionGate: vi.fn(),
+  createAccountListHelpers: vi.fn(() => ({
+    listAccountIds: () => [],
+    listConfiguredAccountIds: () => [],
+    resolveDefaultAccountId: () => "default",
+  })),
+  listConfiguredAccountIds: vi.fn(() => []),
+  normalizeAccountId: vi.fn((accountId?: string | null) => accountId?.trim() || "default"),
+  normalizeChatType: vi.fn((chatType: string) => chatType),
+  normalizeOptionalAccountId: vi.fn((accountId?: string | null) => accountId?.trim() || undefined),
+  pathExists: vi.fn(async () => false),
+  resolveAccountEntry: vi.fn(),
+  resolveAccountWithDefaultFallback: vi.fn(),
+  resolveDiscordAccount: vi.fn(),
+  resolveSignalAccount: vi.fn(),
+  resolveSlackAccount: vi.fn(),
+  resolveTelegramAccount: vi.fn(),
+  resolveUserPath: vi.fn(),
+}));
+
+vi.mock("../../../src/auto-reply/chunk.js", () => ({
+  resolveChunkMode: vi.fn(() => "length"),
+}));
+
+vi.mock("../../../src/auto-reply/reply/history.js", () => ({
+  clearHistoryEntriesIfEnabled: vi.fn(),
+}));
+
+vi.mock("../../../src/channels/ack-reactions.js", () => ({
+  removeAckReactionAfterReply: vi.fn(),
+}));
+
+vi.mock("../../../src/channels/logging.js", () => ({
+  logAckFailure: vi.fn(),
+  logTypingFailure: vi.fn(),
+}));
 
 vi.mock("./draft-stream.js", () => ({
   createTelegramDraftStream,
@@ -22,22 +119,93 @@ vi.mock("../../../src/auto-reply/reply/provider-dispatcher.js", () => ({
   dispatchReplyWithBufferedBlockDispatcher,
 }));
 
+vi.mock("./bot-deps.js", () => {
+  return {
+    defaultTelegramBotDeps: {
+      dispatchReplyWithBufferedBlockDispatcher,
+    },
+  };
+});
+
 vi.mock("./bot/delivery.js", () => ({
   deliverReplies,
 }));
 
-vi.mock("./send.js", () => ({
-  editMessageTelegram,
+vi.mock("../../../src/channels/reply-prefix.js", () => ({
+  createReplyPrefixOptions,
 }));
 
-vi.mock("../../../src/config/sessions.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../src/config/sessions.js")>();
+vi.mock("../../../src/channels/typing.js", () => ({
+  createTypingCallbacks,
+}));
+
+vi.mock("../../../src/config/markdown-tables.js", () => ({
+  resolveMarkdownTableMode: vi.fn(() => "code"),
+}));
+
+vi.mock("./send.js", () => ({
+  createForumTopicTelegram: vi.fn(),
+  deleteMessageTelegram: vi.fn(),
+  editForumTopicTelegram: vi.fn(),
+  editMessageTelegram,
+  reactMessageTelegram: vi.fn(),
+  sendMessageTelegram: vi.fn(),
+  sendPollTelegram: vi.fn(),
+  sendStickerTelegram: vi.fn(),
+}));
+
+vi.mock("../../../src/config/sessions.js", () => {
   return {
-    ...actual,
     loadSessionStore,
+    resolveSessionStoreEntry: vi.fn(
+      ({ store, sessionKey }: { store: Record<string, unknown>; sessionKey?: string }) => ({
+        existing:
+          typeof sessionKey === "string"
+            ? ((store?.[sessionKey] as Record<string, unknown> | undefined) ?? undefined)
+            : undefined,
+      }),
+    ),
     resolveStorePath,
   };
 });
+
+vi.mock("../../../src/globals.js", () => ({
+  danger: vi.fn((text: string) => text),
+  logVerbose: vi.fn(),
+}));
+
+vi.mock("../../../src/logging/diagnostic.js", () => ({
+  getDiagnosticSessionStateCountForTest: vi.fn(() => 0),
+  logMessageProcessed: vi.fn(),
+  logMessageQueued: vi.fn(),
+  logSessionStateChange: vi.fn(),
+  logWebhookError: vi.fn(),
+  logWebhookProcessed: vi.fn(),
+  logWebhookReceived: vi.fn(),
+  pruneDiagnosticSessionStates: vi.fn(),
+  resetDiagnosticSessionStateForTest: vi.fn(),
+  resolveStuckSessionWarnMs: vi.fn(() => 120_000),
+}));
+
+vi.mock("../../../src/media/local-roots.js", () => ({
+  getAgentScopedMediaLocalRoots: vi.fn((_cfg: unknown, agentId?: string) =>
+    mediaLocalRoots.forAgent(agentId),
+  ),
+  getDefaultMediaLocalRoots: vi.fn(() => mediaLocalRoots.baseRoots),
+}));
+
+vi.mock("@mariozechner/pi-ai", () => ({}));
+
+vi.mock("./format.js", () => ({
+  markdownToTelegramHtml: vi.fn((text: string) => text),
+  markdownToTelegramHtmlChunks: vi.fn((text: string, _limit: number) => [text]),
+  renderTelegramHtmlText: vi.fn((text: string) => text),
+  splitTelegramHtmlChunks: vi.fn((text: string, _limit: number) => [text]),
+}));
+
+vi.mock("./exec-approvals.js", () => ({
+  shouldSuppressLocalTelegramExecApprovalPrompt: vi.fn(() => false),
+}));
 
 vi.mock("./sticker-cache.js", () => ({
   cacheSticker: vi.fn(),
@@ -54,6 +222,7 @@ describe("dispatchTelegramMessage draft streaming", () => {
   type TelegramMessageContext = Parameters<typeof dispatchTelegramMessage>[0]["context"];
 
   beforeEach(() => {
+    createReplyPrefixOptions.mockClear();
     createTelegramDraftStream.mockClear();
     dispatchReplyWithBufferedBlockDispatcher.mockClear();
     deliverReplies.mockClear();

@@ -1,15 +1,15 @@
-import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
-import { resetInboundDedupe } from "openclaw/plugin-sdk/reply-runtime";
-import type { MsgContext } from "openclaw/plugin-sdk/reply-runtime";
-import type { GetReplyOptions, ReplyPayload } from "openclaw/plugin-sdk/reply-runtime";
-import type { MockFn } from "openclaw/plugin-sdk/testing";
 import { beforeEach, vi } from "vitest";
+import { resetInboundDedupe } from "../../../src/auto-reply/reply/inbound-dedupe.js";
+import type { MsgContext } from "../../../src/auto-reply/templating.js";
+import type { GetReplyOptions, ReplyPayload } from "../../../src/auto-reply/types.js";
+import type { OpenClawConfig } from "../../../src/config/config.js";
+import type { MockFn } from "../../../src/test-utils/vitest-mock-fn.js";
 import type { TelegramBotDeps } from "./bot-deps.js";
 
 type AnyMock = ReturnType<typeof vi.fn>;
 type AnyAsyncMock = ReturnType<typeof vi.fn>;
 type DispatchReplyWithBufferedBlockDispatcherFn =
-  typeof import("openclaw/plugin-sdk/reply-runtime").dispatchReplyWithBufferedBlockDispatcher;
+  typeof import("../../../src/auto-reply/reply/provider-dispatcher.js").dispatchReplyWithBufferedBlockDispatcher;
 type DispatchReplyWithBufferedBlockDispatcherResult = Awaited<
   ReturnType<DispatchReplyWithBufferedBlockDispatcherFn>
 >;
@@ -33,7 +33,10 @@ export function getLoadWebMediaMock(): AnyMock {
   return loadWebMedia;
 }
 
-vi.doMock("openclaw/plugin-sdk/web-media", () => ({
+vi.mock("openclaw/plugin-sdk/web-media", () => ({
+  loadWebMedia,
+}));
+vi.mock("../../../src/plugin-sdk/web-media.ts", () => ({
   loadWebMedia,
 }));
 
@@ -49,16 +52,25 @@ const { resolveStorePathMock } = vi.hoisted(
 export function getLoadConfigMock(): AnyMock {
   return loadConfig;
 }
-vi.doMock("openclaw/plugin-sdk/config-runtime", async (importOriginal) => {
+vi.mock("openclaw/plugin-sdk/config-runtime", async (importOriginal) => {
   const actual = await importOriginal<typeof import("openclaw/plugin-sdk/config-runtime")>();
   return {
     ...actual,
     loadConfig,
+    resolveStorePath: resolveStorePathMock,
+  };
+});
+vi.mock("../../../src/plugin-sdk/config-runtime.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/plugin-sdk/config-runtime.ts")>();
+  return {
+    ...actual,
+    loadConfig,
+    resolveStorePath: resolveStorePathMock,
   };
 });
 
-vi.doMock("openclaw/plugin-sdk/config-runtime", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/config-runtime")>();
+vi.mock("../../../src/config/sessions.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/config/sessions.js")>();
   return {
     ...actual,
     resolveStorePath: resolveStorePathMock,
@@ -86,8 +98,17 @@ export function getUpsertChannelPairingRequestMock(): AnyAsyncMock {
   return upsertChannelPairingRequest;
 }
 
-vi.doMock("openclaw/plugin-sdk/conversation-runtime", async (importOriginal) => {
+vi.mock("openclaw/plugin-sdk/conversation-runtime", async (importOriginal) => {
   const actual = await importOriginal<typeof import("openclaw/plugin-sdk/conversation-runtime")>();
+  return {
+    ...actual,
+    readChannelAllowFromStore,
+    upsertChannelPairingRequest,
+  };
+});
+vi.mock("../../../src/plugin-sdk/conversation-runtime.ts", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../src/plugin-sdk/conversation-runtime.ts")>();
   return {
     ...actual,
     readChannelAllowFromStore,
@@ -117,7 +138,11 @@ const skillCommandsHoisted = vi.hoisted(() => ({
       const reply = await skillCommandsHoisted.replySpy(params.ctx, params.replyOptions);
       const payloads = reply === undefined ? [] : Array.isArray(reply) ? reply : [reply];
       for (const payload of payloads) {
-        await params.dispatcherOptions?.deliver?.(payload, { kind: "final" });
+        const text =
+          typeof payload.text === "string" && params.dispatcherOptions?.responsePrefix
+            ? `${params.dispatcherOptions.responsePrefix} ${payload.text}`.trim()
+            : payload.text;
+        await params.dispatcherOptions?.deliver?.({ ...payload, text }, { kind: "final" });
       }
       return result;
     },
@@ -128,15 +153,30 @@ export const replySpy = skillCommandsHoisted.replySpy;
 export const dispatchReplyWithBufferedBlockDispatcher =
   skillCommandsHoisted.dispatchReplyWithBufferedBlockDispatcher;
 
-vi.doMock("openclaw/plugin-sdk/reply-runtime", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/reply-runtime")>();
+vi.doMock("../../../src/auto-reply/skill-commands.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/auto-reply/skill-commands.js")>();
   return {
     ...actual,
     listSkillCommandsForAgents: skillCommandsHoisted.listSkillCommandsForAgents,
-    getReplyFromConfig: skillCommandsHoisted.replySpy,
-    __replySpy: skillCommandsHoisted.replySpy,
+  };
+});
+
+vi.doMock("../../../src/auto-reply/reply/provider-dispatcher.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../src/auto-reply/reply/provider-dispatcher.js")>();
+  return {
+    ...actual,
     dispatchReplyWithBufferedBlockDispatcher:
       skillCommandsHoisted.dispatchReplyWithBufferedBlockDispatcher,
+  };
+});
+
+vi.doMock("../../../src/auto-reply/reply.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/auto-reply/reply.js")>();
+  return {
+    ...actual,
+    getReplyFromConfig: skillCommandsHoisted.replySpy,
+    __replySpy: skillCommandsHoisted.replySpy,
   };
 });
 
@@ -146,11 +186,26 @@ const systemEventsHoisted = vi.hoisted(() => ({
 export const enqueueSystemEventSpy: MockFn<TelegramBotDeps["enqueueSystemEvent"]> =
   systemEventsHoisted.enqueueSystemEventSpy;
 
-vi.doMock("openclaw/plugin-sdk/infra-runtime", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/infra-runtime")>();
+vi.doMock("../../../src/infra/system-events.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/infra/system-events.js")>();
   return {
     ...actual,
     enqueueSystemEvent: systemEventsHoisted.enqueueSystemEventSpy,
+  };
+});
+
+vi.doMock("./bot-deps.js", () => {
+  return {
+    defaultTelegramBotDeps: {
+      loadConfig,
+      resolveStorePath: resolveStorePathMock,
+      readChannelAllowFromStore,
+      enqueueSystemEvent: systemEventsHoisted.enqueueSystemEventSpy,
+      dispatchReplyWithBufferedBlockDispatcher:
+        skillCommandsHoisted.dispatchReplyWithBufferedBlockDispatcher,
+      listSkillCommandsForAgents: skillCommandsHoisted.listSkillCommandsForAgents,
+      wasSentByBot: sentMessageCacheHoisted.wasSentByBot,
+    },
   };
 });
 
@@ -376,7 +431,11 @@ beforeEach(() => {
       const reply = await replySpy(params.ctx, params.replyOptions);
       const payloads = reply === undefined ? [] : Array.isArray(reply) ? reply : [reply];
       for (const payload of payloads) {
-        await params.dispatcherOptions?.deliver?.(payload, { kind: "final" });
+        const text =
+          typeof payload.text === "string" && params.dispatcherOptions?.responsePrefix
+            ? `${params.dispatcherOptions.responsePrefix} ${payload.text}`.trim()
+            : payload.text;
+        await params.dispatcherOptions?.deliver?.({ ...payload, text }, { kind: "final" });
       }
       return result;
     },
