@@ -1035,6 +1035,7 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
       origin: candidate.origin,
       config: normalized,
       rootConfig: cfg,
+      enabledByDefault: manifestRecord.enabledByDefault,
     });
     const entry = normalized.entries[pluginId];
     const record = createPluginRecord({
@@ -1107,7 +1108,10 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
             capability === "commands" &&
             (record.bundleFormat === "claude" || record.bundleFormat === "cursor")
           ) &&
-          !(capability === "hooks" && record.bundleFormat === "codex"),
+          !(
+            capability === "hooks" &&
+            (record.bundleFormat === "codex" || record.bundleFormat === "claude")
+          ),
       );
       for (const capability of unsupportedCapabilities) {
         registry.diagnostics.push({
