@@ -2,7 +2,11 @@ import {
   createDiscordActionGate,
   listDiscordDirectoryGroupsFromConfig,
   listDiscordDirectoryPeersFromConfig,
+  looksLikeDiscordTargetId,
+  normalizeDiscordMessagingTarget,
+  normalizeDiscordOutboundTarget,
   readDiscordComponentSpec,
+  resolveDiscordChannelId,
 } from "../../extensions/discord/api.js";
 import type {
   ThreadBindingManager,
@@ -45,9 +49,12 @@ import {
   resolveThreadBindingInactivityExpiresAt,
   resolveThreadBindingMaxAgeExpiresAt,
   resolveThreadBindingMaxAgeMs,
+  sendMessageDiscord,
   sendDiscordComponentMessage,
   sendPollDiscord,
+  sendTypingDiscord,
   sendStickerDiscord,
+  sendVoiceMessageDiscord,
   setThreadBindingIdleTimeoutBySessionKey,
   setThreadBindingMaxAgeBySessionKey,
   setChannelPermissionDiscord,
@@ -68,11 +75,7 @@ import {
   collectDiscordStatusIssues,
   inspectDiscordAccount,
   listDiscordAccountIds,
-  looksLikeDiscordTargetId,
-  normalizeDiscordMessagingTarget,
-  normalizeDiscordOutboundTarget,
   resolveDefaultDiscordAccountId,
-  resolveDiscordChannelId,
   resolveDiscordGroupRequireMention,
   resolveDiscordGroupToolPolicy,
 } from "../channels/discord/plugin-sdk-bridge.js";
@@ -94,9 +97,6 @@ import {
   probeDiscord,
   readMessagesDiscord,
   searchMessagesDiscord,
-  sendMessageDiscord,
-  sendTypingDiscord,
-  sendVoiceMessageDiscord,
   unpinMessageDiscord,
 } from "../channels/discord/plugin-sdk-bridge.js";
 

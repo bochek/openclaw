@@ -10,12 +10,8 @@ export {
   collectDiscordStatusIssues,
   inspectDiscordAccount,
   listDiscordAccountIds,
-  looksLikeDiscordTargetId,
-  normalizeDiscordMessagingTarget,
-  normalizeDiscordOutboundTarget,
   resolveDiscordAccount,
   resolveDefaultDiscordAccountId,
-  resolveDiscordChannelId,
   resolveDiscordGroupRequireMention,
   resolveDiscordGroupToolPolicy,
 } from "../../../extensions/discord/api.js";
@@ -37,8 +33,5 @@ export {
   probeDiscord,
   readMessagesDiscord,
   searchMessagesDiscord,
-  sendMessageDiscord,
-  sendTypingDiscord,
-  sendVoiceMessageDiscord,
   unpinMessageDiscord,
 } from "../../../extensions/discord/runtime-api.js";
