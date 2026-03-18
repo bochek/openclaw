@@ -111,7 +111,7 @@ async function runGitHubCopilotAuth(ctx: ProviderAuthContext) {
         credential,
       },
     ],
-    defaultModel: "github-copilot/gpt-5.4",
+    defaultModel: "github-copilot/gpt-4o",
   };
 }
 
