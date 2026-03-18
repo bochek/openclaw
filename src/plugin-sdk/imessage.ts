@@ -38,7 +38,7 @@ export {
 export {
   resolveIMessageGroupRequireMention,
   resolveIMessageGroupToolPolicy,
-} from "../../extensions/imessage/api.js";
+} from "../channels/imessage/plugin-sdk-bridge.js";
 export { IMessageConfigSchema } from "../config/zod-schema.providers-core.js";
 
 export { resolveChannelMediaMaxBytes } from "../channels/plugins/media-limits.js";
@@ -47,4 +47,4 @@ export {
   monitorIMessageProvider,
   probeIMessage,
   sendMessageIMessage,
-} from "../../extensions/imessage/runtime-api.js";
+} from "../channels/imessage/plugin-sdk-bridge.js";

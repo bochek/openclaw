@@ -39,7 +39,7 @@ export type PluginRuntimeCore = {
     formatNativeDependencyHint: typeof import("./native-deps.js").formatNativeDependencyHint;
   };
   media: {
-    loadWebMedia: typeof import("../../../extensions/whatsapp/runtime-api.js").loadWebMedia;
+    loadWebMedia: typeof import("openclaw/plugin-sdk/web-media").loadWebMedia;
     detectMime: typeof import("../../media/mime.js").detectMime;
     mediaKindFromMime: typeof import("../../media/constants.js").mediaKindFromMime;
     isVoiceCompatibleAudio: typeof import("../../media/audio.js").isVoiceCompatibleAudio;

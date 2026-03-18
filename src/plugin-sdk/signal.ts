@@ -1,7 +1,7 @@
 export type { ChannelMessageActionAdapter } from "../channels/plugins/types.js";
 export type { OpenClawConfig } from "../config/config.js";
 export type { SignalAccountConfig } from "../config/types.js";
-export type { ResolvedSignalAccount } from "../../extensions/signal/api.js";
+export type { ResolvedSignalAccount } from "../channels/signal/plugin-sdk-bridge.js";
 export type {
   ChannelMessageActionContext,
   ChannelPlugin,
@@ -51,13 +51,10 @@ export {
   listEnabledSignalAccounts,
   listSignalAccountIds,
   resolveDefaultSignalAccountId,
-} from "../../extensions/signal/api.js";
-export { monitorSignalProvider } from "../../extensions/signal/src/monitor.js";
-export { probeSignal } from "../../extensions/signal/src/probe.js";
-export { resolveSignalReactionLevel } from "../../extensions/signal/src/reaction-level.js";
-export {
-  removeReactionSignal,
-  sendReactionSignal,
-} from "../../extensions/signal/src/send-reactions.js";
-export { sendMessageSignal } from "../../extensions/signal/src/send.js";
-export { signalMessageActions } from "../../extensions/signal/src/message-actions.js";
+} from "../channels/signal/plugin-sdk-bridge.js";
+export { monitorSignalProvider } from "../channels/signal/plugin-sdk-bridge.js";
+export { probeSignal } from "../channels/signal/plugin-sdk-bridge.js";
+export { resolveSignalReactionLevel } from "../channels/signal/plugin-sdk-bridge.js";
+export { removeReactionSignal, sendReactionSignal } from "../channels/signal/plugin-sdk-bridge.js";
+export { sendMessageSignal } from "../channels/signal/plugin-sdk-bridge.js";
+export { signalMessageActions } from "../channels/signal/plugin-sdk-bridge.js";

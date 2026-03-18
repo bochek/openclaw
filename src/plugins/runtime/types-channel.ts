@@ -194,15 +194,15 @@ export type PluginRuntimeChannel = {
     };
   };
   signal: {
-    probeSignal: typeof import("../../../extensions/signal/runtime-api.js").probeSignal;
-    sendMessageSignal: typeof import("../../../extensions/signal/runtime-api.js").sendMessageSignal;
-    monitorSignalProvider: typeof import("../../../extensions/signal/runtime-api.js").monitorSignalProvider;
-    messageActions: typeof import("../../../extensions/signal/runtime-api.js").signalMessageActions;
+    probeSignal: typeof import("openclaw/plugin-sdk/signal").probeSignal;
+    sendMessageSignal: typeof import("openclaw/plugin-sdk/signal").sendMessageSignal;
+    monitorSignalProvider: typeof import("openclaw/plugin-sdk/signal").monitorSignalProvider;
+    messageActions: typeof import("openclaw/plugin-sdk/signal").signalMessageActions;
   };
   imessage: {
-    monitorIMessageProvider: typeof import("../../../extensions/imessage/runtime-api.js").monitorIMessageProvider;
-    probeIMessage: typeof import("../../../extensions/imessage/runtime-api.js").probeIMessage;
-    sendMessageIMessage: typeof import("../../../extensions/imessage/runtime-api.js").sendMessageIMessage;
+    monitorIMessageProvider: typeof import("openclaw/plugin-sdk/imessage").monitorIMessageProvider;
+    probeIMessage: typeof import("openclaw/plugin-sdk/imessage").probeIMessage;
+    sendMessageIMessage: typeof import("openclaw/plugin-sdk/imessage").sendMessageIMessage;
   };
   whatsapp: {
     getActiveWebListener: typeof import("openclaw/plugin-sdk/whatsapp").getActiveWebListener;

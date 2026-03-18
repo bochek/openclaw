@@ -3,4 +3,4 @@ export {
   loadWebMedia,
   loadWebMediaRaw,
   type WebMediaResult,
-} from "../../extensions/whatsapp/runtime-api.js";
+} from "../channels/whatsapp/web-media-bridge.js";
