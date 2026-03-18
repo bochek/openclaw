@@ -1,6 +1,6 @@
 export type { InspectedSlackAccount, ResolvedSlackAccount } from "../../../extensions/slack/api.js";
 export type { SlackActionContext } from "../../../extensions/slack/runtime-api.js";
-export type { SlackTarget, SlackTargetKind } from "../../../extensions/slack/src/targets.js";
+export type { SlackTarget, SlackTargetKind } from "../../../extensions/slack/api.js";
 
 export {
   buildSlackThreadingToolContext,
@@ -48,4 +48,4 @@ export {
 export {
   listSlackDirectoryGroupsFromConfig,
   listSlackDirectoryPeersFromConfig,
-} from "../../../extensions/slack/src/directory-config.js";
+} from "../../../extensions/slack/api.js";

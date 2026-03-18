@@ -98,4 +98,4 @@ export { normalizeExplicitDiscordSessionKey } from "../../../extensions/discord/
 export {
   listDiscordDirectoryGroupsFromConfig,
   listDiscordDirectoryPeersFromConfig,
-} from "../../../extensions/discord/src/directory-config.js";
+} from "../../../extensions/discord/api.js";

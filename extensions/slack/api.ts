@@ -3,6 +3,7 @@ export * from "./src/accounts.js";
 export * from "./src/actions.js";
 export * from "./src/blocks-input.js";
 export * from "./src/blocks-render.js";
+export * from "./src/directory-config.js";
 export * from "./src/http/index.js";
 export * from "./src/interactive-replies.js";
 export * from "./src/message-actions.js";

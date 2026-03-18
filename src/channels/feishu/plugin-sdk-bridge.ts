@@ -2,4 +2,4 @@ export { feishuSetupAdapter, feishuSetupWizard } from "../../../extensions/feish
 export {
   buildFeishuConversationId,
   parseFeishuConversationId,
-} from "../../../extensions/feishu/src/conversation-id.js";
+} from "../../../extensions/feishu/api.js";

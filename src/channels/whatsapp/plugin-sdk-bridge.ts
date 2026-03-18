@@ -47,4 +47,4 @@ export {
 export {
   listWhatsAppDirectoryGroupsFromConfig,
   listWhatsAppDirectoryPeersFromConfig,
-} from "../../../extensions/whatsapp/src/directory-config.js";
+} from "../../../extensions/whatsapp/api.js";
