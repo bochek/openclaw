@@ -202,7 +202,7 @@ The current boundary is:
   channel-specific schema fragments
 - channel plugins execute the final action through their action adapter
 
-For channel plugins, the preferred SDK surface is
+For channel plugins, the SDK surface is
 `ChannelMessageActionAdapter.describeMessageTool(...)`. That unified discovery
 call lets a plugin return its visible actions, capabilities, and schema
 contributions together so those pieces do not drift apart.
@@ -234,6 +234,17 @@ Slack, Telegram, or WhatsApp message-action runtimes under `src/agents/tools`.
 We do not publish separate `plugin-sdk/*-action-runtime` subpaths, and bundled
 plugins should import their own local runtime code directly from their
 extension-owned modules.
+
+For polls specifically, there are two execution paths:
+
+- `outbound.sendPoll` is the shared baseline for channels that fit the common
+  poll model
+- `actions.handleAction("poll")` is the preferred path for channel-specific
+  poll semantics or extra poll parameters
+
+Core now defers shared poll parsing until after plugin poll dispatch declines
+the action, so plugin-owned poll handlers can accept channel-specific poll
+fields without being blocked by the generic poll parser first.
 
 ## Capability ownership model
 
@@ -1133,14 +1144,24 @@ Use SDK subpaths instead of the monolithic `openclaw/plugin-sdk` import when
 authoring plugins:
 
 - `openclaw/plugin-sdk/core` for the smallest generic plugin-facing contract.
+  It also carries small assembly helpers such as
+  `definePluginEntry`, `defineChannelPluginEntry`, `defineSetupPluginEntry`,
+  and `createChannelPluginBase` for bundled or third-party plugin entry wiring.
 - Domain subpaths such as `openclaw/plugin-sdk/channel-config-helpers`,
   `openclaw/plugin-sdk/channel-config-schema`,
   `openclaw/plugin-sdk/channel-policy`,
+  `openclaw/plugin-sdk/channel-runtime`,
+  `openclaw/plugin-sdk/config-runtime`,
+  `openclaw/plugin-sdk/agent-runtime`,
   `openclaw/plugin-sdk/lazy-runtime`,
   `openclaw/plugin-sdk/reply-history`,
   `openclaw/plugin-sdk/routing`,
   `openclaw/plugin-sdk/runtime-store`, and
   `openclaw/plugin-sdk/directory-runtime` for shared runtime/config helpers.
+- Narrow channel-core subpaths such as `openclaw/plugin-sdk/discord-core`,
+  `openclaw/plugin-sdk/telegram-core`, `openclaw/plugin-sdk/whatsapp-core`,
+  and `openclaw/plugin-sdk/line-core` for channel-specific primitives that
+  should stay smaller than the full channel helper barrels.
 - `openclaw/plugin-sdk/compat` remains as a legacy migration surface for older
   external plugins. Bundled plugins should not use it, and non-test imports emit
   a one-time deprecation warning outside test environments.
