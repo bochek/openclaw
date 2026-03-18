@@ -413,12 +413,12 @@ jobs:
 
           if [ -n "$EXTENSION_ID" ]; then
             echo "Running extensions plan precheck: $EXTENSION_ID"
-            pnpm test:extension "$EXTENSION_ID" --allow-empty --dry-run --json > /dev/null
+            node scripts/test-extension.mjs "$EXTENSION_ID" --allow-empty --dry-run --json > /dev/null
           fi
 
           if [ -n "$CHANNEL_ID" ]; then
             echo "Running channels plan precheck: $CHANNEL_ID"
-            pnpm test:extension "$CHANNEL_ID" --allow-empty --dry-run --json > /dev/null
+            node scripts/test-extension.mjs "$CHANNEL_ID" --allow-empty --dry-run --json > /dev/null
           fi
 
           if [ -z "$EXTENSION_ID" ] && [ -z "$CHANNEL_ID" ]; then
@@ -463,7 +463,7 @@ jobs:
           OPENCLAW_CHANGED_EXTENSION: ${{ matrix.extension }}
         run: |
           set -euo pipefail
-          plan_json="$(pnpm test:extension "$OPENCLAW_CHANGED_EXTENSION" --allow-empty --dry-run --json)"
+          plan_json="$(node scripts/test-extension.mjs "$OPENCLAW_CHANGED_EXTENSION" --allow-empty --dry-run --json)"
           config="$(printf '%s' "$plan_json" | jq -r '.config')"
           roots="$(printf '%s' "$plan_json" | jq -r '.roots | join(", ")')"
           tests="$(printf '%s' "$plan_json" | jq -r '.testFiles | length')"
