@@ -143,9 +143,19 @@ jobs:
           let reason = extensionIds.length > 0 ? "changed-extensions" : "none";
 
           if (extensionIds.length === 0 && extensionFastInfraChanged) {
+            const allExtensionIds = listAvailableExtensionIds();
+            const preferredRepresentativeExtensions = ["memory-lancedb", "line"];
+            const orderedExtensionIds = [
+              ...preferredRepresentativeExtensions.filter((extensionId) =>
+                allExtensionIds.includes(extensionId),
+              ),
+              ...allExtensionIds.filter(
+                (extensionId) => !preferredRepresentativeExtensions.includes(extensionId),
+              ),
+            ];
             let extensionCandidate = "";
             let channelCandidate = "";
-            for (const extensionId of listAvailableExtensionIds()) {
+            for (const extensionId of orderedExtensionIds) {
               const plan = resolveExtensionTestPlan({ targetArg: extensionId, cwd: process.cwd() });
               if (plan.testFiles.length === 0) {
                 continue;
@@ -342,10 +352,21 @@ jobs:
           import { appendFileSync } from "node:fs";
           import { listAvailableExtensionIds, resolveExtensionTestPlan } from "./scripts/test-extension.mjs";
 
+          const allExtensionIds = listAvailableExtensionIds();
+          const preferredRepresentativeExtensions = ["memory-lancedb", "line"];
+          const orderedExtensionIds = [
+            ...preferredRepresentativeExtensions.filter((extensionId) =>
+              allExtensionIds.includes(extensionId),
+            ),
+            ...allExtensionIds.filter(
+              (extensionId) => !preferredRepresentativeExtensions.includes(extensionId),
+            ),
+          ];
+
           let extensionFile = "";
           let channelFile = "";
 
-          for (const extensionId of listAvailableExtensionIds()) {
+          for (const extensionId of orderedExtensionIds) {
             const plan = resolveExtensionTestPlan({ targetArg: extensionId, cwd: process.cwd() });
             if (plan.testFiles.length === 0) {
               continue;
