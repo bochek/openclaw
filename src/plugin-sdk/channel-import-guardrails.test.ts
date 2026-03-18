@@ -368,6 +368,19 @@ describe("channel import guardrails", () => {
     expect(text).toMatch(/from\s+"..\/..\/extensions\/discord\/session-key-api\.js";/);
   });
 
+  it("keeps Discord directory ownership on extension public seams", () => {
+    const text = readSource("src/plugin-sdk/discord.ts");
+    const bridgeImports = [...text.matchAll(/import(?: type)?\s*\{[\s\S]*?\}\s*from\s+"[^"]+";/g)]
+      .map((match) => match[0])
+      .filter((statement) => statement.includes("../channels/discord/plugin-sdk-bridge.js"))
+      .join("\n");
+    expect(bridgeImports).not.toMatch(
+      /\b(?:listDiscordDirectoryGroupsFromConfig|listDiscordDirectoryPeersFromConfig|listDiscordDirectoryGroupsLive|listDiscordDirectoryPeersLive|resolveDiscordChannelAllowlist|resolveDiscordUserAllowlist)\b/,
+    );
+    expect(text).toMatch(/from\s+"..\/..\/extensions\/discord\/api\.js";/);
+    expect(text).toMatch(/from\s+"..\/..\/extensions\/discord\/runtime-api\.js";/);
+  });
+
   it("keeps channel helper modules off their own SDK barrels", () => {
     for (const source of SAME_CHANNEL_SDK_GUARDS) {
       const text = readSource(source.path);

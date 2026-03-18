@@ -47,8 +47,6 @@ export {
   getPresence,
   hasAnyGuildPermissionDiscord,
   kickMemberDiscord,
-  listDiscordDirectoryGroupsLive,
-  listDiscordDirectoryPeersLive,
   listGuildChannelsDiscord,
   listGuildEmojisDiscord,
   listPinsDiscord,
@@ -64,8 +62,6 @@ export {
   removeOwnReactionsDiscord,
   removeReactionDiscord,
   removeRoleDiscord,
-  resolveDiscordChannelAllowlist,
-  resolveDiscordUserAllowlist,
   searchMessagesDiscord,
   sendDiscordComponentMessage,
   sendMessageDiscord,
@@ -79,7 +75,3 @@ export {
   uploadEmojiDiscord,
   uploadStickerDiscord,
 } from "../../../extensions/discord/runtime-api.js";
-export {
-  listDiscordDirectoryGroupsFromConfig,
-  listDiscordDirectoryPeersFromConfig,
-} from "../../../extensions/discord/api.js";

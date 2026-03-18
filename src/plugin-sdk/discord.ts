@@ -1,3 +1,7 @@
+import {
+  listDiscordDirectoryGroupsFromConfig,
+  listDiscordDirectoryPeersFromConfig,
+} from "../../extensions/discord/api.js";
 import type {
   ThreadBindingManager,
   ThreadBindingRecord,
@@ -6,7 +10,11 @@ import type {
 import {
   autoBindSpawnedDiscordSubagent,
   getThreadBindingManager,
+  listDiscordDirectoryGroupsLive,
+  listDiscordDirectoryPeersLive,
   listThreadBindingsBySessionKey,
+  resolveDiscordChannelAllowlist,
+  resolveDiscordUserAllowlist,
   resolveThreadBindingIdleTimeoutMs,
   resolveThreadBindingInactivityExpiresAt,
   resolveThreadBindingMaxAgeExpiresAt,
@@ -63,8 +71,6 @@ import {
   getPresence,
   hasAnyGuildPermissionDiscord,
   kickMemberDiscord,
-  listDiscordDirectoryGroupsLive,
-  listDiscordDirectoryPeersLive,
   listGuildChannelsDiscord,
   listGuildEmojisDiscord,
   listPinsDiscord,
@@ -80,8 +86,6 @@ import {
   removeOwnReactionsDiscord,
   removeReactionDiscord,
   removeRoleDiscord,
-  resolveDiscordChannelAllowlist,
-  resolveDiscordUserAllowlist,
   searchMessagesDiscord,
   sendDiscordComponentMessage,
   sendMessageDiscord,
@@ -94,8 +98,6 @@ import {
   unpinMessageDiscord,
   uploadEmojiDiscord,
   uploadStickerDiscord,
-  listDiscordDirectoryGroupsFromConfig,
-  listDiscordDirectoryPeersFromConfig,
 } from "../channels/discord/plugin-sdk-bridge.js";
 
 export type {

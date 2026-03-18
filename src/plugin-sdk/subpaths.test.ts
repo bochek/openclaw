@@ -266,6 +266,10 @@ describe("plugin-sdk subpath exports", () => {
   it("exports Discord helpers", () => {
     expect(typeof discordSdk.buildChannelConfigSchema).toBe("function");
     expect(typeof discordSdk.DiscordConfigSchema).toBe("object");
+    expect(typeof discordSdk.listDiscordDirectoryGroupsFromConfig).toBe("function");
+    expect(typeof discordSdk.listDiscordDirectoryPeersFromConfig).toBe("function");
+    expect(typeof discordSdk.listDiscordDirectoryGroupsLive).toBe("function");
+    expect(typeof discordSdk.listDiscordDirectoryPeersLive).toBe("function");
     expect(typeof discordSdk.getThreadBindingManager).toBe("function");
     expect(typeof discordSdk.listThreadBindingsBySessionKey).toBe("function");
     expect(typeof discordSdk.normalizeExplicitDiscordSessionKey).toBe("function");
