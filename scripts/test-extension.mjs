@@ -181,6 +181,7 @@ export function resolveExtensionTestPlan(params = {}) {
 function printUsage() {
   console.error("Usage: pnpm test:extension <extension-name|path> [vitest args...]");
   console.error("       node scripts/test-extension.mjs [extension-name|path] [vitest args...]");
+  console.error("       node scripts/test-extension.mjs <extension-name|path> --allow-empty");
   console.error("       node scripts/test-extension.mjs --list");
   console.error(
     "       node scripts/test-extension.mjs --list-changed --base <git-ref> [--head <git-ref>]",
@@ -191,6 +192,7 @@ async function run() {
   const rawArgs = process.argv.slice(2);
   const dryRun = rawArgs.includes("--dry-run");
   const json = rawArgs.includes("--json");
+  const allowEmpty = rawArgs.includes("--allow-empty");
   const list = rawArgs.includes("--list");
   const listChanged = rawArgs.includes("--list-changed");
   const args = rawArgs.filter(
@@ -198,6 +200,7 @@ async function run() {
       arg !== "--" &&
       arg !== "--dry-run" &&
       arg !== "--json" &&
+      arg !== "--allow-empty" &&
       arg !== "--list" &&
       arg !== "--list-changed",
   );
@@ -271,11 +274,20 @@ async function run() {
     process.exit(1);
   }
 
-  if (plan.testFiles.length === 0) {
+  if (plan.testFiles.length === 0 && !allowEmpty) {
     console.error(
       `No tests found for ${plan.extensionDir}. Run "pnpm test:extension ${plan.extensionId} -- --dry-run" to inspect the resolved roots.`,
     );
     process.exit(1);
+  }
+
+  if (plan.testFiles.length === 0 && allowEmpty && !dryRun) {
+    const message = `[test-extension] Skipping ${plan.extensionId}: no test files were found under ${plan.roots.join(", ")}`;
+    console.warn(message);
+    if (process.env.GITHUB_ACTIONS === "true") {
+      console.log(`::warning::${message}`);
+    }
+    return;
   }
 
   if (dryRun) {

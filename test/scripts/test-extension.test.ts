@@ -17,6 +17,16 @@ function readPlan(args: string[], cwd = process.cwd()) {
   return JSON.parse(stdout) as ReturnType<typeof resolveExtensionTestPlan>;
 }
 
+function findZeroTestExtensionId(): string | undefined {
+  for (const extensionId of listAvailableExtensionIds()) {
+    const plan = resolveExtensionTestPlan({ targetArg: extensionId, cwd: process.cwd() });
+    if (plan.testFiles.length === 0) {
+      return extensionId;
+    }
+  }
+  return undefined;
+}
+
 describe("scripts/test-extension.mjs", () => {
   it("resolves channel-root extensions onto the channel vitest config", () => {
     const plan = resolveExtensionTestPlan({ targetArg: "slack", cwd: process.cwd() });
@@ -71,5 +81,14 @@ describe("scripts/test-extension.mjs", () => {
     expect(extensionIds).toEqual(
       [...extensionIds].toSorted((left, right) => left.localeCompare(right)),
     );
+  });
+
+  it("permits zero-test extensions when --allow-empty is passed", () => {
+    const extensionId = findZeroTestExtensionId();
+    expect(extensionId).toBeTruthy();
+
+    const plan = readPlan([extensionId!, "--allow-empty"]);
+    expect(plan.extensionId).toBe(extensionId);
+    expect(plan.testFiles).toHaveLength(0);
   });
 });
