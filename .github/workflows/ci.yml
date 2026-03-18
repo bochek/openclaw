@@ -330,7 +330,7 @@ jobs:
   extension-fast-precheck:
     name: "extension-fast-precheck"
     needs: [docs-scope, changed-scope, changed-extensions]
-    if: needs.docs-scope.outputs.docs_only != 'true' && needs.changed-scope.outputs.run_node == 'true' && needs.changed-extensions.outputs.has_changed_extensions == 'true'
+    if: needs.docs-scope.outputs.docs_only != 'true' && needs.changed-scope.outputs.run_node == 'true' && needs.changed-extensions.outputs.has_changed_extensions == 'true' && needs.changed-extensions.outputs.changed_extensions_reason != 'extension-fast-infra-change-representative'
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 10
     steps:
