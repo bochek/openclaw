@@ -85,6 +85,7 @@ jobs:
     outputs:
       has_changed_extensions: ${{ steps.changed.outputs.has_changed_extensions }}
       changed_extensions_matrix: ${{ steps.changed.outputs.changed_extensions_matrix }}
+      changed_extensions_reason: ${{ steps.changed.outputs.changed_extensions_reason }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -113,14 +114,78 @@ jobs:
         run: |
           node --input-type=module <<'EOF'
           import { appendFileSync } from "node:fs";
-          import { listChangedExtensionIds } from "./scripts/test-extension.mjs";
+          import { execFileSync } from "node:child_process";
+          import {
+            listAvailableExtensionIds,
+            listChangedExtensionIds,
+            resolveExtensionTestPlan,
+          } from "./scripts/test-extension.mjs";
 
-          const extensionIds = listChangedExtensionIds({ base: process.env.BASE_SHA, head: "HEAD" });
+          const normalizeRelative = (filePath) => String(filePath).replaceAll("\\", "/");
+          const changedPaths = execFileSync("git", ["diff", "--name-only", process.env.BASE_SHA, "HEAD"], {
+            cwd: process.cwd(),
+            stdio: ["ignore", "pipe", "pipe"],
+            encoding: "utf8",
+          })
+            .split("\n")
+            .map((line) => normalizeRelative(line.trim()))
+            .filter((line) => line.length > 0);
+          const extensionFastInfraChanged = changedPaths.some((changedPath) =>
+            changedPath === ".github/workflows/ci.yml" ||
+            changedPath === "scripts/test-extension.mjs" ||
+            changedPath === "vitest.extensions.config.ts" ||
+            changedPath === "vitest.channels.config.ts" ||
+            changedPath === "vitest.channel-paths.mjs" ||
+            changedPath.startsWith(".github/actions/setup-node-env/"),
+          );
+
+          let extensionIds = listChangedExtensionIds({ base: process.env.BASE_SHA, head: "HEAD" });
+          let reason = extensionIds.length > 0 ? "changed-extensions" : "none";
+
+          if (extensionIds.length === 0 && extensionFastInfraChanged) {
+            let extensionCandidate = "";
+            let channelCandidate = "";
+            for (const extensionId of listAvailableExtensionIds()) {
+              const plan = resolveExtensionTestPlan({ targetArg: extensionId, cwd: process.cwd() });
+              if (plan.testFiles.length === 0) {
+                continue;
+              }
+              if (!extensionCandidate && plan.config === "vitest.extensions.config.ts") {
+                extensionCandidate = extensionId;
+              }
+              if (!channelCandidate && plan.config === "vitest.channels.config.ts") {
+                channelCandidate = extensionId;
+              }
+              if (extensionCandidate && channelCandidate) {
+                break;
+              }
+            }
+
+            const representativeIds = [];
+            if (extensionCandidate) {
+              representativeIds.push(extensionCandidate);
+            }
+            if (channelCandidate && channelCandidate !== extensionCandidate) {
+              representativeIds.push(channelCandidate);
+            }
+
+            extensionIds = representativeIds;
+            reason =
+              representativeIds.length > 0
+                ? "extension-fast-infra-change-representative"
+                : "extension-fast-infra-change-no-tests";
+          }
+
           const matrix = JSON.stringify({ include: extensionIds.map((extension) => ({ extension })) });
-
+          appendFileSync(process.env.GITHUB_OUTPUT, `changed_extensions_reason=${reason}\n`, "utf8");
           appendFileSync(process.env.GITHUB_OUTPUT, `has_changed_extensions=${extensionIds.length > 0}\n`, "utf8");
           appendFileSync(process.env.GITHUB_OUTPUT, `changed_extensions_matrix=${matrix}\n`, "utf8");
           EOF
+
+      - name: Report changed-extensions selection
+        run: |
+          echo "extension-fast selection reason: ${{ steps.changed.outputs.changed_extensions_reason }}"
+          echo "extension-fast matrix: ${{ steps.changed.outputs.changed_extensions_matrix }}"
 
   # Build dist once for Node-relevant changes and share it with downstream jobs.
   build-artifacts:
