@@ -1,3 +1,4 @@
+import { createNonExitingRuntime } from "openclaw/plugin-sdk/runtime-env";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/slack";
 import { describe, expect, it, vi } from "vitest";
 import { slackOutbound } from "./outbound-adapter.js";
@@ -15,6 +16,8 @@ vi.mock("./runtime.js", () => ({
 }));
 
 import { slackPlugin } from "./channel.js";
+
+const runtime = createNonExitingRuntime();
 
 async function getSlackConfiguredState(cfg: OpenClawConfig) {
   const account = slackPlugin.config.resolveAccount(cfg, "default");
@@ -261,7 +264,7 @@ describe("slackPlugin directory", () => {
             },
           },
         },
-        runtime: undefined,
+        runtime,
       }),
     ).resolves.toEqual([{ id: "user:u123", kind: "user" }]);
   });
