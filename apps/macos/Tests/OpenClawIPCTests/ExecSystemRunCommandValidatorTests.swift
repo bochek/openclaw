@@ -64,6 +64,38 @@ struct ExecSystemRunCommandValidatorTests {
         }
     }
 
+    @Test func `validator keeps busybox shell wrapper text out of allowlist raw parsing`() throws {
+        let tmp = try makeTempDirForTests()
+        let busybox = tmp.appendingPathComponent("busybox")
+        try makeExecutableForTests(at: busybox)
+
+        let command = [busybox.path, "sh", "-lc", "/usr/bin/printf ok"]
+        let rawCommand = "\(busybox.path) sh -lc \"/usr/bin/printf ok\""
+        let result = ExecSystemRunCommandValidator.resolve(command: command, rawCommand: rawCommand)
+
+        switch result {
+        case let .ok(resolved):
+            #expect(resolved.displayCommand == rawCommand)
+            #expect(resolved.evaluationRawCommand == nil)
+        case let .invalid(message):
+            Issue.record("unexpected invalid result: \(message)")
+        }
+    }
+
+    @Test func `validator keeps dispatch wrapper shell text out of allowlist raw parsing`() {
+        let command = ["/usr/bin/nice", "/bin/sh", "-lc", "/usr/bin/printf ok"]
+        let rawCommand = "/usr/bin/nice /bin/sh -lc \"/usr/bin/printf ok\""
+        let result = ExecSystemRunCommandValidator.resolve(command: command, rawCommand: rawCommand)
+
+        switch result {
+        case let .ok(resolved):
+            #expect(resolved.displayCommand == rawCommand)
+            #expect(resolved.evaluationRawCommand == nil)
+        case let .invalid(message):
+            Issue.record("unexpected invalid result: \(message)")
+        }
+    }
+
     private static func loadContractCases() throws -> [SystemRunCommandContractCase] {
         let fixtureURL = try self.findContractFixtureURL()
         let data = try Data(contentsOf: fixtureURL)

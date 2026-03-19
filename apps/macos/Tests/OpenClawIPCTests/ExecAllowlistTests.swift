@@ -228,6 +228,42 @@ struct ExecAllowlistTests {
         #expect(resolutions[1].executableName == "touch")
     }
 
+    @Test func `resolve for allowlist unwraps busybox shell applets`() throws {
+        let tmp = try makeTempDirForTests()
+        let busybox = tmp.appendingPathComponent("busybox")
+        let whoami = tmp.appendingPathComponent("whoami")
+        try makeExecutableForTests(at: busybox)
+        try makeExecutableForTests(at: whoami)
+
+        let resolutions = ExecCommandResolution.resolveForAllowlist(
+            command: [busybox.path, "sh", "-lc", "echo allowlisted && whoami"],
+            rawCommand: nil,
+            cwd: tmp.path,
+            env: ["PATH": "\(tmp.path):/usr/bin:/bin"])
+
+        #expect(resolutions.count == 2)
+        #expect(resolutions[0].executableName == "echo")
+        #expect(resolutions[1].resolvedPath == whoami.path)
+        #expect(resolutions[1].executableName == "whoami")
+    }
+
+    @Test func `resolve for allowlist unwraps dispatch wrappers before shell wrappers`() throws {
+        let tmp = try makeTempDirForTests()
+        let whoami = tmp.appendingPathComponent("whoami")
+        try makeExecutableForTests(at: whoami)
+
+        let resolutions = ExecCommandResolution.resolveForAllowlist(
+            command: ["/usr/bin/nice", "/bin/zsh", "-lc", "echo allowlisted && whoami"],
+            rawCommand: nil,
+            cwd: tmp.path,
+            env: ["PATH": "\(tmp.path):/usr/bin:/bin"])
+
+        #expect(resolutions.count == 2)
+        #expect(resolutions[0].executableName == "echo")
+        #expect(resolutions[1].resolvedPath == whoami.path)
+        #expect(resolutions[1].executableName == "whoami")
+    }
+
     @Test func `resolve for allowlist unwraps env dispatch wrappers inside shell segments`() {
         let command = ["/bin/sh", "-lc", "env /usr/bin/touch /tmp/openclaw-allowlist-test"]
         let resolutions = ExecCommandResolution.resolveForAllowlist(
@@ -287,6 +323,58 @@ struct ExecAllowlistTests {
             env: ["PATH": "/usr/bin:/bin"])
 
         #expect(patterns == ["/usr/bin/printf"])
+    }
+
+    @Test func `allow always patterns unwrap dispatch wrappers before shell wrappers`() throws {
+        let tmp = try makeTempDirForTests()
+        let whoami = tmp.appendingPathComponent("whoami")
+        try makeExecutableForTests(at: whoami)
+
+        let patterns = ExecCommandResolution.resolveAllowAlwaysPatterns(
+            command: ["/usr/bin/nice", "/bin/zsh", "-lc", "whoami"],
+            cwd: tmp.path,
+            env: ["PATH": "\(tmp.path):/usr/bin:/bin"])
+
+        #expect(patterns == [whoami.path])
+        #expect(!patterns.contains("/usr/bin/nice"))
+    }
+
+    @Test func `allow always patterns unwrap busybox shell applets to inner executables`() throws {
+        let tmp = try makeTempDirForTests()
+        let busybox = tmp.appendingPathComponent("busybox")
+        let whoami = tmp.appendingPathComponent("whoami")
+        try makeExecutableForTests(at: busybox)
+        try makeExecutableForTests(at: whoami)
+
+        let patterns = ExecCommandResolution.resolveAllowAlwaysPatterns(
+            command: [busybox.path, "sh", "-lc", "whoami"],
+            cwd: tmp.path,
+            env: ["PATH": "\(tmp.path):/usr/bin:/bin"])
+
+        #expect(patterns == [whoami.path])
+        #expect(!patterns.contains(busybox.path))
+    }
+
+    @Test func `allow always patterns fail closed for unsupported busybox applets`() throws {
+        let tmp = try makeTempDirForTests()
+        let busybox = tmp.appendingPathComponent("busybox")
+        try makeExecutableForTests(at: busybox)
+
+        let patterns = ExecCommandResolution.resolveAllowAlwaysPatterns(
+            command: [busybox.path, "sed", "-n", "1p"],
+            cwd: tmp.path,
+            env: ["PATH": "\(tmp.path):/usr/bin:/bin"])
+
+        #expect(patterns.isEmpty)
+    }
+
+    @Test func `allow always patterns fail closed for blocked dispatch wrappers`() {
+        let patterns = ExecCommandResolution.resolveAllowAlwaysPatterns(
+            command: ["sudo", "/bin/zsh", "-lc", "whoami"],
+            cwd: nil,
+            env: ["PATH": "/usr/bin:/bin"])
+
+        #expect(patterns.isEmpty)
     }
 
     @Test func `match all requires every segment to match`() {

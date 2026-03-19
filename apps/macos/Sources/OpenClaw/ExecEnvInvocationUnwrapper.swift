@@ -90,24 +90,6 @@ enum ExecEnvInvocationUnwrapper {
     }
 
     static func unwrapDispatchWrappersForResolution(_ command: [String]) -> [String] {
-        var current = command
-        var depth = 0
-        while depth < self.maxWrapperDepth {
-            guard let token = current.first?.trimmingCharacters(in: .whitespacesAndNewlines), !token.isEmpty else {
-                break
-            }
-            guard ExecCommandToken.basenameLower(token) == "env" else {
-                break
-            }
-            guard let unwrapped = self.unwrapWithMetadata(current), !unwrapped.command.isEmpty else {
-                break
-            }
-            if unwrapped.usesModifiers {
-                break
-            }
-            current = unwrapped.command
-            depth += 1
-        }
-        return current
+        ExecWrapperResolution.unwrapDispatchWrappersForResolution(command)
     }
 }
