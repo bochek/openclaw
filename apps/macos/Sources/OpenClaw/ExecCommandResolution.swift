@@ -34,6 +34,25 @@ struct ExecCommandResolution {
         cwd: String?,
         env: [String: String]?) -> [ExecCommandResolution]
     {
+        self.resolveForAllowlist(
+            command: command,
+            rawCommand: rawCommand,
+            cwd: cwd,
+            env: env,
+            depth: 0)
+    }
+
+    private static func resolveForAllowlist(
+        command: [String],
+        rawCommand: String?,
+        cwd: String?,
+        env: [String: String]?,
+        depth: Int) -> [ExecCommandResolution]
+    {
+        guard depth <= ExecWrapperResolution.maxWrapperDepth, !command.isEmpty else {
+            return []
+        }
+
         let shell = ExecShellWrapperParser.extract(command: command, rawCommand: rawCommand)
         if shell.isWrapper {
             guard let shellCommand = shell.command,
@@ -45,7 +64,11 @@ struct ExecCommandResolution {
             }
             var resolutions: [ExecCommandResolution] = []
             for segment in segments {
-                let segmentResolutions = self.resolveShellSegmentExecutions(segment, cwd: cwd, env: env)
+                let segmentResolutions = self.resolveShellSegmentExecutions(
+                    segment,
+                    cwd: cwd,
+                    env: env,
+                    depth: depth + 1)
                 guard !segmentResolutions.isEmpty else {
                     return []
                 }
@@ -115,11 +138,20 @@ struct ExecCommandResolution {
     private static func resolveShellSegmentExecutions(
         _ segment: String,
         cwd: String?,
-        env: [String: String]?) -> [ExecCommandResolution]
+        env: [String: String]?,
+        depth: Int) -> [ExecCommandResolution]
     {
+        guard depth <= ExecWrapperResolution.maxWrapperDepth else {
+            return []
+        }
         let tokens = self.tokenizeShellWords(segment)
         guard !tokens.isEmpty else { return [] }
-        return self.resolveForAllowlist(command: tokens, rawCommand: nil, cwd: cwd, env: env)
+        return self.resolveForAllowlist(
+            command: tokens,
+            rawCommand: nil,
+            cwd: cwd,
+            env: env,
+            depth: depth)
     }
 
     private static func collectAllowAlwaysPatterns(

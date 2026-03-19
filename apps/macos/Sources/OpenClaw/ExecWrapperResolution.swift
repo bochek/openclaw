@@ -182,11 +182,7 @@ enum ExecWrapperResolution {
             return .blocked(wrapper: wrapper)
         }
 
-        let unwrapped = Array(argv[appletIndex...])
-        guard !unwrapped.isEmpty else {
-            return .blocked(wrapper: wrapper)
-        }
-        return .unwrapped(wrapper: wrapper, argv: unwrapped)
+        return .unwrapped(wrapper: wrapper, argv: Array(argv[appletIndex...]))
     }
 
     static func unwrapKnownDispatchWrapperInvocation(_ argv: [String]) -> DispatchWrapperUnwrapResult {

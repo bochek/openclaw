@@ -280,6 +280,28 @@ struct ExecAllowlistTests {
         #expect(resolutions[0].executableName == "whoami")
     }
 
+    @Test func `resolve for allowlist fails closed when nested shell wrapper depth exceeds max`() throws {
+        let tmp = try makeTempDirForTests()
+        let whoami = tmp.appendingPathComponent("whoami")
+        try makeExecutableForTests(at: whoami)
+
+        var payload = "whoami"
+        for _ in 0...ExecWrapperResolution.maxWrapperDepth {
+            let escaped = payload
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+            payload = "/bin/sh -lc \"\(escaped)\""
+        }
+
+        let resolutions = ExecCommandResolution.resolveForAllowlist(
+            command: ["/bin/sh", "-lc", payload],
+            rawCommand: nil,
+            cwd: tmp.path,
+            env: ["PATH": "\(tmp.path):/usr/bin:/bin"])
+
+        #expect(resolutions.isEmpty)
+    }
+
     @Test func `resolve for allowlist unwraps direct dispatch wrappers with canonical raw command`() {
         let command = ["/usr/bin/nice", "/usr/bin/printf", "ok"]
         let resolutions = ExecCommandResolution.resolveForAllowlist(
