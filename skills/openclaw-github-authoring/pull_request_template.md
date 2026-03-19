@@ -1,9 +1,11 @@
+<!-- internal-only guidance: do not include this preamble in the final filed PR body -->
+
 Prepared via the `openclaw-github-authoring` skill template copy.
 
 Draft this PR body for the user instead of replaying every heading as a questionnaire when the intent is already clear.
 Ask only a very short grouped follow-up for missing high-value facts such as branch context, verification, or risk.
 Automatically redact obvious secrets, tokens, cookies, passwords, emails, phone numbers, and similar sensitive strings before filing when the technical meaning remains intact.
-If explicit title, base branch, head branch, or proof of an existing remote head branch is still missing after the brief follow-up, respond with exactly `NOT_ENOUGH_INFO`.
+If explicit title, base branch, head ref, or proof of an existing remote head branch is still missing after the brief follow-up, respond with exactly `NOT_ENOUGH_INFO`.
 
 ## Summary
 

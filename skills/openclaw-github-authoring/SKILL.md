@@ -71,14 +71,15 @@ Submission states
 
 Default workflow
 
-1. Decide whether the request is a bug issue, feature issue, or PR.
+1. Decide whether the request is a bug issue, feature issue, or PR. If it is an issue, also set `$LABEL` to `bug` or `enhancement` to match the bundled template.
 2. Load the copied template file for the chosen issue or PR type.
 3. Run a short targeted interview even if the initial request is terse but plausible.
 4. Prefer grouped interview questions over replaying the whole template.
 5. Stop interviewing as soon as the payload is strong enough.
 6. Draft the issue or PR body yourself using the bundled template structure instead of forcing the user to fill every field manually.
-7. If critical facts are still missing after the brief recovery attempt, return `NOT_ENOUGH_INFO`.
-8. If the payload is complete and safe, create the issue or PR with `gh` for the user; do not stop at `READY_TO_CREATE` unless actual creation is blocked.
+7. Treat any instruction preamble in the copied template files as internal-only guidance. Do not pass the copied template files directly as `$BODY_FILE`; generate a new body file that excludes internal-only guidance.
+8. If critical facts are still missing after the brief recovery attempt, return `NOT_ENOUGH_INFO`.
+9. If the payload is complete and safe, create the issue or PR with `gh` for the user; do not stop at `READY_TO_CREATE` unless actual creation is blocked.
 
 Interview policy
 
@@ -106,9 +107,10 @@ PR requirements
 - Require:
   - explicit PR title
   - explicit base branch
-  - explicit head branch
+  - explicit head ref in either `<branch>` form for branches on `openclaw/openclaw` or `<owner>:<branch>` form for fork branches
   - proof that the remote head branch already exists
 - If the remote head branch does not exist, return `NOT_ENOUGH_INFO`.
+- If the head branch lives on a fork and the owner is missing, return `NOT_ENOUGH_INFO`.
 - Preserve the canonical PR section structure in the generated body.
 - If branch context is missing, ask the smallest grouped follow-up possible before failing.
 
@@ -138,10 +140,10 @@ Creation commands
 
 ```bash
 # Issue
-gh issue create --repo openclaw/openclaw --title "$TITLE" --body-file "$BODY_FILE"
+gh issue create --repo openclaw/openclaw --title "$TITLE" --label "$LABEL" --body-file "$BODY_FILE"
 
 # PR
-gh pr create --repo openclaw/openclaw --base "$BASE_BRANCH" --head "$HEAD_BRANCH" --title "$TITLE" --body-file "$BODY_FILE"
+gh pr create --repo openclaw/openclaw --base "$BASE_BRANCH" --head "$HEAD_REF" --title "$TITLE" --body-file "$BODY_FILE"
 ```
 
 Output format
