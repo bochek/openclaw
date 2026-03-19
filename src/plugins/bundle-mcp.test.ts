@@ -11,6 +11,10 @@ function getServerArgs(value: unknown): unknown[] | undefined {
   return isRecord(value) && Array.isArray(value.args) ? value.args : undefined;
 }
 
+function normalizePluginPath(value: string): string {
+  return path.normalize(value.replaceAll("/", path.sep));
+}
+
 const tempHarness = createBundleMcpTempHarness();
 
 afterEach(async () => {
@@ -177,16 +181,18 @@ describe("loadEnabledBundleMcpConfig", () => {
         },
       });
       expect(loaded.diagnostics).toEqual([]);
-      expect(loaded.config.mcpServers.inlineProbe).toEqual({
-        command: path.join(pluginRoot, "bin", "server.sh"),
-        args: [
-          path.join(pluginRoot, "servers", "probe.mjs"),
-          path.join(pluginRoot, "local-probe.mjs"),
-        ],
-        cwd: pluginRoot,
-        env: {
-          PLUGIN_ROOT: pluginRoot,
-        },
+      const inlineProbe = loaded.config.mcpServers.inlineProbe;
+      expect(isRecord(inlineProbe)).toBe(true);
+      expect(normalizePluginPath(String(isRecord(inlineProbe) ? inlineProbe.command : ""))).toBe(
+        normalizePluginPath(path.join(pluginRoot, "bin", "server.sh")),
+      );
+      expect(getServerArgs(inlineProbe)?.map((arg) => normalizePluginPath(String(arg)))).toEqual([
+        normalizePluginPath(path.join(pluginRoot, "servers", "probe.mjs")),
+        normalizePluginPath(path.join(pluginRoot, "local-probe.mjs")),
+      ]);
+      expect(isRecord(inlineProbe) ? inlineProbe.cwd : undefined).toBe(pluginRoot);
+      expect(isRecord(inlineProbe) ? inlineProbe.env : undefined).toEqual({
+        PLUGIN_ROOT: pluginRoot,
       });
     } finally {
       env.restore();

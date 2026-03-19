@@ -12,3 +12,8 @@ export {
   resolveMatrixLegacyFlatStoreRoot,
   sanitizeMatrixPathSegment,
 } from "./helper-api.js";
+export {
+  createMatrixThreadBindingManager,
+  resetMatrixThreadBindingsForTests,
+} from "./src/matrix/thread-bindings.js";
+export { setMatrixRuntime } from "./src/runtime.js";

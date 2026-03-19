@@ -10,8 +10,8 @@ import { createFeishuThreadBindingManager } from "../../../../extensions/feishu/
 import {
   createMatrixThreadBindingManager,
   resetMatrixThreadBindingsForTests,
-} from "../../../../extensions/matrix/src/matrix/thread-bindings.js";
-import { setMatrixRuntime } from "../../../../extensions/matrix/src/runtime.js";
+  setMatrixRuntime,
+} from "../../../../extensions/matrix/runtime-api.js";
 import { createTelegramThreadBindingManager } from "../../../../extensions/telegram/runtime-api.js";
 import type { OpenClawConfig } from "../../../config/config.js";
 import {
