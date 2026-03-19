@@ -143,6 +143,24 @@ describe("resolveMessageChannelSelection", () => {
     });
   });
 
+  it("skips configured-channel scanning when includeConfigured is false", async () => {
+    const isConfigured = vi.fn(async () => true);
+    mocks.listChannelPlugins.mockReturnValue([makePlugin({ id: "whatsapp", isConfigured })]);
+
+    const selection = await resolveMessageChannelSelection({
+      cfg: {} as never,
+      channel: "telegram",
+      includeConfigured: false,
+    });
+
+    expect(selection).toEqual({
+      channel: "telegram",
+      configured: [],
+      source: "explicit",
+    });
+    expect(isConfigured).not.toHaveBeenCalled();
+  });
+
   it("falls back to tool context channel when explicit channel is unknown", async () => {
     const selection = await resolveMessageChannelSelection({
       cfg: {} as never,

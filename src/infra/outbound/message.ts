@@ -136,6 +136,7 @@ async function resolveRequiredChannel(params: {
     await resolveMessageChannelSelection({
       cfg: params.cfg,
       channel: params.channel,
+      includeConfigured: false,
     })
   ).channel;
 }

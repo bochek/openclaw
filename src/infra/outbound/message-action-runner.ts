@@ -226,6 +226,7 @@ async function resolveChannel(
     cfg,
     channel: readStringParam(params, "channel"),
     fallbackChannel: toolContext?.currentChannelProvider,
+    includeConfigured: false,
   });
   if (selection.source === "tool-context-fallback") {
     params.channel = selection.channel;
@@ -318,14 +319,13 @@ async function handleBroadcastAction(
     throw new Error("Broadcast requires at least one target in --targets.");
   }
   const channelHint = readStringParam(params, "channel");
-  const configured = await listConfiguredMessageChannels(input.cfg);
-  if (configured.length === 0) {
-    throw new Error("Broadcast requires at least one configured channel.");
-  }
   const targetChannels =
     channelHint && channelHint.trim().toLowerCase() !== "all"
       ? [await resolveChannel(input.cfg, { channel: channelHint }, input.toolContext)]
-      : configured;
+      : await listConfiguredMessageChannels(input.cfg);
+  if (targetChannels.length === 0) {
+    throw new Error("Broadcast requires at least one configured channel.");
+  }
   const results: Array<{
     channel: ChannelId;
     to: string;
