@@ -377,7 +377,8 @@ function addCandidate(params: {
   if (params.seen.has(resolved)) {
     return;
   }
-  const resolvedRoot = safeRealpathSync(params.rootDir) ?? path.resolve(params.rootDir);
+  const lexicalRoot = path.resolve(params.rootDir);
+  const resolvedRoot = safeRealpathSync(params.rootDir) ?? lexicalRoot;
   if (
     isUnsafePluginCandidate({
       source: resolved,
@@ -395,7 +396,7 @@ function addCandidate(params: {
     idHint: params.idHint,
     source: resolved,
     setupSource: params.setupSource,
-    rootDir: resolvedRoot,
+    rootDir: lexicalRoot,
     origin: params.origin,
     format: params.format ?? "openclaw",
     bundleFormat: params.bundleFormat,

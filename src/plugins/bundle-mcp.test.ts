@@ -46,8 +46,6 @@ describe("loadEnabledBundleMcpConfig", () => {
       const loadedServer = loaded.config.mcpServers.bundleProbe;
       const loadedArgs = getServerArgs(loadedServer);
       const loadedServerPath = typeof loadedArgs?.[0] === "string" ? loadedArgs[0] : undefined;
-      const resolvedPluginRoot = await fs.realpath(pluginRoot);
-
       expect(loaded.diagnostics).toEqual([]);
       expect(isRecord(loadedServer) ? loadedServer.command : undefined).toBe("node");
       expect(loadedArgs).toHaveLength(1);
@@ -56,7 +54,7 @@ describe("loadEnabledBundleMcpConfig", () => {
         throw new Error("expected bundled MCP args to include the server path");
       }
       expect(await fs.realpath(loadedServerPath)).toBe(resolvedServerPath);
-      expect(loadedServer.cwd).toBe(resolvedPluginRoot);
+      expect(loadedServer.cwd).toBe(pluginRoot);
     } finally {
       env.restore();
     }
@@ -178,18 +176,16 @@ describe("loadEnabledBundleMcpConfig", () => {
           },
         },
       });
-      const resolvedPluginRoot = await fs.realpath(pluginRoot);
-
       expect(loaded.diagnostics).toEqual([]);
       expect(loaded.config.mcpServers.inlineProbe).toEqual({
-        command: path.join(resolvedPluginRoot, "bin", "server.sh"),
+        command: path.join(pluginRoot, "bin", "server.sh"),
         args: [
-          path.join(resolvedPluginRoot, "servers", "probe.mjs"),
-          path.join(resolvedPluginRoot, "local-probe.mjs"),
+          path.join(pluginRoot, "servers", "probe.mjs"),
+          path.join(pluginRoot, "local-probe.mjs"),
         ],
-        cwd: resolvedPluginRoot,
+        cwd: pluginRoot,
         env: {
-          PLUGIN_ROOT: resolvedPluginRoot,
+          PLUGIN_ROOT: pluginRoot,
         },
       });
     } finally {
