@@ -273,6 +273,23 @@ struct ExecAllowlistTests {
         #expect(resolutions[1].executableName == "whoami")
     }
 
+    @Test func `resolve for allowlist resolves blocked busybox applets to busybox itself`() throws {
+        let tmp = try makeTempDirForTests()
+        let busybox = tmp.appendingPathComponent("busybox")
+        try makeExecutableForTests(at: busybox)
+
+        let resolutions = ExecCommandResolution.resolveForAllowlist(
+            command: [busybox.path, "sed", "-n", "1p"],
+            rawCommand: nil,
+            cwd: tmp.path,
+            env: ["PATH": "\(tmp.path):/usr/bin:/bin"])
+
+        #expect(resolutions.count == 1)
+        #expect(resolutions[0].rawExecutable == busybox.path)
+        #expect(resolutions[0].resolvedPath == busybox.path)
+        #expect(resolutions[0].executableName == "busybox")
+    }
+
     @Test func `resolve for allowlist unwraps dispatch wrappers before shell wrappers`() throws {
         let tmp = try makeTempDirForTests()
         let whoami = tmp.appendingPathComponent("whoami")

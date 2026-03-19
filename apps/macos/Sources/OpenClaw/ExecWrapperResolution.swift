@@ -361,7 +361,7 @@ enum ExecWrapperResolution {
         var idx = 1
         var expectsOptionValue = false
 
-        while idx < argv.count {
+        scanLoop: while idx < argv.count {
             let token = argv[idx].trimmingCharacters(in: .whitespacesAndNewlines)
             if token.isEmpty {
                 idx += 1
@@ -380,16 +380,12 @@ enum ExecWrapperResolution {
             let directive = onToken(token, token.lowercased())
             switch directive {
             case .stop:
-                break
+                break scanLoop
             case .invalid:
                 return nil
             case .consumeNext:
                 expectsOptionValue = true
             case .continueScan:
-                break
-            }
-
-            if directive == .stop {
                 break
             }
             idx += 1
