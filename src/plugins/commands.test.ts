@@ -108,6 +108,64 @@ describe("registerPluginCommand", () => {
     expect(getPluginCommandSpecs("slack")).toEqual([]);
   });
 
+  it("shares plugin commands across duplicated module instances", async () => {
+    const duplicateCommands = (await import("./commands.js?duplicate=1")) as {
+      clearPluginCommands: () => void;
+      getPluginCommandSpecs: (provider?: string) => Array<{
+        name: string;
+        description: string;
+        acceptsArgs: boolean;
+      }>;
+      registerPluginCommand: typeof registerPluginCommand;
+    };
+
+    clearPluginCommands();
+    duplicateCommands.clearPluginCommands();
+
+    expect(
+      duplicateCommands.registerPluginCommand("demo-plugin", {
+        name: "phone",
+        description: "Phone control",
+        acceptsArgs: true,
+        nativeNames: {
+          telegram: "phone",
+        },
+        handler: async () => ({ text: "ok" }),
+      }),
+    ).toEqual({ ok: true });
+
+    expect(getPluginCommandSpecs("telegram")).toEqual([
+      {
+        name: "phone",
+        description: "Phone control",
+        acceptsArgs: true,
+      },
+    ]);
+
+    clearPluginCommands();
+    expect(duplicateCommands.getPluginCommandSpecs("telegram")).toEqual([]);
+
+    expect(
+      registerPluginCommand("demo-plugin", {
+        name: "voice",
+        description: "Voice control",
+        acceptsArgs: false,
+        nativeNames: {
+          telegram: "voice",
+        },
+        handler: async () => ({ text: "ok" }),
+      }),
+    ).toEqual({ ok: true });
+
+    expect(duplicateCommands.getPluginCommandSpecs("telegram")).toEqual([
+      {
+        name: "voice",
+        description: "Voice control",
+        acceptsArgs: false,
+      },
+    ]);
+  });
+
   it("matches provider-specific native aliases back to the canonical command", () => {
     const result = registerPluginCommand("demo-plugin", {
       name: "voice",

@@ -8,6 +8,7 @@
 import { parseExplicitTargetForChannel } from "../channels/plugins/target-parsing.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { logVerbose } from "../globals.js";
+import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 import {
   detachPluginConversationBinding,
   getCurrentPluginConversationBinding,
@@ -25,11 +26,28 @@ type RegisteredPluginCommand = OpenClawPluginCommandDefinition & {
   pluginRoot?: string;
 };
 
-// Registry of plugin commands
-const pluginCommands: Map<string, RegisteredPluginCommand> = new Map();
+type PluginCommandRegistryState = {
+  pluginCommands: Map<string, RegisteredPluginCommand>;
+  registryLocked: boolean;
+};
 
-// Lock to prevent modifications during command execution
-let registryLocked = false;
+const PLUGIN_COMMAND_REGISTRY_STATE_KEY = Symbol.for("openclaw.plugins.command-registry-state");
+
+/**
+ * Keep plugin command state on globalThis so source-loaded plugin-sdk shims,
+ * bundled dist extensions, and Jiti-transpiled copies all share one registry.
+ * Without this, plugin registration can succeed in one module graph while
+ * Telegram/Discord read commands from a different copy and see an empty set.
+ */
+const registryState = resolveGlobalSingleton<PluginCommandRegistryState>(
+  PLUGIN_COMMAND_REGISTRY_STATE_KEY,
+  () => ({
+    pluginCommands: new Map<string, RegisteredPluginCommand>(),
+    registryLocked: false,
+  }),
+);
+
+const pluginCommands = registryState.pluginCommands;
 
 // Maximum allowed length for command arguments (defense in depth)
 const MAX_ARGS_LENGTH = 4096;
@@ -172,7 +190,7 @@ export function registerPluginCommand(
   opts?: { pluginName?: string; pluginRoot?: string },
 ): CommandRegistrationResult {
   // Prevent registration while commands are being processed
-  if (registryLocked) {
+  if (registryState.registryLocked) {
     return { ok: false, error: "Cannot register commands while processing is in progress" };
   }
 
@@ -451,7 +469,7 @@ export async function executePluginCommand(params: {
   };
 
   // Lock registry during execution to prevent concurrent modifications
-  registryLocked = true;
+  registryState.registryLocked = true;
   try {
     const result = await command.handler(ctx);
     logVerbose(
@@ -464,7 +482,7 @@ export async function executePluginCommand(params: {
     // Don't leak internal error details - return a safe generic message
     return { text: "⚠️ Command failed. Please try again later." };
   } finally {
-    registryLocked = false;
+    registryState.registryLocked = false;
   }
 }
 
