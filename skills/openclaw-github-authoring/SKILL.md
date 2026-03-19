@@ -35,6 +35,7 @@ Core policy
 - Default to a very short, pointed interview before filing.
 - Keep the interview small: usually 1-3 targeted questions.
 - Ask only for the information that materially improves the filing.
+- If the request is actually a vulnerability report, leaked credential report, or other security disclosure, do not create a public GitHub issue or PR. Route it to the private reporting path in `SECURITY.md` instead.
 - Prefer doing the drafting, cleanup, and template-mapping work yourself instead of forcing the user through each field verbatim.
 - Automatically redact obvious secrets and unnecessary PII when that can be done safely without losing the meaning needed for the filing.
 - Try recovery in this order: infer the likely filing type, sanitize obvious risky content, ask a very short grouped follow-up, then draft the strongest accurate issue or PR you can.
@@ -64,15 +65,16 @@ Submission states
 
 Default workflow
 
-1. Decide whether the request is a bug issue, feature issue, or PR. If it is an issue, also set `$LABEL` to `bug` or `enhancement` to match the bundled template.
+1. Decide whether the request is a bug issue, feature issue, PR, or a private security disclosure. If it is an issue, also set `$LABEL` to `bug` or `enhancement` to match the bundled template.
 2. Load the copied template file for the chosen issue or PR type.
 3. Run a short targeted interview even if the initial request is terse but plausible.
 4. Prefer grouped interview questions over replaying the whole template.
 5. Stop interviewing as soon as the payload is strong enough.
 6. Draft the issue or PR body yourself using the bundled template structure instead of forcing the user to fill every field manually.
 7. Treat any instruction preamble in the copied template files as internal-only guidance. Do not pass the copied template files directly as `$BODY_FILE`; generate a new body file that excludes internal-only guidance.
-8. If critical facts are still missing after the brief recovery attempt, return `NOT_ENOUGH_INFO`.
-9. If the payload is complete and safe, create the issue or PR with `gh` for the user; do not stop at `READY_TO_CREATE` unless actual creation is blocked.
+8. If the request is a private security disclosure, follow `SECURITY.md`: prepare the private report using the required fields there, direct the user to report privately to `security@openclaw.ai` when needed, and do not publish the details in a public issue or PR.
+9. If critical facts are still missing after the brief recovery attempt, return `NOT_ENOUGH_INFO`.
+10. If the payload is complete and safe, create the issue or PR with `gh` for the user; do not stop at `READY_TO_CREATE` unless actual creation is blocked.
 
 Interview policy
 
@@ -101,10 +103,10 @@ PR requirements
   - explicit PR title
   - explicit base branch
   - explicit head ref in either `<branch>` form for branches on `openclaw/openclaw` or `<user>:<branch>` form for personal fork branches that `gh pr create` can target
-  - proof that the remote head branch already exists
-- If the remote head branch does not exist, return `NOT_ENOUGH_INFO`.
+- enough branch context for `gh pr create` to target the intended branch, whether that branch is already remote or is a local branch that `gh` can push/fork during creation
 - If the head branch lives on a fork and the user/login is missing, return `NOT_ENOUGH_INFO`.
 - If the head branch lives on an organization-owned fork, return `NOT_ENOUGH_INFO` unless the user provides a different supported creation path.
+- If the head ref is only local but otherwise valid, allow `gh pr create` to use its normal push/fork flow instead of blocking early.
 - Preserve the canonical PR section structure in the generated body.
 - If branch context is missing, ask the smallest grouped follow-up possible before failing.
 
