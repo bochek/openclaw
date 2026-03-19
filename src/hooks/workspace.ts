@@ -81,8 +81,16 @@ function loadHookFromDir(params: {
   nameHint?: string;
 }): Hook | null {
   const hookMdPath = path.join(params.hookDir, "HOOK.md");
-  const content = readBoundaryFileUtf8({
+  const safeHookMdPath = resolveBoundaryFilePath({
     absolutePath: hookMdPath,
+    rootPath: params.hookDir,
+    boundaryLabel: "hook directory",
+  });
+  if (!safeHookMdPath) {
+    return null;
+  }
+  const content = readBoundaryFileUtf8({
+    absolutePath: safeHookMdPath,
     rootPath: params.hookDir,
     boundaryLabel: "hook directory",
   });
@@ -127,7 +135,7 @@ function loadHookFromDir(params: {
       description,
       source: params.source,
       pluginId: params.pluginId,
-      filePath: hookMdPath,
+      filePath: safeHookMdPath,
       baseDir,
       handlerPath,
     };
