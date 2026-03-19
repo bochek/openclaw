@@ -17,13 +17,6 @@ metadata:
               "bins": ["gh"],
               "label": "Install GitHub CLI (brew)",
             },
-            {
-              "id": "apt",
-              "kind": "apt",
-              "package": "gh",
-              "bins": ["gh"],
-              "label": "Install GitHub CLI (apt)",
-            },
           ],
       },
   }
@@ -107,10 +100,11 @@ PR requirements
 - Require:
   - explicit PR title
   - explicit base branch
-  - explicit head ref in either `<branch>` form for branches on `openclaw/openclaw` or `<owner>:<branch>` form for fork branches
+  - explicit head ref in either `<branch>` form for branches on `openclaw/openclaw` or `<user>:<branch>` form for personal fork branches that `gh pr create` can target
   - proof that the remote head branch already exists
 - If the remote head branch does not exist, return `NOT_ENOUGH_INFO`.
-- If the head branch lives on a fork and the owner is missing, return `NOT_ENOUGH_INFO`.
+- If the head branch lives on a fork and the user/login is missing, return `NOT_ENOUGH_INFO`.
+- If the head branch lives on an organization-owned fork, return `NOT_ENOUGH_INFO` unless the user provides a different supported creation path.
 - Preserve the canonical PR section structure in the generated body.
 - If branch context is missing, ask the smallest grouped follow-up possible before failing.
 
