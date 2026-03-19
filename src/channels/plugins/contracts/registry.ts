@@ -1,9 +1,17 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { expect, vi } from "vitest";
 import {
   __testing as discordThreadBindingTesting,
   createThreadBindingManager as createDiscordThreadBindingManager,
 } from "../../../../extensions/discord/runtime-api.js";
 import { createFeishuThreadBindingManager } from "../../../../extensions/feishu/api.js";
+import {
+  createMatrixThreadBindingManager,
+  resetMatrixThreadBindingsForTests,
+} from "../../../../extensions/matrix/src/matrix/thread-bindings.js";
+import { setMatrixRuntime } from "../../../../extensions/matrix/src/runtime.js";
 import { createTelegramThreadBindingManager } from "../../../../extensions/telegram/runtime-api.js";
 import type { OpenClawConfig } from "../../../config/config.js";
 import {
@@ -126,11 +134,38 @@ type DirectoryContractEntry = {
 type SessionBindingContractEntry = {
   id: string;
   expectedCapabilities: SessionBindingCapabilities;
-  getCapabilities: () => SessionBindingCapabilities;
+  getCapabilities: () => SessionBindingCapabilities | Promise<SessionBindingCapabilities>;
   bindAndResolve: () => Promise<SessionBindingRecord>;
   unbindAndVerify: (binding: SessionBindingRecord) => Promise<void>;
   cleanup: () => Promise<void> | void;
 };
+
+const matrixSessionBindingAuth = {
+  accountId: "default",
+  homeserver: "https://matrix.example.org",
+  userId: "@bot:example.org",
+  accessToken: "token",
+} as const;
+
+function createMatrixSessionBindingStateDir() {
+  return fs.mkdtempSync(path.join(os.tmpdir(), "matrix-session-binding-contract-"));
+}
+
+async function setupMatrixSessionBindingManager() {
+  setMatrixRuntime({
+    state: {
+      resolveStateDir: () => createMatrixSessionBindingStateDir(),
+    },
+  } as never);
+  return await createMatrixThreadBindingManager({
+    accountId: "default",
+    auth: matrixSessionBindingAuth,
+    client: {} as never,
+    idleTimeoutMs: 24 * 60 * 60 * 1000,
+    maxAgeMs: 0,
+    enableSweeper: false,
+  });
+}
 
 function expectResolvedSessionBinding(params: {
   channel: string;
@@ -705,6 +740,58 @@ export const sessionBindingContractRegistry: SessionBindingContractEntry[] = [
         channel: "feishu",
         accountId: "default",
         conversationId: "oc_group_chat:topic:om_topic_root",
+      });
+    },
+  },
+  {
+    id: "matrix",
+    expectedCapabilities: {
+      adapterAvailable: true,
+      bindSupported: true,
+      unbindSupported: true,
+      placements: ["current", "child"],
+    },
+    getCapabilities: async () => {
+      await setupMatrixSessionBindingManager();
+      return getSessionBindingService().getCapabilities({
+        channel: "matrix",
+        accountId: "default",
+      });
+    },
+    bindAndResolve: async () => {
+      await setupMatrixSessionBindingManager();
+      const service = getSessionBindingService();
+      const binding = await service.bind({
+        targetSessionKey: "agent:matrix:child:thread-1",
+        targetKind: "subagent",
+        conversation: {
+          channel: "matrix",
+          accountId: "default",
+          conversationId: "!room:example",
+        },
+        placement: "child",
+        metadata: {
+          label: "codex-matrix",
+          introText: "matrix contract intro",
+        },
+      });
+      expectResolvedSessionBinding({
+        channel: "matrix",
+        accountId: "default",
+        conversationId: "$root",
+        targetSessionKey: "agent:matrix:child:thread-1",
+      });
+      return binding;
+    },
+    unbindAndVerify: unbindAndExpectClearedSessionBinding,
+    cleanup: async () => {
+      const manager = await setupMatrixSessionBindingManager();
+      manager.stop();
+      resetMatrixThreadBindingsForTests();
+      expectClearedSessionBinding({
+        channel: "matrix",
+        accountId: "default",
+        conversationId: "$root",
       });
     },
   },
