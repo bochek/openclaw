@@ -65,6 +65,7 @@ describe("isPathInside", () => {
   it("accepts identical and nested paths but rejects escapes", () => {
     expect(isPathInside("/workspace/root", "/workspace/root")).toBe(true);
     expect(isPathInside("/workspace/root", "/workspace/root/nested/file.txt")).toBe(true);
+    expect(isPathInside("/workspace/root", "/workspace/root/..cache/file.txt")).toBe(true);
     expect(isPathInside("/workspace/root", "/workspace/root/../escape.txt")).toBe(false);
   });
 
@@ -74,6 +75,9 @@ describe("isPathInside", () => {
     expect(isPathInside(String.raw`C:\workspace\root`, String.raw`C:\workspace\root`)).toBe(true);
     expect(
       isPathInside(String.raw`C:\workspace\root`, String.raw`C:\workspace\root\Nested\File.txt`),
+    ).toBe(true);
+    expect(
+      isPathInside(String.raw`C:\workspace\root`, String.raw`C:\workspace\root\..cache\file.txt`),
     ).toBe(true);
     expect(
       isPathInside(String.raw`C:\workspace\root`, String.raw`C:\workspace\root\..\escape.txt`),

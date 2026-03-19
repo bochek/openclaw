@@ -132,11 +132,12 @@ async function resolveRequiredChannel(params: {
   cfg: OpenClawConfig;
   channel?: string;
 }): Promise<string> {
+  const explicitChannel = typeof params.channel === "string" ? params.channel.trim() : "";
   return (
     await resolveMessageChannelSelection({
       cfg: params.cfg,
-      channel: params.channel,
-      includeConfigured: false,
+      channel: explicitChannel || undefined,
+      includeConfigured: !explicitChannel,
     })
   ).channel;
 }

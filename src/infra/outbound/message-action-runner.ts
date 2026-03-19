@@ -222,11 +222,12 @@ async function resolveChannel(
   params: Record<string, unknown>,
   toolContext?: { currentChannelProvider?: string },
 ) {
+  const explicitChannel = readStringParam(params, "channel");
   const selection = await resolveMessageChannelSelection({
     cfg,
-    channel: readStringParam(params, "channel"),
+    channel: explicitChannel,
     fallbackChannel: toolContext?.currentChannelProvider,
-    includeConfigured: false,
+    includeConfigured: !explicitChannel,
   });
   if (selection.source === "tool-context-fallback") {
     params.channel = selection.channel;

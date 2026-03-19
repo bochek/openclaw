@@ -299,7 +299,9 @@ describe("discoverOpenClawPlugins", () => {
     expect(bundle?.format).toBe("bundle");
     expect(bundle?.bundleFormat).toBe("codex");
     expect(bundle?.source).toBe(bundleDir);
-    expect(normalizePathForAssertion(bundle?.rootDir)).toBe(normalizePathForAssertion(bundleDir));
+    expect(normalizePathForAssertion(bundle?.rootDir)).toBe(
+      normalizePathForAssertion(fs.realpathSync(bundleDir)),
+    );
   });
 
   it("auto-detects manifestless Claude bundles from the default layout", async () => {

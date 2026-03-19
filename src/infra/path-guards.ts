@@ -37,11 +37,20 @@ export function isPathInside(root: string, target: string): boolean {
     const rootForCompare = normalizeWindowsPathForComparison(path.win32.resolve(root));
     const targetForCompare = normalizeWindowsPathForComparison(path.win32.resolve(target));
     const relative = path.win32.relative(rootForCompare, targetForCompare);
-    return relative === "" || (!relative.startsWith("..") && !path.win32.isAbsolute(relative));
+    return (
+      relative === "" ||
+      (relative !== ".." &&
+        !relative.startsWith(`..\\`) &&
+        !relative.startsWith("../") &&
+        !path.win32.isAbsolute(relative))
+    );
   }
 
   const resolvedRoot = path.resolve(root);
   const resolvedTarget = path.resolve(target);
   const relative = path.relative(resolvedRoot, resolvedTarget);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+  return (
+    relative === "" ||
+    (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))
+  );
 }

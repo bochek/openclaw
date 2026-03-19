@@ -1,7 +1,11 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelOutboundAdapter, ChannelPlugin } from "../../channels/plugins/types.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
-import { createMSTeamsTestPlugin, createTestRegistry } from "../../test-utils/channel-plugins.js";
+import {
+  createChannelTestPluginBase,
+  createMSTeamsTestPlugin,
+  createTestRegistry,
+} from "../../test-utils/channel-plugins.js";
 import { createIMessageTestPlugin } from "../../test-utils/imessage-test-plugin.js";
 import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../../utils/message-channel.js";
 
@@ -238,6 +242,78 @@ describe("sendPoll channel normalization", () => {
       params?: Record<string, unknown>;
     };
     expect(call?.params?.channel).toBe("msteams");
+    expect(result.channel).toBe("msteams");
+  });
+});
+
+describe("implicit single-channel selection", () => {
+  it("keeps single configured channel fallback for sendMessage when channel is omitted", async () => {
+    const sendText = vi.fn(async () => ({ channel: "msteams", messageId: "m1" }));
+    setRegistry(
+      createTestRegistry([
+        {
+          pluginId: "msteams",
+          source: "test",
+          plugin: {
+            ...createChannelTestPluginBase({
+              id: "msteams",
+              label: "Microsoft Teams",
+              docsPath: "/channels/msteams",
+              config: {
+                listAccountIds: () => ["default"],
+                resolveAccount: () => ({}),
+                isConfigured: () => true,
+              },
+            }),
+            outbound: {
+              ...createMSTeamsOutbound(),
+              sendText,
+            },
+          },
+        },
+      ]),
+    );
+
+    const result = await sendMessage({
+      cfg: {},
+      to: "conversation:19:abc@thread.tacv2",
+      content: "hi",
+    });
+
+    expect(result.channel).toBe("msteams");
+    expect(sendText).toHaveBeenCalled();
+  });
+
+  it("keeps single configured channel fallback for sendPoll when channel is omitted", async () => {
+    setRegistry(
+      createTestRegistry([
+        {
+          pluginId: "msteams",
+          source: "test",
+          plugin: {
+            ...createChannelTestPluginBase({
+              id: "msteams",
+              label: "Microsoft Teams",
+              docsPath: "/channels/msteams",
+              config: {
+                listAccountIds: () => ["default"],
+                resolveAccount: () => ({}),
+                isConfigured: () => true,
+              },
+            }),
+            outbound: createMSTeamsOutbound({ includePoll: true }),
+          },
+        },
+      ]),
+    );
+
+    const result = await sendPoll({
+      cfg: {},
+      to: "conversation:19:abc@thread.tacv2",
+      question: "Lunch?",
+      options: ["Pizza", "Sushi"],
+    });
+
     expect(result.channel).toBe("msteams");
   });
 });
