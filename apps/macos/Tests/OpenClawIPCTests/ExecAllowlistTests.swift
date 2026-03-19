@@ -382,6 +382,17 @@ struct ExecAllowlistTests {
         #expect(resolutions[0].executableName == "env")
     }
 
+    @Test func `resolve for allowlist fails closed on env manipulation before shell wrapper`() {
+        let command = ["/usr/bin/env", "PATH=/tmp", "/bin/sh", "-lc", "whoami"]
+        let resolutions = ExecCommandResolution.resolveForAllowlist(
+            command: command,
+            rawCommand: nil,
+            cwd: nil,
+            env: ["PATH": "/usr/bin:/bin"])
+
+        #expect(resolutions.isEmpty)
+    }
+
     @Test func `resolve for allowlist preserves env wrapper with modifiers`() {
         let command = ["/usr/bin/env", "FOO=bar", "/usr/bin/printf", "ok"]
         let resolutions = ExecCommandResolution.resolveForAllowlist(
@@ -433,6 +444,15 @@ struct ExecAllowlistTests {
             env: ["PATH": "/usr/bin:/bin"])
 
         #expect(patterns == ["/usr/bin/printf"])
+    }
+
+    @Test func `allow always patterns fail closed on env manipulation before shell wrapper`() {
+        let patterns = ExecCommandResolution.resolveAllowAlwaysPatterns(
+            command: ["/usr/bin/env", "PATH=/tmp", "/bin/sh", "-lc", "whoami"],
+            cwd: nil,
+            env: ["PATH": "/usr/bin:/bin"])
+
+        #expect(patterns.isEmpty)
     }
 
     @Test func `allow always patterns unwrap dispatch wrappers before shell wrappers`() throws {

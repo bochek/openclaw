@@ -77,6 +77,11 @@ struct ExecCommandResolution {
         guard depth <= ExecWrapperResolution.maxWrapperDepth, !command.isEmpty else {
             return []
         }
+        if ExecWrapperResolution.hasEnvManipulationBeforeShellWrapper(command) {
+            // Fail closed for semantic env wrappers that can alter shell lookup
+            // semantics before we would analyze inner shell payloads.
+            return []
+        }
 
         let shell = ExecShellWrapperParser.extract(command: command, rawCommand: rawCommand)
         if shell.isWrapper {
@@ -192,6 +197,12 @@ struct ExecCommandResolution {
         seen: inout Set<String>)
     {
         guard depth <= Self.maxAllowAlwaysTraversalDepth, !command.isEmpty else {
+            return
+        }
+        if ExecWrapperResolution.hasEnvManipulationBeforeShellWrapper(command) {
+            // Mirror the conservative node-host policy for env-modified shell
+            // launches: require explicit approval each time instead of persisting
+            // an inner-executable pattern that the modified environment can subvert.
             return
         }
 
