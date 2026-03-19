@@ -14,14 +14,7 @@ import {
   resolveHookInvocationPolicy,
 } from "./frontmatter.js";
 import { resolvePluginHookDirs } from "./plugin-hooks.js";
-import type {
-  Hook,
-  HookEligibilityContext,
-  HookEntry,
-  HookSnapshot,
-  HookSource,
-  ParsedHookFrontmatter,
-} from "./types.js";
+import type { Hook, HookEligibilityContext, HookEntry, HookSnapshot, HookSource } from "./types.js";
 
 type HookPackageManifest = {
   name?: string;
@@ -135,6 +128,7 @@ function loadHookFromDir(params: {
       description,
       source: params.source,
       pluginId: params.pluginId,
+      frontmatter,
       filePath: safeHookMdPath,
       baseDir,
       handlerPath,
@@ -220,15 +214,7 @@ export function loadHookEntriesFromDir(params: {
     pluginId: params.pluginId,
   });
   return hooks.map((hook) => {
-    let frontmatter: ParsedHookFrontmatter = {};
-    const raw = readBoundaryFileUtf8({
-      absolutePath: hook.filePath,
-      rootPath: path.dirname(hook.filePath),
-      boundaryLabel: "hook directory",
-    });
-    if (raw !== null) {
-      frontmatter = parseFrontmatter(raw);
-    }
+    const frontmatter = hook.frontmatter ?? {};
     const entry: HookEntry = {
       hook: {
         ...hook,
@@ -311,15 +297,7 @@ function loadHookEntries(
   }
 
   return Array.from(merged.values()).map((hook) => {
-    let frontmatter: ParsedHookFrontmatter = {};
-    const raw = readBoundaryFileUtf8({
-      absolutePath: hook.filePath,
-      rootPath: hook.baseDir,
-      boundaryLabel: "hook directory",
-    });
-    if (raw !== null) {
-      frontmatter = parseFrontmatter(raw);
-    }
+    const frontmatter = hook.frontmatter ?? {};
     return {
       hook,
       frontmatter,

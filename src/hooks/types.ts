@@ -37,6 +37,7 @@ export type Hook = {
   description: string;
   source: "openclaw-bundled" | "openclaw-managed" | "openclaw-workspace" | "openclaw-plugin";
   pluginId?: string;
+  frontmatter?: ParsedHookFrontmatter;
   filePath: string; // Path to HOOK.md
   baseDir: string; // Directory containing hook
   handlerPath: string; // Path to handler module (handler.ts/js)
