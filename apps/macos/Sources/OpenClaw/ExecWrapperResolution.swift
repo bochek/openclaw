@@ -229,7 +229,6 @@ enum ExecWrapperResolution {
                     policyBlocked: true,
                     blockedWrapper: wrapper)
             case let .unwrapped(wrapper, argv):
-                guard !argv.isEmpty else { break }
                 wrappers.append(wrapper)
                 if self.isSemanticDispatchWrapperUsage(wrapper: wrapper, argv: current) {
                     return DispatchWrapperExecutionPlan(

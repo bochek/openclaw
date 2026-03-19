@@ -264,6 +264,19 @@ struct ExecAllowlistTests {
         #expect(resolutions[1].executableName == "whoami")
     }
 
+    @Test func `resolve for allowlist unwraps direct dispatch wrappers with canonical raw command`() {
+        let command = ["/usr/bin/nice", "/usr/bin/printf", "ok"]
+        let resolutions = ExecCommandResolution.resolveForAllowlist(
+            command: command,
+            rawCommand: "/usr/bin/nice /usr/bin/printf ok",
+            cwd: nil,
+            env: ["PATH": "/usr/bin:/bin"])
+
+        #expect(resolutions.count == 1)
+        #expect(resolutions[0].resolvedPath == "/usr/bin/printf")
+        #expect(resolutions[0].executableName == "printf")
+    }
+
     @Test func `resolve for allowlist unwraps env dispatch wrappers inside shell segments`() {
         let command = ["/bin/sh", "-lc", "env /usr/bin/touch /tmp/openclaw-allowlist-test"]
         let resolutions = ExecCommandResolution.resolveForAllowlist(
@@ -375,6 +388,19 @@ struct ExecAllowlistTests {
             env: ["PATH": "/usr/bin:/bin"])
 
         #expect(patterns.isEmpty)
+    }
+
+    @Test func `allow always patterns support max transparent wrapper depth`() throws {
+        let tmp = try makeTempDirForTests()
+        let whoami = tmp.appendingPathComponent("whoami")
+        try makeExecutableForTests(at: whoami)
+
+        let patterns = ExecCommandResolution.resolveAllowAlwaysPatterns(
+            command: ["nice", "nohup", "timeout", "5", "stdbuf", "-o", "L", "whoami"],
+            cwd: tmp.path,
+            env: ["PATH": "\(tmp.path):/usr/bin:/bin"])
+
+        #expect(patterns == [whoami.path])
     }
 
     @Test func `match all requires every segment to match`() {

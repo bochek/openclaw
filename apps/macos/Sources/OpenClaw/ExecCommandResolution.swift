@@ -12,11 +12,20 @@ struct ExecCommandResolution {
         cwd: String?,
         env: [String: String]?) -> ExecCommandResolution?
     {
+        let effective = ExecWrapperResolution.unwrapDispatchWrappersForResolution(command)
+        guard let effectiveRaw = effective.first?.trimmingCharacters(in: .whitespacesAndNewlines), !effectiveRaw.isEmpty else {
+            return nil
+        }
+
         let trimmedRaw = rawCommand?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if !trimmedRaw.isEmpty, let token = self.parseFirstToken(trimmedRaw) {
-            return self.resolveExecutable(rawExecutable: token, cwd: cwd, env: env)
+            let normalizedToken = ExecWrapperResolution.normalizeExecutableToken(token)
+            let normalizedEffective = ExecWrapperResolution.normalizeExecutableToken(effectiveRaw)
+            if normalizedToken == normalizedEffective {
+                return self.resolveExecutable(rawExecutable: token, cwd: cwd, env: env)
+            }
         }
-        return self.resolve(command: command, cwd: cwd, env: env)
+        return self.resolveExecutable(rawExecutable: effectiveRaw, cwd: cwd, env: env)
     }
 
     static func resolveForAllowlist(
@@ -126,7 +135,7 @@ struct ExecCommandResolution {
         patterns: inout [String],
         seen: inout Set<String>)
     {
-        guard depth < 3, !command.isEmpty else {
+        guard depth <= ExecWrapperResolution.maxWrapperDepth, !command.isEmpty else {
             return
         }
 

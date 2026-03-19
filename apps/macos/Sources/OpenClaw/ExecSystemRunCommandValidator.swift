@@ -94,13 +94,7 @@ enum ExecSystemRunCommandValidator {
         return normalizedRaw == previewCommand ? normalizedRaw : nil
     }
 
-    private static func hasEnvManipulationBeforeShellWrapper(
-        _ argv: [String],
-        depth: Int = 0,
-        envManipulationSeen: Bool = false) -> Bool
-    {
-        _ = depth
-        _ = envManipulationSeen
+    private static func hasEnvManipulationBeforeShellWrapper(_ argv: [String]) -> Bool {
         return ExecWrapperResolution.hasEnvManipulationBeforeShellWrapper(argv)
     }
 
