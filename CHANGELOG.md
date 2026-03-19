@@ -50,6 +50,7 @@ Docs: https://docs.openclaw.ai
 - Hooks/Windows: preserve Windows-aware hook path handling across plugin-managed hook loading and bundle MCP config resolution, so path aliases and canonicalization differences no longer drop hook metadata or break bundled MCP launches.
 - Outbound/channels: skip full configured-channel scans when explicit channel selection already determines the target, so explicit sends and broadcasts avoid slow unrelated plugin configuration checks.
 - Tlon/install: fetch `@tloncorp/api` from the pinned HTTPS tarball artifact instead of a Git transport URL so installs no longer depend on GitHub SSH access.
+- WhatsApp/install: fetch the Baileys `libsignal` dependency from a pinned GitHub HTTPS tarball so frozen installs and Windows CI no longer depend on `git@github.com` access.
 - CLI/Ollama onboarding: keep the interactive model picker for explicit `openclaw onboard --auth-choice ollama` runs so setup still selects a default model without reintroducing pre-picker auto-pulls. (#49249) Thanks @BruceMacD.
 - Plugins/bundler TDZ: fix `RESERVED_COMMANDS` temporal dead zone error that prevented device-pair, phone-control, and talk-voice plugins from registering when the bundler placed the commands module after call sites in the same output chunk. Thanks @BunsDev.
 - Plugins/imports: fix stale googlechat runtime-api import paths and signal SDK circular re-exports broken by recent plugin-sdk refactors. Thanks @BunsDev.
