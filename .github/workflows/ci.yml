@@ -32,8 +32,8 @@ jobs:
       - name: Ensure docs-scope base commit
         uses: ./.github/actions/ensure-base-commit
         with:
-          base-sha: ${{ github.event_name == 'push' && github.event.before || github.event.pull_request.base.sha }}
-          fetch-ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.base.ref }}
+          base-sha: ${{ github.event_name == 'push' && github.event.before || github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          fetch-ref: ${{ github.event_name == 'push' && github.ref_name || github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.event.repository.default_branch }}
 
       - name: Detect docs-only changes
         id: check
@@ -73,8 +73,12 @@ jobs:
 
           if [ "${{ github.event_name }}" = "push" ]; then
             BASE="${{ github.event.before }}"
-          else
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
             BASE="${{ github.event.pull_request.base.sha }}"
+          else
+            DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+            git fetch --no-tags --depth=50 origin "${DEFAULT_BRANCH}" || true
+            BASE="$(git merge-base HEAD "origin/${DEFAULT_BRANCH}" 2>/dev/null || true)"
           fi
 
           node scripts/ci-changed-scope.mjs --base "$BASE" --head HEAD
@@ -97,8 +101,8 @@ jobs:
       - name: Ensure changed-extensions base commit
         uses: ./.github/actions/ensure-base-commit
         with:
-          base-sha: ${{ github.event_name == 'push' && github.event.before || github.event.pull_request.base.sha }}
-          fetch-ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.base.ref }}
+          base-sha: ${{ github.event_name == 'push' && github.event.before || github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          fetch-ref: ${{ github.event_name == 'push' && github.ref_name || github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.event.repository.default_branch }}
 
       - name: Setup Node environment
         uses: ./.github/actions/setup-node-env
@@ -109,9 +113,20 @@ jobs:
 
       - name: Detect changed extensions
         id: changed
-        env:
-          BASE_SHA: ${{ github.event_name == 'push' && github.event.before || github.event.pull_request.base.sha }}
         run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            BASE_SHA="${{ github.event.before }}"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+            git fetch --no-tags --depth=50 origin "${DEFAULT_BRANCH}" || true
+            BASE_SHA="$(git merge-base HEAD "origin/${DEFAULT_BRANCH}" 2>/dev/null || true)"
+          fi
+
+          export BASE_SHA
           node --input-type=module <<'EOF'
           import { appendFileSync } from "node:fs";
           import { listChangedExtensionIds } from "./scripts/test-extension.mjs";
@@ -536,8 +551,8 @@ jobs:
       - name: Ensure secrets base commit
         uses: ./.github/actions/ensure-base-commit
         with:
-          base-sha: ${{ github.event_name == 'push' && github.event.before || github.event.pull_request.base.sha }}
-          fetch-ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.base.ref }}
+          base-sha: ${{ github.event_name == 'push' && github.event.before || github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          fetch-ref: ${{ github.event_name == 'push' && github.ref_name || github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.event.repository.default_branch }}
 
       - name: Setup Node environment
         uses: ./.github/actions/setup-node-env
@@ -572,10 +587,18 @@ jobs:
         run: pre-commit run --all-files detect-private-key
 
       - name: Audit changed GitHub workflows with zizmor
-        env:
-          BASE_SHA: ${{ github.event_name == 'push' && github.event.before || github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            BASE_SHA="${{ github.event.before }}"
+          elif [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            DEFAULT_BRANCH="${{ github.event.repository.default_branch }}"
+            git fetch --no-tags --depth=50 origin "${DEFAULT_BRANCH}" || true
+            BASE_SHA="$(git merge-base HEAD "origin/${DEFAULT_BRANCH}" 2>/dev/null || true)"
+          fi
 
           if [ -z "${BASE_SHA:-}" ] || [ "${BASE_SHA}" = "0000000000000000000000000000000000000000" ]; then
             echo "No usable base SHA detected; skipping zizmor."
