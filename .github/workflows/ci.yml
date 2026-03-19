@@ -62,8 +62,8 @@ jobs:
       - name: Ensure changed-scope base commit
         uses: ./.github/actions/ensure-base-commit
         with:
-          base-sha: ${{ github.event_name == 'push' && github.event.before || github.event.pull_request.base.sha }}
-          fetch-ref: ${{ github.event_name == 'push' && github.ref_name || github.event.pull_request.base.ref }}
+          base-sha: ${{ github.event_name == 'push' && github.event.before || github.event_name == 'pull_request' && github.event.pull_request.base.sha || '' }}
+          fetch-ref: ${{ github.event_name == 'push' && github.ref_name || github.event_name == 'pull_request' && github.event.pull_request.base.ref || github.event.repository.default_branch }}
 
       - name: Detect changed scopes
         id: scope
@@ -129,9 +129,15 @@ jobs:
           export BASE_SHA
           node --input-type=module <<'EOF'
           import { appendFileSync } from "node:fs";
-          import { listChangedExtensionIds } from "./scripts/test-extension.mjs";
+          import {
+            listAvailableExtensionIds,
+            listChangedExtensionIds,
+          } from "./scripts/test-extension.mjs";
 
-          const extensionIds = listChangedExtensionIds({ base: process.env.BASE_SHA, head: "HEAD" });
+          const baseSha = process.env.BASE_SHA?.trim();
+          const extensionIds = baseSha
+            ? listChangedExtensionIds({ base: baseSha, head: "HEAD" })
+            : listAvailableExtensionIds();
           const matrix = JSON.stringify({ include: extensionIds.map((extension) => ({ extension })) });
 
           appendFileSync(process.env.GITHUB_OUTPUT, `has_changed_extensions=${extensionIds.length > 0}\n`, "utf8");
