@@ -146,11 +146,15 @@ export async function resolveMessageChannelSelection(params: {
   cfg: OpenClawConfig;
   channel?: string | null;
   fallbackChannel?: string | null;
+  includeConfigured?: boolean;
 }): Promise<{
   channel: MessageChannelId;
   configured: MessageChannelId[];
   source: MessageChannelSelectionSource;
 }> {
+  const includeConfigured = params.includeConfigured !== false;
+  const resolveConfigured = async () =>
+    includeConfigured ? await listConfiguredMessageChannels(params.cfg) : [];
   const normalized = normalizeMessageChannel(params.channel);
   if (normalized) {
     const availableExplicit = resolveAvailableKnownChannel({
@@ -165,7 +169,7 @@ export async function resolveMessageChannelSelection(params: {
       if (fallback) {
         return {
           channel: fallback,
-          configured: await listConfiguredMessageChannels(params.cfg),
+          configured: await resolveConfigured(),
           source: "tool-context-fallback",
         };
       }
@@ -176,7 +180,7 @@ export async function resolveMessageChannelSelection(params: {
     }
     return {
       channel: availableExplicit,
-      configured: await listConfiguredMessageChannels(params.cfg),
+      configured: await resolveConfigured(),
       source: "explicit",
     };
   }
@@ -188,12 +192,12 @@ export async function resolveMessageChannelSelection(params: {
   if (fallback) {
     return {
       channel: fallback,
-      configured: await listConfiguredMessageChannels(params.cfg),
+      configured: await resolveConfigured(),
       source: "tool-context-fallback",
     };
   }
 
-  const configured = await listConfiguredMessageChannels(params.cfg);
+  const configured = await resolveConfigured();
   if (configured.length === 1) {
     return { channel: configured[0], configured, source: "single-configured" };
   }
