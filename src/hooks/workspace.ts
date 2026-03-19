@@ -223,7 +223,7 @@ export function loadHookEntriesFromDir(params: {
     let frontmatter: ParsedHookFrontmatter = {};
     const raw = readBoundaryFileUtf8({
       absolutePath: hook.filePath,
-      rootPath: hook.baseDir,
+      rootPath: path.dirname(hook.filePath),
       boundaryLabel: "hook directory",
     });
     if (raw !== null) {
