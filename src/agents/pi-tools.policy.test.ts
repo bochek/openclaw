@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
+import { applyOpenClawToolPolicies } from "./pi-tools.js";
 import {
   filterToolsByPolicy,
   isToolAllowedByPolicyName,
@@ -32,6 +33,26 @@ describe("pi-tools.policy", () => {
 
   it("keeps apply_patch when exec is allowlisted", () => {
     expect(isToolAllowedByPolicyName("apply_patch", { allow: ["exec"] })).toBe(true);
+  });
+});
+
+describe("applyOpenClawToolPolicies", () => {
+  it("removes owner-only tools for non-owner senders", () => {
+    const tools = [createStubTool("read"), { ...createStubTool("bundle_probe"), ownerOnly: true }];
+    const filtered = applyOpenClawToolPolicies({ tools, senderIsOwner: false });
+    expect(filtered.map((tool) => tool.name)).toEqual(["read"]);
+  });
+
+  it("applies allow/deny policy to non-plugin tools", () => {
+    const cfg = {
+      tools: {
+        allow: ["read"],
+        deny: ["bundle_probe"],
+      },
+    } as unknown as OpenClawConfig;
+    const tools = [createStubTool("read"), createStubTool("bundle_probe")];
+    const filtered = applyOpenClawToolPolicies({ tools, config: cfg });
+    expect(filtered.map((tool) => tool.name)).toEqual(["read"]);
   });
 });
 

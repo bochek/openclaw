@@ -74,7 +74,11 @@ import { subscribeEmbeddedPiSession } from "../../pi-embedded-subscribe.js";
 import { createPreparedEmbeddedPiSettingsManager } from "../../pi-project-settings.js";
 import { applyPiAutoCompactionGuard } from "../../pi-settings.js";
 import { toClientToolDefinitions } from "../../pi-tool-definition-adapter.js";
-import { createOpenClawCodingTools, resolveToolLoopDetectionConfig } from "../../pi-tools.js";
+import {
+  applyOpenClawToolPolicies,
+  createOpenClawCodingTools,
+  resolveToolLoopDetectionConfig,
+} from "../../pi-tools.js";
 import { resolveSandboxContext } from "../../sandbox.js";
 import { resolveSandboxRuntimeStatus } from "../../sandbox/runtime-status.js";
 import { isXaiProvider } from "../../schema/clean-for-xai.js";
@@ -1559,10 +1563,30 @@ export async function runEmbeddedAttempt(
           ],
         })
       : undefined;
-    const effectiveTools =
+    const effectiveToolsUnfiltered =
       bundleMcpRuntime && bundleMcpRuntime.tools.length > 0
         ? [...tools, ...bundleMcpRuntime.tools]
         : tools;
+    const effectiveTools = applyOpenClawToolPolicies({
+      tools: effectiveToolsUnfiltered,
+      config: params.config,
+      sessionKey: sandboxSessionKey,
+      agentId: sessionAgentId,
+      modelProvider: params.model.provider,
+      modelId: params.modelId,
+      messageProvider: params.messageChannel ?? params.messageProvider,
+      groupId: params.groupId,
+      groupChannel: params.groupChannel,
+      groupSpace: params.groupSpace,
+      agentAccountId: params.agentAccountId,
+      senderId: params.senderId,
+      senderName: params.senderName,
+      senderUsername: params.senderUsername,
+      senderE164: params.senderE164,
+      senderIsOwner: params.senderIsOwner,
+      spawnedBy: params.spawnedBy,
+      sandbox,
+    });
     const allowedToolNames = collectAllowedToolNames({
       tools: effectiveTools,
       clientTools,
