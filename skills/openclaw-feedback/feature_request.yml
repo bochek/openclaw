@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Prepared via the `openclaw-github-authoring` skill template copy.
+        Prepared via the `openclaw-feedback` skill template copy.
         Draft the request for the user instead of replaying the form field-by-field when the intent is already clear.
         Help evaluate the request with concrete use cases and tradeoffs.
         Automatically mask obvious secrets and unnecessary PII before filing.
