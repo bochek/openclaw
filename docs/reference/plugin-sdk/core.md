@@ -1,25 +1,23 @@
 ---
 title: "Plugin SDK Core"
 sidebarTitle: "Core"
-summary: "Phase 1 core entry surfaces for the Plugin SDK reference"
-read_when:
-  - You are looking for plugin entry helpers
-  - You need the main plugin-facing types and entry surfaces
+summary: "Generated index for the core Plugin SDK entry surfaces plugin authors reach for first."
 ---
 
 # Plugin SDK core
 
-The core category covers the main entry surfaces plugin authors reach for first.
+Generated index for the core Plugin SDK entry surfaces plugin authors reach for first.
 
-## Reviewed phase 1 modules
+> Every module listed here is currently unstable until OpenClaw makes an explicit compatibility promise.
 
-| Import path                        | Stability  | Use this for                                           |
-| ---------------------------------- | ---------- | ------------------------------------------------------ |
-| `openclaw/plugin-sdk/core`         | `unstable` | Main plugin entry helpers and base plugin-facing types |
-| `openclaw/plugin-sdk/plugin-entry` | `unstable` | Small entry helper for provider and command plugins    |
+## Modules
 
-## Notes
+| Import path                                                                      | Stability  | Summary                                                                    |
+| -------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------- |
+| [`openclaw/plugin-sdk/core`](/reference/plugin-sdk/modules/core)                 | `unstable` | Primary entry surface for plugin definitions and base plugin-facing types. |
+| [`openclaw/plugin-sdk/plugin-entry`](/reference/plugin-sdk/modules/plugin-entry) | `unstable` | Small entry helper for provider and command plugins.                       |
 
-- Start with these surfaces before reaching for lower-level helpers, but do not
-  treat them as frozen API yet.
-- Generated module pages for these subpaths land in phase 2.
+## Generated from
+
+- `scripts/lib/plugin-sdk-doc-metadata.ts`
+- `scripts/generate-plugin-sdk-docs.ts`

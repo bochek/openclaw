@@ -1,43 +1,39 @@
 ---
 title: "Plugin SDK Modules"
 sidebarTitle: "All Modules"
-summary: "Reviewed phase 1 Plugin SDK modules grouped by category and stability"
-read_when:
-  - You want the reviewed module set for the Plugin SDK docs rollout
-  - You need a quick index before generated module pages exist
+summary: "Generated index of the current curated Plugin SDK module set"
 ---
 
 # Plugin SDK modules
 
-This page tracks the reviewed phase 1 module set for the Plugin SDK reference.
-Generated per-module pages land in the next phase. Every surface listed here is
-currently classified as `unstable`.
+This page is auto-generated from the current curated Plugin SDK metadata and
+the TypeScript export surface. Every listed module is currently classified as
+`unstable`.
 
-## Unstable
+## Current module set
 
-| Import path                                  | Category  | Primary use                                |
-| -------------------------------------------- | --------- | ------------------------------------------ |
-| `openclaw/plugin-sdk/allow-from`             | Utilities | Allowlist formatting and normalization     |
-| `openclaw/plugin-sdk/channel-actions`        | Channel   | Shared action and reaction helpers         |
-| `openclaw/plugin-sdk/channel-config-schema`  | Channel   | Channel config schema builders             |
-| `openclaw/plugin-sdk/channel-contract`       | Channel   | Channel contract types                     |
-| `openclaw/plugin-sdk/channel-pairing`        | Channel   | Pairing and approval flows                 |
-| `openclaw/plugin-sdk/channel-reply-pipeline` | Channel   | Reply and typing orchestration             |
-| `openclaw/plugin-sdk/channel-runtime`        | Legacy    | Older channel runtime helper shim          |
-| `openclaw/plugin-sdk/channel-setup`          | Channel   | Channel setup adapters                     |
-| `openclaw/plugin-sdk/command-auth`           | Channel   | Shared command authorization helpers       |
-| `openclaw/plugin-sdk/compat`                 | Legacy    | Deprecated compatibility surface           |
-| `openclaw/plugin-sdk/core`                   | Core      | Main plugin entry surface                  |
-| `openclaw/plugin-sdk`                        | Legacy    | Root barrel kept for compatibility         |
-| `openclaw/plugin-sdk/plugin-entry`           | Core      | Small entry helper for non-channel plugins |
-| `openclaw/plugin-sdk/provider-onboard`       | Provider  | Provider onboarding config helpers         |
-| `openclaw/plugin-sdk/reply-payload`          | Utilities | Reply payload and outbound media helpers   |
-| `openclaw/plugin-sdk/runtime-store`          | Runtime   | Persistent plugin runtime storage          |
-| `openclaw/plugin-sdk/secret-input`           | Channel   | Secret input parsing and normalization     |
-| `openclaw/plugin-sdk/testing`                | Utilities | Plugin test helpers and fixtures           |
-| `openclaw/plugin-sdk/webhook-ingress`        | Channel   | Webhook validation and target registration |
+| Import path                                                                                          | Category  | Stability  | Summary                                                                        |
+| ---------------------------------------------------------------------------------------------------- | --------- | ---------- | ------------------------------------------------------------------------------ |
+| [`openclaw/plugin-sdk`](/reference/plugin-sdk/modules/root-barrel)                                   | Legacy    | `unstable` | Root barrel kept for compatibility; new docs should point to focused subpaths. |
+| [`openclaw/plugin-sdk/channel-runtime`](/reference/plugin-sdk/modules/channel-runtime)               | Legacy    | `unstable` | Legacy runtime helper shim for older channel helpers.                          |
+| [`openclaw/plugin-sdk/core`](/reference/plugin-sdk/modules/core)                                     | Core      | `unstable` | Primary entry surface for plugin definitions and base plugin-facing types.     |
+| [`openclaw/plugin-sdk/plugin-entry`](/reference/plugin-sdk/modules/plugin-entry)                     | Core      | `unstable` | Small entry helper for provider and command plugins.                           |
+| [`openclaw/plugin-sdk/channel-actions`](/reference/plugin-sdk/modules/channel-actions)               | Channel   | `unstable` | Shared action and reaction helpers for channel plugins.                        |
+| [`openclaw/plugin-sdk/channel-config-schema`](/reference/plugin-sdk/modules/channel-config-schema)   | Channel   | `unstable` | Channel config schema builders and shared schema primitives.                   |
+| [`openclaw/plugin-sdk/channel-contract`](/reference/plugin-sdk/modules/channel-contract)             | Channel   | `unstable` | Core channel contract types for channel plugins.                               |
+| [`openclaw/plugin-sdk/channel-pairing`](/reference/plugin-sdk/modules/channel-pairing)               | Channel   | `unstable` | Pairing controllers and DM approval flows.                                     |
+| [`openclaw/plugin-sdk/channel-reply-pipeline`](/reference/plugin-sdk/modules/channel-reply-pipeline) | Channel   | `unstable` | Common reply and typing orchestration for channel plugins.                     |
+| [`openclaw/plugin-sdk/channel-setup`](/reference/plugin-sdk/modules/channel-setup)                   | Channel   | `unstable` | Setup adapter surfaces for channel onboarding.                                 |
+| [`openclaw/plugin-sdk/command-auth`](/reference/plugin-sdk/modules/command-auth)                     | Channel   | `unstable` | Shared command authorization helpers.                                          |
+| [`openclaw/plugin-sdk/secret-input`](/reference/plugin-sdk/modules/secret-input)                     | Channel   | `unstable` | Secret input parsing and normalization helpers.                                |
+| [`openclaw/plugin-sdk/webhook-ingress`](/reference/plugin-sdk/modules/webhook-ingress)               | Channel   | `unstable` | Webhook request validation, target registration, and routing helpers.          |
+| [`openclaw/plugin-sdk/provider-onboard`](/reference/plugin-sdk/modules/provider-onboard)             | Provider  | `unstable` | Provider onboarding config patch helpers.                                      |
+| [`openclaw/plugin-sdk/runtime-store`](/reference/plugin-sdk/modules/runtime-store)                   | Runtime   | `unstable` | Persistent runtime storage helpers for plugins.                                |
+| [`openclaw/plugin-sdk/allow-from`](/reference/plugin-sdk/modules/allow-from)                         | Utilities | `unstable` | Allowlist formatting and normalization helpers.                                |
+| [`openclaw/plugin-sdk/reply-payload`](/reference/plugin-sdk/modules/reply-payload)                   | Utilities | `unstable` | Reply payload normalization and outbound media helpers.                        |
+| [`openclaw/plugin-sdk/testing`](/reference/plugin-sdk/modules/testing)                               | Utilities | `unstable` | Plugin test helpers, mocks, and runtime fixtures.                              |
 
-## Next phase
+## Generated from
 
-The next phase adds generated module pages for the current unstable set under
-`/reference/plugin-sdk/modules/*`.
+- `scripts/lib/plugin-sdk-doc-metadata.ts`
+- `scripts/generate-plugin-sdk-docs.ts`

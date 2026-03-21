@@ -1,24 +1,22 @@
 ---
 title: "Plugin SDK Runtime"
 sidebarTitle: "Runtime"
-summary: "Phase 1 runtime-focused Plugin SDK modules for persistent plugin state"
-read_when:
-  - You need plugin runtime storage helpers
-  - You are deciding what belongs in runtime vs utility docs
+summary: "Generated index for runtime-focused Plugin SDK modules in the current curated set."
 ---
 
 # Plugin SDK runtime
 
-The runtime category covers shared helpers that plugins use to keep durable
-runtime state.
+Generated index for runtime-focused Plugin SDK modules in the current curated set.
 
-## Reviewed phase 1 modules
+> Every module listed here is currently unstable until OpenClaw makes an explicit compatibility promise.
 
-| Import path                         | Stability  | Use this for                      |
-| ----------------------------------- | ---------- | --------------------------------- |
-| `openclaw/plugin-sdk/runtime-store` | `unstable` | Persistent plugin runtime storage |
+## Modules
 
-## Notes
+| Import path                                                                        | Stability  | Summary                                         |
+| ---------------------------------------------------------------------------------- | ---------- | ----------------------------------------------- |
+| [`openclaw/plugin-sdk/runtime-store`](/reference/plugin-sdk/modules/runtime-store) | `unstable` | Persistent runtime storage helpers for plugins. |
 
-- Runtime-heavy or bundled-plugin-only helpers should not be documented here until reviewed.
-- Generated module pages land in phase 2.
+## Generated from
+
+- `scripts/lib/plugin-sdk-doc-metadata.ts`
+- `scripts/generate-plugin-sdk-docs.ts`

@@ -1,26 +1,23 @@
 ---
 title: "Plugin SDK Legacy"
 sidebarTitle: "Legacy"
-summary: "Compatibility-only Plugin SDK surfaces that remain documented for migration"
-read_when:
-  - You are migrating away from deprecated Plugin SDK imports
-  - You need to understand why a compatibility surface is still present
+summary: "Generated index for compatibility-only Plugin SDK surfaces that remain documented for migration."
 ---
 
 # Plugin SDK legacy
 
-These surfaces still exist for compatibility, but they are not the recommended
-entrypoints for new plugin code. They are also classified as `unstable`.
+Generated index for compatibility-only Plugin SDK surfaces that remain documented for migration.
 
-## Reviewed legacy modules
+> These modules are still kept for migration, but they are also explicitly unstable.
 
-| Import path                           | Why it remains documented                      | Preferred direction                          |
-| ------------------------------------- | ---------------------------------------------- | -------------------------------------------- |
-| `openclaw/plugin-sdk`                 | Root barrel kept for compatibility             | Use focused `openclaw/plugin-sdk/*` subpaths |
-| `openclaw/plugin-sdk/channel-runtime` | Older channel runtime helper shim              | Prefer the dedicated channel subpaths        |
-| `openclaw/plugin-sdk/compat`          | Deprecated migration surface for older plugins | Migrate to focused subpaths                  |
+## Modules
 
-## Notes
+| Import path                                                                            | Stability  | Summary                                                                        |
+| -------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------ |
+| [`openclaw/plugin-sdk`](/reference/plugin-sdk/modules/root-barrel)                     | `unstable` | Root barrel kept for compatibility; new docs should point to focused subpaths. |
+| [`openclaw/plugin-sdk/channel-runtime`](/reference/plugin-sdk/modules/channel-runtime) | `unstable` | Legacy runtime helper shim for older channel helpers.                          |
 
-- Legacy docs stay visible so migration guidance has a consistent target.
-- New generated module pages should emphasize migration, not new usage.
+## Generated from
+
+- `scripts/lib/plugin-sdk-doc-metadata.ts`
+- `scripts/generate-plugin-sdk-docs.ts`

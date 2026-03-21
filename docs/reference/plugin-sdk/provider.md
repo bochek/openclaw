@@ -1,25 +1,22 @@
 ---
 title: "Plugin SDK Provider"
 sidebarTitle: "Provider"
-summary: "Phase 1 provider-focused Plugin SDK modules for onboarding flows"
-read_when:
-  - You are building or migrating a provider plugin
-  - You need the first reviewed provider helper surface
+summary: "Generated index for provider-focused Plugin SDK modules in the current curated set."
 ---
 
 # Plugin SDK provider
 
-The provider category will grow over time. Phase 1 keeps it intentionally small
-and focuses on the highest-value onboarding helper.
+Generated index for provider-focused Plugin SDK modules in the current curated set.
 
-## Reviewed phase 1 modules
+> Every module listed here is currently unstable until OpenClaw makes an explicit compatibility promise.
 
-| Import path                            | Stability  | Use this for                                         |
-| -------------------------------------- | ---------- | ---------------------------------------------------- |
-| `openclaw/plugin-sdk/provider-onboard` | `unstable` | Provider onboarding config patches and setup helpers |
+## Modules
 
-## Notes
+| Import path                                                                              | Stability  | Summary                                   |
+| ---------------------------------------------------------------------------------------- | ---------- | ----------------------------------------- |
+| [`openclaw/plugin-sdk/provider-onboard`](/reference/plugin-sdk/modules/provider-onboard) | `unstable` | Provider onboarding config patch helpers. |
 
-- Additional provider surfaces can be added after they are reviewed and
-  intentionally classified.
-- Generated module pages land in phase 2.
+## Generated from
+
+- `scripts/lib/plugin-sdk-doc-metadata.ts`
+- `scripts/generate-plugin-sdk-docs.ts`

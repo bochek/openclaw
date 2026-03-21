@@ -20,11 +20,6 @@ export const pluginSdkDocMetadata = {
     stability: "unstable",
     summary: "Root barrel kept for compatibility; new docs should point to focused subpaths.",
   },
-  compat: {
-    category: "legacy",
-    stability: "unstable",
-    summary: "Deprecated compatibility surface for older plugins migrating off broad imports.",
-  },
   "channel-runtime": {
     category: "legacy",
     stability: "unstable",
