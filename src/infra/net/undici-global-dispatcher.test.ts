@@ -9,7 +9,6 @@ const {
   setCurrentDispatcher,
   getCurrentDispatcher,
   getDefaultAutoSelectFamily,
-  getCACertificates,
 } = vi.hoisted(() => {
   class Agent {
     constructor(public readonly options?: Record<string, unknown>) {}
@@ -34,7 +33,6 @@ const {
   };
   const getCurrentDispatcher = () => currentDispatcher;
   const getDefaultAutoSelectFamily = vi.fn(() => undefined as boolean | undefined);
-  const getCACertificates = vi.fn((_source: "bundled" | "system" | "extra") => [] as string[]);
 
   return {
     Agent,
@@ -45,7 +43,6 @@ const {
     setCurrentDispatcher,
     getCurrentDispatcher,
     getDefaultAutoSelectFamily,
-    getCACertificates,
   };
 });
 
@@ -58,10 +55,6 @@ vi.mock("undici", () => ({
 
 vi.mock("node:net", () => ({
   getDefaultAutoSelectFamily,
-}));
-
-vi.mock("node:tls", () => ({
-  getCACertificates,
 }));
 
 vi.mock("./proxy-env.js", () => ({
@@ -87,16 +80,6 @@ describe("ensureGlobalUndiciStreamTimeouts", () => {
     resetGlobalUndiciStreamTimeoutsForTests();
     setCurrentDispatcher(new Agent());
     getDefaultAutoSelectFamily.mockReturnValue(undefined);
-    getCACertificates.mockImplementation((source: "bundled" | "system" | "extra") => {
-      switch (source) {
-        case "bundled":
-          return ["bundled-cert"];
-        case "system":
-          return ["system-cert"];
-        case "extra":
-          return [];
-      }
-    });
     vi.mocked(hasEnvHttpProxyConfigured).mockReturnValue(false);
   });
 
@@ -113,7 +96,6 @@ describe("ensureGlobalUndiciStreamTimeouts", () => {
     expect(next.options?.connect).toEqual({
       autoSelectFamily: true,
       autoSelectFamilyAttemptTimeout: 300,
-      ca: ["bundled-cert", "system-cert"],
     });
   });
 
@@ -131,13 +113,6 @@ describe("ensureGlobalUndiciStreamTimeouts", () => {
     expect(next.options?.connect).toEqual({
       autoSelectFamily: false,
       autoSelectFamilyAttemptTimeout: 300,
-      ca: ["bundled-cert", "system-cert"],
-    });
-    expect(next.options?.requestTls).toEqual({
-      ca: ["bundled-cert", "system-cert"],
-    });
-    expect(next.options?.proxyTls).toEqual({
-      ca: ["bundled-cert", "system-cert"],
     });
   });
 
@@ -170,7 +145,6 @@ describe("ensureGlobalUndiciStreamTimeouts", () => {
     expect(next.options?.connect).toEqual({
       autoSelectFamily: false,
       autoSelectFamilyAttemptTimeout: 300,
-      ca: ["bundled-cert", "system-cert"],
     });
   });
 });
@@ -180,17 +154,6 @@ describe("ensureGlobalUndiciEnvProxyDispatcher", () => {
     vi.clearAllMocks();
     resetGlobalUndiciStreamTimeoutsForTests();
     setCurrentDispatcher(new Agent());
-    getDefaultAutoSelectFamily.mockReturnValue(true);
-    getCACertificates.mockImplementation((source: "bundled" | "system" | "extra") => {
-      switch (source) {
-        case "bundled":
-          return ["bundled-cert"];
-        case "system":
-          return ["system-cert"];
-        case "extra":
-          return [];
-      }
-    });
     vi.mocked(hasEnvHttpProxyConfigured).mockReturnValue(false);
   });
 
@@ -200,18 +163,7 @@ describe("ensureGlobalUndiciEnvProxyDispatcher", () => {
     ensureGlobalUndiciEnvProxyDispatcher();
 
     expect(setGlobalDispatcher).toHaveBeenCalledTimes(1);
-    const next = getCurrentDispatcher() as { options?: Record<string, unknown> };
-    expect(next).toBeInstanceOf(EnvHttpProxyAgent);
-    expect(next.options?.connect).toEqual({
-      autoSelectFamily: true,
-      autoSelectFamilyAttemptTimeout: 300,
-    });
-    expect(next.options?.requestTls).toEqual({
-      ca: ["bundled-cert", "system-cert"],
-    });
-    expect(next.options?.proxyTls).toEqual({
-      ca: ["bundled-cert", "system-cert"],
-    });
+    expect(getCurrentDispatcher()).toBeInstanceOf(EnvHttpProxyAgent);
   });
 
   it("does not override unsupported custom proxy dispatcher types", () => {

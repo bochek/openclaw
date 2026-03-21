@@ -1,5 +1,4 @@
 import * as net from "node:net";
-import * as tls from "node:tls";
 import { Agent, EnvHttpProxyAgent, getGlobalDispatcher, setGlobalDispatcher } from "undici";
 import { hasEnvHttpProxyConfigured } from "./proxy-env.js";
 
@@ -52,58 +51,6 @@ function resolveConnectOptions(
   };
 }
 
-let cachedCaCertificates: string[] | null | undefined;
-
-function resolveCaCertificates(): string[] | undefined {
-  if (cachedCaCertificates !== undefined) {
-    return cachedCaCertificates ?? undefined;
-  }
-  if (typeof tls.getCACertificates !== "function") {
-    cachedCaCertificates = null;
-    return undefined;
-  }
-  try {
-    const unique = new Set<string>();
-    for (const source of ["bundled", "system", "extra"] as const) {
-      for (const cert of tls.getCACertificates(source)) {
-        const trimmed = cert.trim();
-        if (trimmed) {
-          unique.add(trimmed);
-        }
-      }
-    }
-    cachedCaCertificates = unique.size > 0 ? Array.from(unique) : null;
-    return cachedCaCertificates ?? undefined;
-  } catch {
-    cachedCaCertificates = null;
-    return undefined;
-  }
-}
-
-function resolveAgentConnectOptions(
-  autoSelectFamily: boolean | undefined,
-):
-  | ({ autoSelectFamily?: boolean; autoSelectFamilyAttemptTimeout?: number } & { ca?: string[] })
-  | undefined {
-  const connect = resolveConnectOptions(autoSelectFamily);
-  const ca = resolveCaCertificates();
-  if (!connect && !ca) {
-    return undefined;
-  }
-  return {
-    ...connect,
-    ...(ca ? { ca } : {}),
-  };
-}
-
-function resolveProxyTlsOptions(): { ca: string[] } | undefined {
-  const ca = resolveCaCertificates();
-  if (!ca) {
-    return undefined;
-  }
-  return { ca };
-}
-
 function resolveDispatcherKey(params: {
   kind: DispatcherKind;
   timeoutMs: number;
@@ -146,14 +93,7 @@ export function ensureGlobalUndiciEnvProxyDispatcher(): void {
     return;
   }
   try {
-    const connect = resolveConnectOptions(resolveAutoSelectFamily());
-    const requestTls = resolveProxyTlsOptions();
-    setGlobalDispatcher(
-      new EnvHttpProxyAgent({
-        ...(connect ? { connect } : {}),
-        ...(requestTls ? { requestTls, proxyTls: requestTls } : {}),
-      }),
-    );
+    setGlobalDispatcher(new EnvHttpProxyAgent());
     lastAppliedProxyBootstrap = true;
   } catch {
     // Best-effort bootstrap only.
@@ -177,15 +117,13 @@ export function ensureGlobalUndiciStreamTimeouts(opts?: { timeoutMs?: number }):
     return;
   }
 
-  const connect = resolveAgentConnectOptions(autoSelectFamily);
-  const requestTls = resolveProxyTlsOptions();
+  const connect = resolveConnectOptions(autoSelectFamily);
   try {
     if (kind === "env-proxy") {
       const proxyOptions = {
         bodyTimeout: timeoutMs,
         headersTimeout: timeoutMs,
         ...(connect ? { connect } : {}),
-        ...(requestTls ? { requestTls, proxyTls: requestTls } : {}),
       } as ConstructorParameters<typeof EnvHttpProxyAgent>[0];
       setGlobalDispatcher(new EnvHttpProxyAgent(proxyOptions));
     } else {
@@ -206,5 +144,4 @@ export function ensureGlobalUndiciStreamTimeouts(opts?: { timeoutMs?: number }):
 export function resetGlobalUndiciStreamTimeoutsForTests(): void {
   lastAppliedTimeoutKey = null;
   lastAppliedProxyBootstrap = false;
-  cachedCaCertificates = undefined;
 }
