@@ -226,6 +226,32 @@ describe("reportCommand", () => {
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
+  it("suppresses config warning logging while building a report and restores the env", async () => {
+    process.env.OPENCLAW_SUPPRESS_CONFIG_WARNINGS = "0";
+    readBestEffortConfig.mockImplementation(async () => {
+      expect(process.env.OPENCLAW_SUPPRESS_CONFIG_WARNINGS).toBe("1");
+      return {
+        gateway: { mode: "local" },
+        models: { providers: { anthropic: { models: [{ id: "claude-sonnet-4.5" }] } } },
+        agents: { defaults: { model: "anthropic/claude-sonnet-4.5" } },
+      };
+    });
+
+    await reportCommand({
+      kind: "bug",
+      options: {
+        summary: "Gateway timeout",
+        repro: "1. Start gateway\n2. Send request",
+        expected: "Model responds",
+        actual: "Timeout",
+        impact: "Blocks requests",
+      },
+      runtime,
+    });
+
+    expect(process.env.OPENCLAW_SUPPRESS_CONFIG_WARNINGS).toBe("0");
+  });
+
   it("collects gateway evidence for gateway probe mode", async () => {
     vi.stubEnv("HTTPS_PROXY", "http://proxy.local:8080");
 

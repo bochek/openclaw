@@ -528,7 +528,11 @@ async function collectGatewayEvidence(ctx: ReportContext): Promise<ReportEvidenc
   const details: ReportEvidenceDetail[] = [];
   try {
     const connection = buildGatewayConnectionDetails({ config: ctx.config });
-    const auth = resolveGatewayProbeAuthSafe({ cfg: ctx.config }).auth;
+    const authResolution = resolveGatewayProbeAuthSafe({
+      cfg: ctx.config,
+      mode: ctx.config.gateway?.mode === "remote" ? "remote" : "local",
+    });
+    const auth = authResolution.auth;
     addEvidence(details, {
       source: "gateway",
       label: "Gateway target",
@@ -551,6 +555,16 @@ async function collectGatewayEvidence(ctx: ReportContext): Promise<ReportEvidenc
       classification: "inference",
       includedInPublicBody: false,
     });
+    if (authResolution.warning) {
+      addEvidence(details, {
+        source: "secretDiagnostics",
+        label: "Gateway auth warning",
+        value: authResolution.warning,
+        sensitive: false,
+        classification: "diagnostic_failure",
+        includedInPublicBody: false,
+      });
+    }
     try {
       const probe = await probeGateway({
         url: connection.url,
@@ -1190,43 +1204,53 @@ export async function reportCommand<K extends ReportKind>(params: {
   options: ReportOptionsByKind[K];
   runtime: RuntimeEnv;
 }): Promise<ReportPayload> {
-  const format = resolveOutputFormat(params.options);
-  const payload = await buildReportPayload({
-    kind: params.kind,
-    options: params.options,
-    commandName: `report ${params.kind}`,
-  });
-
-  if (params.options.submit) {
-    payload.submission = await submitPublicReportIssue({
-      payload,
-      yes: params.options.yes,
-      nonInteractive: params.options.nonInteractive,
-      runtime: params.runtime,
+  const originalSuppressConfigWarnings = process.env.OPENCLAW_SUPPRESS_CONFIG_WARNINGS;
+  process.env.OPENCLAW_SUPPRESS_CONFIG_WARNINGS = "1";
+  try {
+    const format = resolveOutputFormat(params.options);
+    const payload = await buildReportPayload({
+      kind: params.kind,
+      options: params.options,
+      commandName: `report ${params.kind}`,
     });
-  }
 
-  if (params.options.output) {
-    await writeReportOutput(params.options.output, payload.body);
-  }
+    if (params.options.submit) {
+      payload.submission = await submitPublicReportIssue({
+        payload,
+        yes: params.options.yes,
+        nonInteractive: params.options.nonInteractive,
+        runtime: params.runtime,
+      });
+    }
 
-  if (format === "json") {
-    params.runtime.log(JSON.stringify(payload, null, 2));
-  } else if (format === "markdown") {
-    params.runtime.log(payload.body);
-  } else {
-    params.runtime.log(renderHumanPreview(payload));
-    if (payload.kind === "security") {
-      params.runtime.log("");
-      params.runtime.log("Private route: send this report to security@openclaw.ai");
-    } else if (params.options.submit && payload.submission.created && payload.submission.url) {
-      params.runtime.log("");
-      params.runtime.log(`Created: ${payload.submission.url}`);
-    } else if (params.options.submit && payload.submission.blockedReason) {
-      params.runtime.log("");
-      params.runtime.log(`Submission blocked: ${payload.submission.blockedReason}`);
+    if (params.options.output) {
+      await writeReportOutput(params.options.output, payload.body);
+    }
+
+    if (format === "json") {
+      params.runtime.log(JSON.stringify(payload, null, 2));
+    } else if (format === "markdown") {
+      params.runtime.log(payload.body);
+    } else {
+      params.runtime.log(renderHumanPreview(payload));
+      if (payload.kind === "security") {
+        params.runtime.log("");
+        params.runtime.log("Private route: send this report to security@openclaw.ai");
+      } else if (params.options.submit && payload.submission.created && payload.submission.url) {
+        params.runtime.log("");
+        params.runtime.log(`Created: ${payload.submission.url}`);
+      } else if (params.options.submit && payload.submission.blockedReason) {
+        params.runtime.log("");
+        params.runtime.log(`Submission blocked: ${payload.submission.blockedReason}`);
+      }
+    }
+
+    return payload;
+  } finally {
+    if (originalSuppressConfigWarnings === undefined) {
+      delete process.env.OPENCLAW_SUPPRESS_CONFIG_WARNINGS;
+    } else {
+      process.env.OPENCLAW_SUPPRESS_CONFIG_WARNINGS = originalSuppressConfigWarnings;
     }
   }
-
-  return payload;
 }

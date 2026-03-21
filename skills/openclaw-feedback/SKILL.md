@@ -1,6 +1,6 @@
 ---
 name: openclaw-feedback
-description: Turn bug reports, feature requests, and security disclosures into the right `openclaw report` flow for `openclaw/openclaw`.
+description: Invoke when the user starts complaining about a bug, broken behavior, regression, product issue, feature request, or private security problem in `openclaw/openclaw`. Route them into the right `openclaw report` flow.
 user-invocable: true
 metadata:
   {
@@ -35,13 +35,16 @@ Use this skill only for `openclaw/openclaw`.
 
 - Tell the user you are using the `openclaw-feedback` skill.
 - In that opening, explain that getting enough context matters because stronger context produces a more accurate, actionable GitHub issue and avoids weak or misleading filings.
+- In that opening, give the user a clear way to decline or cancel issue filing if they do not want to proceed.
 - Decide `bug`, `feature`, or `private security report`.
 - Ask only for missing required fields, with at most 1-3 short questions.
+- Derive as much as possible from the conversation, the active diagnosis session, and the generated report draft before asking the user anything.
 - Treat `openclaw report bug|feature|security` as the source of truth for drafting, redaction, diagnostics, previewing, and submission behavior.
 - If you are unsure about flags or subcommand shape, run `openclaw report --help` before invoking the report flow.
 - Tell the user report generation can take a moment when diagnostics or probes are included.
 - Relay the generated draft or blocked result from `openclaw report` directly.
-- Ask permission before adding `--submit`.
+- Show the full sanitized draft before asking to submit.
+- Ask permission in plain English before adding `--submit`.
 - Only after approval, use `--submit` for public bug or feature issues.
 
 ## Do Not
@@ -51,6 +54,8 @@ Use this skill only for `openclaw/openclaw`.
 - Never maintain a separate manual issue-writing path when `openclaw report` is available.
 - Never publish a security report as a public issue.
 - Never fall back to manual filing if `openclaw report` or `gh` is unavailable.
+- Never ask the user for fields the conversation, diagnostics, or report output already make clear.
+- Never read report metadata such as labels, submission eligibility, or redactions back to the user unless it is directly useful to the decision.
 
 ## If X Then Y
 
@@ -59,6 +64,7 @@ Use this skill only for `openclaw/openclaw`.
 - If the request is clearly asking for a new capability or improvement: use `openclaw report feature`.
 - If the type is unclear: ask one short question to decide bug vs feature.
 - If the user already gave enough detail: skip extra questions.
+- If summary, likely title, environment, diagnosis clues, repro outline, or impact can be derived from the conversation or active diagnosis work: do not ask for them again.
 - If diagnostics would materially improve the report: use `--probe general|gateway|model|channel` on the `openclaw report` command instead of assembling standalone diagnostics yourself.
 - If the issue is still too weak after a short recovery attempt: return `NOT_ENOUGH_INFO`.
 - If unsafe content cannot be safely redacted without losing the technical meaning: return `BLOCKED_UNSAFE_CONTENT`.
@@ -66,18 +72,20 @@ Use this skill only for `openclaw/openclaw`.
 
 ## Workflow
 
-1. Say: `I’m using the openclaw-feedback skill to prepare an OpenClaw GitHub issue. I want to gather enough context to make the issue accurate and useful for maintainers without over-questioning you. Report generation can take a moment if I include diagnostics or probes.`
+1. Say: `I’m using the openclaw-feedback skill to prepare an OpenClaw GitHub issue. I want to gather enough context to make the issue accurate and useful for maintainers without over-questioning you. Report generation can take a moment if I include diagnostics or probes. If you do not want to file an issue, just tell me and I’ll stop.`
 2. Decide `bug`, `feature`, or `private security report`.
-3. Ask only for missing required fields:
+3. Derive as much as possible from the conversation and current diagnosis context before asking anything.
+4. Ask only for missing required user facts:
    - bug: summary, steps to reproduce, expected behavior, actual behavior, impact
      optional regression context: previous version -> `--previous-version`
    - feature: summary, problem to solve, proposed solution, impact
    - security: title, severity, impact, affected component, technical reproduction, demonstrated impact, environment, remediation advice
-4. Choose the matching command:
+     If a field can be inferred with high confidence from the conversation or diagnosis session, infer it instead of asking.
+5. Choose the matching command:
    - `openclaw report bug`
    - `openclaw report feature`
    - `openclaw report security`
-5. If targeted diagnostics are useful, add one probe mode:
+6. If targeted diagnostics are useful, add one probe mode:
    - `--probe general`
    - `--probe gateway`
    - `--probe model`
@@ -85,11 +93,13 @@ Use this skill only for `openclaw/openclaw`.
      Choose `--probe gateway` for proxy, gateway, or timeout/network failures.
      Choose `--probe model` for provider auth, model-call, or dispatcher/proxy-path issues.
      Choose `--probe channel` for channel integrations or account-specific failures.
-6. Run `openclaw report <kind> ...` and trust its output as authoritative.
-7. Show the generated draft or blocked result without reformatting it into a separate skill-owned state machine.
-8. If the user wants to inspect more detail, show the full sanitized draft from the CLI output.
-9. Only if the user clearly approves, rerun or continue with `--submit` for public bug or feature issues.
-10. For security, keep the report private and route the user to `security@openclaw.ai`.
+7. Run `openclaw report <kind> ...` and trust its output as authoritative.
+8. Show the full sanitized draft or blocked result without reformatting it into a separate skill-owned state machine.
+9. When showing the draft, emphasize the user-visible problem and the proposed report body, not internal metadata like labels or submission headers.
+10. After showing the draft, ask in plain English: `If this draft looks right, I can submit it to GitHub now.`
+11. Do not mention CLI flags like `--submit` in the user-facing approval question.
+12. Only if the user clearly approves, rerun or continue with `--submit` for public bug or feature issues.
+13. For security, keep the report private and route the user to `security@openclaw.ai`.
 
 ## Common Commands
 
@@ -119,6 +129,8 @@ Use `--additional-information` for details that do not fit neatly into `--repro`
 - unusual observations
 - operator hypotheses worth preserving
 
+Prefer deriving these from the conversation when they are already clear instead of asking the user to restate them.
+
 ## Private Security Reports
 
 If the request is a security issue:
@@ -141,7 +153,7 @@ Let `openclaw report` define the preview, readiness, blocked-submission, and cre
 
 Do not restate or simulate `READY_TO_CREATE`, `SUBMISSION_BLOCKED`, or other CLI output formats inside this skill.
 
-If the user has not clearly approved filing, stop before adding `--submit`.
+If the user has not clearly approved filing after seeing the full draft, stop before adding `--submit`.
 
 ## Notes
 
@@ -159,17 +171,24 @@ Assistant says:
 
 ```text
 I’m using the openclaw-feedback skill to prepare an OpenClaw GitHub issue. I want to gather enough context to make the issue accurate and useful for maintainers without over-questioning you. Report generation can take a moment if I include diagnostics or probes.
+If you do not want to file an issue, just tell me and I’ll stop.
 
 I need a few bug-report details: what steps reproduce it, what you expected, what actually happened, and the impact.
 ```
 
-If the user provides those fields, run:
+If those fields are not already clear from the diagnosis session, ask for them. Otherwise infer them and run:
 
 ```bash
 openclaw report bug --summary "Gateway times out behind mitmproxy" --repro "..." --expected "..." --actual "..." --impact "..." --probe gateway
 ```
 
-Then relay the generated draft or blocked result directly. Only add `--submit` after explicit approval.
+Then show the draft itself, not internal report metadata. Only add `--submit` after explicit approval.
+
+After showing the draft, ask:
+
+```text
+If this draft looks right, I can submit it to GitHub now.
+```
 
 ### Example: regression bug with loose extra context
 
@@ -179,24 +198,37 @@ Assistant says:
 
 ```text
 I’m using the openclaw-feedback skill to prepare an OpenClaw GitHub issue. I want to gather enough context to make the issue accurate and useful for maintainers without over-questioning you. Report generation can take a moment if I include diagnostics or probes.
+If you do not want to file an issue, just tell me and I’ll stop.
 
 I need the repro steps, expected behavior, actual behavior, and impact. I can also include the previous version and any extra observations that do not fit neatly into the main bug fields.
 ```
 
-If the user provides those fields, run:
+If the missing facts are not already clear from the conversation or diagnosis session, ask for them. Otherwise infer them and run:
 
 ```bash
 openclaw report bug --summary "Regression after update" --repro "..." --expected "..." --actual "..." --impact "..." --previous-version "2026.3.14" --additional-information "Worked last week; now every call times out behind the same proxy setup." --probe model
+```
+
+Then show the draft and ask:
+
+```text
+If this draft looks right, I can submit it to GitHub now.
 ```
 
 ### Example: feature request
 
 User says: `Please add a way to export a report draft without submitting it.`
 
-If the user already gave enough detail, run:
+If the user already gave enough detail, derive the report directly and run:
 
 ```bash
 openclaw report feature --summary "Export report drafts without submission" --problem "Operators want a clean draft artifact without creating a GitHub issue" --solution "Allow report generation and file output without submit" --impact "Safer scripted issue authoring"
+```
+
+Then show the draft and ask:
+
+```text
+If this draft looks right, I can submit it to GitHub now.
 ```
 
 ### Example: private security report
@@ -207,6 +239,7 @@ Assistant says:
 
 ```text
 I’m using the openclaw-feedback skill to route this into the private OpenClaw security-report flow. I want to gather enough context to make the report accurate and actionable while keeping it private.
+If you do not want to file a report, just tell me and I’ll stop.
 ```
 
 Then gather only missing private-report fields and run:

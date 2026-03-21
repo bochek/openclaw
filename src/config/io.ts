@@ -86,6 +86,14 @@ const OPEN_DM_POLICY_ALLOW_FROM_RE =
 const CONFIG_AUDIT_LOG_FILENAME = "config-audit.jsonl";
 const loggedInvalidConfigs = new Set<string>();
 
+function shouldSuppressConfigWarningsFromEnv(value: string | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  const normalized = value.trim().toLowerCase();
+  return normalized !== "" && normalized !== "0" && normalized !== "false" && normalized !== "off";
+}
+
 type ConfigWriteAuditResult = "rename" | "copy-fallback" | "failed";
 
 type ConfigWriteAuditRecord = {
@@ -786,7 +794,10 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
         (error as { code?: string; details?: string }).details = details;
         throw error;
       }
-      if (validated.warnings.length > 0) {
+      if (
+        validated.warnings.length > 0 &&
+        !shouldSuppressConfigWarningsFromEnv(process.env.OPENCLAW_SUPPRESS_CONFIG_WARNINGS)
+      ) {
         const details = validated.warnings
           .map(
             (iss) =>
@@ -1123,7 +1134,10 @@ export function createConfigIO(overrides: ConfigIoDeps = {}) {
       const issueMessage = issue?.message ?? "invalid";
       throw new Error(formatConfigValidationFailure(pathLabel, issueMessage));
     }
-    if (validated.warnings.length > 0) {
+    if (
+      validated.warnings.length > 0 &&
+      !shouldSuppressConfigWarningsFromEnv(process.env.OPENCLAW_SUPPRESS_CONFIG_WARNINGS)
+    ) {
       const details = validated.warnings
         .map((warning) => `- ${warning.path}: ${warning.message}`)
         .join("\n");
