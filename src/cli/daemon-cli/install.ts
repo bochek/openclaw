@@ -1,4 +1,5 @@
 import type { DaemonInstallOptions } from "./types.js";
+import { resolveAutoNodeExtraCaCerts } from "../../bootstrap/node-extra-ca-certs.js";
 import { buildGatewayInstallPlan } from "../../commands/daemon-install-helpers.js";
 import {
   DEFAULT_GATEWAY_DAEMON_RUNTIME,
@@ -83,20 +84,29 @@ export async function runDaemonInstall(opts: DaemonInstallOptions) {
   }
   if (loaded) {
     if (!opts.force) {
-      emit({
-        ok: true,
-        result: "already-installed",
-        message: `Gateway service already ${service.loadedText}.`,
-        service: buildDaemonServiceSnapshot(service, loaded),
-        warnings: warnings.length ? warnings : undefined,
-      });
-      if (!json) {
-        defaultRuntime.log(`Gateway service already ${service.loadedText}.`);
-        defaultRuntime.log(
-          `Reinstall with: ${formatCliCommand("openclaw gateway install --force")}`,
-        );
+      if (await gatewayServiceNeedsAutoNodeExtraCaCertsRefresh({ service, env: process.env })) {
+        const message = "Gateway service is missing the nvm TLS CA bundle; refreshing the install.";
+        if (json) {
+          warnings.push(message);
+        } else {
+          defaultRuntime.log(message);
+        }
+      } else {
+        emit({
+          ok: true,
+          result: "already-installed",
+          message: `Gateway service already ${service.loadedText}.`,
+          service: buildDaemonServiceSnapshot(service, loaded),
+          warnings: warnings.length ? warnings : undefined,
+        });
+        if (!json) {
+          defaultRuntime.log(`Gateway service already ${service.loadedText}.`);
+          defaultRuntime.log(
+            `Reinstall with: ${formatCliCommand("openclaw gateway install --force")}`,
+          );
+        }
+        return;
       }
-      return;
     }
   }
 
@@ -208,4 +218,25 @@ export async function runDaemonInstall(opts: DaemonInstallOptions) {
     service: buildDaemonServiceSnapshot(service, installed),
     warnings: warnings.length ? warnings : undefined,
   });
+}
+
+async function gatewayServiceNeedsAutoNodeExtraCaCertsRefresh(params: {
+  service: ReturnType<typeof resolveGatewayService>;
+  env: Record<string, string | undefined>;
+}): Promise<boolean> {
+  const expectedNodeExtraCaCerts = resolveAutoNodeExtraCaCerts({
+    env: params.env,
+    execPath: process.execPath,
+  });
+  if (!expectedNodeExtraCaCerts) {
+    return false;
+  }
+
+  try {
+    const currentCommand = await params.service.readCommand(params.env);
+    const currentNodeExtraCaCerts = currentCommand?.environment?.NODE_EXTRA_CA_CERTS?.trim();
+    return currentNodeExtraCaCerts !== expectedNodeExtraCaCerts;
+  } catch {
+    return false;
+  }
 }

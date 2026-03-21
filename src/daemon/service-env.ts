@@ -1,4 +1,9 @@
 import path from "node:path";
+import {
+  isNvmNode,
+  resolveAutoNodeExtraCaCerts,
+  resolveLinuxSystemCaBundle,
+} from "../bootstrap/node-extra-ca-certs.js";
 import { VERSION } from "../version.js";
 import {
   GATEWAY_SERVICE_KIND,
@@ -12,6 +17,8 @@ import {
   resolveNodeSystemdServiceName,
   resolveNodeWindowsTaskName,
 } from "./constants.js";
+
+export { isNvmNode, resolveLinuxSystemCaBundle };
 
 export type MinimalServicePathOptions = {
   platform?: NodeJS.Platform;
@@ -146,18 +153,30 @@ export function buildServiceEnvironment(params: {
   port: number;
   token?: string;
   launchdLabel?: string;
+  platform?: NodeJS.Platform;
+  execPath?: string;
 }): Record<string, string | undefined> {
   const { env, port, token, launchdLabel } = params;
+  const platform = params.platform ?? process.platform;
   const profile = env.OPENCLAW_PROFILE;
   const resolvedLaunchdLabel =
-    launchdLabel ||
-    (process.platform === "darwin" ? resolveGatewayLaunchAgentLabel(profile) : undefined);
+    launchdLabel || (platform === "darwin" ? resolveGatewayLaunchAgentLabel(profile) : undefined);
   const systemdUnit = `${resolveGatewaySystemdServiceName(profile)}.service`;
   const stateDir = env.OPENCLAW_STATE_DIR;
   const configPath = env.OPENCLAW_CONFIG_PATH;
+  const nodeExtraCaCerts =
+    env.NODE_EXTRA_CA_CERTS ??
+    (platform === "darwin"
+      ? "/etc/ssl/cert.pem"
+      : resolveAutoNodeExtraCaCerts({
+          env,
+          platform,
+          execPath: params.execPath,
+        }));
+  const nodeUseSystemCa = env.NODE_USE_SYSTEM_CA ?? (platform === "darwin" ? "1" : undefined);
   return {
     HOME: env.HOME,
-    PATH: buildMinimalServicePath({ env }),
+    PATH: buildMinimalServicePath({ env, platform }),
     OPENCLAW_PROFILE: profile,
     OPENCLAW_STATE_DIR: stateDir,
     OPENCLAW_CONFIG_PATH: configPath,
@@ -168,18 +187,33 @@ export function buildServiceEnvironment(params: {
     OPENCLAW_SERVICE_MARKER: GATEWAY_SERVICE_MARKER,
     OPENCLAW_SERVICE_KIND: GATEWAY_SERVICE_KIND,
     OPENCLAW_SERVICE_VERSION: VERSION,
+    NODE_EXTRA_CA_CERTS: nodeExtraCaCerts,
+    NODE_USE_SYSTEM_CA: nodeUseSystemCa,
   };
 }
 
 export function buildNodeServiceEnvironment(params: {
   env: Record<string, string | undefined>;
+  platform?: NodeJS.Platform;
+  execPath?: string;
 }): Record<string, string | undefined> {
   const { env } = params;
+  const platform = params.platform ?? process.platform;
   const stateDir = env.OPENCLAW_STATE_DIR;
   const configPath = env.OPENCLAW_CONFIG_PATH;
+  const nodeExtraCaCerts =
+    env.NODE_EXTRA_CA_CERTS ??
+    (platform === "darwin"
+      ? "/etc/ssl/cert.pem"
+      : resolveAutoNodeExtraCaCerts({
+          env,
+          platform,
+          execPath: params.execPath,
+        }));
+  const nodeUseSystemCa = env.NODE_USE_SYSTEM_CA ?? (platform === "darwin" ? "1" : undefined);
   return {
     HOME: env.HOME,
-    PATH: buildMinimalServicePath({ env }),
+    PATH: buildMinimalServicePath({ env, platform }),
     OPENCLAW_STATE_DIR: stateDir,
     OPENCLAW_CONFIG_PATH: configPath,
     OPENCLAW_LAUNCHD_LABEL: resolveNodeLaunchAgentLabel(),
@@ -190,5 +224,7 @@ export function buildNodeServiceEnvironment(params: {
     OPENCLAW_SERVICE_MARKER: NODE_SERVICE_MARKER,
     OPENCLAW_SERVICE_KIND: NODE_SERVICE_KIND,
     OPENCLAW_SERVICE_VERSION: VERSION,
+    NODE_EXTRA_CA_CERTS: nodeExtraCaCerts,
+    NODE_USE_SYSTEM_CA: nodeUseSystemCa,
   };
 }
