@@ -210,6 +210,11 @@ my-plugin/
       | `plugin-sdk/testing` | Test utilities |
     </Accordion>
 
+    The curated [Plugin SDK reference](/reference/plugin-sdk) now tracks the
+    reviewed public subpaths, import rules, and stability tiers. Use that
+    reference when deciding whether a helper is part of the intended public
+    contract.
+
     Use the narrowest subpath that matches the job.
 
   </Step>

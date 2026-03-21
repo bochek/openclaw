@@ -139,7 +139,8 @@ is a small, self-contained module with a clear purpose and documented contract.
 </Accordion>
 
 Use the narrowest import that matches the job. If you cannot find an export,
-check the source at `src/plugin-sdk/` or ask in Discord.
+start with the curated [Plugin SDK reference](/reference/plugin-sdk), then
+check the source at `src/plugin-sdk/` if you still need to trace a helper.
 
 ## Removal timeline
 
