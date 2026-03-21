@@ -7,6 +7,8 @@ import {
 } from "./embeddings-remote-provider.js";
 import type { EmbeddingProvider, EmbeddingProviderOptions } from "./embeddings.js";
 
+export { OPENAI_DEFAULT_EMBEDDING_MODEL as DEFAULT_OPENAI_EMBEDDING_MODEL } from "../providers/openai-defaults.js";
+
 export type OpenAiEmbeddingClient = {
   baseUrl: string;
   headers: Record<string, string>;
@@ -25,7 +27,7 @@ const OPENAI_MAX_INPUT_TOKENS: Record<string, number> = {
 export function normalizeOpenAiModel(model: string): string {
   return normalizeEmbeddingModelWithPrefixes({
     model,
-    defaultModel: DEFAULT_OPENAI_EMBEDDING_MODEL,
+    defaultModel: OPENAI_DEFAULT_EMBEDDING_MODEL,
     prefixes: ["openai/"],
   });
 }
