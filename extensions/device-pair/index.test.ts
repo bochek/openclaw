@@ -71,6 +71,37 @@ function createApi(params?: {
   }) as OpenClawPluginApi;
 }
 
+function registerPairCommand(params?: {
+  runtime?: OpenClawPluginApi["runtime"];
+  pluginConfig?: Record<string, unknown>;
+}): OpenClawPluginCommandDefinition {
+  let command: OpenClawPluginCommandDefinition | undefined;
+  registerDevicePair.register(
+    createApi({
+      ...params,
+      registerCommand: (nextCommand) => {
+        command = nextCommand;
+      },
+    }),
+  );
+  expect(command).toBeTruthy();
+  return command!;
+}
+
+function createChannelRuntime(
+  runtimeKey: string,
+  sendKey: string,
+  sendMessage: (...args: unknown[]) => Promise<unknown>,
+): OpenClawPluginApi["runtime"] {
+  return {
+    channel: {
+      [runtimeKey]: {
+        [sendKey]: sendMessage,
+      },
+    },
+  } as unknown as OpenClawPluginApi["runtime"];
+}
+
 function createCommandContext(params?: Partial<PluginCommandContext>): PluginCommandContext {
   return {
     channel: "webchat",
@@ -103,15 +134,7 @@ describe("device-pair /pair qr", () => {
   });
 
   it("returns an inline QR image for webchat surfaces", async () => {
-    let command: OpenClawPluginCommandDefinition | undefined;
-    registerDevicePair.register(
-      createApi({
-        registerCommand: (nextCommand) => {
-          command = nextCommand;
-        },
-      }),
-    );
-
+    const command = registerPairCommand();
     const result = await command?.handler(createCommandContext({ channel: "webchat" }));
 
     expect(pluginApiMocks.renderQrPngBase64).toHaveBeenCalledTimes(1);
@@ -135,9 +158,9 @@ describe("device-pair /pair qr", () => {
         messageThreadId: 271,
       },
       expectedTarget: "123",
-      assertOpts: (opts: Record<string, unknown>) => {
-        expect(opts.accountId).toBe("default");
-        expect(opts.messageThreadId).toBe(271);
+      expectedOpts: {
+        accountId: "default",
+        messageThreadId: 271,
       },
     },
     {
@@ -150,8 +173,8 @@ describe("device-pair /pair qr", () => {
         accountId: "default",
       },
       expectedTarget: "user:123",
-      assertOpts: (opts: Record<string, unknown>) => {
-        expect(opts.accountId).toBe("default");
+      expectedOpts: {
+        accountId: "default",
       },
     },
     {
@@ -165,9 +188,9 @@ describe("device-pair /pair qr", () => {
         messageThreadId: "1234567890.000001",
       },
       expectedTarget: "user:U123",
-      assertOpts: (opts: Record<string, unknown>) => {
-        expect(opts.accountId).toBe("default");
-        expect(opts.threadTs).toBe("1234567890.000001");
+      expectedOpts: {
+        accountId: "default",
+        threadTs: "1234567890.000001",
       },
     },
     {
@@ -180,8 +203,8 @@ describe("device-pair /pair qr", () => {
         accountId: "default",
       },
       expectedTarget: "signal:+15551234567",
-      assertOpts: (opts: Record<string, unknown>) => {
-        expect(opts.accountId).toBe("default");
+      expectedOpts: {
+        accountId: "default",
       },
     },
     {
@@ -194,8 +217,8 @@ describe("device-pair /pair qr", () => {
         accountId: "default",
       },
       expectedTarget: "+15551234567",
-      assertOpts: (opts: Record<string, unknown>) => {
-        expect(opts.accountId).toBe("default");
+      expectedOpts: {
+        accountId: "default",
       },
     },
     {
@@ -208,9 +231,9 @@ describe("device-pair /pair qr", () => {
         accountId: "default",
       },
       expectedTarget: "+15551234567",
-      assertOpts: (opts: Record<string, unknown>) => {
-        expect(opts.accountId).toBe("default");
-        expect(opts.verbose).toBe(false);
+      expectedOpts: {
+        accountId: "default",
+        verbose: false,
       },
     },
   ])("sends $label a real QR image attachment", async (testCase) => {
@@ -221,21 +244,9 @@ describe("device-pair /pair qr", () => {
       }
       return { messageId: "1" };
     });
-    let command: OpenClawPluginCommandDefinition | undefined;
-    registerDevicePair.register(
-      createApi({
-        runtime: {
-          channel: {
-            [testCase.runtimeKey]: {
-              [testCase.sendKey]: sendMessage,
-            },
-          },
-        } as unknown as OpenClawPluginApi["runtime"],
-        registerCommand: (nextCommand) => {
-          command = nextCommand;
-        },
-      }),
-    );
+    const command = registerPairCommand({
+      runtime: createChannelRuntime(testCase.runtimeKey, testCase.sendKey, sendMessage),
+    });
 
     const result = await command?.handler(createCommandContext(testCase.ctx));
 
@@ -255,7 +266,7 @@ describe("device-pair /pair qr", () => {
     expect(caption).toContain("If this QR code leaks, run /pair cleanup immediately.");
     expect(opts.mediaUrl).toMatch(/pair-qr\.png$/);
     expect(opts.mediaLocalRoots).toEqual([path.dirname(opts.mediaUrl!)]);
-    testCase.assertOpts(opts);
+    expect(opts).toMatchObject(testCase.expectedOpts);
     expect(sentPng).toBe("fakepng");
     await expect(fs.access(opts.mediaUrl!)).rejects.toBeTruthy();
     expect(result?.text).toContain("QR code sent above.");
@@ -274,21 +285,9 @@ describe("device-pair /pair qr", () => {
       });
 
     const sendMessage = vi.fn().mockRejectedValue(new Error("upload failed"));
-    let command: OpenClawPluginCommandDefinition | undefined;
-    registerDevicePair.register(
-      createApi({
-        runtime: {
-          channel: {
-            discord: {
-              sendMessageDiscord: sendMessage,
-            },
-          },
-        } as unknown as OpenClawPluginApi["runtime"],
-        registerCommand: (nextCommand) => {
-          command = nextCommand;
-        },
-      }),
-    );
+    const command = registerPairCommand({
+      runtime: createChannelRuntime("discord", "sendMessageDiscord", sendMessage),
+    });
 
     const result = await command?.handler(
       createCommandContext({
@@ -306,15 +305,7 @@ describe("device-pair /pair qr", () => {
   });
 
   it("falls back to the setup code instead of ASCII when the channel cannot send media", async () => {
-    let command: OpenClawPluginCommandDefinition | undefined;
-    registerDevicePair.register(
-      createApi({
-        registerCommand: (nextCommand) => {
-          command = nextCommand;
-        },
-      }),
-    );
-
+    const command = registerPairCommand();
     const result = await command?.handler(
       createCommandContext({
         channel: "msteams",
@@ -329,15 +320,7 @@ describe("device-pair /pair qr", () => {
   });
 
   it("supports invalidating unused setup codes", async () => {
-    let command: OpenClawPluginCommandDefinition | undefined;
-    registerDevicePair.register(
-      createApi({
-        registerCommand: (nextCommand) => {
-          command = nextCommand;
-        },
-      }),
-    );
-
+    const command = registerPairCommand();
     const result = await command?.handler(
       createCommandContext({
         args: "cleanup",

@@ -17,6 +17,22 @@ function resolveBootstrapPath(baseDir: string): string {
   return path.join(baseDir, "devices", "bootstrap.json");
 }
 
+async function verifyBootstrapToken(
+  baseDir: string,
+  token: string,
+  overrides: Partial<Parameters<typeof verifyDeviceBootstrapToken>[0]> = {},
+) {
+  return await verifyDeviceBootstrapToken({
+    token,
+    deviceId: "device-123",
+    publicKey: "public-key-123",
+    role: "operator.admin",
+    scopes: ["operator.admin"],
+    baseDir,
+    ...overrides,
+  });
+}
+
 afterEach(async () => {
   vi.useRealTimers();
   await tempDirs.cleanup();
@@ -49,27 +65,12 @@ describe("device bootstrap tokens", () => {
     const baseDir = await createTempDir();
     const issued = await issueDeviceBootstrapToken({ baseDir });
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: issued.token,
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: true });
+    await expect(verifyBootstrapToken(baseDir, issued.token)).resolves.toEqual({ ok: true });
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: issued.token,
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
+    await expect(verifyBootstrapToken(baseDir, issued.token)).resolves.toEqual({
+      ok: false,
+      reason: "bootstrap_token_invalid",
+    });
 
     await expect(fs.readFile(resolveBootstrapPath(baseDir), "utf8")).resolves.toBe("{}");
   });
@@ -82,27 +83,15 @@ describe("device bootstrap tokens", () => {
     await expect(clearDeviceBootstrapTokens({ baseDir })).resolves.toEqual({ removed: 2 });
     await expect(fs.readFile(resolveBootstrapPath(baseDir), "utf8")).resolves.toBe("{}");
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: first.token,
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
+    await expect(verifyBootstrapToken(baseDir, first.token)).resolves.toEqual({
+      ok: false,
+      reason: "bootstrap_token_invalid",
+    });
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: second.token,
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
+    await expect(verifyBootstrapToken(baseDir, second.token)).resolves.toEqual({
+      ok: false,
+      reason: "bootstrap_token_invalid",
+    });
   });
 
   it("revokes a specific bootstrap token", async () => {
@@ -114,27 +103,12 @@ describe("device bootstrap tokens", () => {
       removed: true,
     });
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: first.token,
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
+    await expect(verifyBootstrapToken(baseDir, first.token)).resolves.toEqual({
+      ok: false,
+      reason: "bootstrap_token_invalid",
+    });
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: second.token,
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: true });
+    await expect(verifyBootstrapToken(baseDir, second.token)).resolves.toEqual({ ok: true });
   });
 
   it("consumes bootstrap tokens by the persisted map key", async () => {
@@ -158,16 +132,7 @@ describe("device bootstrap tokens", () => {
       "utf8",
     );
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: issued.token,
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: true });
+    await expect(verifyBootstrapToken(baseDir, issued.token)).resolves.toEqual({ ok: true });
 
     await expect(fs.readFile(bootstrapPath, "utf8")).resolves.toBe("{}");
   });
@@ -177,13 +142,8 @@ describe("device bootstrap tokens", () => {
     const issued = await issueDeviceBootstrapToken({ baseDir });
 
     await expect(
-      verifyDeviceBootstrapToken({
-        token: issued.token,
-        deviceId: "device-123",
-        publicKey: "public-key-123",
+      verifyBootstrapToken(baseDir, issued.token, {
         role: "   ",
-        scopes: ["operator.admin"],
-        baseDir,
       }),
     ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
 
@@ -195,16 +155,9 @@ describe("device bootstrap tokens", () => {
     const baseDir = await createTempDir();
     const issued = await issueDeviceBootstrapToken({ baseDir });
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: `  ${issued.token}  `,
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: true });
+    await expect(verifyBootstrapToken(baseDir, `  ${issued.token}  `)).resolves.toEqual({
+      ok: true,
+    });
 
     await expect(fs.readFile(resolveBootstrapPath(baseDir), "utf8")).resolves.toBe("{}");
   });
@@ -213,16 +166,10 @@ describe("device bootstrap tokens", () => {
     const baseDir = await createTempDir();
     await issueDeviceBootstrapToken({ baseDir });
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: "   ",
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
+    await expect(verifyBootstrapToken(baseDir, "   ")).resolves.toEqual({
+      ok: false,
+      reason: "bootstrap_token_invalid",
+    });
 
     await expect(
       verifyDeviceBootstrapToken({
@@ -279,26 +226,11 @@ describe("device bootstrap tokens", () => {
       "utf8",
     );
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: "legacyToken",
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: true });
+    await expect(verifyBootstrapToken(baseDir, "legacyToken")).resolves.toEqual({ ok: true });
 
-    await expect(
-      verifyDeviceBootstrapToken({
-        token: "expiredToken",
-        deviceId: "device-123",
-        publicKey: "public-key-123",
-        role: "operator.admin",
-        scopes: ["operator.admin"],
-        baseDir,
-      }),
-    ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
+    await expect(verifyBootstrapToken(baseDir, "expiredToken")).resolves.toEqual({
+      ok: false,
+      reason: "bootstrap_token_invalid",
+    });
   });
 });

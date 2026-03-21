@@ -126,6 +126,28 @@ private func sendUserMessage(_ vm: OpenClawChatViewModel, text: String = "hi") a
     }
 }
 
+@discardableResult
+private func sendMessageAndEmitFinal(
+    transport: TestChatTransport,
+    vm: OpenClawChatViewModel,
+    text: String,
+    sessionKey: String = "main") async throws -> String
+{
+    await sendUserMessage(vm, text: text)
+    try await waitUntil("pending run starts") { await MainActor.run { vm.pendingRunCount == 1 } }
+
+    let runId = try #require(await transport.lastSentRunId())
+    transport.emit(
+        .chat(
+            OpenClawChatEventPayload(
+                runId: runId,
+                sessionKey: sessionKey,
+                state: "final",
+                message: nil,
+                errorMessage: nil)))
+    return runId
+}
+
 private func emitAssistantText(
     transport: TestChatTransport,
     runId: String,
@@ -454,18 +476,10 @@ extension TestChatTransportState {
 
         let (transport, vm) = await makeViewModel(historyResponses: [history1, history2])
         try await loadAndWaitBootstrap(vm: vm, sessionId: sessionId)
-        await sendUserMessage(vm, text: "hello from mac webchat")
-        try await waitUntil("pending run starts") { await MainActor.run { vm.pendingRunCount == 1 } }
-
-        let runId = try #require(await transport.lastSentRunId())
-        transport.emit(
-            .chat(
-                OpenClawChatEventPayload(
-                    runId: runId,
-                    sessionKey: "main",
-                    state: "final",
-                    message: nil,
-                    errorMessage: nil)))
+        try await sendMessageAndEmitFinal(
+            transport: transport,
+            vm: vm,
+            text: "hello from mac webchat")
 
         try await waitUntil("assistant history refreshes without dropping user message") {
             await MainActor.run {
@@ -485,18 +499,10 @@ extension TestChatTransportState {
 
         let (transport, vm) = await makeViewModel(historyResponses: [history1, history2])
         try await loadAndWaitBootstrap(vm: vm, sessionId: sessionId)
-        await sendUserMessage(vm, text: "hello from mac webchat")
-        try await waitUntil("pending run starts") { await MainActor.run { vm.pendingRunCount == 1 } }
-
-        let runId = try #require(await transport.lastSentRunId())
-        transport.emit(
-            .chat(
-                OpenClawChatEventPayload(
-                    runId: runId,
-                    sessionKey: "main",
-                    state: "final",
-                    message: nil,
-                    errorMessage: nil)))
+        try await sendMessageAndEmitFinal(
+            transport: transport,
+            vm: vm,
+            text: "hello from mac webchat")
 
         try await waitUntil("empty refresh does not clear optimistic user message") {
             await MainActor.run {
@@ -527,18 +533,10 @@ extension TestChatTransportState {
 
         let (transport, vm) = await makeViewModel(historyResponses: [history1, history2])
         try await loadAndWaitBootstrap(vm: vm, sessionId: sessionId)
-        await sendUserMessage(vm, text: "hello from mac webchat")
-        try await waitUntil("pending run starts") { await MainActor.run { vm.pendingRunCount == 1 } }
-
-        let runId = try #require(await transport.lastSentRunId())
-        transport.emit(
-            .chat(
-                OpenClawChatEventPayload(
-                    runId: runId,
-                    sessionKey: "main",
-                    state: "final",
-                    message: nil,
-                    errorMessage: nil)))
+        try await sendMessageAndEmitFinal(
+            transport: transport,
+            vm: vm,
+            text: "hello from mac webchat")
 
         try await waitUntil("canonical refresh keeps one user message") {
             await MainActor.run {
