@@ -29,7 +29,8 @@ Use it alongside the hand-written plugin guides:
 ## What this section does not do yet
 
 Phase 1 adds the information architecture and stability policy, not the
-generated per-module pages. Those land in the next phase under
+generated per-module pages. The current rollout also keeps every documented
+surface marked `unstable`. Generated pages land in the next phase under
 `/reference/plugin-sdk/modules/*`.
 
 ## Start here

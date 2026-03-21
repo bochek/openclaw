@@ -211,7 +211,7 @@ my-plugin/
     </Accordion>
 
     The curated [Plugin SDK reference](/reference/plugin-sdk) now tracks the
-    reviewed public subpaths, import rules, and stability tiers. Use that
+    reviewed public subpaths, import rules, and current stability labels. Use that
     reference when deciding whether a helper is part of the intended public
     contract.
 

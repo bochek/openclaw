@@ -14,9 +14,9 @@ runtime state.
 
 ## Reviewed phase 1 modules
 
-| Import path                         | Stability | Use this for                      |
-| ----------------------------------- | --------- | --------------------------------- |
-| `openclaw/plugin-sdk/runtime-store` | `stable`  | Persistent plugin runtime storage |
+| Import path                         | Stability  | Use this for                      |
+| ----------------------------------- | ---------- | --------------------------------- |
+| `openclaw/plugin-sdk/runtime-store` | `unstable` | Persistent plugin runtime storage |
 
 ## Notes
 

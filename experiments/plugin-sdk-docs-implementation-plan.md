@@ -10,7 +10,7 @@ The result should be:
 - hand-written guides remain the explanation layer
 - generated reference pages cover the intended public SDK surface
 - docs drift is checked in CI
-- the first release documents a curated stable subset instead of every export
+- the first release documents a curated unstable subset instead of every export
 
 ## Why This Fits OpenClaw
 
@@ -37,7 +37,7 @@ or bundled-plugin-only helpers as if they were long-term public API.
 1. `docs/reference/plugin-sdk/` exists with a landing page and category pages.
 2. A generator creates module reference pages from the real SDK interface.
 3. The generator is driven by the canonical SDK entrypoint list.
-4. The first shipped reference covers the high-value stable modules.
+4. The first shipped reference covers the high-value reviewed modules, all marked unstable until explicitly promoted.
 5. CI fails if generated docs drift from the checked-in source of truth.
 6. Existing hand-written tables in plugin docs are replaced with links to the generated reference where appropriate.
 
@@ -46,16 +46,19 @@ or bundled-plugin-only helpers as if they were long-term public API.
 Use `scripts/lib/plugin-sdk-entrypoints.json` as the source of truth for
 documented public subpaths.
 
-Before generating module pages, classify each entrypoint into one of these tiers:
+Before generating module pages, classify each documented entrypoint into one of
+these stability states:
 
-- `stable`: recommended public contract for plugin authors
-- `advanced`: public but niche or low-level
-- `legacy`: compatibility-only or deprecated
-- `hidden`: exported today but intentionally omitted from docs until reviewed
+- `stable`: explicit compatibility promise for external plugin authors
+- `unstable`: documented surface with no compatibility promise yet
 
 This classification should live in a checked-in metadata file, for example:
 
 - `scripts/lib/plugin-sdk-doc-metadata.ts`
+
+Any entrypoint without metadata stays out of the generated reference until it is
+reviewed. `legacy` remains a docs category for migration surfaces, not a
+stability level.
 
 That file should also assign each module to a docs category, for example:
 
@@ -129,7 +132,7 @@ The normalized doc model for each module should capture:
 - subpath
 - import specifier
 - category
-- stability tier
+- stability state
 - deprecation state
 - short summary
 - source file path
@@ -178,12 +181,12 @@ Deliverable:
 - add TypeDoc dependency and config
 - implement `scripts/generate-plugin-sdk-docs.ts`
 - read `scripts/lib/plugin-sdk-entrypoints.json`
-- filter to the reviewed stable subset
+- filter to the reviewed documented subset
 - generate module pages for the first 12 to 15 high-value modules
 - add `plugin-sdk:docs:gen` and `plugin-sdk:docs:check`
 - add CI drift checking
 
-Initial stable subset should prioritize:
+Initial unstable subset should prioritize:
 
 - `core`
 - `plugin-entry`
@@ -203,7 +206,7 @@ Initial stable subset should prioritize:
 
 ### Phase 3: Comment Coverage and Docs Cleanup
 
-- improve TSDoc coverage for the high-value stable subset
+- improve TSDoc coverage for the high-value unstable subset
 - add module-level summaries where missing
 - add `@deprecated` and `@remarks` tags for compatibility surfaces
 - replace duplicated long import tables in:
@@ -213,9 +216,9 @@ Initial stable subset should prioritize:
 
 ### Phase 4: Coverage Expansion
 
-- expand generated coverage to the rest of the reviewed stable modules
-- add `advanced` and `legacy` pages only after stable pages are solid
-- decide whether any currently exported modules should move to `hidden` or be removed from the public surface entirely
+- expand generated coverage to the rest of the reviewed unstable modules
+- decide whether any currently documented modules have earned a true `stable` label
+- decide whether any currently exported modules should be added to metadata or be removed from the public surface entirely
 
 ### Phase 5: Optional Governance
 
@@ -229,7 +232,8 @@ The implementation should be considered healthy when:
 - `plugin-sdk:docs:gen` is deterministic
 - `plugin-sdk:docs:check` fails on drift
 - the generated pages are readable in Mintlify locally
-- adding a new documented stable entrypoint requires metadata review and a generated page update
+- adding a new documented entrypoint requires metadata review and a generated page update
+- promoting any entrypoint from `unstable` to `stable` requires an explicit compatibility review
 - compatibility-only modules are visually marked as legacy or deprecated
 
 ## Risks
@@ -239,6 +243,7 @@ The implementation should be considered healthy when:
 Mitigation:
 
 - require explicit stability metadata before a module appears in the generated reference
+- default reviewed modules to `unstable` unless a real compatibility promise exists
 
 ### Risk: poor generated quality from sparse comments
 
@@ -258,7 +263,7 @@ Mitigation:
 
 Mitigation:
 
-- classify compatibility layers as `legacy`
+- keep currently documented modules labeled `unstable`
 - keep bundled-plugin-only helpers out of the generated public reference
 
 ## Proposed First PR Sequence
@@ -273,16 +278,17 @@ Mitigation:
 
 - add generator script
 - add TypeDoc config and dependency
-- generate pages for the initial stable subset
+- generate pages for the initial unstable subset
 - add docs drift check
 
 ### PR 3
 
-- improve TSDoc coverage for the initial stable subset
+- improve TSDoc coverage for the initial unstable subset
 - replace duplicated manual SDK tables with links to the generated reference
-- expand stable coverage as comments and metadata improve
+- expand unstable coverage as comments and metadata improve
 
 ## Recommendation
 
-Ship this as a curated generated reference for the stable Plugin SDK, not as a
-blind dump of every current export.
+Ship this as a curated generated reference for the current Plugin SDK, with all
+documented surfaces marked `unstable` until OpenClaw is actually ready to make a
+compatibility promise.

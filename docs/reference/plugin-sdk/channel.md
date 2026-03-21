@@ -14,19 +14,20 @@ channel plugins.
 
 ## Reviewed phase 1 modules
 
-| Import path                                  | Stability | Use this for                                         |
-| -------------------------------------------- | --------- | ---------------------------------------------------- |
-| `openclaw/plugin-sdk/channel-actions`        | `stable`  | Shared message action and reaction helpers           |
-| `openclaw/plugin-sdk/channel-config-schema`  | `stable`  | Channel config schema builders                       |
-| `openclaw/plugin-sdk/channel-contract`       | `stable`  | Channel contract types                               |
-| `openclaw/plugin-sdk/channel-pairing`        | `stable`  | Pairing and DM approval flows                        |
-| `openclaw/plugin-sdk/channel-reply-pipeline` | `stable`  | Reply prefix, typing, and reply orchestration        |
-| `openclaw/plugin-sdk/channel-setup`          | `stable`  | Setup adapters and setup surfaces                    |
-| `openclaw/plugin-sdk/command-auth`           | `stable`  | Shared command authorization helpers                 |
-| `openclaw/plugin-sdk/secret-input`           | `stable`  | Secret input parsing and normalization               |
-| `openclaw/plugin-sdk/webhook-ingress`        | `stable`  | Webhook validation, target registration, and routing |
+| Import path                                  | Stability  | Use this for                                         |
+| -------------------------------------------- | ---------- | ---------------------------------------------------- |
+| `openclaw/plugin-sdk/channel-actions`        | `unstable` | Shared message action and reaction helpers           |
+| `openclaw/plugin-sdk/channel-config-schema`  | `unstable` | Channel config schema builders                       |
+| `openclaw/plugin-sdk/channel-contract`       | `unstable` | Channel contract types                               |
+| `openclaw/plugin-sdk/channel-pairing`        | `unstable` | Pairing and DM approval flows                        |
+| `openclaw/plugin-sdk/channel-reply-pipeline` | `unstable` | Reply prefix, typing, and reply orchestration        |
+| `openclaw/plugin-sdk/channel-setup`          | `unstable` | Setup adapters and setup surfaces                    |
+| `openclaw/plugin-sdk/command-auth`           | `unstable` | Shared command authorization helpers                 |
+| `openclaw/plugin-sdk/secret-input`           | `unstable` | Secret input parsing and normalization               |
+| `openclaw/plugin-sdk/webhook-ingress`        | `unstable` | Webhook validation, target registration, and routing |
 
 ## Notes
 
 - These are the reviewed shared channel primitives for the first generated reference pass.
+- All of them are still classified as unstable.
 - Generated module pages land in phase 2.

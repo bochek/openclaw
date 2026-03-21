@@ -10,7 +10,7 @@ read_when:
 # Plugin SDK legacy
 
 These surfaces still exist for compatibility, but they are not the recommended
-entrypoints for new plugin code.
+entrypoints for new plugin code. They are also classified as `unstable`.
 
 ## Reviewed legacy modules
 
@@ -22,5 +22,5 @@ entrypoints for new plugin code.
 
 ## Notes
 
-- Legacy docs stay visible so migration guidance has a stable target.
+- Legacy docs stay visible so migration guidance has a consistent target.
 - New generated module pages should emphasize migration, not new usage.

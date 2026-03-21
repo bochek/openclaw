@@ -56,7 +56,7 @@ Do not treat these as public plugin contracts:
 
 - repo `src/**` internals
 - bundled extension `src/**` internals
-- accidental helper exports that have not been reviewed for stability
+- accidental helper exports that have not been reviewed and classified
 
 ## Current rollout state
 

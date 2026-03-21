@@ -3,23 +3,22 @@ title: "Plugin SDK Stability"
 sidebarTitle: "Stability"
 summary: "How OpenClaw classifies reviewed Plugin SDK subpaths during the reference rollout"
 read_when:
-  - You need to know whether a Plugin SDK subpath is stable or legacy
+  - You need to know whether a Plugin SDK subpath is stable or unstable
   - You are deciding whether a helper belongs in public docs
   - You are reviewing Plugin SDK surface changes
 ---
 
 # Plugin SDK stability
 
-Not every exported helper should be treated as equally stable.
+OpenClaw should use `stable` as a real compatibility promise, not as a soft
+way to say "document this first."
 
-The generated reference rollout uses these tiers:
+The generated reference rollout uses these stability states:
 
-| Tier       | Meaning                                                     | Docs behavior                                 |
-| ---------- | ----------------------------------------------------------- | --------------------------------------------- |
-| `stable`   | Recommended public contract for plugin authors              | Document first and link from guides           |
-| `advanced` | Public but niche or low-level                               | Document after the core stable set is solid   |
-| `legacy`   | Compatibility-only or deprecated                            | Document with warnings and migration guidance |
-| `hidden`   | Exported today but intentionally omitted from the reference | Do not publish until reviewed                 |
+| State      | Meaning                                                    | Docs behavior                                  |
+| ---------- | ---------------------------------------------------------- | ---------------------------------------------- |
+| `stable`   | Explicit compatibility promise for external plugin authors | Use only after deliberate compatibility review |
+| `unstable` | Documented surface with no compatibility promise yet       | Warn clearly and avoid implying API freeze     |
 
 ## Phase 1 policy
 
@@ -33,12 +32,17 @@ The current reviewed set favors:
 - persistent runtime helpers
 - migration-critical legacy surfaces that need clear warnings
 
-## Legacy surfaces
+Every currently documented subpath in this rollout is marked `unstable`,
+including the compatibility surfaces in the legacy category.
 
-The following surfaces are treated as legacy in the current rollout:
+## Legacy category
+
+`legacy` remains useful as a docs category for migration-only surfaces, but it
+is not a stability tier. These legacy-category surfaces are still `unstable`:
 
 - `openclaw/plugin-sdk`
 - `openclaw/plugin-sdk/compat`
 - `openclaw/plugin-sdk/channel-runtime`
 
-See [Legacy](/reference/plugin-sdk/legacy) for details.
+See [Legacy](/reference/plugin-sdk/legacy) for migration guidance and
+[All Modules](/reference/plugin-sdk/all-modules) for the full current unstable set.

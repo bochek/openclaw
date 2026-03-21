@@ -14,13 +14,14 @@ not define the main plugin entry flow on their own.
 
 ## Reviewed phase 1 modules
 
-| Import path                         | Stability | Use this for                                           |
-| ----------------------------------- | --------- | ------------------------------------------------------ |
-| `openclaw/plugin-sdk/allow-from`    | `stable`  | Allowlist formatting and normalization                 |
-| `openclaw/plugin-sdk/reply-payload` | `stable`  | Reply payload normalization and outbound media helpers |
-| `openclaw/plugin-sdk/testing`       | `stable`  | Plugin test helpers and runtime fixtures               |
+| Import path                         | Stability  | Use this for                                           |
+| ----------------------------------- | ---------- | ------------------------------------------------------ |
+| `openclaw/plugin-sdk/allow-from`    | `unstable` | Allowlist formatting and normalization                 |
+| `openclaw/plugin-sdk/reply-payload` | `unstable` | Reply payload normalization and outbound media helpers |
+| `openclaw/plugin-sdk/testing`       | `unstable` | Plugin test helpers and runtime fixtures               |
 
 ## Notes
 
-- These utilities support the stable phase 1 plugin author workflow.
+- These utilities support the current phase 1 plugin author workflow, but they
+  are still marked unstable.
 - Generated module pages land in phase 2.

@@ -41,7 +41,7 @@ The old approach caused problems:
 
 - **Slow startup** — importing one helper loaded dozens of unrelated modules
 - **Circular dependencies** — broad re-exports made it easy to create import cycles
-- **Unclear API surface** — no way to tell which exports were stable vs internal
+- **Unclear API surface** — no way to tell which exports were public, unstable, or internal
 
 The modern plugin SDK fixes this: each import path (`openclaw/plugin-sdk/\<subpath\>`)
 is a small, self-contained module with a clear purpose and documented contract.

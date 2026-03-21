@@ -14,11 +14,12 @@ and focuses on the highest-value onboarding helper.
 
 ## Reviewed phase 1 modules
 
-| Import path                            | Stability | Use this for                                         |
-| -------------------------------------- | --------- | ---------------------------------------------------- |
-| `openclaw/plugin-sdk/provider-onboard` | `stable`  | Provider onboarding config patches and setup helpers |
+| Import path                            | Stability  | Use this for                                         |
+| -------------------------------------- | ---------- | ---------------------------------------------------- |
+| `openclaw/plugin-sdk/provider-onboard` | `unstable` | Provider onboarding config patches and setup helpers |
 
 ## Notes
 
-- Additional provider surfaces can be added after they are reviewed for stability.
+- Additional provider surfaces can be added after they are reviewed and
+  intentionally classified.
 - Generated module pages land in phase 2.
