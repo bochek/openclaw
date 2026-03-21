@@ -263,7 +263,7 @@ async function notifySubscriber(params: {
   try {
     await send(params.subscriber.to, params.text, {
       ...(params.subscriber.accountId ? { accountId: params.subscriber.accountId } : {}),
-      ...(params.subscriber.messageThreadId != null
+      ...(typeof params.subscriber.messageThreadId === "number"
         ? { messageThreadId: params.subscriber.messageThreadId }
         : {}),
     });

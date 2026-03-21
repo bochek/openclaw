@@ -2,12 +2,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { OpenClawPluginApi } from "./api.js";
 import type {
   OpenClawPluginCommandDefinition,
   PluginCommandContext,
 } from "../../src/plugins/types.js";
 import { createTestPluginApi } from "../../test/helpers/extensions/plugin-api.js";
+import type { OpenClawPluginApi } from "./api.js";
 
 const pluginApiMocks = vi.hoisted(() => ({
   clearDeviceBootstrapTokens: vi.fn(async () => ({ removed: 2 })),
@@ -20,12 +20,11 @@ const pluginApiMocks = vi.hoisted(() => ({
   resolvePreferredOpenClawTmpDir: vi.fn(() => path.join(os.tmpdir(), "openclaw-device-pair-tests")),
 }));
 
-vi.mock("./api.js", async () => {
-  const actual = await vi.importActual<object>("./api.js");
+vi.mock("./api.js", () => {
   return {
-    ...actual,
     approveDevicePairing: vi.fn(),
     clearDeviceBootstrapTokens: pluginApiMocks.clearDeviceBootstrapTokens,
+    definePluginEntry: vi.fn((entry) => entry),
     issueDeviceBootstrapToken: pluginApiMocks.issueDeviceBootstrapToken,
     listDevicePairing: vi.fn(async () => ({ pending: [] })),
     renderQrPngBase64: pluginApiMocks.renderQrPngBase64,
@@ -79,6 +78,12 @@ function createCommandContext(params?: Partial<PluginCommandContext>): PluginCom
     commandBody: "/pair qr",
     args: "qr",
     config: {},
+    requestConversationBinding: async () => ({
+      status: "error",
+      message: "unsupported",
+    }),
+    detachConversationBinding: async () => ({ removed: false }),
+    getCurrentConversationBinding: async () => null,
     ...params,
   };
 }

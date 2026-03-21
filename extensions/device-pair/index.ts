@@ -697,8 +697,9 @@ export default definePluginEntry({
               setupCode = encodeSetupCode(payload);
             } finally {
               if (qrFilePath) {
-                await rm(path.dirname(qrFilePath), { recursive: true, force: true }).catch(() => {
-                });
+                await rm(path.dirname(qrFilePath), { recursive: true, force: true }).catch(
+                  () => {},
+                );
               }
             }
           }
@@ -768,6 +769,7 @@ export default definePluginEntry({
               )})`,
             );
           }
+        }
         return {
           text: formatSetupReply(payload, authLabel),
         };
