@@ -1825,6 +1825,7 @@
 }
 
 .data-table {
+  --data-table-checkbox-col-width: 36px;
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
@@ -1938,7 +1939,10 @@
 
 /* Checkbox column */
 .data-table-checkbox-col {
-  width: 1%;
+  width: var(--data-table-checkbox-col-width);
+  min-width: var(--data-table-checkbox-col-width);
+  max-width: var(--data-table-checkbox-col-width);
+  box-sizing: border-box;
   padding-left: 12px !important;
   padding-right: 4px !important;
   text-align: center;
@@ -1973,7 +1977,7 @@ td.data-table-checkbox-col {
 /* Sticky Key column (second column, after checkbox) */
 .data-table .data-table-key-col {
   position: sticky;
-  left: 36px;
+  left: var(--data-table-checkbox-col-width);
   z-index: 2;
   min-width: 180px;
 }
