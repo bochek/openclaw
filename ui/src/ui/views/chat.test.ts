@@ -339,7 +339,6 @@ describe("chat view", () => {
 
     expect(container.textContent).not.toContain("context used");
   });
-
   it("uses the assistant avatar URL for the welcome state when the identity avatar is only initials", () => {
     const container = document.createElement("div");
     render(
