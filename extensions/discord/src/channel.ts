@@ -46,7 +46,6 @@ import {
   resolveDiscordGroupRequireMention,
   resolveDiscordGroupToolPolicy,
 } from "./group-policy.js";
-import { monitorDiscordProvider } from "./monitor.js";
 import {
   looksLikeDiscordTargetId,
   normalizeDiscordMessagingTarget,
@@ -77,6 +76,10 @@ import { DiscordUiContainer } from "./ui.js";
 type DiscordSendFn = ReturnType<
   typeof getDiscordRuntime
 >["channel"]["discord"]["sendMessageDiscord"];
+
+async function loadDiscordProviderRuntime() {
+  return await import("./monitor/provider.runtime.js");
+}
 
 const meta = getChatChannelMeta("discord");
 const REQUIRED_DISCORD_PERMISSIONS = ["ViewChannel", "SendMessages"] as const;
@@ -679,7 +682,7 @@ export const discordPlugin: ChannelPlugin<ResolvedDiscordAccount> = {
         }
       }
       ctx.log?.info(`[${account.accountId}] starting provider${discordBotLabel}`);
-      return monitorDiscordProvider({
+      return (await loadDiscordProviderRuntime()).monitorDiscordProvider({
         token,
         accountId: account.accountId,
         config: ctx.cfg,
