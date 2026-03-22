@@ -36,6 +36,14 @@ export type GatewayErrorInfo = {
   details?: unknown;
 };
 
+export const CONTROL_UI_OPERATOR_SCOPES = [
+  "operator.admin",
+  "operator.read",
+  "operator.write",
+  "operator.approvals",
+  "operator.pairing",
+] as const;
+
 export class GatewayRequestError extends Error {
   readonly gatewayCode: string;
   readonly details?: unknown;
@@ -242,13 +250,7 @@ export class GatewayBrowserClient {
     // Gateways may reject this unless gateway.controlUi.allowInsecureAuth is enabled.
     const isSecureContext = typeof crypto !== "undefined" && !!crypto.subtle;
 
-    const scopes = [
-      "operator.admin",
-      "operator.read",
-      "operator.write",
-      "operator.approvals",
-      "operator.pairing",
-    ];
+    const scopes = [...CONTROL_UI_OPERATOR_SCOPES];
     const role = "operator";
     const explicitGatewayToken = this.opts.token?.trim() || undefined;
     const explicitPassword = this.opts.password?.trim() || undefined;

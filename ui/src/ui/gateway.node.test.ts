@@ -79,7 +79,7 @@ vi.mock("./device-identity.ts", () => ({
   signDevicePayload: signDevicePayloadMock,
 }));
 
-const { GatewayBrowserClient } = await import("./gateway.ts");
+const { CONTROL_UI_OPERATOR_SCOPES, GatewayBrowserClient } = await import("./gateway.ts");
 
 function createStorageMock(): Storage {
   const store = new Map<string, string>();
@@ -143,19 +143,37 @@ describe("GatewayBrowserClient", () => {
       deviceId: "device-1",
       role: "operator",
       token: "stored-device-token",
-      scopes: [
-        "operator.admin",
-        "operator.read",
-        "operator.write",
-        "operator.approvals",
-        "operator.pairing",
-      ],
+      scopes: [...CONTROL_UI_OPERATOR_SCOPES],
     });
   });
 
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it("requests the full control ui operator scope bundle on connect", async () => {
+    const client = new GatewayBrowserClient({
+      url: "ws://127.0.0.1:18789",
+      token: "shared-auth-token",
+    });
+
+    client.start();
+    const ws = getLatestWebSocket();
+    ws.emitOpen();
+    ws.emitMessage({
+      type: "event",
+      event: "connect.challenge",
+      payload: { nonce: "nonce-1" },
+    });
+    await vi.waitFor(() => expect(ws.sent.length).toBeGreaterThan(0));
+
+    const connectFrame = JSON.parse(ws.sent.at(-1) ?? "{}") as {
+      method?: string;
+      params?: { scopes?: string[] };
+    };
+    expect(connectFrame.method).toBe("connect");
+    expect(connectFrame.params?.scopes).toEqual([...CONTROL_UI_OPERATOR_SCOPES]);
   });
 
   it("prefers explicit shared auth over cached device tokens", async () => {
