@@ -77,9 +77,7 @@ API key auth, and dynamic model resolution.
 
     ```typescript index.ts
     import { definePluginEntry } from "openclaw/plugin-sdk/plugin-entry";
-    import {
-      createProviderApiKeyAuthMethod,
-    } from "openclaw/plugin-sdk/provider-auth";
+    import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth";
 
     export default definePluginEntry({
       id: "acme-ai",
@@ -94,15 +92,15 @@ API key auth, and dynamic model resolution.
 
           auth: [
             createProviderApiKeyAuthMethod({
-              provider: "acme-ai",
+              providerId: "acme-ai",
+              methodId: "api-key",
+              label: "Acme AI API key",
+              hint: "API key from your Acme AI dashboard",
+              optionKey: "acmeAiApiKey",
+              flagName: "--acme-ai-api-key",
               envVar: "ACME_AI_API_KEY",
-              label: "API key",
-              validate: async (key) => {
-                const ok = await testAcmeKey(key);
-                return ok
-                  ? { valid: true }
-                  : { valid: false, error: "Invalid key" };
-              },
+              promptMessage: "Enter your Acme AI API key",
+              defaultModel: "acme-ai/acme-large",
             }),
           ],
 
