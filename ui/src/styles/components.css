@@ -973,6 +973,10 @@
   flex-wrap: wrap;
 }
 
+.cron-form-actions .btn.primary {
+  flex: 1 1 100%;
+}
+
 .cron-submit-reason {
   color: var(--muted);
   font-size: 12px;

@@ -1013,6 +1013,51 @@ export function renderCron(props: CronProps) {
             </div>
           </section>
 
+          ${
+            blockedByValidation
+              ? html`
+                  <div class="cron-form-status" role="status" aria-live="polite">
+                    <div class="cron-form-status__title">${t("cron.form.cantAddYet")}</div>
+                    <div class="cron-help">${t("cron.form.fillRequired")}</div>
+                    <ul class="cron-form-status__list">
+                      ${blockingFields.map(
+                        (field) => html`
+                          <li>
+                            <button
+                              type="button"
+                              class="cron-form-status__link"
+                              @click=${() => focusFormField(field.inputId)}
+                            >
+                              ${field.label}: ${t(field.message)}
+                            </button>
+                          </li>
+                        `,
+                      )}
+                    </ul>
+                  </div>
+                `
+              : nothing
+          }
+          <div class="row cron-form-actions">
+            <button class="btn primary" ?disabled=${props.busy || !props.canSubmit} @click=${props.onAdd}>
+              ${props.busy ? t("cron.form.saving") : isEditing ? t("cron.form.saveChanges") : t("cron.form.addJob")}
+            </button>
+            ${
+              submitDisabledReason
+                ? html`<div class="cron-submit-reason" aria-live="polite">${submitDisabledReason}</div>`
+                : nothing
+            }
+            ${
+              isEditing
+                ? html`
+                    <button class="btn" ?disabled=${props.busy} @click=${props.onCancelEdit}>
+                      ${t("cron.form.cancel")}
+                    </button>
+                  `
+                : nothing
+            }
+          </div>
+
           <details class="cron-advanced">
             <summary class="cron-advanced__summary">${t("cron.form.advanced")}</summary>
             <div class="cron-help">${t("cron.form.advancedHelp")}</div>
@@ -1333,50 +1378,6 @@ export function renderCron(props: CronProps) {
               }
             </div>
           </details>
-        </div>
-        ${
-          blockedByValidation
-            ? html`
-                <div class="cron-form-status" role="status" aria-live="polite">
-                  <div class="cron-form-status__title">${t("cron.form.cantAddYet")}</div>
-                  <div class="cron-help">${t("cron.form.fillRequired")}</div>
-                  <ul class="cron-form-status__list">
-                    ${blockingFields.map(
-                      (field) => html`
-                        <li>
-                          <button
-                            type="button"
-                            class="cron-form-status__link"
-                            @click=${() => focusFormField(field.inputId)}
-                          >
-                            ${field.label}: ${t(field.message)}
-                          </button>
-                        </li>
-                      `,
-                    )}
-                  </ul>
-                </div>
-              `
-            : nothing
-        }
-        <div class="row cron-form-actions">
-          <button class="btn primary" ?disabled=${props.busy || !props.canSubmit} @click=${props.onAdd}>
-            ${props.busy ? t("cron.form.saving") : isEditing ? t("cron.form.saveChanges") : t("cron.form.addJob")}
-          </button>
-          ${
-            submitDisabledReason
-              ? html`<div class="cron-submit-reason" aria-live="polite">${submitDisabledReason}</div>`
-              : nothing
-          }
-          ${
-            isEditing
-              ? html`
-                  <button class="btn" ?disabled=${props.busy} @click=${props.onCancelEdit}>
-                    ${t("cron.form.cancel")}
-                  </button>
-                `
-              : nothing
-          }
         </div>
       </section>
     </section>
