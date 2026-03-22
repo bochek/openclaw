@@ -41,7 +41,7 @@ The old approach caused problems:
 
 - **Slow startup** — importing one helper loaded dozens of unrelated modules
 - **Circular dependencies** — broad re-exports made it easy to create import cycles
-- **Unclear API surface** — no way to tell which exports were public, unstable, or internal
+- **Unclear API surface** — no way to tell which exports were stable vs internal
 
 The modern plugin SDK fixes this: each import path (`openclaw/plugin-sdk/\<subpath\>`)
 is a small, self-contained module with a clear purpose and documented contract.
@@ -139,8 +139,7 @@ is a small, self-contained module with a clear purpose and documented contract.
 </Accordion>
 
 Use the narrowest import that matches the job. If you cannot find an export,
-start with the curated [Plugin SDK reference](/reference/plugin-sdk), then
-check the source at `src/plugin-sdk/` if you still need to trace a helper.
+check the source at `src/plugin-sdk/` or ask in Discord.
 
 ## Removal timeline
 

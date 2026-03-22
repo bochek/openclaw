@@ -1387,21 +1387,6 @@
                 "pages": ["reference/rpc", "reference/device-models"]
               },
               {
-                "group": "Plugin SDK",
-                "pages": [
-                  "reference/plugin-sdk/index",
-                  "reference/plugin-sdk/import-model",
-                  "reference/plugin-sdk/stability",
-                  "reference/plugin-sdk/all-modules",
-                  "reference/plugin-sdk/core",
-                  "reference/plugin-sdk/channel",
-                  "reference/plugin-sdk/provider",
-                  "reference/plugin-sdk/runtime",
-                  "reference/plugin-sdk/utilities",
-                  "reference/plugin-sdk/legacy"
-                ]
-              },
-              {
                 "group": "Templates",
                 "pages": [
                   "reference/AGENTS.default",

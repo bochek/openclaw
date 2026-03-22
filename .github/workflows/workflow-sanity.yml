@@ -87,3 +87,19 @@ jobs:
 
       - name: Check config docs drift statefile
         run: pnpm config:docs:check
+
+  plugin-sdk-api-drift:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node environment
+        uses: ./.github/actions/setup-node-env
+        with:
+          install-bun: "false"
+          use-sticky-disk: "false"
+
+      - name: Check plugin SDK API baseline drift
+        run: pnpm plugin-sdk:api:check
