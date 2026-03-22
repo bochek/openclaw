@@ -19,8 +19,10 @@ elif [[ -n "$SMOKE_PREVIOUS_VERSION" ]]; then
   LATEST_VERSION="$(npm view "$PACKAGE_NAME" version)"
   PREVIOUS_VERSION="$SMOKE_PREVIOUS_VERSION"
 else
+  LATEST_VERSION="$(npm view "$PACKAGE_NAME" dist-tags.latest)"
   VERSIONS_JSON="$(npm view "$PACKAGE_NAME" versions --json)"
-  read -r LATEST_VERSION PREVIOUS_VERSION <<<"$(VERSIONS_JSON="$VERSIONS_JSON" node - <<'NODE'
+  PREVIOUS_VERSION="$(LATEST_VERSION="$LATEST_VERSION" VERSIONS_JSON="$VERSIONS_JSON" node - <<'NODE'
+const latest = String(process.env.LATEST_VERSION || "");
 const raw = process.env.VERSIONS_JSON || "[]";
 let versions;
 try {
@@ -31,12 +33,15 @@ try {
 if (!Array.isArray(versions)) {
   versions = [versions];
 }
-if (versions.length === 0) {
+if (versions.length === 0 || latest.length === 0) {
   process.exit(1);
 }
-const latest = String(versions[versions.length - 1] ?? "");
-const previous = String(versions.length > 1 ? versions[versions.length - 2] : latest);
-process.stdout.write(`${latest} ${previous}`);
+const latestIndex = versions.lastIndexOf(latest);
+if (latestIndex <= 0) {
+  process.stdout.write(latest);
+  process.exit(0);
+}
+process.stdout.write(String(versions[latestIndex - 1] ?? latest));
 NODE
 )"
 fi
