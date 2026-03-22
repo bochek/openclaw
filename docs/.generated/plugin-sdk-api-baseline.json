@@ -640,8 +640,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/index.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "utilities",
@@ -895,8 +894,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/allow-from.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "channel",
@@ -952,8 +950,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/channel-actions.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "channel",
@@ -1036,8 +1033,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/channel-config-schema.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "channel",
@@ -1174,8 +1170,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/channel-contract.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "channel",
@@ -1240,8 +1235,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/channel-pairing.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "channel",
@@ -1315,8 +1309,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/channel-reply-pipeline.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "legacy",
@@ -2227,8 +2220,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/channel-runtime.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "channel",
@@ -2356,8 +2348,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/channel-setup.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "channel",
@@ -2944,8 +2935,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/command-auth.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "core",
@@ -3811,8 +3801,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/core.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "core",
@@ -4201,8 +4190,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/plugin-entry.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "provider",
@@ -4348,8 +4336,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/provider-onboard.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "utilities",
@@ -4585,8 +4572,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/reply-payload.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "runtime",
@@ -4615,8 +4601,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/runtime-store.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "channel",
@@ -4690,8 +4675,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/secret-input.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "utilities",
@@ -4792,8 +4776,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/testing.ts"
-      },
-      "stability": "unstable"
+      }
     },
     {
       "category": "channel",
@@ -5137,8 +5120,7 @@
       "source": {
         "line": 1,
         "path": "src/plugin-sdk/webhook-ingress.ts"
-      },
-      "stability": "unstable"
+      }
     }
   ]
 }
