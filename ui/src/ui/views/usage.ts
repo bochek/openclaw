@@ -781,7 +781,7 @@ export function renderUsage(props: UsageProps) {
               )}
 
               <div class="usage-grid">
-                <div class="usage-grid-left">
+                <div class="usage-grid-column">
                   <div class="card usage-left-card">
                     ${renderDailyChartCompact(
                       filteredDaily,
@@ -797,8 +797,6 @@ export function renderUsage(props: UsageProps) {
                         : nothing
                     }
                   </div>
-                </div>
-                <div class="usage-grid-right">
                   ${renderSessionsCard(
                     filteredSessions,
                     filters.selectedSessions,
@@ -817,40 +815,41 @@ export function renderUsage(props: UsageProps) {
                     filterActions.onClearSessions,
                   )}
                 </div>
+                <div class="usage-grid-column">
+                  ${
+                    primarySelectedEntry
+                      ? renderSessionDetailPanel(
+                          primarySelectedEntry,
+                          detail.timeSeries,
+                          detail.timeSeriesLoading,
+                          detail.timeSeriesMode,
+                          detailActions.onTimeSeriesModeChange,
+                          detail.timeSeriesBreakdownMode,
+                          detailActions.onTimeSeriesBreakdownChange,
+                          detail.timeSeriesCursorStart,
+                          detail.timeSeriesCursorEnd,
+                          detailActions.onTimeSeriesCursorRangeChange,
+                          filters.startDate,
+                          filters.endDate,
+                          filters.selectedDays,
+                          detail.sessionLogs,
+                          detail.sessionLogsLoading,
+                          detail.sessionLogsExpanded,
+                          detailActions.onToggleSessionLogsExpanded,
+                          detail.logFilters,
+                          detailActions.onLogFilterRolesChange,
+                          detailActions.onLogFilterToolsChange,
+                          detailActions.onLogFilterHasToolsChange,
+                          detailActions.onLogFilterQueryChange,
+                          detailActions.onLogFilterClear,
+                          display.contextExpanded,
+                          detailActions.onToggleContextExpanded,
+                          filterActions.onClearSessions,
+                        )
+                      : renderEmptyDetailState()
+                  }
+                </div>
               </div>
-
-              ${
-                primarySelectedEntry
-                  ? renderSessionDetailPanel(
-                      primarySelectedEntry,
-                      detail.timeSeries,
-                      detail.timeSeriesLoading,
-                      detail.timeSeriesMode,
-                      detailActions.onTimeSeriesModeChange,
-                      detail.timeSeriesBreakdownMode,
-                      detailActions.onTimeSeriesBreakdownChange,
-                      detail.timeSeriesCursorStart,
-                      detail.timeSeriesCursorEnd,
-                      detailActions.onTimeSeriesCursorRangeChange,
-                      filters.startDate,
-                      filters.endDate,
-                      filters.selectedDays,
-                      detail.sessionLogs,
-                      detail.sessionLogsLoading,
-                      detail.sessionLogsExpanded,
-                      detailActions.onToggleSessionLogsExpanded,
-                      detail.logFilters,
-                      detailActions.onLogFilterRolesChange,
-                      detailActions.onLogFilterToolsChange,
-                      detailActions.onLogFilterHasToolsChange,
-                      detailActions.onLogFilterQueryChange,
-                      detailActions.onLogFilterClear,
-                      display.contextExpanded,
-                      detailActions.onToggleContextExpanded,
-                      filterActions.onClearSessions,
-                    )
-                  : renderEmptyDetailState()
-              }
             `
       }
     </div>

@@ -251,10 +251,19 @@ function renderFallbackIndicator(status: FallbackIndicatorStatus | null | undefi
  * Compact notice when context usage reaches 85%+.
  * Progressively shifts from amber (85%) to red (90%+).
  */
+/** Parse a CSS hex color string to [r, g, b] integer components. */
+function parseHexRgb(hex: string): [number, number, number] {
+  const h = hex.trim().replace(/^#/, "");
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
 function renderContextNotice(
   session: GatewaySessionRow | undefined,
   defaultContextTokens: number | null,
 ) {
+  if (session?.totalTokensFresh === false) {
+    return nothing;
+  }
   const used = session?.totalTokens ?? 0;
   const limit = session?.contextTokens ?? defaultContextTokens ?? 0;
   if (!used || !limit) {
@@ -265,12 +274,17 @@ function renderContextNotice(
     return nothing;
   }
   const pct = Math.min(Math.round(ratio * 100), 100);
-  // Lerp from amber (#d97706) at 85% to red (#dc2626) at 95%+
+  // Read theme semantic tokens so color tracks the active theme (Dash, dark, light …)
+  const rootStyle = getComputedStyle(document.documentElement);
+  const warnHex = rootStyle.getPropertyValue("--warn").trim() || "#f59e0b";
+  const dangerHex = rootStyle.getPropertyValue("--danger").trim() || "#ef4444";
+  const [wr, wg, wb] = parseHexRgb(warnHex);
+  const [dr, dg, db] = parseHexRgb(dangerHex);
+  // Blend from --warn at 85% usage to --danger at 95%+ usage
   const t = Math.min(Math.max((ratio - 0.85) / 0.1, 0), 1);
-  // RGB: amber(217,119,6) → red(220,38,38)
-  const r = Math.round(217 + (220 - 217) * t);
-  const g = Math.round(119 + (38 - 119) * t);
-  const b = Math.round(6 + (38 - 6) * t);
+  const r = Math.round(wr + (dr - wr) * t);
+  const g = Math.round(wg + (dg - wg) * t);
+  const b = Math.round(wb + (db - wb) * t);
   const color = `rgb(${r}, ${g}, ${b})`;
   const bgOpacity = 0.08 + 0.08 * t;
   const bg = `rgba(${r}, ${g}, ${b}, ${bgOpacity})`;

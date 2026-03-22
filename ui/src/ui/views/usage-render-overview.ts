@@ -393,6 +393,43 @@ function renderPeakErrorList(
   `;
 }
 
+function renderSummaryStat(params: {
+  title: string;
+  hint: string;
+  value: string | number;
+  sub: string;
+  tone?: "good" | "warn" | "bad";
+  className?: string;
+  compactValue?: boolean;
+}) {
+  const classes = [
+    "stat",
+    "usage-summary-card",
+    params.className,
+    params.tone ? `usage-summary-card--${params.tone}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const valueClasses = [
+    "stat-value",
+    "usage-summary-value",
+    params.tone ?? "",
+    params.compactValue ? "usage-summary-value--compact" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return html`
+    <div class=${classes}>
+      <div class="usage-summary-title">
+        ${params.title}
+        <span class="usage-summary-hint" title=${params.hint}>?</span>
+      </div>
+      <div class=${valueClasses}>${params.value}</div>
+      <div class="usage-summary-sub">${params.sub}</div>
+    </div>
+  `;
+}
+
 function renderUsageInsights(
   totals: UsageTotals | null,
   aggregates: UsageAggregates,
@@ -480,137 +517,114 @@ function renderUsageInsights(
   return html`
     <section class="card usage-overview-card">
       <div class="card-title">${t("usage.overview.title")}</div>
-      <div class="usage-summary-grid">
-        <div class="stat usage-summary-card">
-          <div class="usage-summary-title">
-            ${t("usage.overview.messages")}
-            <span class="usage-summary-hint" title=${t("usage.overview.messagesHint")}>?</span>
-          </div>
-          <div class="stat-value usage-summary-value">${aggregates.messages.total}</div>
-          <div class="usage-summary-sub">
-            ${aggregates.messages.user} ${t("usage.overview.user").toLowerCase()} ·
-            ${aggregates.messages.assistant} ${t("usage.overview.assistant").toLowerCase()}
-          </div>
-        </div>
-        <div class="stat usage-summary-card">
-          <div class="usage-summary-title">
-            ${t("usage.overview.toolCalls")}
-            <span class="usage-summary-hint" title=${t("usage.overview.toolCallsHint")}>?</span>
-          </div>
-          <div class="stat-value usage-summary-value">${aggregates.tools.totalCalls}</div>
-          <div class="usage-summary-sub">
-            ${aggregates.tools.uniqueTools} ${t("usage.overview.toolsUsed")}
-          </div>
-        </div>
-        <div class="stat usage-summary-card">
-          <div class="usage-summary-title">
-            ${t("usage.overview.errors")}
-            <span class="usage-summary-hint" title=${t("usage.overview.errorsHint")}>?</span>
-          </div>
-          <div class="stat-value usage-summary-value">${aggregates.messages.errors}</div>
-          <div class="usage-summary-sub">
-            ${aggregates.messages.toolResults} ${t("usage.overview.toolResults")}
-          </div>
-        </div>
-        <div class="stat usage-summary-card">
-          <div class="usage-summary-title">
-            ${t("usage.overview.avgTokens")}
-            <span class="usage-summary-hint" title=${tokensHint}>?</span>
-          </div>
-          <div class="stat-value usage-summary-value">${formatTokens(avgTokens)}</div>
-          <div class="usage-summary-sub">
-            ${t("usage.overview.acrossMessages", {
+      <div class="usage-overview-layout">
+        <div class="usage-summary-grid">
+          ${renderSummaryStat({
+            title: t("usage.overview.messages"),
+            hint: t("usage.overview.messagesHint"),
+            value: aggregates.messages.total,
+            sub: `${aggregates.messages.user} ${t("usage.overview.user").toLowerCase()} · ${aggregates.messages.assistant} ${t("usage.overview.assistant").toLowerCase()}`,
+            className: "usage-summary-card--hero",
+          })}
+          ${renderSummaryStat({
+            title: t("usage.overview.throughput"),
+            hint: throughputHint,
+            value: throughputLabel,
+            sub: throughputCostLabel,
+            className: "usage-summary-card--hero usage-summary-card--throughput",
+            compactValue: true,
+          })}
+          ${renderSummaryStat({
+            title: t("usage.overview.toolCalls"),
+            hint: t("usage.overview.toolCallsHint"),
+            value: aggregates.tools.totalCalls,
+            sub: `${aggregates.tools.uniqueTools} ${t("usage.overview.toolsUsed")}`,
+            className: "usage-summary-card--half",
+          })}
+          ${renderSummaryStat({
+            title: t("usage.overview.avgTokens"),
+            hint: tokensHint,
+            value: formatTokens(avgTokens),
+            sub: t("usage.overview.acrossMessages", {
               count: String(aggregates.messages.total || 0),
-            })}
-          </div>
+            }),
+            className: "usage-summary-card--half",
+          })}
+          ${renderSummaryStat({
+            title: t("usage.overview.cacheHitRate"),
+            hint: cacheHint,
+            value: cacheHitLabel,
+            sub: `${formatTokens(totals.cacheRead)} ${t("usage.overview.cached")} · ${formatTokens(cacheBase)} ${t("usage.overview.prompt")}`,
+            tone: cacheHitRate > 0.6 ? "good" : cacheHitRate > 0.3 ? "warn" : "bad",
+            className: "usage-summary-card--medium",
+          })}
+          ${renderSummaryStat({
+            title: t("usage.overview.errorRate"),
+            hint: errorHint,
+            value: `${errorRatePct.toFixed(2)}%`,
+            sub: `${aggregates.messages.errors} ${t("usage.overview.errors").toLowerCase()} · ${avgDurationLabel} ${t("usage.overview.avgSession")}`,
+            tone: errorRatePct > 5 ? "bad" : errorRatePct > 1 ? "warn" : "good",
+            className: "usage-summary-card--medium",
+          })}
+          ${renderSummaryStat({
+            title: t("usage.overview.avgCost"),
+            hint: costHint,
+            value: formatCost(avgCost, 4),
+            sub: `${formatCost(totals.totalCost)} ${t("usage.breakdown.total").toLowerCase()}`,
+            className: "usage-summary-card--compact",
+          })}
+          ${renderSummaryStat({
+            title: t("usage.overview.sessions"),
+            hint: t("usage.overview.sessionsHint"),
+            value: sessionCount,
+            sub: t("usage.overview.sessionsInRange", { count: String(totalSessions) }),
+            className: "usage-summary-card--compact",
+          })}
+          ${renderSummaryStat({
+            title: t("usage.overview.errors"),
+            hint: t("usage.overview.errorsHint"),
+            value: aggregates.messages.errors,
+            sub: `${aggregates.messages.toolResults} ${t("usage.overview.toolResults")}`,
+            className: "usage-summary-card--compact",
+          })}
         </div>
-        <div class="stat usage-summary-card">
-          <div class="usage-summary-title">
-            ${t("usage.overview.avgCost")}
-            <span class="usage-summary-hint" title=${costHint}>?</span>
-          </div>
-          <div class="stat-value usage-summary-value">${formatCost(avgCost, 4)}</div>
-          <div class="usage-summary-sub">
-            ${formatCost(totals.totalCost)} ${t("usage.breakdown.total").toLowerCase()}
-          </div>
+        <div class="usage-insights-grid">
+          ${renderInsightList(
+            t("usage.overview.topModels"),
+            topModels,
+            t("usage.overview.noModelData"),
+          )}
+          ${renderInsightList(
+            t("usage.overview.topProviders"),
+            topProviders,
+            t("usage.overview.noProviderData"),
+          )}
+          ${renderInsightList(
+            t("usage.overview.topTools"),
+            topTools,
+            t("usage.overview.noToolCalls"),
+          )}
+          ${renderInsightList(
+            t("usage.overview.topAgents"),
+            topAgents,
+            t("usage.overview.noAgentData"),
+          )}
+          ${renderInsightList(
+            t("usage.overview.topChannels"),
+            topChannels,
+            t("usage.overview.noChannelData"),
+          )}
+          ${renderPeakErrorList(
+            t("usage.overview.peakErrorDays"),
+            errorDays,
+            t("usage.overview.noErrorData"),
+          )}
+          ${renderPeakErrorList(
+            t("usage.overview.peakErrorHours"),
+            errorHours,
+            t("usage.overview.noErrorData"),
+          )}
         </div>
-        <div class="stat usage-summary-card">
-          <div class="usage-summary-title">
-            ${t("usage.overview.sessions")}
-            <span class="usage-summary-hint" title=${t("usage.overview.sessionsHint")}>?</span>
-          </div>
-          <div class="stat-value usage-summary-value">${sessionCount}</div>
-          <div class="usage-summary-sub">
-            ${t("usage.overview.sessionsInRange", { count: String(totalSessions) })}
-          </div>
-        </div>
-        <div class="stat usage-summary-card">
-          <div class="usage-summary-title">
-            ${t("usage.overview.throughput")}
-            <span class="usage-summary-hint" title=${throughputHint}>?</span>
-          </div>
-          <div class="stat-value usage-summary-value">${throughputLabel}</div>
-          <div class="usage-summary-sub">${throughputCostLabel}</div>
-        </div>
-        <div class="stat usage-summary-card">
-          <div class="usage-summary-title">
-            ${t("usage.overview.errorRate")}
-            <span class="usage-summary-hint" title=${errorHint}>?</span>
-          </div>
-          <div class="stat-value usage-summary-value ${errorRatePct > 5 ? "bad" : errorRatePct > 1 ? "warn" : "good"}">${errorRatePct.toFixed(2)}%</div>
-          <div class="usage-summary-sub">
-            ${aggregates.messages.errors} ${t("usage.overview.errors").toLowerCase()} ·
-            ${avgDurationLabel} ${t("usage.overview.avgSession")}
-          </div>
-        </div>
-        <div class="stat usage-summary-card">
-          <div class="usage-summary-title">
-            ${t("usage.overview.cacheHitRate")}
-            <span class="usage-summary-hint" title=${cacheHint}>?</span>
-          </div>
-          <div class="stat-value usage-summary-value ${cacheHitRate > 0.6 ? "good" : cacheHitRate > 0.3 ? "warn" : "bad"}">${cacheHitLabel}</div>
-          <div class="usage-summary-sub">
-            ${formatTokens(totals.cacheRead)} ${t("usage.overview.cached")} ·
-            ${formatTokens(cacheBase)} ${t("usage.overview.prompt")}
-          </div>
-        </div>
-      </div>
-      <div class="usage-insights-grid">
-        ${renderInsightList(
-          t("usage.overview.topModels"),
-          topModels,
-          t("usage.overview.noModelData"),
-        )}
-        ${renderInsightList(
-          t("usage.overview.topProviders"),
-          topProviders,
-          t("usage.overview.noProviderData"),
-        )}
-        ${renderInsightList(
-          t("usage.overview.topTools"),
-          topTools,
-          t("usage.overview.noToolCalls"),
-        )}
-        ${renderInsightList(
-          t("usage.overview.topAgents"),
-          topAgents,
-          t("usage.overview.noAgentData"),
-        )}
-        ${renderInsightList(
-          t("usage.overview.topChannels"),
-          topChannels,
-          t("usage.overview.noChannelData"),
-        )}
-        ${renderPeakErrorList(
-          t("usage.overview.peakErrorDays"),
-          errorDays,
-          t("usage.overview.noErrorData"),
-        )}
-        ${renderPeakErrorList(
-          t("usage.overview.peakErrorHours"),
-          errorHours,
-          t("usage.overview.noErrorData"),
-        )}
       </div>
     </section>
   `;
