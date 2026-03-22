@@ -368,15 +368,21 @@ function renderPeakErrorList(
   title: string,
   items: Array<{ label: string; value: string; sub?: string }>,
   emptyLabel: string,
+  options?: {
+    className?: string;
+    listClassName?: string;
+  },
 ) {
+  const cardClass = ["usage-insight-card", options?.className].filter(Boolean).join(" ");
+  const listClass = ["usage-error-list", options?.listClassName].filter(Boolean).join(" ");
   return html`
-    <div class="usage-insight-card">
+    <div class=${cardClass}>
       <div class="usage-insight-title">${title}</div>
       ${
         items.length === 0
           ? html`<div class="muted">${emptyLabel}</div>`
           : html`
-              <div class="usage-error-list">
+              <div class=${listClass}>
                 ${items.map(
                   (item) => html`
                     <div class="usage-error-row">
@@ -623,6 +629,10 @@ function renderUsageInsights(
             t("usage.overview.peakErrorHours"),
             errorHours,
             t("usage.overview.noErrorData"),
+            {
+              className: "usage-insight-card--wide",
+              listClassName: "usage-error-list--hours",
+            },
           )}
         </div>
       </div>

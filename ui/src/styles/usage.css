@@ -727,6 +727,10 @@ details.usage-filter-select summary::-webkit-details-marker,
   background: color-mix(in srgb, var(--card) 82%, var(--bg-muted));
 }
 
+.usage-insight-card--wide {
+  grid-column: 1 / -1;
+}
+
 .usage-list,
 .usage-error-list,
 .context-breakdown-list {
@@ -1533,6 +1537,26 @@ details.usage-filter-select summary::-webkit-details-marker,
 
   .usage-insights-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .usage-error-list--hours {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .usage-error-list--hours .usage-error-row {
+    min-width: 0;
+    align-items: flex-start;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in srgb, var(--danger) 16%, var(--border));
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--danger) 5%, var(--bg-muted));
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .usage-error-list--hours .usage-error-rate {
+    font-size: 18px;
   }
 }
 
