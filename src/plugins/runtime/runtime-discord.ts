@@ -1,5 +1,5 @@
+import { discordMessageActions } from "../../../extensions/discord/src/channel-actions.js";
 import {
-  discordMessageActions,
   getThreadBindingManager,
   resolveThreadBindingIdleTimeoutMs,
   resolveThreadBindingInactivityExpiresAt,
@@ -8,7 +8,7 @@ import {
   setThreadBindingIdleTimeoutBySessionKey,
   setThreadBindingMaxAgeBySessionKey,
   unbindThreadBindingsBySessionKey,
-} from "../../plugin-sdk/discord.js";
+} from "../../../extensions/discord/src/monitor/thread-bindings.js";
 import {
   createLazyRuntimeMethodBinder,
   createLazyRuntimeSurface,
@@ -16,63 +16,73 @@ import {
 import { createDiscordTypingLease } from "./runtime-discord-typing.js";
 import type { PluginRuntimeChannel } from "./types-channel.js";
 
-const loadRuntimeDiscordOps = createLazyRuntimeSurface(
-  () => import("./runtime-discord-ops.runtime.js"),
-  ({ runtimeDiscordOps }) => runtimeDiscordOps,
+const loadRuntimeDiscordDirectory = createLazyRuntimeSurface(
+  () => import("./runtime-discord-directory.runtime.js"),
+  ({ runtimeDiscordDirectory }) => runtimeDiscordDirectory,
+);
+const loadRuntimeDiscordProvider = createLazyRuntimeSurface(
+  () => import("./runtime-discord-provider.runtime.js"),
+  ({ runtimeDiscordProvider }) => runtimeDiscordProvider,
+);
+const loadRuntimeDiscordSend = createLazyRuntimeSurface(
+  () => import("./runtime-discord-send.runtime.js"),
+  ({ runtimeDiscordSend }) => runtimeDiscordSend,
 );
 
-const bindDiscordRuntimeMethod = createLazyRuntimeMethodBinder(loadRuntimeDiscordOps);
+const bindDiscordDirectoryMethod = createLazyRuntimeMethodBinder(loadRuntimeDiscordDirectory);
+const bindDiscordProviderMethod = createLazyRuntimeMethodBinder(loadRuntimeDiscordProvider);
+const bindDiscordSendMethod = createLazyRuntimeMethodBinder(loadRuntimeDiscordSend);
 
-const auditChannelPermissionsLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.auditChannelPermissions,
+const auditChannelPermissionsLazy = bindDiscordDirectoryMethod(
+  (runtimeDiscordDirectory) => runtimeDiscordDirectory.auditChannelPermissions,
 );
-const listDirectoryGroupsLiveLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.listDirectoryGroupsLive,
+const listDirectoryGroupsLiveLazy = bindDiscordDirectoryMethod(
+  (runtimeDiscordDirectory) => runtimeDiscordDirectory.listDirectoryGroupsLive,
 );
-const listDirectoryPeersLiveLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.listDirectoryPeersLive,
+const listDirectoryPeersLiveLazy = bindDiscordDirectoryMethod(
+  (runtimeDiscordDirectory) => runtimeDiscordDirectory.listDirectoryPeersLive,
 );
-const probeDiscordLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.probeDiscord,
+const probeDiscordLazy = bindDiscordProviderMethod(
+  (runtimeDiscordProvider) => runtimeDiscordProvider.probeDiscord,
 );
-const resolveChannelAllowlistLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.resolveChannelAllowlist,
+const resolveChannelAllowlistLazy = bindDiscordDirectoryMethod(
+  (runtimeDiscordDirectory) => runtimeDiscordDirectory.resolveChannelAllowlist,
 );
-const resolveUserAllowlistLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.resolveUserAllowlist,
+const resolveUserAllowlistLazy = bindDiscordDirectoryMethod(
+  (runtimeDiscordDirectory) => runtimeDiscordDirectory.resolveUserAllowlist,
 );
-const sendComponentMessageLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.sendComponentMessage,
+const sendComponentMessageLazy = bindDiscordSendMethod(
+  (runtimeDiscordSend) => runtimeDiscordSend.sendComponentMessage,
 );
-const sendMessageDiscordLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.sendMessageDiscord,
+const sendMessageDiscordLazy = bindDiscordSendMethod(
+  (runtimeDiscordSend) => runtimeDiscordSend.sendMessageDiscord,
 );
-const sendPollDiscordLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.sendPollDiscord,
+const sendPollDiscordLazy = bindDiscordSendMethod(
+  (runtimeDiscordSend) => runtimeDiscordSend.sendPollDiscord,
 );
-const monitorDiscordProviderLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.monitorDiscordProvider,
+const monitorDiscordProviderLazy = bindDiscordProviderMethod(
+  (runtimeDiscordProvider) => runtimeDiscordProvider.monitorDiscordProvider,
 );
-const sendTypingDiscordLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.typing.pulse,
+const sendTypingDiscordLazy = bindDiscordSendMethod(
+  (runtimeDiscordSend) => runtimeDiscordSend.typing.pulse,
 );
-const editMessageDiscordLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.conversationActions.editMessage,
+const editMessageDiscordLazy = bindDiscordSendMethod(
+  (runtimeDiscordSend) => runtimeDiscordSend.conversationActions.editMessage,
 );
-const deleteMessageDiscordLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.conversationActions.deleteMessage,
+const deleteMessageDiscordLazy = bindDiscordSendMethod(
+  (runtimeDiscordSend) => runtimeDiscordSend.conversationActions.deleteMessage,
 );
-const pinMessageDiscordLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.conversationActions.pinMessage,
+const pinMessageDiscordLazy = bindDiscordSendMethod(
+  (runtimeDiscordSend) => runtimeDiscordSend.conversationActions.pinMessage,
 );
-const unpinMessageDiscordLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.conversationActions.unpinMessage,
+const unpinMessageDiscordLazy = bindDiscordSendMethod(
+  (runtimeDiscordSend) => runtimeDiscordSend.conversationActions.unpinMessage,
 );
-const createThreadDiscordLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.conversationActions.createThread,
+const createThreadDiscordLazy = bindDiscordSendMethod(
+  (runtimeDiscordSend) => runtimeDiscordSend.conversationActions.createThread,
 );
-const editChannelDiscordLazy = bindDiscordRuntimeMethod(
-  (runtimeDiscordOps) => runtimeDiscordOps.conversationActions.editChannel,
+const editChannelDiscordLazy = bindDiscordSendMethod(
+  (runtimeDiscordSend) => runtimeDiscordSend.conversationActions.editChannel,
 );
 
 export function createRuntimeDiscord(): PluginRuntimeChannel["discord"] {
