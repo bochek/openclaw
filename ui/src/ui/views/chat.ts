@@ -251,10 +251,36 @@ function renderFallbackIndicator(status: FallbackIndicatorStatus | null | undefi
  * Compact notice when context usage reaches 85%+.
  * Progressively shifts from amber (85%) to red (90%+).
  */
-/** Parse a CSS hex color string to [r, g, b] integer components. */
-function parseHexRgb(hex: string): [number, number, number] {
+/** Parse a 6-digit CSS hex color string to [r, g, b] integer components. */
+function parseHexRgb(hex: string): [number, number, number] | null {
   const h = hex.trim().replace(/^#/, "");
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) {
+    return null;
+  }
   return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+}
+
+let cachedThemeNoticeColors: {
+  warnHex: string;
+  dangerHex: string;
+  warnRgb: [number, number, number];
+  dangerRgb: [number, number, number];
+} | null = null;
+
+function getThemeNoticeColors() {
+  if (cachedThemeNoticeColors) {
+    return cachedThemeNoticeColors;
+  }
+  const rootStyle = getComputedStyle(document.documentElement);
+  const warnHex = rootStyle.getPropertyValue("--warn").trim() || "#f59e0b";
+  const dangerHex = rootStyle.getPropertyValue("--danger").trim() || "#ef4444";
+  cachedThemeNoticeColors = {
+    warnHex,
+    dangerHex,
+    warnRgb: parseHexRgb(warnHex) ?? [245, 158, 11],
+    dangerRgb: parseHexRgb(dangerHex) ?? [239, 68, 68],
+  };
+  return cachedThemeNoticeColors;
 }
 
 function renderContextNotice(
@@ -275,11 +301,9 @@ function renderContextNotice(
   }
   const pct = Math.min(Math.round(ratio * 100), 100);
   // Read theme semantic tokens so color tracks the active theme (Dash, dark, light …)
-  const rootStyle = getComputedStyle(document.documentElement);
-  const warnHex = rootStyle.getPropertyValue("--warn").trim() || "#f59e0b";
-  const dangerHex = rootStyle.getPropertyValue("--danger").trim() || "#ef4444";
-  const [wr, wg, wb] = parseHexRgb(warnHex);
-  const [dr, dg, db] = parseHexRgb(dangerHex);
+  const { warnRgb, dangerRgb } = getThemeNoticeColors();
+  const [wr, wg, wb] = warnRgb;
+  const [dr, dg, db] = dangerRgb;
   // Blend from --warn at 85% usage to --danger at 95%+ usage
   const t = Math.min(Math.max((ratio - 0.85) / 0.1, 0), 1);
   const r = Math.round(wr + (dr - wr) * t);
