@@ -272,7 +272,7 @@ jobs:
 
       - name: Build dist
         if: github.event_name != 'push' && matrix.task == 'test' && matrix.runtime == 'node'
-        run: pnpm build
+        run: pnpm build:plugin-sdk:test-dist
 
       - name: Run ${{ matrix.task }} (${{ matrix.runtime }})
         if: github.event_name != 'pull_request' || (matrix.runtime != 'bun' && matrix.task != 'compat-node22')
@@ -711,7 +711,7 @@ jobs:
 
       - name: Build dist (Windows)
         if: github.event_name != 'push' && matrix.task == 'test'
-        run: pnpm build
+        run: pnpm build:plugin-sdk:test-dist
 
       - name: Run ${{ matrix.task }} (${{ matrix.runtime }})
         run: ${{ matrix.command }}
@@ -736,7 +736,7 @@ jobs:
           install-bun: "false"
 
       - name: Build dist (macOS)
-        run: pnpm build
+        run: pnpm build:plugin-sdk:test-dist
 
       # --- Run all checks sequentially (fast gates first) ---
       - name: TS tests (macOS)
