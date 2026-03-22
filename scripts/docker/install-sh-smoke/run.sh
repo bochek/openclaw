@@ -12,14 +12,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/../install-sh-common/cli-verify.sh"
 
 echo "==> Resolve npm versions"
-LATEST_VERSION="$(npm view "$PACKAGE_NAME" version)"
-if [[ -n "$SMOKE_PREVIOUS_VERSION" ]]; then
+if [[ "$SKIP_PREVIOUS" == "1" ]]; then
+  LATEST_VERSION="$(npm view "$PACKAGE_NAME" version)"
+  PREVIOUS_VERSION="$LATEST_VERSION"
+elif [[ -n "$SMOKE_PREVIOUS_VERSION" ]]; then
+  LATEST_VERSION="$(npm view "$PACKAGE_NAME" version)"
   PREVIOUS_VERSION="$SMOKE_PREVIOUS_VERSION"
 else
   VERSIONS_JSON="$(npm view "$PACKAGE_NAME" versions --json)"
-  PREVIOUS_VERSION="$(VERSIONS_JSON="$VERSIONS_JSON" LATEST_VERSION="$LATEST_VERSION" node - <<'NODE'
+  read -r LATEST_VERSION PREVIOUS_VERSION <<<"$(VERSIONS_JSON="$VERSIONS_JSON" node - <<'NODE'
 const raw = process.env.VERSIONS_JSON || "[]";
-const latest = process.env.LATEST_VERSION || "";
 let versions;
 try {
   versions = JSON.parse(raw);
@@ -32,12 +34,9 @@ if (!Array.isArray(versions)) {
 if (versions.length === 0) {
   process.exit(1);
 }
-const latestIndex = latest ? versions.lastIndexOf(latest) : -1;
-if (latestIndex > 0) {
-  process.stdout.write(String(versions[latestIndex - 1]));
-  process.exit(0);
-}
-process.stdout.write(String(latest || versions[versions.length - 1]));
+const latest = String(versions[versions.length - 1] ?? "");
+const previous = String(versions.length > 1 ? versions[versions.length - 2] : latest);
+process.stdout.write(`${latest} ${previous}`);
 NODE
 )"
 fi

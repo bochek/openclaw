@@ -830,6 +830,9 @@
       "protobufjs",
       "sharp"
     ],
+    "ignoredBuiltDependencies": [
+      "koffi"
+    ],
     "packageExtensions": {
       "@mariozechner/pi-coding-agent": {
         "dependencies": {
