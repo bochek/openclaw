@@ -17,4 +17,5 @@ onlyBuiltDependencies:
   - sharp
 
 ignoredBuiltDependencies:
+  - "@discordjs/opus"
   - koffi
