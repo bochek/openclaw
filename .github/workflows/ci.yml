@@ -727,8 +727,10 @@ jobs:
   # on a single runner. GitHub limits macOS concurrent jobs to 5 per org;
   # running 4 separate jobs per PR (as before) starved the queue. One job
   # per PR allows 5 PRs to run macOS checks simultaneously.
+  # Fan out directly from preflight scope detection so macOS queueing does not
+  # wait behind Linux `check` when native files are touched.
   macos:
-    needs: [docs-scope, changed-scope, check]
+    needs: [docs-scope, changed-scope]
     if: github.event_name == 'pull_request' && needs.docs-scope.outputs.docs_only != 'true' && needs.changed-scope.outputs.run_macos == 'true'
     runs-on: macos-latest
     steps:
