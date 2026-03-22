@@ -53,3 +53,11 @@ export function resolveConfiguredDeferredChannelPluginIds(params: {
     )
     .map((plugin) => plugin.id);
 }
+
+export function resolveGatewayStartupPluginIds(params: {
+  config: OpenClawConfig;
+  workspaceDir?: string;
+  env: NodeJS.ProcessEnv;
+}): string[] {
+  return resolveConfiguredChannelPluginIds(params);
+}
