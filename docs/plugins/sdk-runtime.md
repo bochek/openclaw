@@ -50,10 +50,13 @@ const timeoutMs = api.runtime.agent.resolveAgentTimeoutMs(cfg);
 // Ensure workspace exists
 await api.runtime.agent.ensureAgentWorkspace(cfg);
 
-// Run an embedded Pi agent
+// Run an embedded Pi agent (requires sessionFile + workspaceDir at minimum)
+const agentDir = api.runtime.agent.resolveAgentDir(cfg);
 const result = await api.runtime.agent.runEmbeddedPiAgent({
-  sessionId,
-  prompt,
+  sessionId: "my-plugin:task-1",
+  sessionFile: path.join(agentDir, "sessions", "my-plugin-task-1.jsonl"),
+  workspaceDir: api.runtime.agent.resolveAgentWorkspaceDir(cfg),
+  prompt: "Summarize the latest changes",
 });
 ```
 

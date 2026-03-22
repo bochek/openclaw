@@ -116,8 +116,24 @@ API key auth, and dynamic model resolution.
                   apiKey,
                   api: "openai-completions",
                   models: [
-                    { id: "acme-large", name: "Acme Large" },
-                    { id: "acme-small", name: "Acme Small" },
+                    {
+                      id: "acme-large",
+                      name: "Acme Large",
+                      reasoning: true,
+                      input: ["text", "image"],
+                      cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+                      contextWindow: 200000,
+                      maxTokens: 32768,
+                    },
+                    {
+                      id: "acme-small",
+                      name: "Acme Small",
+                      reasoning: false,
+                      input: ["text"],
+                      cost: { input: 1, output: 5, cacheRead: 0.1, cacheWrite: 1.25 },
+                      contextWindow: 128000,
+                      maxTokens: 8192,
+                    },
                   ],
                 },
               };
@@ -185,13 +201,16 @@ API key auth, and dynamic model resolution.
         For providers that need custom request headers or body modifications:
 
         ```typescript
+        // wrapStreamFn returns a StreamFn derived from ctx.streamFn
         wrapStreamFn: (ctx) => {
-          return (streamFn) => async (params) => {
+          if (!ctx.streamFn) return undefined;
+          const inner = ctx.streamFn;
+          return async (params) => {
             params.headers = {
               ...params.headers,
               "X-Acme-Version": "2",
             };
-            return streamFn(params);
+            return inner(params);
           };
         },
         ```

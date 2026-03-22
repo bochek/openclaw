@@ -219,48 +219,63 @@ For channel-specific config, use the channel config section instead:
 
 ### Building channel config schemas
 
-Use `buildChannelConfigSchema` from `openclaw/plugin-sdk/core` to generate
-account-aware channel config schemas:
+Use `buildChannelConfigSchema` from `openclaw/plugin-sdk/core` to convert a
+Zod schema into the `ChannelConfigSchema` wrapper that OpenClaw validates:
 
 ```typescript
+import { z } from "zod";
 import { buildChannelConfigSchema } from "openclaw/plugin-sdk/core";
 
-const configSchema = buildChannelConfigSchema({
-  channelId: "my-channel",
-  accountProperties: {
-    token: { type: "string" },
-    allowFrom: { type: "array", items: { type: "string" } },
-  },
+const accountSchema = z.object({
+  token: z.string().optional(),
+  allowFrom: z.array(z.string()).optional(),
+  accounts: z.object({}).catchall(z.any()).optional(),
+  defaultAccount: z.string().optional(),
 });
+
+const configSchema = buildChannelConfigSchema(accountSchema);
 ```
 
 ## Setup wizards
 
-Channel plugins can provide interactive setup wizards for onboarding.
-
-The setup wizard is defined on the `ChannelPlugin` object:
+Channel plugins can provide interactive setup wizards for `openclaw onboard`.
+The wizard is a `ChannelSetupWizard` object on the `ChannelPlugin`:
 
 ```typescript
-const myPlugin: ChannelPlugin = {
-  id: "my-channel",
-  // ...
-  setupWizard: {
-    steps: [
-      {
-        id: "token",
-        label: "Bot Token",
-        description: "Enter your bot token",
-        type: "secret",
-      },
-    ],
-    run: async (ctx) => {
-      const token = ctx.answers.token;
-      // Validate and save config
-      return { success: true };
-    },
+import type { ChannelSetupWizard } from "openclaw/plugin-sdk/channel-setup";
+
+const setupWizard: ChannelSetupWizard = {
+  channel: "my-channel",
+  status: {
+    configuredLabel: "Connected",
+    unconfiguredLabel: "Not configured",
+    resolveConfigured: ({ cfg }) => Boolean((cfg.channels as any)?.["my-channel"]?.token),
   },
+  credentials: [
+    {
+      inputKey: "token",
+      providerHint: "my-channel",
+      credentialLabel: "Bot token",
+      preferredEnvVar: "MY_CHANNEL_BOT_TOKEN",
+      envPrompt: "Use MY_CHANNEL_BOT_TOKEN from environment?",
+      keepPrompt: "Keep current token?",
+      inputPrompt: "Enter your bot token:",
+      inspect: ({ cfg, accountId }) => {
+        const token = (cfg.channels as any)?.["my-channel"]?.token;
+        return {
+          accountConfigured: Boolean(token),
+          hasConfiguredValue: Boolean(token),
+        };
+      },
+    },
+  ],
 };
 ```
+
+The `ChannelSetupWizard` type supports `credentials`, `textInputs`,
+`dmPolicy`, `allowFrom`, `groupAccess`, `prepare`, `finalize`, and more.
+See bundled plugins (e.g. `extensions/discord/src/channel.setup.ts`) for
+full examples.
 
 For optional setup surfaces that should only appear in certain contexts, use
 `createOptionalChannelSetupSurface` from `openclaw/plugin-sdk/channel-setup`:
