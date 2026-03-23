@@ -256,6 +256,65 @@ describe("web tools defaults", () => {
 
     expect(tool?.description).toBe("custom runtime tool");
   });
+
+  it("ignores stale runtime-selected providers that are no longer active", async () => {
+    const registry = createEmptyPluginRegistry();
+    registry.webSearchProviders.push({
+      pluginId: "custom-search-live",
+      pluginName: "Custom Search",
+      source: "test",
+      provider: {
+        id: "custom-live",
+        label: "Custom Search",
+        hint: "Custom runtime provider",
+        envVars: ["CUSTOM_SEARCH_API_KEY"],
+        placeholder: "custom-...",
+        signupUrl: "https://example.com/signup",
+        autoDetectOrder: 1,
+        credentialPath: "tools.web.search.custom.apiKey",
+        getCredentialValue: () => "configured",
+        setCredentialValue: () => {},
+        createTool: () => ({
+          description: "live runtime tool",
+          parameters: {},
+          execute: async () => ({ provider: "custom-live" }),
+        }),
+      },
+    });
+    setActivePluginRegistry(registry);
+
+    const mockFetch = installMockFetch(createProviderSuccessPayload("gemini"));
+    const tool = createWebSearchTool({
+      config: {
+        tools: {
+          web: {
+            search: {
+              provider: "gemini",
+              gemini: {
+                apiKey: "gemini-config-test", // pragma: allowlist secret
+              },
+            },
+          },
+        },
+      },
+      sandboxed: true,
+      runtimeWebSearch: {
+        providerConfigured: "custom-missing",
+        providerSource: "configured",
+        selectedProvider: "custom-missing",
+        selectedProviderKeySource: "config",
+        diagnostics: [],
+      },
+    });
+
+    const result = await tool?.execute?.("call-stale-runtime-provider", {
+      query: "runtime stale provider",
+    });
+
+    expect(mockFetch).toHaveBeenCalled();
+    expect(String(mockFetch.mock.calls[0]?.[0])).toContain("generativelanguage.googleapis.com");
+    expect((result?.details as { provider?: string } | undefined)?.provider).toBe("gemini");
+  });
 });
 
 describe("web_search country and language parameters", () => {
