@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 process.stdout.on("error", (error) => {
   if (error?.code === "EPIPE") {
@@ -10,7 +10,9 @@ process.stdout.on("error", (error) => {
   throw error;
 });
 
-const DOCS_DIR = join(process.cwd(), "docs");
+const DOCS_DIR = process.env.OPENCLAW_DOCS_DIR?.trim()
+  ? resolve(process.cwd(), process.env.OPENCLAW_DOCS_DIR.trim())
+  : join(process.cwd(), "docs");
 if (!existsSync(DOCS_DIR)) {
   console.error("docs:list: missing docs directory. Run from repo root.");
   process.exit(1);

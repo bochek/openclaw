@@ -64,6 +64,14 @@ function resolveDeclaredSkillSourcePath(params) {
   return ensurePathInsideRoot(params.repoRoot, normalized);
 }
 
+function resolveDeclaredLocalizationSourcePath(params) {
+  const normalized = normalizeManifestRelativePath(params.rawPath);
+  return {
+    normalized,
+    sourcePath: ensurePathInsideRoot(params.pluginDir, normalized),
+  };
+}
+
 function resolveBundledSkillTarget(rawPath) {
   const normalized = normalizeManifestRelativePath(rawPath);
   if (/^node_modules(?:\/|$)/u.test(normalized)) {
@@ -164,6 +172,51 @@ function copyDeclaredPluginSkillPaths(params) {
   return copiedSkills;
 }
 
+function copyDeclaredPluginLocalizationPaths(params) {
+  const localization =
+    params.manifest &&
+    typeof params.manifest.localization === "object" &&
+    !Array.isArray(params.manifest.localization)
+      ? params.manifest.localization
+      : undefined;
+  if (!localization) {
+    return;
+  }
+
+  const rawPaths = [
+    localization.docs?.root,
+    localization.docs?.navPath,
+    localization.controlUi?.translationPath,
+    localization.runtime?.catalogPath,
+    localization.meta?.glossaryPath,
+    localization.meta?.provenancePath,
+    localization.meta?.sourceManifestPath,
+  ].filter((value) => typeof value === "string" && value.trim().length > 0);
+
+  for (const rawPath of rawPaths) {
+    const { normalized, sourcePath } = resolveDeclaredLocalizationSourcePath({
+      rawPath,
+      pluginDir: params.pluginDir,
+    });
+    if (!fs.existsSync(sourcePath)) {
+      throw new Error(
+        `missing localization resource ${rawPath} for plugin ${params.manifest.id ?? path.basename(params.pluginDir)}`,
+      );
+    }
+    const stat = fs.statSync(sourcePath);
+    const targetPath = ensurePathInsideRoot(params.distPluginDir, normalized);
+    copySkillPathWithRetry({
+      sourcePath,
+      targetPath,
+      copyOptions: {
+        dereference: true,
+        force: true,
+        recursive: stat.isDirectory(),
+      },
+    });
+  }
+}
+
 /**
  * @param {{
  *   cwd?: string;
@@ -214,6 +267,11 @@ export function copyBundledPluginMetadata(params = {}) {
       distPluginDir,
       repoRoot,
     });
+    copyDeclaredPluginLocalizationPaths({
+      manifest,
+      pluginDir,
+      distPluginDir,
+    });
     const bundledManifest = Array.isArray(manifest.skills)
       ? { ...manifest, skills: copiedSkills }
       : manifest;
@@ -226,10 +284,12 @@ export function copyBundledPluginMetadata(params = {}) {
     }
 
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
-    if (packageJson.openclaw && "extensions" in packageJson.openclaw) {
+    if (packageJson.openclaw && typeof packageJson.openclaw === "object") {
       packageJson.openclaw = {
         ...packageJson.openclaw,
-        extensions: rewritePackageExtensions(packageJson.openclaw.extensions),
+        ...(Array.isArray(packageJson.openclaw.extensions)
+          ? { extensions: rewritePackageExtensions(packageJson.openclaw.extensions) }
+          : {}),
         ...(typeof packageJson.openclaw.setupEntry === "string"
           ? { setupEntry: rewritePackageEntry(packageJson.openclaw.setupEntry) }
           : {}),

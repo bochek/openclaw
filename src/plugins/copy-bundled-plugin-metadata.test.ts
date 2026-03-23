@@ -84,6 +84,129 @@ describe("copyBundledPluginMetadata", () => {
     expect(packageJson.openclaw?.extensions).toEqual(["./index.js"]);
   });
 
+  it("copies declared localization resources into the bundled plugin tree", () => {
+    const repoRoot = makeRepoRoot("openclaw-bundled-plugin-localization-");
+    const pluginDir = path.join(repoRoot, "extensions", "de-locale");
+    fs.mkdirSync(path.join(pluginDir, "resources", "docs", "de", "plugins"), {
+      recursive: true,
+    });
+    fs.writeFileSync(path.join(pluginDir, "resources", "docs", "de", "index.md"), "# DE\n", "utf8");
+    fs.writeFileSync(
+      path.join(pluginDir, "resources", "docs", "de", "plugins", "manifest.md"),
+      "# Manifest\n",
+      "utf8",
+    );
+    writeJson(path.join(pluginDir, "resources", "docs-nav.de.json"), {
+      language: "de",
+      tabs: [{ tab: "Überblick", groups: [{ group: "Start", pages: ["de/index"] }] }],
+    });
+    writeJson(path.join(pluginDir, "resources", "provenance.json"), {
+      locale: "de",
+      translationMethod: "human",
+    });
+    writeJson(path.join(pluginDir, "resources", "source-manifest.json"), {
+      locale: "de",
+      sources: [{ translated: "resources/docs/de/index.md" }],
+    });
+    writeJson(path.join(pluginDir, "openclaw.plugin.json"), {
+      id: "de-locale",
+      configSchema: { type: "object" },
+      localization: {
+        locale: "de",
+        docs: {
+          root: "./resources/docs/de",
+          navPath: "./resources/docs-nav.de.json",
+          schemaVersion: "1",
+          coverage: "partial",
+        },
+        meta: {
+          provenancePath: "./resources/provenance.json",
+          sourceManifestPath: "./resources/source-manifest.json",
+        },
+      },
+    });
+    writeJson(path.join(pluginDir, "package.json"), {
+      name: "@openclaw/de-locale",
+      openclaw: { packageMode: "resource-only" },
+    });
+
+    copyBundledPluginMetadataWithEnv({ repoRoot, env: includeOptionalEnv });
+
+    expect(
+      fs.readFileSync(
+        path.join(
+          repoRoot,
+          "dist",
+          "extensions",
+          "de-locale",
+          "resources",
+          "docs",
+          "de",
+          "index.md",
+        ),
+        "utf8",
+      ),
+    ).toContain("# DE");
+    expect(
+      fs.readFileSync(
+        path.join(
+          repoRoot,
+          "dist",
+          "extensions",
+          "de-locale",
+          "resources",
+          "docs",
+          "de",
+          "plugins",
+          "manifest.md",
+        ),
+        "utf8",
+      ),
+    ).toContain("# Manifest");
+    const bundledManifest = JSON.parse(
+      fs.readFileSync(
+        path.join(repoRoot, "dist", "extensions", "de-locale", "openclaw.plugin.json"),
+        "utf8",
+      ),
+    ) as {
+      localization?: {
+        docs?: {
+          root?: string;
+          navPath?: string;
+        };
+        meta?: {
+          provenancePath?: string;
+          sourceManifestPath?: string;
+        };
+      };
+    };
+    expect(bundledManifest.localization).toMatchObject({
+      docs: {
+        root: "./resources/docs/de",
+        navPath: "./resources/docs-nav.de.json",
+      },
+      meta: {
+        provenancePath: "./resources/provenance.json",
+        sourceManifestPath: "./resources/source-manifest.json",
+      },
+    });
+    expect(
+      fs.existsSync(
+        path.join(repoRoot, "dist", "extensions", "de-locale", "resources", "docs-nav.de.json"),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(repoRoot, "dist", "extensions", "de-locale", "resources", "provenance.json"),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(repoRoot, "dist", "extensions", "de-locale", "resources", "source-manifest.json"),
+      ),
+    ).toBe(true);
+  });
+
   it("relocates node_modules-backed skill paths into bundled-skills and rewrites the manifest", () => {
     const repoRoot = makeRepoRoot("openclaw-bundled-plugin-node-modules-");
     const pluginDir = path.join(repoRoot, "extensions", "tlon");

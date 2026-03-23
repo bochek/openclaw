@@ -37,6 +37,26 @@ describe("bundled plugin metadata", () => {
     expect(discord?.manifest.id).toBe("discord");
   });
 
+  it("captures localization metadata for bundled locale plugins", () => {
+    const deLocale = BUNDLED_PLUGIN_METADATA.find((entry) => entry.dirName === "de-locale");
+
+    expect(deLocale?.packageManifest?.packageMode).toBe("resource-only");
+    expect(deLocale?.source).toBeUndefined();
+    expect(deLocale?.manifest.localization).toEqual({
+      locale: "de",
+      docs: {
+        root: "./resources/docs/de",
+        navPath: "./resources/docs-nav.de.json",
+        schemaVersion: "1",
+        coverage: "partial",
+      },
+      meta: {
+        provenancePath: "./resources/provenance.json",
+        sourceManifestPath: "./resources/source-manifest.json",
+      },
+    });
+  });
+
   it("prefers built generated paths when present and falls back to source paths", () => {
     const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-bundled-plugin-metadata-"));
     tempDirs.push(tempRoot);
@@ -57,6 +77,36 @@ describe("bundled plugin metadata", () => {
         built: "plugin/index.js",
       }),
     ).toBe(path.join(tempRoot, "plugin", "index.js"));
+  });
+
+  it("rejects malformed nested localization resources during generation", () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-bundled-plugin-invalid-"));
+    tempDirs.push(tempRoot);
+
+    writeJson(path.join(tempRoot, "extensions", "bad-locale", "package.json"), {
+      name: "@openclaw/bad-locale",
+      version: "0.0.1",
+      openclaw: {
+        packageMode: "resource-only",
+      },
+    });
+    writeJson(path.join(tempRoot, "extensions", "bad-locale", "openclaw.plugin.json"), {
+      id: "bad-locale",
+      configSchema: { type: "object" },
+      localization: {
+        locale: "de",
+        docs: {
+          root: "./resources/docs/de",
+        },
+        meta: {
+          provenancePath: "./resources/provenance.json",
+        },
+      },
+    });
+
+    expect(() => collectBundledPluginMetadata({ repoRoot: tempRoot })).toThrow(
+      /invalid localization/,
+    );
   });
 
   it("supports check mode for stale generated artifacts", () => {

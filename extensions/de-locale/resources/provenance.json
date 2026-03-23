@@ -1,0 +1,7 @@
+{
+  "locale": "de",
+  "scope": ["docs"],
+  "translationMethod": "human-curated-prototype",
+  "notes": "In-repo prototype German locale plugin used to validate locale-pack materialization.",
+  "generatedAt": "2026-03-22"
+}

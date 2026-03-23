@@ -51,13 +51,17 @@ async function discoverWithStateDir(
 function writePluginPackageManifest(params: {
   packageDir: string;
   packageName: string;
-  extensions: string[];
+  extensions?: string[];
+  packageMode?: "runtime-plugin" | "resource-only";
 }) {
   fs.writeFileSync(
     path.join(params.packageDir, "package.json"),
     JSON.stringify({
       name: params.packageName,
-      openclaw: { extensions: params.extensions },
+      openclaw: {
+        ...(params.packageMode ? { packageMode: params.packageMode } : {}),
+        ...(params.extensions ? { extensions: params.extensions } : {}),
+      },
     }),
     "utf-8",
   );
@@ -274,6 +278,40 @@ describe("discoverOpenClawPlugins", () => {
 
     const ids = candidates.map((c) => c.idHint);
     expect(ids).toContain("demo-plugin-dir");
+  });
+
+  it("discovers resource-only locale packages from scanned roots", async () => {
+    const stateDir = makeTempDir();
+    const localeDir = path.join(stateDir, "extensions", "locale-de");
+    mkdirSafe(localeDir);
+
+    writePluginPackageManifest({
+      packageDir: localeDir,
+      packageName: "@openclaw/locale-de",
+      packageMode: "resource-only",
+    });
+    fs.writeFileSync(
+      path.join(localeDir, "openclaw.plugin.json"),
+      JSON.stringify({
+        id: "locale-de",
+        configSchema: { type: "object", additionalProperties: false, properties: {} },
+        localization: {
+          locale: "de",
+          docs: {
+            root: "./resources/docs/de",
+            navPath: "./resources/docs-nav.de.json",
+            schemaVersion: "1",
+          },
+        },
+      }),
+      "utf-8",
+    );
+
+    const { candidates } = await discoverWithStateDir(stateDir, {});
+    const candidate = candidates.find((entry) => entry.idHint === "locale-de");
+
+    expect(candidate).toBeDefined();
+    expect(normalizePathForAssertion(candidate?.source)).toBe(normalizePathForAssertion(localeDir));
   });
 
   it("auto-detects Codex bundles as bundle candidates", async () => {

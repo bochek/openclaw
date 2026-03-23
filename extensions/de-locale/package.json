@@ -1,0 +1,10 @@
+{
+  "name": "@openclaw/de-locale",
+  "version": "2026.3.22",
+  "private": true,
+  "description": "OpenClaw German locale prototype artifact",
+  "type": "module",
+  "openclaw": {
+    "packageMode": "resource-only"
+  }
+}

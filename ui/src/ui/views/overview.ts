@@ -1,5 +1,5 @@
 import { html, nothing } from "lit";
-import { t, i18n, SUPPORTED_LOCALES, type Locale, isSupportedLocale } from "../../i18n/index.ts";
+import { t, i18n, SUPPORTED_LOCALES } from "../../i18n/index.ts";
 import type { EventLogEntry } from "../app-events.ts";
 import { buildExternalLinkRel, EXTERNAL_LINK_TARGET } from "../external-link.ts";
 import { formatRelativeTimestamp, formatDurationHuman } from "../format.ts";
@@ -190,9 +190,10 @@ export function renderOverview(props: OverviewProps) {
     `;
   })();
 
-  const currentLocale = isSupportedLocale(props.settings.locale)
-    ? props.settings.locale
-    : i18n.getLocale();
+  const currentLocale =
+    typeof props.settings.locale === "string" && props.settings.locale.trim().length > 0
+      ? props.settings.locale
+      : i18n.getLocale();
 
   return html`
     <section class="grid">
@@ -290,15 +291,17 @@ export function renderOverview(props: OverviewProps) {
             <select
               .value=${currentLocale}
               @change=${(e: Event) => {
-                const v = (e.target as HTMLSelectElement).value as Locale;
+                const v = (e.target as HTMLSelectElement).value;
                 void i18n.setLocale(v);
                 props.onSettingsChange({ ...props.settings, locale: v });
               }}
             >
               ${SUPPORTED_LOCALES.map((loc) => {
                 const key = loc.replace(/-([a-zA-Z])/g, (_, c) => c.toUpperCase());
+                const translationKey = `languages.${key}`;
+                const label = t(translationKey);
                 return html`<option value=${loc} ?selected=${currentLocale === loc}>
-                  ${t(`languages.${key}`)}
+                  ${label === translationKey ? loc : label}
                 </option>`;
               })}
             </select>

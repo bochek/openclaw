@@ -59,6 +59,7 @@ function makeRegistry(plugins: Array<{ id: string; channels: string[] }>): Plugi
   return {
     plugins: plugins.map((p) => ({
       id: p.id,
+      packageMode: "runtime-plugin" as const,
       channels: p.channels,
       providers: [],
       skills: [],

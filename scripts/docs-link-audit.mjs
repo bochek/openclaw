@@ -5,8 +5,12 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 const ROOT = process.cwd();
-const DOCS_DIR = path.join(ROOT, "docs");
-const DOCS_JSON_PATH = path.join(DOCS_DIR, "docs.json");
+const DOCS_DIR = process.env.OPENCLAW_DOCS_DIR?.trim()
+  ? path.resolve(ROOT, process.env.OPENCLAW_DOCS_DIR.trim())
+  : path.join(ROOT, "docs");
+const DOCS_JSON_PATH = process.env.OPENCLAW_DOCS_JSON_PATH?.trim()
+  ? path.resolve(ROOT, process.env.OPENCLAW_DOCS_JSON_PATH.trim())
+  : path.join(DOCS_DIR, "docs.json");
 
 if (!fs.existsSync(DOCS_DIR) || !fs.statSync(DOCS_DIR).isDirectory()) {
   console.error("docs:check-links: missing docs directory; run from repo root.");

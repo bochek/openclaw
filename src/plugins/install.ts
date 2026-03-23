@@ -9,7 +9,10 @@ import {
 import { type NpmIntegrityDrift, type NpmSpecResolution } from "../infra/install-source-utils.js";
 import { CONFIG_DIR, resolveUserPath } from "../utils.js";
 import {
+  loadPluginManifest,
+  PLUGIN_MANIFEST_FILENAME,
   resolvePackageExtensionEntries,
+  resolvePackageMode,
   type PackageManifest as PluginPackageManifest,
 } from "./manifest.js";
 
@@ -168,6 +171,42 @@ function ensureOpenClawExtensions(params: { manifest: PackageManifest }):
   return {
     ok: true,
     entries: resolved.entries,
+  };
+}
+
+function ensureInstallableOpenClawPackage(params: {
+  manifest: PackageManifest;
+  manifestLoadResult: ReturnType<typeof loadPluginManifest>;
+}):
+  | {
+      ok: true;
+      entries: string[];
+      packageMode: ReturnType<typeof resolvePackageMode>;
+    }
+  | {
+      ok: false;
+      error: string;
+      code?: PluginInstallErrorCode;
+    } {
+  const packageMode = resolvePackageMode(params.manifest);
+  if (packageMode === "resource-only") {
+    if (!params.manifestLoadResult.ok) {
+      return {
+        ok: false,
+        error: `resource-only package requires a valid ${PLUGIN_MANIFEST_FILENAME}: ${params.manifestLoadResult.error}`,
+      };
+    }
+    return { ok: true, entries: [], packageMode };
+  }
+
+  const extensionsResult = ensureOpenClawExtensions({ manifest: params.manifest });
+  if (!extensionsResult.ok) {
+    return extensionsResult;
+  }
+  return {
+    ok: true,
+    entries: extensionsResult.entries,
+    packageMode,
   };
 }
 
@@ -438,6 +477,9 @@ async function detectNativePackageInstallSource(packageDir: string): Promise<boo
 
   try {
     const manifest = await runtime.readJsonFile<PackageManifest>(manifestPath);
+    if (resolvePackageMode(manifest) === "resource-only") {
+      return loadPluginManifest(packageDir).ok;
+    }
     return ensureOpenClawExtensions({ manifest }).ok;
   } catch {
     return false;
@@ -467,17 +509,19 @@ async function installPluginFromPackageDir(
     return { ok: false, error: `invalid package.json: ${String(err)}` };
   }
 
-  const extensionsResult = ensureOpenClawExtensions({
+  const ocManifestResult = loadPluginManifest(params.packageDir);
+  const installShape = ensureInstallableOpenClawPackage({
     manifest,
+    manifestLoadResult: ocManifestResult,
   });
-  if (!extensionsResult.ok) {
+  if (!installShape.ok) {
     return {
       ok: false,
-      error: extensionsResult.error,
-      code: extensionsResult.code,
+      error: installShape.error,
+      ...(installShape.code ? { code: installShape.code } : {}),
     };
   }
-  const extensions = extensionsResult.entries;
+  const extensions = installShape.entries;
 
   const pkgName = typeof manifest.name === "string" ? manifest.name.trim() : "";
   const npmPluginId = pkgName || "plugin";
@@ -486,7 +530,6 @@ async function installPluginFromPackageDir(
   // This avoids a latent key-mismatch bug: if the manifest id (e.g. "memory-cognee")
   // differs from the npm package name (e.g. "cognee-openclaw"), the plugin registry
   // uses the manifest id as the authoritative key, so the config entry must match it.
-  const ocManifestResult = runtime.loadPluginManifest(params.packageDir);
   const manifestPluginId =
     ocManifestResult.ok && ocManifestResult.manifest.id
       ? ocManifestResult.manifest.id.trim()

@@ -24,6 +24,7 @@ function buildRegistry(params: { acpxRoot: string; helperRoot: string }): Plugin
       {
         id: "acpx",
         name: "ACPX Runtime",
+        packageMode: "runtime-plugin",
         channels: [],
         providers: [],
         skills: ["./skills"],
@@ -36,6 +37,7 @@ function buildRegistry(params: { acpxRoot: string; helperRoot: string }): Plugin
       {
         id: "helper",
         name: "Helper",
+        packageMode: "runtime-plugin",
         channels: [],
         providers: [],
         skills: ["./skills"],
@@ -61,6 +63,7 @@ function createSinglePluginRegistry(params: {
         id: "helper",
         name: "Helper",
         format: params.format,
+        packageMode: "runtime-plugin",
         channels: [],
         providers: [],
         skills: params.skills,

@@ -20,7 +20,6 @@ type PersistedUiSettings = Omit<UiSettings, "token" | "sessionKey" | "lastActive
   sessionsByGateway?: Record<string, ScopedSessionSelection>;
 };
 
-import { isSupportedLocale } from "../i18n/index.ts";
 import { getSafeLocalStorage } from "../local-storage.ts";
 import { inferBasePathFromPathname, normalizeBasePath } from "./navigation.ts";
 import { parseThemeSelection, type ThemeMode, type ThemeName } from "./theme.ts";
@@ -255,7 +254,10 @@ export function loadSettings(): UiSettings {
         parsed.borderRadius <= 100
           ? parsed.borderRadius
           : defaults.borderRadius,
-      locale: isSupportedLocale(parsed.locale) ? parsed.locale : undefined,
+      locale:
+        typeof parsed.locale === "string" && parsed.locale.trim().length > 0
+          ? parsed.locale.trim()
+          : undefined,
     };
     if ("token" in parsed) {
       persistSettings(settings);

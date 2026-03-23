@@ -469,6 +469,39 @@ export const GENERATED_BUNDLED_PLUGIN_METADATA = [
     },
   },
   {
+    dirName: "de-locale",
+    idHint: "de-locale",
+    packageName: "@openclaw/de-locale",
+    packageVersion: "2026.3.22",
+    packageDescription: "OpenClaw German locale prototype artifact",
+    packageManifest: {
+      packageMode: "resource-only",
+    },
+    manifest: {
+      id: "de-locale",
+      configSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {},
+      },
+      localization: {
+        locale: "de",
+        docs: {
+          root: "./resources/docs/de",
+          navPath: "./resources/docs-nav.de.json",
+          schemaVersion: "1",
+          coverage: "partial",
+        },
+        meta: {
+          provenancePath: "./resources/provenance.json",
+          sourceManifestPath: "./resources/source-manifest.json",
+        },
+      },
+      name: "German Locale Prototype",
+      description: "Prototype German locale artifact for docs materialization.",
+    },
+  },
+  {
     dirName: "deepgram",
     idHint: "deepgram",
     source: {

@@ -3,7 +3,11 @@ import type { IncomingMessage } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { CONTROL_UI_BOOTSTRAP_CONFIG_PATH } from "./control-ui-contract.js";
+import type { PluginCandidate } from "../plugins/discovery.js";
+import {
+  CONTROL_UI_BOOTSTRAP_CONFIG_PATH,
+  CONTROL_UI_LOCALE_PREFIX,
+} from "./control-ui-contract.js";
 import { handleControlUiAvatarRequest, handleControlUiHttpRequest } from "./control-ui.js";
 import { makeMockHttpResponse } from "./test-http-response.js";
 
@@ -27,7 +31,58 @@ describe("handleControlUiHttpRequest", () => {
       assistantName: string;
       assistantAvatar: string;
       assistantAgentId: string;
+      locales?: Array<{ locale: string; url: string }>;
     };
+  }
+
+  async function createLocalePluginFixture(params: { locale: string; controlUiPayload: unknown }) {
+    const rootDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), `openclaw-ui-locale-${params.locale}-`),
+    );
+    await fs.mkdir(path.join(rootDir, "resources", "control-ui"), { recursive: true });
+    await fs.writeFile(
+      path.join(rootDir, "package.json"),
+      JSON.stringify(
+        {
+          name: `@openclaw/locale-${params.locale}`,
+          version: "0.0.1",
+          openclaw: { packageMode: "resource-only" },
+        },
+        null,
+        2,
+      ),
+    );
+    await fs.writeFile(
+      path.join(rootDir, "openclaw.plugin.json"),
+      JSON.stringify(
+        {
+          id: `locale-${params.locale}`,
+          configSchema: { type: "object", additionalProperties: false, properties: {} },
+          localization: {
+            locale: params.locale,
+            controlUi: {
+              translationPath: `./resources/control-ui/${params.locale}.json`,
+              schemaVersion: "1",
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    await fs.writeFile(
+      path.join(rootDir, "resources", "control-ui", `${params.locale}.json`),
+      JSON.stringify(params.controlUiPayload),
+    );
+    const candidate: PluginCandidate = {
+      idHint: `locale-${params.locale}`,
+      source: rootDir,
+      rootDir,
+      origin: "global",
+      packageDir: rootDir,
+      packageManifest: { packageMode: "resource-only" },
+    };
+    return { rootDir, candidate };
   }
 
   function expectNotFoundResponse(params: {
@@ -201,6 +256,133 @@ describe("handleControlUiHttpRequest", () => {
         expect(parsed.assistantName).toBe("Ops");
         expect(parsed.assistantAvatar).toBe("/openclaw/avatar/main");
         expect(parsed.assistantAgentId).toBe("main");
+      },
+    });
+  });
+
+  it("exposes locale payload URLs by locale rather than plugin id", async () => {
+    await withControlUiRoot({
+      fn: async (tmp) => {
+        const locale = await createLocalePluginFixture({
+          locale: "de",
+          controlUiPayload: { common: { connect: "Verbinden" } },
+        });
+        try {
+          const { res, end } = makeMockHttpResponse();
+          const handled = handleControlUiHttpRequest(
+            { url: CONTROL_UI_BOOTSTRAP_CONFIG_PATH, method: "GET" } as IncomingMessage,
+            res,
+            {
+              root: { kind: "resolved", path: tmp },
+              pluginCandidates: [locale.candidate],
+            },
+          );
+          expect(handled).toBe(true);
+          const parsed = parseBootstrapPayload(end);
+          expect(parsed.locales).toEqual([
+            {
+              locale: "de",
+              url: `${CONTROL_UI_LOCALE_PREFIX}/de/control-ui.json`,
+            },
+          ]);
+        } finally {
+          await fs.rm(locale.rootDir, { recursive: true, force: true });
+        }
+      },
+    });
+  });
+
+  it("serves locale payloads by locale path", async () => {
+    await withControlUiRoot({
+      fn: async (tmp) => {
+        const locale = await createLocalePluginFixture({
+          locale: "de",
+          controlUiPayload: { common: { connect: "Verbinden" } },
+        });
+        try {
+          const { res, end } = makeMockHttpResponse();
+          const handled = handleControlUiHttpRequest(
+            {
+              url: `${CONTROL_UI_LOCALE_PREFIX}/de/control-ui.json`,
+              method: "GET",
+            } as IncomingMessage,
+            res,
+            {
+              root: { kind: "resolved", path: tmp },
+              pluginCandidates: [locale.candidate],
+            },
+          );
+          expect(handled).toBe(true);
+          expect(res.statusCode).toBe(200);
+          expect(String(end.mock.calls[0]?.[0] ?? "")).toContain("Verbinden");
+        } finally {
+          await fs.rm(locale.rootDir, { recursive: true, force: true });
+        }
+      },
+    });
+  });
+
+  it("includes workspace-installed locale payloads in bootstrap config", async () => {
+    await withControlUiRoot({
+      fn: async (tmp) => {
+        const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-ui-workspace-"));
+        const locale = await createLocalePluginFixture({
+          locale: "de",
+          controlUiPayload: { common: { connect: "Verbinden" } },
+        });
+        const workspacePluginDir = path.join(workspaceDir, ".openclaw", "extensions", "locale-de");
+        try {
+          await fs.mkdir(path.dirname(workspacePluginDir), { recursive: true });
+          await fs.rename(locale.rootDir, workspacePluginDir);
+
+          const { res, end } = makeMockHttpResponse();
+          const handled = handleControlUiHttpRequest(
+            { url: CONTROL_UI_BOOTSTRAP_CONFIG_PATH, method: "GET" } as IncomingMessage,
+            res,
+            {
+              root: { kind: "resolved", path: tmp },
+              config: {
+                agents: {
+                  defaults: {
+                    workspace: workspaceDir,
+                  },
+                },
+              },
+            },
+          );
+
+          expect(handled).toBe(true);
+          expect(parseBootstrapPayload(end).locales).toEqual([
+            {
+              locale: "de",
+              url: `${CONTROL_UI_LOCALE_PREFIX}/de/control-ui.json`,
+            },
+          ]);
+
+          const localeResponse = makeMockHttpResponse();
+          const localeHandled = handleControlUiHttpRequest(
+            {
+              url: `${CONTROL_UI_LOCALE_PREFIX}/de/control-ui.json`,
+              method: "GET",
+            } as IncomingMessage,
+            localeResponse.res,
+            {
+              root: { kind: "resolved", path: tmp },
+              config: {
+                agents: {
+                  defaults: {
+                    workspace: workspaceDir,
+                  },
+                },
+              },
+            },
+          );
+          expect(localeHandled).toBe(true);
+          expect(localeResponse.res.statusCode).toBe(200);
+          expect(String(localeResponse.end.mock.calls[0]?.[0] ?? "")).toContain("Verbinden");
+        } finally {
+          await fs.rm(workspaceDir, { recursive: true, force: true });
+        }
       },
     });
   });

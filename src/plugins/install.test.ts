@@ -22,6 +22,7 @@ import {
   PLUGIN_INSTALL_ERROR_CODE,
   resolvePluginInstallDir,
 } from "./install.js";
+import { loadPluginManifest } from "./manifest.js";
 
 vi.mock("../process/exec.js", () => ({
   runCommandWithTimeout: vi.fn(),
@@ -643,6 +644,98 @@ describe("installPluginFromArchive", () => {
       return;
     }
     expect.unreachable("expected install to fail without openclaw.extensions");
+  });
+
+  it("installs locale plugin packages with docs resources via the standard plugin flow", async () => {
+    const { pluginDir, extensionsDir } = setupPluginInstallDirs();
+
+    fs.writeFileSync(
+      path.join(pluginDir, "package.json"),
+      JSON.stringify({
+        name: "@openclaw/locale-de",
+        version: "0.0.1",
+        openclaw: { packageMode: "resource-only" },
+      }),
+      "utf-8",
+    );
+    fs.mkdirSync(path.join(pluginDir, "resources", "docs", "de"), { recursive: true });
+    fs.mkdirSync(path.join(pluginDir, "resources", "control-ui"), { recursive: true });
+    fs.writeFileSync(
+      path.join(pluginDir, "resources", "docs", "de", "index.md"),
+      '---\nsummary: "Deutsch"\ntitle: "Deutsch"\n---\n',
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(pluginDir, "resources", "docs-nav.de.json"),
+      JSON.stringify({
+        language: "de",
+        tabs: [{ tab: "Erste Schritte", groups: [{ group: "Überblick", pages: ["de/index"] }] }],
+      }),
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(pluginDir, "resources", "control-ui", "de.json"),
+      JSON.stringify({ common: { connect: "Verbinden" } }),
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(pluginDir, "openclaw.plugin.json"),
+      JSON.stringify({
+        id: "locale-de",
+        configSchema: { type: "object", additionalProperties: false, properties: {} },
+        localization: {
+          locale: "de",
+          docs: {
+            root: "./resources/docs/de",
+            navPath: "./resources/docs-nav.de.json",
+            schemaVersion: "1",
+          },
+          controlUi: {
+            translationPath: "./resources/control-ui/de.json",
+            schemaVersion: "1",
+          },
+          meta: {
+            provenancePath: "./resources/provenance.json",
+          },
+        },
+      }),
+      "utf-8",
+    );
+    fs.writeFileSync(
+      path.join(pluginDir, "resources", "provenance.json"),
+      JSON.stringify({ translationMethod: "human" }),
+      "utf-8",
+    );
+
+    const result = await installPluginFromDir({
+      dirPath: pluginDir,
+      extensionsDir,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const installedManifest = loadPluginManifest(result.targetDir);
+    expect(installedManifest.ok).toBe(true);
+    if (!installedManifest.ok) {
+      return;
+    }
+    expect(installedManifest.manifest.localization).toEqual({
+      locale: "de",
+      docs: {
+        root: "./resources/docs/de",
+        navPath: "./resources/docs-nav.de.json",
+        schemaVersion: "1",
+      },
+      controlUi: {
+        translationPath: "./resources/control-ui/de.json",
+        schemaVersion: "1",
+      },
+      meta: {
+        provenancePath: "./resources/provenance.json",
+      },
+    });
   });
 
   it("warns when plugin contains dangerous code patterns", async () => {

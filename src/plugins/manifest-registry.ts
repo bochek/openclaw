@@ -6,7 +6,12 @@ import { resolveRuntimeServiceVersion } from "../version.js";
 import { loadBundleManifest } from "./bundle-manifest.js";
 import { normalizePluginsConfig, type NormalizedPluginsConfig } from "./config-state.js";
 import { discoverOpenClawPlugins, type PluginCandidate } from "./discovery.js";
-import { loadPluginManifest, type PluginManifest } from "./manifest.js";
+import {
+  loadPluginManifest,
+  resolvePackageMode,
+  type OpenClawPackageMode,
+  type PluginManifest,
+} from "./manifest.js";
 import { checkMinHostVersion } from "./min-host-version.js";
 import { isPathInside, safeRealpathSync } from "./path-safety.js";
 import { resolvePluginCacheInputs } from "./roots.js";
@@ -43,11 +48,13 @@ export type PluginManifestRecord = {
   bundleFormat?: PluginBundleFormat;
   bundleCapabilities?: string[];
   kind?: PluginKind;
+  packageMode: OpenClawPackageMode;
   channels: string[];
   providers: string[];
   providerAuthEnvVars?: Record<string, string[]>;
   providerAuthChoices?: PluginManifest["providerAuthChoices"];
   skills: string[];
+  localization?: PluginManifest["localization"];
   settingsFiles?: string[];
   hooks: string[];
   origin: PluginOrigin;
@@ -168,11 +175,13 @@ function buildRecord(params: {
     format: params.candidate.format ?? "openclaw",
     bundleFormat: params.candidate.bundleFormat,
     kind: params.manifest.kind,
+    packageMode: resolvePackageMode(params.candidate.packageManifest),
     channels: params.manifest.channels ?? [],
     providers: params.manifest.providers ?? [],
     providerAuthEnvVars: params.manifest.providerAuthEnvVars,
     providerAuthChoices: params.manifest.providerAuthChoices,
     skills: params.manifest.skills ?? [],
+    localization: params.manifest.localization,
     settingsFiles: [],
     hooks: [],
     origin: params.candidate.origin,
@@ -222,6 +231,7 @@ function buildBundleRecord(params: {
     format: "bundle",
     bundleFormat: params.candidate.bundleFormat,
     bundleCapabilities: params.manifest.capabilities,
+    packageMode: "runtime-plugin",
     channels: [],
     providers: [],
     skills: params.manifest.skills ?? [],

@@ -1,0 +1,23 @@
+{
+  "language": "de",
+  "tabs": [
+    {
+      "tab": "Erste Schritte",
+      "groups": [
+        {
+          "group": "Überblick",
+          "pages": ["de/index"]
+        }
+      ]
+    },
+    {
+      "tab": "Plugins",
+      "groups": [
+        {
+          "group": "Referenz",
+          "pages": ["de/plugins/manifest"]
+        }
+      ]
+    }
+  ]
+}

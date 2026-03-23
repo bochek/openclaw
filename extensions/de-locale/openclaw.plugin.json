@@ -1,0 +1,23 @@
+{
+  "id": "de-locale",
+  "name": "German Locale Prototype",
+  "description": "Prototype German locale artifact for docs materialization.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "localization": {
+    "locale": "de",
+    "docs": {
+      "root": "./resources/docs/de",
+      "navPath": "./resources/docs-nav.de.json",
+      "schemaVersion": "1",
+      "coverage": "partial"
+    },
+    "meta": {
+      "provenancePath": "./resources/provenance.json",
+      "sourceManifestPath": "./resources/source-manifest.json"
+    }
+  }
+}

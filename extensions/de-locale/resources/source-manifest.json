@@ -1,0 +1,15 @@
+{
+  "locale": "de",
+  "sources": [
+    {
+      "source": "SPEC.md",
+      "translated": "resources/docs/de/index.md",
+      "kind": "prototype"
+    },
+    {
+      "source": "docs/plugins/manifest.md",
+      "translated": "resources/docs/de/plugins/manifest.md",
+      "kind": "prototype"
+    }
+  ]
+}

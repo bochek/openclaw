@@ -11,7 +11,7 @@ type GeneratedBundledPluginPathPair = {
 export type GeneratedBundledPluginMetadata = {
   dirName: string;
   idHint: string;
-  source: GeneratedBundledPluginPathPair;
+  source?: GeneratedBundledPluginPathPair;
   setupSource?: GeneratedBundledPluginPathPair;
   packageName?: string;
   packageVersion?: string;

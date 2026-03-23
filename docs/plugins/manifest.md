@@ -128,10 +128,57 @@ Those belong in your plugin code and `package.json`.
 | `providerAuthEnvVars` | No       | `Record<string, string[]>`       | Cheap provider-auth env metadata that OpenClaw can inspect without loading plugin code.                                      |
 | `providerAuthChoices` | No       | `object[]`                       | Cheap auth-choice metadata for onboarding pickers, preferred-provider resolution, and simple CLI flag wiring.                |
 | `skills`              | No       | `string[]`                       | Skill directories to load, relative to the plugin root.                                                                      |
+| `localization`        | No       | `object`                         | Experimental locale-pack metadata for docs or UI translation resources shipped with the plugin.                              |
 | `name`                | No       | `string`                         | Human-readable plugin name.                                                                                                  |
 | `description`         | No       | `string`                         | Short summary shown in plugin surfaces.                                                                                      |
 | `version`             | No       | `string`                         | Informational plugin version.                                                                                                |
 | `uiHints`             | No       | `Record<string, object>`         | UI labels, placeholders, and sensitivity hints for config fields.                                                            |
+
+## localization reference
+
+`localization` is an experimental metadata block for locale artifacts.
+It declares locale resources without implying runtime execution.
+
+```json
+{
+  "localization": {
+    "locale": "de",
+    "docs": {
+      "root": "./resources/docs/de",
+      "navPath": "./resources/docs-nav.de.json",
+      "schemaVersion": "1",
+      "coverage": "partial"
+    },
+    "meta": {
+      "provenancePath": "./resources/provenance.json"
+    }
+  }
+}
+```
+
+Current supported fields:
+
+| Field                              | Required | Type     | What it means                                                                                    |
+| ---------------------------------- | -------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `locale`                           | Yes      | `string` | Locale id, for example `de` or `zh-CN`. Must be a safe locale identifier, not a filesystem path. |
+| `docs.root`                        | No       | `string` | Root directory for localized docs pages.                                                         |
+| `docs.navPath`                     | No       | `string` | JSON file that contributes the locale's Mintlify language tree.                                  |
+| `docs.schemaVersion`               | No       | `string` | Docs resource schema version.                                                                    |
+| `docs.coverage`                    | No       | `string` | Optional docs coverage metadata (`full` or `partial`).                                           |
+| `controlUi.translationPath`        | No       | `string` | JSON translation payload for gateway-served Control UI locale loading.                           |
+| `controlUi.schemaVersion`          | No       | `string` | Control UI resource schema version.                                                              |
+| `controlUi.coverage`               | No       | `string` | Optional Control UI coverage metadata (`full` or `partial`).                                     |
+| `runtime.catalogPath`              | No       | `string` | JSON runtime catalog for future server-side string localization.                                 |
+| `runtime.schemaVersion`            | No       | `string` | Runtime resource schema version.                                                                 |
+| `runtime.coverage`                 | No       | `string` | Optional runtime coverage metadata (`full` or `partial`).                                        |
+| `meta.glossaryPath`                | No       | `string` | Optional locale glossary metadata.                                                               |
+| `meta.provenancePath`              | No       | `string` | Optional provenance or attribution metadata.                                                     |
+| `meta.sourceManifestPath`          | No       | `string` | Optional mapping file that describes source-to-translated resource relationships.                |
+| `compatibility.minOpenClawVersion` | No       | `string` | Optional host compatibility floor.                                                               |
+
+This metadata does not register runtime behavior by itself. It only tells
+OpenClaw where locale resources live so locale-aware build-time or runtime
+flows can consume them safely.
 
 ## providerAuthChoices reference
 
@@ -186,10 +233,10 @@ Each field hint can include:
 
 The two files serve different jobs:
 
-| File                   | Use it for                                                                                                         |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `openclaw.plugin.json` | Discovery, config validation, auth-choice metadata, and UI hints that must exist before plugin code runs           |
-| `package.json`         | npm metadata, dependency installation, and the `openclaw` block used for entrypoints and setup or catalog metadata |
+| File                   | Use it for                                                                                                                                                                |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `openclaw.plugin.json` | Discovery, config validation, auth-choice metadata, locale resource metadata, and UI hints that must exist before plugin code runs                                        |
+| `package.json`         | npm metadata, dependency installation, and the `openclaw` block used for execution mode (`runtime-plugin` vs `resource-only`), entrypoints, and setup or catalog metadata |
 
 If you are unsure where a piece of metadata belongs, use this rule:
 

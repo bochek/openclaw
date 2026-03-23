@@ -8,6 +8,51 @@ import type { PluginConfigUiHint, PluginKind } from "./types.js";
 export const PLUGIN_MANIFEST_FILENAME = "openclaw.plugin.json";
 export const PLUGIN_MANIFEST_FILENAMES = [PLUGIN_MANIFEST_FILENAME] as const;
 
+export type PluginLocalizationCoverage = "full" | "partial";
+export type OpenClawPackageMode = "runtime-plugin" | "resource-only";
+
+const LOCALE_ID_RE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
+
+export function isValidLocaleId(value: string): boolean {
+  return LOCALE_ID_RE.test(value);
+}
+
+export type PluginLocalizationDocsResource = {
+  root: string;
+  navPath: string;
+  schemaVersion?: string;
+  coverage?: PluginLocalizationCoverage;
+};
+
+export type PluginLocalizationControlUiResource = {
+  translationPath: string;
+  schemaVersion?: string;
+  coverage?: PluginLocalizationCoverage;
+};
+
+export type PluginLocalizationRuntimeResource = {
+  catalogPath: string;
+  schemaVersion?: string;
+  coverage?: PluginLocalizationCoverage;
+};
+
+export type PluginLocalizationMetaResource = {
+  glossaryPath?: string;
+  provenancePath?: string;
+  sourceManifestPath?: string;
+};
+
+export type PluginLocalizationManifest = {
+  locale: string;
+  docs?: PluginLocalizationDocsResource;
+  controlUi?: PluginLocalizationControlUiResource;
+  runtime?: PluginLocalizationRuntimeResource;
+  meta?: PluginLocalizationMetaResource;
+  compatibility?: {
+    minOpenClawVersion?: string;
+  };
+};
+
 export type PluginManifest = {
   id: string;
   configSchema: Record<string, unknown>;
@@ -23,6 +68,7 @@ export type PluginManifest = {
    */
   providerAuthChoices?: PluginManifestProviderAuthChoice[];
   skills?: string[];
+  localization?: PluginLocalizationManifest;
   name?: string;
   description?: string;
   version?: string;
@@ -137,6 +183,230 @@ function normalizeProviderAuthChoices(
   return normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizeOptionalString(value: unknown): string | undefined {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed ? trimmed : undefined;
+}
+
+type LocalizationParseResult<T> =
+  | { ok: true; present: false }
+  | { ok: true; present: true; value: T }
+  | { ok: false; error: string };
+
+function parseLocalizationCoverage(
+  value: unknown,
+  fieldLabel: string,
+): LocalizationParseResult<PluginLocalizationCoverage> {
+  if (value === undefined) {
+    return { ok: true, present: false };
+  }
+  if (value === "full" || value === "partial") {
+    return { ok: true, present: true, value };
+  }
+  return { ok: false, error: `${fieldLabel} must be "full" or "partial"` };
+}
+
+function parseLocalizationDocsResource(
+  value: unknown,
+): LocalizationParseResult<PluginLocalizationDocsResource> {
+  if (value === undefined) {
+    return { ok: true, present: false };
+  }
+  if (!isRecord(value)) {
+    return { ok: false, error: "localization.docs must be an object" };
+  }
+  const root = normalizeOptionalString(value.root);
+  if (!root) {
+    return { ok: false, error: "localization.docs.root is required" };
+  }
+  const navPath = normalizeOptionalString(value.navPath);
+  if (!navPath) {
+    return { ok: false, error: "localization.docs.navPath is required" };
+  }
+  const coverage = parseLocalizationCoverage(value.coverage, "localization.docs.coverage");
+  if (!coverage.ok) {
+    return coverage;
+  }
+  const schemaVersion = normalizeOptionalString(value.schemaVersion);
+  if (value.schemaVersion !== undefined && !schemaVersion) {
+    return { ok: false, error: "localization.docs.schemaVersion must be a non-empty string" };
+  }
+  return {
+    ok: true,
+    present: true,
+    value: {
+      root,
+      navPath,
+      ...(schemaVersion ? { schemaVersion } : {}),
+      ...(coverage.present ? { coverage: coverage.value } : {}),
+    },
+  };
+}
+
+function parseLocalizationControlUiResource(
+  value: unknown,
+): LocalizationParseResult<PluginLocalizationControlUiResource> {
+  if (value === undefined) {
+    return { ok: true, present: false };
+  }
+  if (!isRecord(value)) {
+    return { ok: false, error: "localization.controlUi must be an object" };
+  }
+  const translationPath = normalizeOptionalString(value.translationPath);
+  if (!translationPath) {
+    return { ok: false, error: "localization.controlUi.translationPath is required" };
+  }
+  const coverage = parseLocalizationCoverage(value.coverage, "localization.controlUi.coverage");
+  if (!coverage.ok) {
+    return coverage;
+  }
+  const schemaVersion = normalizeOptionalString(value.schemaVersion);
+  if (value.schemaVersion !== undefined && !schemaVersion) {
+    return {
+      ok: false,
+      error: "localization.controlUi.schemaVersion must be a non-empty string",
+    };
+  }
+  return {
+    ok: true,
+    present: true,
+    value: {
+      translationPath,
+      ...(schemaVersion ? { schemaVersion } : {}),
+      ...(coverage.present ? { coverage: coverage.value } : {}),
+    },
+  };
+}
+
+function parseLocalizationRuntimeResource(
+  value: unknown,
+): LocalizationParseResult<PluginLocalizationRuntimeResource> {
+  if (value === undefined) {
+    return { ok: true, present: false };
+  }
+  if (!isRecord(value)) {
+    return { ok: false, error: "localization.runtime must be an object" };
+  }
+  const catalogPath = normalizeOptionalString(value.catalogPath);
+  if (!catalogPath) {
+    return { ok: false, error: "localization.runtime.catalogPath is required" };
+  }
+  const coverage = parseLocalizationCoverage(value.coverage, "localization.runtime.coverage");
+  if (!coverage.ok) {
+    return coverage;
+  }
+  const schemaVersion = normalizeOptionalString(value.schemaVersion);
+  if (value.schemaVersion !== undefined && !schemaVersion) {
+    return { ok: false, error: "localization.runtime.schemaVersion must be a non-empty string" };
+  }
+  return {
+    ok: true,
+    present: true,
+    value: {
+      catalogPath,
+      ...(schemaVersion ? { schemaVersion } : {}),
+      ...(coverage.present ? { coverage: coverage.value } : {}),
+    },
+  };
+}
+
+function parseLocalizationMetaResource(
+  value: unknown,
+): LocalizationParseResult<PluginLocalizationMetaResource> {
+  if (value === undefined) {
+    return { ok: true, present: false };
+  }
+  if (!isRecord(value)) {
+    return { ok: false, error: "localization.meta must be an object" };
+  }
+  const glossaryPath = normalizeOptionalString(value.glossaryPath);
+  if (value.glossaryPath !== undefined && !glossaryPath) {
+    return { ok: false, error: "localization.meta.glossaryPath must be a non-empty string" };
+  }
+  const provenancePath = normalizeOptionalString(value.provenancePath);
+  if (value.provenancePath !== undefined && !provenancePath) {
+    return { ok: false, error: "localization.meta.provenancePath must be a non-empty string" };
+  }
+  const sourceManifestPath = normalizeOptionalString(value.sourceManifestPath);
+  if (value.sourceManifestPath !== undefined && !sourceManifestPath) {
+    return {
+      ok: false,
+      error: "localization.meta.sourceManifestPath must be a non-empty string",
+    };
+  }
+  if (!glossaryPath && !provenancePath && !sourceManifestPath) {
+    return {
+      ok: false,
+      error: "localization.meta must define at least one metadata path",
+    };
+  }
+  return {
+    ok: true,
+    present: true,
+    value: {
+      ...(glossaryPath ? { glossaryPath } : {}),
+      ...(provenancePath ? { provenancePath } : {}),
+      ...(sourceManifestPath ? { sourceManifestPath } : {}),
+    },
+  };
+}
+
+function normalizeLocalizationManifest(value: unknown): PluginLocalizationManifest | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const locale = typeof value.locale === "string" ? value.locale.trim() : "";
+  if (!locale || !isValidLocaleId(locale)) {
+    return undefined;
+  }
+
+  const docs = parseLocalizationDocsResource(value.docs);
+  if (!docs.ok) {
+    return undefined;
+  }
+  const controlUi = parseLocalizationControlUiResource(value.controlUi);
+  if (!controlUi.ok) {
+    return undefined;
+  }
+  const runtime = parseLocalizationRuntimeResource(value.runtime);
+  if (!runtime.ok) {
+    return undefined;
+  }
+  const meta = parseLocalizationMetaResource(value.meta);
+  if (!meta.ok) {
+    return undefined;
+  }
+  if (!docs.present && !controlUi.present && !runtime.present && !meta.present) {
+    return undefined;
+  }
+
+  const compatibility = (() => {
+    if (value.compatibility === undefined) {
+      return undefined;
+    }
+    if (!isRecord(value.compatibility)) {
+      return null;
+    }
+    const minOpenClawVersion = normalizeOptionalString(value.compatibility.minOpenClawVersion);
+    if (value.compatibility.minOpenClawVersion !== undefined && !minOpenClawVersion) {
+      return null;
+    }
+    return minOpenClawVersion ? { minOpenClawVersion } : undefined;
+  })();
+  if (compatibility === null) {
+    return undefined;
+  }
+
+  return {
+    locale,
+    ...(docs.present ? { docs: docs.value } : {}),
+    ...(controlUi.present ? { controlUi: controlUi.value } : {}),
+    ...(runtime.present ? { runtime: runtime.value } : {}),
+    ...(meta.present ? { meta: meta.value } : {}),
+    ...(compatibility ? { compatibility } : {}),
+  };
+}
+
 export function resolvePluginManifestPath(rootDir: string): string {
   for (const filename of PLUGIN_MANIFEST_FILENAMES) {
     const candidate = path.join(rootDir, filename);
@@ -206,6 +476,14 @@ export function loadPluginManifest(
   const providerAuthEnvVars = normalizeStringListRecord(raw.providerAuthEnvVars);
   const providerAuthChoices = normalizeProviderAuthChoices(raw.providerAuthChoices);
   const skills = normalizeStringList(raw.skills);
+  const localization = normalizeLocalizationManifest(raw.localization);
+  if (raw.localization !== undefined && !localization) {
+    return {
+      ok: false,
+      error: "plugin manifest localization block is invalid",
+      manifestPath,
+    };
+  }
 
   let uiHints: Record<string, PluginConfigUiHint> | undefined;
   if (isRecord(raw.uiHints)) {
@@ -224,6 +502,7 @@ export function loadPluginManifest(
       providerAuthEnvVars,
       providerAuthChoices,
       skills,
+      localization,
       name,
       description,
       version,
@@ -271,6 +550,7 @@ export type OpenClawPackageStartup = {
 };
 
 export type OpenClawPackageManifest = {
+  packageMode?: OpenClawPackageMode;
   extensions?: string[];
   setupEntry?: string;
   channel?: PluginPackageChannel;
@@ -305,6 +585,38 @@ export function getPackageManifestMetadata(
     return undefined;
   }
   return manifest[MANIFEST_KEY];
+}
+
+function isOpenClawPackageManifest(value: unknown): value is OpenClawPackageManifest {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    record.packageMode === "runtime-plugin" ||
+    record.packageMode === "resource-only" ||
+    "extensions" in record ||
+    "setupEntry" in record ||
+    "channel" in record ||
+    "install" in record ||
+    "startup" in record
+  );
+}
+
+export function resolvePackageMode(
+  manifest: PackageManifest | OpenClawPackageManifest | undefined,
+): OpenClawPackageMode {
+  if (!manifest) {
+    return "runtime-plugin";
+  }
+  const record = manifest as Record<string, unknown>;
+  const packageManifest =
+    MANIFEST_KEY in record
+      ? getPackageManifestMetadata(manifest as PackageManifest)
+      : isOpenClawPackageManifest(manifest)
+        ? manifest
+        : undefined;
+  return packageManifest?.packageMode === "resource-only" ? "resource-only" : "runtime-plugin";
 }
 
 export function resolvePackageExtensionEntries(

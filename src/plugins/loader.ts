@@ -890,6 +890,9 @@ export function loadOpenClawPlugins(options: PluginLoadOptions = {}): PluginRegi
     if (onlyPluginIdSet && !onlyPluginIdSet.has(pluginId)) {
       continue;
     }
+    if (manifestRecord.packageMode === "resource-only") {
+      continue;
+    }
     const existingOrigin = seenIds.get(pluginId);
     if (existingOrigin) {
       const record = createPluginRecord({

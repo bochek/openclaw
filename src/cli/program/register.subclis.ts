@@ -182,6 +182,15 @@ const entries: SubCliEntry[] = [
     },
   },
   {
+    name: "locales",
+    description: "Sync and inspect locale packages",
+    hasSubcommands: true,
+    register: async (program) => {
+      const mod = await import("../locales-cli.js");
+      mod.registerLocalesCli(program);
+    },
+  },
+  {
     name: "hooks",
     description: "Manage internal agent hooks",
     hasSubcommands: true,
