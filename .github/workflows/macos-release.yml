@@ -78,7 +78,7 @@ jobs:
         run: pnpm check
 
       - name: Build
-        run: pnpm build
+        run: pnpm build:npm-pack
 
       - name: Build Control UI
         run: node scripts/ui.js build

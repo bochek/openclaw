@@ -4,3 +4,8 @@ export const OPTIONAL_BUNDLED_BUILD_ENV: "OPENCLAW_INCLUDE_OPTIONAL_BUNDLED";
 export function isOptionalBundledCluster(cluster: string): boolean;
 export function shouldIncludeOptionalBundledClusters(env?: NodeJS.ProcessEnv): boolean;
 export function shouldBuildBundledCluster(cluster: string, env?: NodeJS.ProcessEnv): boolean;
+export function resolveOptionalBundledClusterRequiredPackPaths(repoRoot?: string): string[];
+export function collectMissingOptionalBundledClusterPackPaths(
+  paths: Iterable<string>,
+  repoRoot?: string,
+): string[];

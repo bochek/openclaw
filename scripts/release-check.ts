@@ -9,6 +9,7 @@ import {
   type BundledExtension,
   type ExtensionPackageJson as PackageJson,
 } from "./lib/bundled-extension-manifest.ts";
+import { collectMissingOptionalBundledClusterPackPaths } from "./lib/optional-bundled-clusters.mjs";
 import { listPluginSdkDistArtifacts } from "./lib/plugin-sdk-entries.mjs";
 import { sparkleBuildFloorsFromShortVersion, type SparkleBuildFloors } from "./sparkle-build.ts";
 
@@ -27,12 +28,17 @@ const requiredPathGroups = [
 ];
 const forbiddenPrefixes = ["dist-runtime/", "dist/OpenClaw.app/"];
 // 2026.3.12 ballooned to ~213.6 MiB unpacked and correlated with low-memory
-// startup/doctor OOM reports. Keep enough headroom for the current pack while
-// failing fast if duplicate/shim content sneaks back into the release artifact.
-const npmPackUnpackedSizeBudgetBytes = 160 * 1024 * 1024;
+// startup/doctor OOM reports. The npm release now intentionally includes the
+// optional bundled plugin set, so keep headroom above the current ~167.7 MiB
+// pack while still failing fast if duplicate/shim content sneaks back in.
+const npmPackUnpackedSizeBudgetBytes = 180 * 1024 * 1024;
 const appcastPath = resolve("appcast.xml");
 const laneBuildMin = 1_000_000_000;
 const laneFloorAdoptionDateKey = 20260227;
+
+export function collectMissingBundledPluginPackPaths(paths: Iterable<string>): string[] {
+  return collectMissingOptionalBundledClusterPackPaths(paths);
+}
 
 function collectBundledExtensions(): BundledExtension[] {
   const extensionsDir = resolve("extensions");
@@ -295,6 +301,7 @@ async function main() {
   const results = runPackDry();
   const files = results.flatMap((entry) => entry.files ?? []);
   const paths = new Set(files.map((file) => file.path));
+  const missingBundledPluginPaths = collectMissingBundledPluginPackPaths(paths);
 
   const missing = requiredPathGroups
     .flatMap((group) => {
@@ -303,6 +310,7 @@ async function main() {
       }
       return paths.has(group) ? [] : [group];
     })
+    .concat(missingBundledPluginPaths)
     .toSorted();
   const forbidden = collectForbiddenPackPaths(paths);
   const sizeErrors = collectPackUnpackedSizeErrors(results);
@@ -312,6 +320,11 @@ async function main() {
       console.error("release-check: missing files in npm pack:");
       for (const path of missing) {
         console.error(`  - ${path}`);
+      }
+      if (missingBundledPluginPaths.length > 0) {
+        console.error(
+          "release-check: rebuild pack artifacts with `pnpm build:npm-pack` so optional bundled plugins are included.",
+        );
       }
     }
     if (forbidden.length > 0) {

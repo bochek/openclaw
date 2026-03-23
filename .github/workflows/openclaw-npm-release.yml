@@ -81,7 +81,7 @@ jobs:
         run: pnpm check
 
       - name: Build
-        run: pnpm build
+        run: pnpm build:npm-pack
 
       - name: Verify release contents
         run: pnpm release:check

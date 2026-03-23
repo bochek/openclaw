@@ -212,11 +212,8 @@ jobs:
           install-bun: "false"
           use-sticky-disk: "false"
 
-      - name: Download dist artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: dist-build
-          path: dist/
+      - name: Build npm pack dist
+        run: pnpm build:npm-pack
 
       - name: Check release contents
         run: pnpm release:check
@@ -260,7 +257,7 @@ jobs:
             node_version: "22.x"
             cache_key_suffix: "node22"
             command: |
-              pnpm build
+              pnpm build:npm-pack
               node openclaw.mjs --help
               node openclaw.mjs status --json --timeout 1
               pnpm test:build:singleton

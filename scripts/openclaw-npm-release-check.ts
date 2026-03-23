@@ -3,6 +3,7 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
+import { resolveOptionalBundledClusterRequiredPackPaths } from "./lib/optional-bundled-clusters.mjs";
 
 type PackageJson = {
   name?: string;
@@ -39,7 +40,6 @@ const BETA_VERSION_REGEX =
 const CORRECTION_TAG_REGEX = /^(?<base>\d{4}\.[1-9]\d?\.[1-9]\d?)-(?<correction>[1-9]\d*)$/;
 const EXPECTED_REPOSITORY_URL = "https://github.com/openclaw/openclaw";
 const MAX_CALVER_DISTANCE_DAYS = 2;
-const REQUIRED_PACKED_PATHS = ["dist/control-ui/index.html"];
 const NPM_COMMAND = process.platform === "win32" ? "npm.cmd" : "npm";
 
 function normalizeRepoUrl(value: unknown): string {
@@ -289,13 +289,6 @@ function loadPackageJson(): PackageJson {
 }
 
 function runNpmCommand(args: string[]): string {
-  const npmExecPath = process.env.npm_execpath;
-  if (typeof npmExecPath === "string" && npmExecPath.length > 0) {
-    return execFileSync(process.execPath, [npmExecPath, ...args], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-  }
   return execFileSync(NPM_COMMAND, args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -312,15 +305,15 @@ type NpmPackResult = {
 };
 
 type ExecFailure = Error & {
-  stderr?: string | Buffer;
-  stdout?: string | Buffer;
+  stderr?: string | Uint8Array;
+  stdout?: string | Uint8Array;
 };
 
-function toTrimmedUtf8(value: string | Buffer | undefined): string {
+function toTrimmedUtf8(value: string | Uint8Array | undefined): string {
   if (typeof value === "string") {
     return value.trim();
   }
-  if (Buffer.isBuffer(value)) {
+  if (value instanceof Uint8Array) {
     return value.toString("utf8").trim();
   }
   return "";
@@ -343,6 +336,41 @@ function describeExecFailure(error: unknown): string {
   return details.join(" | ");
 }
 
+function parseTrailingJson(text: string): unknown {
+  const candidates: number[] = [];
+  for (let index = text.indexOf("["); index !== -1; index = text.indexOf("[", index + 1)) {
+    candidates.push(index);
+  }
+  for (let i = candidates.length - 1; i >= 0; i -= 1) {
+    const start = candidates[i];
+    try {
+      return JSON.parse(text.slice(start));
+    } catch {
+      // Keep scanning earlier `[` boundaries until we find the actual payload.
+    }
+  }
+  throw new Error("no trailing JSON payload found");
+}
+
+export function collectPackedTarballPathErrors(paths: Iterable<string>): string[] {
+  const packedPaths = new Set(paths);
+  const errors: string[] = [];
+  const requiredPackedPaths = [
+    "dist/control-ui/index.html",
+    ...resolveOptionalBundledClusterRequiredPackPaths(),
+  ];
+
+  for (const requiredPath of requiredPackedPaths) {
+    if (!packedPaths.has(requiredPath)) {
+      errors.push(
+        `npm package is missing required path "${requiredPath}". Build the package with \`pnpm build:npm-pack\` and include UI assets before publish.`,
+      );
+    }
+  }
+
+  return errors;
+}
+
 function collectPackedTarballErrors(): string[] {
   const errors: string[] = [];
   let stdout = "";
@@ -358,7 +386,7 @@ function collectPackedTarballErrors(): string[] {
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stdout);
+    parsed = parseTrailingJson(stdout);
   } catch {
     errors.push("Failed to parse JSON output from `npm pack --json --dry-run`.");
     return errors;
@@ -376,16 +404,7 @@ function collectPackedTarballErrors(): string[] {
       .map((entry) => entry.path)
       .filter((path): path is string => typeof path === "string" && path.length > 0),
   );
-
-  for (const requiredPath of REQUIRED_PACKED_PATHS) {
-    if (!packedPaths.has(requiredPath)) {
-      errors.push(
-        `npm package is missing required path "${requiredPath}". Ensure UI assets are built and included before publish.`,
-      );
-    }
-  }
-
-  return errors;
+  return collectPackedTarballPathErrors(packedPaths);
 }
 
 function main(): number {

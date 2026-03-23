@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  collectPackedTarballPathErrors,
   collectReleasePackageMetadataErrors,
   collectReleaseTagErrors,
   parseReleaseTagVersion,
@@ -130,5 +131,13 @@ describe("collectReleasePackageMetadataErrors", () => {
         peerDependencies: { "node-llama-cpp": "3.16.2" },
       }),
     ).toContain('package.json peerDependenciesMeta["node-llama-cpp"].optional must be true.');
+  });
+});
+
+describe("collectPackedTarballPathErrors", () => {
+  it("requires optional bundled plugin paths in the npm tarball", () => {
+    expect(collectPackedTarballPathErrors(["dist/control-ui/index.html"])).toContain(
+      'npm package is missing required path "dist/extensions/acpx/openclaw.plugin.json". Build the package with `pnpm build:npm-pack` and include UI assets before publish.',
+    );
   });
 });

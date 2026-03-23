@@ -3,6 +3,7 @@ import {
   collectAppcastSparkleVersionErrors,
   collectBundledExtensionManifestErrors,
   collectForbiddenPackPaths,
+  collectMissingBundledPluginPackPaths,
   collectPackUnpackedSizeErrors,
 } from "../scripts/release-check.ts";
 
@@ -115,6 +116,17 @@ describe("collectForbiddenPackPaths", () => {
   });
 });
 
+describe("collectMissingBundledPluginPackPaths", () => {
+  it("requires optional bundled plugin metadata in npm packs", () => {
+    expect(
+      collectMissingBundledPluginPackPaths([
+        "dist/extensions/discord/openclaw.plugin.json",
+        "dist/extensions/discord/package.json",
+      ]),
+    ).toContain("dist/extensions/acpx/openclaw.plugin.json");
+  });
+});
+
 describe("collectPackUnpackedSizeErrors", () => {
   it("accepts pack results within the unpacked size budget", () => {
     expect(
@@ -126,7 +138,7 @@ describe("collectPackUnpackedSizeErrors", () => {
     expect(
       collectPackUnpackedSizeErrors([makePackResult("openclaw-2026.3.12.tgz", 224_002_564)]),
     ).toEqual([
-      "openclaw-2026.3.12.tgz unpackedSize 224002564 bytes (213.6 MiB) exceeds budget 167772160 bytes (160.0 MiB). Investigate duplicate channel shims, copied extension trees, or other accidental pack bloat before release.",
+      "openclaw-2026.3.12.tgz unpackedSize 224002564 bytes (213.6 MiB) exceeds budget 188743680 bytes (180.0 MiB). Investigate duplicate channel shims, copied extension trees, or other accidental pack bloat before release.",
     ]);
   });
 
