@@ -42,6 +42,7 @@ export default definePluginEntry({
               defaultBaseUrl: SGLANG_DEFAULT_BASE_URL,
               defaultApiKeyEnvVar: SGLANG_DEFAULT_API_KEY_ENV_VAR,
               modelPlaceholder: SGLANG_MODEL_PLACEHOLDER,
+              supportsTools: false,
             });
           },
           runNonInteractive: async (ctx: ProviderAuthMethodNonInteractiveContext) => {
@@ -53,6 +54,7 @@ export default definePluginEntry({
               defaultBaseUrl: SGLANG_DEFAULT_BASE_URL,
               defaultApiKeyEnvVar: SGLANG_DEFAULT_API_KEY_ENV_VAR,
               modelPlaceholder: SGLANG_MODEL_PLACEHOLDER,
+              supportsTools: false,
             });
           },
         },

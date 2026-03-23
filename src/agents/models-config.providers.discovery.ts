@@ -95,6 +95,7 @@ async function discoverOpenAICompatibleLocalModels(params: {
   label: string;
   contextWindow?: number;
   maxTokens?: number;
+  supportsTools?: boolean;
 }): Promise<ModelDefinitionConfig[]> {
   if (process.env.VITEST || process.env.NODE_ENV === "test") {
     return [];
@@ -130,6 +131,13 @@ async function discoverOpenAICompatibleLocalModels(params: {
           name: modelId,
           reasoning: isReasoningModelHeuristic(modelId),
           input: ["text"],
+          ...(params.supportsTools === undefined
+            ? {}
+            : {
+                compat: {
+                  supportsTools: params.supportsTools,
+                },
+              }),
           cost: SELF_HOSTED_DEFAULT_COST,
           contextWindow: params.contextWindow ?? SELF_HOSTED_DEFAULT_CONTEXT_WINDOW,
           maxTokens: params.maxTokens ?? SELF_HOSTED_DEFAULT_MAX_TOKENS,
@@ -162,6 +170,7 @@ export async function buildVllmProvider(params?: {
     baseUrl,
     apiKey: params?.apiKey,
     label: VLLM_PROVIDER_LABEL,
+    supportsTools: false,
   });
   return {
     baseUrl,
@@ -179,6 +188,7 @@ export async function buildSglangProvider(params?: {
     baseUrl,
     apiKey: params?.apiKey,
     label: SGLANG_PROVIDER_LABEL,
+    supportsTools: false,
   });
   return {
     baseUrl,

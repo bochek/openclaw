@@ -42,6 +42,7 @@ export default definePluginEntry({
               defaultBaseUrl: VLLM_DEFAULT_BASE_URL,
               defaultApiKeyEnvVar: VLLM_DEFAULT_API_KEY_ENV_VAR,
               modelPlaceholder: VLLM_MODEL_PLACEHOLDER,
+              supportsTools: false,
             });
           },
           runNonInteractive: async (ctx: ProviderAuthMethodNonInteractiveContext) => {
@@ -53,6 +54,7 @@ export default definePluginEntry({
               defaultBaseUrl: VLLM_DEFAULT_BASE_URL,
               defaultApiKeyEnvVar: VLLM_DEFAULT_API_KEY_ENV_VAR,
               modelPlaceholder: VLLM_MODEL_PLACEHOLDER,
+              supportsTools: false,
             });
           },
         },

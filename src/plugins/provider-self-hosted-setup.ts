@@ -6,6 +6,7 @@ import {
   SELF_HOSTED_DEFAULT_MAX_TOKENS,
 } from "../agents/self-hosted-provider-defaults.js";
 import type { OpenClawConfig } from "../config/config.js";
+import { formatCliCommand } from "../cli/command-format.js";
 import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import { applyAuthProfileConfig } from "./provider-auth-helpers.js";
@@ -54,6 +55,7 @@ function buildOpenAICompatibleSelfHostedProviderConfig(params: {
   reasoning?: boolean;
   contextWindow?: number;
   maxTokens?: number;
+  supportsTools?: boolean;
 }): { config: OpenClawConfig; modelId: string; modelRef: string; profileId: string } {
   const modelRef = `${params.providerId}/${params.modelId}`;
   const profileId = `${params.providerId}:default`;
@@ -75,6 +77,13 @@ function buildOpenAICompatibleSelfHostedProviderConfig(params: {
                 name: params.modelId,
                 reasoning: params.reasoning ?? false,
                 input: params.input ?? ["text"],
+                ...(params.supportsTools === undefined
+                  ? {}
+                  : {
+                      compat: {
+                        supportsTools: params.supportsTools,
+                      },
+                    }),
                 cost: SELF_HOSTED_DEFAULT_COST,
                 contextWindow: params.contextWindow ?? SELF_HOSTED_DEFAULT_CONTEXT_WINDOW,
                 maxTokens: params.maxTokens ?? SELF_HOSTED_DEFAULT_MAX_TOKENS,
@@ -102,6 +111,7 @@ type OpenAICompatibleSelfHostedProviderSetupParams = {
   reasoning?: boolean;
   contextWindow?: number;
   maxTokens?: number;
+  supportsTools?: boolean;
 };
 
 type OpenAICompatibleSelfHostedProviderPromptResult = {
@@ -111,6 +121,22 @@ type OpenAICompatibleSelfHostedProviderPromptResult = {
   modelRef: string;
   profileId: string;
 };
+
+function buildSupportsToolsSetupNote(params: {
+  providerId: string;
+  providerLabel: string;
+  supportsTools?: boolean;
+}): string | null {
+  if (params.supportsTools !== false) {
+    return null;
+  }
+  const configPath = `models.providers.${params.providerId}.models[0].compat.supportsTools`;
+  return [
+    `Tool support varies across ${params.providerLabel} backends.`,
+    `Recommended: disable tools if you are unsure or having issues using ${formatCliCommand(`openclaw config set ${configPath} false --strict-json`)}.`,
+    `Config path: ${configPath} = false`,
+  ].join("\n");
+}
 
 function buildSelfHostedProviderAuthResult(
   result: OpenAICompatibleSelfHostedProviderPromptResult,
@@ -130,6 +156,14 @@ function buildSelfHostedProviderAuthResult(
 export async function promptAndConfigureOpenAICompatibleSelfHostedProvider(
   params: OpenAICompatibleSelfHostedProviderSetupParams,
 ): Promise<OpenAICompatibleSelfHostedProviderPromptResult> {
+  const supportsToolsNote = buildSupportsToolsSetupNote({
+    providerId: params.providerId,
+    providerLabel: params.providerLabel,
+    supportsTools: params.supportsTools,
+  });
+  if (supportsToolsNote) {
+    await params.prompter.note(supportsToolsNote, `${params.providerLabel} tools`);
+  }
   const baseUrlRaw = await params.prompter.text({
     message: `${params.providerLabel} base URL`,
     initialValue: params.defaultBaseUrl,
@@ -167,6 +201,7 @@ export async function promptAndConfigureOpenAICompatibleSelfHostedProvider(
     reasoning: params.reasoning,
     contextWindow: params.contextWindow,
     maxTokens: params.maxTokens,
+    supportsTools: params.supportsTools,
   });
 
   return {
@@ -240,6 +275,7 @@ export async function configureOpenAICompatibleSelfHostedProviderNonInteractive(
   reasoning?: boolean;
   contextWindow?: number;
   maxTokens?: number;
+  supportsTools?: boolean;
 }): Promise<OpenClawConfig | null> {
   const baseUrl = (
     normalizeOptionalSecretInput(params.ctx.opts.customBaseUrl) ?? params.defaultBaseUrl
@@ -287,6 +323,7 @@ export async function configureOpenAICompatibleSelfHostedProviderNonInteractive(
     reasoning: params.reasoning,
     contextWindow: params.contextWindow,
     maxTokens: params.maxTokens,
+    supportsTools: params.supportsTools,
   });
   await upsertAuthProfileWithLock({
     profileId: configured.profileId,
