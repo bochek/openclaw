@@ -1,7 +1,4 @@
-import {
-  isNumericTelegramUserId,
-  normalizeTelegramAllowFromEntry,
-} from "../../extensions/telegram/allow-from.js";
+import { isNumericTelegramUserId, normalizeTelegramAllowFromEntry } from "../plugin-sdk/telegram.js";
 
 export const auditChannelTelegramRuntime = {
   isNumericTelegramUserId,

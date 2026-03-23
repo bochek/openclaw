@@ -1,4 +1,4 @@
-import type { StickerMetadata } from "../../extensions/telegram/api.js";
+import type { StickerMetadata } from "../plugin-sdk/telegram.js";
 import type { ChannelId } from "../channels/plugins/types.js";
 import type {
   MediaUnderstandingDecision,

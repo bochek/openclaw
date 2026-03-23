@@ -55,6 +55,12 @@ export {
   listSignalAccountIds,
   resolveDefaultSignalAccountId,
 } from "../../extensions/signal/api.js";
+export {
+  looksLikeUuid,
+  resolveSignalPeerId,
+  resolveSignalRecipient,
+  resolveSignalSender,
+} from "../../extensions/signal/api.js";
 export { monitorSignalProvider } from "../../extensions/signal/api.js";
 export { probeSignal } from "../../extensions/signal/api.js";
 export { resolveSignalReactionLevel } from "../../extensions/signal/api.js";

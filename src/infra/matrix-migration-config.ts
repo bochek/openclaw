@@ -10,7 +10,7 @@ import {
   resolveMatrixChannelConfig,
   resolveMatrixCredentialsPath,
   resolveMatrixDefaultOrOnlyAccountId,
-} from "../../extensions/matrix/runtime-api.js";
+} from "../plugin-sdk/matrix.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
 import { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";

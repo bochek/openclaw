@@ -1,4 +1,4 @@
-import { buildBrowseProvidersButton } from "../../../extensions/telegram/api.js";
+import { buildBrowseProvidersButton } from "../../plugin-sdk/telegram.js";
 import {
   ensureAuthProfileStore,
   resolveAuthStorePathForDisplay,

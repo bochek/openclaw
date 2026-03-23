@@ -1,4 +1,4 @@
-import { hasAnyWhatsAppAuth } from "../../extensions/whatsapp/auth-presence.js";
+import { hasAnyWhatsAppAuth } from "../plugin-sdk/whatsapp.js";
 import { hasMeaningfulChannelConfig } from "../channels/config-presence.js";
 import { isRecord } from "../utils.js";
 import type { OpenClawConfig } from "./config.js";

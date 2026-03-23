@@ -76,6 +76,7 @@ export {
   looksLikeDiscordTargetId,
   normalizeDiscordMessagingTarget,
   normalizeDiscordOutboundTarget,
+  parseDiscordTarget,
 } from "../../extensions/discord/api.js";
 export { collectDiscordAuditChannelIds } from "../../extensions/discord/runtime-api.js";
 export { collectDiscordStatusIssues } from "../../extensions/discord/api.js";
