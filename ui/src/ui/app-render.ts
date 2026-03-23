@@ -1262,6 +1262,7 @@ export function renderApp(state: AppViewState) {
                     }
                     updateConfigFormValue(state, ["agents", "defaultId"], agentId);
                   },
+                  onRequestUpdate: requestHostUpdate,
                 }),
               )
             : nothing

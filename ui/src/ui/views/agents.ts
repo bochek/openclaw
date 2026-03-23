@@ -104,6 +104,7 @@ export type AgentsProps = {
   onAgentSkillsClear: (agentId: string) => void;
   onAgentSkillsDisableAll: (agentId: string) => void;
   onSetDefault: (agentId: string) => void;
+  onRequestUpdate?: () => void;
 };
 
 export function renderAgents(props: AgentsProps) {
@@ -169,6 +170,7 @@ export function renderAgents(props: AgentsProps) {
                           type="button"
                           @click=${() => {
                             actionsMenuOpen = !actionsMenuOpen;
+                            props.onRequestUpdate?.();
                           }}
                         >⋯</button>
                         ${
@@ -178,6 +180,7 @@ export function renderAgents(props: AgentsProps) {
                                   <button type="button" @click=${() => {
                                     void navigator.clipboard.writeText(selectedAgent.id);
                                     actionsMenuOpen = false;
+                                    props.onRequestUpdate?.();
                                   }}>Copy agent ID</button>
                                   <button
                                     type="button"
