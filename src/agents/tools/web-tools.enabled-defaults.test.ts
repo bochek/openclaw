@@ -315,6 +315,59 @@ describe("web tools defaults", () => {
     expect(String(mockFetch.mock.calls[0]?.[0])).toContain("generativelanguage.googleapis.com");
     expect((result?.details as { provider?: string } | undefined)?.provider).toBe("gemini");
   });
+
+  it("treats stale runtime-selected DuckDuckGo as bundled instead of switching to another runtime plugin", async () => {
+    const registry = createEmptyPluginRegistry();
+    registry.webSearchProviders.push({
+      pluginId: "custom-search-live",
+      pluginName: "Custom Search",
+      source: "test",
+      provider: {
+        id: "custom-live",
+        label: "Custom Search",
+        hint: "Custom runtime provider",
+        envVars: ["CUSTOM_SEARCH_API_KEY"],
+        placeholder: "custom-...",
+        signupUrl: "https://example.com/signup",
+        autoDetectOrder: 1,
+        credentialPath: "tools.web.search.custom.apiKey",
+        getCredentialValue: () => "configured",
+        setCredentialValue: () => {},
+        createTool: () => ({
+          description: "live runtime tool",
+          parameters: {},
+          execute: async () => ({ provider: "custom-live" }),
+        }),
+      },
+    });
+    setActivePluginRegistry(registry);
+
+    const tool = createWebSearchTool({
+      config: {
+        tools: {
+          web: {
+            search: {
+              provider: "duckduckgo",
+            },
+          },
+        },
+      },
+      sandboxed: true,
+      runtimeWebSearch: {
+        providerConfigured: "duckduckgo",
+        providerSource: "configured",
+        selectedProvider: "duckduckgo",
+        selectedProviderKeySource: "config",
+        diagnostics: [],
+      },
+    });
+
+    const result = await tool?.execute?.("call-stale-duckduckgo-provider", {
+      query: "duckduckgo stale provider",
+    });
+
+    expect((result?.details as { provider?: string } | undefined)?.provider).toBe("duckduckgo");
+  });
 });
 
 describe("web_search country and language parameters", () => {
