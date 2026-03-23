@@ -96,6 +96,7 @@
   "provider-auth-api-key",
   "provider-auth-login",
   "provider-catalog",
+  "provider-entry",
   "provider-models",
   "provider-onboard",
   "provider-stream",

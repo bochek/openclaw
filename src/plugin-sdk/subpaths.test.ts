@@ -13,6 +13,7 @@ import * as lineCoreSdk from "openclaw/plugin-sdk/line-core";
 import * as msteamsSdk from "openclaw/plugin-sdk/msteams";
 import * as nostrSdk from "openclaw/plugin-sdk/nostr";
 import * as ollamaSetupSdk from "openclaw/plugin-sdk/ollama-setup";
+import * as providerEntrySdk from "openclaw/plugin-sdk/provider-entry";
 import * as providerSetupSdk from "openclaw/plugin-sdk/provider-setup";
 import * as routingSdk from "openclaw/plugin-sdk/routing";
 import * as runtimeSdk from "openclaw/plugin-sdk/runtime";
@@ -118,6 +119,10 @@ describe("plugin-sdk subpath exports", () => {
     expect(typeof providerSetupSdk.promptAndConfigureOpenAICompatibleSelfHostedProviderAuth).toBe(
       "function",
     );
+  });
+
+  it("exports single-provider plugin entry helpers from the dedicated subpath", () => {
+    expect(typeof providerEntrySdk.defineSingleProviderPluginEntry).toBe("function");
   });
 
   it("exports shared setup helpers from the dedicated subpath", () => {
