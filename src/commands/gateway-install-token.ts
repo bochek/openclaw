@@ -59,6 +59,7 @@ export async function resolveGatewayInstallToken(
 
   const resolvedAuth = resolveGatewayAuth({
     authConfig: cfg.gateway?.auth,
+    env: options.env,
     tailscaleMode: cfg.gateway?.tailscale?.mode ?? "off",
   });
   const needsToken =

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { readStateDirDotEnvVars } from "../config/env-vars.js";
 
 const mocks = vi.hoisted(() => ({
   loadAuthProfileStoreForSecretsRuntime: vi.fn(),
@@ -33,7 +34,6 @@ vi.mock("../daemon/service-env.js", () => ({
 import {
   buildGatewayInstallPlan,
   gatewayInstallErrorHint,
-  readStateDirDotEnvVars,
   resolveGatewayDevMode,
 } from "./daemon-install-helpers.js";
 

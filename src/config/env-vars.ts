@@ -1,9 +1,13 @@
+import fs from "node:fs";
+import path from "node:path";
+import dotenv from "dotenv";
 import {
   isDangerousHostEnvOverrideVarName,
   isDangerousHostEnvVarName,
   normalizeEnvVarKey,
 } from "../infra/host-env-security.js";
 import { containsEnvVarReference } from "./env-substitution.js";
+import { resolveStateDir } from "./paths.js";
 import type { OpenClawConfig } from "./types.js";
 
 function isBlockedConfigEnvVar(key: string): boolean {
@@ -51,6 +55,45 @@ function collectConfigEnvVarsByTarget(cfg?: OpenClawConfig): Record<string, stri
     entries[key] = value;
   }
 
+  return entries;
+}
+
+/**
+ * Read and parse `~/.openclaw/.env` (or `$OPENCLAW_STATE_DIR/.env`), returning
+ * a filtered record of key-value pairs suitable for embedding in a service
+ * environment (LaunchAgent plist, systemd unit, Scheduled Task).
+ *
+ * Security: dangerous host env vars (NODE_OPTIONS, LD_PRELOAD, etc.) are
+ * dropped, matching the same policy applied to config env vars.
+ */
+export function readStateDirDotEnvVars(
+  env: Record<string, string | undefined>,
+): Record<string, string> {
+  const stateDir = resolveStateDir(env as NodeJS.ProcessEnv);
+  const dotEnvPath = path.join(stateDir, ".env");
+
+  let content: string;
+  try {
+    content = fs.readFileSync(dotEnvPath, "utf8");
+  } catch {
+    return {};
+  }
+
+  const parsed = dotenv.parse(content);
+  const entries: Record<string, string> = {};
+  for (const [rawKey, value] of Object.entries(parsed)) {
+    if (!value?.trim()) {
+      continue;
+    }
+    const key = normalizeEnvVarKey(rawKey, { portable: true });
+    if (!key) {
+      continue;
+    }
+    if (isBlockedConfigEnvVar(key)) {
+      continue;
+    }
+    entries[key] = value;
+  }
   return entries;
 }
 

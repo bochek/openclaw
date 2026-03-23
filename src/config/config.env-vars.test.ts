@@ -7,6 +7,7 @@ import {
   applyConfigEnvVars,
   collectConfigRuntimeEnvVars,
   createConfigRuntimeEnv,
+  readStateDirDotEnvVars,
 } from "./env-vars.js";
 import { withEnvOverride, withTempHome } from "./test-helpers.js";
 import type { OpenClawConfig } from "./types.js";
@@ -128,6 +129,26 @@ describe("config env vars", () => {
         const second = resolveConfigEnvVars(config, process.env) as OpenClawConfig;
         expect(second.tools?.web?.search?.apiKey).toBe("from-dotenv");
       });
+    });
+  });
+
+  it("reads filtered service env vars from the state-dir .env file", async () => {
+    await withTempHome(async (_home) => {
+      const stateDir = process.env.OPENCLAW_STATE_DIR?.trim();
+      if (!stateDir) {
+        throw new Error("Expected OPENCLAW_STATE_DIR to be set by withTempHome");
+      }
+      await fs.mkdir(stateDir, { recursive: true });
+      await fs.writeFile(
+        path.join(stateDir, ".env"),
+        "BRAVE_API_KEY=from-dotenv\nNODE_OPTIONS=--require /tmp/evil.js\nEMPTY=\n",
+        "utf-8",
+      );
+
+      const entries = readStateDirDotEnvVars(process.env);
+      expect(entries.BRAVE_API_KEY).toBe("from-dotenv");
+      expect(entries.NODE_OPTIONS).toBeUndefined();
+      expect(entries.EMPTY).toBeUndefined();
     });
   });
 });

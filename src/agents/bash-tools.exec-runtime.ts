@@ -315,7 +315,7 @@ function classifyExecFailureKind(params: {
   exitCode: number;
   isShellFailure: boolean;
   exitSignal: NodeJS.Signals | number | null;
-}): ExecProcessFailureKind {
+}): Exclude<ExecProcessFailureKind, "runtime-error"> {
   if (params.isShellFailure) {
     return params.exitCode === 127 ? "shell-command-not-found" : "shell-not-executable";
   }
