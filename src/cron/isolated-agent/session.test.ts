@@ -160,6 +160,21 @@ describe("resolveCronSession", () => {
       expect(clearBootstrapSnapshot).toHaveBeenCalledWith("webhook:stable-key");
     });
 
+    it("preserves subject metadata when forceNew is true", () => {
+      const result = resolveWithStoredEntry({
+        entry: {
+          sessionId: "existing-session-id-subject",
+          updatedAt: NOW_MS - 1000,
+          subject: "Dev Team Chat",
+        },
+        fresh: true,
+        forceNew: true,
+      });
+
+      expect(result.isNewSession).toBe(true);
+      expect(result.sessionEntry.subject).toBe("Dev Team Chat");
+    });
+
     it("clears delivery routing metadata and deliveryContext when forceNew is true", () => {
       const result = resolveWithStoredEntry({
         entry: {
