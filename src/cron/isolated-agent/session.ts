@@ -66,8 +66,7 @@ export function resolveCronSession(params: {
 
   // Build session entry based on mode:
   // - Isolated mode (forceNew): fresh runtime context but preserve user config
-  // - New session (expired): preserve user config, clear routing metadata
-  // - Reuse session: preserve everything, clear routing metadata only
+  // - Non-isolated: preserve everything, clear routing only for new sessions
   const sessionEntry: SessionEntry = params.forceNew
     ? {
         // Isolated mode: fresh runtime context but preserve user-managed overrides
@@ -105,31 +104,20 @@ export function resolveCronSession(params: {
         label: entry?.label,
         displayName: entry?.displayName,
       }
-    : isNewSession
-      ? {
-          // New session (expired): preserve user config from old entry
-          ...entry,
-          sessionId,
-          updatedAt: params.nowMs,
-          systemSent,
-          // Clear routing metadata for fresh inference
+    : {
+        // Non-isolated: preserve everything, clear routing only for new sessions
+        ...entry,
+        sessionId,
+        updatedAt: params.nowMs,
+        systemSent,
+        // Clear routing metadata only for new sessions (matches original behavior)
+        ...(isNewSession && {
           lastChannel: undefined,
           lastTo: undefined,
           lastAccountId: undefined,
           lastThreadId: undefined,
           deliveryContext: undefined,
-        }
-      : {
-          // Reuse session: preserve everything, just clear routing
-          ...entry,
-          sessionId,
-          updatedAt: params.nowMs,
-          systemSent,
-          lastChannel: undefined,
-          lastTo: undefined,
-          lastAccountId: undefined,
-          lastThreadId: undefined,
-          deliveryContext: undefined,
-        };
+        }),
+      };
   return { storePath, store, sessionEntry, systemSent, isNewSession };
 }
