@@ -324,4 +324,95 @@ describe("syncDocsLocales", () => {
       }),
     ]);
   });
+
+  it("rejects invalid locale filters instead of syncing all locales", async () => {
+    const docsDir = makeTempDir();
+    const pluginDir = makeTempDir();
+
+    writeCanonicalDocsFixture(docsDir);
+    writeLocalePlugin({ pluginDir, id: "locale-de", locale: "de" });
+
+    await expect(
+      syncDocsLocales({
+        docsDir,
+        locales: ["../bad"],
+        candidates: [createLocalePluginCandidate(pluginDir, "locale-de")],
+      }),
+    ).rejects.toThrow(/invalid locale filter/);
+  });
+
+  it("rejects docs nav pages with parent-path segments", async () => {
+    const docsDir = makeTempDir();
+    const pluginDir = makeTempDir();
+
+    writeCanonicalDocsFixture(docsDir);
+    writeLocalePlugin({ pluginDir, id: "locale-de", locale: "de" });
+    writeJson(path.join(pluginDir, "resources", "docs-nav.de.json"), {
+      language: "de",
+      tabs: [
+        {
+          tab: "Get started",
+          groups: [{ group: "Overview", pages: ["de/../index"] }],
+        },
+      ],
+    });
+
+    await expect(
+      syncDocsLocales({
+        docsDir,
+        candidates: [createLocalePluginCandidate(pluginDir, "locale-de")],
+      }),
+    ).rejects.toThrow(/escapes the locale namespace/);
+  });
+
+  it("rejects docs nav entries that point at directories without page files", async () => {
+    const docsDir = makeTempDir();
+    const pluginDir = makeTempDir();
+
+    writeCanonicalDocsFixture(docsDir);
+    writeLocalePlugin({ pluginDir, id: "locale-de", locale: "de" });
+    fs.mkdirSync(path.join(pluginDir, "resources", "docs", "de", "plugins"), { recursive: true });
+    writeJson(path.join(pluginDir, "resources", "docs-nav.de.json"), {
+      language: "de",
+      tabs: [
+        {
+          tab: "Get started",
+          groups: [{ group: "Overview", pages: ["de/plugins"] }],
+        },
+      ],
+    });
+
+    await expect(
+      syncDocsLocales({
+        docsDir,
+        candidates: [createLocalePluginCandidate(pluginDir, "locale-de")],
+      }),
+    ).rejects.toThrow(/docs nav page not found/);
+  });
+
+  it("does not treat arbitrary page prefixes as source-owned locale directories", async () => {
+    const docsDir = makeTempDir();
+
+    writeJson(path.join(docsDir, "docs.json"), {
+      $schema: "https://mintlify.com/docs.json",
+      navigation: {
+        languages: [
+          {
+            language: "en",
+            tabs: [
+              {
+                tab: "Get started",
+                groups: [{ group: "Overview", pages: ["de/index"] }],
+              },
+            ],
+          },
+        ],
+      },
+    });
+    writeText(path.join(docsDir, "de", "index.md"), "# not a source-owned locale\n");
+
+    const result = await syncDocsLocales({ docsDir, candidates: [] });
+
+    expect(fs.existsSync(path.join(result.workspaceDir, "de", "index.md"))).toBe(true);
+  });
 });

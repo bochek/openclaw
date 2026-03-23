@@ -1,8 +1,14 @@
 /* @vitest-environment jsdom */
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CONTROL_UI_BOOTSTRAP_CONFIG_PATH } from "../../../../src/gateway/control-ui-contract.js";
+import { i18n } from "../../i18n/index.ts";
 import { loadControlUiBootstrapConfig } from "./control-ui-bootstrap.ts";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe("loadControlUiBootstrapConfig", () => {
   it("loads assistant identity from the bootstrap endpoint", async () => {
@@ -81,6 +87,62 @@ describe("loadControlUiBootstrapConfig", () => {
       `/openclaw${CONTROL_UI_BOOTSTRAP_CONFIG_PATH}`,
       expect.objectContaining({ method: "GET" }),
     );
+
+    vi.unstubAllGlobals();
+  });
+
+  it("refreshes i18n subscribers when remote locales are registered without a preferred locale", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        locales: [{ locale: "fr", url: "/__openclaw/locales/fr/control-ui.json" }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const refreshSpy = vi.spyOn(i18n, "refresh");
+    const setLocaleSpy = vi.spyOn(i18n, "setLocale");
+
+    const state = {
+      basePath: "",
+      assistantName: "Assistant",
+      assistantAvatar: null,
+      assistantAgentId: null,
+      serverVersion: null,
+      settings: {},
+    };
+
+    await loadControlUiBootstrapConfig(state);
+
+    expect(refreshSpy).toHaveBeenCalledTimes(1);
+    expect(setLocaleSpy).not.toHaveBeenCalled();
+
+    vi.unstubAllGlobals();
+  });
+
+  it("applies a preferred locale after registering remote locale sources", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        locales: [{ locale: "fr", url: "/__openclaw/locales/fr/control-ui.json" }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const setLocaleSpy = vi.spyOn(i18n, "setLocale").mockResolvedValue();
+    const refreshSpy = vi.spyOn(i18n, "refresh");
+
+    const state = {
+      basePath: "",
+      assistantName: "Assistant",
+      assistantAvatar: null,
+      assistantAgentId: null,
+      serverVersion: null,
+      settings: { locale: "fr" },
+    };
+
+    await loadControlUiBootstrapConfig(state);
+
+    expect(setLocaleSpy).toHaveBeenCalledWith("fr");
+    expect(refreshSpy).not.toHaveBeenCalled();
 
     vi.unstubAllGlobals();
   });

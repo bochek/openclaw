@@ -104,6 +104,10 @@ class I18nManager {
     return () => this.subscribers.delete(sub);
   }
 
+  public refresh() {
+    this.notify();
+  }
+
   private notify() {
     this.subscribers.forEach((sub) => sub(this.locale));
   }

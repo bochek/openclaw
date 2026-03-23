@@ -34,11 +34,16 @@ function collectRepeatedOption(value: string, previous: string[] = []): string[]
   return [...previous, value];
 }
 
-function loadWorkspaceLocaleRegistry() {
+function loadWorkspaceLocaleContext() {
   const config = loadConfig();
   const workspaceDir =
     resolveAgentWorkspaceDir(config, resolveDefaultAgentId(config)) ??
     resolveDefaultAgentWorkspaceDir();
+  return { config, workspaceDir };
+}
+
+function loadWorkspaceLocaleRegistry() {
+  const { config, workspaceDir } = loadWorkspaceLocaleContext();
   return loadLocaleRegistry({ config, workspaceDir });
 }
 
@@ -214,12 +219,15 @@ export function registerLocalesCli(program: Command) {
     .option("--json", "Print JSON output", false)
     .action(async (opts: LocalesSyncDocsOptions) => {
       await runCommandWithRuntime(defaultRuntime, async () => {
+        const { config, workspaceDir } = loadWorkspaceLocaleContext();
         const result = await syncDocsLocales({
           docsDir: opts.docsDir,
           sourceConfigPath: opts.sourceConfig,
           workspaceDir: opts.workspaceDir,
           outputConfigPath: opts.outputConfig,
           locales: opts.locale,
+          config,
+          workspaceDirForPlugins: workspaceDir,
         });
 
         if (opts.json) {

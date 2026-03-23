@@ -6,6 +6,7 @@ import { i18n } from "../../i18n/index.ts";
 import { getSafeLocalStorage } from "../../local-storage.ts";
 import { renderChatSessionSelect } from "../app-render.helpers.ts";
 import type { AppViewState } from "../app-view-state.ts";
+import { loadControlUiBootstrapConfig } from "../controllers/control-ui-bootstrap.ts";
 import type { GatewayBrowserClient } from "../gateway.ts";
 import type { ModelCatalogEntry } from "../types.ts";
 import type { SessionsListResult } from "../types.ts";
@@ -492,6 +493,51 @@ describe("chat view", () => {
     expect(select?.selectedOptions[0]?.textContent?.trim()).toBe("简体中文 (简体中文)");
 
     await i18n.setLocale("en");
+  });
+
+  it("refreshes locale subscribers when bootstrap registers remote locales without a preferred locale", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        locales: [{ locale: "fr", url: "/__openclaw/locales/fr/control-ui.json" }],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+
+    const notifications: string[] = [];
+    const unsubscribe = i18n.subscribe((locale) => notifications.push(locale));
+
+    await loadControlUiBootstrapConfig({
+      basePath: "",
+      assistantName: "Assistant",
+      assistantAvatar: null,
+      assistantAgentId: null,
+      serverVersion: null,
+      settings: {},
+    });
+
+    const container = document.createElement("div");
+    render(
+      renderOverview(
+        createOverviewProps({
+          settings: {
+            ...createOverviewProps().settings,
+            locale: "",
+          },
+        }),
+      ),
+      container,
+    );
+    await Promise.resolve();
+
+    const localeOptions = Array.from(container.querySelectorAll("option")).map((option) =>
+      option.getAttribute("value"),
+    );
+    expect(localeOptions).toContain("fr");
+    expect(notifications.length).toBeGreaterThan(0);
+
+    unsubscribe();
+    vi.unstubAllGlobals();
   });
 
   it("renders compacting indicator as a badge", () => {

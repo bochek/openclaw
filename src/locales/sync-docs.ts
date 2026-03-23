@@ -51,9 +51,22 @@ const GENERATED_DIRNAME = ".generated";
 const DEFAULT_WORKSPACE_DIRNAME = path.join(GENERATED_DIRNAME, "locale-workspace");
 
 function normalizeLocaleFilter(locales: string[] | undefined): Set<string> | null {
-  const values = (locales ?? [])
-    .map((locale) => locale.trim())
-    .filter((locale) => locale && isValidLocaleId(locale));
+  const values: string[] = [];
+  const invalid: string[] = [];
+  for (const locale of locales ?? []) {
+    const trimmed = locale.trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (!isValidLocaleId(trimmed)) {
+      invalid.push(trimmed);
+      continue;
+    }
+    values.push(trimmed);
+  }
+  if (invalid.length > 0) {
+    throw new Error(`invalid locale filter(s): ${invalid.join(", ")}`);
+  }
   return values.length > 0 ? new Set(values) : null;
 }
 
@@ -178,6 +191,41 @@ function assertDirectoryTreeSafe(params: {
   }
 }
 
+function normalizeDocsNavPage(pluginId: string, locale: string, rawPage: string): string {
+  const page = rawPage.trim();
+  if (!page) {
+    throw new Error(`locale plugin "${pluginId}" docs nav contains an empty page entry`);
+  }
+  if (page.includes("\\") || page.includes("\0")) {
+    throw new Error(`locale plugin "${pluginId}" docs nav page is invalid: ${rawPage}`);
+  }
+  const rawSegments = page.split("/");
+  if (rawSegments.some((segment) => segment === "." || segment === "..")) {
+    throw new Error(
+      `locale plugin "${pluginId}" docs nav page escapes the locale namespace: ${rawPage}`,
+    );
+  }
+  const normalized = path.posix.normalize(page);
+  if (
+    path.posix.isAbsolute(normalized) ||
+    normalized === "." ||
+    normalized === ".." ||
+    normalized.startsWith("../") ||
+    normalized.includes("/../") ||
+    normalized.split("/").some((segment) => segment === "." || segment === "..")
+  ) {
+    throw new Error(
+      `locale plugin "${pluginId}" docs nav page escapes the locale namespace: ${rawPage}`,
+    );
+  }
+  if (!normalized.startsWith(`${locale}/`)) {
+    throw new Error(
+      `locale plugin "${pluginId}" docs nav page must stay in locale namespace: ${rawPage}`,
+    );
+  }
+  return normalized;
+}
+
 function validateDocsNav(
   pluginId: string,
   locale: string,
@@ -201,13 +249,9 @@ function validateDocsNav(
     throw new Error(`locale plugin "${pluginId}" docs nav does not reference any pages`);
   }
   for (const page of pageEntries) {
-    if (!page.startsWith(`${locale}/`)) {
-      throw new Error(
-        `locale plugin "${pluginId}" docs nav page must stay in locale namespace: ${page}`,
-      );
-    }
-    if (!hasDocsPage(docsRoot, page.slice(locale.length + 1))) {
-      throw new Error(`locale plugin "${pluginId}" docs nav page not found: ${page}`);
+    const normalizedPage = normalizeDocsNavPage(pluginId, locale, page);
+    if (!hasDocsPage(docsRoot, normalizedPage.slice(locale.length + 1))) {
+      throw new Error(`locale plugin "${pluginId}" docs nav page not found: ${normalizedPage}`);
     }
   }
   return {
@@ -244,6 +288,9 @@ function collectNavPages(node: unknown): string[] {
 
 function hasDocsPage(docsRoot: string, relativePage: string): boolean {
   const normalized = relativePage.replace(/^\/+|\/+$/g, "");
+  if (!normalized) {
+    return false;
+  }
   const candidates = [
     normalized,
     `${normalized}.md`,
@@ -251,7 +298,14 @@ function hasDocsPage(docsRoot: string, relativePage: string): boolean {
     path.join(normalized, "index.md"),
     path.join(normalized, "index.mdx"),
   ];
-  return candidates.some((candidate) => fs.existsSync(path.join(docsRoot, candidate)));
+  return candidates.some((candidate) => {
+    const candidatePath = path.join(docsRoot, candidate);
+    try {
+      return fs.statSync(candidatePath).isFile();
+    } catch {
+      return false;
+    }
+  });
 }
 
 function countMarkdownFiles(dir: string): number {
@@ -299,10 +353,16 @@ function mergeLanguageIntoConfig(config: DocsConfig, languageNav: DocsNavLanguag
 function getSourceOwnedLocaleDirs(config: DocsConfig): Set<string> {
   const dirs = new Set<string>();
   const languages = Array.isArray(config.navigation?.languages) ? config.navigation.languages : [];
-  for (const page of collectNavPages(languages)) {
-    const [topLevel] = page.split("/");
-    if (topLevel && isValidLocaleId(topLevel) && topLevel !== "en") {
-      dirs.add(topLevel);
+  for (const entry of languages) {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+      continue;
+    }
+    const language =
+      typeof (entry as { language?: unknown }).language === "string"
+        ? (entry as { language: string }).language.trim()
+        : "";
+    if (language && isValidLocaleId(language) && language !== "en") {
+      dirs.add(language);
     }
   }
   return dirs;

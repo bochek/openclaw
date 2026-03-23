@@ -75,6 +75,7 @@ export type LoadLocaleRegistryOptions = {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
   candidates?: PluginCandidate[];
+  cache?: boolean;
 };
 
 const LOCALE_ORIGIN_RANK: Readonly<Record<PluginOrigin, number>> = {
@@ -333,7 +334,7 @@ export function loadLocaleRegistry(options: LoadLocaleRegistryOptions = {}): Loc
   const manifestRegistry = loadPluginManifestRegistry({
     config: options.config,
     workspaceDir: options.workspaceDir,
-    cache: false,
+    cache: options.cache ?? false,
     env: options.env,
     candidates: options.candidates,
   });

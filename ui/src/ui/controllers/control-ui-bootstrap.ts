@@ -65,8 +65,10 @@ export async function loadControlUiBootstrapConfig(state: ControlUiBootstrapStat
       name: parsed.assistantName,
       avatar: parsed.assistantAvatar ?? null,
     });
+    let registeredRemoteLocales = 0;
     for (const locale of normalizeBootstrapLocales(parsed.locales)) {
       registerRemoteLocaleTranslationSource(locale);
+      registeredRemoteLocales += 1;
     }
     state.assistantName = normalized.name;
     state.assistantAvatar = normalized.avatar;
@@ -77,6 +79,8 @@ export async function loadControlUiBootstrapConfig(state: ControlUiBootstrapStat
       typeof state.settings?.locale === "string" ? state.settings.locale.trim() : "";
     if (preferredLocale) {
       await i18n.setLocale(preferredLocale);
+    } else if (registeredRemoteLocales > 0) {
+      i18n.refresh();
     }
   } catch {
     // Ignore bootstrap failures; UI will update identity after connecting.

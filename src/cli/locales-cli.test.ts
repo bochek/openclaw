@@ -177,4 +177,23 @@ describe("registerLocalesCli", () => {
     expect(selectedLines).toHaveLength(1);
     expect(selectedLines[0]).toContain("locale-de");
   });
+
+  it("passes workspace plugin context into sync-docs", async () => {
+    const program = new Command().name("openclaw");
+    registerLocalesCli(program);
+
+    await program.parseAsync(["node", "openclaw", "locales", "sync-docs"], {
+      from: "node",
+    });
+
+    expect(mocks.syncDocsLocales).toHaveBeenCalledWith({
+      docsDir: undefined,
+      sourceConfigPath: undefined,
+      workspaceDir: undefined,
+      outputConfigPath: undefined,
+      locales: [],
+      config: { plugins: {} },
+      workspaceDirForPlugins: "/tmp/workspace",
+    });
+  });
 });

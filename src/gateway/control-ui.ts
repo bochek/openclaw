@@ -181,6 +181,7 @@ function collectControlUiLocaleResources(
   const registry = loadLocaleRegistry({
     config: opts?.config,
     workspaceDir,
+    cache: !opts?.pluginCandidates,
     env: process.env,
     candidates: opts?.pluginCandidates,
   });
