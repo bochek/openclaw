@@ -127,6 +127,35 @@ describe("sessions view", () => {
     expect(fast?.value).toBe("on");
   });
 
+  it("copies selected session names to clipboard", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, { clipboard: { writeText } });
+    const container = document.createElement("div");
+    render(
+      renderSessions({
+        ...buildProps(
+          buildMultiResult([
+            { key: "sess-a", kind: "direct", updatedAt: 30, displayName: "Chat Alpha" },
+            { key: "sess-b", kind: "direct", updatedAt: 20, label: "Beta" },
+            { key: "sess-c", kind: "direct", updatedAt: 10 },
+          ]),
+        ),
+        selectedKeys: new Set(["sess-a", "sess-b", "sess-c"]),
+      }),
+      container,
+    );
+    await Promise.resolve();
+
+    const copyBtn = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(".data-table-bulk-bar button"),
+    ).find((btn) => btn.textContent?.includes("Copy Names"));
+    expect(copyBtn).toBeTruthy();
+    copyBtn!.click();
+    await Promise.resolve();
+
+    expect(writeText).toHaveBeenCalledWith("Chat Alpha\nBeta\nsess-c");
+  });
+
   it("deselects only the current page from the header checkbox", async () => {
     const onSelectPage = vi.fn();
     const onDeselectPage = vi.fn();

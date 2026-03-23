@@ -130,6 +130,22 @@ function resolveThinkLevelPatchValue(value: string, isBinary: boolean): string |
   return value;
 }
 
+function formatSessionName(row: GatewaySessionRow): string {
+  return row.displayName?.trim() || row.label?.trim() || row.key;
+}
+
+async function copySelectedSessionNames(
+  rows: GatewaySessionRow[],
+  selectedKeys: Set<string>,
+): Promise<void> {
+  const names = rows.filter((r) => selectedKeys.has(r.key)).map(formatSessionName);
+  try {
+    await navigator.clipboard.writeText(names.join("\n"));
+  } catch {
+    // Clipboard can fail in insecure contexts or when permission is denied.
+  }
+}
+
 function filterRows(rows: GatewaySessionRow[], query: string): GatewaySessionRow[] {
   const q = query.trim().toLowerCase();
   if (!q) {
@@ -310,6 +326,12 @@ export function renderSessions(props: SessionsProps) {
                     @click=${props.onDeselectAll}
                   >
                     Unselect
+                  </button>
+                  <button
+                    class="btn btn--sm"
+                    @click=${() => void copySelectedSessionNames(rawRows, props.selectedKeys)}
+                  >
+                    ${icons.copy} Copy Names
                   </button>
                   <button
                     class="btn btn--sm danger"
