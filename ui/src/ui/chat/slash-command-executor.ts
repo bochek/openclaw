@@ -3,7 +3,6 @@
  * Calls gateway RPC methods and returns formatted results.
  */
 
-import type { ModelCatalogEntry } from "../../../../src/agents/model-catalog.js";
 import {
   formatThinkingLevels,
   normalizeThinkLevel,
@@ -16,12 +15,16 @@ import {
   isSubagentSessionKey,
   parseAgentSessionKey,
 } from "../../../../src/routing/session-key.js";
-import { createChatModelOverride, normalizeChatModelOverrideValue, resolveServerChatModelValue } from "../chat-model-ref.ts";
+import {
+  createChatModelOverride,
+  resolvePreferredServerChatModelValue,
+} from "../chat-model-ref.ts";
 import type { GatewayBrowserClient } from "../gateway.ts";
 import type {
   AgentsListResult,
   ChatModelOverride,
   GatewaySessionRow,
+  ModelCatalogEntry,
   SessionsListResult,
   SessionsPatchResult,
 } from "../types.ts";
@@ -151,16 +154,20 @@ async function executeModel(
   }
 
   try {
-    const patched = await client.request<SessionsPatchResult>("sessions.patch", {
-      key: sessionKey,
-      model: args.trim(),
-    });
-    const patchedModel = patched.resolved?.model ?? args.trim();
-    const rawOverride = createChatModelOverride(patchedModel.trim());
-    const resolvedValue = rawOverride
-      ? (normalizeChatModelOverrideValue(rawOverride, state.chatModelCatalog ?? []) ||
-         resolveServerChatModelValue(patchedModel, patched.resolved?.modelProvider))
-      : resolveServerChatModelValue(patchedModel, patched.resolved?.modelProvider);
+    const [patched, models] = await Promise.all([
+      client.request<SessionsPatchResult>("sessions.patch", {
+        key: sessionKey,
+        model: args.trim(),
+      }),
+      client
+        .request<{ models: ModelCatalogEntry[] }>("models.list", {})
+        .catch(() => ({ models: [] })),
+    ]);
+    const resolvedValue = resolvePreferredServerChatModelValue(
+      patched.resolved?.model ?? args.trim(),
+      patched.resolved?.modelProvider,
+      models?.models ?? [],
+    );
     return {
       content: `Model set to \`${args.trim()}\`.`,
       action: "refresh",

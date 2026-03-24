@@ -4,6 +4,7 @@ import {
   createChatModelOverride,
   formatChatModelDisplay,
   normalizeChatModelOverrideValue,
+  resolvePreferredServerChatModelValue,
   resolveServerChatModelValue,
 } from "./chat-model-ref.ts";
 import type { ModelCatalogEntry } from "./types.ts";
@@ -46,5 +47,28 @@ describe("chat-model-ref helpers", () => {
   it("resolves server session data to qualified option values", () => {
     expect(resolveServerChatModelValue("gpt-5-mini", "openai")).toBe("openai/gpt-5-mini");
     expect(resolveServerChatModelValue("alias-only", null)).toBe("alias-only");
+  });
+
+  it("prefers the catalog provider over a stale server provider when the match is unique", () => {
+    expect(
+      resolvePreferredServerChatModelValue("deepseek-chat", "zai", [
+        { id: "deepseek-chat", name: "DeepSeek Chat", provider: "deepseek" },
+      ]),
+    ).toBe("deepseek/deepseek-chat");
+  });
+
+  it("falls back to the server provider when the catalog is empty", () => {
+    expect(resolvePreferredServerChatModelValue("gpt-5-mini", "openai", [])).toBe(
+      "openai/gpt-5-mini",
+    );
+  });
+
+  it("falls back to the server provider when the catalog match is ambiguous", () => {
+    expect(
+      resolvePreferredServerChatModelValue("gpt-5-mini", "openai", [
+        { id: "gpt-5-mini", name: "GPT-5 Mini", provider: "openai" },
+        { id: "gpt-5-mini", name: "GPT-5 Mini", provider: "openrouter" },
+      ]),
+    ).toBe("openai/gpt-5-mini");
   });
 });

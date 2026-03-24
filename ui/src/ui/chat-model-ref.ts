@@ -72,6 +72,30 @@ export function resolveServerChatModelValue(
   return buildQualifiedChatModelValue(model, provider);
 }
 
+export function resolvePreferredServerChatModelValue(
+  model: string | null | undefined,
+  provider: string | null | undefined,
+  catalog: ModelCatalogEntry[],
+): string {
+  if (typeof model !== "string") {
+    return "";
+  }
+  const trimmedModel = model.trim();
+  if (!trimmedModel) {
+    return "";
+  }
+
+  const override = createChatModelOverride(trimmedModel);
+  if (override) {
+    const normalized = normalizeChatModelOverrideValue(override, catalog);
+    if (normalized.includes("/")) {
+      return normalized;
+    }
+  }
+
+  return resolveServerChatModelValue(trimmedModel, provider);
+}
+
 export function formatChatModelDisplay(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {

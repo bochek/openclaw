@@ -11,7 +11,7 @@ import {
   createChatModelOverride,
   formatChatModelDisplay,
   normalizeChatModelOverrideValue,
-  resolveServerChatModelValue,
+  resolvePreferredServerChatModelValue,
 } from "./chat-model-ref.ts";
 import { ChatState, loadChatHistory } from "./controllers/chat.ts";
 import { loadSessions } from "./controllers/sessions.ts";
@@ -541,33 +541,22 @@ function resolveModelOverrideValue(state: AppViewState): string {
   // not the model's actual provider (e.g. "zai" for a "deepseek-chat" model).
   const activeRow = resolveActiveSessionRow(state);
   if (activeRow && typeof activeRow.model === "string" && activeRow.model.trim()) {
-    const rawOverride = createChatModelOverride(activeRow.model.trim());
-    if (rawOverride) {
-      const normalized = normalizeChatModelOverrideValue(rawOverride, state.chatModelCatalog ?? []);
-      if (normalized) {
-        return normalized;
-      }
-    }
-    // Fallback: use server-provided provider if catalog lookup fails.
-    return resolveServerChatModelValue(activeRow.model, activeRow.modelProvider);
+    return resolvePreferredServerChatModelValue(
+      activeRow.model,
+      activeRow.modelProvider,
+      state.chatModelCatalog ?? [],
+    );
   }
   return "";
 }
 
 function resolveDefaultModelValue(state: AppViewState): string {
   const defaults = state.sessionsResult?.defaults;
-  const model = defaults?.model;
-  if (typeof model !== "string" || !model.trim()) {
-    return "";
-  }
-  const rawOverride = createChatModelOverride(model.trim());
-  if (rawOverride) {
-    const normalized = normalizeChatModelOverrideValue(rawOverride, state.chatModelCatalog ?? []);
-    if (normalized) {
-      return normalized;
-    }
-  }
-  return resolveServerChatModelValue(model, defaults?.modelProvider);
+  return resolvePreferredServerChatModelValue(
+    defaults?.model,
+    defaults?.modelProvider,
+    state.chatModelCatalog ?? [],
+  );
 }
 
 function buildChatModelOptions(

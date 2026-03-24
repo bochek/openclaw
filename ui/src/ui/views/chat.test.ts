@@ -25,12 +25,13 @@ function createSessions(): SessionsListResult {
 function createChatHeaderState(
   overrides: {
     model?: string | null;
+    modelProvider?: string | null;
     models?: ModelCatalogEntry[];
     omitSessionFromList?: boolean;
   } = {},
 ): { state: AppViewState; request: ReturnType<typeof vi.fn> } {
   let currentModel = overrides.model ?? null;
-  let currentModelProvider = currentModel ? "openai" : null;
+  let currentModelProvider = overrides.modelProvider ?? (currentModel ? "openai" : null);
   const omitSessionFromList = overrides.omitSessionFromList ?? false;
   const catalog = overrides.models ?? [
     { id: "gpt-5", name: "GPT-5", provider: "openai" },
@@ -907,6 +908,43 @@ describe("chat view", () => {
       'select[data-chat-model-select="true"]',
     );
     expect(modelSelect).not.toBeNull();
+    expect(modelSelect?.value).toBe("openai/gpt-5-mini");
+
+    const optionValues = Array.from(modelSelect?.querySelectorAll("option") ?? []).map(
+      (option) => option.value,
+    );
+    expect(optionValues).toContain("openai/gpt-5-mini");
+    expect(optionValues).not.toContain("gpt-5-mini");
+  });
+
+  it("prefers the catalog provider when the active session reports a stale provider", () => {
+    const { state } = createChatHeaderState({
+      model: "deepseek-chat",
+      modelProvider: "zai",
+      models: [{ id: "deepseek-chat", name: "DeepSeek Chat", provider: "deepseek" }],
+    });
+
+    const container = document.createElement("div");
+    render(renderChatSessionSelect(state), container);
+
+    const modelSelect = container.querySelector<HTMLSelectElement>(
+      'select[data-chat-model-select="true"]',
+    );
+    expect(modelSelect?.value).toBe("deepseek/deepseek-chat");
+  });
+
+  it("falls back to the server-qualified session model when catalog lookup fails", () => {
+    const { state } = createChatHeaderState({
+      model: "gpt-5-mini",
+      models: [],
+    });
+
+    const container = document.createElement("div");
+    render(renderChatSessionSelect(state), container);
+
+    const modelSelect = container.querySelector<HTMLSelectElement>(
+      'select[data-chat-model-select="true"]',
+    );
     expect(modelSelect?.value).toBe("openai/gpt-5-mini");
 
     const optionValues = Array.from(modelSelect?.querySelectorAll("option") ?? []).map(

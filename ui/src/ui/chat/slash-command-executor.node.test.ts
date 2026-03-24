@@ -277,6 +277,11 @@ describe("executeSlashCommand directives", () => {
           },
         };
       }
+      if (method === "models.list") {
+        return {
+          models: [{ id: "gpt-5-mini", name: "GPT-5 Mini", provider: "openai" }],
+        };
+      }
       throw new Error(`unexpected method: ${method}`);
     });
 
@@ -291,6 +296,70 @@ describe("executeSlashCommand directives", () => {
       key: "main",
       model: "gpt-5-mini",
     });
+    expect(result.sessionPatch?.modelOverride).toEqual({
+      kind: "qualified",
+      value: "openai/gpt-5-mini",
+    });
+  });
+
+  it("corrects stale patched providers with the catalog after /model", async () => {
+    const request = vi.fn(async (method: string, _payload?: unknown) => {
+      if (method === "sessions.patch") {
+        return {
+          ok: true,
+          key: "main",
+          resolved: {
+            modelProvider: "zai",
+            model: "deepseek-chat",
+          },
+        };
+      }
+      if (method === "models.list") {
+        return {
+          models: [{ id: "deepseek-chat", name: "DeepSeek Chat", provider: "deepseek" }],
+        };
+      }
+      throw new Error(`unexpected method: ${method}`);
+    });
+
+    const result = await executeSlashCommand(
+      { request } as unknown as GatewayBrowserClient,
+      "main",
+      "model",
+      "deepseek-chat",
+    );
+
+    expect(result.sessionPatch?.modelOverride).toEqual({
+      kind: "qualified",
+      value: "deepseek/deepseek-chat",
+    });
+  });
+
+  it("falls back to the patched server provider when the model catalog lookup fails", async () => {
+    const request = vi.fn(async (method: string, _payload?: unknown) => {
+      if (method === "sessions.patch") {
+        return {
+          ok: true,
+          key: "main",
+          resolved: {
+            modelProvider: "openai",
+            model: "gpt-5-mini",
+          },
+        };
+      }
+      if (method === "models.list") {
+        throw new Error("models unavailable");
+      }
+      throw new Error(`unexpected method: ${method}`);
+    });
+
+    const result = await executeSlashCommand(
+      { request } as unknown as GatewayBrowserClient,
+      "main",
+      "model",
+      "gpt-5-mini",
+    );
+
     expect(result.sessionPatch?.modelOverride).toEqual({
       kind: "qualified",
       value: "openai/gpt-5-mini",
