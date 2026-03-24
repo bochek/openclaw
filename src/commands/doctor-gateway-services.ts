@@ -20,6 +20,7 @@ import {
 } from "../daemon/service-audit.js";
 import { resolveGatewayService } from "../daemon/service.js";
 import { uninstallLegacySystemdUnits } from "../daemon/systemd.js";
+import { isTruthyEnvValue } from "../infra/env.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { note } from "../terminal/note.js";
 import { buildGatewayInstallPlan } from "./daemon-install-helpers.js";
@@ -308,6 +309,7 @@ export async function maybeRepairGatewayServiceConfig(
 
   const aggressiveIssues = audit.issues.filter((issue) => issue.level === "aggressive");
   const needsAggressive = aggressiveIssues.length > 0;
+  const updateInProgress = isTruthyEnvValue(process.env.OPENCLAW_UPDATE_IN_PROGRESS);
 
   if (needsAggressive && !prompter.shouldForce) {
     note(
@@ -321,10 +323,12 @@ export async function maybeRepairGatewayServiceConfig(
         message: "Overwrite gateway service config with current defaults now?",
         initialValue: Boolean(prompter.shouldForce),
       })
-    : await prompter.confirmSkipInNonInteractive({
-        message: "Update gateway service config to the recommended defaults now?",
-        initialValue: true,
-      });
+    : updateInProgress && prompter.shouldRepair
+      ? true
+      : await prompter.confirmSkipInNonInteractive({
+          message: "Update gateway service config to the recommended defaults now?",
+          initialValue: true,
+        });
   if (!repair) {
     return;
   }
@@ -335,30 +339,39 @@ export async function maybeRepairGatewayServiceConfig(
       ? cfg.gateway.auth.token.trim() || undefined
       : undefined;
   let cfgForServiceInstall = cfg;
+  let transientGatewayToken: string | undefined;
   if (!tokenRefConfigured && !configuredGatewayToken && gatewayTokenForRepair) {
-    const nextCfg: OpenClawConfig = {
-      ...cfg,
-      gateway: {
-        ...cfg.gateway,
-        auth: {
-          ...cfg.gateway?.auth,
-          mode: cfg.gateway?.auth?.mode ?? "token",
-          token: gatewayTokenForRepair,
-        },
-      },
-    };
-    try {
-      await writeConfigFile(nextCfg);
-      cfgForServiceInstall = nextCfg;
+    if (updateInProgress) {
+      transientGatewayToken = gatewayTokenForRepair;
       note(
-        expectedGatewayToken
-          ? "Persisted gateway.auth.token from environment before reinstalling service."
-          : "Persisted gateway.auth.token from existing service definition before reinstalling service.",
+        "Using the recovered gateway token for this update repair without persisting it to openclaw.json.",
         "Gateway",
       );
-    } catch (err) {
-      runtime.error(`Failed to persist gateway.auth.token before service repair: ${String(err)}`);
-      return;
+    } else {
+      const nextCfg: OpenClawConfig = {
+        ...cfg,
+        gateway: {
+          ...cfg.gateway,
+          auth: {
+            ...cfg.gateway?.auth,
+            mode: cfg.gateway?.auth?.mode ?? "token",
+            token: gatewayTokenForRepair,
+          },
+        },
+      };
+      try {
+        await writeConfigFile(nextCfg);
+        cfgForServiceInstall = nextCfg;
+        note(
+          expectedGatewayToken
+            ? "Persisted gateway.auth.token from environment before reinstalling service."
+            : "Persisted gateway.auth.token from existing service definition before reinstalling service.",
+          "Gateway",
+        );
+      } catch (err) {
+        runtime.error(`Failed to persist gateway.auth.token before service repair: ${String(err)}`);
+        return;
+      }
     }
   }
 
@@ -371,6 +384,9 @@ export async function maybeRepairGatewayServiceConfig(
     warn: (message, title) => note(message, title),
     config: cfgForServiceInstall,
   });
+  if (transientGatewayToken && !updatedPlan.environment.OPENCLAW_GATEWAY_TOKEN) {
+    updatedPlan.environment.OPENCLAW_GATEWAY_TOKEN = transientGatewayToken;
+  }
   try {
     await service.install({
       env: process.env,
@@ -378,6 +394,7 @@ export async function maybeRepairGatewayServiceConfig(
       programArguments: updatedPlan.programArguments,
       workingDirectory: updatedPlan.workingDirectory,
       environment: updatedPlan.environment,
+      startService: !updateInProgress,
     });
   } catch (err) {
     runtime.error(`Gateway service update failed: ${String(err)}`);

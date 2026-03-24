@@ -7,6 +7,7 @@ export type GatewayServiceInstallArgs = {
   workingDirectory?: string;
   environment?: GatewayServiceEnv;
   description?: string;
+  startService?: boolean;
 };
 
 export type GatewayServiceManageArgs = {

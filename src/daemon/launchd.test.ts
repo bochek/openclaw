@@ -297,6 +297,18 @@ describe("launchd install", () => {
     expect(plist).toContain(`<string>${tmpDir}</string>`);
   });
 
+  it("rewrites the plist without bootstrapping when startService is false", async () => {
+    const env = createDefaultLaunchdEnv();
+    await installLaunchAgent({
+      env,
+      stdout: new PassThrough(),
+      programArguments: defaultProgramArguments,
+      startService: false,
+    });
+
+    expect(state.launchctlCalls).toEqual([]);
+  });
+
   it("writes KeepAlive=true policy with restrictive umask", async () => {
     const env = createDefaultLaunchdEnv();
     await installLaunchAgent({

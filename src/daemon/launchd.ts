@@ -465,20 +465,23 @@ export async function installLaunchAgent({
   workingDirectory,
   environment,
   description,
+  startService = true,
 }: GatewayServiceInstallArgs): Promise<{ plistPath: string }> {
   const { logDir, stdoutPath, stderrPath } = resolveGatewayLogPaths(env);
   await ensureSecureDirectory(logDir);
 
   const domain = resolveGuiDomain();
   const label = resolveLaunchAgentLabel({ env });
-  for (const legacyLabel of resolveLegacyGatewayLaunchAgentLabels(env.OPENCLAW_PROFILE)) {
-    const legacyPlistPath = resolveLaunchAgentPlistPathForLabel(env, legacyLabel);
-    await execLaunchctl(["bootout", domain, legacyPlistPath]);
-    await execLaunchctl(["unload", legacyPlistPath]);
-    try {
-      await fs.unlink(legacyPlistPath);
-    } catch {
-      // ignore
+  if (startService) {
+    for (const legacyLabel of resolveLegacyGatewayLaunchAgentLabels(env.OPENCLAW_PROFILE)) {
+      const legacyPlistPath = resolveLaunchAgentPlistPathForLabel(env, legacyLabel);
+      await execLaunchctl(["bootout", domain, legacyPlistPath]);
+      await execLaunchctl(["unload", legacyPlistPath]);
+      try {
+        await fs.unlink(legacyPlistPath);
+      } catch {
+        // ignore
+      }
     }
   }
 
@@ -502,18 +505,20 @@ export async function installLaunchAgent({
   await fs.writeFile(plistPath, plist, { encoding: "utf8", mode: LAUNCH_AGENT_PLIST_MODE });
   await fs.chmod(plistPath, LAUNCH_AGENT_PLIST_MODE).catch(() => undefined);
 
-  await execLaunchctl(["bootout", domain, plistPath]);
-  await execLaunchctl(["unload", plistPath]);
-  // launchd can persist "disabled" state even after bootout + plist removal; clear it before bootstrap.
-  await bootstrapLaunchAgentOrThrow({
-    domain,
-    serviceTarget: `${domain}/${label}`,
-    plistPath,
-    actionHint: "openclaw gateway install --force",
-  });
-  // `bootstrap` already loads RunAtLoad agents. Avoid `kickstart -k` here:
-  // on slow macOS guests it SIGTERMs the freshly booted gateway and pushes the
-  // real listener startup past setup's health deadline.
+  if (startService) {
+    await execLaunchctl(["bootout", domain, plistPath]);
+    await execLaunchctl(["unload", plistPath]);
+    // launchd can persist "disabled" state even after bootout + plist removal; clear it before bootstrap.
+    await bootstrapLaunchAgentOrThrow({
+      domain,
+      serviceTarget: `${domain}/${label}`,
+      plistPath,
+      actionHint: "openclaw gateway install --force",
+    });
+    // `bootstrap` already loads RunAtLoad agents. Avoid `kickstart -k` here:
+    // on slow macOS guests it SIGTERMs the freshly booted gateway and pushes the
+    // real listener startup past setup's health deadline.
+  }
 
   // Ensure we don't end up writing to a clack spinner line (wizards show progress without a newline).
   writeFormattedLines(

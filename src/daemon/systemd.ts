@@ -456,6 +456,7 @@ export async function installSystemdService({
   workingDirectory,
   environment,
   description,
+  startService = true,
 }: GatewayServiceInstallArgs): Promise<{ unitPath: string }> {
   await assertSystemdAvailable(env);
 
@@ -494,9 +495,11 @@ export async function installSystemdService({
     throw new Error(`systemctl enable failed: ${enable.stderr || enable.stdout}`.trim());
   }
 
-  const restart = await execSystemctlUser(env, ["restart", unitName]);
-  if (restart.code !== 0) {
-    throw new Error(`systemctl restart failed: ${restart.stderr || restart.stdout}`.trim());
+  if (startService) {
+    const restart = await execSystemctlUser(env, ["restart", unitName]);
+    if (restart.code !== 0) {
+      throw new Error(`systemctl restart failed: ${restart.stderr || restart.stdout}`.trim());
+    }
   }
 
   // Ensure we don't end up writing to a clack spinner line (wizards show progress without a newline).

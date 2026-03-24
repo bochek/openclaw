@@ -10,6 +10,8 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Doctor/gateway updates: stage gateway service entrypoint repairs during update-mode `doctor --fix` without auto-starting the daemon or persisting recovered tokens into `openclaw.json`, so source updates can repair stale service definitions while still honoring deferred restarts. (#53197) Thanks @giulio-leone.
+
 ## 2026.3.23
 
 ### Breaking

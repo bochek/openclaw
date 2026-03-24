@@ -116,7 +116,7 @@ describe("createDoctorPrompter", () => {
         message: "Repair gateway service config?",
         initialValue: false,
       }),
-    ).resolves.toBe(true);
+    ).resolves.toBe(false);
     await expect(
       prompter.confirmSkipInNonInteractive({
         message: "Restart gateway service now?",

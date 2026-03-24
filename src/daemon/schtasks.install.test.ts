@@ -151,4 +151,19 @@ describe("installScheduledTask", () => {
       expect(script).toContain('set "OPENCLAW_GATEWAY_PORT=18789"');
     });
   });
+
+  it("stages the task without launching it when startService is false", async () => {
+    await withUserProfileDir(async (_tmpDir, env) => {
+      await installScheduledTask({
+        env,
+        stdout: new PassThrough(),
+        programArguments: ["node", "gateway.js"],
+        startService: false,
+      });
+
+      expect(schtasksCalls[0]).toEqual(["/Query"]);
+      expect(schtasksCalls[1]?.[0]).toBe("/Create");
+      expect(schtasksCalls).toHaveLength(2);
+    });
+  });
 });

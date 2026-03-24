@@ -12,6 +12,7 @@ const ALLOWED_EXTENSION_PUBLIC_SURFACES = new Set([
   "api.js",
   "auth-presence.js",
   "index.js",
+  "helper-api.js",
   "light-runtime-api.js",
   "login-qr-api.js",
   "onboard.js",
@@ -21,6 +22,7 @@ const ALLOWED_EXTENSION_PUBLIC_SURFACES = new Set([
   "session-key-api.js",
   "setup-api.js",
   "setup-entry.js",
+  "thread-bindings-runtime.js",
   "timeouts.js",
 ]);
 const GUARDED_CHANNEL_EXTENSIONS = new Set([

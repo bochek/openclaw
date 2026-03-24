@@ -556,6 +556,7 @@ export async function installScheduledTask({
   workingDirectory,
   environment,
   description,
+  startService = true,
 }: GatewayServiceInstallArgs): Promise<{ scriptPath: string }> {
   await assertSchtasksAvailable();
   const scriptPath = resolveTaskScriptPath(env);
@@ -597,7 +598,9 @@ export async function installScheduledTask({
       await fs.mkdir(path.dirname(startupEntryPath), { recursive: true });
       const launcher = buildStartupLauncherScript({ description: taskDescription, scriptPath });
       await fs.writeFile(startupEntryPath, launcher, "utf8");
-      launchFallbackTaskScript(scriptPath);
+      if (startService) {
+        launchFallbackTaskScript(scriptPath);
+      }
       writeFormattedLines(
         stdout,
         [
@@ -611,7 +614,9 @@ export async function installScheduledTask({
     throw new Error(`schtasks create failed: ${detail}`.trim());
   }
 
-  await execSchtasks(["/Run", "/TN", taskName]);
+  if (startService) {
+    await execSchtasks(["/Run", "/TN", taskName]);
+  }
   // Ensure we don't end up writing to a clack spinner line (wizards show progress without a newline).
   writeFormattedLines(
     stdout,

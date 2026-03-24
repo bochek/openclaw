@@ -417,7 +417,7 @@ describe("maybeRepairGatewayServiceConfig", () => {
     expect(mocks.install).toHaveBeenCalledTimes(1);
   });
 
-  it("skips service config reinstalls during non-interactive update repairs", async () => {
+  it("stages service config reinstalls without starting the service during non-interactive update repairs", async () => {
     Object.defineProperty(process.stdin, "isTTY", {
       value: false,
       configurable: true,
@@ -466,7 +466,44 @@ describe("maybeRepairGatewayServiceConfig", () => {
       expect.stringContaining("Gateway service entrypoint does not match the current install."),
       "Gateway service config",
     );
-    expect(mocks.install).not.toHaveBeenCalled();
+    expect(mocks.install).toHaveBeenCalledTimes(1);
+    expect(mocks.install).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startService: false,
+      }),
+    );
+  });
+
+  it("does not persist recovered gateway tokens during update-mode repairs", async () => {
+    Object.defineProperty(process.stdin, "isTTY", {
+      value: false,
+      configurable: true,
+    });
+    process.env.OPENCLAW_UPDATE_IN_PROGRESS = "1";
+    setupGatewayTokenRepairScenario();
+
+    await maybeRepairGatewayServiceConfig(
+      { gateway: {} },
+      "local",
+      makeDoctorIo(),
+      createDoctorPrompter({
+        runtime: makeDoctorIo(),
+        options: {
+          repair: true,
+          nonInteractive: true,
+        },
+      }),
+    );
+
+    expect(mocks.writeConfigFile).not.toHaveBeenCalled();
+    expect(mocks.install).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startService: false,
+        environment: expect.objectContaining({
+          OPENCLAW_GATEWAY_TOKEN: "stale-token",
+        }),
+      }),
+    );
   });
 
   it("treats SecretRef-managed gateway token as non-persisted service state", async () => {
@@ -559,7 +596,7 @@ describe("maybeRepairGatewayServiceConfig", () => {
     );
   });
 
-  it("does not persist embedded service tokens during non-interactive update repairs", async () => {
+  it("stages embedded service tokens during non-interactive update repairs without persisting them", async () => {
     Object.defineProperty(process.stdin, "isTTY", {
       value: false,
       configurable: true,
@@ -591,7 +628,14 @@ describe("maybeRepairGatewayServiceConfig", () => {
         );
 
         expect(mocks.writeConfigFile).not.toHaveBeenCalled();
-        expect(mocks.install).not.toHaveBeenCalled();
+        expect(mocks.install).toHaveBeenCalledWith(
+          expect.objectContaining({
+            startService: false,
+            environment: expect.objectContaining({
+              OPENCLAW_GATEWAY_TOKEN: "stale-token",
+            }),
+          }),
+        );
       },
     );
   });
