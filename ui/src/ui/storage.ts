@@ -343,3 +343,145 @@ function persistSettings(next: UiSettings) {
     // prevent in-memory settings and visual updates from being applied
   }
 }
+
+// ── Chat State Persistence ──
+// Keys for persisting chat queue, draft message, and attachments across refreshes
+
+const CHAT_QUEUE_KEY_PREFIX = "openclaw.control.chat-queue.";
+const CHAT_DRAFT_KEY_PREFIX = "openclaw.control.chat-draft.";
+const CHAT_ATTACHMENTS_KEY_PREFIX = "openclaw.control.chat-attachments.";
+
+/**
+ * Persist the chat message queue to localStorage.
+ * This allows queued messages to survive browser refreshes.
+ */
+export function persistChatQueue(sessionKey: string, queue: Array<unknown>): void {
+  const storage = getSafeLocalStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    const key = `${CHAT_QUEUE_KEY_PREFIX}${sessionKey}`;
+    if (queue.length === 0) {
+      storage.removeItem(key);
+    } else {
+      storage.setItem(key, JSON.stringify(queue));
+    }
+  } catch {
+    // best-effort
+  }
+}
+
+/**
+ * Load persisted chat message queue from localStorage.
+ */
+export function loadPersistedChatQueue(sessionKey: string): Array<unknown> {
+  const storage = getSafeLocalStorage();
+  if (!storage) {
+    return [];
+  }
+  try {
+    const key = `${CHAT_QUEUE_KEY_PREFIX}${sessionKey}`;
+    const raw = storage.getItem(key);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Clear persisted chat queue for a session.
+ */
+export function clearPersistedChatQueue(sessionKey: string): void {
+  const storage = getSafeLocalStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    storage.removeItem(`${CHAT_QUEUE_KEY_PREFIX}${sessionKey}`);
+  } catch {
+    // best-effort
+  }
+}
+
+/**
+ * Persist unsent draft message to sessionStorage.
+ * sessionStorage is used because drafts should not persist across tabs/sessions.
+ */
+export function persistChatDraft(sessionKey: string, draft: string): void {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    const key = `${CHAT_DRAFT_KEY_PREFIX}${sessionKey}`;
+    if (!draft) {
+      storage.removeItem(key);
+    } else {
+      storage.setItem(key, draft);
+    }
+  } catch {
+    // best-effort
+  }
+}
+
+/**
+ * Load persisted draft message from sessionStorage.
+ */
+export function loadPersistedChatDraft(sessionKey: string): string {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return "";
+  }
+  try {
+    const key = `${CHAT_DRAFT_KEY_PREFIX}${sessionKey}`;
+    return storage.getItem(key) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Persist unsent attachments to sessionStorage.
+ */
+export function persistChatAttachments(sessionKey: string, attachments: Array<unknown>): void {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    const key = `${CHAT_ATTACHMENTS_KEY_PREFIX}${sessionKey}`;
+    if (attachments.length === 0) {
+      storage.removeItem(key);
+    } else {
+      storage.setItem(key, JSON.stringify(attachments));
+    }
+  } catch {
+    // best-effort
+  }
+}
+
+/**
+ * Load persisted attachments from sessionStorage.
+ */
+export function loadPersistedChatAttachments(sessionKey: string): Array<unknown> {
+  const storage = getSessionStorage();
+  if (!storage) {
+    return [];
+  }
+  try {
+    const key = `${CHAT_ATTACHMENTS_KEY_PREFIX}${sessionKey}`;
+    const raw = storage.getItem(key);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}

@@ -10,6 +10,15 @@ import { loadModels } from "./controllers/models.ts";
 import { loadSessions } from "./controllers/sessions.ts";
 import type { GatewayBrowserClient, GatewayHelloOk } from "./gateway.ts";
 import { normalizeBasePath } from "./navigation.ts";
+import {
+  clearPersistedChatQueue,
+  loadPersistedChatAttachments,
+  loadPersistedChatDraft,
+  loadPersistedChatQueue,
+  persistChatAttachments,
+  persistChatDraft,
+  persistChatQueue,
+} from "./storage.ts";
 import type { ChatModelOverride, ModelCatalogEntry } from "./types.ts";
 import type { ChatAttachment, ChatQueueItem } from "./ui-types.ts";
 import { generateUUID } from "./uuid.ts";
@@ -106,6 +115,8 @@ function enqueueChatMessage(
       localCommandName: localCommand?.name,
     },
   ];
+  // Persist queue to localStorage for recovery after refresh
+  persistChatQueue(host.sessionKey, host.chatQueue);
 }
 
 async function sendChatMessageNow(
@@ -160,9 +171,13 @@ async function flushChatQueue(host: ChatHost) {
   }
   const [next, ...rest] = host.chatQueue;
   if (!next) {
+    // Queue is empty, clear persisted queue
+    clearPersistedChatQueue(host.sessionKey);
     return;
   }
   host.chatQueue = rest;
+  // Persist updated queue (without the message being sent)
+  persistChatQueue(host.sessionKey, host.chatQueue);
   let ok = false;
   try {
     if (next.localCommandName) {
@@ -179,6 +194,8 @@ async function flushChatQueue(host: ChatHost) {
   }
   if (!ok) {
     host.chatQueue = [next, ...host.chatQueue];
+    // Restore persisted queue
+    persistChatQueue(host.sessionKey, host.chatQueue);
   } else if (host.chatQueue.length > 0) {
     // Continue draining — local commands don't block on server response
     void flushChatQueue(host);
@@ -355,6 +372,24 @@ function injectCommandResult(host: ChatHost, content: string) {
 }
 
 export async function refreshChat(host: ChatHost, opts?: { scheduleScroll?: boolean }) {
+  // Restore persisted chat queue and draft before loading history
+  const persistedQueue = loadPersistedChatQueue(host.sessionKey);
+  if (persistedQueue.length > 0) {
+    host.chatQueue = persistedQueue as ChatQueueItem[];
+  }
+
+  // Restore persisted draft message
+  const persistedDraft = loadPersistedChatDraft(host.sessionKey);
+  if (persistedDraft) {
+    host.chatMessage = persistedDraft;
+  }
+
+  // Restore persisted attachments
+  const persistedAttachments = loadPersistedChatAttachments(host.sessionKey);
+  if (persistedAttachments.length > 0) {
+    host.chatAttachments = persistedAttachments as ChatAttachment[];
+  }
+
   await Promise.all([
     loadChatHistory(host as unknown as OpenClawApp),
     loadSessions(host as unknown as OpenClawApp, {
