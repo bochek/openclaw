@@ -15,8 +15,6 @@ import {
   loadPersistedChatAttachments,
   loadPersistedChatDraft,
   loadPersistedChatQueue,
-  persistChatAttachments,
-  persistChatDraft,
   persistChatQueue,
 } from "./storage.ts";
 import type { ChatModelOverride, ModelCatalogEntry } from "./types.ts";
