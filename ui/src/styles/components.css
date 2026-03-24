@@ -3442,9 +3442,10 @@ td.data-table-key-col {
 }
 
 .md-preview-dialog__body.sidebar-markdown > * {
-  max-width: 78ch;
-  margin-left: auto;
-  margin-right: auto;
+  width: min(100%, 92ch);
+  max-width: 100%;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .md-preview-dialog__body.sidebar-markdown > :first-child {
