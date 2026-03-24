@@ -8,6 +8,8 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- UI/agents and usage: polish the agent file markdown preview into a readable modal, refine markdown spacing/alignment, and anchor usage filter/export popovers so they open in the intended direction. (#53382) Thanks @BunsDev.
+
 ### Fixes
 
 ## 2026.3.23
