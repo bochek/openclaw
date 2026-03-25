@@ -1,5 +1,21 @@
 # Plugin SDK Namespaces Plan
 
+## Plain-Language TL;DR
+
+OpenClaw should introduce a few clear SDK namespaces like `plugin`, `channel`,
+and `provider`, instead of keeping so much of the public surface flat.
+
+The safe way to do that is:
+
+- add thin ESM facade entrypoints, not TypeScript `namespace`
+- keep the root `openclaw/plugin-sdk` surface small
+- add namespaced aliases to `OpenClawPluginApi`
+- keep old flat APIs as compatibility aliases during migration
+- forbid leaf modules from importing back through namespace facades
+
+That gives plugin authors a cleaner SDK that feels closer to VS Code, without
+turning the SDK into a giant barrel or creating circular import problems.
+
 ## Goal
 
 Introduce public namespaces to the OpenClaw Plugin SDK so the surface feels
