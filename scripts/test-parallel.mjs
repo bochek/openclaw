@@ -45,12 +45,20 @@ const parseCliArgs = (args) => {
       }
     }
     if (arg === "--profile") {
-      wrapper.profile = args[index + 1] ?? null;
+      const nextValue = args[index + 1] ?? "";
+      if (!nextValue || nextValue === "--" || nextValue.startsWith("-")) {
+        throw new Error(`Invalid --profile value: ${String(nextValue || "<missing>")}`);
+      }
+      wrapper.profile = nextValue;
       index += 1;
       continue;
     }
     if (arg === "--surface") {
-      wrapper.surfaces.push(args[index + 1] ?? "");
+      const nextValue = args[index + 1] ?? "";
+      if (!nextValue || nextValue === "--" || nextValue.startsWith("-")) {
+        throw new Error(`Invalid --surface value: ${String(nextValue || "<missing>")}`);
+      }
+      wrapper.surfaces.push(nextValue);
       index += 1;
       continue;
     }
@@ -64,7 +72,11 @@ const parseCliArgs = (args) => {
       continue;
     }
     if (arg === "--explain") {
-      wrapper.explain = args[index + 1] ?? null;
+      const nextValue = args[index + 1] ?? "";
+      if (!nextValue || nextValue === "--" || nextValue.startsWith("-")) {
+        throw new Error(`Invalid --explain value: ${String(nextValue || "<missing>")}`);
+      }
+      wrapper.explain = nextValue;
       index += 1;
       continue;
     }

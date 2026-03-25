@@ -274,6 +274,42 @@ describe("scripts/test-parallel lane planning", () => {
     ).toThrowError(/Invalid --files value/u);
   });
 
+  it("rejects missing --profile values", () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../..");
+
+    expect(() =>
+      execFileSync("node", ["scripts/test-parallel.mjs", "--plan", "--profile"], {
+        cwd: repoRoot,
+        env: process.env,
+        encoding: "utf8",
+      }),
+    ).toThrowError(/Invalid --profile value/u);
+  });
+
+  it("rejects missing --surface values", () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../..");
+
+    expect(() =>
+      execFileSync("node", ["scripts/test-parallel.mjs", "--plan", "--surface"], {
+        cwd: repoRoot,
+        env: process.env,
+        encoding: "utf8",
+      }),
+    ).toThrowError(/Invalid --surface value/u);
+  });
+
+  it("rejects missing --explain values", () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../..");
+
+    expect(() =>
+      execFileSync("node", ["scripts/test-parallel.mjs", "--explain"], {
+        cwd: repoRoot,
+        env: process.env,
+        encoding: "utf8",
+      }),
+    ).toThrowError(/Invalid --explain value/u);
+  });
+
   it("rejects explicit existing files that are not known test files", () => {
     const repoRoot = path.resolve(import.meta.dirname, "../..");
     const tempFilePath = path.join(os.tmpdir(), `openclaw-non-test-${Date.now()}.ts`);
