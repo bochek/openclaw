@@ -230,13 +230,13 @@ describe("formatCliCommand", () => {
       name: "profile is default",
       cmd: "openclaw doctor --fix",
       env: { OPENCLAW_PROFILE: "default" },
-      expected: "openclaw doctor --fix",
+      expected: "openclaw --profile default doctor --fix",
     },
     {
       name: "profile is Default (case-insensitive)",
       cmd: "openclaw doctor --fix",
       env: { OPENCLAW_PROFILE: "Default" },
-      expected: "openclaw doctor --fix",
+      expected: "openclaw --profile default doctor --fix",
     },
     {
       name: "profile is invalid",
@@ -295,6 +295,15 @@ describe("formatCliCommand", () => {
       formatCliCommand("openclaw doctor", {
         OPENCLAW_CONTAINER_HINT: "demo",
         OPENCLAW_PROFILE: "work",
+      }),
+    ).toBe("openclaw --container demo doctor");
+  });
+
+  it("preserves an explicit default profile alongside container hints", () => {
+    expect(
+      formatCliCommand("openclaw doctor", {
+        OPENCLAW_CONTAINER_HINT: "demo",
+        OPENCLAW_PROFILE: "default",
       }),
     ).toBe("openclaw --container demo doctor");
   });

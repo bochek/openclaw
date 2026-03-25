@@ -192,6 +192,23 @@ describe("profile commands", () => {
     await expect(fs.stat(path.join(legacyRoot, "credentials", "oauth.json"))).resolves.toBeTruthy();
   });
 
+  it("refuses to import when a same-id managed manifest already exists but is unreadable", async () => {
+    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-import-bad-manifest-"));
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+    const legacyRoot = path.join(root, ".openclaw-legacy");
+    await fs.mkdir(legacyRoot, { recursive: true });
+    await fs.writeFile(path.join(legacyRoot, "openclaw.json"), "{}", "utf8");
+
+    const profileRoot = path.join(root, ".openclaw", "profiles", "legacy");
+    await fs.mkdir(profileRoot, { recursive: true });
+    await fs.writeFile(path.join(profileRoot, "profile.json"), "{not-json", "utf8");
+
+    await expect(profileImportCommand(runtime, "legacy", {})).rejects.toThrow(
+      /manifest exists but is unreadable/i,
+    );
+  });
+
   it("refuses to import a symlinked legacy profile root", async () => {
     const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-import-symlink-"));
     process.env.OPENCLAW_HOME = root;
