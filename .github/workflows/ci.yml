@@ -201,12 +201,13 @@ jobs:
       - name: Audit production dependencies
         run: pre-commit run --config "${PRE_COMMIT_CONFIG_PATH:-.pre-commit-config.yaml}" --all-files pnpm-audit-prod
 
-  # Fanout: downstream lanes branch from preflight outputs instead of waiting
-  # on unrelated Linux checks.
+  # Fanout: let routing and fast correctness checks settle before spinning up the
+  # expensive build/test matrix. This keeps cheap failures from burning shared CI
+  # capacity across the heavyweight lanes.
   # Build dist once for Node-relevant changes and share it with downstream jobs.
   build-artifacts:
-    needs: [scope]
-    if: needs.scope.outputs.docs_only != 'true' && needs.scope.outputs.run_node == 'true'
+    needs: [scope, check]
+    if: needs.scope.outputs.docs_only != 'true' && needs.scope.outputs.run_node == 'true' && needs.check.result == 'success'
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 20
     steps:
@@ -279,8 +280,8 @@ jobs:
         run: pnpm release:check
 
   checks-fast:
-    needs: [scope]
-    if: always() && needs.scope.outputs.docs_only != 'true' && needs.scope.outputs.run_node == 'true'
+    needs: [scope, check]
+    if: needs.scope.outputs.docs_only != 'true' && needs.scope.outputs.run_node == 'true' && needs.check.result == 'success'
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 20
     strategy:
@@ -427,8 +428,8 @@ jobs:
 
   extension-fast:
     name: "extension-fast"
-    needs: [scope]
-    if: needs.scope.outputs.docs_only != 'true' && needs.scope.outputs.run_node == 'true' && needs.scope.outputs.has_changed_extensions == 'true'
+    needs: [scope, check]
+    if: needs.scope.outputs.docs_only != 'true' && needs.scope.outputs.run_node == 'true' && needs.scope.outputs.has_changed_extensions == 'true' && needs.check.result == 'success'
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 20
     strategy:
@@ -825,8 +826,8 @@ jobs:
   # running 4 separate jobs per PR (as before) starved the queue. One job
   # per PR allows 5 PRs to run macOS checks simultaneously.
   macos:
-    needs: [scope]
-    if: github.event_name == 'pull_request' && needs.scope.outputs.docs_only != 'true' && needs.scope.outputs.run_macos == 'true'
+    needs: [scope, check]
+    if: github.event_name == 'pull_request' && needs.scope.outputs.docs_only != 'true' && needs.scope.outputs.run_macos == 'true' && needs.check.result == 'success'
     runs-on: macos-latest
     timeout-minutes: 20
     steps:
@@ -903,8 +904,8 @@ jobs:
           exit 1
 
   android:
-    needs: [scope]
-    if: needs.scope.outputs.docs_only != 'true' && needs.scope.outputs.run_android == 'true'
+    needs: [scope, check]
+    if: needs.scope.outputs.docs_only != 'true' && needs.scope.outputs.run_android == 'true' && needs.check.result == 'success'
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 20
     strategy:
