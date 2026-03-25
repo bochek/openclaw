@@ -210,4 +210,33 @@ describe("runServiceRestart token drift", () => {
     expect(payload.result).toBe("scheduled");
     expect(payload.message).toBe("restart scheduled, gateway will restart momentarily");
   });
+
+  it("fails start when restarting a stopped installed service errors", async () => {
+    service.isLoaded.mockResolvedValue(false);
+    service.restart.mockRejectedValue(new Error("launchctl kickstart failed: permission denied"));
+
+    await expect(runServiceStart(createServiceRunArgs())).rejects.toThrow("__exit__:1");
+
+    const payload = readJsonLog<{ ok?: boolean; error?: string }>();
+    expect(payload.ok).toBe(false);
+    expect(payload.error).toContain("launchctl kickstart failed: permission denied");
+  });
+
+  it("falls back to not-loaded hints when restart fails after uninstall", async () => {
+    service.isLoaded.mockResolvedValue(false);
+    service.restart.mockRejectedValue(new Error("launchctl bootstrap failed"));
+    service.readCommand.mockResolvedValue(null);
+
+    await runServiceStart({
+      serviceNoun: "Gateway",
+      service,
+      renderStartHints: () => ["openclaw gateway install"],
+      opts: { json: true },
+    });
+
+    const payload = readJsonLog<{ ok?: boolean; result?: string; hints?: string[] }>();
+    expect(payload.ok).toBe(true);
+    expect(payload.result).toBe("not-loaded");
+    expect(payload.hints).toEqual(["openclaw gateway install"]);
+  });
 });

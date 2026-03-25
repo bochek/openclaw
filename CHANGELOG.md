@@ -50,6 +50,7 @@ Docs: https://docs.openclaw.ai
 - Feishu/MSTeams message tool: keep provider-native `card` payloads optional in merged tool schemas so media-only sends stop failing validation before channel runtime dispatch. (#53715) Thanks @lndyzwdxhs.
 - Feishu/startup: keep `requireMention` enforcement strict when bot identity startup probes fail, raise the startup bot-info timeout to 30s, and add cancellable background identity recovery so mention-gated groups recover without noisy fallback. (#43788) Thanks @lefarcen.
 - Plugins: enforce terminal hook decision semantics for tool/message guards (#54241) Thanks @joshavant.
+- Gateway/daemon: keep `openclaw gateway start` failing on real restart errors for stopped-but-installed services, while still falling back to install hints after uninstall. (#54087) Thanks @hclsys.
 
 ## 2026.3.23
 

@@ -103,6 +103,14 @@ async function handleServiceNotLoaded(params: {
   }
 }
 
+async function isServiceInstallMissing(service: GatewayService): Promise<boolean> {
+  try {
+    return (await service.readCommand(process.env)) === null;
+  } catch {
+    return false;
+  }
+}
+
 async function resolveServiceLoadedOrFail(params: {
   serviceNoun: string;
   service: GatewayService;
@@ -237,17 +245,23 @@ export async function runServiceStart(params: {
         defaultRuntime.log(restartStatus.message);
       }
       return;
-    } catch {
-      // Bootstrap failed (e.g. plist was deleted, not just booted out).
-      // Fall through to the not-loaded hints.
-      await handleServiceNotLoaded({
-        serviceNoun: params.serviceNoun,
-        service: params.service,
-        loaded,
-        renderStartHints: params.renderStartHints,
-        json,
-        emit,
-      });
+    } catch (err) {
+      // Only fall back to "not loaded" hints when the service install itself is
+      // gone. If restart failed while install artifacts still exist, surface
+      // the real error instead of reporting a misleading success.
+      if (await isServiceInstallMissing(params.service)) {
+        await handleServiceNotLoaded({
+          serviceNoun: params.serviceNoun,
+          service: params.service,
+          loaded,
+          renderStartHints: params.renderStartHints,
+          json,
+          emit,
+        });
+        return;
+      }
+      const hints = params.renderStartHints();
+      fail(`${params.serviceNoun} start failed: ${String(err)}`, hints);
       return;
     }
   }
