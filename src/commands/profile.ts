@@ -196,15 +196,13 @@ async function copyProfileStateTree(params: {
   }
 }
 
-async function chooseBasePort(profileId: string, from?: string): Promise<number> {
+async function chooseBasePort(profileId: string): Promise<number> {
   const id = resolveCommandProfileId(profileId);
-  if (!from) {
-    const preferredPort = id === "default" ? 18789 : id === "dev" ? 19001 : undefined;
-    if (preferredPort) {
-      const existing = await listProfiles();
-      if (!existing.some((profile) => profile.effectiveGatewayPort === preferredPort)) {
-        return preferredPort;
-      }
+  const preferredPort = id === "default" ? 18789 : id === "dev" ? 19001 : undefined;
+  if (preferredPort) {
+    const existing = await listProfiles();
+    if (!existing.some((profile) => profile.effectiveGatewayPort === preferredPort)) {
+      return preferredPort;
     }
   }
   return suggestProfileBasePort();
@@ -475,7 +473,7 @@ export async function profileCloneCommand(
   }
   const sourceConfig = await readCloneSourceConfigObject(source.configPath);
 
-  const basePort = await chooseBasePort(id, source.id);
+  const basePort = await chooseBasePort(id);
   const spec: ProfileSpec = createProfileSpec({
     id,
     basePort,

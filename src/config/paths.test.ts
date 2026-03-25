@@ -124,6 +124,37 @@ describe("gateway port resolution", () => {
       expect(resolveGatewayPort({}, env)).toBe(19789);
     });
   });
+
+  it("uses the selected profile port when state/config paths were auto-filled by profile selection", async () => {
+    await withTempDir({ prefix: "openclaw-gateway-port-auto-profile-" }, async (root) => {
+      const env = {
+        OPENCLAW_HOME: root,
+        OPENCLAW_PROFILE: "rescue",
+        OPENCLAW_PROFILE_AUTO_PATHS: "1",
+        OPENCLAW_STATE_DIR: path.join(root, ".openclaw", "profiles", "rescue", "state"),
+        OPENCLAW_CONFIG_PATH: path.join(
+          root,
+          ".openclaw",
+          "profiles",
+          "rescue",
+          "config",
+          "openclaw.json",
+        ),
+      } as NodeJS.ProcessEnv;
+
+      await writeManagedProfileSpec(
+        createProfileSpec({
+          id: "rescue",
+          basePort: 19789,
+        }),
+        env,
+        () => root,
+      );
+      clearProfilePathCache();
+
+      expect(resolveGatewayPort({}, env)).toBe(19789);
+    });
+  });
 });
 
 describe("state + config path candidates", () => {
@@ -268,6 +299,40 @@ describe("state + config path candidates", () => {
       const manifestPath = path.join(root, ".openclaw", "profiles", "broken", "profile.json");
       await fs.mkdir(path.dirname(manifestPath), { recursive: true });
       await fs.writeFile(manifestPath, "{not-json", "utf8");
+      const env = {
+        OPENCLAW_HOME: root,
+        OPENCLAW_PROFILE: "broken",
+      } as NodeJS.ProcessEnv;
+
+      expect(resolveStateDir(env, () => root)).toBe(
+        path.join(root, ".openclaw", "profiles", "broken", "state"),
+      );
+      expect(
+        resolveConfigPath(
+          env,
+          resolveStateDir(env, () => root),
+          () => root,
+        ),
+      ).toBe(path.join(root, ".openclaw", "profiles", "broken", "config", "openclaw.json"));
+    });
+  });
+
+  it("keeps manifest-id drift on the requested managed fallback roots instead of adopting the wrong id", async () => {
+    await withTempDir({ prefix: "openclaw-managed-id-mismatch-" }, async (root) => {
+      const manifestPath = path.join(root, ".openclaw", "profiles", "broken", "profile.json");
+      await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+      await fs.writeFile(
+        manifestPath,
+        JSON.stringify(
+          createProfileSpec({
+            id: "other",
+            basePort: 19789,
+          }),
+          null,
+          2,
+        ),
+        "utf8",
+      );
       const env = {
         OPENCLAW_HOME: root,
         OPENCLAW_PROFILE: "broken",

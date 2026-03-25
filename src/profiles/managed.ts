@@ -281,8 +281,12 @@ function buildResolvedProfile(params: {
 function buildResolvedManagedProfile(
   spec: ProfileSpec,
   profileRoot: string,
+  expectedProfileId: string,
   configuredGatewayPort?: number,
 ): ResolvedProfile {
+  if (normalizeProfileId(spec.id) !== normalizeProfileId(expectedProfileId)) {
+    throw new Error(`Profile manifest id mismatch: expected ${expectedProfileId}, got ${spec.id}`);
+  }
   const allowAbsolute = Boolean(spec.adoptedFromLegacy);
   const adoptedRoot = spec.adoptedFromLegacy ? path.resolve(spec.adoptedFromLegacy) : null;
   const configPath = resolveProfileComponentPath(profileRoot, spec.roots.config, { allowAbsolute });
@@ -423,7 +427,7 @@ export async function readManagedProfile(
     const configuredGatewayPort = await readGatewayPortFromConfig(
       resolveProfileComponentPath(profileRoot, spec.roots.config, { allowAbsolute }),
     );
-    return buildResolvedManagedProfile(spec, profileRoot, configuredGatewayPort);
+    return buildResolvedManagedProfile(spec, profileRoot, profileId, configuredGatewayPort);
   } catch (err) {
     return buildInvalidResolvedManagedProfileFromSpec(
       spec,
@@ -458,7 +462,7 @@ export function readManagedProfileSync(
     const configuredGatewayPort = readGatewayPortFromConfigSync(
       resolveProfileComponentPath(profileRoot, spec.roots.config, { allowAbsolute }),
     );
-    return buildResolvedManagedProfile(spec, profileRoot, configuredGatewayPort);
+    return buildResolvedManagedProfile(spec, profileRoot, profileId, configuredGatewayPort);
   } catch (err) {
     return buildInvalidResolvedManagedProfileFromSpec(
       spec,
@@ -752,6 +756,7 @@ export async function writeManagedProfileSpec(
   const resolved = buildResolvedManagedProfile(
     spec,
     profileRoot,
+    spec.id,
     readGatewayPortFromConfigSync(
       resolveProfileComponentPath(profileRoot, spec.roots.config, {
         allowAbsolute: Boolean(spec.adoptedFromLegacy),

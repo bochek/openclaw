@@ -439,6 +439,21 @@ describe("profile commands", () => {
     expect(dev?.basePort).not.toBe(work?.basePort);
   });
 
+  it("uses default's preferred port for clone destinations when it is still free", async () => {
+    const root = await createTempProfileDir("openclaw-profile-clone-default-port-");
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+
+    await profileCreateCommand(runtime, "source", {});
+    const source = await readManagedProfile("source", process.env, () => root);
+    expect(source?.basePort).toBe(19001);
+
+    await profileCloneCommand(runtime, "source", "default", {});
+
+    const clone = await readManagedProfile("default", process.env, () => root);
+    expect(clone?.basePort).toBe(18789);
+  });
+
   it("rejects invalid profile ids instead of coercing them to default", async () => {
     const root = await createTempProfileDir("openclaw-profile-invalid-id-");
     process.env.OPENCLAW_HOME = root;

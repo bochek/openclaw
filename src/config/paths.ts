@@ -362,7 +362,8 @@ export function resolveGatewayPort(
       return configPort;
     }
   }
-  if (env.OPENCLAW_STATE_DIR?.trim() || env.OPENCLAW_CONFIG_PATH?.trim()) {
+  const autoProfilePaths = env.OPENCLAW_PROFILE_AUTO_PATHS === "1";
+  if ((env.OPENCLAW_STATE_DIR?.trim() || env.OPENCLAW_CONFIG_PATH?.trim()) && !autoProfilePaths) {
     return DEFAULT_GATEWAY_PORT;
   }
   const selectedProfile = resolveProfilePaths(env, envHomedir(env));
