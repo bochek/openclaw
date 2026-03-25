@@ -219,8 +219,16 @@ export function printDaemonStatus(status: DaemonStatus, opts: { json: boolean })
   const systemdUnavailable =
     process.platform === "linux" && isSystemdUnavailableDetail(service.runtime?.detail);
   if (systemdUnavailable) {
+    const env = service.command?.environment ?? process.env;
+    const container = Boolean(
+      env.OPENCLAW_CONTAINER_HINT?.trim() || env.OPENCLAW_CONTAINER?.trim(),
+    );
     defaultRuntime.error(errorText("systemd user services unavailable."));
-    for (const hint of renderSystemdUnavailableHints({ wsl: isWSLEnv() })) {
+    for (const hint of renderSystemdUnavailableHints({
+      wsl: isWSLEnv(),
+      detail: service.runtime?.detail,
+      container,
+    })) {
       defaultRuntime.error(errorText(hint));
     }
     spacer();

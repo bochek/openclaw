@@ -35,6 +35,7 @@ export function buildGatewayRuntimeHints(
   }
   const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
+  const container = Boolean(env.OPENCLAW_CONTAINER_HINT?.trim() || env.OPENCLAW_CONTAINER?.trim());
   const fileLog = (() => {
     try {
       return getResolvedLoggerSettings().file;
@@ -43,7 +44,13 @@ export function buildGatewayRuntimeHints(
     }
   })();
   if (platform === "linux" && isSystemdUnavailableDetail(runtime.detail)) {
-    hints.push(...renderSystemdUnavailableHints({ wsl: isWSLEnv() }));
+    hints.push(
+      ...renderSystemdUnavailableHints({
+        wsl: isWSLEnv(),
+        detail: runtime.detail,
+        container,
+      }),
+    );
     if (fileLog) {
       hints.push(`File logs: ${fileLog}`);
     }
