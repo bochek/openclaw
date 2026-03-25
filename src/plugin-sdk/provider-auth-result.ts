@@ -10,14 +10,16 @@ export function buildOauthProviderAuthResult(params: {
   refresh?: string | null;
   expires?: number | null;
   email?: string | null;
+  profileName?: string | null;
   profilePrefix?: string;
   credentialExtra?: Record<string, unknown>;
   configPatch?: Partial<OpenClawConfig>;
   notes?: string[];
 }): ProviderAuthResult {
   const email = params.email ?? undefined;
+  const profileName = params.profileName ?? email;
   const profilePrefix = params.profilePrefix ?? params.providerId;
-  const profileId = `${profilePrefix}:${email ?? "default"}`;
+  const profileId = `${profilePrefix}:${profileName ?? "default"}`;
 
   const credential: AuthProfileCredential = {
     type: "oauth",

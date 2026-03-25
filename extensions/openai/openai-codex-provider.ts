@@ -243,17 +243,17 @@ async function runOpenAICodexOAuth(ctx: ProviderAuthContext) {
     normalizeNonEmptyString(payload?.["https://api.openai.com/profile"]?.email) ??
     normalizeNonEmptyString(creds.email);
   const stableSubject = resolveCodexStableSubject(payload);
-  const resolvedEmailOrFallback =
+  const resolvedProfileName =
     resolvedEmail ??
     (stableSubject ? `id-${Buffer.from(stableSubject).toString("base64url")}` : undefined);
-
   return buildOauthProviderAuthResult({
     providerId: PROVIDER_ID,
     defaultModel: OPENAI_CODEX_DEFAULT_MODEL,
     access: creds.access,
     refresh: creds.refresh,
     expires: creds.expires,
-    email: resolvedEmailOrFallback,
+    email: resolvedEmail,
+    profileName: resolvedProfileName,
   });
 }
 

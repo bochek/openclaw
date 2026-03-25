@@ -203,7 +203,7 @@ describe("provider auth contract", () => {
     });
   });
 
-  it("uses a stable fallback id when OpenAI Codex JWT email is missing", async () => {
+  it("uses a stable fallback profile id when OpenAI Codex JWT email is missing", async () => {
     const provider = requireProvider(registerProviders(openAIPlugin), "openai-codex");
     const access = createJwt({
       "https://api.openai.com/auth": {
@@ -229,7 +229,6 @@ describe("provider auth contract", () => {
             access,
             refresh: "refresh-token",
             expires: 1_700_000_000_000,
-            email: `id-${expectedStableId}`,
           },
         },
       ],
@@ -247,7 +246,7 @@ describe("provider auth contract", () => {
     });
   });
 
-  it("uses iss and sub to build a stable fallback id when auth claims are missing", async () => {
+  it("uses iss and sub to build a stable fallback profile id when auth claims are missing", async () => {
     const provider = requireProvider(registerProviders(openAIPlugin), "openai-codex");
     const access = createJwt({
       iss: "https://accounts.openai.com",
@@ -274,7 +273,6 @@ describe("provider auth contract", () => {
             access,
             refresh: "refresh-token",
             expires: 1_700_000_000_000,
-            email: `id-${expectedStableId}`,
           },
         },
       ],
@@ -292,7 +290,7 @@ describe("provider auth contract", () => {
     });
   });
 
-  it("uses sub alone to build a stable fallback id when iss is missing", async () => {
+  it("uses sub alone to build a stable fallback profile id when iss is missing", async () => {
     const provider = requireProvider(registerProviders(openAIPlugin), "openai-codex");
     const access = createJwt({
       sub: "user-abc",
@@ -316,7 +314,6 @@ describe("provider auth contract", () => {
             access,
             refresh: "refresh-token",
             expires: 1_700_000_000_000,
-            email: `id-${expectedStableId}`,
           },
         },
       ],
