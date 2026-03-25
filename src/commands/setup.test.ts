@@ -136,4 +136,26 @@ describe("setupCommand", () => {
       ).rejects.toThrow(/manifest exists but is unreadable/i);
     });
   });
+
+  it("rejects invalid OPENCLAW_PROFILE values before bootstrapping managed metadata", async () => {
+    await withTempHome(async (home) => {
+      const runtime = {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      };
+      process.env.OPENCLAW_HOME = home;
+      process.env.OPENCLAW_PROFILE = "bad profile";
+      delete process.env.OPENCLAW_STATE_DIR;
+      delete process.env.OPENCLAW_CONFIG_PATH;
+      delete process.env.OPENCLAW_GATEWAY_PORT;
+
+      await expect(
+        setupCommand({ workspace: path.join(home, "workspace-bad") }, runtime),
+      ).rejects.toThrow(/invalid profile id/i);
+
+      const defaultProfile = await readManagedProfile("default", process.env, () => home);
+      expect(defaultProfile).toBeNull();
+    });
+  });
 });

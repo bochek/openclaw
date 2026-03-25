@@ -177,6 +177,22 @@ describe("setupWizardCommand", () => {
     });
   });
 
+  it("rejects invalid OPENCLAW_PROFILE values before bootstrapping managed metadata", async () => {
+    await withTempHome(async (home) => {
+      const runtime = makeRuntime();
+      process.env.OPENCLAW_HOME = home;
+      process.env.OPENCLAW_PROFILE = "bad profile";
+      delete process.env.OPENCLAW_STATE_DIR;
+      delete process.env.OPENCLAW_CONFIG_PATH;
+      delete process.env.OPENCLAW_GATEWAY_PORT;
+
+      await expect(setupWizardCommand({}, runtime)).rejects.toThrow(/invalid profile id/i);
+
+      const defaultProfile = await readManagedProfile("default", process.env, () => home);
+      expect(defaultProfile).toBeNull();
+    });
+  });
+
   it("fails fast for invalid --reset-scope", async () => {
     const runtime = makeRuntime();
 

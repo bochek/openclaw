@@ -441,6 +441,19 @@ describe("profile commands", () => {
     );
   });
 
+  it("treats OPENCLAW_PROFILE casing aliases as live-profile matches during delete", async () => {
+    const root = await createTempProfileDir("openclaw-profile-delete-case-");
+    process.env.OPENCLAW_HOME = root;
+    process.env.OPENCLAW_PROFILE = "Default";
+    const runtime = createNonExitingRuntime();
+
+    await profileCreateCommand(runtime, "default", {});
+
+    await expect(profileDeleteCommand(runtime, "default", { yes: true })).rejects.toThrow(
+      /live profile|active CLI environment/i,
+    );
+  });
+
   it("refuses to delete a profile when the active env points at its config/state roots", async () => {
     const root = await createTempProfileDir("openclaw-profile-delete-override-");
     process.env.OPENCLAW_HOME = root;

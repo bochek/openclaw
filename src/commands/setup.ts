@@ -5,7 +5,7 @@ import { type OpenClawConfig, createConfigIO, writeConfigFile } from "../config/
 import { formatConfigPath, logConfigUpdated } from "../config/logging.js";
 import { clearProfilePathCache } from "../config/paths.js";
 import { resolveSessionTranscriptsDir } from "../config/sessions.js";
-import { ensureManagedProfile } from "../profiles/managed.js";
+import { ensureManagedProfile, requireValidProfileId } from "../profiles/managed.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
 import { shortenHomePath } from "../utils.js";
@@ -36,7 +36,7 @@ export async function setupCommand(
     Boolean(process.env.OPENCLAW_STATE_DIR?.trim()) ||
     Boolean(process.env.OPENCLAW_CONFIG_PATH?.trim());
   if (selectedProfile && (!hasExplicitPathOverride || autoProfilePaths)) {
-    await ensureManagedProfile(selectedProfile);
+    await ensureManagedProfile(requireValidProfileId(selectedProfile));
     clearProfilePathCache();
   }
 

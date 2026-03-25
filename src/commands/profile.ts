@@ -311,8 +311,15 @@ async function canonicalizeProfilePathForComparison(input: string): Promise<stri
 }
 
 async function detectLiveProfileReason(profile: ResolvedProfile): Promise<string | null> {
-  if (process.env.OPENCLAW_PROFILE?.trim() === profile.id) {
-    return "profile matches the active CLI environment";
+  const activeProfile = process.env.OPENCLAW_PROFILE?.trim();
+  if (activeProfile) {
+    try {
+      if (requireValidProfileId(activeProfile) === profile.id) {
+        return "profile matches the active CLI environment";
+      }
+    } catch {
+      // Ignore invalid env values here and continue with explicit path checks.
+    }
   }
   const activeStateDir = process.env.OPENCLAW_STATE_DIR?.trim();
   if (
