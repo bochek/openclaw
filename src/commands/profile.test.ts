@@ -1,4 +1,5 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readManagedProfile } from "../profiles/managed.js";
@@ -10,6 +11,11 @@ import {
   profileDoctorCommand,
   profileImportCommand,
 } from "./profile.js";
+
+async function createTempProfileDir(prefix: string): Promise<string> {
+  const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
+  return fs.realpath(dir);
+}
 
 describe("profile commands", () => {
   const originalHome = process.env.OPENCLAW_HOME;
@@ -33,7 +39,7 @@ describe("profile commands", () => {
   });
 
   it("creates a managed profile with manifest, config, state, and workspace", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-create-"));
+    const root = await createTempProfileDir("openclaw-profile-create-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -49,7 +55,7 @@ describe("profile commands", () => {
   });
 
   it("clones a profile with a fresh token and rewritten workspace", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-clone-"));
+    const root = await createTempProfileDir("openclaw-profile-clone-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -119,7 +125,7 @@ describe("profile commands", () => {
   });
 
   it("preserves non-token auth modes during clone", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-clone-auth-mode-"));
+    const root = await createTempProfileDir("openclaw-profile-clone-auth-mode-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -154,7 +160,7 @@ describe("profile commands", () => {
   });
 
   it("fails clone when the source config is unreadable", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-clone-bad-source-"));
+    const root = await createTempProfileDir("openclaw-profile-clone-bad-source-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -173,7 +179,7 @@ describe("profile commands", () => {
   });
 
   it("skips symlinked state entries during clone", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-clone-symlink-"));
+    const root = await createTempProfileDir("openclaw-profile-clone-symlink-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -196,8 +202,8 @@ describe("profile commands", () => {
   });
 
   it("copies state correctly when the source root is reached through a symlinked OPENCLAW_HOME", async () => {
-    const realRoot = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-real-home-"));
-    const symlinkRoot = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-home-link-"));
+    const realRoot = await createTempProfileDir("openclaw-profile-real-home-");
+    const symlinkRoot = await createTempProfileDir("openclaw-profile-home-link-");
     const linkedHome = path.join(symlinkRoot, "linked-home");
     await fs.symlink(realRoot, linkedHome);
 
@@ -224,7 +230,7 @@ describe("profile commands", () => {
   });
 
   it("doctor warns when config workspace escapes the managed workspace root", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-doctor-"));
+    const root = await createTempProfileDir("openclaw-profile-doctor-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -252,7 +258,7 @@ describe("profile commands", () => {
   });
 
   it("imports a legacy named profile without changing its effective roots", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-import-"));
+    const root = await createTempProfileDir("openclaw-profile-import-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
     const legacyRoot = path.join(root, ".openclaw-legacy");
@@ -275,7 +281,7 @@ describe("profile commands", () => {
   });
 
   it("refuses to import when a same-id managed manifest already exists but is unreadable", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-import-bad-manifest-"));
+    const root = await createTempProfileDir("openclaw-profile-import-bad-manifest-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
     const legacyRoot = path.join(root, ".openclaw-legacy");
@@ -292,10 +298,10 @@ describe("profile commands", () => {
   });
 
   it("refuses to import a symlinked legacy profile root", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-import-symlink-"));
+    const root = await createTempProfileDir("openclaw-profile-import-symlink-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
-    const external = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-external-"));
+    const external = await createTempProfileDir("openclaw-profile-external-");
     await fs.symlink(external, path.join(root, ".openclaw-legacy"));
 
     await expect(profileImportCommand(runtime, "legacy", {})).rejects.toThrow(
@@ -304,7 +310,7 @@ describe("profile commands", () => {
   });
 
   it("treats absolute managed-native roots as invalid manifests", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-absolute-roots-"));
+    const root = await createTempProfileDir("openclaw-profile-absolute-roots-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -321,7 +327,7 @@ describe("profile commands", () => {
   });
 
   it("treats adopted legacy manifests that escape the adopted root as invalid", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-adopted-escape-"));
+    const root = await createTempProfileDir("openclaw-profile-adopted-escape-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
     const legacyRoot = path.join(root, ".openclaw-legacy");
@@ -342,7 +348,7 @@ describe("profile commands", () => {
   });
 
   it("refuses to create a managed profile when a same-id legacy profile exists", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-shadow-"));
+    const root = await createTempProfileDir("openclaw-profile-shadow-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
     await fs.mkdir(path.join(root, ".openclaw-shadow"), { recursive: true });
@@ -353,7 +359,7 @@ describe("profile commands", () => {
   });
 
   it("refuses to create when a managed manifest already exists but is unreadable", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-bad-manifest-"));
+    const root = await createTempProfileDir("openclaw-profile-bad-manifest-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
     const profileRoot = path.join(root, ".openclaw", "profiles", "broken");
@@ -366,7 +372,7 @@ describe("profile commands", () => {
   });
 
   it("refuses to clone into a destination id already used by a legacy profile", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-clone-shadow-"));
+    const root = await createTempProfileDir("openclaw-profile-clone-shadow-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -379,7 +385,7 @@ describe("profile commands", () => {
   });
 
   it("refuses to clone when a destination managed manifest already exists but is unreadable", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-clone-bad-manifest-"));
+    const root = await createTempProfileDir("openclaw-profile-clone-bad-manifest-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -394,7 +400,7 @@ describe("profile commands", () => {
   });
 
   it("avoids reusing dev's preferred port when another profile already occupies it", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-dev-port-"));
+    const root = await createTempProfileDir("openclaw-profile-dev-port-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -410,7 +416,7 @@ describe("profile commands", () => {
   });
 
   it("rejects invalid profile ids instead of coercing them to default", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-invalid-id-"));
+    const root = await createTempProfileDir("openclaw-profile-invalid-id-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -423,7 +429,7 @@ describe("profile commands", () => {
   });
 
   it("refuses to delete the active profile without force", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-delete-"));
+    const root = await createTempProfileDir("openclaw-profile-delete-");
     process.env.OPENCLAW_HOME = root;
     process.env.OPENCLAW_PROFILE = "active";
     const runtime = createNonExitingRuntime();
@@ -436,7 +442,7 @@ describe("profile commands", () => {
   });
 
   it("refuses to delete a profile when the active env points at its config/state roots", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-delete-override-"));
+    const root = await createTempProfileDir("openclaw-profile-delete-override-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
@@ -455,7 +461,7 @@ describe("profile commands", () => {
   });
 
   it("refuses to delete a profile when the active env reaches its state dir through a symlink", async () => {
-    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-delete-symlink-"));
+    const root = await createTempProfileDir("openclaw-profile-delete-symlink-");
     process.env.OPENCLAW_HOME = root;
     const runtime = createNonExitingRuntime();
 
