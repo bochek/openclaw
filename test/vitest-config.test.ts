@@ -37,6 +37,23 @@ describe("resolveLocalVitestMaxWorkers", () => {
     ).toBe(2);
   });
 
+  it("maps the legacy low profile to serial intent for compatibility", () => {
+    const runtime = resolveRuntimeCapabilities(
+      {
+        OPENCLAW_TEST_PROFILE: "low",
+        RUNNER_OS: "Linux",
+      },
+      {
+        cpuCount: 8,
+        totalMemoryBytes: 32 * 1024 ** 3,
+        platform: "linux",
+        mode: "local",
+      },
+    );
+
+    expect(runtime.intentProfile).toBe("serial");
+  });
+
   it("classifies 64 GiB local macOS hosts as mid-memory capabilities", () => {
     const runtime = resolveRuntimeCapabilities(
       {

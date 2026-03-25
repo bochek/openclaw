@@ -21,6 +21,9 @@ const parseProfile = (rawProfile) => {
     return "normal";
   }
   const normalized = rawProfile.trim().toLowerCase();
+  if (normalized === "low") {
+    return "serial";
+  }
   if (!TEST_PROFILES.has(normalized)) {
     throw new Error(
       `Unsupported test profile "${normalized}". Supported profiles: normal, serial, max.`,
