@@ -468,6 +468,9 @@ export async function profileCloneCommand(
   }
 
   const source = await resolveProfileSelection(resolveCommandProfileId(sourceId));
+  if (hasInvalidManagedManifest(source)) {
+    throw new Error(`Source profile manifest is unreadable: ${resolveCommandProfileId(sourceId)}`);
+  }
   if (!source.exists) {
     throw new Error(`Source profile not found: ${resolveCommandProfileId(sourceId)}`);
   }

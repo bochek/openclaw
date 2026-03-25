@@ -178,6 +178,22 @@ describe("profile commands", () => {
     expect(clone).toBeNull();
   });
 
+  it("fails clone when the source profile manifest is unreadable", async () => {
+    const root = await createTempProfileDir("openclaw-profile-clone-bad-source-manifest-");
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+
+    await profileCreateCommand(runtime, "source", {});
+    const manifestPath = path.join(root, ".openclaw", "profiles", "source", "profile.json");
+    await fs.writeFile(manifestPath, "{not-json", "utf8");
+
+    await expect(profileCloneCommand(runtime, "source", "clone", {})).rejects.toThrow(
+      /source profile manifest is unreadable/i,
+    );
+    const clone = await readManagedProfile("clone", process.env, () => root);
+    expect(clone).toBeNull();
+  });
+
   it("skips symlinked state entries during clone", async () => {
     const root = await createTempProfileDir("openclaw-profile-clone-symlink-");
     process.env.OPENCLAW_HOME = root;
