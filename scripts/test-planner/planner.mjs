@@ -12,6 +12,7 @@ import { loadTestCatalog, normalizeRepoPath } from "./catalog.mjs";
 import { resolveExecutionBudget, resolveRuntimeCapabilities } from "./runtime-profile.mjs";
 import {
   countExplicitEntryFilters,
+  getExplicitEntryFilters,
   parsePassthroughArgs,
   SINGLE_RUN_ONLY_FLAGS,
 } from "./vitest-args.mjs";
