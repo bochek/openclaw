@@ -12,7 +12,12 @@ export type MentionTargets = {
   normalizedMentions: string[];
   selfE164: string | null;
   selfJid: string | null;
+  selfLid: string | null;
 };
+
+function normalizeDeviceScopedJid(jid: string | null | undefined): string | null {
+  return jid ? jid.replace(/:\d+/, "") : null;
+}
 
 export function buildMentionConfig(
   cfg: ReturnType<typeof loadConfig>,
@@ -25,11 +30,17 @@ export function buildMentionConfig(
 export function resolveMentionTargets(msg: WebInboundMsg, authDir?: string): MentionTargets {
   const jidOptions = authDir ? { authDir } : undefined;
   const normalizedMentions = msg.mentionedJids?.length
-    ? msg.mentionedJids.map((jid) => jidToE164(jid, jidOptions) ?? jid).filter(Boolean)
+    ? msg.mentionedJids
+        .map((jid) => jidToE164(jid, jidOptions) ?? normalizeDeviceScopedJid(jid) ?? jid)
+        .filter(Boolean)
     : [];
-  const selfE164 = msg.selfE164 ?? (msg.selfJid ? jidToE164(msg.selfJid, jidOptions) : null);
-  const selfJid = msg.selfJid ? msg.selfJid.replace(/:\\d+/, "") : null;
-  return { normalizedMentions, selfE164, selfJid };
+  const selfJid = normalizeDeviceScopedJid(msg.selfJid);
+  const selfLid = normalizeDeviceScopedJid(msg.selfLid);
+  const selfE164 =
+    msg.selfE164 ??
+    (selfJid ? jidToE164(selfJid, jidOptions) : null) ??
+    (selfLid ? jidToE164(selfLid, jidOptions) : null);
+  return { normalizedMentions, selfE164, selfJid, selfLid };
 }
 
 export function isBotMentionedFromTargets(
@@ -49,8 +60,14 @@ export function isBotMentionedFromTargets(
       return true;
     }
     if (targets.selfJid) {
-      // Some mentions use the bare JID; match on E.164 to be safe.
+      // Some mentions use the bare phone JID when E.164 mapping is unavailable.
       if (targets.normalizedMentions.includes(targets.selfJid)) {
+        return true;
+      }
+    }
+    if (targets.selfLid) {
+      // Some mentions use the bot's LID directly; compare the bare LID too.
+      if (targets.normalizedMentions.includes(targets.selfLid)) {
         return true;
       }
     }
@@ -100,6 +117,8 @@ export function debugMention(
       : null,
     selfJid: msg.selfJid ?? null,
     selfJidBare: mentionTargets.selfJid,
+    selfLid: msg.selfLid ?? null,
+    selfLidBare: mentionTargets.selfLid,
     selfE164: msg.selfE164 ?? null,
     resolvedSelfE164: mentionTargets.selfE164,
   };

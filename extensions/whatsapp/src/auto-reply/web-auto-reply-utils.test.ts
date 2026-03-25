@@ -61,6 +61,17 @@ describe("isBotMentionedFromTargets", () => {
     expectMentioned(msg, mentionCfg, true);
   });
 
+  it("matches explicit self LID mentions without reverse mapping", () => {
+    const msg = makeMsg({
+      body: "hey",
+      mentionedJids: ["777:1@lid"],
+      selfJid: "15551234567@s.whatsapp.net",
+      selfLid: "777@lid",
+      selfE164: "+15551234567",
+    });
+    expectMentioned(msg, mentionCfg, true);
+  });
+
   it("falls back to regex when no mentions are present", () => {
     const msg = makeMsg({
       body: "openclaw can you help?",
@@ -184,6 +195,7 @@ describe("web auto-reply util", () => {
       expect(result.wasMentioned).toBe(true);
       expect(result.details.bodyClean).toBe("openclaw ping");
       expect(result.details.normalizedMentionedJids).toBeNull();
+      expect(result.details.selfLidBare).toBeNull();
     });
 
     it("resolves owner list from allowFrom or falls back to self", () => {

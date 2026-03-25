@@ -268,4 +268,15 @@ describe("web monitor inbox", () => {
       },
     });
   });
+
+  it.each(["botInvokeMessage", "groupMentionedMessage"] as const)(
+    "captures reply context from %s wrapped quoted messages",
+    async (wrapperKey) => {
+      await expectQuotedReplyContext({
+        [wrapperKey]: {
+          message: { conversation: "original" },
+        },
+      });
+    },
+  );
 });
