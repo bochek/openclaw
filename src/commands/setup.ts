@@ -4,6 +4,7 @@ import { DEFAULT_AGENT_WORKSPACE_DIR, ensureAgentWorkspace } from "../agents/wor
 import { type OpenClawConfig, createConfigIO, writeConfigFile } from "../config/config.js";
 import { formatConfigPath, logConfigUpdated } from "../config/logging.js";
 import { resolveSessionTranscriptsDir } from "../config/sessions.js";
+import { ensureManagedProfile } from "../profiles/managed.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
 import { shortenHomePath } from "../utils.js";
@@ -28,6 +29,14 @@ export async function setupCommand(
   opts?: { workspace?: string },
   runtime: RuntimeEnv = defaultRuntime,
 ) {
+  const selectedProfile = process.env.OPENCLAW_PROFILE?.trim();
+  const hasExplicitPathOverride =
+    Boolean(process.env.OPENCLAW_STATE_DIR?.trim()) ||
+    Boolean(process.env.OPENCLAW_CONFIG_PATH?.trim());
+  if (selectedProfile && !hasExplicitPathOverride) {
+    await ensureManagedProfile(selectedProfile);
+  }
+
   const desiredWorkspace =
     typeof opts?.workspace === "string" && opts.workspace.trim()
       ? opts.workspace.trim()

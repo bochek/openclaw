@@ -1,6 +1,7 @@
 import { formatCliCommand } from "../cli/command-format.js";
 import { readConfigFileSnapshot } from "../config/config.js";
 import { assertSupportedRuntime } from "../infra/runtime-guard.js";
+import { ensureManagedProfile } from "../profiles/managed.js";
 import type { RuntimeEnv } from "../runtime.js";
 import { defaultRuntime } from "../runtime.js";
 import { resolveUserPath } from "../utils.js";
@@ -16,6 +17,14 @@ export async function setupWizardCommand(
   opts: OnboardOptions,
   runtime: RuntimeEnv = defaultRuntime,
 ) {
+  const selectedProfile = process.env.OPENCLAW_PROFILE?.trim();
+  const hasExplicitPathOverride =
+    Boolean(process.env.OPENCLAW_STATE_DIR?.trim()) ||
+    Boolean(process.env.OPENCLAW_CONFIG_PATH?.trim());
+  if (selectedProfile && !hasExplicitPathOverride) {
+    await ensureManagedProfile(selectedProfile);
+  }
+
   assertSupportedRuntime(runtime);
   const originalAuthChoice = opts.authChoice;
   const normalizedAuthChoice = normalizeLegacyOnboardAuthChoice(originalAuthChoice);

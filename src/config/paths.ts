@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { resolveHomeRelativePath, resolveRequiredHomeDir } from "../infra/home-dir.js";
+import { resolveSelectedProfileSync } from "../profiles/managed.js";
 import type { OpenClawConfig } from "./types.js";
 
 /**
@@ -40,6 +41,13 @@ function newStateDir(homedir: () => string = resolveDefaultHomeDir): string {
   return path.join(homedir(), NEW_STATE_DIRNAME);
 }
 
+function resolveProfilePaths(
+  env: NodeJS.ProcessEnv,
+  homedir: () => string,
+): ReturnType<typeof resolveSelectedProfileSync> {
+  return resolveSelectedProfileSync(env, homedir);
+}
+
 export function resolveLegacyStateDir(homedir: () => string = resolveDefaultHomeDir): string {
   return legacyStateDirs(homedir)[0] ?? newStateDir(homedir);
 }
@@ -65,6 +73,10 @@ export function resolveStateDir(
   const override = env.OPENCLAW_STATE_DIR?.trim();
   if (override) {
     return resolveUserPath(override, env, effectiveHomedir);
+  }
+  const selectedProfile = resolveProfilePaths(env, effectiveHomedir);
+  if (selectedProfile) {
+    return path.resolve(selectedProfile.stateDir);
   }
   const newDir = newStateDir(effectiveHomedir);
   if (env.OPENCLAW_TEST_FAST === "1") {
@@ -111,6 +123,13 @@ export function resolveCanonicalConfigPath(
   if (override) {
     return resolveUserPath(override, env, envHomedir(env));
   }
+  if (env.OPENCLAW_STATE_DIR?.trim()) {
+    return path.join(stateDir, CONFIG_FILENAME);
+  }
+  const selectedProfile = resolveProfilePaths(env, envHomedir(env));
+  if (selectedProfile) {
+    return path.resolve(selectedProfile.configPath);
+  }
   return path.join(stateDir, CONFIG_FILENAME);
 }
 
@@ -150,6 +169,27 @@ export function resolveConfigPath(
   const override = env.OPENCLAW_CONFIG_PATH?.trim();
   if (override) {
     return resolveUserPath(override, env, homedir);
+  }
+  if (env.OPENCLAW_STATE_DIR?.trim()) {
+    if (env.OPENCLAW_TEST_FAST === "1") {
+      return path.join(stateDir, CONFIG_FILENAME);
+    }
+    const candidates = [
+      path.join(stateDir, CONFIG_FILENAME),
+      ...LEGACY_CONFIG_FILENAMES.map((name) => path.join(stateDir, name)),
+    ];
+    const existing = candidates.find((candidate) => {
+      try {
+        return fs.existsSync(candidate);
+      } catch {
+        return false;
+      }
+    });
+    return existing ?? path.join(stateDir, CONFIG_FILENAME);
+  }
+  const selectedProfile = resolveProfilePaths(env, homedir);
+  if (selectedProfile) {
+    return path.resolve(selectedProfile.configPath);
   }
   if (env.OPENCLAW_TEST_FAST === "1") {
     return path.join(stateDir, CONFIG_FILENAME);
@@ -194,13 +234,18 @@ export function resolveDefaultConfigCandidates(
   if (explicit) {
     return [resolveUserPath(explicit, env, effectiveHomedir)];
   }
-
   const candidates: string[] = [];
   const openclawStateDir = env.OPENCLAW_STATE_DIR?.trim();
   if (openclawStateDir) {
     const resolved = resolveUserPath(openclawStateDir, env, effectiveHomedir);
     candidates.push(path.join(resolved, CONFIG_FILENAME));
     candidates.push(...LEGACY_CONFIG_FILENAMES.map((name) => path.join(resolved, name)));
+    return candidates;
+  }
+
+  const selectedProfile = resolveProfilePaths(env, effectiveHomedir);
+  if (selectedProfile) {
+    return [path.resolve(selectedProfile.configPath)];
   }
 
   const defaultDirs = [newStateDir(effectiveHomedir), ...legacyStateDirs(effectiveHomedir)];
@@ -296,6 +341,14 @@ export function resolveGatewayPort(
     if (configPort > 0) {
       return configPort;
     }
+  }
+  const selectedProfile = resolveProfilePaths(env, envHomedir(env));
+  if (
+    selectedProfile &&
+    Number.isFinite(selectedProfile.effectiveGatewayPort) &&
+    selectedProfile.effectiveGatewayPort > 0
+  ) {
+    return selectedProfile.effectiveGatewayPort;
   }
   return DEFAULT_GATEWAY_PORT;
 }

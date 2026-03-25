@@ -42,6 +42,19 @@ const coreEntries: CoreCliEntry[] = [
   {
     commands: [
       {
+        name: "profile",
+        description: "Manage first-class OpenClaw profiles",
+        hasSubcommands: true,
+      },
+    ],
+    register: async ({ program }) => {
+      const mod = await import("./register.profile.js");
+      mod.registerProfileCommand(program);
+    },
+  },
+  {
+    commands: [
+      {
         name: "setup",
         description: "Initialize local config and agent workspace",
         hasSubcommands: false,

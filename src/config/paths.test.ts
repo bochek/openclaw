@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { writeManagedProfileSpec, createProfileSpec } from "../profiles/managed.js";
 import { withTempDir } from "../test-helpers/temp-dir.js";
 import {
   DEFAULT_GATEWAY_PORT,
@@ -196,6 +197,84 @@ describe("state + config path candidates", () => {
       const env = { OPENCLAW_STATE_DIR: overrideDir } as NodeJS.ProcessEnv;
       const resolved = resolveConfigPath(env, overrideDir, () => root);
       expect(resolved).toBe(path.join(overrideDir, "openclaw.json"));
+    });
+  });
+
+  it("resolves managed profile state and config paths from OPENCLAW_PROFILE", async () => {
+    await withTempDir({ prefix: "openclaw-managed-profile-" }, async (root) => {
+      const env = {
+        OPENCLAW_HOME: root,
+        OPENCLAW_PROFILE: "rescue",
+      } as NodeJS.ProcessEnv;
+      await writeManagedProfileSpec(
+        createProfileSpec({
+          id: "rescue",
+          basePort: 19789,
+        }),
+        env,
+        () => root,
+      );
+
+      expect(resolveStateDir(env, () => root)).toBe(
+        path.join(root, ".openclaw", "profiles", "rescue", "state"),
+      );
+      expect(
+        resolveConfigPath(
+          env,
+          resolveStateDir(env, () => root),
+          () => root,
+        ),
+      ).toBe(path.join(root, ".openclaw", "profiles", "rescue", "config", "openclaw.json"));
+      expect(resolveDefaultConfigCandidates(env, () => root)).toEqual([
+        path.join(root, ".openclaw", "profiles", "rescue", "config", "openclaw.json"),
+      ]);
+    });
+  });
+
+  it("keeps explicit state-dir config precedence even when a profile is selected", async () => {
+    await withTempDir({ prefix: "openclaw-profile-state-override-" }, async (root) => {
+      const overrideDir = path.join(root, "override");
+      const env = {
+        OPENCLAW_HOME: root,
+        OPENCLAW_PROFILE: "rescue",
+        OPENCLAW_STATE_DIR: overrideDir,
+      } as NodeJS.ProcessEnv;
+      await writeManagedProfileSpec(
+        createProfileSpec({
+          id: "rescue",
+          basePort: 19789,
+        }),
+        env,
+        () => root,
+      );
+
+      expect(resolveStateDir(env, () => root)).toBe(overrideDir);
+      expect(resolveConfigPath(env, overrideDir, () => root)).toBe(
+        path.join(overrideDir, "openclaw.json"),
+      );
+      expect(resolveDefaultConfigCandidates(env, () => root)).toEqual([
+        path.join(overrideDir, "openclaw.json"),
+        path.join(overrideDir, "clawdbot.json"),
+        path.join(overrideDir, "moldbot.json"),
+      ]);
+    });
+  });
+
+  it("preserves a legacy profile's configured gateway port over profile defaults", async () => {
+    await withTempDir({ prefix: "openclaw-legacy-port-" }, async (root) => {
+      const legacyDir = path.join(root, ".openclaw-work");
+      await fs.mkdir(legacyDir, { recursive: true });
+      await fs.writeFile(
+        path.join(legacyDir, "openclaw.json"),
+        JSON.stringify({ gateway: { port: 19555 } }),
+        "utf8",
+      );
+
+      const env = {
+        OPENCLAW_HOME: root,
+        OPENCLAW_PROFILE: "work",
+      } as NodeJS.ProcessEnv;
+      expect(resolveGatewayPort(undefined, env)).toBe(19555);
     });
   });
 });

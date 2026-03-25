@@ -2,6 +2,7 @@ import os from "node:os";
 import path from "node:path";
 import { consumeRootOptionToken, FLAG_TERMINATOR } from "../infra/cli-root-options.js";
 import { resolveRequiredHomeDir } from "../infra/home-dir.js";
+import { resolveProfileSelectionSync } from "../profiles/managed.js";
 import { getPrimaryCommand } from "./argv.js";
 import { isValidProfileName } from "./profile-utils.js";
 import { takeCliRootOptionValue } from "./root-option-value.js";
@@ -83,15 +84,6 @@ export function parseCliProfileArgs(argv: string[]): CliProfileParseResult {
   return { ok: true, profile, argv: out };
 }
 
-function resolveProfileStateDir(
-  profile: string,
-  env: Record<string, string | undefined>,
-  homedir: () => string,
-): string {
-  const suffix = profile.toLowerCase() === "default" ? "" : `-${profile}`;
-  return path.join(resolveRequiredHomeDir(env as NodeJS.ProcessEnv, homedir), `.openclaw${suffix}`);
-}
-
 export function applyCliProfileEnv(params: {
   profile: string;
   env?: Record<string, string | undefined>;
@@ -107,16 +99,22 @@ export function applyCliProfileEnv(params: {
   // Convenience only: fill defaults, never override explicit env values.
   env.OPENCLAW_PROFILE = profile;
 
-  const stateDir = env.OPENCLAW_STATE_DIR?.trim() || resolveProfileStateDir(profile, env, homedir);
+  const resolvedHomeDir = () => resolveRequiredHomeDir(env as NodeJS.ProcessEnv, homedir);
+  const selected = resolveProfileSelectionSync(profile, env as NodeJS.ProcessEnv, resolvedHomeDir);
+  const explicitStateDir = env.OPENCLAW_STATE_DIR?.trim();
+  const stateDir = explicitStateDir || path.resolve(selected.stateDir);
   if (!env.OPENCLAW_STATE_DIR?.trim()) {
     env.OPENCLAW_STATE_DIR = stateDir;
   }
 
-  if (!env.OPENCLAW_CONFIG_PATH?.trim()) {
-    env.OPENCLAW_CONFIG_PATH = path.join(stateDir, "openclaw.json");
+  const explicitConfigPath = env.OPENCLAW_CONFIG_PATH?.trim();
+  if (!explicitConfigPath) {
+    env.OPENCLAW_CONFIG_PATH = explicitStateDir
+      ? path.join(stateDir, "openclaw.json")
+      : path.resolve(selected.configPath);
   }
 
-  if (profile === "dev" && !env.OPENCLAW_GATEWAY_PORT?.trim()) {
-    env.OPENCLAW_GATEWAY_PORT = "19001";
+  if (!env.OPENCLAW_GATEWAY_PORT?.trim() && !explicitStateDir && !explicitConfigPath) {
+    env.OPENCLAW_GATEWAY_PORT = String(selected.effectiveGatewayPort);
   }
 }

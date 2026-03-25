@@ -12,14 +12,15 @@ describe("setupCommand", () => {
         error: vi.fn(),
         exit: vi.fn(),
       };
+      const workspace = path.join(home, "workspace");
 
-      await setupCommand(undefined, runtime);
+      await setupCommand({ workspace }, runtime);
 
       const configPath = path.join(home, ".openclaw", "openclaw.json");
       const raw = await fs.readFile(configPath, "utf-8");
 
       expect(raw).toContain('"mode": "local"');
-      expect(raw).toContain('"workspace"');
+      expect(raw).toContain(`"workspace": "${workspace}"`);
     });
   });
 
