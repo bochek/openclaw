@@ -216,6 +216,32 @@ describe("scripts/test-parallel lane planning", () => {
     expect(output).toContain("pool=forks");
   });
 
+  it("prints the planner-backed CI manifest as JSON", () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../..");
+    const output = execFileSync("node", ["scripts/test-parallel.mjs", "--ci-manifest"], {
+      cwd: repoRoot,
+      env: {
+        ...clearPlannerShardEnv(process.env),
+        GITHUB_EVENT_NAME: "pull_request",
+        OPENCLAW_CI_DOCS_ONLY: "false",
+        OPENCLAW_CI_DOCS_CHANGED: "false",
+        OPENCLAW_CI_RUN_NODE: "true",
+        OPENCLAW_CI_RUN_MACOS: "true",
+        OPENCLAW_CI_RUN_ANDROID: "false",
+        OPENCLAW_CI_RUN_WINDOWS: "true",
+        OPENCLAW_CI_RUN_SKILLS_PYTHON: "false",
+        OPENCLAW_CI_HAS_CHANGED_EXTENSIONS: "false",
+        OPENCLAW_CI_CHANGED_EXTENSIONS_MATRIX: '{"include":[]}',
+      },
+      encoding: "utf8",
+    });
+
+    const manifest = JSON.parse(output);
+    expect(manifest.jobs.checks.enabled).toBe(true);
+    expect(manifest.jobs.macosNode.enabled).toBe(true);
+    expect(manifest.jobs.checksWindows.enabled).toBe(true);
+  });
+
   it("passes through vitest --mode values that are not wrapper runtime overrides", () => {
     const repoRoot = path.resolve(import.meta.dirname, "../..");
     const output = execFileSync(
