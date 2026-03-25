@@ -118,6 +118,58 @@ describe("profile commands", () => {
     await expect(fs.stat(path.join(clone.stateDir, "logs"))).rejects.toThrow();
   });
 
+  it("preserves non-token auth modes during clone", async () => {
+    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-clone-auth-mode-"));
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+
+    await profileCreateCommand(runtime, "source", {});
+    const source = await readManagedProfile("source", process.env, () => root);
+    if (!source) {
+      throw new Error("source profile missing");
+    }
+    await fs.writeFile(
+      source.configPath,
+      JSON.stringify(
+        {
+          gateway: { auth: { mode: "trusted-proxy" } },
+        },
+        null,
+        2,
+      ),
+      "utf8",
+    );
+
+    await profileCloneCommand(runtime, "source", "clone", {});
+
+    const clone = await readManagedProfile("clone", process.env, () => root);
+    if (!clone) {
+      throw new Error("clone profile missing");
+    }
+    const cloneConfig = JSON.parse(await fs.readFile(clone.configPath, "utf8")) as {
+      gateway?: { auth?: { mode?: string; token?: string } };
+    };
+    expect(cloneConfig.gateway?.auth?.mode).toBe("trusted-proxy");
+    expect(cloneConfig.gateway?.auth?.token).toBeUndefined();
+  });
+
+  it("fails clone when the source config is unreadable", async () => {
+    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-clone-bad-source-"));
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+
+    await profileCreateCommand(runtime, "source", {});
+    const source = await readManagedProfile("source", process.env, () => root);
+    if (!source) {
+      throw new Error("source profile missing");
+    }
+    await fs.writeFile(source.configPath, "{not-json", "utf8");
+
+    await expect(profileCloneCommand(runtime, "source", "clone", {})).rejects.toThrow(
+      /source config is unreadable/i,
+    );
+  });
+
   it("skips symlinked state entries during clone", async () => {
     const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-clone-symlink-"));
     process.env.OPENCLAW_HOME = root;

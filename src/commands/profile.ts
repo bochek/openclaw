@@ -70,8 +70,26 @@ async function readConfigObject(filePath: string): Promise<MutableRecord> {
   try {
     const raw = await fsp.readFile(filePath, "utf8");
     return normalizeConfigObject(JSON5.parse(raw));
+  } catch (error) {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : null;
+    if (code === "ENOENT") {
+      return {};
+    }
+    throw error;
+  }
+}
+
+async function readCloneSourceConfigObject(filePath: string): Promise<MutableRecord> {
+  try {
+    return await readConfigObject(filePath);
   } catch {
-    return {};
+    throw new Error(`Source config is unreadable: ${filePath}`);
   }
 }
 
@@ -96,8 +114,8 @@ function prepareConfigForProfile(params: {
   const gateway = withRecord(next.gateway);
   const auth = withRecord(gateway.auth);
   const mode = typeof auth.mode === "string" ? auth.mode : undefined;
-  const hasPassword = typeof auth.password === "string" && auth.password.trim().length > 0;
-  if (params.operation === "clone" && (!hasPassword || mode === "token" || mode === undefined)) {
+  const hasToken = typeof auth.token === "string" && auth.token.trim().length > 0;
+  if (params.operation === "clone" && (mode === "token" || (mode === undefined && hasToken))) {
     auth.mode = "token";
     auth.token = randomToken();
     gateway.auth = auth;
@@ -445,7 +463,7 @@ export async function profileCloneCommand(
   });
   const destination = await writeManagedProfileSpec(spec);
 
-  const sourceConfig = await readConfigObject(source.configPath);
+  const sourceConfig = await readCloneSourceConfigObject(source.configPath);
   const nextConfig = prepareConfigForProfile({
     config: sourceConfig,
     destination,
