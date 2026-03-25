@@ -307,6 +307,50 @@ Examples:
 - allowed: `src/plugin-sdk/channel.ts` importing `./channel-setup.ts`
 - forbidden: `src/plugin-sdk/channel-setup.ts` importing `./channel.ts`
 
+### Rule 1A: Allowed Dependency Directions Must Be Explicit
+
+The allowed directions should be:
+
+- namespace facade -> leaves in the same namespace
+- leaf -> local implementation helpers
+- leaf -> dedicated shared internal leaf
+- leaf -> another leaf in the same namespace only by direct relative import,
+  never through the namespace facade
+
+The forbidden directions should be:
+
+- leaf -> its own namespace facade
+- leaf -> another namespace facade
+- namespace facade -> another namespace facade
+- channel leaf -> provider leaf, or provider leaf -> channel leaf, unless the
+  dependency is first extracted into a shared internal leaf
+
+Short version:
+
+- facades point downward
+- leaves never point back upward
+- cross-namespace sharing must go sideways through a shared internal leaf, not
+  directly through another public namespace
+
+### Rule 1B: If Two Namespaces Need Each Other, Extract A Shared Leaf
+
+If `channel` and `provider` start needing each other directly, that is the sign
+that the seam is wrong.
+
+Do not allow:
+
+- `src/plugin-sdk/channel/*` importing from `src/plugin-sdk/provider/*`
+- `src/plugin-sdk/provider/*` importing from `src/plugin-sdk/channel/*`
+
+Instead:
+
+- extract the shared logic into a dedicated internal leaf
+- let both sides depend on that leaf
+- keep the public namespaces separate
+
+This is the main cycle-prevention rule. Shared logic moves to a lower layer
+before it creates a back-edge.
+
 ### Rule 2: No Public-Specifier Self-Imports Inside The SDK
 
 Files inside `src/plugin-sdk/**` should never import from
@@ -348,6 +392,34 @@ from the same underlying implementation.
 
 Namespace facades should stay close to pure exports. If a namespace file grows
 real orchestration logic, split that logic back into leaf modules.
+
+### Dependency Shape
+
+The intended import graph is:
+
+```text
+public facade
+  -> same-namespace leaves
+    -> local helpers
+    -> shared internal leaves
+```
+
+Not this:
+
+```text
+channel facade -> provider facade
+channel leaf -> channel facade
+provider leaf -> channel leaf
+```
+
+Concrete examples:
+
+- allowed: `src/plugin-sdk/channel.ts` -> `./channel/setup.ts`
+- allowed: `src/plugin-sdk/channel/setup.ts` -> `./_internal/channel-shared.ts`
+- allowed: `src/plugin-sdk/provider/auth.ts` -> `../_internal/provider-shared.ts`
+- forbidden: `src/plugin-sdk/channel/setup.ts` -> `./channel.ts`
+- forbidden: `src/plugin-sdk/channel/setup.ts` -> `../provider/index.ts`
+- forbidden: `src/plugin-sdk/channel.ts` -> `./provider.ts`
 
 ## Migration Strategy
 
@@ -448,6 +520,10 @@ The namespace rollout should ship with explicit checks.
 
 - namespace facade files may only re-export or compose approved leaves
 - leaf files under a namespace may not import their parent `index` facade
+- leaf files under one namespace may not import another namespace facade
+- cross-namespace leaf imports should fail unless the target is an approved
+  shared internal leaf
+- namespace facades may not import other namespace facades
 - no new API should be added to `core` once namespace facades exist
 - `OpenClawPluginApi` must not expose both flat and namespaced registration
   methods after cutover
