@@ -256,30 +256,31 @@ function parseGatewayPortEnvValue(raw: string | undefined): number | null {
   if (!trimmed) {
     return null;
   }
-  if (/^\d+$/.test(trimmed)) {
-    const parsed = Number.parseInt(trimmed, 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-  }
+  return parsePositivePort(trimmed) ?? parseComposePublishedPort(trimmed);
+}
 
+function parsePositivePort(raw: string): number | null {
+  if (!/^\d+$/.test(raw)) {
+    return null;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseComposePublishedPort(raw: string): number | null {
   // Docker Compose publish strings can leak into host CLI env loading via repo `.env`,
   // for example `127.0.0.1:18789` or `[::1]:18789`. Accept only explicit host:port forms.
-  const bracketedIpv6Match = trimmed.match(/^\[[^\]]+\]:(\d+)$/);
+  const bracketedIpv6Match = raw.match(/^\[[^\]]+\]:(\d+)$/);
   if (bracketedIpv6Match?.[1]) {
-    const parsed = Number.parseInt(bracketedIpv6Match[1], 10);
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    return parsePositivePort(bracketedIpv6Match[1]);
   }
 
-  const firstColon = trimmed.indexOf(":");
-  const lastColon = trimmed.lastIndexOf(":");
+  const firstColon = raw.indexOf(":");
+  const lastColon = raw.lastIndexOf(":");
   if (firstColon <= 0 || firstColon !== lastColon) {
     return null;
   }
-  const suffix = trimmed.slice(firstColon + 1);
-  if (!/^\d+$/.test(suffix)) {
-    return null;
-  }
-  const parsed = Number.parseInt(suffix, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  return parsePositivePort(raw.slice(firstColon + 1));
 }
 
 export function resolveGatewayPort(
