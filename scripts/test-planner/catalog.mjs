@@ -8,6 +8,11 @@ const baseConfigPrefixes = ["src/agents/", "src/auto-reply/", "src/commands/", "
 
 export const normalizeRepoPath = (value) => value.split(path.sep).join("/");
 
+const toRepoRelativePath = (value) => {
+  const relativePath = normalizeRepoPath(path.relative(process.cwd(), path.resolve(value)));
+  return relativePath.startsWith("../") || relativePath === ".." ? null : relativePath;
+};
+
 const walkTestFiles = (rootDir) => {
   if (!fs.existsSync(rootDir)) {
     return [];
@@ -132,14 +137,27 @@ export function loadTestCatalog() {
 
   const resolveFilterMatches = (fileFilter) => {
     const normalizedFilter = normalizeRepoPath(fileFilter);
+    const repoRelativeFilter = toRepoRelativePath(fileFilter);
     if (fs.existsSync(fileFilter)) {
       const stats = fs.statSync(fileFilter);
       if (stats.isFile()) {
-        return [normalizedFilter];
+        if (repoRelativeFilter && allKnownTestFiles.includes(repoRelativeFilter)) {
+          return [repoRelativeFilter];
+        }
+        throw new Error(`Explicit path ${fileFilter} is not a known test file.`);
       }
       if (stats.isDirectory()) {
-        const prefix = normalizedFilter.endsWith("/") ? normalizedFilter : `${normalizedFilter}/`;
-        return allKnownTestFiles.filter((file) => file.startsWith(prefix));
+        if (!repoRelativeFilter) {
+          throw new Error(`Explicit path ${fileFilter} is outside the repo test roots.`);
+        }
+        const prefix = repoRelativeFilter.endsWith("/")
+          ? repoRelativeFilter
+          : `${repoRelativeFilter}/`;
+        const matches = allKnownTestFiles.filter((file) => file.startsWith(prefix));
+        if (matches.length === 0) {
+          throw new Error(`Explicit path ${fileFilter} does not contain known test files.`);
+        }
+        return matches;
       }
     }
     if (/[*?[\]{}]/.test(normalizedFilter)) {

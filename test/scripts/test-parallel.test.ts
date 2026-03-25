@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
@@ -270,5 +272,23 @@ describe("scripts/test-parallel lane planning", () => {
         encoding: "utf8",
       }),
     ).toThrowError(/Invalid --files value/u);
+  });
+
+  it("rejects explicit existing files that are not known test files", () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../..");
+    const tempFilePath = path.join(os.tmpdir(), `openclaw-non-test-${Date.now()}.ts`);
+    fs.writeFileSync(tempFilePath, "export const notATest = true;\n", "utf8");
+
+    try {
+      expect(() =>
+        execFileSync("node", ["scripts/test-parallel.mjs", "--plan", "--files", tempFilePath], {
+          cwd: repoRoot,
+          env: process.env,
+          encoding: "utf8",
+        }),
+      ).toThrowError(/is not a known test file/u);
+    } finally {
+      fs.rmSync(tempFilePath, { force: true });
+    }
   });
 });
