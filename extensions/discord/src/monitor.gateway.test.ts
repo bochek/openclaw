@@ -133,4 +133,26 @@ describe("waitForDiscordGatewayStop", () => {
     forceStop?.(new Error("too late"));
     expect(disconnect).toHaveBeenCalledTimes(1);
   });
+
+  it("keeps the error listener active until disconnect returns", async () => {
+    const err = new Error("disconnect emitted error");
+    const emitter = new EventEmitter();
+    const onGatewayError = vi.fn();
+    const disconnect = vi.fn(() => {
+      emitter.emit("error", err);
+    });
+    const abort = new AbortController();
+    const promise = waitForDiscordGatewayStop({
+      gateway: { emitter, disconnect },
+      abortSignal: abort.signal,
+      onGatewayError,
+    });
+
+    abort.abort();
+
+    await expect(promise).resolves.toBeUndefined();
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(onGatewayError).toHaveBeenCalledWith(err);
+    expect(emitter.listenerCount("error")).toBe(0);
+  });
 });

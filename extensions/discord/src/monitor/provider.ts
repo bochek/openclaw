@@ -650,6 +650,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
   }
   let lifecycleStarted = false;
   let releaseEarlyGatewayErrorGuard = () => {};
+  let setGatewayErrorHandler: ((handler: ((err: unknown) => void) | undefined) => void) | undefined;
   let deactivateMessageHandler: (() => void) | undefined;
   let autoPresenceController: ReturnType<typeof createDiscordAutoPresenceController> | null = null;
   let earlyGatewayEmitter: ReturnType<typeof getDiscordGatewayEmitter> | undefined;
@@ -800,6 +801,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
     );
     const earlyGatewayErrorGuard = attachEarlyGatewayErrorGuard(client);
     releaseEarlyGatewayErrorGuard = earlyGatewayErrorGuard.release;
+    setGatewayErrorHandler = earlyGatewayErrorGuard.setHandler;
 
     const lifecycleGateway = client.getPlugin<GatewayPlugin>("gateway");
     earlyGatewayEmitter = getDiscordGatewayEmitter(lifecycleGateway);
@@ -1020,7 +1022,7 @@ export async function monitorDiscordProvider(opts: MonitorDiscordOpts = {}) {
       execApprovalsHandler,
       threadBindings,
       pendingGatewayErrors: earlyGatewayErrorGuard.pendingErrors,
-      releaseEarlyGatewayErrorGuard,
+      setGatewayErrorHandler,
     });
   } finally {
     deactivateMessageHandler?.();

@@ -7,6 +7,7 @@ import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import { attachDiscordGatewayLogging } from "../gateway-logging.js";
 import { getDiscordGatewayEmitter, waitForDiscordGatewayStop } from "../monitor.gateway.js";
 import type { DiscordVoiceManager } from "../voice/manager.js";
+import type { EarlyGatewayErrorGuard } from "./gateway-error-guard.js";
 import { registerGateway, unregisterGateway } from "./gateway-registry.js";
 import type { DiscordMonitorStatusSink } from "./status.js";
 
@@ -57,7 +58,7 @@ export async function runDiscordGatewayLifecycle(params: {
   execApprovalsHandler: ExecApprovalsHandler | null;
   threadBindings: { stop: () => void };
   pendingGatewayErrors?: unknown[];
-  releaseEarlyGatewayErrorGuard?: () => void;
+  setGatewayErrorHandler?: EarlyGatewayErrorGuard["setHandler"];
   statusSink?: DiscordMonitorStatusSink;
 }) {
   const HELLO_TIMEOUT_MS = 30000;
@@ -313,6 +314,17 @@ export async function runDiscordGatewayLifecycle(params: {
     }
     return "continue";
   };
+  params.setGatewayErrorHandler?.((err) => {
+    logGatewayError(err);
+    if (!shouldStopOnGatewayError(err)) {
+      return;
+    }
+    if (forceStopHandler) {
+      triggerForceStop(err);
+      return;
+    }
+    params.pendingGatewayErrors?.push(err);
+  });
   try {
     if (params.execApprovalsHandler) {
       await params.execApprovalsHandler.start();
@@ -395,6 +407,10 @@ export async function runDiscordGatewayLifecycle(params: {
       });
     }
 
+    if (drainPendingGatewayErrors() === "stop") {
+      return;
+    }
+
     await waitForDiscordGatewayStop({
       gateway: gateway
         ? {
@@ -420,14 +436,7 @@ export async function runDiscordGatewayLifecycle(params: {
     }
   } finally {
     lifecycleStopping = true;
-    // attach a safety listener before releasing other listeners so that late
-    // "error" events emitted by Carbon during teardown do not become uncaught
-    // exceptions and crash the entire gateway process.
-    const suppressLateError = (err: unknown) => {
-      params.runtime.error?.(danger(`discord: suppressed late gateway error: ${String(err)}`));
-    };
-    gatewayEmitter?.on("error", suppressLateError);
-    params.releaseEarlyGatewayErrorGuard?.();
+    params.setGatewayErrorHandler?.(undefined);
     unregisterGateway(params.accountId);
     stopGatewayLogging();
     reconnectStallWatchdog.stop();
@@ -442,6 +451,5 @@ export async function runDiscordGatewayLifecycle(params: {
       await params.execApprovalsHandler.stop();
     }
     params.threadBindings.stop();
-    gatewayEmitter?.removeListener("error", suppressLateError);
   }
 }
