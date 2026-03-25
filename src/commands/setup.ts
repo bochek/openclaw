@@ -3,6 +3,7 @@ import JSON5 from "json5";
 import { DEFAULT_AGENT_WORKSPACE_DIR, ensureAgentWorkspace } from "../agents/workspace.js";
 import { type OpenClawConfig, createConfigIO, writeConfigFile } from "../config/config.js";
 import { formatConfigPath, logConfigUpdated } from "../config/logging.js";
+import { clearProfilePathCache } from "../config/paths.js";
 import { resolveSessionTranscriptsDir } from "../config/sessions.js";
 import { ensureManagedProfile } from "../profiles/managed.js";
 import type { RuntimeEnv } from "../runtime.js";
@@ -36,6 +37,7 @@ export async function setupCommand(
     Boolean(process.env.OPENCLAW_CONFIG_PATH?.trim());
   if (selectedProfile && (!hasExplicitPathOverride || autoProfilePaths)) {
     await ensureManagedProfile(selectedProfile);
+    clearProfilePathCache();
   }
 
   const desiredWorkspace =

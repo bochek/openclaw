@@ -278,16 +278,33 @@ function resolveGatewayLockPathForProfile(profile: ResolvedProfile): string {
   return path.join(resolveGatewayLockDir(), `gateway.${hash}.lock`);
 }
 
+async function canonicalizeProfilePathForComparison(input: string): Promise<string> {
+  const resolved = path.resolve(input);
+  try {
+    return await fsp.realpath(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
 async function detectLiveProfileReason(profile: ResolvedProfile): Promise<string | null> {
   if (process.env.OPENCLAW_PROFILE?.trim() === profile.id) {
     return "profile matches the active CLI environment";
   }
   const activeStateDir = process.env.OPENCLAW_STATE_DIR?.trim();
-  if (activeStateDir && path.resolve(activeStateDir) === path.resolve(profile.stateDir)) {
+  if (
+    activeStateDir &&
+    (await canonicalizeProfilePathForComparison(activeStateDir)) ===
+      (await canonicalizeProfilePathForComparison(profile.stateDir))
+  ) {
     return "profile state dir matches the active CLI environment";
   }
   const activeConfigPath = process.env.OPENCLAW_CONFIG_PATH?.trim();
-  if (activeConfigPath && path.resolve(activeConfigPath) === path.resolve(profile.configPath)) {
+  if (
+    activeConfigPath &&
+    (await canonicalizeProfilePathForComparison(activeConfigPath)) ===
+      (await canonicalizeProfilePathForComparison(profile.configPath))
+  ) {
     return "profile config path matches the active CLI environment";
   }
 

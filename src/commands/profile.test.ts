@@ -371,4 +371,26 @@ describe("profile commands", () => {
       /state dir matches the active CLI environment/i,
     );
   });
+
+  it("refuses to delete a profile when the active env reaches its state dir through a symlink", async () => {
+    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-delete-symlink-"));
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+
+    await profileCreateCommand(runtime, "linked", {});
+    const profile = await readManagedProfile("linked", process.env, () => root);
+    if (!profile) {
+      throw new Error("linked profile missing");
+    }
+
+    const symlinkPath = path.join(root, "linked-state");
+    await fs.symlink(profile.stateDir, symlinkPath);
+
+    delete process.env.OPENCLAW_PROFILE;
+    process.env.OPENCLAW_STATE_DIR = symlinkPath;
+
+    await expect(profileDeleteCommand(runtime, "linked", { yes: true })).rejects.toThrow(
+      /state dir matches the active CLI environment/i,
+    );
+  });
 });

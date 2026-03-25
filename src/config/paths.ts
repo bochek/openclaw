@@ -64,6 +64,10 @@ function resolveProfilePaths(
 
 const PROFILE_PATH_CACHE = new Map<string, ReturnType<typeof resolveSelectedProfileSync>>();
 
+export function clearProfilePathCache(): void {
+  PROFILE_PATH_CACHE.clear();
+}
+
 export function resolveLegacyStateDir(homedir: () => string = resolveDefaultHomeDir): string {
   return legacyStateDirs(homedir)[0] ?? newStateDir(homedir);
 }

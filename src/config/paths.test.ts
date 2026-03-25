@@ -5,6 +5,7 @@ import { writeManagedProfileSpec, createProfileSpec } from "../profiles/managed.
 import { withTempDir } from "../test-helpers/temp-dir.js";
 import {
   DEFAULT_GATEWAY_PORT,
+  clearProfilePathCache,
   resolveDefaultConfigCandidates,
   resolveConfigPathCandidate,
   resolveConfigPath,
@@ -99,6 +100,29 @@ describe("gateway port resolution", () => {
     expect(resolveGatewayPort({}, envWith({ OPENCLAW_GATEWAY_PORT: "127.0.0.1:not-a-port" }))).toBe(
       DEFAULT_GATEWAY_PORT,
     );
+  });
+
+  it("refreshes profile-derived ports after managed bootstrap clears the cache", async () => {
+    await withTempDir({ prefix: "openclaw-gateway-port-cache-" }, async (root) => {
+      const env = {
+        OPENCLAW_HOME: root,
+        OPENCLAW_PROFILE: "rescue",
+      } as NodeJS.ProcessEnv;
+
+      expect(resolveGatewayPort({}, env)).toBe(DEFAULT_GATEWAY_PORT);
+
+      await writeManagedProfileSpec(
+        createProfileSpec({
+          id: "rescue",
+          basePort: 19789,
+        }),
+        env,
+        () => root,
+      );
+      clearProfilePathCache();
+
+      expect(resolveGatewayPort({}, env)).toBe(19789);
+    });
   });
 });
 
