@@ -38,6 +38,7 @@ Docs: https://docs.openclaw.ai
 - Matrix: allow secret-storage recreation during automatic repair bootstrap so clients that lose their recovery key can recover and persist new cross-signing keys. (#59846) Thanks @al3mart.
 - Matrix/crypto persistence: capture and write the IndexedDB snapshot while holding the snapshot file lock so concurrent gateway and CLI persists cannot overwrite newer crypto state. (#59851) Thanks @al3mart.
 - Ollama/auth: prefer real cloud auth over local marker during model auth resolution so cloud-backed Ollama auth does not get shadowed by stale local-only markers.
+- Cache/images: delay history image pruning so recent turns stay byte-identical for prompt-cache prefix matching instead of invalidating the cache every turn. (#58038) Thanks @bcherny.
 - Plugins/Kimi Coding: parse tagged Kimi tool-call text into structured tool calls on the provider stream path so tools execute instead of echoing raw markup. (#60051) Thanks @obviyus.
 - Channels/passive hooks: emit passive message hooks for mention-skipped Telegram and Signal group messages when `ingest` is enabled, including wildcard/default fallback and per-group override handling. (#60018) Thanks @obviyus.
 - Providers/compat: stop forcing OpenAI-only payload defaults on proxy and custom OpenAI-compatible routes, and preserve native vendor-specific reasoning, tool, and streaming behavior for Anthropic-compatible, Moonshot, Mistral, ModelStudio, OpenRouter, xAI, Z.ai, and other routed provider paths.
