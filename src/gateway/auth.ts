@@ -377,6 +377,27 @@ function shouldAllowTailscaleHeaderAuth(authSurface: GatewayAuthSurface): boolea
   return authSurface === "ws-control-ui";
 }
 
+function authorizeTokenAuth(params: {
+  authToken?: string;
+  connectToken?: string;
+  limiter?: AuthRateLimiter;
+  ip?: string;
+  rateLimitScope: string;
+}): GatewayAuthResult {
+  if (!params.authToken) {
+    return { ok: false, reason: "token_missing_config" };
+  }
+  if (!params.connectToken) {
+    return { ok: false, reason: "token_missing" };
+  }
+  if (!safeEqualSecret(params.connectToken, params.authToken)) {
+    params.limiter?.recordFailure(params.ip, params.rateLimitScope);
+    return { ok: false, reason: "token_mismatch" };
+  }
+  params.limiter?.reset(params.ip, params.rateLimitScope);
+  return { ok: true, method: "token" };
+}
+
 export async function authorizeGatewayConnect(
   params: AuthorizeGatewayConnectParams,
 ): Promise<GatewayAuthResult> {
@@ -384,6 +405,12 @@ export async function authorizeGatewayConnect(
   const tailscaleWhois = params.tailscaleWhois ?? readTailscaleWhoisIdentity;
   const authSurface = params.authSurface ?? "http";
   const allowTailscaleHeaderAuth = shouldAllowTailscaleHeaderAuth(authSurface);
+  const limiter = params.rateLimiter;
+  const ip =
+    params.clientIp ??
+    resolveRequestClientIp(req, trustedProxies, params.allowRealIpFallback === true) ??
+    req?.socket?.remoteAddress;
+  const rateLimitScope = params.rateLimitScope ?? AUTH_RATE_LIMIT_SCOPE_SHARED_SECRET;
   const localDirect = isLocalDirectRequest(
     req,
     trustedProxies,
@@ -391,23 +418,38 @@ export async function authorizeGatewayConnect(
   );
 
   if (auth.mode === "trusted-proxy") {
-    // A local-direct request with no proxy identity header is a raw CLI/sub-agent
-    // connection — allow it directly as "local" without header checks.
-    // If the identity header IS present (same-host reverse proxy forwarding user
-    // identity without x-forwarded-for), fall through to authorizeTrustedProxy so
-    // that allowUsers and userHeader are properly evaluated.
-    const proxyUserHeader = auth.trustedProxy?.userHeader?.toLowerCase();
-    const hasProxyIdentityHeader =
-      proxyUserHeader !== undefined && Boolean(req?.headers?.[proxyUserHeader]);
-    if (localDirect && !hasProxyIdentityHeader) {
-      return { ok: true, method: "trusted-proxy", user: "local" };
-    }
-
+    // Same-host reverse proxies may forward identity headers without a full
+    // forwarded chain; keep those on the trusted-proxy path so allowUsers and
+    // requiredHeaders still apply. Only raw local-direct traffic falls back.
     if (!auth.trustedProxy) {
       return { ok: false, reason: "trusted_proxy_config_missing" };
     }
     if (!trustedProxies || trustedProxies.length === 0) {
       return { ok: false, reason: "trusted_proxy_no_proxies_configured" };
+    }
+
+    const proxyUserHeader = auth.trustedProxy?.userHeader?.toLowerCase();
+    const hasProxyIdentityHeader =
+      proxyUserHeader !== undefined && Boolean(req?.headers?.[proxyUserHeader]);
+    if (localDirect && !hasProxyIdentityHeader) {
+      if (limiter) {
+        const rlCheck: RateLimitCheckResult = limiter.check(ip, rateLimitScope);
+        if (!rlCheck.allowed) {
+          return {
+            ok: false,
+            reason: "rate_limited",
+            rateLimited: true,
+            retryAfterMs: rlCheck.retryAfterMs,
+          };
+        }
+      }
+      return authorizeTokenAuth({
+        authToken: auth.token,
+        connectToken: connectAuth?.token,
+        limiter,
+        ip,
+        rateLimitScope,
+      });
     }
 
     const result = authorizeTrustedProxy({
@@ -426,12 +468,6 @@ export async function authorizeGatewayConnect(
     return { ok: true, method: "none" };
   }
 
-  const limiter = params.rateLimiter;
-  const ip =
-    params.clientIp ??
-    resolveRequestClientIp(req, trustedProxies, params.allowRealIpFallback === true) ??
-    req?.socket?.remoteAddress;
-  const rateLimitScope = params.rateLimitScope ?? AUTH_RATE_LIMIT_SCOPE_SHARED_SECRET;
   if (limiter) {
     const rlCheck: RateLimitCheckResult = limiter.check(ip, rateLimitScope);
     if (!rlCheck.allowed) {
@@ -460,21 +496,13 @@ export async function authorizeGatewayConnect(
   }
 
   if (auth.mode === "token") {
-    if (!auth.token) {
-      return { ok: false, reason: "token_missing_config" };
-    }
-    if (!connectAuth?.token) {
-      // Don't burn rate-limit slots for missing credentials — the client
-      // simply hasn't provided a token yet (e.g. bare browser open).
-      // Only actual *wrong* credentials should count as failures.
-      return { ok: false, reason: "token_missing" };
-    }
-    if (!safeEqualSecret(connectAuth.token, auth.token)) {
-      limiter?.recordFailure(ip, rateLimitScope);
-      return { ok: false, reason: "token_mismatch" };
-    }
-    limiter?.reset(ip, rateLimitScope);
-    return { ok: true, method: "token" };
+    return authorizeTokenAuth({
+      authToken: auth.token,
+      connectToken: connectAuth?.token,
+      limiter,
+      ip,
+      rateLimitScope,
+    });
   }
 
   if (auth.mode === "password") {

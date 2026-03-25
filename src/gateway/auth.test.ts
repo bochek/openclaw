@@ -634,16 +634,23 @@ describe("trusted-proxy auth", () => {
   });
 
   describe("local-direct token fallback", () => {
-    function authorizeLocalDirect(options?: { token?: string; connectToken?: string }) {
+    function authorizeLocalDirect(options?: {
+      token?: string;
+      connectToken?: string;
+      trustedProxy?: GatewayConnectInput["auth"]["trustedProxy"];
+      trustedProxies?: string[];
+    }) {
       return authorizeGatewayConnect({
         auth: {
           mode: "trusted-proxy",
           allowTailscale: false,
-          trustedProxy: trustedProxyConfig,
+          ...(Object.hasOwn(options ?? {}, "trustedProxy")
+            ? { trustedProxy: options?.trustedProxy }
+            : { trustedProxy: trustedProxyConfig }),
           token: options?.token,
         },
         connectAuth: options?.connectToken ? { token: options.connectToken } : null,
-        trustedProxies: ["127.0.0.1"],
+        trustedProxies: options?.trustedProxies ?? ["127.0.0.1"],
         req: {
           socket: { remoteAddress: "127.0.0.1" },
           headers: { host: "localhost" },
@@ -651,11 +658,38 @@ describe("trusted-proxy auth", () => {
       });
     }
 
-    it("allows local-direct request without credentials", async () => {
-      const res = await authorizeLocalDirect({});
+    it("allows local-direct request with a valid token", async () => {
+      const res = await authorizeLocalDirect({
+        token: "secret",
+        connectToken: "secret",
+      });
       expect(res.ok).toBe(true);
-      expect(res.method).toBe("trusted-proxy");
-      expect(res.user).toBe("local");
+      expect(res.method).toBe("token");
+    });
+
+    it("rejects local-direct request without credentials", async () => {
+      const res = await authorizeLocalDirect({
+        token: "secret",
+      });
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("token_missing");
+    });
+
+    it("rejects local-direct request with a wrong token", async () => {
+      const res = await authorizeLocalDirect({
+        token: "secret",
+        connectToken: "wrong",
+      });
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("token_mismatch");
+    });
+
+    it("rejects local-direct request when no local token is configured", async () => {
+      const res = await authorizeLocalDirect({
+        connectToken: "secret",
+      });
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("token_missing_config");
     });
 
     it("runs full proxy auth for same-host proxy that forwards only the identity header", async () => {
@@ -704,6 +738,26 @@ describe("trusted-proxy auth", () => {
       });
       expect(res.ok).toBe(false);
       expect(res.reason).toBe("trusted_proxy_missing_header_x-forwarded-proto");
+    });
+
+    it("still fails closed when trusted-proxy config is missing", async () => {
+      const res = await authorizeLocalDirect({
+        token: "secret",
+        connectToken: "secret",
+        trustedProxy: undefined,
+      });
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("trusted_proxy_config_missing");
+    });
+
+    it("still fails closed when trusted proxies are not configured", async () => {
+      const res = await authorizeLocalDirect({
+        token: "secret",
+        connectToken: "secret",
+        trustedProxies: [],
+      });
+      expect(res.ok).toBe(false);
+      expect(res.reason).toBe("trusted_proxy_no_proxies_configured");
     });
   });
 });
