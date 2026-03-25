@@ -152,12 +152,16 @@ async function copyProfileStateTree(params: {
   sourceRoot: string;
   destinationRoot: string;
   relative?: string;
+  canonicalSourceRoot?: string;
 }) {
   const relative = params.relative ?? "";
   const sourceRoot = relative ? path.join(params.sourceRoot, relative) : params.sourceRoot;
   const destinationRoot = relative
     ? path.join(params.destinationRoot, relative)
     : params.destinationRoot;
+  const canonicalSourceRoot =
+    params.canonicalSourceRoot ??
+    (await fsp.realpath(params.sourceRoot).catch(() => path.resolve(params.sourceRoot)));
   await fsp.mkdir(destinationRoot, { recursive: true, mode: 0o700 });
   const entries = await fsp.readdir(sourceRoot, { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
@@ -172,7 +176,7 @@ async function copyProfileStateTree(params: {
       continue;
     }
     const realPath = await fsp.realpath(srcPath).catch(() => null);
-    if (!realPath || !isPathWithinRoot(params.sourceRoot, realPath)) {
+    if (!realPath || !isPathWithinRoot(canonicalSourceRoot, realPath)) {
       continue;
     }
     if (stats.isDirectory()) {
@@ -180,6 +184,7 @@ async function copyProfileStateTree(params: {
         sourceRoot: params.sourceRoot,
         destinationRoot: params.destinationRoot,
         relative: childRelative,
+        canonicalSourceRoot,
       });
       continue;
     }
@@ -454,6 +459,7 @@ export async function profileCloneCommand(
   if (!source.exists) {
     throw new Error(`Source profile not found: ${resolveCommandProfileId(sourceId)}`);
   }
+  const sourceConfig = await readCloneSourceConfigObject(source.configPath);
 
   const basePort = await chooseBasePort(id, source.id);
   const spec: ProfileSpec = createProfileSpec({
@@ -463,7 +469,6 @@ export async function profileCloneCommand(
   });
   const destination = await writeManagedProfileSpec(spec);
 
-  const sourceConfig = await readCloneSourceConfigObject(source.configPath);
   const nextConfig = prepareConfigForProfile({
     config: sourceConfig,
     destination,

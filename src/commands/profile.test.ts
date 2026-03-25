@@ -168,6 +168,8 @@ describe("profile commands", () => {
     await expect(profileCloneCommand(runtime, "source", "clone", {})).rejects.toThrow(
       /source config is unreadable/i,
     );
+    const clone = await readManagedProfile("clone", process.env, () => root);
+    expect(clone).toBeNull();
   });
 
   it("skips symlinked state entries during clone", async () => {
@@ -191,6 +193,34 @@ describe("profile commands", () => {
     }
     await expect(fs.stat(path.join(clone.stateDir, "safe.json"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(clone.stateDir, "leak.txt"))).rejects.toThrow();
+  });
+
+  it("copies state correctly when the source root is reached through a symlinked OPENCLAW_HOME", async () => {
+    const realRoot = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-real-home-"));
+    const symlinkRoot = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-home-link-"));
+    const linkedHome = path.join(symlinkRoot, "linked-home");
+    await fs.symlink(realRoot, linkedHome);
+
+    process.env.OPENCLAW_HOME = linkedHome;
+    const runtime = createNonExitingRuntime();
+
+    await profileCreateCommand(runtime, "source", {});
+    const source = await readManagedProfile("source", process.env, () => linkedHome);
+    if (!source) {
+      throw new Error("source profile missing");
+    }
+    await fs.mkdir(path.join(source.stateDir, "credentials"), { recursive: true });
+    await fs.writeFile(path.join(source.stateDir, "credentials", "oauth.json"), "{}", "utf8");
+
+    await profileCloneCommand(runtime, "source", "clone", {});
+
+    const clone = await readManagedProfile("clone", process.env, () => linkedHome);
+    if (!clone) {
+      throw new Error("clone profile missing");
+    }
+    await expect(
+      fs.stat(path.join(clone.stateDir, "credentials", "oauth.json")),
+    ).resolves.toBeTruthy();
   });
 
   it("doctor warns when config workspace escapes the managed workspace root", async () => {
