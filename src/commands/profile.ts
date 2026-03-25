@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import JSON5 from "json5";
@@ -342,11 +341,6 @@ function buildProfileEnv(profile: ResolvedProfile): Record<string, string> {
   } as Record<string, string>;
 }
 
-function resolveGatewayLockPathForProfile(profile: ResolvedProfile): string {
-  const hash = createHash("sha256").update(profile.configPath).digest("hex").slice(0, 8);
-  return path.join(resolveGatewayLockDir(), `gateway.${hash}.lock`);
-}
-
 async function canonicalizeProfilePathForComparison(input: string): Promise<string> {
   const resolved = path.resolve(input);
   try {
@@ -354,6 +348,38 @@ async function canonicalizeProfilePathForComparison(input: string): Promise<stri
   } catch {
     return resolved;
   }
+}
+
+async function detectLiveGatewayLockReason(profile: ResolvedProfile): Promise<string | null> {
+  const lockDir = resolveGatewayLockDir();
+  const profileConfigPath = await canonicalizeProfilePathForComparison(profile.configPath);
+  let entries: string[];
+  try {
+    entries = await fsp.readdir(lockDir);
+  } catch {
+    return null;
+  }
+
+  for (const entry of entries) {
+    if (!/^gateway\.[0-9a-f]{8}\.lock$/i.test(entry)) {
+      continue;
+    }
+    try {
+      const raw = await fsp.readFile(path.join(lockDir, entry), "utf8");
+      const parsed = JSON.parse(raw) as { pid?: number; configPath?: string };
+      if (typeof parsed.pid !== "number" || parsed.pid <= 0 || !parsed.configPath) {
+        continue;
+      }
+      const lockConfigPath = await canonicalizeProfilePathForComparison(parsed.configPath);
+      if (lockConfigPath === profileConfigPath && isPidAlive(parsed.pid)) {
+        return `gateway lock is owned by live pid ${parsed.pid}`;
+      }
+    } catch {
+      // Ignore malformed or disappearing lock files.
+    }
+  }
+
+  return null;
 }
 
 async function detectLiveProfileReason(profile: ResolvedProfile): Promise<string | null> {
@@ -400,14 +426,9 @@ async function detectLiveProfileReason(profile: ResolvedProfile): Promise<string
     // Best effort only; fall through to lock inspection.
   }
 
-  try {
-    const raw = await fsp.readFile(resolveGatewayLockPathForProfile(profile), "utf8");
-    const parsed = JSON.parse(raw) as { pid?: number };
-    if (typeof parsed.pid === "number" && parsed.pid > 0 && isPidAlive(parsed.pid)) {
-      return `gateway lock is owned by live pid ${parsed.pid}`;
-    }
-  } catch {
-    // No lock or unreadable lock.
+  const lockReason = await detectLiveGatewayLockReason(profile);
+  if (lockReason) {
+    return lockReason;
   }
 
   return null;

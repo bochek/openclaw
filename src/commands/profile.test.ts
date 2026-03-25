@@ -424,6 +424,29 @@ describe("profile commands", () => {
     expect(managed?.stateDir).toBe(path.join(root, ".openclaw", "profiles", "legacy", "state"));
   });
 
+  it("treats adopted paths with in-root symlink escapes as invalid even when the target is missing", async () => {
+    const root = await createTempProfileDir("openclaw-profile-adopted-symlink-escape-");
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+    const legacyRoot = path.join(root, ".openclaw-legacy");
+    const outside = await createTempProfileDir("openclaw-profile-adopted-outside-");
+    await fs.mkdir(legacyRoot, { recursive: true });
+    await fs.writeFile(path.join(legacyRoot, "openclaw.json"), "{}", "utf8");
+    await fs.symlink(outside, path.join(legacyRoot, "link"));
+
+    await profileImportCommand(runtime, "legacy", {});
+
+    const manifestPath = path.join(root, ".openclaw", "profiles", "legacy", "profile.json");
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
+      roots: { config: string; state: string; workspace: string };
+    };
+    manifest.roots.state = path.join(legacyRoot, "link", "newstate");
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+
+    const managed = await readManagedProfile("legacy", process.env, () => root);
+    expect(managed?.warnings.join("\n")).toContain("escapes adopted legacy root");
+  });
+
   it("refuses to create a managed profile when a same-id legacy profile exists", async () => {
     const root = await createTempProfileDir("openclaw-profile-shadow-");
     process.env.OPENCLAW_HOME = root;

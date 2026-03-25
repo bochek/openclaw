@@ -204,13 +204,42 @@ function validateAdoptedAbsolutePath(
   label: string,
 ): string {
   const adoptedReal = fs.realpathSync(adoptedRoot);
-  const targetReal = fs.existsSync(resolvedPath)
-    ? fs.realpathSync(resolvedPath)
-    : path.resolve(resolvedPath);
+  const targetReal = resolvePathWithMissingSegmentsSync(resolvedPath);
   if (!isPathWithinRoot(adoptedReal, targetReal)) {
     throw new Error(`${label} escapes adopted legacy root: ${resolvedPath}`);
   }
   return resolvedPath;
+}
+
+function resolvePathWithMissingSegmentsSync(input: string): string {
+  const absolute = path.resolve(input);
+  const parsed = path.parse(absolute);
+  const segments = absolute.slice(parsed.root.length).split(path.sep).filter(Boolean);
+  let current = parsed.root;
+
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    const next = path.join(current, segment);
+    try {
+      const stat = fs.lstatSync(next);
+      current = stat.isSymbolicLink() ? fs.realpathSync(next) : next;
+      continue;
+    } catch (error) {
+      const code =
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        typeof (error as { code?: unknown }).code === "string"
+          ? (error as { code: string }).code
+          : null;
+      if (code !== "ENOENT") {
+        throw error;
+      }
+      return path.resolve(current, ...segments.slice(index));
+    }
+  }
+
+  return current;
 }
 
 function validateProfileSpec(raw: unknown): ProfileSpec | null {
