@@ -1,6 +1,6 @@
 # Plugin SDK Namespaces Plan
 
-## Plain-Language TL;DR
+## TL;DR
 
 OpenClaw should introduce a few clear SDK namespaces like `plugin`, `channel`,
 and `provider`, instead of keeping so much of the public surface flat.
@@ -9,8 +9,9 @@ The safe way to do that is:
 
 - add thin ESM facade entrypoints, not TypeScript `namespace`
 - keep the root `openclaw/plugin-sdk` surface small
-- add namespaced aliases to `OpenClawPluginApi`
-- keep old flat APIs as compatibility aliases during migration
+- replace flat registration methods on `OpenClawPluginApi` with namespace groups
+- ship the cutover in one coordinated release instead of dragging old flat APIs
+  along
 - forbid leaf modules from importing back through namespace facades
 
 That gives plugin authors a cleaner SDK that feels closer to VS Code, without
@@ -57,8 +58,8 @@ Those facts suggest a path that is low-risk:
 
 - keep leaf modules as the source of truth
 - add namespace facades on top
-- move docs and examples to the namespace model
-- keep flat compatibility aliases during migration
+- cut docs, examples, and templates over in the same release as the namespace
+  model
 
 ## Design Principles
 
@@ -87,7 +88,6 @@ They should only:
 
 - re-export stable leaves
 - assemble small namespace objects
-- provide compatibility aliases
 
 That keeps cycles and accidental coupling down.
 
@@ -183,8 +183,8 @@ Target split:
 
 - plugin-wide entry helpers move toward `plugin`
 - channel builders and channel-oriented shared helpers move toward `channel`
-- `core` remains as a migration surface and compatibility alias for one release
-  cycle
+- `core` stops being a first-class public destination and shrinks to the
+  smallest possible remaining shared surface
 
 Rule: no new public API should be added to `core` once namespace entrypoints
 exist.
@@ -208,7 +208,7 @@ Keep context fields flat:
 
 Move registration behavior behind namespaces:
 
-| Current flat method                  | Proposed namespace alias                  |
+| Current flat method                  | Proposed namespace location               |
 | ------------------------------------ | ----------------------------------------- |
 | `registerTool`                       | `api.tool.register`                       |
 | `registerHook`                       | `api.hook.register`                       |
@@ -228,10 +228,10 @@ Move registration behavior behind namespaces:
 | `registerContextEngine`              | `api.contextEngine.register`              |
 | `registerMemoryPromptSection`        | `api.memory.registerPromptSection`        |
 
-Keep the flat methods as direct compatibility aliases during migration.
+The cutover should replace the flat methods in one coordinated change.
 
-That gives plugin authors a clearer public shape without forcing immediate
-rewrites across the repo.
+That gives plugin authors a clearer public shape and avoids carrying two public
+registration models at the same time.
 
 ## Example Public Usage
 
@@ -321,8 +321,9 @@ to a shared leaf instead of importing one namespace from the other.
 
 Good shared homes:
 
-- a narrowed `core` during migration
 - a dedicated internal shared leaf
+- a very small shared core leaf only if it has a precise, stable reason to
+  exist
 - existing domain-neutral helpers
 
 Bad pattern:
@@ -339,8 +340,7 @@ hand-building separate versions of the API object.
 
 That factory can expose:
 
-- flat methods
-- namespace aliases
+- the namespaced shape only
 
 from the same underlying implementation.
 
@@ -351,22 +351,30 @@ real orchestration logic, split that logic back into leaf modules.
 
 ## Migration Strategy
 
-## Phase 1: Add Namespace Aliases To `OpenClawPluginApi`
+This should be a cutover, not a long overlap period.
 
-Do this first.
+That means:
+
+- one coordinated release
+- one migration guide
+- one docs/templates/test update
+- one public SDK shape after the release
+
+## Phase 1: Extract The Canonical API Builder
+
+Do this first, before changing the public surface.
 
 Why:
 
-- lowest migration risk
-- no package export churn required yet
-- plugin authors immediately get the better public shape
-- docs can start using namespaces without moving leaf files
+- it removes duplicated API assembly
+- it gives one place to switch the public shape
+- it reduces cutover risk
 
 Implementation:
 
-- extend `OpenClawPluginApi` in `src/plugins/types.ts`
-- assemble namespace aliases in the canonical API builder
-- keep all existing flat methods
+- extract one canonical API builder from `src/plugins/registry.ts` and
+  `src/plugins/captured-registration.ts`
+- make that builder assemble the new namespaced registration API
 
 ## Phase 2: Add Canonical Namespace Entrypoints
 
@@ -391,26 +399,27 @@ Examples:
 - `src/plugin-sdk/provider/auth.ts` can initially re-export from
   `../provider-auth.js`
 
-This lets the public namespace story land before the internal source move.
+This lets the public namespace story land before the internal source move,
+without forcing all implementation files to move in the same commit.
 
-## Phase 3: Move The Canonical Docs And Templates
+## Phase 3: Cut Public API, Docs, And Templates Together
 
-Once aliases exist:
+In the same release:
 
 - docs prefer namespaced entrypoints
 - templates prefer namespaced imports
-- new SDK additions land under namespaces first
+- tests and examples switch to the namespaced shape
+- `OpenClawPluginApi` changes to the namespaced registration model
+- flat registration methods are removed instead of carried as aliases
 
-At this point the old flat leaves still work but stop being the preferred story.
+## Phase 4: Remove The Old Public Story
 
-## Phase 4: Deprecate Flat Leaves
+After the cutover release lands:
 
-After one release cycle of overlap:
-
-- mark flat leaves as compatibility aliases
-- keep the highest-value ones for longer if third-party plugin breakage risk is
-  high
-- stop documenting them as first-class API
+- stop documenting superseded flat leaves as public API
+- keep only the namespace model in author-facing docs
+- remove any leftover flat registration surface that survived only as
+  transitional scaffolding during implementation
 
 ## What Should Not Be Namespaced In Phase 1
 
@@ -440,7 +449,8 @@ The namespace rollout should ship with explicit checks.
 - namespace facade files may only re-export or compose approved leaves
 - leaf files under a namespace may not import their parent `index` facade
 - no new API should be added to `core` once namespace facades exist
-- compatibility aliases must stay type-equivalent to canonical namespaced leaves
+- `OpenClawPluginApi` must not expose both flat and namespaced registration
+  methods after cutover
 
 ## Recommended End State
 
@@ -462,10 +472,10 @@ constraints.
 If this work starts soon, the first implementation step should be:
 
 1. extract one canonical `OpenClawPluginApi` builder
-2. add namespace aliases there
+2. switch that builder to the namespaced registration shape
 3. add `plugin`, `channel`, and `provider` facade entrypoints
-4. move docs and examples to those names
-5. only then decide which flat leaves deserve long-term compatibility
+4. cut docs, templates, and examples over in the same release
+5. remove the old flat registration story instead of maintaining dual public APIs
 
 That sequence keeps the refactor elegant and minimizes the chance that
 namespaces become another layer of accidental coupling.
