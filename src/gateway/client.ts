@@ -39,6 +39,7 @@ import {
   validateRequestFrame,
   validateResponseFrame,
 } from "./protocol/index.js";
+import { DEFAULT_HANDSHAKE_TIMEOUT_MS } from "./server-constants.js";
 
 type Pending = {
   resolve: (value: unknown) => void;
@@ -121,7 +122,7 @@ export function describeGatewayCloseCode(code: number): string | undefined {
 
 const FORCE_STOP_TERMINATE_GRACE_MS = 250;
 const STOP_AND_WAIT_TIMEOUT_MS = 1_000;
-const DEFAULT_CONNECT_CHALLENGE_TIMEOUT_MS = 5_000;
+const DEFAULT_CONNECT_CHALLENGE_TIMEOUT_MS = DEFAULT_HANDSHAKE_TIMEOUT_MS;
 
 type PendingStop = {
   ws: WebSocket;

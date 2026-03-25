@@ -4,6 +4,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
 import { rawDataToString } from "../infra/ws.js";
 import { GatewayClient } from "./client.js";
+import { DEFAULT_HANDSHAKE_TIMEOUT_MS } from "./server-constants.js";
 
 // Find a free localhost port for ad-hoc WS servers.
 async function getFreePort(): Promise<number> {
@@ -36,7 +37,7 @@ describe("GatewayClient", () => {
     }
   });
 
-  test("uses a 5s default connect-challenge timeout", async () => {
+  test("uses the shared handshake timeout by default for connect challenge", async () => {
     vi.useFakeTimers();
     try {
       const onConnectError = vi.fn();
@@ -65,7 +66,7 @@ describe("GatewayClient", () => {
         }
       ).queueConnect();
 
-      await vi.advanceTimersByTimeAsync(4_999);
+      await vi.advanceTimersByTimeAsync(DEFAULT_HANDSHAKE_TIMEOUT_MS - 1);
       expect(onConnectError).not.toHaveBeenCalled();
       expect(close).not.toHaveBeenCalled();
 
