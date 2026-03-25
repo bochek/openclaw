@@ -14,12 +14,15 @@ import {
 } from "./constants.js";
 
 describe("normalizeGatewayProfile", () => {
-  it("returns null for empty/default profiles", () => {
+  it("returns null for empty profiles", () => {
     expect(normalizeGatewayProfile()).toBeNull();
     expect(normalizeGatewayProfile("")).toBeNull();
     expect(normalizeGatewayProfile("   ")).toBeNull();
-    expect(normalizeGatewayProfile("default")).toBeNull();
-    expect(normalizeGatewayProfile(" Default ")).toBeNull();
+  });
+
+  it("preserves explicit default profiles", () => {
+    expect(normalizeGatewayProfile("default")).toBe("default");
+    expect(normalizeGatewayProfile(" Default ")).toBe("default");
   });
 
   it("returns trimmed custom profiles", () => {
@@ -39,6 +42,10 @@ describe("resolveGatewayLaunchAgentLabel", () => {
     const result = resolveGatewayLaunchAgentLabel("dev");
     expect(result).toBe("ai.openclaw.dev");
   });
+
+  it("returns a distinct label for explicit default profiles", () => {
+    expect(resolveGatewayLaunchAgentLabel("default")).toBe("ai.openclaw.default");
+  });
 });
 
 describe("resolveGatewaySystemdServiceName", () => {
@@ -51,6 +58,10 @@ describe("resolveGatewaySystemdServiceName", () => {
   it("returns profile-specific service name when profile is set", () => {
     const result = resolveGatewaySystemdServiceName("dev");
     expect(result).toBe("openclaw-gateway-dev");
+  });
+
+  it("returns a distinct service name for explicit default profiles", () => {
+    expect(resolveGatewaySystemdServiceName("default")).toBe("openclaw-gateway-default");
   });
 });
 
@@ -65,6 +76,10 @@ describe("resolveGatewayWindowsTaskName", () => {
     const result = resolveGatewayWindowsTaskName("dev");
     expect(result).toBe("OpenClaw Gateway (dev)");
   });
+
+  it("returns a distinct task name for explicit default profiles", () => {
+    expect(resolveGatewayWindowsTaskName("default")).toBe("OpenClaw Gateway (default)");
+  });
 });
 
 describe("resolveGatewayProfileSuffix", () => {
@@ -72,9 +87,9 @@ describe("resolveGatewayProfileSuffix", () => {
     expect(resolveGatewayProfileSuffix()).toBe("");
   });
 
-  it("returns empty string for default profiles", () => {
-    expect(resolveGatewayProfileSuffix("default")).toBe("");
-    expect(resolveGatewayProfileSuffix(" Default ")).toBe("");
+  it("returns a suffix for explicit default profiles", () => {
+    expect(resolveGatewayProfileSuffix("default")).toBe("-default");
+    expect(resolveGatewayProfileSuffix(" Default ")).toBe("-default");
   });
 
   it("returns a hyphenated suffix for custom profiles", () => {

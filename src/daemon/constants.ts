@@ -19,10 +19,10 @@ export const LEGACY_GATEWAY_WINDOWS_TASK_NAMES: string[] = [];
 
 export function normalizeGatewayProfile(profile?: string): string | null {
   const trimmed = profile?.trim();
-  if (!trimmed || trimmed.toLowerCase() === "default") {
+  if (!trimmed) {
     return null;
   }
-  return trimmed;
+  return trimmed.toLowerCase() === "default" ? "default" : trimmed;
 }
 
 export function resolveGatewayProfileSuffix(profile?: string): string {

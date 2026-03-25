@@ -321,6 +321,38 @@ function buildResolvedManagedProfile(
   });
 }
 
+function buildInvalidManagedProfile(params: {
+  id: string;
+  profileRoot: string;
+  manifestPath: string;
+  warning: string;
+}): ResolvedProfile {
+  return buildResolvedProfile({
+    id: params.id,
+    kind: "managed",
+    mode: "managed-native",
+    profileRoot: params.profileRoot,
+    manifestPath: params.manifestPath,
+    configPath: path.join(params.profileRoot, "config", CONFIG_FILENAME),
+    stateDir: path.join(params.profileRoot, "state"),
+    workspaceDir: path.join(params.profileRoot, "workspace"),
+    basePort: resolveDefaultBasePort(params.id),
+    configuredGatewayPort: undefined,
+    exists: true,
+    managed: true,
+    warnings: [params.warning],
+  });
+}
+
+export function hasInvalidManagedManifest(profile: ResolvedProfile | null | undefined): boolean {
+  return Boolean(
+    profile?.managed &&
+    profile.warnings.some((warning) =>
+      warning.startsWith("Invalid profile manifest: unreadable or schema-invalid"),
+    ),
+  );
+}
+
 export async function readManagedProfile(
   profileId: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -330,6 +362,14 @@ export async function readManagedProfile(
   const manifestPath = path.join(profileRoot, "profile.json");
   const spec = await loadManagedProfileSpec(manifestPath);
   if (!spec) {
+    if (managedProfileManifestExists(profileId, env, homedir)) {
+      return buildInvalidManagedProfile({
+        id: requireValidProfileId(profileId),
+        profileRoot,
+        manifestPath,
+        warning: "Invalid profile manifest: unreadable or schema-invalid",
+      });
+    }
     return null;
   }
   try {
@@ -369,6 +409,14 @@ export function readManagedProfileSync(
   const manifestPath = path.join(profileRoot, "profile.json");
   const spec = loadManagedProfileSpecSync(manifestPath);
   if (!spec) {
+    if (managedProfileManifestExists(profileId, env, homedir)) {
+      return buildInvalidManagedProfile({
+        id: requireValidProfileId(profileId),
+        profileRoot,
+        manifestPath,
+        warning: "Invalid profile manifest: unreadable or schema-invalid",
+      });
+    }
     return null;
   }
   try {
@@ -573,7 +621,7 @@ export async function resolveSelectedProfile(
   homedir: () => string = envHomedir(env),
 ): Promise<ResolvedProfile | null> {
   const profileId = env.OPENCLAW_PROFILE?.trim();
-  return profileId ? resolveProfileSelection(profileId, env, homedir) : null;
+  return profileId ? resolveProfileSelection(requireValidProfileId(profileId), env, homedir) : null;
 }
 
 export function resolveSelectedProfileSync(
@@ -581,7 +629,9 @@ export function resolveSelectedProfileSync(
   homedir: () => string = envHomedir(env),
 ): ResolvedProfile | null {
   const profileId = env.OPENCLAW_PROFILE?.trim();
-  return profileId ? resolveProfileSelectionSync(profileId, env, homedir) : null;
+  return profileId
+    ? resolveProfileSelectionSync(requireValidProfileId(profileId), env, homedir)
+    : null;
 }
 
 export async function listProfiles(
@@ -698,6 +748,11 @@ export async function importLegacyProfile(
   homedir: () => string = envHomedir(env),
 ): Promise<ResolvedProfile> {
   const existing = await readManagedProfile(profileId, env, homedir);
+  if (hasInvalidManagedManifest(existing)) {
+    throw new Error(
+      `Managed profile manifest exists but is unreadable: ${normalizeProfileId(profileId)}`,
+    );
+  }
   if (existing) {
     return existing;
   }
@@ -729,6 +784,11 @@ export async function ensureManagedProfile(
   homedir: () => string = envHomedir(env),
 ): Promise<ResolvedProfile> {
   const existing = await readManagedProfile(profileId, env, homedir);
+  if (hasInvalidManagedManifest(existing)) {
+    throw new Error(
+      `Managed profile manifest exists but is unreadable: ${normalizeProfileId(profileId)}`,
+    );
+  }
   if (existing) {
     return existing;
   }

@@ -7,6 +7,7 @@ import { resolveGatewayService } from "../daemon/service.js";
 import { writeJsonAtomic } from "../infra/json-files.js";
 import {
   createProfileSpec,
+  hasInvalidManagedManifest,
   importLegacyProfile,
   listProfiles,
   managedProfileManifestExists,
@@ -411,6 +412,9 @@ export async function profileCreateCommand(
 ): Promise<void> {
   const id = resolveCommandProfileId(profileId);
   const existingManaged = await readManagedProfile(id);
+  if (hasInvalidManagedManifest(existingManaged)) {
+    throw new Error(`Managed profile manifest exists but is unreadable: ${id}`);
+  }
   if (existingManaged) {
     throw new Error(`Managed profile already exists: ${id}`);
   }
@@ -449,6 +453,9 @@ export async function profileCloneCommand(
 ): Promise<void> {
   const id = resolveCommandProfileId(profileId);
   const existingManaged = await readManagedProfile(id);
+  if (hasInvalidManagedManifest(existingManaged)) {
+    throw new Error(`Managed profile manifest exists but is unreadable: ${id}`);
+  }
   if (existingManaged) {
     throw new Error(`Managed profile already exists: ${id}`);
   }

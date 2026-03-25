@@ -147,6 +147,14 @@ describe("state + config path candidates", () => {
     expect(resolveStateDir(env, () => "/home/test")).toBe(path.resolve("/new/state"));
   });
 
+  it("rejects invalid OPENCLAW_PROFILE values instead of falling back to default", () => {
+    const env = {
+      OPENCLAW_PROFILE: "bad profile",
+    } as NodeJS.ProcessEnv;
+
+    expect(() => resolveStateDir(env, () => "/home/test")).toThrow(/invalid profile id/i);
+  });
+
   it("uses OPENCLAW_HOME for default state/config locations", () => {
     const env = {
       OPENCLAW_HOME: "/srv/openclaw-home",
@@ -252,6 +260,29 @@ describe("state + config path candidates", () => {
       expect(resolveDefaultConfigCandidates(env, () => root)).toEqual([
         path.join(root, ".openclaw", "profiles", "rescue", "config", "openclaw.json"),
       ]);
+    });
+  });
+
+  it("keeps unreadable managed manifests on managed fallback roots instead of implicit fallback", async () => {
+    await withTempDir({ prefix: "openclaw-managed-invalid-manifest-" }, async (root) => {
+      const manifestPath = path.join(root, ".openclaw", "profiles", "broken", "profile.json");
+      await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+      await fs.writeFile(manifestPath, "{not-json", "utf8");
+      const env = {
+        OPENCLAW_HOME: root,
+        OPENCLAW_PROFILE: "broken",
+      } as NodeJS.ProcessEnv;
+
+      expect(resolveStateDir(env, () => root)).toBe(
+        path.join(root, ".openclaw", "profiles", "broken", "state"),
+      );
+      expect(
+        resolveConfigPath(
+          env,
+          resolveStateDir(env, () => root),
+          () => root,
+        ),
+      ).toBe(path.join(root, ".openclaw", "profiles", "broken", "config", "openclaw.json"));
     });
   });
 
