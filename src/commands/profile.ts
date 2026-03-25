@@ -40,6 +40,8 @@ const PROFILE_TOP_LEVEL_EXCLUDES = new Set([
 
 const PROFILE_FILE_EXCLUDES = new Set([
   "openclaw.json",
+  "clawdbot.json",
+  "moldbot.json",
   "openclaw.json.bak",
   "openclaw.json.bak.1",
   "openclaw.json.bak.2",

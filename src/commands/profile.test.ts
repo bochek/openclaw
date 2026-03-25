@@ -124,6 +124,31 @@ describe("profile commands", () => {
     await expect(fs.stat(path.join(clone.stateDir, "logs"))).rejects.toThrow();
   });
 
+  it("does not copy legacy config files into cloned profile state", async () => {
+    const root = await createTempProfileDir("openclaw-profile-clone-legacy-config-");
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+
+    const legacyRoot = path.join(root, ".openclaw-legacy");
+    await fs.mkdir(legacyRoot, { recursive: true });
+    await fs.writeFile(
+      path.join(legacyRoot, "clawdbot.json"),
+      '{"gateway":{"auth":{"token":"old"}}}',
+      "utf8",
+    );
+
+    await profileImportCommand(runtime, "legacy", {});
+    await profileCloneCommand(runtime, "legacy", "clone", {});
+
+    const clone = await readManagedProfile("clone", process.env, () => root);
+    if (!clone) {
+      throw new Error("clone profile missing");
+    }
+
+    await expect(fs.stat(path.join(clone.stateDir, "clawdbot.json"))).rejects.toThrow();
+    await expect(fs.stat(path.join(clone.stateDir, "moldbot.json"))).rejects.toThrow();
+  });
+
   it("preserves non-token auth modes during clone", async () => {
     const root = await createTempProfileDir("openclaw-profile-clone-auth-mode-");
     process.env.OPENCLAW_HOME = root;
