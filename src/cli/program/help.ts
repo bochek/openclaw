@@ -55,12 +55,9 @@ export function configureProgramHelp(program: Command, ctx: ProgramContext) {
     )
     .option(
       "--dev",
-      "Dev profile: isolate state under ~/.openclaw-dev, default gateway port 19001, and shift derived ports (browser/canvas)",
+      "Use the managed dev profile (default gateway port 19001, isolated state/config/workspace, shifted derived ports)",
     )
-    .option(
-      "--profile <name>",
-      "Use a named profile (isolates OPENCLAW_STATE_DIR/OPENCLAW_CONFIG_PATH under ~/.openclaw-<name>)",
-    )
+    .option("--profile <name>", "Select a named managed profile (or legacy profile before import)")
     .option(
       "--log-level <level>",
       `Global log level override for file + console (${CLI_LOG_LEVEL_VALUES})`,

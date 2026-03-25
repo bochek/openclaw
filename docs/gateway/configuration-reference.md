@@ -2638,7 +2638,7 @@ OPENCLAW_STATE_DIR=~/.openclaw-a \
 openclaw gateway --port 19001
 ```
 
-Convenience flags: `--dev` (uses `~/.openclaw-dev` + port `19001`), `--profile <name>` (uses `~/.openclaw-<name>`).
+Convenience selectors: `--dev` selects the managed `dev` profile (default port `19001`), and `--profile <name>` selects a named profile. Managed profiles live under `~/.openclaw/profiles/<name>/`; legacy `~/.openclaw-<name>` layouts can be adopted with `openclaw profile import <name>`.
 
 See [Multiple Gateways](/gateway/multiple-gateways).
 

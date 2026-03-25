@@ -15,6 +15,7 @@ This page describes the current CLI behavior. If commands change, update this do
 - [`setup`](/cli/setup)
 - [`onboard`](/cli/onboard)
 - [`configure`](/cli/configure)
+- [`profile`](/cli/profile)
 - [`config`](/cli/config)
 - [`completion`](/cli/completion)
 - [`doctor`](/cli/doctor)
@@ -61,8 +62,8 @@ This page describes the current CLI behavior. If commands change, update this do
 
 ## Global flags
 
-- `--dev`: isolate state under `~/.openclaw-dev` and shift default ports.
-- `--profile <name>`: isolate state under `~/.openclaw-<name>`.
+- `--dev`: use the managed `dev` profile with isolated state/config/workspace and default port `19001`.
+- `--profile <name>`: select a named profile; managed profiles live under `~/.openclaw/profiles/<name>/`, and legacy profiles can be adopted with `openclaw profile import <name>`.
 - `--no-color`: disable ANSI colors.
 - `--update`: shorthand for `openclaw update` (source installs only).
 - `-V`, `--version`, `-v`: print version and exit.
@@ -94,6 +95,15 @@ Palette source of truth: `src/terminal/palette.ts` (the “lobster palette”).
 
 ```
 openclaw [--dev] [--profile <name>] <command>
+  profile
+    list
+    get
+    paths
+    create
+    clone
+    import
+    doctor
+    delete
   setup
   onboard
   configure

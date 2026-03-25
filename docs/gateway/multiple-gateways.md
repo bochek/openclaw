@@ -22,14 +22,22 @@ If these are shared, you will hit config races and port conflicts.
 
 ## Recommended: profiles (`--profile`)
 
-Profiles auto-scope `OPENCLAW_STATE_DIR` + `OPENCLAW_CONFIG_PATH` and suffix service names.
+Profiles are now first-class managed objects. A managed profile owns its config, state, workspace, and default gateway port under:
+
+```text
+~/.openclaw/profiles/<id>/
+```
+
+Use `openclaw profile create <id>` for a fresh profile, `openclaw profile import <id>` to adopt an existing legacy `~/.openclaw-<id>` layout without changing behavior, and `openclaw profile clone <source> <id>` for a new isolated copy.
 
 ```bash
 # main
+openclaw profile create main
 openclaw --profile main setup
 openclaw --profile main gateway --port 18789
 
 # rescue
+openclaw profile create rescue
 openclaw --profile rescue setup
 openclaw --profile rescue gateway --port 19001
 ```
@@ -45,7 +53,7 @@ openclaw --profile rescue gateway install
 
 Run a second Gateway on the same host with its own:
 
-- profile/config
+- profile config
 - state dir
 - workspace
 - base port (plus derived ports)
@@ -63,12 +71,12 @@ openclaw onboard
 openclaw gateway install
 
 # Rescue bot (isolated profile + ports)
+openclaw profile create rescue
 openclaw --profile rescue onboard
 # Notes:
-# - workspace name will be postfixed with -rescue per default
-# - Port should be at least 18789 + 20 Ports,
-#   better choose completely different base port, like 19789,
-# - rest of the onboarding is the same as normal
+# - workspace is isolated under the rescue profile root by default
+# - choose a base port with at least 20 ports of spacing from the main instance
+# - the rest of onboarding is the same as normal
 
 # To install the service (if not happened automatically during setup)
 openclaw --profile rescue gateway install
@@ -92,6 +100,8 @@ If you override any of these in config or env, you must keep them unique per ins
 - Remote Chrome: use `browser.profiles.<name>.cdpUrl` (per profile, per instance).
 
 ## Manual env example
+
+Manual env isolation still works, but profiles are the preferred product surface because they keep config/state/workspace/runtime metadata together.
 
 ```bash
 OPENCLAW_CONFIG_PATH=~/.openclaw/main.json \
