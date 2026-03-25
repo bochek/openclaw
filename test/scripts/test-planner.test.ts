@@ -36,8 +36,11 @@ describe("test planner", () => {
     expect(plan.runtimeCapabilities.runtimeProfileName).toBe("local-darwin");
     expect(plan.runtimeCapabilities.memoryBand).toBe("mid");
     expect(plan.executionBudget.unitSharedWorkers).toBe(4);
+    expect(plan.executionBudget.topLevelParallelLimitNoIsolate).toBe(8);
+    expect(plan.executionBudget.topLevelParallelLimitIsolated).toBe(3);
     expect(plan.selectedUnits.some((unit) => unit.id.startsWith("unit-fast"))).toBe(true);
     expect(plan.selectedUnits.some((unit) => unit.id.startsWith("extensions"))).toBe(true);
+    expect(plan.topLevelParallelLimit).toBe(8);
     artifacts.cleanupTempArtifacts();
   });
 
@@ -69,7 +72,9 @@ describe("test planner", () => {
     expect(plan.runtimeCapabilities.memoryBand).toBe("mid");
     expect(plan.runtimeCapabilities.loadBand).toBe("saturated");
     expect(plan.executionBudget.unitSharedWorkers).toBe(2);
-    expect(plan.topLevelParallelLimit).toBe(1);
+    expect(plan.executionBudget.topLevelParallelLimitNoIsolate).toBe(4);
+    expect(plan.executionBudget.topLevelParallelLimitIsolated).toBe(1);
+    expect(plan.topLevelParallelLimit).toBe(4);
     expect(plan.deferredRunConcurrency).toBe(1);
     artifacts.cleanupTempArtifacts();
   });

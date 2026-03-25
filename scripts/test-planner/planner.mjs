@@ -983,14 +983,14 @@ export function buildExecutionPlan(request, options = {}) {
   const serialPrefixUnits = parallelUnits.filter((unit) => unit.serialPhase);
   const deferredParallelUnits = parallelUnits.filter((unit) => !unit.serialPhase);
   const topLevelParallelEnabled = context.executionBudget.topLevelParallelEnabled;
+  const baseTopLevelParallelLimit =
+    context.noIsolateArgs.length > 0
+      ? context.executionBudget.topLevelParallelLimitNoIsolate
+      : context.executionBudget.topLevelParallelLimitIsolated;
   const defaultTopLevelParallelLimit =
     context.noIsolateArgs.length > 0
-      ? Math.max(
-          1,
-          context.executionBudget.topLevelParallelLimit +
-            (context.runtime.intentProfile === "max" ? 1 : 0),
-        )
-      : context.executionBudget.topLevelParallelLimit;
+      ? Math.max(1, baseTopLevelParallelLimit + (context.runtime.intentProfile === "max" ? 1 : 0))
+      : baseTopLevelParallelLimit;
   const topLevelParallelLimit = Math.max(
     1,
     parseEnvNumber(env, "OPENCLAW_TEST_TOP_LEVEL_CONCURRENCY", defaultTopLevelParallelLimit),

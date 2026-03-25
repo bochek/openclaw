@@ -252,6 +252,8 @@ export function resolveExecutionBudget(runtimeCapabilities) {
       gatewayWorkers: macCiWorkers,
       topLevelParallelEnabled: runtime.intentProfile !== "serial" && !runtime.isWindows,
       topLevelParallelLimit: runtime.isWindows ? 2 : 4,
+      topLevelParallelLimitNoIsolate: runtime.isWindows ? 2 : 4,
+      topLevelParallelLimitIsolated: runtime.isWindows ? 2 : 4,
       deferredRunConcurrency: null,
       heavyUnitFileLimit: 64,
       heavyUnitLaneCount: 4,
@@ -273,6 +275,8 @@ export function resolveExecutionBudget(runtimeCapabilities) {
     gatewayWorkers: Math.min(cpuCount, bandBudget.gateway),
     topLevelParallelEnabled: runtime.nodeMajor < 25,
     topLevelParallelLimit: Math.min(cpuCount, bandBudget.topLevelIsolated),
+    topLevelParallelLimitNoIsolate: Math.min(cpuCount, bandBudget.topLevelNoIsolate),
+    topLevelParallelLimitIsolated: Math.min(cpuCount, bandBudget.topLevelIsolated),
     deferredRunConcurrency: bandBudget.deferred,
     heavyUnitFileLimit: bandBudget.heavyFileLimit,
     heavyUnitLaneCount: bandBudget.heavyLaneCount,
@@ -292,6 +296,14 @@ export function resolveExecutionBudget(runtimeCapabilities) {
     gatewayWorkers: scaleForLoad(baseBudget.gatewayWorkers, runtime.loadBand),
     topLevelParallelLimit: scaleConcurrencyForLoad(
       baseBudget.topLevelParallelLimit,
+      runtime.loadBand,
+    ),
+    topLevelParallelLimitNoIsolate: scaleConcurrencyForLoad(
+      baseBudget.topLevelParallelLimitNoIsolate,
+      runtime.loadBand,
+    ),
+    topLevelParallelLimitIsolated: scaleConcurrencyForLoad(
+      baseBudget.topLevelParallelLimitIsolated,
       runtime.loadBand,
     ),
     deferredRunConcurrency:
