@@ -727,6 +727,11 @@ export async function ensureManagedProfile(
   if (existing) {
     return existing;
   }
+  if (managedProfileManifestExists(profileId, env, homedir)) {
+    throw new Error(
+      `Managed profile manifest exists but is unreadable: ${normalizeProfileId(profileId)}`,
+    );
+  }
   const selected = resolveProfileSelectionSync(profileId, env, homedir);
   if (selected.mode === "legacy-unmanaged") {
     return importLegacyProfile(profileId, env, homedir);

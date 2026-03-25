@@ -405,6 +405,9 @@ export async function profileCloneCommand(
   if (existingManaged) {
     throw new Error(`Managed profile already exists: ${id}`);
   }
+  if (managedProfileManifestExists(id)) {
+    throw new Error(`Managed profile manifest exists but is unreadable: ${id}`);
+  }
   const existingSelection = await resolveProfileSelection(id);
   if (existingSelection.mode === "legacy-unmanaged") {
     throw new Error(

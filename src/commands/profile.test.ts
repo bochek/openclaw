@@ -279,6 +279,21 @@ describe("profile commands", () => {
     );
   });
 
+  it("refuses to clone when a destination managed manifest already exists but is unreadable", async () => {
+    const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-clone-bad-manifest-"));
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+
+    await profileCreateCommand(runtime, "source", {});
+    const profileRoot = path.join(root, ".openclaw", "profiles", "broken");
+    await fs.mkdir(profileRoot, { recursive: true });
+    await fs.writeFile(path.join(profileRoot, "profile.json"), "{not-json", "utf8");
+
+    await expect(profileCloneCommand(runtime, "source", "broken", {})).rejects.toThrow(
+      /manifest exists but is unreadable/i,
+    );
+  });
+
   it("avoids reusing dev's preferred port when another profile already occupies it", async () => {
     const root = await fs.mkdtemp(path.join(process.cwd(), ".tmp-profile-dev-port-"));
     process.env.OPENCLAW_HOME = root;

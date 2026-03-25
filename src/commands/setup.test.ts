@@ -109,4 +109,31 @@ describe("setupCommand", () => {
       expect(profile?.exists).toBe(true);
     });
   });
+
+  it("fails fast when selected profile manifest exists but is unreadable", async () => {
+    await withTempHome(async (home) => {
+      const runtime = {
+        log: vi.fn(),
+        error: vi.fn(),
+        exit: vi.fn(),
+      };
+      process.env.OPENCLAW_HOME = home;
+      delete process.env.OPENCLAW_STATE_DIR;
+      delete process.env.OPENCLAW_CONFIG_PATH;
+      delete process.env.OPENCLAW_GATEWAY_PORT;
+      applyCliProfileEnv({
+        profile: "broken",
+        env: process.env as Record<string, string | undefined>,
+        homedir: () => home,
+      });
+
+      const profileRoot = path.join(home, ".openclaw", "profiles", "broken");
+      await fs.mkdir(profileRoot, { recursive: true });
+      await fs.writeFile(path.join(profileRoot, "profile.json"), "{not-json", "utf8");
+
+      await expect(
+        setupCommand({ workspace: path.join(home, "workspace-broken") }, runtime),
+      ).rejects.toThrow(/manifest exists but is unreadable/i);
+    });
+  });
 });
