@@ -350,17 +350,26 @@ function buildInvalidResolvedManagedProfileFromSpec(
   manifestPath: string,
   warning: string,
 ): ResolvedProfile {
-  const preserveDeclaredRoots = Boolean(spec.adoptedFromLegacy);
-  const allowAbsolute = preserveDeclaredRoots;
-  const configPath = preserveDeclaredRoots
-    ? resolveProfileComponentPath(profileRoot, spec.roots.config, { allowAbsolute })
-    : path.join(profileRoot, "config", CONFIG_FILENAME);
-  const stateDir = preserveDeclaredRoots
-    ? resolveProfileComponentPath(profileRoot, spec.roots.state, { allowAbsolute })
-    : path.join(profileRoot, "state");
-  const workspaceDir = preserveDeclaredRoots
-    ? resolveProfileComponentPath(profileRoot, spec.roots.workspace, { allowAbsolute })
-    : path.join(profileRoot, "workspace");
+  let configPath = path.join(profileRoot, "config", CONFIG_FILENAME);
+  let stateDir = path.join(profileRoot, "state");
+  let workspaceDir = path.join(profileRoot, "workspace");
+  const warnings = [warning];
+
+  if (spec.adoptedFromLegacy) {
+    try {
+      configPath = resolveProfileComponentPath(profileRoot, spec.roots.config, {
+        allowAbsolute: true,
+      });
+      stateDir = resolveProfileComponentPath(profileRoot, spec.roots.state, {
+        allowAbsolute: true,
+      });
+      workspaceDir = resolveProfileComponentPath(profileRoot, spec.roots.workspace, {
+        allowAbsolute: true,
+      });
+    } catch (error) {
+      warnings.push(`Invalid adopted profile paths: ${String(error)}`);
+    }
+  }
   return buildResolvedProfile({
     id: spec.id,
     kind: "managed",
@@ -377,7 +386,7 @@ function buildInvalidResolvedManagedProfileFromSpec(
     createdAt: spec.createdAt,
     createdFrom: spec.createdFrom,
     adoptedFromLegacy: spec.adoptedFromLegacy,
-    warnings: [warning],
+    warnings,
   });
 }
 

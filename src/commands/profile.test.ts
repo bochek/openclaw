@@ -349,6 +349,28 @@ describe("profile commands", () => {
     expect(managed?.configPath).toBe(path.join(legacyRoot, "openclaw.json"));
   });
 
+  it("falls back safely when adopted invalid-manifest paths cannot be resolved", async () => {
+    const root = await createTempProfileDir("openclaw-profile-adopted-relative-escape-");
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+    const legacyRoot = path.join(root, ".openclaw-legacy");
+    await fs.mkdir(legacyRoot, { recursive: true });
+    await fs.writeFile(path.join(legacyRoot, "openclaw.json"), "{}", "utf8");
+
+    await profileImportCommand(runtime, "legacy", {});
+
+    const manifestPath = path.join(root, ".openclaw", "profiles", "legacy", "profile.json");
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
+      roots: { config: string; state: string; workspace: string };
+    };
+    manifest.roots.state = "../escape-state";
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+
+    const managed = await readManagedProfile("legacy", process.env, () => root);
+    expect(managed?.warnings.join("\n")).toContain("Invalid adopted profile paths");
+    expect(managed?.stateDir).toBe(path.join(root, ".openclaw", "profiles", "legacy", "state"));
+  });
+
   it("refuses to create a managed profile when a same-id legacy profile exists", async () => {
     const root = await createTempProfileDir("openclaw-profile-shadow-");
     process.env.OPENCLAW_HOME = root;
