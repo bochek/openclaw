@@ -164,7 +164,34 @@ async function copyProfileStateTree(params: {
     params.canonicalSourceRoot ??
     (await fsp.realpath(params.sourceRoot).catch(() => path.resolve(params.sourceRoot)));
   await fsp.mkdir(destinationRoot, { recursive: true, mode: 0o700 });
-  const entries = await fsp.readdir(sourceRoot, { withFileTypes: true }).catch(() => []);
+  let entries: Array<{
+    name: string;
+    isDirectory(): boolean;
+    isFile(): boolean;
+    isSymbolicLink(): boolean;
+  }>;
+  try {
+    entries = (await fsp.readdir(sourceRoot, { withFileTypes: true })) as Array<{
+      name: string;
+      isDirectory(): boolean;
+      isFile(): boolean;
+      isSymbolicLink(): boolean;
+    }>;
+  } catch (error) {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : null;
+    if (code === "ENOENT") {
+      return;
+    }
+    throw new Error(`Profile clone could not read state directory: ${sourceRoot}`, {
+      cause: error,
+    });
+  }
   for (const entry of entries) {
     const childRelative = relative ? path.join(relative, entry.name) : entry.name;
     if (classifyStateEntry(childRelative) === "skip") {
@@ -172,12 +199,26 @@ async function copyProfileStateTree(params: {
     }
     const srcPath = path.join(params.sourceRoot, childRelative);
     const dstPath = path.join(params.destinationRoot, childRelative);
-    const stats = await fsp.lstat(srcPath).catch(() => null);
-    if (!stats || stats.isSymbolicLink()) {
+    let stats: Awaited<ReturnType<typeof fsp.lstat>>;
+    try {
+      stats = await fsp.lstat(srcPath);
+    } catch (error) {
+      throw new Error(`Profile clone could not inspect state entry: ${srcPath}`, {
+        cause: error,
+      });
+    }
+    if (stats.isSymbolicLink()) {
       continue;
     }
-    const realPath = await fsp.realpath(srcPath).catch(() => null);
-    if (!realPath || !isPathWithinRoot(canonicalSourceRoot, realPath)) {
+    let realPath: string;
+    try {
+      realPath = await fsp.realpath(srcPath);
+    } catch (error) {
+      throw new Error(`Profile clone could not resolve state entry path: ${srcPath}`, {
+        cause: error,
+      });
+    }
+    if (!isPathWithinRoot(canonicalSourceRoot, realPath)) {
       continue;
     }
     if (stats.isDirectory()) {
@@ -191,7 +232,13 @@ async function copyProfileStateTree(params: {
     }
     if (stats.isFile()) {
       await fsp.mkdir(path.dirname(dstPath), { recursive: true, mode: 0o700 });
-      await fsp.copyFile(srcPath, dstPath);
+      try {
+        await fsp.copyFile(srcPath, dstPath);
+      } catch (error) {
+        throw new Error(`Profile clone could not copy state entry: ${srcPath}`, {
+          cause: error,
+        });
+      }
     }
   }
 }
@@ -483,21 +530,25 @@ export async function profileCloneCommand(
     createdFrom: source.id,
   });
   const destination = await writeManagedProfileSpec(spec);
-
-  const nextConfig = prepareConfigForProfile({
-    config: sourceConfig,
-    destination,
-    operation: "clone",
-  });
-  await writeJsonAtomic(destination.configPath, nextConfig, {
-    mode: 0o600,
-    trailingNewline: true,
-    ensureDirMode: 0o700,
-  });
-  await copyProfileStateTree({
-    sourceRoot: source.stateDir,
-    destinationRoot: destination.stateDir,
-  });
+  try {
+    const nextConfig = prepareConfigForProfile({
+      config: sourceConfig,
+      destination,
+      operation: "clone",
+    });
+    await writeJsonAtomic(destination.configPath, nextConfig, {
+      mode: 0o600,
+      trailingNewline: true,
+      ensureDirMode: 0o700,
+    });
+    await copyProfileStateTree({
+      sourceRoot: source.stateDir,
+      destinationRoot: destination.stateDir,
+    });
+  } catch (error) {
+    await fsp.rm(destination.profileRoot, { recursive: true, force: true });
+    throw error;
+  }
 
   writeProfileOutput(runtime, formatProfileSummary(destination), Boolean(opts.json));
 }

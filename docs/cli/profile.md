@@ -61,4 +61,5 @@ Clone preserves durable config and credentials, allocates a fresh workspace and 
 - `profile import` is for behavior-preserving legacy adoption.
 - `profile clone` is for creating a new isolated runtime instance.
 - `profile delete` only removes managed profile roots and refuses live profiles unless you pass `--force`.
+- If you previously installed the gateway with `openclaw --profile default gateway install`, upgrade by uninstalling that older service instance before reinstalling with the new build. Older explicit-`default` installs used the unscoped gateway service label/name, while the managed profile system gives explicit `default` its own service identity.
 - For multi-gateway deployment guidance, see [Multiple Gateways](/gateway/multiple-gateways).

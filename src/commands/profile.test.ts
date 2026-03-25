@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readManagedProfile } from "../profiles/managed.js";
 import { createNonExitingRuntime } from "../runtime.js";
 import {
@@ -215,6 +215,43 @@ describe("profile commands", () => {
     }
     await expect(fs.stat(path.join(clone.stateDir, "safe.json"))).resolves.toBeTruthy();
     await expect(fs.stat(path.join(clone.stateDir, "leak.txt"))).rejects.toThrow();
+  });
+
+  it("fails clone when a non-excluded state entry is unreadable", async () => {
+    const root = await createTempProfileDir("openclaw-profile-clone-unreadable-state-");
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+
+    await profileCreateCommand(runtime, "source", {});
+    const source = await readManagedProfile("source", process.env, () => root);
+    if (!source) {
+      throw new Error("source profile missing");
+    }
+    const blockedPath = path.join(source.stateDir, "credentials", "oauth.json");
+    await fs.mkdir(path.dirname(blockedPath), { recursive: true });
+    await fs.writeFile(blockedPath, "{}", "utf8");
+
+    const originalLstat = fs.lstat.bind(fs);
+    const lstat = vi.spyOn(fs, "lstat");
+    lstat.mockImplementation(async (target, options) => {
+      if (String(target) === blockedPath) {
+        const error = new Error("permission denied") as NodeJS.ErrnoException;
+        error.code = "EACCES";
+        throw error;
+      }
+      return await originalLstat(target, options);
+    });
+
+    try {
+      await expect(profileCloneCommand(runtime, "source", "clone", {})).rejects.toThrow(
+        /could not inspect state entry/i,
+      );
+    } finally {
+      lstat.mockRestore();
+    }
+
+    const clone = await readManagedProfile("clone", process.env, () => root);
+    expect(clone).toBeNull();
   });
 
   it("copies state correctly when the source root is reached through a symlinked OPENCLAW_HOME", async () => {
