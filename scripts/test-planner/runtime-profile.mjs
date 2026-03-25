@@ -1,6 +1,6 @@
 import os from "node:os";
 
-export const TEST_PROFILES = new Set(["low", "macmini", "max", "normal", "serial"]);
+export const TEST_PROFILES = new Set(["normal", "serial", "max"]);
 
 export const parsePositiveInt = (value) => {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -14,17 +14,174 @@ export const resolveVitestMode = (env = process.env, explicitMode = null) => {
   return env.CI === "true" || env.GITHUB_ACTIONS === "true" ? "ci" : "local";
 };
 
-const resolveLoadRatio = (env, hostCpuCount, platform, loadAverage) => {
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const parseProfile = (rawProfile) => {
+  if (!rawProfile) {
+    return "normal";
+  }
+  const normalized = rawProfile.trim().toLowerCase();
+  if (!TEST_PROFILES.has(normalized)) {
+    throw new Error(
+      `Unsupported test profile "${normalized}". Supported profiles: normal, serial, max.`,
+    );
+  }
+  return normalized;
+};
+
+const resolveLoadRatio = (env, cpuCount, platform, loadAverage) => {
   const loadAwareDisabledRaw = env.OPENCLAW_TEST_LOAD_AWARE?.trim().toLowerCase();
   const loadAwareDisabled = loadAwareDisabledRaw === "0" || loadAwareDisabledRaw === "false";
-  if (loadAwareDisabled || platform === "win32" || hostCpuCount <= 0) {
+  if (loadAwareDisabled || platform === "win32" || cpuCount <= 0) {
     return 0;
   }
   const source = Array.isArray(loadAverage) ? loadAverage : os.loadavg();
-  return source.length > 0 ? source[0] / hostCpuCount : 0;
+  return source.length > 0 ? source[0] / cpuCount : 0;
 };
 
-export function resolveRuntimeProfile(env = process.env, options = {}) {
+const resolveMemoryBand = (memoryGiB) => {
+  if (memoryGiB < 24) {
+    return "constrained";
+  }
+  if (memoryGiB < 48) {
+    return "moderate";
+  }
+  if (memoryGiB < 96) {
+    return "mid";
+  }
+  return "high";
+};
+
+const resolveLoadBand = (isLoadAware, loadRatio) => {
+  if (!isLoadAware) {
+    return "normal";
+  }
+  if (loadRatio < 0.5) {
+    return "idle";
+  }
+  if (loadRatio < 0.9) {
+    return "normal";
+  }
+  if (loadRatio < 1.1) {
+    return "busy";
+  }
+  return "saturated";
+};
+
+const scaleForLoad = (value, loadBand) => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  const scale = loadBand === "busy" ? 0.75 : loadBand === "saturated" ? 0.5 : 1;
+  return Math.max(1, Math.floor(value * scale));
+};
+
+const scaleConcurrencyForLoad = (value, loadBand) => {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  const scale = loadBand === "busy" ? 0.8 : loadBand === "saturated" ? 0.5 : 1;
+  return Math.max(1, Math.floor(value * scale));
+};
+
+const LOCAL_MEMORY_BUDGETS = {
+  constrained: {
+    vitestCap: 2,
+    unitShared: 2,
+    unitIsolated: 1,
+    unitHeavy: 1,
+    extensions: 1,
+    gateway: 1,
+    topLevelNoIsolate: 4,
+    topLevelIsolated: 2,
+    deferred: 1,
+    heavyFileLimit: 36,
+    heavyLaneCount: 3,
+    memoryHeavyFileLimit: 8,
+    unitFastBatchTargetMs: 10_000,
+  },
+  moderate: {
+    vitestCap: 3,
+    unitShared: 3,
+    unitIsolated: 1,
+    unitHeavy: 1,
+    extensions: 2,
+    gateway: 1,
+    topLevelNoIsolate: 6,
+    topLevelIsolated: 2,
+    deferred: 1,
+    heavyFileLimit: 48,
+    heavyLaneCount: 4,
+    memoryHeavyFileLimit: 12,
+    unitFastBatchTargetMs: 15_000,
+  },
+  mid: {
+    vitestCap: 4,
+    unitShared: 4,
+    unitIsolated: 1,
+    unitHeavy: 1,
+    extensions: 3,
+    gateway: 1,
+    topLevelNoIsolate: 8,
+    topLevelIsolated: 3,
+    deferred: 2,
+    heavyFileLimit: 60,
+    heavyLaneCount: 4,
+    memoryHeavyFileLimit: 16,
+    unitFastBatchTargetMs: 0,
+  },
+  high: {
+    vitestCap: 6,
+    unitShared: 6,
+    unitIsolated: 2,
+    unitHeavy: 2,
+    extensions: 4,
+    gateway: 3,
+    topLevelNoIsolate: 12,
+    topLevelIsolated: 4,
+    deferred: 3,
+    heavyFileLimit: 80,
+    heavyLaneCount: 5,
+    memoryHeavyFileLimit: 16,
+    unitFastBatchTargetMs: 45_000,
+  },
+};
+
+const withIntentBudgetAdjustments = (budget, intentProfile, cpuCount) => {
+  if (intentProfile === "serial") {
+    return {
+      ...budget,
+      vitestMaxWorkers: 1,
+      unitSharedWorkers: 1,
+      unitIsolatedWorkers: 1,
+      unitHeavyWorkers: 1,
+      extensionWorkers: 1,
+      gatewayWorkers: 1,
+      topLevelParallelEnabled: false,
+      topLevelParallelLimit: 1,
+      deferredRunConcurrency: 1,
+    };
+  }
+
+  if (intentProfile === "max") {
+    return {
+      ...budget,
+      vitestMaxWorkers: clamp(Math.max(budget.vitestMaxWorkers, Math.min(8, cpuCount)), 1, 16),
+      unitSharedWorkers: clamp(Math.max(budget.unitSharedWorkers, Math.min(8, cpuCount)), 1, 16),
+      unitIsolatedWorkers: clamp(Math.max(budget.unitIsolatedWorkers, Math.min(4, cpuCount)), 1, 4),
+      unitHeavyWorkers: clamp(Math.max(budget.unitHeavyWorkers, Math.min(4, cpuCount)), 1, 4),
+      extensionWorkers: clamp(Math.max(budget.extensionWorkers, Math.min(6, cpuCount)), 1, 6),
+      gatewayWorkers: clamp(Math.max(budget.gatewayWorkers, Math.min(2, cpuCount)), 1, 6),
+      topLevelParallelEnabled: true,
+      topLevelParallelLimit: clamp(Math.max(budget.topLevelParallelLimit, 5), 1, 8),
+      deferredRunConcurrency: Math.max(budget.deferredRunConcurrency ?? 1, 3),
+    };
+  }
+
+  return budget;
+};
+
+export function resolveRuntimeCapabilities(env = process.env, options = {}) {
   const mode = resolveVitestMode(env, options.mode ?? null);
   const isCI = mode === "ci";
   const platform = options.platform ?? process.platform;
@@ -37,41 +194,26 @@ export function resolveRuntimeProfile(env = process.env, options = {}) {
   const totalMemoryBytes = options.totalMemoryBytes ?? os.totalmem();
   const hostMemoryGiB =
     parsePositiveInt(env.OPENCLAW_TEST_HOST_MEMORY_GIB) ?? Math.floor(totalMemoryBytes / 1024 ** 3);
-  const highMemLocalHost = !isCI && hostMemoryGiB >= 96;
-  const lowMemLocalHost = !isCI && hostMemoryGiB < 64;
   const nodeMajor = Number.parseInt(
     (options.nodeVersion ?? process.versions.node).split(".")[0] ?? "",
     10,
   );
-  const rawTestProfile = (options.profile ?? env.OPENCLAW_TEST_PROFILE)?.trim().toLowerCase();
-  const autoMacMiniProfile =
-    !isCI && !rawTestProfile && isMacOS && hostCpuCount <= 12 && hostMemoryGiB <= 64;
-  const testProfile = TEST_PROFILES.has(rawTestProfile)
-    ? rawTestProfile
-    : autoMacMiniProfile
-      ? "macmini"
-      : "normal";
-  const isMacMiniProfile = testProfile === "macmini";
+  const intentProfile = parseProfile(options.profile ?? env.OPENCLAW_TEST_PROFILE ?? "normal");
   const loadRatio = !isCI ? resolveLoadRatio(env, hostCpuCount, platform, options.loadAverage) : 0;
-  const extremeLoadScale = loadRatio >= 1.1 ? 0.75 : loadRatio >= 1 ? 0.85 : 1;
-  const baseLocalWorkers = Math.max(4, Math.min(16, hostCpuCount));
-  const adjustedLocalWorkers = Math.max(
-    4,
-    Math.min(16, Math.floor(baseLocalWorkers * extremeLoadScale)),
-  );
+  const loadAware = !isCI && platform !== "win32";
+  const memoryBand = resolveMemoryBand(hostMemoryGiB);
+  const loadBand = resolveLoadBand(loadAware, loadRatio);
   const runtimeProfileName = isCI
     ? isWindows
       ? "ci-windows"
       : isMacOS
         ? "ci-macos"
         : "ci-linux"
-    : isMacMiniProfile
-      ? "macmini"
-      : highMemLocalHost
-        ? "local-high-mem"
-        : lowMemLocalHost
-          ? "local-constrained"
-          : "local-mid-mem";
+    : isWindows
+      ? "local-windows"
+      : isMacOS
+        ? "local-darwin"
+        : "local-linux";
 
   return {
     mode,
@@ -83,16 +225,81 @@ export function resolveRuntimeProfile(env = process.env, options = {}) {
     platform,
     hostCpuCount,
     hostMemoryGiB,
-    highMemLocalHost,
-    lowMemLocalHost,
     nodeMajor,
-    testProfile,
-    autoMacMiniProfile,
-    isMacMiniProfile,
+    intentProfile,
+    memoryBand,
+    loadAware,
     loadRatio,
-    extremeLoadScale,
-    adjustedLocalWorkers,
+    loadBand,
   };
+}
+
+export function resolveExecutionBudget(runtimeCapabilities) {
+  const runtime = runtimeCapabilities;
+  const cpuCount = clamp(runtime.hostCpuCount, 1, 16);
+
+  if (runtime.isCI) {
+    const macCiWorkers = runtime.isMacOS ? 1 : null;
+    return {
+      vitestMaxWorkers: runtime.isWindows ? 2 : runtime.isMacOS ? 1 : 3,
+      unitSharedWorkers: macCiWorkers,
+      unitIsolatedWorkers: macCiWorkers,
+      unitHeavyWorkers: macCiWorkers,
+      extensionWorkers: macCiWorkers,
+      gatewayWorkers: macCiWorkers,
+      topLevelParallelEnabled: runtime.intentProfile !== "serial" && !runtime.isWindows,
+      topLevelParallelLimit: runtime.isWindows ? 2 : 4,
+      deferredRunConcurrency: null,
+      heavyUnitFileLimit: 64,
+      heavyUnitLaneCount: 4,
+      memoryHeavyUnitFileLimit: 64,
+      unitFastLaneCount: runtime.isWindows ? 1 : 3,
+      unitFastBatchTargetMs: runtime.isWindows ? 0 : 45_000,
+      channelsBatchTargetMs: runtime.isWindows ? 0 : 30_000,
+      extensionsBatchTargetMs: runtime.isWindows ? 0 : 30_000,
+    };
+  }
+
+  const bandBudget = LOCAL_MEMORY_BUDGETS[runtime.memoryBand];
+  const baseBudget = {
+    vitestMaxWorkers: Math.min(cpuCount, bandBudget.vitestCap),
+    unitSharedWorkers: Math.min(cpuCount, bandBudget.unitShared),
+    unitIsolatedWorkers: Math.min(cpuCount, bandBudget.unitIsolated),
+    unitHeavyWorkers: Math.min(cpuCount, bandBudget.unitHeavy),
+    extensionWorkers: Math.min(cpuCount, bandBudget.extensions),
+    gatewayWorkers: Math.min(cpuCount, bandBudget.gateway),
+    topLevelParallelEnabled: runtime.nodeMajor < 25,
+    topLevelParallelLimit: Math.min(cpuCount, bandBudget.topLevelIsolated),
+    deferredRunConcurrency: bandBudget.deferred,
+    heavyUnitFileLimit: bandBudget.heavyFileLimit,
+    heavyUnitLaneCount: bandBudget.heavyLaneCount,
+    memoryHeavyUnitFileLimit: bandBudget.memoryHeavyFileLimit,
+    unitFastLaneCount: 1,
+    unitFastBatchTargetMs: bandBudget.unitFastBatchTargetMs,
+    channelsBatchTargetMs: 0,
+    extensionsBatchTargetMs: 0,
+  };
+
+  const loadAdjustedBudget = {
+    ...baseBudget,
+    vitestMaxWorkers: scaleForLoad(baseBudget.vitestMaxWorkers, runtime.loadBand),
+    unitSharedWorkers: scaleForLoad(baseBudget.unitSharedWorkers, runtime.loadBand),
+    unitHeavyWorkers: scaleForLoad(baseBudget.unitHeavyWorkers, runtime.loadBand),
+    extensionWorkers: scaleForLoad(baseBudget.extensionWorkers, runtime.loadBand),
+    gatewayWorkers: scaleForLoad(baseBudget.gatewayWorkers, runtime.loadBand),
+    topLevelParallelLimit: scaleConcurrencyForLoad(
+      baseBudget.topLevelParallelLimit,
+      runtime.loadBand,
+    ),
+    deferredRunConcurrency:
+      runtime.loadBand === "busy"
+        ? Math.max(1, (baseBudget.deferredRunConcurrency ?? 1) - 1)
+        : runtime.loadBand === "saturated"
+          ? 1
+          : baseBudget.deferredRunConcurrency,
+  };
+
+  return withIntentBudgetAdjustments(loadAdjustedBudget, runtime.intentProfile, cpuCount);
 }
 
 export function resolveLocalVitestMaxWorkers(env = process.env, options = {}) {
@@ -101,20 +308,13 @@ export function resolveLocalVitestMaxWorkers(env = process.env, options = {}) {
     return explicit;
   }
 
-  const runtime = resolveRuntimeProfile(env, {
+  const runtimeCapabilities = resolveRuntimeCapabilities(env, {
     cpuCount: options.cpuCount,
     totalMemoryBytes: options.totalMemoryBytes,
     platform: options.platform,
     mode: "local",
     loadAverage: options.loadAverage,
+    profile: options.profile,
   });
-  const boundedCpuCount = Math.max(1, runtime.hostCpuCount);
-
-  if (runtime.isMacOS && boundedCpuCount <= 12 && runtime.hostMemoryGiB <= 64) {
-    return Math.min(3, boundedCpuCount);
-  }
-  if (runtime.hostMemoryGiB <= 64) {
-    return Math.min(4, boundedCpuCount);
-  }
-  return Math.max(4, Math.min(16, boundedCpuCount));
+  return resolveExecutionBudget(runtimeCapabilities).vitestMaxWorkers;
 }

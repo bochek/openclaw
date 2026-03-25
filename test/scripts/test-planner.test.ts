@@ -3,11 +3,12 @@ import { createExecutionArtifacts } from "../../scripts/test-planner/executor.mj
 import { buildExecutionPlan, explainExecutionTarget } from "../../scripts/test-planner/planner.mjs";
 
 describe("test planner", () => {
-  it("builds a macmini-aware plan for local runs", () => {
+  it("builds a capability-aware plan for mid-memory local runs", () => {
     const artifacts = createExecutionArtifacts({
       RUNNER_OS: "macOS",
       OPENCLAW_TEST_HOST_CPU_COUNT: "10",
       OPENCLAW_TEST_HOST_MEMORY_GIB: "64",
+      OPENCLAW_TEST_LOAD_AWARE: "0",
     });
     const plan = buildExecutionPlan(
       {
@@ -21,14 +22,49 @@ describe("test planner", () => {
           RUNNER_OS: "macOS",
           OPENCLAW_TEST_HOST_CPU_COUNT: "10",
           OPENCLAW_TEST_HOST_MEMORY_GIB: "64",
+          OPENCLAW_TEST_LOAD_AWARE: "0",
         },
         writeTempJsonArtifact: artifacts.writeTempJsonArtifact,
       },
     );
 
-    expect(plan.runtimeProfile.runtimeProfileName).toBe("macmini");
-    expect(plan.selectedUnits.find((unit) => unit.id === "unit-fast")?.maxWorkers).toBe(3);
-    expect(plan.selectedUnits.find((unit) => unit.id === "extensions")?.maxWorkers).toBe(1);
+    expect(plan.runtimeCapabilities.runtimeProfileName).toBe("local-darwin");
+    expect(plan.runtimeCapabilities.memoryBand).toBe("mid");
+    expect(plan.executionBudget.unitSharedWorkers).toBe(4);
+    expect(plan.selectedUnits.find((unit) => unit.id === "unit-fast")?.maxWorkers).toBe(4);
+    expect(plan.selectedUnits.find((unit) => unit.id === "extensions")?.maxWorkers).toBe(3);
+    artifacts.cleanupTempArtifacts();
+  });
+
+  it("scales down mid-tier local concurrency under saturated load", () => {
+    const artifacts = createExecutionArtifacts({
+      RUNNER_OS: "Linux",
+      OPENCLAW_TEST_HOST_CPU_COUNT: "10",
+      OPENCLAW_TEST_HOST_MEMORY_GIB: "64",
+    });
+    const plan = buildExecutionPlan(
+      {
+        profile: null,
+        mode: "local",
+        surfaces: ["unit", "extensions"],
+        passthroughArgs: [],
+      },
+      {
+        env: {
+          RUNNER_OS: "Linux",
+          OPENCLAW_TEST_HOST_CPU_COUNT: "10",
+          OPENCLAW_TEST_HOST_MEMORY_GIB: "64",
+        },
+        loadAverage: [11.5, 11.5, 11.5],
+        writeTempJsonArtifact: artifacts.writeTempJsonArtifact,
+      },
+    );
+
+    expect(plan.runtimeCapabilities.memoryBand).toBe("mid");
+    expect(plan.runtimeCapabilities.loadBand).toBe("saturated");
+    expect(plan.executionBudget.unitSharedWorkers).toBe(2);
+    expect(plan.topLevelParallelLimit).toBe(1);
+    expect(plan.deferredRunConcurrency).toBe(1);
     artifacts.cleanupTempArtifacts();
   });
 
@@ -72,5 +108,6 @@ describe("test planner", () => {
     expect(explanation.surface).toBe("base");
     expect(explanation.pool).toBe("forks");
     expect(explanation.reasons).toContain("base-pinned-manifest");
+    expect(explanation.intentProfile).toBe("normal");
   });
 });

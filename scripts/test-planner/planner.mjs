@@ -9,7 +9,7 @@ import {
   selectUnitHeavyFileGroups,
 } from "../test-runner-manifest.mjs";
 import { loadTestCatalog, normalizeRepoPath } from "./catalog.mjs";
-import { resolveRuntimeProfile } from "./runtime-profile.mjs";
+import { resolveExecutionBudget, resolveRuntimeCapabilities } from "./runtime-profile.mjs";
 import {
   countExplicitEntryFilters,
   parsePassthroughArgs,
@@ -54,10 +54,16 @@ const buildRequestedSurfaces = (request, env) => {
 
 const createPlannerContext = (request, options = {}) => {
   const env = options.env ?? process.env;
-  const runtime = resolveRuntimeProfile(env, {
+  const runtime = resolveRuntimeCapabilities(env, {
     mode: request.mode ?? null,
     profile: request.profile ?? null,
+    cpuCount: options.cpuCount,
+    totalMemoryBytes: options.totalMemoryBytes,
+    platform: options.platform,
+    loadAverage: options.loadAverage,
+    nodeVersion: options.nodeVersion,
   });
+  const executionBudget = resolveExecutionBudget(runtime);
   const catalog = options.catalog ?? loadTestCatalog();
   const unitTimingManifest = loadUnitTimingManifest();
   const channelTimingManifest = loadChannelTimingManifest();
@@ -65,6 +71,7 @@ const createPlannerContext = (request, options = {}) => {
   return {
     env,
     runtime,
+    executionBudget,
     catalog,
     unitTimingManifest,
     channelTimingManifest,
@@ -123,44 +130,6 @@ const splitFilesByDurationBudget = (files, targetDurationMs, estimateDurationMs)
   return batches;
 };
 
-const resolveDefaultWorkerBudget = (runtime) => {
-  const localWorkers = runtime.adjustedLocalWorkers;
-  if (runtime.testProfile === "low") {
-    return { unit: 2, unitIsolated: 1, extensions: 4, gateway: 1 };
-  }
-  if (runtime.isMacMiniProfile) {
-    return { unit: 3, unitIsolated: 1, extensions: 1, gateway: 1 };
-  }
-  if (runtime.testProfile === "serial") {
-    return { unit: 1, unitIsolated: 1, extensions: 1, gateway: 1 };
-  }
-  if (runtime.testProfile === "max") {
-    return {
-      unit: localWorkers,
-      unitIsolated: Math.min(4, localWorkers),
-      extensions: Math.max(1, Math.min(6, Math.floor(localWorkers / 2))),
-      gateway: Math.max(1, Math.min(2, Math.floor(localWorkers / 4))),
-    };
-  }
-  if (runtime.highMemLocalHost) {
-    return {
-      unit: Math.max(4, Math.min(10, Math.floor((localWorkers * 5) / 8))),
-      unitIsolated: Math.max(1, Math.min(2, Math.floor(localWorkers / 6) || 1)),
-      extensions: Math.max(1, Math.min(4, Math.floor(localWorkers / 4))),
-      gateway: Math.max(2, Math.min(6, Math.floor(localWorkers / 2))),
-    };
-  }
-  if (runtime.lowMemLocalHost) {
-    return { unit: 2, unitIsolated: 1, extensions: 4, gateway: 1 };
-  }
-  return {
-    unit: Math.max(2, Math.min(8, Math.floor(localWorkers / 2))),
-    unitIsolated: 1,
-    extensions: Math.max(1, Math.min(4, Math.floor(localWorkers / 4))),
-    gateway: 1,
-  };
-};
-
 const resolveMaxWorkersForUnit = (unit, context) => {
   const overrideWorkers = Number.parseInt(context.env.OPENCLAW_TEST_WORKERS ?? "", 10);
   const resolvedOverride =
@@ -168,26 +137,20 @@ const resolveMaxWorkersForUnit = (unit, context) => {
   if (resolvedOverride) {
     return resolvedOverride;
   }
-  if (context.runtime.isCI && !context.runtime.isMacOS) {
-    return null;
-  }
-  if (context.runtime.isCI && context.runtime.isMacOS) {
-    return 1;
-  }
-  const budget = context.defaultWorkerBudget;
+  const budget = context.executionBudget;
   if (unit.isolate) {
-    return 1;
+    return budget.unitIsolatedWorkers;
   }
   if (unit.id.startsWith("unit-heavy-")) {
-    return budget.unitIsolated;
+    return budget.unitHeavyWorkers;
   }
   if (unit.surface === "extensions") {
-    return budget.extensions;
+    return budget.extensionWorkers;
   }
   if (unit.surface === "gateway") {
-    return budget.gateway;
+    return budget.gatewayWorkers;
   }
-  return budget.unit;
+  return budget.unitSharedWorkers;
 };
 
 const formatPerFileEntryName = (owner, file) => {
@@ -226,6 +189,7 @@ const buildDefaultUnits = (context, request) => {
   const {
     env,
     runtime,
+    executionBudget,
     catalog,
     unitTimingManifest,
     channelTimingManifest,
@@ -235,20 +199,14 @@ const buildDefaultUnits = (context, request) => {
   const selectedSurfaces = buildRequestedSurfaces(request, env);
   const selectedSurfaceSet = new Set(selectedSurfaces);
 
-  const defaultHeavyUnitFileLimit = runtime.isMacMiniProfile
-    ? 90
-    : runtime.testProfile === "low" || runtime.testProfile === "serial"
-      ? 36
-      : runtime.highMemLocalHost
-        ? 80
-        : 60;
-  const defaultHeavyUnitLaneCount = runtime.isMacMiniProfile
-    ? 6
-    : runtime.testProfile === "low" || runtime.testProfile === "serial"
-      ? 4
-      : runtime.highMemLocalHost
-        ? 5
-        : 4;
+  const defaultHeavyUnitFileLimit =
+    runtime.intentProfile === "max"
+      ? Math.max(executionBudget.heavyUnitFileLimit, 90)
+      : executionBudget.heavyUnitFileLimit;
+  const defaultHeavyUnitLaneCount =
+    runtime.intentProfile === "max"
+      ? Math.max(executionBudget.heavyUnitLaneCount, 6)
+      : executionBudget.heavyUnitLaneCount;
   const heavyUnitFileLimit = parseEnvNumber(
     env,
     "OPENCLAW_TEST_HEAVY_UNIT_FILE_LIMIT",
@@ -260,11 +218,7 @@ const buildDefaultUnits = (context, request) => {
     defaultHeavyUnitLaneCount,
   );
   const heavyUnitMinDurationMs = parseEnvNumber(env, "OPENCLAW_TEST_HEAVY_UNIT_MIN_MS", 1200);
-  const defaultMemoryHeavyUnitFileLimit = runtime.isCI
-    ? 64
-    : runtime.testProfile === "low" || runtime.testProfile === "serial"
-      ? 8
-      : 16;
+  const defaultMemoryHeavyUnitFileLimit = executionBudget.memoryHeavyUnitFileLimit;
   const memoryHeavyUnitFileLimit = parseEnvNumber(
     env,
     "OPENCLAW_TEST_MEMORY_HEAVY_UNIT_FILE_LIMIT",
@@ -315,32 +269,24 @@ const buildDefaultUnits = (context, request) => {
       catalog.channelTestPrefixes.some((prefix) => file.startsWith(prefix)) &&
       !catalog.channelIsolatedFileSet.has(file),
   );
-  const defaultExtensionsBatchTargetMs = runtime.isCI && !runtime.isWindows ? 30_000 : 0;
+  const defaultExtensionsBatchTargetMs = executionBudget.extensionsBatchTargetMs;
   const extensionsBatchTargetMs = parseEnvNumber(
     env,
     "OPENCLAW_TEST_EXTENSIONS_BATCH_TARGET_MS",
     defaultExtensionsBatchTargetMs,
   );
-  const defaultUnitFastLaneCount =
-    runtime.testProfile === "low" ? 8 : runtime.isCI && !runtime.isWindows ? 3 : 1;
+  const defaultUnitFastLaneCount = executionBudget.unitFastLaneCount;
   const unitFastLaneCount = Math.max(
     1,
     parseEnvNumber(env, "OPENCLAW_TEST_UNIT_FAST_LANES", defaultUnitFastLaneCount),
   );
-  const defaultUnitFastBatchTargetMs =
-    runtime.testProfile === "low" || runtime.testProfile === "serial"
-      ? 10_000
-      : runtime.isCI && !runtime.isWindows
-        ? 45_000
-        : runtime.highMemLocalHost
-          ? 45_000
-          : 0;
+  const defaultUnitFastBatchTargetMs = executionBudget.unitFastBatchTargetMs;
   const unitFastBatchTargetMs = parseEnvNumber(
     env,
     "OPENCLAW_TEST_UNIT_FAST_BATCH_TARGET_MS",
     defaultUnitFastBatchTargetMs,
   );
-  const defaultChannelsBatchTargetMs = runtime.isCI && !runtime.isWindows ? 30_000 : 0;
+  const defaultChannelsBatchTargetMs = executionBudget.channelsBatchTargetMs;
   const channelsBatchTargetMs = parseEnvNumber(
     env,
     "OPENCLAW_TEST_CHANNELS_BATCH_TARGET_MS",
@@ -910,12 +856,14 @@ export function explainExecutionTarget(request, options = {}) {
           context.env.OPENCLAW_TEST_NO_ISOLATE !== "false"
         ? ["--isolate=false"]
         : [];
-  context.defaultWorkerBudget = resolveDefaultWorkerBudget(context.runtime);
   const [target] = request.fileFilters;
   const classification = context.catalog.classifyTestFile(target, { unitMemoryIsolatedFiles: [] });
   const targetedUnit = createTargetedUnit(context, classification, [normalizeRepoPath(target)]);
   return {
     runtimeProfile: context.runtime.runtimeProfileName,
+    intentProfile: context.runtime.intentProfile,
+    memoryBand: context.runtime.memoryBand,
+    loadBand: context.runtime.loadBand,
     file: classification.file,
     surface: classification.legacyBasePinned ? "base" : classification.surface,
     isolate: targetedUnit.isolate,
@@ -965,7 +913,6 @@ export function buildExecutionPlan(request, options = {}) {
       : env.OPENCLAW_TEST_NO_ISOLATE !== "0" && env.OPENCLAW_TEST_NO_ISOLATE !== "false"
         ? ["--isolate=false"]
         : [];
-  context.defaultWorkerBudget = resolveDefaultWorkerBudget(context.runtime);
   context.writeTempJsonArtifact =
     options.writeTempJsonArtifact ??
     (() => {
@@ -1004,13 +951,12 @@ export function buildExecutionPlan(request, options = {}) {
   const selectedUnits = targetedUnits.length > 0 ? targetedUnits : units;
   const topLevelSingleShardAssignments = buildTopLevelSingleShardAssignments(context, units);
   const parallelGatewayEnabled =
-    !context.runtime.isMacMiniProfile &&
-    (env.OPENCLAW_TEST_PARALLEL_GATEWAY === "1" ||
-      (!context.runtime.isCI && context.runtime.highMemLocalHost));
+    env.OPENCLAW_TEST_PARALLEL_GATEWAY === "1" ||
+    (!context.runtime.isCI && context.executionBudget.gatewayWorkers > 1);
   const keepGatewaySerial =
     context.runtime.isWindowsCi ||
     env.OPENCLAW_TEST_SERIAL_GATEWAY === "1" ||
-    context.runtime.testProfile === "serial" ||
+    context.runtime.intentProfile === "serial" ||
     !parallelGatewayEnabled;
   const parallelUnits = keepGatewaySerial
     ? selectedUnits.filter((unit) => unit.surface !== "gateway")
@@ -1020,49 +966,24 @@ export function buildExecutionPlan(request, options = {}) {
     : [];
   const serialPrefixUnits = parallelUnits.filter((unit) => unit.serialPhase);
   const deferredParallelUnits = parallelUnits.filter((unit) => !unit.serialPhase);
-  const topLevelParallelEnabled =
-    context.runtime.testProfile !== "low" &&
-    context.runtime.testProfile !== "serial" &&
-    !(!context.runtime.isCI && context.runtime.nodeMajor >= 25) &&
-    !context.runtime.isMacMiniProfile;
+  const topLevelParallelEnabled = context.executionBudget.topLevelParallelEnabled;
   const defaultTopLevelParallelLimit =
     context.noIsolateArgs.length > 0
-      ? context.runtime.isCI
-        ? context.runtime.isWindows
-          ? 2
-          : 4
-        : context.runtime.highMemLocalHost
-          ? Math.min(16, context.runtime.hostCpuCount)
-          : context.runtime.lowMemLocalHost
-            ? Math.min(8, context.runtime.hostCpuCount)
-            : Math.min(12, context.runtime.hostCpuCount)
-      : context.runtime.testProfile === "serial"
-        ? 1
-        : context.runtime.testProfile === "low"
-          ? context.runtime.lowMemLocalHost
-            ? 2
-            : 3
-          : context.runtime.testProfile === "max"
-            ? 5
-            : context.runtime.highMemLocalHost
-              ? 4
-              : context.runtime.lowMemLocalHost
-                ? 2
-                : 3;
+      ? Math.max(
+          1,
+          context.executionBudget.topLevelParallelLimit +
+            (context.runtime.intentProfile === "max" ? 1 : 0),
+        )
+      : context.executionBudget.topLevelParallelLimit;
   const topLevelParallelLimit = Math.max(
     1,
     parseEnvNumber(env, "OPENCLAW_TEST_TOP_LEVEL_CONCURRENCY", defaultTopLevelParallelLimit),
   );
-  const deferredRunConcurrency = context.runtime.isMacMiniProfile
-    ? 3
-    : context.runtime.testProfile === "low"
-      ? 1
-      : !context.runtime.isCI && !context.runtime.highMemLocalHost
-        ? 2
-        : undefined;
+  const deferredRunConcurrency = context.executionBudget.deferredRunConcurrency;
 
   return {
-    runtimeProfile: context.runtime,
+    runtimeCapabilities: context.runtime,
+    executionBudget: context.executionBudget,
     passthroughOptionArgs: optionArgs,
     passthroughRequiresSingleRun,
     passthroughMetadataOnly,

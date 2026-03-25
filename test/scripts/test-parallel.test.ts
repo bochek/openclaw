@@ -165,7 +165,7 @@ describe("scripts/test-parallel lane planning", () => {
     expect(output).not.toContain("base-followup-runner");
   });
 
-  it("auto-applies the macmini profile on mid-memory local macOS hosts", () => {
+  it("reports capability-derived output for mid-memory local macOS hosts", () => {
     const repoRoot = path.resolve(import.meta.dirname, "../..");
     const output = execFileSync(
       "node",
@@ -179,14 +179,15 @@ describe("scripts/test-parallel lane planning", () => {
           RUNNER_OS: "macOS",
           OPENCLAW_TEST_HOST_CPU_COUNT: "10",
           OPENCLAW_TEST_HOST_MEMORY_GIB: "64",
+          OPENCLAW_TEST_LOAD_AWARE: "0",
         },
         encoding: "utf8",
       },
     );
 
-    expect(output).toContain("runtimeProfile=macmini");
-    expect(output).toContain("unit-fast filters=all maxWorkers=3");
-    expect(output).toContain("extensions filters=all maxWorkers=1");
+    expect(output).toContain("runtime=local-darwin mode=local intent=normal memoryBand=mid");
+    expect(output).toContain("unit-fast filters=all maxWorkers=4");
+    expect(output).toContain("extensions filters=all maxWorkers=3");
   });
 
   it("explains targeted file ownership and execution policy", () => {
@@ -231,8 +232,20 @@ describe("scripts/test-parallel lane planning", () => {
       },
     );
 
-    expect(output).toContain("runtimeProfile=local-high-mem");
+    expect(output).toContain("mode=local intent=normal memoryBand=high");
     expect(output).toContain("unit-deliver-isolated filters=1");
+  });
+
+  it("rejects removed machine-name profiles", () => {
+    const repoRoot = path.resolve(import.meta.dirname, "../..");
+
+    expect(() =>
+      execFileSync("node", ["scripts/test-parallel.mjs", "--plan", "--profile", "macmini"], {
+        cwd: repoRoot,
+        env: process.env,
+        encoding: "utf8",
+      }),
+    ).toThrowError(/Unsupported test profile "macmini"/u);
   });
 
   it("rejects wrapper --files values that look like options", () => {

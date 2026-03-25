@@ -91,7 +91,7 @@ if (rawCli.showHelp) {
       "  --surface <name>       Select a surface (repeatable or comma-separated)",
       "  --files <pattern>      Add targeted files/patterns (repeatable)",
       "  --mode <ci|local>      Override runtime mode",
-      "  --profile <name>       Override host profile (low|macmini|max|normal|serial)",
+      "  --profile <name>       Override execution intent (normal|max|serial)",
     ].join("\n"),
   );
   process.exit(0);

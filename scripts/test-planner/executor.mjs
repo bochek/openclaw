@@ -15,7 +15,8 @@ import {
 } from "../test-parallel-utils.mjs";
 import { countExplicitEntryFilters, getExplicitEntryFilters } from "./vitest-args.mjs";
 
-const resolvePnpmCommand = (runtimeProfile) => (runtimeProfile.isWindows ? "pnpm.cmd" : "pnpm");
+const resolvePnpmCommand = (runtimeCapabilities) =>
+  runtimeCapabilities.isWindows ? "pnpm.cmd" : "pnpm";
 
 const sanitizeArtifactName = (value) => {
   const normalized = value
@@ -86,7 +87,7 @@ const getShardLabel = (args) => {
 
 export function formatPlanOutput(plan) {
   return [
-    `runtimeProfile=${plan.runtimeProfile.runtimeProfileName} mode=${plan.runtimeProfile.mode} testProfile=${plan.runtimeProfile.testProfile}`,
+    `runtime=${plan.runtimeCapabilities.runtimeProfileName} mode=${plan.runtimeCapabilities.mode} intent=${plan.runtimeCapabilities.intentProfile} memoryBand=${plan.runtimeCapabilities.memoryBand} loadBand=${plan.runtimeCapabilities.loadBand} vitestMaxWorkers=${String(plan.executionBudget.vitestMaxWorkers ?? "default")} topLevelParallel=${plan.topLevelParallelEnabled ? String(plan.topLevelParallelLimit) : "off"}`,
     ...plan.selectedUnits.map(
       (unit) =>
         `${unit.id} filters=${String(countExplicitEntryFilters(unit.args) ?? "all")} maxWorkers=${String(
@@ -99,7 +100,7 @@ export function formatPlanOutput(plan) {
 export function formatExplanation(explanation) {
   return [
     `file=${explanation.file}`,
-    `runtimeProfile=${explanation.runtimeProfile}`,
+    `runtime=${explanation.runtimeProfile} intent=${explanation.intentProfile} memoryBand=${explanation.memoryBand} loadBand=${explanation.loadBand}`,
     `surface=${explanation.surface}`,
     `isolate=${explanation.isolate ? "yes" : "no"}`,
     `pool=${explanation.pool}`,
@@ -112,9 +113,9 @@ export function formatExplanation(explanation) {
 export async function executePlan(plan, options = {}) {
   const env = options.env ?? process.env;
   const artifacts = options.artifacts ?? createExecutionArtifacts(env);
-  const pnpm = resolvePnpmCommand(plan.runtimeProfile);
+  const pnpm = resolvePnpmCommand(plan.runtimeCapabilities);
   const children = new Set();
-  const windowsCiArgs = plan.runtimeProfile.isWindowsCi
+  const windowsCiArgs = plan.runtimeCapabilities.isWindowsCi
     ? ["--dangerouslyIgnoreUnhandledErrors"]
     : [];
   const silentArgs = env.OPENCLAW_TEST_SHOW_PASSED_LOGS === "1" ? [] : ["--silent=passed-only"];
@@ -123,7 +124,7 @@ export async function executePlan(plan, options = {}) {
     process.platform !== "win32" &&
     (rawMemoryTrace === "1" ||
       rawMemoryTrace === "true" ||
-      (rawMemoryTrace !== "0" && rawMemoryTrace !== "false" && plan.runtimeProfile.isCI));
+      (rawMemoryTrace !== "0" && rawMemoryTrace !== "false" && plan.runtimeCapabilities.isCI));
   const parseEnvNumber = (name, fallback) => {
     const parsed = Number.parseInt(env[name] ?? "", 10);
     return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
@@ -160,7 +161,7 @@ export async function executePlan(plan, options = {}) {
     if (Number.isFinite(parsed) && parsed > 0) {
       return parsed;
     }
-    if (plan.runtimeProfile.isCI && !plan.runtimeProfile.isWindows) {
+    if (plan.runtimeCapabilities.isCI && !plan.runtimeCapabilities.isWindows) {
       return DEFAULT_CI_MAX_OLD_SPACE_SIZE_MB;
     }
     return null;
@@ -618,24 +619,6 @@ export async function executePlan(plan, options = {}) {
       : await runUnits(plan.deferredParallelUnits, plan.passthroughOptionArgs);
     if (failedDeferredParallel !== undefined) {
       return failedDeferredParallel;
-    }
-  } else if (plan.runtimeProfile.isMacMiniProfile && plan.targetedUnits.length === 0) {
-    const unitFastUnits = plan.parallelUnits.filter((unit) => unit.id.startsWith("unit-fast"));
-    for (const unit of unitFastUnits) {
-      // eslint-disable-next-line no-await-in-loop
-      const code = await runUnit(unit, plan.passthroughOptionArgs);
-      if (code !== 0) {
-        return code;
-      }
-    }
-    const deferredUnits = plan.parallelUnits.filter((unit) => !unit.id.startsWith("unit-fast"));
-    const failedMacMiniParallel = await runUnitsWithLimit(
-      deferredUnits,
-      plan.passthroughOptionArgs,
-      3,
-    );
-    if (failedMacMiniParallel !== undefined) {
-      return failedMacMiniParallel;
     }
   } else {
     const failedParallel = await runUnits(plan.parallelUnits, plan.passthroughOptionArgs);
