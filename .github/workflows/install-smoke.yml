@@ -70,9 +70,44 @@ jobs:
 
           node scripts/ci-changed-scope.mjs --base "$BASE" --head HEAD
 
-  install-smoke:
+  ci-manifest:
     needs: [docs-scope, changed-smoke]
-    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && needs.docs-scope.outputs.docs_only != 'true' && needs.changed-smoke.outputs.run_changed_smoke == 'true'
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: blacksmith-16vcpu-ubuntu-2404
+    outputs:
+      run_install_smoke: ${{ steps.manifest.outputs.run_install_smoke }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          submodules: false
+
+      - name: Setup Node environment
+        uses: ./.github/actions/setup-node-env
+        with:
+          install-bun: "false"
+          install-deps: "false"
+          use-sticky-disk: "false"
+
+      - name: Build install-smoke CI manifest
+        id: manifest
+        env:
+          OPENCLAW_CI_DOCS_ONLY: ${{ needs.docs-scope.outputs.docs_only }}
+          OPENCLAW_CI_DOCS_CHANGED: "false"
+          OPENCLAW_CI_RUN_NODE: "false"
+          OPENCLAW_CI_RUN_MACOS: "false"
+          OPENCLAW_CI_RUN_ANDROID: "false"
+          OPENCLAW_CI_RUN_WINDOWS: "false"
+          OPENCLAW_CI_RUN_SKILLS_PYTHON: "false"
+          OPENCLAW_CI_HAS_CHANGED_EXTENSIONS: "false"
+          OPENCLAW_CI_CHANGED_EXTENSIONS_MATRIX: '{"include":[]}'
+          OPENCLAW_CI_RUN_CHANGED_SMOKE: ${{ needs.changed-smoke.outputs.run_changed_smoke || 'false' }}
+        run: node scripts/ci-write-manifest-outputs.mjs
+
+  install-smoke:
+    needs: [docs-scope, changed-smoke, ci-manifest]
+    if: needs.ci-manifest.outputs.run_install_smoke == 'true'
     runs-on: blacksmith-16vcpu-ubuntu-2404
     env:
       DOCKER_BUILD_SUMMARY: "false"
