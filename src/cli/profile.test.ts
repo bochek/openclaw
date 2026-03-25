@@ -206,11 +206,12 @@ describe("applyCliProfileEnv", () => {
       homedir: () => "/home/fallback",
     });
 
+    const resolvedHome = path.resolve("/srv/openclaw-home");
     expect(env.OPENCLAW_STATE_DIR).toBe(
-      path.join("/srv/openclaw-home", ".openclaw", "profiles", "fresh", "state"),
+      path.join(resolvedHome, ".openclaw", "profiles", "fresh", "state"),
     );
     expect(env.OPENCLAW_CONFIG_PATH).toBe(
-      path.join("/srv/openclaw-home", ".openclaw", "profiles", "fresh", "config", "openclaw.json"),
+      path.join(resolvedHome, ".openclaw", "profiles", "fresh", "config", "openclaw.json"),
     );
     expect(env.OPENCLAW_PROFILE_AUTO_PATHS).toBe("1");
     expect(env.OPENCLAW_GATEWAY_PORT).toBeUndefined();
