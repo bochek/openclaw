@@ -509,7 +509,7 @@ export async function executePlan(plan, options = {}) {
       return runOnce(unit, extraArgs);
     }
     const explicitFilterCount = countExplicitEntryFilters(unit.args);
-    const topLevelAssignedShard = plan.topLevelSingleShardAssignments.get(unit.id);
+    const topLevelAssignedShard = plan.topLevelSingleShardAssignments.get(unit);
     if (topLevelAssignedShard !== undefined) {
       if (plan.shardIndexOverride !== null && plan.shardIndexOverride !== topLevelAssignedShard) {
         return 0;

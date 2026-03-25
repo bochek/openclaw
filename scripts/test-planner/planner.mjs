@@ -813,7 +813,7 @@ const estimateTopLevelEntryDurationMs = (unit, context) => {
 
 const buildTopLevelSingleShardAssignments = (context, units) => {
   if (context.shardIndexOverride === null || context.shardCount <= 1) {
-    return new Map();
+    return new WeakMap();
   }
 
   const entriesNeedingAssignment = units.filter((unit) => {
@@ -828,7 +828,7 @@ const buildTopLevelSingleShardAssignments = (context, units) => {
     return effectiveShardCount <= 1;
   });
 
-  const assignmentMap = new Map();
+  const assignmentMap = new WeakMap();
   const pinnedShardLoadsMs = Array.from({ length: context.shardCount }, () => 0);
   for (const unit of units) {
     if (unit.fixedShardIndex === undefined) {
@@ -848,7 +848,7 @@ const buildTopLevelSingleShardAssignments = (context, units) => {
   );
   for (const [bucketIndex, bucket] of buckets.entries()) {
     for (const unit of bucket) {
-      assignmentMap.set(unit.id, bucketIndex + 1);
+      assignmentMap.set(unit, bucketIndex + 1);
     }
   }
   return assignmentMap;

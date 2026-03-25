@@ -132,6 +132,36 @@ describe("test planner", () => {
     expect(explanation.reasons).toContain("unit-memory-isolated");
   });
 
+  it("does not leak default-plan shard assignments into targeted units with the same id", () => {
+    const artifacts = createExecutionArtifacts({});
+    const plan = buildExecutionPlan(
+      {
+        mode: "local",
+        fileFilters: ["src/cli/qr-dashboard.integration.test.ts"],
+        passthroughArgs: [],
+      },
+      {
+        env: {
+          OPENCLAW_TEST_SHARDS: "4",
+          OPENCLAW_TEST_SHARD_INDEX: "2",
+          OPENCLAW_TEST_LOAD_AWARE: "0",
+        },
+        writeTempJsonArtifact: artifacts.writeTempJsonArtifact,
+      },
+    );
+
+    const targetedUnit = plan.targetedUnits.at(0);
+    const defaultUnitWithSameId = plan.allUnits.find((unit) => unit.id === targetedUnit?.id);
+
+    expect(targetedUnit).toBeTruthy();
+    expect(defaultUnitWithSameId).toBeTruthy();
+    expect(defaultUnitWithSameId).not.toBe(targetedUnit);
+    expect(plan.topLevelSingleShardAssignments.get(targetedUnit)).toBeUndefined();
+    expect(plan.topLevelSingleShardAssignments.get(defaultUnitWithSameId)).toBeDefined();
+
+    artifacts.cleanupTempArtifacts();
+  });
+
   it("removes planner temp artifacts when cleanup runs after planning", () => {
     const artifacts = createExecutionArtifacts({});
     buildExecutionPlan(
