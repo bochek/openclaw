@@ -316,6 +316,42 @@ describe("runCliAgent with process supervisor", () => {
     expect(input.scopeKey).toContain("thread-123");
   });
 
+  it("preserves the existing CLI session ID for text output mode", async () => {
+    supervisorSpawnMock.mockResolvedValueOnce(
+      createManagedRun({
+        reason: "exit",
+        exitCode: 0,
+        exitSignal: null,
+        durationMs: 50,
+        stdout: "ok",
+        stderr: "",
+        timedOut: false,
+        noOutputTimedOut: false,
+      }),
+    );
+
+    const result = await runCliAgent({
+      sessionId: "s1",
+      sessionFile: "/tmp/session.jsonl",
+      workspaceDir: "/tmp",
+      config: EXISTING_CODEX_CONFIG,
+      prompt: "hi",
+      provider: "codex-cli",
+      model: "gpt-5.4",
+      timeoutMs: 1_000,
+      runId: "run-text-session-id",
+      cliSessionBinding: {
+        sessionId: "thread-123",
+        authProfileId: "openai-codex:default",
+      },
+      authProfileId: "openai-codex:default",
+    });
+
+    expect(result.payloads?.[0]?.text).toBe("ok");
+    expect(result.meta.agentMeta?.sessionId).toBe("thread-123");
+    expect(result.meta.agentMeta?.cliSessionBinding?.sessionId).toBe("thread-123");
+  });
+
   it("keeps resuming the CLI across model changes and passes the new model flag", async () => {
     mockSuccessfulCliRun();
 

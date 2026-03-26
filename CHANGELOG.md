@@ -62,6 +62,8 @@ Docs: https://docs.openclaw.ai
 - Agents/failover: classify Codex accountId token extraction failures as auth errors so model fallback continues to the next configured candidate. (#55206) Thanks @cosmicnet.
 - Talk/macOS: stop direct system-voice failures from replaying system speech, use app-locale fallback for shared watchdog timing, and add regression coverage for the macOS fallback route and language-aware timeout policy. (#53511) thanks @hongsw.
 - Discord/gateway cleanup: keep late Carbon reconnect-exhausted errors suppressed through startup/dispose cleanup so Discord monitor shutdown no longer crashes on late gateway close events. (#55373) Thanks @Takhoffman.
+- CLI/agents: stop injecting a fake "Tools are disabled" system-prompt line into CLI backend runs, so Claude CLI native tools can decide tool usage themselves. (#46214) Thanks @Dhi13man.
+- CLI/agents: preserve backend session IDs for text-output CLI runs so resume uses the real CLI session handle instead of the OpenClaw session UUID. (#52712) Thanks @kenantan32.
 
 ## 2026.3.24
 
