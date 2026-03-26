@@ -57,6 +57,7 @@ Docs: https://docs.openclaw.ai
 - Agents/sandbox: make blocked-tool guidance glob-aware again, redact/sanitize session-specific explain hints for safer copy-paste, and avoid leaking control-character session keys in those hints. (#54684) Thanks @ngutman.
 - Agents/compaction: trigger timeout recovery compaction before retrying high-context LLM timeouts so embedded runs stop repeating oversized requests. (#46417) thanks @joeykrug.
 - Agents/compaction: reconcile `sessions.json.compactionCount` after a late embedded auto-compaction success so persisted session counts catch up once the handler reports completion. (#45493) Thanks @jackal092927.
+- Telegram/polling: rebuild the polling transport after stuck or recoverable polling-network cycles, but keep `409 getUpdates` conflict restarts on the existing transport so sticky IPv4 fallback state is preserved. (#55014) Thanks @pkuGeo.
 
 ## 2026.3.24
 

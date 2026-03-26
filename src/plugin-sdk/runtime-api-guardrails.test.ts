@@ -66,6 +66,7 @@ const RUNTIME_API_EXPORT_GUARDS: Record<string, readonly string[]> = {
     'export { buildChannelConfigSchema, getChatChannelMeta, jsonResult, readNumberParam, readReactionParams, readStringArrayParam, readStringOrNumberParam, readStringParam, resolvePollMaxSelections, TelegramConfigSchema } from "openclaw/plugin-sdk/telegram-core";',
     'export type { TelegramProbe } from "./src/probe.js";',
     'export { auditTelegramGroupMembership, collectTelegramUnmentionedGroupIds } from "./src/audit.js";',
+    'export { buildTelegramExecApprovalPendingPayload, shouldSuppressTelegramExecApprovalForwardingFallback } from "./src/exec-approval-forwarding.js";',
     'export { telegramMessageActions } from "./src/channel-actions.js";',
     'export { monitorTelegramProvider } from "./src/monitor.js";',
     'export { probeTelegram } from "./src/probe.js";',

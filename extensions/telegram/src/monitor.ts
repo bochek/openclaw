@@ -181,7 +181,7 @@ export async function monitorTelegramProvider(opts: MonitorTelegramOpts = {}) {
       return;
     }
 
-    // Create transport once to preserve sticky IPv4 fallback state across polling restarts
+    // Reuse the transport across clean restarts, but allow dirty polling cycles to rebuild it.
     const createTelegramTransportForPolling = () =>
       resolveTelegramTransport(proxyFetch, {
         network: account.config.network,

@@ -50,7 +50,7 @@ type TelegramPollingSessionOpts = {
   log: (line: string) => void;
   /** Pre-resolved Telegram transport to reuse across bot instances */
   telegramTransport?: TelegramTransport;
-  /** Rebuild Telegram transport after stall/network recovery when marked dirty. */
+  /** Rebuild Telegram transport after dirty polling cycles. */
   createTelegramTransport?: () => TelegramTransport;
 };
 
@@ -61,7 +61,7 @@ export class TelegramPollingSession {
   #activeRunner: ReturnType<typeof run> | undefined;
   #activeFetchAbort: AbortController | undefined;
   #telegramTransport: TelegramTransport | undefined;
-  #discardTransportOnRestart = false;
+  #transportDirty = false;
 
   constructor(private readonly opts: TelegramPollingSessionOpts) {
     this.#telegramTransport = opts.telegramTransport;
@@ -76,9 +76,8 @@ export class TelegramPollingSession {
   }
 
   markTransportDirty() {
-    this.#discardTransportOnRestart = true;
+    this.#transportDirty = true;
   }
-
   abortActiveFetch() {
     this.#activeFetchAbort?.abort();
   }
@@ -136,16 +135,16 @@ export class TelegramPollingSession {
   async #createPollingBot(): Promise<TelegramBot | undefined> {
     const fetchAbortController = new AbortController();
     this.#activeFetchAbort = fetchAbortController;
-    const shouldRebuildTransport = this.#discardTransportOnRestart || !this.#telegramTransport;
-    const telegramTransport = shouldRebuildTransport
-      ? (this.opts.createTelegramTransport?.() ?? this.#telegramTransport)
-      : this.#telegramTransport;
-    if (shouldRebuildTransport && telegramTransport) {
-      this.opts.log("[telegram][diag] rebuilding transport for next polling cycle");
-    }
-    this.#telegramTransport = telegramTransport;
-    this.#discardTransportOnRestart = false;
     try {
+      const shouldRebuildTransport = this.#transportDirty || !this.#telegramTransport;
+      const telegramTransport = shouldRebuildTransport
+        ? (this.opts.createTelegramTransport?.() ?? this.#telegramTransport)
+        : this.#telegramTransport;
+      if (shouldRebuildTransport && telegramTransport) {
+        this.opts.log("[telegram][diag] rebuilding transport for next polling cycle");
+      }
+      this.#telegramTransport = telegramTransport;
+      this.#transportDirty = false;
       return createTelegramBot({
         token: this.opts.token,
         runtime: this.opts.runtime,
@@ -212,7 +211,6 @@ export class TelegramPollingSession {
     let lastGetUpdatesError: string | null = null;
     let lastGetUpdatesOffset: number | null = null;
     let inFlightGetUpdates = 0;
-    let stopSequenceLogged = false;
     let stallDiagLoggedAt = 0;
 
     bot.api.config.use(async (prev, method, payload, signal) => {
@@ -296,8 +294,11 @@ export class TelegramPollingSession {
 
       const now = Date.now();
       const activeElapsed =
-        inFlightGetUpdates > 0 && lastGetUpdatesStartedAt != null ? now - lastGetUpdatesStartedAt : 0;
-      const idleElapsed = inFlightGetUpdates > 0 ? 0 : now - (lastGetUpdatesFinishedAt ?? lastGetUpdatesAt);
+        inFlightGetUpdates > 0 && lastGetUpdatesStartedAt != null
+          ? now - lastGetUpdatesStartedAt
+          : 0;
+      const idleElapsed =
+        inFlightGetUpdates > 0 ? 0 : now - (lastGetUpdatesFinishedAt ?? lastGetUpdatesAt);
       const elapsed = inFlightGetUpdates > 0 ? activeElapsed : idleElapsed;
 
       if (elapsed > POLL_STALL_THRESHOLD_MS && runner.isRunning()) {
@@ -305,7 +306,7 @@ export class TelegramPollingSession {
           return;
         }
         stallDiagLoggedAt = now;
-        this.#discardTransportOnRestart = true;
+        this.#transportDirty = true;
         stalledRestart = true;
         const elapsedLabel =
           inFlightGetUpdates > 0
@@ -359,8 +360,8 @@ export class TelegramPollingSession {
         this.#webhookCleared = false;
       }
       const isRecoverable = isRecoverableTelegramNetworkError(err, { context: "polling" });
-      if (isConflict || isRecoverable) {
-        this.#discardTransportOnRestart = true;
+      if (isRecoverable) {
+        this.#transportDirty = true;
       }
       if (!isConflict && !isRecoverable) {
         throw err;
