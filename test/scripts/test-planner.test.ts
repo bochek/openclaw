@@ -155,7 +155,13 @@ describe("test planner", () => {
         fileFilters: ["src/auto-reply/reply/followup-runner.test.ts"],
       },
       {
-        env: {},
+        env: {
+          RUNNER_OS: "macOS",
+          OPENCLAW_TEST_HOST_CPU_COUNT: "10",
+          OPENCLAW_TEST_HOST_MEMORY_GIB: "16",
+          OPENCLAW_TEST_LOAD_AWARE: "0",
+        },
+        platform: "darwin",
       },
     );
 

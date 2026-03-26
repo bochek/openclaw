@@ -21,6 +21,9 @@ const clearPlannerShardEnv = (env) => {
   return nextEnv;
 };
 
+const expectedLocalThreadPolicy = () =>
+  process.platform === "win32" ? "windows-local-conservative" : "memory-below-thread-threshold";
+
 describe("scripts/test-parallel fatal output guard", () => {
   it("fails a zero exit when V8 reports an out-of-memory fatal", () => {
     const output = [
@@ -195,8 +198,14 @@ describe("scripts/test-parallel lane planning", () => {
     );
 
     expect(output).toContain("mode=local intent=normal memoryBand=mid");
-    expect(output).toContain("unitPool=threads");
-    expect(output).toContain("basePool=threads");
+    if (process.platform === "win32") {
+      expect(output).toContain("unitPool=forks");
+      expect(output).toContain("basePool=forks");
+      expect(output).toContain("threadPolicy=windows-local-conservative");
+    } else {
+      expect(output).toContain("unitPool=threads");
+      expect(output).toContain("basePool=threads");
+    }
     expect(output).toContain("unit-fast filters=all maxWorkers=");
     expect(output).toContain("extensions filters=all maxWorkers=");
   });
@@ -223,7 +232,7 @@ describe("scripts/test-parallel lane planning", () => {
 
     expect(output).toContain("unitPool=forks");
     expect(output).toContain("basePool=forks");
-    expect(output).toContain("threadPolicy=memory-below-thread-threshold");
+    expect(output).toContain(`threadPolicy=${expectedLocalThreadPolicy()}`);
   });
 
   it("explains targeted file ownership and execution policy", () => {
@@ -233,7 +242,15 @@ describe("scripts/test-parallel lane planning", () => {
       ["scripts/test-parallel.mjs", "--explain", "src/auto-reply/reply/followup-runner.test.ts"],
       {
         cwd: repoRoot,
-        env: clearPlannerShardEnv(process.env),
+        env: {
+          ...clearPlannerShardEnv(process.env),
+          CI: "",
+          GITHUB_ACTIONS: "",
+          RUNNER_OS: process.platform === "win32" ? "Windows" : "macOS",
+          OPENCLAW_TEST_HOST_CPU_COUNT: "10",
+          OPENCLAW_TEST_HOST_MEMORY_GIB: "16",
+          OPENCLAW_TEST_LOAD_AWARE: "0",
+        },
         encoding: "utf8",
       },
     );
@@ -241,7 +258,7 @@ describe("scripts/test-parallel lane planning", () => {
     expect(output).toContain("surface=base");
     expect(output).toContain("reasons=base-surface,base-pinned-manifest");
     expect(output).toContain("pool=threads");
-    expect(output).toContain("threadPolicy=memory-below-thread-threshold");
+    expect(output).toContain(`threadPolicy=${expectedLocalThreadPolicy()}`);
   });
 
   it("prints the planner-backed CI manifest as JSON", () => {
