@@ -9,6 +9,7 @@ import {
   parseCompletedTestFileLines,
   sampleProcessTreeRssKb,
 } from "./test-parallel-memory.mjs";
+import { resolveThreadPoolPolicy } from "./test-parallel-pool-policy.mjs";
 import {
   appendCapturedOutput,
   formatCapturedOutputTail,
@@ -105,6 +106,21 @@ const disableIsolation =
   !forceIsolation &&
   process.env.OPENCLAW_TEST_NO_ISOLATE !== "0" &&
   process.env.OPENCLAW_TEST_NO_ISOLATE !== "false";
+const loadAwareDisabledRaw = process.env.OPENCLAW_TEST_LOAD_AWARE?.trim().toLowerCase();
+const loadAwareDisabled = loadAwareDisabledRaw === "0" || loadAwareDisabledRaw === "false";
+const loadRatio =
+  !isCI && !loadAwareDisabled && process.platform !== "win32" && hostCpuCount > 0
+    ? os.loadavg()[0] / hostCpuCount
+    : 0;
+const threadPoolPolicy = resolveThreadPoolPolicy({
+  env: process.env,
+  isCI,
+  isWindows,
+  hostCpuCount,
+  hostMemoryGiB,
+  loadRatio,
+  testProfile,
+});
 const includeGatewaySuite = process.env.OPENCLAW_TEST_INCLUDE_GATEWAY === "1";
 const includeChannelsSuite = process.env.OPENCLAW_TEST_INCLUDE_CHANNELS === "1";
 const includeExtensionsSuite = process.env.OPENCLAW_TEST_INCLUDE_EXTENSIONS === "1";
@@ -119,6 +135,7 @@ const parsePoolOverride = (value, fallback) => {
 // Even on low-memory hosts, keep the isolated lane split so files like
 // git-commit.test.ts still get the worker/process isolation they require.
 const shouldSplitUnitRuns = testProfile !== "serial";
+const defaultBasePool = threadPoolPolicy.defaultBasePool;
 let runs = [];
 const shardOverride = Number.parseInt(process.env.OPENCLAW_TEST_SHARDS ?? "", 10);
 const configuredShardCount =
@@ -283,7 +300,10 @@ const channelIsolatedFiles = dedupeFilesPreserveOrder([
   ),
 ]);
 const channelIsolatedFileSet = new Set(channelIsolatedFiles);
-const defaultUnitPool = parsePoolOverride(process.env.OPENCLAW_TEST_UNIT_DEFAULT_POOL, "threads");
+const defaultUnitPool = parsePoolOverride(
+  process.env.OPENCLAW_TEST_UNIT_DEFAULT_POOL,
+  threadPoolPolicy.defaultUnitPool,
+);
 const isTargetedIsolatedUnitFile = (fileFilter) =>
   unitForkIsolatedFiles.includes(fileFilter) || unitMemoryIsolatedFiles.includes(fileFilter);
 const inferTarget = (fileFilter) => {
@@ -459,7 +479,7 @@ const channelIsolatedEntries = channelIsolatedFiles.map((file) => ({
   name: `${path.basename(file, ".test.ts")}-channels-isolated`,
   args: ["vitest", "run", "--config", "vitest.channels.config.ts", "--pool=forks", file],
 }));
-const defaultUnitFastLaneCount = testProfile === "low" ? 8 : isCI && !isWindows ? 3 : 1;
+const defaultUnitFastLaneCount = testProfile === "low" ? 8 : threadPoolPolicy.unitFastLaneCount;
 const unitFastLaneCount = Math.max(
   1,
   parseEnvNumber("OPENCLAW_TEST_UNIT_FAST_LANES", defaultUnitFastLaneCount),
@@ -619,7 +639,7 @@ const baseRuns = [
               "run",
               "--config",
               "vitest.unit.config.ts",
-              "--pool=forks",
+              `--pool=${defaultUnitPool}`,
               ...noIsolateArgs,
             ],
           },
@@ -671,7 +691,11 @@ const baseRuns = [
 runs = baseRuns;
 const formatEntrySummary = (entry) => {
   const explicitFilters = countExplicitEntryFilters(entry.args) ?? 0;
-  return `${entry.name} filters=${String(explicitFilters || "all")} maxWorkers=${String(
+  const poolArg =
+    entry.args.find((arg) => arg.startsWith("--pool=")) ??
+    (entry.args.includes("--pool") ? (entry.args[entry.args.indexOf("--pool") + 1] ?? null) : null);
+  const pool = typeof poolArg === "string" ? poolArg.replace(/^--pool=/u, "") : "config-default";
+  return `${entry.name} filters=${String(explicitFilters || "all")} pool=${pool} maxWorkers=${String(
     maxWorkersForRun(entry.name) ?? "default",
   )}`;
 };
@@ -801,7 +825,7 @@ const createTargetedEntry = (owner, isolated, filters) => {
       "--config",
       "vitest.config.ts",
       ...noIsolateArgs,
-      ...(forceForks ? ["--pool=forks"] : []),
+      `--pool=${forceForks ? "forks" : defaultBasePool}`,
       ...filters,
     ],
   };
@@ -1047,12 +1071,6 @@ const serialRuns = keepGatewaySerial ? runs.filter((entry) => entry.name === "ga
 const serialPrefixRuns = parallelRuns.filter((entry) => entry.serialPhase);
 const deferredParallelRuns = parallelRuns.filter((entry) => !entry.serialPhase);
 const baseLocalWorkers = Math.max(4, Math.min(16, hostCpuCount));
-const loadAwareDisabledRaw = process.env.OPENCLAW_TEST_LOAD_AWARE?.trim().toLowerCase();
-const loadAwareDisabled = loadAwareDisabledRaw === "0" || loadAwareDisabledRaw === "false";
-const loadRatio =
-  !isCI && !loadAwareDisabled && process.platform !== "win32" && hostCpuCount > 0
-    ? os.loadavg()[0] / hostCpuCount
-    : 0;
 // Keep the fast-path unchanged on normal load; only throttle under extreme host pressure.
 const extremeLoadScale = loadRatio >= 1.1 ? 0.75 : loadRatio >= 1 ? 0.85 : 1;
 const localWorkers = Math.max(4, Math.min(16, Math.floor(baseLocalWorkers * extremeLoadScale)));
@@ -1611,6 +1629,19 @@ const shutdown = (signal) => {
 process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("exit", cleanupTempArtifacts);
+
+if (
+  process.env.OPENCLAW_TEST_SHOW_POOL_DECISION === "1" ||
+  process.env.OPENCLAW_TEST_LIST_LANES === "1"
+) {
+  console.log(
+    `[test-parallel] pool-policy unit=${defaultUnitPool} base=${defaultBasePool} threadExpansion=${String(
+      threadPoolPolicy.threadExpansionEnabled,
+    )} unitFastLanes=${String(threadPoolPolicy.unitFastLaneCount)} reason=${threadPoolPolicy.reason} load=${loadRatio.toFixed(2)} cpu=${String(
+      hostCpuCount,
+    )} memGiB=${String(hostMemoryGiB)}`,
+  );
+}
 
 if (process.env.OPENCLAW_TEST_LIST_LANES === "1") {
   const entriesToPrint = targetedEntries.length > 0 ? targetedEntries : runs;
