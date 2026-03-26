@@ -138,6 +138,11 @@ function resolveProfileComponentPath(
   if (relative.startsWith("..") || path.isAbsolute(relative)) {
     throw new Error(`Profile path escapes root: ${value}`);
   }
+  const canonicalProfileRoot = resolvePathWithMissingSegmentsSync(profileRoot);
+  const canonicalResolved = resolvePathWithMissingSegmentsSync(resolved);
+  if (!isPathWithinRoot(canonicalProfileRoot, canonicalResolved)) {
+    throw new Error(`Profile path escapes root via symlink: ${value}`);
+  }
   return resolved;
 }
 

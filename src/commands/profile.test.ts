@@ -404,6 +404,27 @@ describe("profile commands", () => {
     expect(managed?.warnings.join("\n")).toContain("Absolute profile paths are not allowed");
   });
 
+  it("treats managed-native relative roots that escape through symlinks as invalid", async () => {
+    const root = await createTempProfileDir("openclaw-profile-native-symlink-escape-");
+    process.env.OPENCLAW_HOME = root;
+    const runtime = createNonExitingRuntime();
+    const outside = await createTempProfileDir("openclaw-profile-native-outside-");
+
+    await profileCreateCommand(runtime, "native", {});
+    const profileRoot = path.join(root, ".openclaw", "profiles", "native");
+    await fs.symlink(outside, path.join(profileRoot, "state-link"));
+
+    const manifestPath = path.join(profileRoot, "profile.json");
+    const manifest = JSON.parse(await fs.readFile(manifestPath, "utf8")) as {
+      roots: { config: string; state: string; workspace: string };
+    };
+    manifest.roots.state = "state-link";
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+
+    const managed = await readManagedProfile("native", process.env, () => root);
+    expect(managed?.warnings.join("\n")).toContain("Profile path escapes root via symlink");
+  });
+
   it("treats adopted legacy manifests that escape the adopted root as invalid", async () => {
     const root = await createTempProfileDir("openclaw-profile-adopted-escape-");
     process.env.OPENCLAW_HOME = root;
