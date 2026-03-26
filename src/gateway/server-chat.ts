@@ -5,10 +5,6 @@ import { loadConfig } from "../config/config.js";
 import { type AgentEventPayload, getAgentRunContext } from "../infra/agent-events.js";
 import { resolveHeartbeatVisibility } from "../infra/heartbeat-visibility.js";
 import { stripInlineDirectiveTagsForDisplay } from "../utils/directive-tags.js";
-import {
-  deriveGatewaySessionLifecycleSnapshot,
-  persistGatewaySessionLifecycleEvent,
-} from "./session-lifecycle-state.js";
 import { loadGatewaySessionRow, loadSessionEntry } from "./session-utils.js";
 import { formatForLog } from "./ws-log.js";
 
@@ -463,39 +459,23 @@ export function createAgentEventHandler({
   toolEventRecipients,
   sessionEventSubscribers,
 }: AgentEventHandlerOptions) {
-  const buildSessionEventSnapshot = (sessionKey: string, evt?: AgentEventPayload) => {
+  const buildSessionEventSnapshot = (sessionKey: string) => {
     const row = loadGatewaySessionRow(sessionKey);
-    const lifecyclePatch = evt
-      ? deriveGatewaySessionLifecycleSnapshot({
-          session: row
-            ? {
-                updatedAt: row.updatedAt ?? undefined,
-                status: row.status,
-                startedAt: row.startedAt,
-                endedAt: row.endedAt,
-                runtimeMs: row.runtimeMs,
-                abortedLastRun: row.abortedLastRun,
-              }
-            : undefined,
-          event: evt,
-        })
-      : {};
-    const session = row ? { ...row, ...lifecyclePatch } : undefined;
-    const snapshotSource = session ?? lifecyclePatch;
+    if (!row) {
+      return {};
+    }
     return {
-      ...(session ? { session } : {}),
-      totalTokens: row?.totalTokens,
-      totalTokensFresh: row?.totalTokensFresh,
-      contextTokens: row?.contextTokens,
-      estimatedCostUsd: row?.estimatedCostUsd,
-      modelProvider: row?.modelProvider,
-      model: row?.model,
-      status: snapshotSource.status,
-      startedAt: snapshotSource.startedAt,
-      endedAt: snapshotSource.endedAt,
-      runtimeMs: snapshotSource.runtimeMs,
-      updatedAt: snapshotSource.updatedAt,
-      abortedLastRun: snapshotSource.abortedLastRun,
+      session: row,
+      totalTokens: row.totalTokens,
+      totalTokensFresh: row.totalTokensFresh,
+      contextTokens: row.contextTokens,
+      estimatedCostUsd: row.estimatedCostUsd,
+      modelProvider: row.modelProvider,
+      model: row.model,
+      status: row.status,
+      startedAt: row.startedAt,
+      endedAt: row.endedAt,
+      runtimeMs: row.runtimeMs,
     };
   };
 
@@ -816,7 +796,6 @@ export function createAgentEventHandler({
       sessionKey &&
       (lifecyclePhase === "start" || lifecyclePhase === "end" || lifecyclePhase === "error")
     ) {
-      void persistGatewaySessionLifecycleEvent({ sessionKey, event: evt }).catch(() => undefined);
       const sessionEventConnIds = sessionEventSubscribers.getAll();
       if (sessionEventConnIds.size > 0) {
         broadcastToConnIds(
@@ -826,7 +805,7 @@ export function createAgentEventHandler({
             phase: lifecyclePhase,
             runId: evt.runId,
             ts: evt.ts,
-            ...buildSessionEventSnapshot(sessionKey, evt),
+            ...buildSessionEventSnapshot(sessionKey),
           },
           sessionEventConnIds,
           { dropIfSlow: true },

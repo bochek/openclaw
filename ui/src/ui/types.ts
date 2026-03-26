@@ -391,7 +391,6 @@ export type GatewaySessionRow = {
   inputTokens?: number;
   outputTokens?: number;
   totalTokens?: number;
-  totalTokensFresh?: boolean;
   status?: SessionRunStatus;
   startedAt?: number;
   endedAt?: number;

@@ -57,16 +57,12 @@ function createHost() {
       token: "",
       sessionKey: "main",
       lastActiveSessionKey: "main",
-      theme: "claw",
-      themeMode: "system",
+      theme: "system",
       chatFocusMode: false,
       chatShowThinking: true,
-      chatShowToolCalls: true,
       splitRatio: 0.6,
       navCollapsed: false,
-      navWidth: 280,
       navGroupsCollapsed: {},
-      borderRadius: 50,
     },
     password: "",
     clientInstanceId: "instance-test",
@@ -84,9 +80,6 @@ function createHost() {
     agentsLoading: false,
     agentsList: null,
     agentsError: null,
-    healthLoading: false,
-    healthResult: null,
-    healthError: null,
     toolsCatalogLoading: false,
     toolsCatalogError: null,
     toolsCatalogResult: null,
@@ -101,7 +94,7 @@ function createHost() {
     execApprovalQueue: [],
     execApprovalError: null,
     updateAvailable: null,
-  } as unknown as Parameters<typeof handleGatewayEvent>[0];
+  } as Parameters<typeof handleGatewayEvent>[0];
 }
 
 describe("handleGatewayEvent sessions.changed", () => {
@@ -110,7 +103,6 @@ describe("handleGatewayEvent sessions.changed", () => {
     const host = createHost();
 
     handleGatewayEvent(host, {
-      type: "event",
       event: "sessions.changed",
       payload: { sessionKey: "agent:main:main", reason: "patch" },
       seq: 1,

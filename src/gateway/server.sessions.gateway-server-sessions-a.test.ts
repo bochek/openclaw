@@ -7,6 +7,7 @@ import { DEFAULT_PROVIDER } from "../agents/defaults.js";
 import { clearConfigCache, clearRuntimeConfigSnapshot } from "../config/config.js";
 import { isSessionPatchEvent, type InternalHookEvent } from "../hooks/internal-hooks.js";
 import { GATEWAY_CLIENT_IDS, GATEWAY_CLIENT_MODES } from "./protocol/client-info.js";
+import { sessionsHandlers } from "./server-methods/sessions.js";
 import { startGatewayServerHarness, type GatewayServerHarness } from "./server.e2e-ws-harness.js";
 import { createToolSummaryPreviewTranscriptLines } from "./session-preview.test-helpers.js";
 import {
@@ -19,6 +20,7 @@ import {
   trackConnectChallengeNonce,
   writeSessionStore,
 } from "./test-helpers.js";
+import { getReplyFromConfig } from "./test-helpers.mocks.js";
 
 async function getSessionsHandlers() {
   return (await import("./server-methods/sessions.js")).sessionsHandlers;
@@ -352,32 +354,6 @@ describe("gateway server sessions", () => {
     ws.close();
   });
 
-  test("sessions.create accepts an explicit key for persistent dashboard sessions", async () => {
-    await createSessionStoreDir();
-    const { ws } = await openClient();
-
-    const key = "agent:ops-agent:dashboard:direct:subagent-orchestrator";
-    const created = await rpcReq<{
-      key?: string;
-      sessionId?: string;
-      entry?: {
-        label?: string;
-      };
-    }>(ws, "sessions.create", {
-      key,
-      label: "Dashboard Orchestrator",
-    });
-
-    expect(created.ok).toBe(true);
-    expect(created.payload?.key).toBe(key);
-    expect(created.payload?.entry?.label).toBe("Dashboard Orchestrator");
-    expect(created.payload?.sessionId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-    );
-
-    ws.close();
-  });
-
   test("sessions.create rejects unknown parentSessionKey", async () => {
     await createSessionStoreDir();
     const { ws } = await openClient();
@@ -396,8 +372,9 @@ describe("gateway server sessions", () => {
   });
 
   test("sessions.create can start the first agent turn from an initial task", async () => {
-    await createSessionStoreDir();
     const { ws } = await openClient();
+    const replySpy = vi.mocked(getReplyFromConfig);
+    const callsBefore = replySpy.mock.calls.length;
 
     const created = await rpcReq<{
       key?: string;
@@ -419,6 +396,13 @@ describe("gateway server sessions", () => {
     expect(created.payload?.runStarted).toBe(true);
     expect(created.payload?.runId).toBeTruthy();
     expect(created.payload?.messageSeq).toBe(1);
+
+    await vi.waitFor(() => replySpy.mock.calls.length > callsBefore);
+    const ctx = replySpy.mock.calls.at(-1)?.[0] as
+      | { Body?: string; SessionKey?: string }
+      | undefined;
+    expect(ctx?.Body).toContain("hello from create");
+    expect(ctx?.SessionKey).toBe(created.payload?.key);
 
     ws.close();
   });
@@ -554,9 +538,7 @@ describe("gateway server sessions", () => {
 
     const broadcastToConnIds = vi.fn();
     const respond = vi.fn();
-    const sessionsHandlers = await getSessionsHandlers();
     await sessionsHandlers["sessions.patch"]({
-      req: {} as never,
       params: {
         key: "main",
         label: "Renamed",

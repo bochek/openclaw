@@ -265,7 +265,6 @@ export function installSessionToolResultGuard(
     if (sessionFile) {
       emitSessionTranscriptUpdate({
         sessionFile,
-        sessionKey: opts?.sessionKey,
         message: finalMessage,
         messageId: typeof result === "string" ? result : undefined,
       });

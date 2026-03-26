@@ -119,98 +119,6 @@ describe("session history HTTP endpoints", () => {
     }
   });
 
-  test("returns 404 for unknown sessions", async () => {
-    await createSessionStoreFile();
-
-    const harness = await createGatewaySuiteHarness();
-    try {
-      const res = await fetch(
-        `http://127.0.0.1:${harness.port}/sessions/${encodeURIComponent("agent:main:missing")}/history`,
-        {
-          headers: AUTH_HEADER,
-        },
-      );
-
-      expect(res.status).toBe(404);
-      await expect(res.json()).resolves.toMatchObject({
-        ok: false,
-        error: {
-          type: "not_found",
-          message: "Session not found: agent:main:missing",
-        },
-      });
-    } finally {
-      await harness.close();
-    }
-  });
-
-  test("prefers the freshest duplicate row for direct history reads", async () => {
-    const storePath = await createSessionStoreFile();
-    const dir = path.dirname(storePath);
-    const staleTranscriptPath = path.join(dir, "sess-stale-main.jsonl");
-    const freshTranscriptPath = path.join(dir, "sess-fresh-main.jsonl");
-    await fs.writeFile(
-      staleTranscriptPath,
-      [
-        JSON.stringify({ type: "session", version: 1, id: "sess-stale-main" }),
-        JSON.stringify({
-          message: { role: "assistant", content: [{ type: "text", text: "stale history" }] },
-        }),
-      ].join("\n"),
-      "utf-8",
-    );
-    await fs.writeFile(
-      freshTranscriptPath,
-      [
-        JSON.stringify({ type: "session", version: 1, id: "sess-fresh-main" }),
-        JSON.stringify({
-          message: { role: "assistant", content: [{ type: "text", text: "fresh history" }] },
-        }),
-      ].join("\n"),
-      "utf-8",
-    );
-    await fs.writeFile(
-      storePath,
-      JSON.stringify(
-        {
-          "agent:main:main": {
-            sessionId: "sess-stale-main",
-            sessionFile: staleTranscriptPath,
-            updatedAt: 1,
-          },
-          "agent:main:MAIN": {
-            sessionId: "sess-fresh-main",
-            sessionFile: freshTranscriptPath,
-            updatedAt: 2,
-          },
-        },
-        null,
-        2,
-      ),
-      "utf-8",
-    );
-
-    const harness = await createGatewaySuiteHarness();
-    try {
-      const res = await fetch(
-        `http://127.0.0.1:${harness.port}/sessions/${encodeURIComponent("agent:main:main")}/history`,
-        {
-          headers: AUTH_HEADER,
-        },
-      );
-
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as {
-        sessionKey?: string;
-        messages?: Array<{ content?: Array<{ text?: string }> }>;
-      };
-      expect(body.sessionKey).toBe("agent:main:main");
-      expect(body.messages?.[0]?.content?.[0]?.text).toBe("fresh history");
-    } finally {
-      await harness.close();
-    }
-  });
-
   test("supports cursor pagination over direct REST while preserving the messages field", async () => {
     const { storePath } = await seedSession({ text: "first message" });
     const second = await appendAssistantMessageToSessionTranscript({
@@ -376,9 +284,6 @@ describe("session history HTTP endpoints", () => {
           ?.content?.[0]?.text,
       ).toBe("second message");
       expect((messageEvent.data as { messageSeq?: number }).messageSeq).toBe(2);
-      if (!appended.ok) {
-        throw new Error(`append failed: ${appended.reason}`);
-      }
       expect(
         (
           messageEvent.data as {
@@ -386,7 +291,7 @@ describe("session history HTTP endpoints", () => {
           }
         ).message?.__openclaw,
       ).toMatchObject({
-        id: appended.ok ? appended.messageId : undefined,
+        id: appended.messageId,
         seq: 2,
       });
 

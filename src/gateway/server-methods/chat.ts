@@ -1446,9 +1446,14 @@ export const chatHandlers: GatewayRequestHandlers = {
         agentId,
         channel: INTERNAL_MESSAGE_CHANNEL,
       });
-      const deliveredReplies: Array<{ payload: ReplyPayload; kind: "block" | "final" }> = [];
+      const finalReplyParts: string[] = [];
+      const userTranscriptMessage = {
+        role: "user" as const,
+        content: parsedMessage,
+        timestamp: now,
+      };
       let userTranscriptUpdateEmitted = false;
-      const emitUserTranscriptUpdate = async () => {
+      const emitUserTranscriptUpdate = () => {
         if (userTranscriptUpdateEmitted) {
           return;
         }
@@ -1467,42 +1472,10 @@ export const chatHandlers: GatewayRequestHandlers = {
           return;
         }
         userTranscriptUpdateEmitted = true;
-        const persistedImages = await persistedImagesPromise;
         emitSessionTranscriptUpdate({
           sessionFile: transcriptPath,
           sessionKey,
-          message: buildChatSendTranscriptMessage({
-            message: parsedMessage,
-            savedImages: persistedImages,
-            timestamp: now,
-          }),
-        });
-      };
-      let transcriptMediaRewriteDone = false;
-      const rewriteUserTranscriptMedia = async () => {
-        if (transcriptMediaRewriteDone) {
-          return;
-        }
-        const { storePath: latestStorePath, entry: latestEntry } = loadSessionEntry(sessionKey);
-        const resolvedSessionId = latestEntry?.sessionId ?? entry?.sessionId;
-        if (!resolvedSessionId) {
-          return;
-        }
-        const transcriptPath = resolveTranscriptPath({
-          sessionId: resolvedSessionId,
-          storePath: latestStorePath,
-          sessionFile: latestEntry?.sessionFile ?? entry?.sessionFile,
-          agentId,
-        });
-        if (!transcriptPath) {
-          return;
-        }
-        transcriptMediaRewriteDone = true;
-        await rewriteChatSendUserTurnMediaPaths({
-          transcriptPath,
-          sessionKey,
-          message: parsedMessage,
-          savedImages: await persistedImagesPromise,
+          message: userTranscriptMessage,
         });
       };
       const dispatcher = createReplyDispatcher({

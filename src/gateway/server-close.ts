@@ -26,7 +26,6 @@ export function createGatewayCloseHandler(params: {
   agentUnsub: (() => void) | null;
   heartbeatUnsub: (() => void) | null;
   transcriptUnsub: (() => void) | null;
-  lifecycleUnsub: (() => void) | null;
   chatRunState: { clear: () => void };
   clients: Set<{ socket: { close: (code: number, reason: string) => void } }>;
   configReloader: { stop: () => Promise<void> };
@@ -158,6 +157,42 @@ export function createGatewayCloseHandler(params: {
       } catch {
         /* ignore */
       }
+    }
+    if (params.transcriptUnsub) {
+      try {
+        params.transcriptUnsub();
+      } catch {
+        /* ignore */
+      }
+    }
+    params.chatRunState.clear();
+    for (const c of params.clients) {
+      try {
+        c.socket.close(1012, "service restart");
+      } catch {
+        /* ignore */
+      }
+    }
+    params.clients.clear();
+    await params.configReloader.stop().catch(() => {});
+    if (params.browserControl) {
+      await params.browserControl.stop().catch(() => {});
+    }
+    await new Promise<void>((resolve) => params.wss.close(() => resolve()));
+    const servers =
+      params.httpServers && params.httpServers.length > 0
+        ? params.httpServers
+        : [params.httpServer];
+    for (const server of servers) {
+      const httpServer = server as HttpServer & {
+        closeIdleConnections?: () => void;
+      };
+      if (typeof httpServer.closeIdleConnections === "function") {
+        httpServer.closeIdleConnections();
+      }
+      await new Promise<void>((resolve, reject) =>
+        httpServer.close((err) => (err ? reject(err) : resolve())),
+      );
     }
   };
 }

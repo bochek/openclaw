@@ -709,8 +709,8 @@ vi.mock("../channels/web/index.js", async () => {
   };
 });
 vi.mock("../commands/agent.js", () => ({
-  agentCommand,
-  agentCommandFromIngress: agentCommand,
+  agentCommand: hoisted.agentCommand,
+  agentCommandFromIngress: hoisted.agentCommand,
 }));
 vi.mock("../auto-reply/dispatch.js", async () => {
   return await vi.importActual<typeof import("../auto-reply/dispatch.js")>(
@@ -723,21 +723,7 @@ vi.mock("/src/auto-reply/dispatch.js", async () => {
   );
 });
 vi.mock("../auto-reply/reply.js", () => ({
-  getReplyFromConfig: (...args: Parameters<GetReplyFromConfigFn>) =>
-    hoisted.getReplyFromConfig(...args),
-}));
-
-vi.mock("/src/auto-reply/reply.js", () => ({
-  getReplyFromConfig: (...args: Parameters<GetReplyFromConfigFn>) =>
-    hoisted.getReplyFromConfig(...args),
-}));
-vi.mock("../auto-reply/reply/get-reply-from-config.runtime.js", () => ({
-  getReplyFromConfig: (...args: Parameters<GetReplyFromConfigFn>) =>
-    hoisted.getReplyFromConfig(...args),
-}));
-vi.mock("/src/auto-reply/reply/get-reply-from-config.runtime.js", () => ({
-  getReplyFromConfig: (...args: Parameters<GetReplyFromConfigFn>) =>
-    hoisted.getReplyFromConfig(...args),
+  getReplyFromConfig: hoisted.getReplyFromConfig,
 }));
 vi.mock("../cli/deps.js", async () => {
   const actual = await vi.importActual<typeof import("../cli/deps.js")>("../cli/deps.js");

@@ -18,7 +18,6 @@ const EVENT_SCOPE_GUARDS: Record<string, string[]> = {
   "node.pair.resolved": [PAIRING_SCOPE],
   "sessions.changed": [READ_SCOPE],
   "session.message": [READ_SCOPE],
-  "session.tool": [READ_SCOPE],
 };
 
 export type GatewayBroadcastStateVersion = {

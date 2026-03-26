@@ -356,22 +356,6 @@ function handleGatewayEventUnsafe(host: GatewayHost, evt: GatewayEventFrame) {
     return;
   }
 
-  if (evt.event === "shutdown") {
-    const payload = evt.payload as { reason?: unknown; restartExpectedMs?: unknown } | undefined;
-    const reason =
-      payload && typeof payload.reason === "string" && payload.reason.trim()
-        ? payload.reason.trim()
-        : "gateway stopping";
-    const shutdownMessage =
-      typeof payload?.restartExpectedMs === "number"
-        ? `Restarting: ${reason}`
-        : `Disconnected: ${reason}`;
-    (host as GatewayHostWithShutdownMessage).pendingShutdownMessage = shutdownMessage;
-    host.lastError = shutdownMessage;
-    host.lastErrorCode = null;
-    return;
-  }
-
   if (evt.event === "sessions.changed") {
     void loadSessions(host as unknown as OpenClawApp);
     return;

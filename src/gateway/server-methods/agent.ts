@@ -655,23 +655,10 @@ export const agentHandlers: GatewayRequestHandlers = {
     });
     respond(true, accepted, undefined, { runId });
 
-    if (resolvedSessionKey) {
-      reactivateCompletedSubagentSession({
-        sessionKey: resolvedSessionKey,
-        runId,
-      });
-    }
-
     if (requestedSessionKey && resolvedSessionKey && isNewSession) {
       emitSessionsChanged(context, {
         sessionKey: resolvedSessionKey,
         reason: "create",
-      });
-    }
-    if (resolvedSessionKey) {
-      emitSessionsChanged(context, {
-        sessionKey: resolvedSessionKey,
-        reason: "send",
       });
     }
 

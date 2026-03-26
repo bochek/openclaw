@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, test, vi } from "vitest";
+import { afterEach, describe, expect, test } from "vitest";
 import { appendAssistantMessageToSessionTranscript } from "../config/sessions/transcript.js";
 import { emitSessionTranscriptUpdate } from "../sessions/transcript-events.js";
 import { testState } from "./test-helpers.mocks.js";
@@ -30,26 +30,6 @@ async function createSessionStoreFile(): Promise<string> {
   const storePath = path.join(dir, "sessions.json");
   testState.sessionStorePath = storePath;
   return storePath;
-}
-
-async function expectNoMessageWithin(params: {
-  action?: () => Promise<void> | void;
-  watch: () => Promise<unknown>;
-  timeoutMs?: number;
-}): Promise<void> {
-  const timeoutMs = params.timeoutMs ?? 300;
-  vi.useFakeTimers();
-  try {
-    const outcome = params
-      .watch()
-      .then(() => "received")
-      .catch(() => "timeout");
-    await params.action?.();
-    await vi.advanceTimersByTimeAsync(timeoutMs);
-    await expect(outcome).resolves.toBe("timeout");
-  } finally {
-    vi.useRealTimers();
-  }
 }
 
 describe("session.message websocket events", () => {
@@ -84,6 +64,21 @@ describe("session.message websocket events", () => {
             (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
               "agent:main:main",
         );
+        const unsubscribedEvent = Promise.race([
+          onceMessage(
+            unsubscribedWs,
+            (message) => message.type === "event" && message.event === "session.message",
+          ).then(() => "received"),
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 300)),
+        ]);
+        const nodeEvent = Promise.race([
+          onceMessage(
+            nodeWs,
+            (message) => message.type === "event" && message.event === "session.message",
+          ).then(() => "received"),
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 300)),
+        ]);
+
         const appended = await appendAssistantMessageToSessionTranscript({
           sessionKey: "agent:main:main",
           text: "subscribed only",
@@ -91,22 +86,8 @@ describe("session.message websocket events", () => {
         });
         expect(appended.ok).toBe(true);
         await expect(subscribedEvent).resolves.toBeTruthy();
-        await expectNoMessageWithin({
-          watch: () =>
-            onceMessage(
-              unsubscribedWs,
-              (message) => message.type === "event" && message.event === "session.message",
-              300,
-            ),
-        });
-        await expectNoMessageWithin({
-          watch: () =>
-            onceMessage(
-              nodeWs,
-              (message) => message.type === "event" && message.event === "session.message",
-              300,
-            ),
-        });
+        await expect(unsubscribedEvent).resolves.toBe("timeout");
+        await expect(nodeEvent).resolves.toBe("timeout");
       } finally {
         subscribedWs.close();
         unsubscribedWs.close();
@@ -152,9 +133,6 @@ describe("session.message websocket events", () => {
 
         const [appended, event] = await Promise.all([appendPromise, eventPromise]);
         expect(appended.ok).toBe(true);
-        if (!appended.ok) {
-          throw new Error(`append failed: ${appended.reason}`);
-        }
         expect(
           (event.payload as { message?: { content?: Array<{ text?: string }> } }).message
             ?.content?.[0]?.text,
@@ -167,7 +145,7 @@ describe("session.message websocket events", () => {
             }
           ).message?.__openclaw,
         ).toMatchObject({
-          id: appended.ok ? appended.messageId : undefined,
+          id: appended.messageId,
           seq: 1,
         });
       } finally {
@@ -322,6 +300,18 @@ describe("session.message websocket events", () => {
             (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
               "agent:main:main",
         );
+        const workerEvent = Promise.race([
+          onceMessage(
+            ws,
+            (message) =>
+              message.type === "event" &&
+              message.event === "session.message" &&
+              (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
+                "agent:main:worker",
+          ).then(() => "received"),
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 300)),
+        ]);
+
         const [mainAppend] = await Promise.all([
           appendAssistantMessageToSessionTranscript({
             sessionKey: "agent:main:main",
@@ -332,26 +322,13 @@ describe("session.message websocket events", () => {
         ]);
         expect(mainAppend.ok).toBe(true);
 
-        await expectNoMessageWithin({
-          watch: () =>
-            onceMessage(
-              ws,
-              (message) =>
-                message.type === "event" &&
-                message.event === "session.message" &&
-                (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
-                  "agent:main:worker",
-              300,
-            ),
-          action: async () => {
-            const workerAppend = await appendAssistantMessageToSessionTranscript({
-              sessionKey: "agent:main:worker",
-              text: "worker hidden",
-              storePath,
-            });
-            expect(workerAppend.ok).toBe(true);
-          },
+        const workerAppend = await appendAssistantMessageToSessionTranscript({
+          sessionKey: "agent:main:worker",
+          text: "worker hidden",
+          storePath,
         });
+        expect(workerAppend.ok).toBe(true);
+        await expect(workerEvent).resolves.toBe("timeout");
 
         const unsubscribeRes = await rpcReq(ws, "sessions.messages.unsubscribe", {
           key: "agent:main:main",
@@ -359,100 +336,24 @@ describe("session.message websocket events", () => {
         expect(unsubscribeRes.ok).toBe(true);
         expect(unsubscribeRes.payload?.subscribed).toBe(false);
 
-        await expectNoMessageWithin({
-          watch: () =>
-            onceMessage(
-              ws,
-              (message) =>
-                message.type === "event" &&
-                message.event === "session.message" &&
-                (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
-                  "agent:main:main",
-              300,
-            ),
-          action: async () => {
-            const hiddenAppend = await appendAssistantMessageToSessionTranscript({
-              sessionKey: "agent:main:main",
-              text: "hidden after unsubscribe",
-              storePath,
-            });
-            expect(hiddenAppend.ok).toBe(true);
-          },
+        const postUnsubscribeEvent = Promise.race([
+          onceMessage(
+            ws,
+            (message) =>
+              message.type === "event" &&
+              message.event === "session.message" &&
+              (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
+                "agent:main:main",
+          ).then(() => "received"),
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 300)),
+        ]);
+        const hiddenAppend = await appendAssistantMessageToSessionTranscript({
+          sessionKey: "agent:main:main",
+          text: "hidden after unsubscribe",
+          storePath,
         });
-      } finally {
-        ws.close();
-      }
-    } finally {
-      await harness.close();
-    }
-  });
-
-  test("routes transcript-only updates to the freshest session owner when different sessionIds share a transcript path", async () => {
-    const storePath = await createSessionStoreFile();
-    const transcriptPath = path.join(path.dirname(storePath), "shared.jsonl");
-    await writeSessionStore({
-      entries: {
-        older: {
-          sessionId: "sess-old",
-          sessionFile: transcriptPath,
-          updatedAt: Date.now(),
-        },
-        newer: {
-          sessionId: "sess-new",
-          sessionFile: transcriptPath,
-          updatedAt: Date.now() + 10,
-        },
-      },
-      storePath,
-    });
-    await fs.writeFile(
-      transcriptPath,
-      [
-        JSON.stringify({ type: "session", version: 1, id: "sess-new" }),
-        JSON.stringify({
-          id: "msg-shared",
-          message: {
-            role: "assistant",
-            content: [{ type: "text", text: "shared transcript update" }],
-            timestamp: Date.now(),
-          },
-        }),
-      ].join("\n"),
-      "utf-8",
-    );
-
-    const harness = await createGatewaySuiteHarness();
-    try {
-      const ws = await harness.openWs();
-      try {
-        await connectOk(ws, { scopes: ["operator.read"] });
-        await rpcReq(ws, "sessions.subscribe");
-
-        const messageEventPromise = onceMessage(
-          ws,
-          (message) =>
-            message.type === "event" &&
-            message.event === "session.message" &&
-            (message.payload as { sessionKey?: string } | undefined)?.sessionKey ===
-              "agent:main:newer",
-        );
-
-        emitSessionTranscriptUpdate({
-          sessionFile: transcriptPath,
-          message: {
-            role: "assistant",
-            content: [{ type: "text", text: "shared transcript update" }],
-            timestamp: Date.now(),
-          },
-          messageId: "msg-shared",
-        });
-
-        const messageEvent = await messageEventPromise;
-        expect(messageEvent.payload).toMatchObject({
-          sessionKey: "agent:main:newer",
-          messageId: "msg-shared",
-          messageSeq: 1,
-        });
+        expect(hiddenAppend.ok).toBe(true);
+        await expect(postUnsubscribeEvent).resolves.toBe("timeout");
       } finally {
         ws.close();
       }

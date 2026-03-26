@@ -8,20 +8,29 @@ import { listGatewayMethods } from "./server-methods-list.js";
 import { coreGatewayHandlers } from "./server-methods.js";
 
 describe("method scope resolution", () => {
-  it.each([
-    ["sessions.resolve", ["operator.read"]],
-    ["config.schema.lookup", ["operator.read"]],
-    ["sessions.create", ["operator.write"]],
-    ["sessions.send", ["operator.write"]],
-    ["sessions.abort", ["operator.write"]],
-    ["sessions.messages.subscribe", ["operator.read"]],
-    ["sessions.messages.unsubscribe", ["operator.read"]],
-    ["poll", ["operator.write"]],
-    ["config.patch", ["operator.admin"]],
-    ["wizard.start", ["operator.admin"]],
-    ["update.run", ["operator.admin"]],
-  ])("resolves least-privilege scopes for %s", (method, expected) => {
-    expect(resolveLeastPrivilegeOperatorScopesForMethod(method)).toEqual(expected);
+  it("classifies session dashboard lifecycle methods with least privilege scopes", () => {
+    expect(resolveLeastPrivilegeOperatorScopesForMethod("sessions.resolve")).toEqual([
+      "operator.read",
+    ]);
+    expect(resolveLeastPrivilegeOperatorScopesForMethod("config.schema.lookup")).toEqual([
+      "operator.read",
+    ]);
+    expect(resolveLeastPrivilegeOperatorScopesForMethod("sessions.create")).toEqual([
+      "operator.write",
+    ]);
+    expect(resolveLeastPrivilegeOperatorScopesForMethod("sessions.send")).toEqual([
+      "operator.write",
+    ]);
+    expect(resolveLeastPrivilegeOperatorScopesForMethod("sessions.abort")).toEqual([
+      "operator.write",
+    ]);
+    expect(resolveLeastPrivilegeOperatorScopesForMethod("sessions.messages.subscribe")).toEqual([
+      "operator.read",
+    ]);
+    expect(resolveLeastPrivilegeOperatorScopesForMethod("sessions.messages.unsubscribe")).toEqual([
+      "operator.read",
+    ]);
+    expect(resolveLeastPrivilegeOperatorScopesForMethod("poll")).toEqual(["operator.write"]);
   });
 
   it("leaves node-only pending drain outside operator scopes", () => {

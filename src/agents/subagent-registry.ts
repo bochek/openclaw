@@ -1755,50 +1755,27 @@ export function listDescendantRunsForRequester(rootSessionKey: string): Subagent
 }
 
 export function getSubagentRunByChildSessionKey(childSessionKey: string): SubagentRunRecord | null {
-  const key = childSessionKey.trim();
-  if (!key) {
+  const runIds = findRunIdsByChildSessionKeyFromRuns(subagentRuns, childSessionKey);
+  if (runIds.length === 0) {
     return null;
   }
-
-  let latestActive: SubagentRunRecord | null = null;
-  let latestEnded: SubagentRunRecord | null = null;
-  for (const entry of getSubagentRunsSnapshotForRead(subagentRuns).values()) {
-    if (entry.childSessionKey !== key) {
-      continue;
-    }
-    if (typeof entry.endedAt !== "number") {
-      if (!latestActive || entry.createdAt > latestActive.createdAt) {
-        latestActive = entry;
-      }
-      continue;
-    }
-    if (!latestEnded || entry.createdAt > latestEnded.createdAt) {
-      latestEnded = entry;
-    }
-  }
-
-  return latestActive ?? latestEnded;
-}
-
-export function getLatestSubagentRunByChildSessionKey(
-  childSessionKey: string,
-): SubagentRunRecord | null {
-  const key = childSessionKey.trim();
-  if (!key) {
-    return null;
-  }
-
   let latest: SubagentRunRecord | null = null;
-  for (const entry of getSubagentRunsSnapshotForRead(subagentRuns).values()) {
-    if (entry.childSessionKey !== key) {
+  for (const runId of runIds) {
+    const entry = subagentRuns.get(runId);
+    if (!entry) {
       continue;
     }
     if (!latest || entry.createdAt > latest.createdAt) {
       latest = entry;
     }
   }
-
   return latest;
+}
+
+export function getLatestSubagentRunByChildSessionKey(
+  childSessionKey: string,
+): SubagentRunRecord | null {
+  return getSubagentRunByChildSessionKey(childSessionKey);
 }
 
 export function initSubagentRegistry() {

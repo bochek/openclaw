@@ -1,9 +1,11 @@
 import fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { SessionEntry } from "../../config/sessions/types.js";
-import type { FollowupRun, QueueSettings } from "./queue.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { loadSessionStore, saveSessionStore, type SessionEntry } from "../../config/sessions.js";
+import type { FollowupRun } from "./queue.js";
+import * as sessionRunAccounting from "./session-run-accounting.js";
+import { createMockTypingController } from "./test-helpers.js";
 
 const runEmbeddedPiAgentMock = vi.fn();
 const compactEmbeddedPiSessionMock = vi.fn();

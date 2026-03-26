@@ -11,10 +11,8 @@ import {
 } from "../agents/model-selection.js";
 import {
   getLatestSubagentRunByChildSessionKey,
-  getSubagentSessionRuntimeMs,
-  getSubagentSessionStartedAt,
+  getSubagentRunByChildSessionKey,
   listSubagentRunsForController,
-  resolveSubagentSessionStatus,
 } from "../agents/subagent-registry.js";
 import { type OpenClawConfig, loadConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
@@ -190,11 +188,39 @@ export function deriveSessionTitle(
   return undefined;
 }
 
+function resolveSessionRunStatus(
+  run: {
+    endedAt?: number;
+    outcome?: { status?: string };
+  } | null,
+): "running" | "done" | "failed" | "killed" | "timeout" | undefined {
+  if (!run) {
+    return undefined;
+  }
+  if (!run.endedAt) {
+    return "running";
+  }
+  const status = run.outcome?.status;
+  if (status === "error") {
+    return "failed";
+  }
+  if (status === "killed") {
+    return "killed";
+  }
+  if (status === "timeout") {
+    return "timeout";
+  }
+  return "done";
+}
+
 function resolveSessionRuntimeMs(
-  run: { startedAt?: number; endedAt?: number; accumulatedRuntimeMs?: number } | null,
+  run: { startedAt?: number; endedAt?: number } | null,
   now: number,
 ) {
-  return getSubagentSessionRuntimeMs(run, now);
+  if (!run?.startedAt) {
+    return undefined;
+  }
+  return Math.max(0, (run.endedAt ?? now) - run.startedAt);
 }
 
 function resolvePositiveNumber(value: number | null | undefined): number | undefined {
@@ -257,38 +283,20 @@ function resolveChildSessionKeys(
   controllerSessionKey: string,
   store: Record<string, SessionEntry>,
 ): string[] | undefined {
-  const childSessionKeys = new Set<string>();
-  for (const entry of listSubagentRunsForController(controllerSessionKey)) {
-    const childSessionKey = entry.childSessionKey?.trim();
-    if (!childSessionKey) {
-      continue;
-    }
-    const latest = getLatestSubagentRunByChildSessionKey(childSessionKey);
-    const latestControllerSessionKey =
-      latest?.controllerSessionKey?.trim() || latest?.requesterSessionKey?.trim();
-    if (latestControllerSessionKey !== controllerSessionKey) {
-      continue;
-    }
-    childSessionKeys.add(childSessionKey);
-  }
+  const childSessionKeys = new Set(
+    listSubagentRunsForController(controllerSessionKey)
+      .map((entry) => entry.childSessionKey)
+      .filter((value) => typeof value === "string" && value.trim().length > 0),
+  );
   for (const [key, entry] of Object.entries(store)) {
     if (!entry || key === controllerSessionKey) {
       continue;
     }
     const spawnedBy = entry.spawnedBy?.trim();
     const parentSessionKey = entry.parentSessionKey?.trim();
-    if (spawnedBy !== controllerSessionKey && parentSessionKey !== controllerSessionKey) {
-      continue;
+    if (spawnedBy === controllerSessionKey || parentSessionKey === controllerSessionKey) {
+      childSessionKeys.add(key);
     }
-    const latest = getLatestSubagentRunByChildSessionKey(key);
-    if (latest) {
-      const latestControllerSessionKey =
-        latest.controllerSessionKey?.trim() || latest.requesterSessionKey?.trim();
-      if (latestControllerSessionKey !== controllerSessionKey) {
-        continue;
-      }
-    }
-    childSessionKeys.add(key);
   }
   const childSessions = Array.from(childSessionKeys);
   return childSessions.length > 0 ? childSessions : undefined;
@@ -330,8 +338,6 @@ function resolveTranscriptUsageFallback(params: {
     cfg: params.cfg,
     provider: modelProvider,
     model,
-    // Gateway/session listing is read-only; don't start async model discovery.
-    allowAsyncLoad: false,
   });
   const estimatedCostUsd = resolveEstimatedSessionCostUsd({
     cfg: params.cfg,
@@ -1105,13 +1111,7 @@ export function buildGatewaySessionRow(params: {
   const deliveryFields = normalizeSessionDeliveryFields(entry);
   const parsedAgent = parseAgentSessionKey(key);
   const sessionAgentId = normalizeAgentId(parsedAgent?.agentId ?? resolveDefaultAgentId(cfg));
-  const subagentRun = getLatestSubagentRunByChildSessionKey(key);
-  const subagentOwner =
-    subagentRun?.controllerSessionKey?.trim() || subagentRun?.requesterSessionKey?.trim();
-  const subagentStatus = subagentRun ? resolveSubagentSessionStatus(subagentRun) : undefined;
-  const subagentStartedAt = subagentRun ? getSubagentSessionStartedAt(subagentRun) : undefined;
-  const subagentEndedAt = subagentRun ? subagentRun.endedAt : undefined;
-  const subagentRuntimeMs = subagentRun ? resolveSessionRuntimeMs(subagentRun, now) : undefined;
+  const subagentRun = getSubagentRunByChildSessionKey(key);
   const resolvedModel = resolveSessionModelIdentityRef(
     cfg,
     entry,
@@ -1161,8 +1161,6 @@ export function buildGatewaySessionRow(params: {
         cfg,
         provider: modelProvider,
         model,
-        // Gateway/session listing is read-only; don't start async model discovery.
-        allowAsyncLoad: false,
       }),
     );
 
@@ -1185,7 +1183,7 @@ export function buildGatewaySessionRow(params: {
 
   return {
     key,
-    spawnedBy: subagentOwner || entry?.spawnedBy,
+    spawnedBy: entry?.spawnedBy,
     kind: classifySessionKey(key, entry),
     label: entry?.label,
     displayName,
@@ -1211,11 +1209,11 @@ export function buildGatewaySessionRow(params: {
     totalTokens,
     totalTokensFresh,
     estimatedCostUsd,
-    status: subagentRun ? subagentStatus : entry?.status,
-    startedAt: subagentRun ? subagentStartedAt : entry?.startedAt,
-    endedAt: subagentRun ? subagentEndedAt : entry?.endedAt,
-    runtimeMs: subagentRun ? subagentRuntimeMs : entry?.runtimeMs,
-    parentSessionKey: subagentOwner || entry?.parentSessionKey,
+    status: resolveSessionRunStatus(subagentRun),
+    startedAt: subagentRun?.startedAt,
+    endedAt: subagentRun?.endedAt,
+    runtimeMs: resolveSessionRuntimeMs(subagentRun, now),
+    parentSessionKey: entry?.parentSessionKey,
     childSessions,
     responseUsage: entry?.responseUsage,
     modelProvider,

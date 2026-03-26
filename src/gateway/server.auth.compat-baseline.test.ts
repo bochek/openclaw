@@ -87,8 +87,22 @@ describe("gateway auth compatibility baseline", () => {
       }
     });
 
-    test("clears requested scopes for shared-token operator connects without device identity", async () => {
-      await expectSharedOperatorScopesCleared(port, { token: "secret" });
+    test("keeps requested scopes for shared-token operator connects without device identity", async () => {
+      const ws = await openWs(port);
+      try {
+        const res = await connectReq(ws, {
+          token: "secret",
+          scopes: ["operator.admin"],
+          device: null,
+        });
+        expect(res.ok).toBe(true);
+
+        const adminRes = await rpcReq(ws, "set-heartbeats", { enabled: false });
+        expect(adminRes.ok).toBe(true);
+        expect((adminRes.payload as { enabled?: boolean } | undefined)?.enabled).toBe(false);
+      } finally {
+        ws.close();
+      }
     });
 
     test("returns stable token-missing details for control ui without token", async () => {
@@ -239,8 +253,22 @@ describe("gateway auth compatibility baseline", () => {
       }
     });
 
-    test("clears requested scopes for shared-password operator connects without device identity", async () => {
-      await expectSharedOperatorScopesCleared(port, { password: "secret" });
+    test("keeps requested scopes for shared-password operator connects without device identity", async () => {
+      const ws = await openWs(port);
+      try {
+        const res = await connectReq(ws, {
+          password: "secret",
+          scopes: ["operator.admin"],
+          device: null,
+        });
+        expect(res.ok).toBe(true);
+
+        const adminRes = await rpcReq(ws, "set-heartbeats", { enabled: false });
+        expect(adminRes.ok).toBe(true);
+        expect((adminRes.payload as { enabled?: boolean } | undefined)?.enabled).toBe(false);
+      } finally {
+        ws.close();
+      }
     });
   });
 

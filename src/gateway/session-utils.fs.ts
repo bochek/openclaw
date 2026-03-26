@@ -1,5 +1,16 @@
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { deriveSessionTotalTokens, hasNonzeroUsage, normalizeUsage } from "../agents/usage.js";
+import {
+  formatSessionArchiveTimestamp,
+  parseSessionArchiveTimestamp,
+  type SessionArchiveReason,
+  resolveSessionFilePath,
+  resolveSessionTranscriptPath,
+  resolveSessionTranscriptPathInDir,
+} from "../config/sessions.js";
+import { resolveRequiredHomeDir } from "../infra/home-dir.js";
 import { jsonUtf8Bytes } from "../infra/json-utf8-bytes.js";
 import { hasInterSessionUserProvenance } from "../sessions/input-provenance.js";
 import { stripInlineDirectiveTagsForDisplay } from "../utils/directive-tags.js";

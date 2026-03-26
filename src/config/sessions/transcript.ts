@@ -181,13 +181,6 @@ export async function appendAssistantMessageToSessionTranscript(params: {
 
   await ensureSessionHeader({ sessionFile, sessionId: entry.sessionId });
 
-  const existingMessageId = params.idempotencyKey
-    ? await transcriptHasIdempotencyKey(sessionFile, params.idempotencyKey)
-    : undefined;
-  if (existingMessageId) {
-    return { ok: true, sessionFile, messageId: existingMessageId };
-  }
-
   const message = {
     role: "assistant" as const,
     content: [{ type: "text", text: mirrorText }],
@@ -210,43 +203,10 @@ export async function appendAssistantMessageToSessionTranscript(params: {
     },
     stopReason: "stop" as const,
     timestamp: Date.now(),
-    ...(params.idempotencyKey ? { idempotencyKey: params.idempotencyKey } : {}),
   } as Parameters<SessionManager["appendMessage"]>[0];
   const sessionManager = SessionManager.open(sessionFile);
   const messageId = sessionManager.appendMessage(message);
 
   emitSessionTranscriptUpdate({ sessionFile, sessionKey, message, messageId });
   return { ok: true, sessionFile, messageId };
-}
-
-async function transcriptHasIdempotencyKey(
-  transcriptPath: string,
-  idempotencyKey: string,
-): Promise<string | undefined> {
-  try {
-    const raw = await fs.promises.readFile(transcriptPath, "utf-8");
-    for (const line of raw.split(/\r?\n/)) {
-      if (!line.trim()) {
-        continue;
-      }
-      try {
-        const parsed = JSON.parse(line) as {
-          id?: unknown;
-          message?: { idempotencyKey?: unknown };
-        };
-        if (
-          parsed.message?.idempotencyKey === idempotencyKey &&
-          typeof parsed.id === "string" &&
-          parsed.id
-        ) {
-          return parsed.id;
-        }
-      } catch {
-        continue;
-      }
-    }
-  } catch {
-    return undefined;
-  }
-  return undefined;
 }

@@ -189,7 +189,7 @@ describe("gateway server chat", () => {
     };
   };
 
-  test("sessions.send accepts dashboard messages for existing sessions", async () => {
+  test("sessions.send forwards dashboard messages into existing sessions", async () => {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-sessions-send-"));
     testState.sessionStorePath = path.join(dir, "sessions.json");
     try {
@@ -202,6 +202,8 @@ describe("gateway server chat", () => {
         },
       });
 
+      const spy = vi.mocked(getReplyFromConfig);
+      const callsBefore = spy.mock.calls.length;
       const res = await rpcReq(ws, "sessions.send", {
         key: "agent:main:dashboard:test-send",
         message: "hello from dashboard",
@@ -210,33 +212,11 @@ describe("gateway server chat", () => {
       expect(res.ok).toBe(true);
       expect(res.payload?.runId).toBe("idem-sessions-send-1");
       expect(res.payload?.messageSeq).toBe(1);
-    } finally {
-      testState.sessionStorePath = undefined;
-      await fs.rm(dir, { recursive: true, force: true });
-    }
-  });
 
-  test("sessions.steer accepts dashboard follow-up messages for existing sessions", async () => {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-sessions-steer-"));
-    testState.sessionStorePath = path.join(dir, "sessions.json");
-    try {
-      await writeSessionStore({
-        entries: {
-          "agent:main:dashboard:test-steer": {
-            sessionId: "sess-dashboard-steer",
-            updatedAt: Date.now(),
-          },
-        },
-      });
-
-      const res = await rpcReq(ws, "sessions.steer", {
-        key: "agent:main:dashboard:test-steer",
-        message: "follow-up from dashboard",
-        idempotencyKey: "idem-sessions-steer-1",
-      });
-      expect(res.ok).toBe(true);
-      expect(res.payload?.runId).toBe("idem-sessions-steer-1");
-      expect(res.payload?.messageSeq).toBe(1);
+      await waitFor(() => spy.mock.calls.length > callsBefore, 1_000);
+      const ctx = spy.mock.calls.at(-1)?.[0] as { Body?: string; SessionKey?: string } | undefined;
+      expect(ctx?.Body).toContain("hello from dashboard");
+      expect(ctx?.SessionKey).toBe("agent:main:dashboard:test-send");
     } finally {
       testState.sessionStorePath = undefined;
       await fs.rm(dir, { recursive: true, force: true });
@@ -256,6 +236,32 @@ describe("gateway server chat", () => {
         },
       });
 
+      let aborted = false;
+      const spy = vi.mocked(getReplyFromConfig);
+      spy.mockImplementationOnce(async (_ctx, opts) => {
+        const signal = opts?.abortSignal;
+        await new Promise<void>((resolve) => {
+          if (!signal) {
+            resolve();
+            return;
+          }
+          if (signal.aborted) {
+            aborted = true;
+            resolve();
+            return;
+          }
+          signal.addEventListener(
+            "abort",
+            () => {
+              aborted = true;
+              resolve();
+            },
+            { once: true },
+          );
+        });
+        return undefined;
+      });
+
       const sendRes = await rpcReq(ws, "sessions.send", {
         key: "agent:main:dashboard:test-abort",
         message: "hello",
@@ -264,17 +270,24 @@ describe("gateway server chat", () => {
       });
       expect(sendRes.ok).toBe(true);
 
+      await waitFor(() => spy.mock.calls.length > 0, 1_000);
+
       const abortRes = await rpcReq(ws, "sessions.abort", {
         key: "agent:main:dashboard:test-abort",
         runId: "idem-sessions-abort-1",
       });
       expect(abortRes.ok).toBe(true);
-      expect(["aborted", "no-active-run"]).toContain(abortRes.payload?.status);
-      if (abortRes.payload?.status === "aborted") {
-        expect(abortRes.payload?.abortedRunId).toBe("idem-sessions-abort-1");
-      } else {
-        expect(abortRes.payload?.abortedRunId).toBeNull();
-      }
+      expect(abortRes.payload?.abortedRunId).toBe("idem-sessions-abort-1");
+      expect(abortRes.payload?.status).toBe("aborted");
+      await waitFor(() => aborted, 1_000);
+
+      const idleAbortRes = await rpcReq(ws, "sessions.abort", {
+        key: "agent:main:dashboard:test-abort",
+        runId: "idem-sessions-abort-1",
+      });
+      expect(idleAbortRes.ok).toBe(true);
+      expect(idleAbortRes.payload?.abortedRunId).toBeNull();
+      expect(idleAbortRes.payload?.status).toBe("no-active-run");
     } finally {
       testState.sessionStorePath = undefined;
       await fs.rm(dir, { recursive: true, force: true });

@@ -352,11 +352,10 @@ function deriveIdHint(params: {
   const unscoped = rawPackageName.includes("/")
     ? (rawPackageName.split("/").pop() ?? rawPackageName)
     : rawPackageName;
-  const canonicalPackageId = CANONICAL_PACKAGE_ID_ALIASES[unscoped] ?? unscoped;
   const normalizedPackageId =
-    canonicalPackageId.endsWith("-provider") && canonicalPackageId.length > "-provider".length
-      ? canonicalPackageId.slice(0, -"-provider".length)
-      : canonicalPackageId;
+    unscoped.endsWith("-provider") && unscoped.length > "-provider".length
+      ? unscoped.slice(0, -"-provider".length)
+      : unscoped;
 
   if (!params.hasMultipleExtensions) {
     return normalizedPackageId;

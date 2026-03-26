@@ -30,6 +30,7 @@ import {
   clearSubagentRunSteerRestart,
   countPendingDescendantRuns,
   getLatestSubagentRunByChildSessionKey,
+  getSubagentRunByChildSessionKey,
   getSubagentSessionRuntimeMs,
   getSubagentSessionStartedAt,
   listSubagentRunsForController,
@@ -312,15 +313,7 @@ export function buildSubagentList(params: {
     });
     const childSessions = Array.from(
       new Set(
-        listSubagentRunsForController(entry.childSessionKey)
-          .map((run) => run.childSessionKey?.trim())
-          .filter((childSessionKey): childSessionKey is string => Boolean(childSessionKey))
-          .filter((childSessionKey) => {
-            const latest = getLatestSubagentRunByChildSessionKey(childSessionKey);
-            const latestControllerSessionKey =
-              latest?.controllerSessionKey?.trim() || latest?.requesterSessionKey?.trim();
-            return latestControllerSessionKey === entry.childSessionKey;
-          }),
+        listSubagentRunsForController(entry.childSessionKey).map((run) => run.childSessionKey),
       ),
     );
     const runtime = formatDurationCompact(runtimeMs);
@@ -622,7 +615,7 @@ export async function killSubagentRunAdmin(params: { cfg: OpenClawConfig; sessio
   if (!targetSessionKey) {
     return { found: false as const, killed: false };
   }
-  const entry = getLatestSubagentRunByChildSessionKey(targetSessionKey);
+  const entry = getSubagentRunByChildSessionKey(targetSessionKey);
   if (!entry) {
     return { found: false as const, killed: false };
   }

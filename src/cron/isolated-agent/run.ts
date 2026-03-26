@@ -651,7 +651,7 @@ export async function runCronIsolatedAgentTurn(params: {
           cost: resolveModelCostConfig({
             provider: providerUsed,
             model: modelUsed,
-            config: cfgWithAgentDefaults,
+            config: cfg,
           }),
         }),
       );

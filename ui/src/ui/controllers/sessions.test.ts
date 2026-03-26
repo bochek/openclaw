@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deleteSessionsAndRefresh, subscribeSessions, type SessionsState } from "./sessions.ts";
+import {
+  deleteSession,
+  deleteSessionAndRefresh,
+  subscribeSessions,
+  type SessionsState,
+} from "./sessions.ts";
 
 type RequestFn = (method: string, params?: unknown) => Promise<unknown>;
 
@@ -42,8 +47,8 @@ describe("subscribeSessions", () => {
   });
 });
 
-describe("deleteSessionsAndRefresh", () => {
-  it("deletes multiple sessions and refreshes", async () => {
+describe("deleteSessionAndRefresh", () => {
+  it("refreshes sessions after a successful delete", async () => {
     const request = vi.fn(async (method: string) => {
       if (method === "sessions.delete") {
         return { ok: true };
