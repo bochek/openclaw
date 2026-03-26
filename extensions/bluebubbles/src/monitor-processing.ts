@@ -89,6 +89,26 @@ function trimOrUndefined(value?: string | null): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function shouldPreferLogicalSectionChunking(
+  ctx: {
+    BodyForCommands?: string;
+    CommandBody?: string;
+    RawBody?: string;
+    Body?: string;
+    CommandAuthorized?: boolean;
+  },
+  kind: "tool" | "block" | "final",
+): boolean {
+  if (kind === "tool") {
+    return true;
+  }
+  if (ctx.CommandAuthorized !== true) {
+    return false;
+  }
+  const body = (ctx.BodyForCommands ?? ctx.CommandBody ?? ctx.RawBody ?? ctx.Body ?? "").trim();
+  return body.startsWith("/") || body.startsWith("!");
+}
+
 function normalizeSnippet(value: string): string {
   return stripMarkdown(value).replace(/\s+/g, " ").trim().toLowerCase();
 }
@@ -1339,8 +1359,14 @@ export async function processMessage(
           const text = sanitizeReplyDirectiveText(
             core.channel.text.convertMarkdownTables(payload.text ?? "", tableMode),
           );
-          const chunks =
-            chunkMode === "newline"
+          const useLogicalSectionChunking =
+            chunkMode === "newline" && shouldPreferLogicalSectionChunking(ctxPayload, info.kind);
+          const chunks = useLogicalSectionChunking
+            ? resolveTextChunksWithFallback(
+                text,
+                core.channel.text.chunkMarkdownTextWithMode(text, textLimit, "newline"),
+              )
+            : chunkMode === "newline"
               ? resolveTextChunksWithFallback(
                   text,
                   core.channel.text.chunkTextWithMode(text, textLimit, chunkMode),

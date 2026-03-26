@@ -1145,6 +1145,174 @@ describe("BlueBubbles webhook monitor", () => {
     });
   });
 
+  describe("logical section chunking", () => {
+    it("keeps slash command replies grouped by blank-line sections", async () => {
+      const { sendMessageBlueBubbles } = await import("./send.js");
+      const sendMock = vi.mocked(sendMessageBlueBubbles);
+      sendMock.mockClear();
+      mockResolveCommandAuthorizedFromAuthorizers.mockReturnValue(true);
+      mockChunkTextWithMode.mockImplementation((text: string) =>
+        text
+          .split("\n")
+          .map((chunk) => chunk.trim())
+          .filter(Boolean),
+      );
+      mockChunkMarkdownTextWithMode.mockImplementation((text: string) =>
+        text
+          .split(/\n\s*\n/)
+          .map((chunk) => chunk.trim())
+          .filter(Boolean),
+      );
+
+      mockDispatchReplyWithBufferedBlockDispatcher.mockImplementationOnce(async (params) => {
+        params.ctx.CommandAuthorized = true;
+        params.ctx.CommandBody = "/subagents";
+        params.ctx.BodyForCommands = "/subagents";
+        await params.dispatcherOptions.deliver(
+          {
+            text: [
+              "active subagents:",
+              "1. alpha",
+              "2. beta",
+              "",
+              "recent subagents:",
+              "1. gamma",
+              "2. delta",
+            ].join("\n"),
+          },
+          { kind: "final" },
+        );
+        return EMPTY_DISPATCH_RESULT;
+      });
+
+      setupWebhookTarget({
+        account: createMockAccount({ chunkMode: "newline" }),
+      });
+
+      await dispatchWebhookPayload(
+        createTimestampedNewMessagePayloadForTest({
+          text: "/subagents",
+          chatGuid: "iMessage;-;+15551234567",
+        }),
+      );
+
+      expect(sendMock).toHaveBeenCalledTimes(2);
+      expect(sendMock.mock.calls.map((call) => call[1])).toEqual([
+        "active subagents:\n1. alpha\n2. beta",
+        "recent subagents:\n1. gamma\n2. delta",
+      ]);
+    });
+
+    it("leaves normal assistant replies on the configured newline chunker", async () => {
+      const { sendMessageBlueBubbles } = await import("./send.js");
+      const sendMock = vi.mocked(sendMessageBlueBubbles);
+      sendMock.mockClear();
+      mockChunkTextWithMode.mockImplementation((text: string) =>
+        text
+          .split("\n")
+          .map((chunk) => chunk.trim())
+          .filter(Boolean),
+      );
+      mockChunkMarkdownTextWithMode.mockImplementation((text: string) =>
+        text
+          .split(/\n\s*\n/)
+          .map((chunk) => chunk.trim())
+          .filter(Boolean),
+      );
+
+      mockDispatchReplyWithBufferedBlockDispatcher.mockImplementationOnce(async (params) => {
+        await params.dispatcherOptions.deliver(
+          {
+            text: [
+              "active subagents:",
+              "1. alpha",
+              "2. beta",
+              "",
+              "recent subagents:",
+              "1. gamma",
+              "2. delta",
+            ].join("\n"),
+          },
+          { kind: "final" },
+        );
+        return EMPTY_DISPATCH_RESULT;
+      });
+
+      setupWebhookTarget({
+        account: createMockAccount({ chunkMode: "newline" }),
+      });
+
+      await dispatchWebhookPayload(
+        createTimestampedNewMessagePayloadForTest({
+          text: "hello there",
+          chatGuid: "iMessage;-;+15551234567",
+        }),
+      );
+
+      expect(sendMock.mock.calls.map((call) => call[1])).toEqual([
+        "active subagents:",
+        "1. alpha",
+        "2. beta",
+        "recent subagents:",
+        "1. gamma",
+        "2. delta",
+      ]);
+    });
+
+    it("keeps tool summaries grouped by blank-line sections", async () => {
+      const { sendMessageBlueBubbles } = await import("./send.js");
+      const sendMock = vi.mocked(sendMessageBlueBubbles);
+      sendMock.mockClear();
+      mockChunkTextWithMode.mockImplementation((text: string) =>
+        text
+          .split("\n")
+          .map((chunk) => chunk.trim())
+          .filter(Boolean),
+      );
+      mockChunkMarkdownTextWithMode.mockImplementation((text: string) =>
+        text
+          .split(/\n\s*\n/)
+          .map((chunk) => chunk.trim())
+          .filter(Boolean),
+      );
+
+      mockDispatchReplyWithBufferedBlockDispatcher.mockImplementationOnce(async (params) => {
+        await params.dispatcherOptions.deliver(
+          {
+            text: [
+              "active subagents:",
+              "1. alpha",
+              "2. beta",
+              "",
+              "recent subagents:",
+              "1. gamma",
+              "2. delta",
+            ].join("\n"),
+          },
+          { kind: "tool" },
+        );
+        return EMPTY_DISPATCH_RESULT;
+      });
+
+      setupWebhookTarget({
+        account: createMockAccount({ chunkMode: "newline" }),
+      });
+
+      await dispatchWebhookPayload(
+        createTimestampedNewMessagePayloadForTest({
+          text: "status pls",
+          chatGuid: "iMessage;-;+15551234567",
+        }),
+      );
+
+      expect(sendMock).toHaveBeenCalledTimes(2);
+      expect(sendMock.mock.calls.map((call) => call[1])).toEqual([
+        "active subagents:\n1. alpha\n2. beta",
+        "recent subagents:\n1. gamma\n2. delta",
+      ]);
+    });
+  });
+
   describe("reaction events", () => {
     it("drops DM reactions when dmPolicy=pairing and allowFrom is empty", async () => {
       mockEnqueueSystemEvent.mockClear();
