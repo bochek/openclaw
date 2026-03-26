@@ -12,7 +12,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
-  bun-manifest:
+  preflight:
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 20
     outputs:
@@ -43,11 +43,11 @@ jobs:
           OPENCLAW_CI_RUN_SKILLS_PYTHON: "false"
           OPENCLAW_CI_HAS_CHANGED_EXTENSIONS: "false"
           OPENCLAW_CI_CHANGED_EXTENSIONS_MATRIX: '{"include":[]}'
-        run: node scripts/ci-write-manifest-outputs.mjs
+        run: node scripts/ci-write-manifest-outputs.mjs --workflow ci-bun
 
   build-bun-artifacts:
-    needs: [bun-manifest]
-    if: needs.bun-manifest.outputs.run_bun_checks == 'true'
+    needs: [preflight]
+    if: needs.preflight.outputs.run_bun_checks == 'true'
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 20
     steps:
@@ -73,13 +73,13 @@ jobs:
 
   bun-checks:
     name: ${{ matrix.check_name }}
-    needs: [bun-manifest, build-bun-artifacts]
-    if: needs.bun-manifest.outputs.run_bun_checks == 'true'
+    needs: [preflight, build-bun-artifacts]
+    if: needs.preflight.outputs.run_bun_checks == 'true'
     runs-on: blacksmith-16vcpu-ubuntu-2404
     timeout-minutes: 20
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.bun-manifest.outputs.bun_checks_matrix) }}
+      matrix: ${{ fromJson(needs.preflight.outputs.bun_checks_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
