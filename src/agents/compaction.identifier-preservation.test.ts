@@ -13,6 +13,7 @@ vi.mock("@mariozechner/pi-coding-agent", async (importOriginal) => {
 
 const mockGenerateSummary = vi.mocked(piCodingAgent.generateSummary);
 type SummarizeInStagesInput = Parameters<typeof import("./compaction.js").summarizeInStages>[0];
+const SUMMARY_INSTRUCTIONS_INDEX = 5;
 
 let buildCompactionSummarizationInstructions: typeof import("./compaction.js").buildCompactionSummarizationInstructions;
 let summarizeInStages: typeof import("./compaction.js").summarizeInStages;
@@ -65,7 +66,7 @@ describe("compaction identifier-preservation instructions", () => {
   }
 
   function firstSummaryInstructions() {
-    return mockGenerateSummary.mock.calls[0]?.[6];
+    return mockGenerateSummary.mock.calls[0]?.[SUMMARY_INSTRUCTIONS_INDEX];
   }
 
   it("injects identifier-preservation guidance even without custom instructions", async () => {
@@ -101,7 +102,9 @@ describe("compaction identifier-preservation instructions", () => {
 
     expect(mockGenerateSummary.mock.calls.length).toBeGreaterThan(1);
     for (const call of mockGenerateSummary.mock.calls) {
-      expect(call[6]).toContain("Preserve all opaque identifiers exactly as written");
+      expect(call[SUMMARY_INSTRUCTIONS_INDEX]).toContain(
+        "Preserve all opaque identifiers exactly as written",
+      );
     }
   });
 
@@ -114,7 +117,7 @@ describe("compaction identifier-preservation instructions", () => {
     });
 
     const mergedCall = mockGenerateSummary.mock.calls.at(-1);
-    const instructions = mergedCall?.[6] ?? "";
+    const instructions = mergedCall?.[SUMMARY_INSTRUCTIONS_INDEX] ?? "";
     expect(instructions).toContain("Merge these partial summaries into a single cohesive summary.");
     expect(instructions).toContain("Prioritize customer-visible regressions.");
     expect((instructions.match(/Additional focus:/g) ?? []).length).toBe(1);
