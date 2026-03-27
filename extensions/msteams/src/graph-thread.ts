@@ -14,6 +14,23 @@ export type GraphThreadMessage = {
 const teamGroupIdCache = new Map<string, { groupId: string; expiresAt: number }>();
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+type GraphPagedResponse<T> = GraphResponse<T> & {
+  "@odata.nextLink"?: string;
+};
+
+function looksLikeGraphTeamId(value: string): boolean {
+  return /^[0-9a-fA-F-]{16,}$/.test(value.trim());
+}
+
+function graphPathFromNextLink(nextLink: string): string | null {
+  try {
+    const url = new URL(nextLink);
+    return `${url.pathname}${url.search}`;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Strip HTML tags from Teams message content, preserving @mention display names.
  * Teams wraps mentions in <at>Name</at> tags.
@@ -48,28 +65,65 @@ export async function resolveTeamGroupId(
     return cached.groupId;
   }
 
-  // The team ID in channelData is typically the group ID itself for standard teams.
-  // Validate by fetching /teams/{id} and returning the confirmed id.
-  // Requires Team.ReadBasic.All permission; fall back to raw ID if missing.
+  // First try the cheap path: some tenants already expose a Graph-usable team
+  // id in channelData.team.id, so `/teams/{id}` succeeds directly.
   try {
     const path = `/teams/${encodeURIComponent(conversationTeamId)}?$select=id`;
     const team = await fetchGraphJson<{ id?: string }>({ token, path });
     const groupId = team.id ?? conversationTeamId;
-
-    // Only cache when the Graph lookup succeeds — caching a fallback raw ID
-    // can cause silent failures for the entire TTL if the ID is not a valid
-    // Graph team GUID (e.g. Bot Framework conversation key).
     teamGroupIdCache.set(conversationTeamId, {
       groupId,
       expiresAt: Date.now() + CACHE_TTL_MS,
     });
-
     return groupId;
   } catch {
-    // Fallback to raw team ID without caching so subsequent calls retry the
-    // Graph lookup instead of using a potentially invalid cached value.
-    return conversationTeamId;
+    // If the runtime id already looks like a Graph team id, preserve the old
+    // behavior and let downstream channel/message APIs attempt the real call
+    // without forcing extra directory scopes up front.
+    if (looksLikeGraphTeamId(conversationTeamId)) {
+      return conversationTeamId;
+    }
   }
+
+  // Bot Framework commonly gives us the runtime team key (matching the primary
+  // channel id) instead of the Graph group id. Recover the Graph team id by
+  // scanning teams until one reports this primary channel id.
+  try {
+    let path = `/groups?$filter=${encodeURIComponent("resourceProvisioningOptions/Any(x:x eq 'Team')")}&$select=id&$top=999`;
+    while (path) {
+      const teams = await fetchGraphJson<GraphPagedResponse<{ id?: string }>>({ token, path });
+      for (const candidate of teams.value ?? []) {
+        const graphTeamId = candidate.id?.trim();
+        if (!graphTeamId) {
+          continue;
+        }
+        try {
+          const primary = await fetchGraphJson<{ id?: string }>({
+            token,
+            path: `/teams/${encodeURIComponent(graphTeamId)}/primaryChannel?$select=id`,
+          });
+          const primaryId = primary.id?.trim();
+          if (!primaryId || primaryId !== conversationTeamId) {
+            continue;
+          }
+          teamGroupIdCache.set(conversationTeamId, {
+            groupId: graphTeamId,
+            expiresAt: Date.now() + CACHE_TTL_MS,
+          });
+          return graphTeamId;
+        } catch {
+          continue;
+        }
+      }
+      path = teams["@odata.nextLink"]
+        ? (graphPathFromNextLink(teams["@odata.nextLink"]) ?? "")
+        : "";
+    }
+  } catch {
+    // Ignore and fail closed below.
+  }
+
+  throw new Error(`Unable to resolve Graph team id for Teams team key ${conversationTeamId}`);
 }
 
 /**
