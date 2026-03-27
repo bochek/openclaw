@@ -1,6 +1,10 @@
 import { defineSingleProviderPluginEntry } from "openclaw/plugin-sdk/provider-entry";
 import { createToolStreamWrapper } from "openclaw/plugin-sdk/provider-stream";
 import { applyXaiModelCompat, buildXaiProvider, normalizeXaiModelId } from "./api.js";
+import {
+  readConfiguredSecretString,
+  resolveProviderWebSearchPluginConfig,
+} from "openclaw/plugin-sdk/provider-web-search";
 import { applyXaiConfig, XAI_DEFAULT_MODEL_REF } from "./onboard.js";
 import { isModernXaiModel, resolveXaiForwardCompatModel } from "./provider-models.js";
 import {
@@ -11,6 +15,16 @@ import {
 import { createXaiWebSearchProvider } from "./web-search.js";
 
 const PROVIDER_ID = "xai";
+
+function resolveXaiProviderFallbackApiKey(config: unknown): string | undefined {
+  if (!config || typeof config !== "object") {
+    return undefined;
+  }
+  return readConfiguredSecretString(
+    resolveProviderWebSearchPluginConfig(config as Record<string, unknown>, PROVIDER_ID)?.apiKey,
+    "plugins.entries.xai.config.webSearch.apiKey",
+  );
+}
 
 export default defineSingleProviderPluginEntry({
   id: "xai",
@@ -55,6 +69,17 @@ export default defineSingleProviderPluginEntry({
       }
       streamFn = createXaiToolCallArgumentDecodingWrapper(streamFn);
       return createToolStreamWrapper(streamFn, ctx.extraParams?.tool_stream !== false);
+    },
+    resolveSyntheticAuth: ({ config }) => {
+      const apiKey = resolveXaiProviderFallbackApiKey(config);
+      if (!apiKey) {
+        return undefined;
+      }
+      return {
+        apiKey,
+        source: "plugins.entries.xai.config.webSearch.apiKey",
+        mode: "api-key" as const,
+      };
     },
     normalizeResolvedModel: ({ model }) => applyXaiModelCompat(model),
     normalizeModelId: ({ modelId }) => normalizeXaiModelId(modelId),
