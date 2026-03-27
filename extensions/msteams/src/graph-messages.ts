@@ -67,10 +67,6 @@ function stripTargetPrefix(raw: string): string {
   return trimmed;
 }
 
-function looksLikeGraphTeamId(value: string): boolean {
-  return /^[0-9a-fA-F-]{16,}$/.test(value.trim());
-}
-
 async function resolveGraphConversationTarget(params: {
   to: string;
   token: string;
