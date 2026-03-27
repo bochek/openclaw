@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { buildOpenAICodexProviderPlugin } from "../../../extensions/openai/openai-codex-provider.js";
 import { createProviderUsageFetch, makeResponse } from "../../test-utils/provider-usage-fetch.js";
 import type { ProviderPlugin, ProviderRuntimeModel } from "../types.js";
 import { requireProviderContractProvider as requireBundledProviderContractProvider } from "./registry.js";
@@ -28,7 +29,7 @@ vi.mock("@mariozechner/pi-ai/oauth", async () => {
   };
 });
 
-vi.mock("../../../extensions/openai/src/openai-codex-provider.runtime.js", () => ({
+vi.mock("../../../extensions/openai/openai-codex-provider.runtime.js", () => ({
   getOAuthApiKey: getOAuthApiKeyMock,
 }));
 
@@ -520,7 +521,11 @@ describe("provider runtime contract", () => {
 
   describe("openai-codex", () => {
     it("owns refresh fallback for accountId extraction failures", async () => {
-      const provider = requireProviderContractProvider("openai-codex");
+      // The bundled plugin contract loader uses Jiti, which bypasses this file's
+      // Vitest mock for the runtime wrapper module. Exercise the provider module
+      // directly here so the fallback behavior stays covered without hitting the
+      // real OAuth refresh path.
+      const provider = buildOpenAICodexProviderPlugin();
       const credential = {
         type: "oauth" as const,
         provider: "openai-codex",
