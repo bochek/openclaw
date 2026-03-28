@@ -385,7 +385,7 @@ async function runMatrixConfigure(params: {
     allowPrivateNetwork,
   });
 
-  let accessToken = existing.accessToken ?? "";
+  let accessToken = typeof existing.accessToken === "string" ? existing.accessToken : "";
   let password = typeof existing.password === "string" ? existing.password : "";
   let userId = existing.userId ?? "";
 

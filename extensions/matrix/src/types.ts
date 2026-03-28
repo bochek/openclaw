@@ -152,5 +152,12 @@ export type CoreConfig = {
     ackReaction?: string;
     ackReactionScope?: "group-mentions" | "group-all" | "direct" | "all" | "none" | "off";
   };
+  secrets?: {
+    defaults?: {
+      env?: string;
+      file?: string;
+      exec?: string;
+    };
+  };
   [key: string]: unknown;
 };
