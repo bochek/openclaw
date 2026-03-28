@@ -1,4 +1,4 @@
-import { fetchGraphJson, type GraphResponse } from "./graph.js";
+import { fetchGraphJson, postGraphJson, type GraphResponse } from "./graph.js";
 
 export type GraphThreadMessage = {
   id?: string;
@@ -18,6 +18,16 @@ type GraphPagedResponse<T> = GraphResponse<T> & {
   "@odata.nextLink"?: string;
 };
 
+type GraphBatchResponse<T> = {
+  responses?: Array<{
+    id?: string;
+    status?: number;
+    body?: T;
+  }>;
+};
+
+const GRAPH_BATCH_MAX_REQUESTS = 20;
+
 // Graph team ids are Azure AD group ids. We keep this check intentionally broad
 // because some tenants surface uppercase GUIDs and Graph ids are the only raw
 // team ids we can safely reuse without another directory lookup.
@@ -36,6 +46,45 @@ function graphPathFromNextLink(nextLink: string): string | null {
   } catch {
     return null;
   }
+}
+
+function chunkArray<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    chunks.push(values.slice(index, index + size));
+  }
+  return chunks;
+}
+
+async function findGraphTeamIdByPrimaryChannel(params: {
+  token: string;
+  conversationTeamId: string;
+  candidateTeamIds: string[];
+}): Promise<string | null> {
+  for (const teamIds of chunkArray(params.candidateTeamIds, GRAPH_BATCH_MAX_REQUESTS)) {
+    const response = await postGraphJson<GraphBatchResponse<{ id?: string }>>({
+      token: params.token,
+      path: "/$batch",
+      body: {
+        requests: teamIds.map((graphTeamId, index) => ({
+          id: String(index),
+          method: "GET",
+          url: `/teams/${encodeURIComponent(graphTeamId)}/primaryChannel?$select=id`,
+        })),
+      },
+    });
+    const responses = new Map(
+      (response.responses ?? []).map((entry) => [entry.id ?? "", entry] as const),
+    );
+    for (const [index, graphTeamId] of teamIds.entries()) {
+      const candidate = responses.get(String(index));
+      const primaryId = candidate?.status === 200 ? candidate.body?.id?.trim() : undefined;
+      if (primaryId && primaryId === params.conversationTeamId) {
+        return graphTeamId;
+      }
+    }
+  }
+  return null;
 }
 
 /**
@@ -104,28 +153,19 @@ export async function resolveTeamGroupId(
     let path = `/groups?$filter=${encodeURIComponent("resourceProvisioningOptions/Any(x:x eq 'Team')")}&$select=id&$top=999`;
     while (path) {
       const teams = await fetchGraphJson<GraphPagedResponse<{ id?: string }>>({ token, path });
-      for (const candidate of teams.value ?? []) {
-        const graphTeamId = candidate.id?.trim();
-        if (!graphTeamId) {
-          continue;
-        }
-        try {
-          const primary = await fetchGraphJson<{ id?: string }>({
-            token,
-            path: `/teams/${encodeURIComponent(graphTeamId)}/primaryChannel?$select=id`,
-          });
-          const primaryId = primary.id?.trim();
-          if (!primaryId || primaryId !== conversationTeamId) {
-            continue;
-          }
-          teamGroupIdCache.set(conversationTeamId, {
-            groupId: graphTeamId,
-            expiresAt: Date.now() + CACHE_TTL_MS,
-          });
-          return graphTeamId;
-        } catch {
-          continue;
-        }
+      const graphTeamId = await findGraphTeamIdByPrimaryChannel({
+        token,
+        conversationTeamId,
+        candidateTeamIds: (teams.value ?? [])
+          .map((candidate) => candidate.id?.trim())
+          .filter((value): value is string => Boolean(value)),
+      });
+      if (graphTeamId) {
+        teamGroupIdCache.set(conversationTeamId, {
+          groupId: graphTeamId,
+          expiresAt: Date.now() + CACHE_TTL_MS,
+        });
+        return graphTeamId;
       }
       path = teams["@odata.nextLink"]
         ? (graphPathFromNextLink(teams["@odata.nextLink"]) ?? "")

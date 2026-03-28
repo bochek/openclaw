@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockState = vi.hoisted(() => ({
   fetchGraphJson: vi.fn(),
+  postGraphJson: vi.fn(),
 }));
 
 type GraphThreadModule = typeof import("./graph-thread.js");
@@ -10,6 +11,7 @@ async function loadGraphThreadModule(): Promise<GraphThreadModule> {
   vi.resetModules();
   vi.doMock("./graph.js", () => ({
     fetchGraphJson: mockState.fetchGraphJson,
+    postGraphJson: mockState.postGraphJson,
   }));
   return await import("./graph-thread.js");
 }
@@ -99,18 +101,59 @@ describe("resolveTeamGroupId", () => {
         "@odata.nextLink":
           "https://graph.microsoft.com/v1.0/groups?$skiptoken=page-2&$select=id&$top=999",
       })
-      .mockRejectedValueOnce(new Error("no match on page 1"))
       .mockResolvedValueOnce({
         value: [{ id: "group-guid-2" }],
+      });
+    mockState.postGraphJson
+      .mockResolvedValueOnce({
+        responses: [{ id: "0", status: 200, body: { id: "different-primary" } }],
       })
-      .mockResolvedValueOnce({ id: "team-runtime-key" });
+      .mockResolvedValueOnce({
+        responses: [{ id: "0", status: 200, body: { id: "team-runtime-key" } }],
+      });
 
     const result = await module.resolveTeamGroupId("tok", "team-runtime-key");
 
     expect(result).toBe("group-guid-2");
-    expect(mockState.fetchGraphJson).toHaveBeenNthCalledWith(4, {
+    expect(mockState.fetchGraphJson).toHaveBeenNthCalledWith(3, {
       token: "tok",
       path: "/groups?$skiptoken=page-2&$select=id&$top=999",
+    });
+  });
+
+  it("batches primary-channel lookups instead of fetching each team sequentially", async () => {
+    const module = await loadGraphThreadModule();
+    module._teamGroupIdCacheForTest.clear();
+    mockState.fetchGraphJson.mockRejectedValueOnce(new Error("not found")).mockResolvedValueOnce({
+      value: [{ id: "group-guid-1" }, { id: "group-guid-2" }],
+    });
+    mockState.postGraphJson.mockResolvedValueOnce({
+      responses: [
+        { id: "0", status: 200, body: { id: "different-primary" } },
+        { id: "1", status: 200, body: { id: "team-runtime-key" } },
+      ],
+    });
+
+    const result = await module.resolveTeamGroupId("tok", "team-runtime-key");
+
+    expect(result).toBe("group-guid-2");
+    expect(mockState.postGraphJson).toHaveBeenCalledWith({
+      token: "tok",
+      path: "/$batch",
+      body: {
+        requests: [
+          {
+            id: "0",
+            method: "GET",
+            url: "/teams/group-guid-1/primaryChannel?$select=id",
+          },
+          {
+            id: "1",
+            method: "GET",
+            url: "/teams/group-guid-2/primaryChannel?$select=id",
+          },
+        ],
+      },
     });
   });
 });
