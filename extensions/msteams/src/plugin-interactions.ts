@@ -176,7 +176,18 @@ export async function handleMSTeamsPluginInteraction(params: {
       await sendTextOrCard(context, { ...reply, replyToId: messageId });
     },
     followUp: async (reply) => {
-      await sendTextOrCard(context, { ...reply, replyToId: messageId });
+      if (!messageId) {
+        await sendTextOrCard(context, reply);
+        return;
+      }
+      try {
+        await sendTextOrCard(context, { ...reply, replyToId: messageId });
+      } catch {
+        // Some fallback paths reach followUp because the source message could
+        // not be updated anymore (for example it was deleted). Retry without a
+        // replyToId so the user still sees the approval/result message.
+        await sendTextOrCard(context, reply);
+      }
     },
     editMessage: async (reply) => {
       if (!messageId) {

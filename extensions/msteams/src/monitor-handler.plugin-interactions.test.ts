@@ -317,4 +317,56 @@ describe("msteams plugin interactions", () => {
       }),
     );
   });
+
+  it("retries Teams follow-ups without replyToId when the source message cannot be threaded", async () => {
+    conversationRuntimeState.parsePluginBindingApprovalCustomId.mockReturnValue({
+      approvalId: "approval-1",
+      decision: "allow-once",
+    });
+    conversationRuntimeState.buildPluginBindingResolvedText.mockReturnValue(
+      "Allowed Codex to bind this conversation once.",
+    );
+    const handler = registerMSTeamsHandlers(
+      createActivityHandler(),
+      createDeps({} as OpenClawConfig),
+    ) as MSTeamsActivityHandler & {
+      run: NonNullable<MSTeamsActivityHandler["run"]>;
+    };
+    const context = createTeamsInvokeContext({
+      value: {
+        openclawInteractive: {
+          version: 1,
+          data: "pluginbind:approval-1:o",
+        },
+      },
+    });
+    (context.updateActivity as unknown as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new Error("message missing"),
+    );
+    (context.sendActivity as unknown as ReturnType<typeof vi.fn>)
+      .mockRejectedValueOnce(new Error("reply target missing"))
+      .mockResolvedValueOnce({ id: "sent-2" });
+
+    await handler.run(context);
+
+    expect(context.sendActivity as unknown as ReturnType<typeof vi.fn>).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        type: "message",
+        text: "Allowed Codex to bind this conversation once.",
+        replyToId: "source-msg-1",
+      }),
+    );
+    expect(context.sendActivity as unknown as ReturnType<typeof vi.fn>).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        type: "message",
+        text: "Allowed Codex to bind this conversation once.",
+      }),
+    );
+    expect(context.sendActivity as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ replyToId: "source-msg-1" }),
+    );
+  });
 });
