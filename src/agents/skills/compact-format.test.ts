@@ -19,7 +19,7 @@ function makeSkill(name: string, desc = "A skill", filePath = `/skills/${name}/S
     sourceInfo: { source: "workspace" },
     disableModelInvocation: false,
   };
-  return skill as Skill;
+  return skill as unknown as Skill;
 }
 
 function makeEntry(skill: Skill): SkillEntry {

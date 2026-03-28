@@ -82,7 +82,7 @@ function createFixtureSkill(params: {
     sourceInfo: { source: params.source },
     disableModelInvocation: false,
   };
-  return skill as SkillEntry["skill"];
+  return skill as unknown as SkillEntry["skill"];
 }
 
 function buildDownloadSpec(params: {
