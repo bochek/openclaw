@@ -156,24 +156,6 @@ export function removePluginFromConfig(
     slots = undefined;
   }
 
-  // Remove channel config owned by this installed plugin.
-  // Built-in channels have no install record, so keep their config untouched.
-  const hasInstallRecord = Object.hasOwn(cfg.plugins?.installs ?? {}, pluginId);
-  let channels = cfg.channels as Record<string, unknown> | undefined;
-  if (hasInstallRecord && channels) {
-    for (const key of resolveUninstallChannelConfigKeys(pluginId, opts)) {
-      if (!Object.hasOwn(channels, key)) {
-        continue;
-      }
-      const { [key]: _removed, ...rest } = channels;
-      channels = Object.keys(rest).length > 0 ? rest : undefined;
-      actions.channelConfig = true;
-      if (!channels) {
-        break;
-      }
-    }
-  }
-
   const newPlugins = {
     ...pluginsConfig,
     entries,
@@ -199,6 +181,24 @@ export function removePluginFromConfig(
   }
   if (cleanedPlugins.slots === undefined) {
     delete cleanedPlugins.slots;
+  }
+
+  // Remove channel config owned by this installed plugin.
+  // Built-in channels have no install record, so keep their config untouched.
+  const hasInstallRecord = Object.hasOwn(cfg.plugins?.installs ?? {}, pluginId);
+  let channels = cfg.channels as Record<string, unknown> | undefined;
+  if (hasInstallRecord && channels) {
+    for (const key of resolveUninstallChannelConfigKeys(pluginId, opts)) {
+      if (!Object.hasOwn(channels, key)) {
+        continue;
+      }
+      const { [key]: _removed, ...rest } = channels;
+      channels = Object.keys(rest).length > 0 ? rest : undefined;
+      actions.channelConfig = true;
+      if (!channels) {
+        break;
+      }
+    }
   }
 
   const config: OpenClawConfig = {

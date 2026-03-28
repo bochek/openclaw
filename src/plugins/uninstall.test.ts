@@ -366,6 +366,7 @@ describe("removePluginFromConfig", () => {
 
     const { config: result, actions } = removePluginFromConfig(config, "telegram");
 
+    // Built-in channels have no install record, so channel config must be preserved.
     expect((result.channels as Record<string, unknown>)?.telegram).toEqual({ enabled: true });
     expect(actions.channelConfig).toBe(false);
   });
@@ -422,6 +423,7 @@ describe("removePluginFromConfig", () => {
 
     const { config: result, actions } = removePluginFromConfig(config, "discord");
 
+    // No install record means this is a built-in channel; config must stay.
     expect((result.channels as Record<string, unknown>)?.discord).toEqual({
       enabled: true,
       token: "abc",
@@ -457,7 +459,7 @@ describe("removePluginFromConfig", () => {
     expect(actions.channelConfig).toBe(true);
   });
 
-  it("preserves shared channel keys", () => {
+  it("preserves shared channel keys (defaults, modelByChannel)", () => {
     const config: OpenClawConfig = {
       plugins: {
         entries: {
@@ -507,7 +509,7 @@ describe("removePluginFromConfig", () => {
     expect(actions.channelConfig).toBe(false);
   });
 
-  it("skips channel cleanup when channelIds is empty array", () => {
+  it("skips channel cleanup when channelIds is empty array (non-channel plugin)", () => {
     const config: OpenClawConfig = {
       plugins: {
         entries: {
@@ -526,6 +528,7 @@ describe("removePluginFromConfig", () => {
       channelIds: [],
     });
 
+    // Empty channelIds means the plugin declares no channels, so channel config must stay.
     expect((result.channels as Record<string, unknown>)?.telegram).toEqual({ enabled: true });
     expect(actions.channelConfig).toBe(false);
   });
