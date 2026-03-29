@@ -495,6 +495,7 @@ export class MemoryIndexManager extends MemoryManagerEmbeddingOps implements Mem
       sourceFilter,
       buildFtsQuery: (raw) => this.buildFtsQuery(raw),
       bm25RankToScore,
+      ftsTokenizer: this.settings.store.fts.tokenizer,
     });
     return results.map((entry) => entry as MemorySearchResult & { id: string; textScore: number });
   }

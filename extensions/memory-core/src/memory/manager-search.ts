@@ -136,6 +136,32 @@ export function listChunks(params: {
   }));
 }
 
+const QUERY_TOKEN_RE = /[\p{L}\p{N}_]+/gu;
+const CJK_QUERY_TOKEN_RE = /[\u3400-\u9fff\u3040-\u30ff\u3131-\u3163\uac00-\ud7af]/u;
+
+function splitTrigramQueryTokens(raw: string): { matchTokens: string[]; likeTokens: string[] } {
+  const tokens =
+    raw
+      .match(QUERY_TOKEN_RE)
+      ?.map((token) => token.trim())
+      .filter(Boolean) ?? [];
+  const matchTokens: string[] = [];
+  const likeTokens: string[] = [];
+  for (const token of tokens) {
+    const codePointLength = Array.from(token).length;
+    if (codePointLength < 3 && CJK_QUERY_TOKEN_RE.test(token)) {
+      likeTokens.push(token);
+    } else {
+      matchTokens.push(token);
+    }
+  }
+  return { matchTokens, likeTokens };
+}
+
+function escapeLikePattern(token: string): string {
+  return token.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
 export async function searchKeyword(params: {
   db: DatabaseSync;
   ftsTable: string;
@@ -146,29 +172,49 @@ export async function searchKeyword(params: {
   sourceFilter: { sql: string; params: SearchSource[] };
   buildFtsQuery: (raw: string) => string | null;
   bm25RankToScore: (rank: number) => number;
+  ftsTokenizer?: "unicode61" | "trigram";
 }): Promise<Array<SearchRowResult & { textScore: number }>> {
   if (params.limit <= 0) {
     return [];
   }
-  const ftsQuery = params.buildFtsQuery(params.query);
-  if (!ftsQuery) {
+
+  const { matchTokens, likeTokens } =
+    params.ftsTokenizer === "trigram"
+      ? splitTrigramQueryTokens(params.query)
+      : { matchTokens: [], likeTokens: [] };
+  const matchQuerySource = params.ftsTokenizer === "trigram" ? matchTokens.join(" ") : params.query;
+  const ftsQuery = params.buildFtsQuery(matchQuerySource);
+  const useMatch = Boolean(ftsQuery);
+  if (!useMatch && likeTokens.length === 0) {
     return [];
   }
 
   // When providerModel is undefined (FTS-only mode), search all models
   const modelClause = params.providerModel ? " AND model = ?" : "";
   const modelParams = params.providerModel ? [params.providerModel] : [];
+  const likeClause =
+    likeTokens.length > 0 ? likeTokens.map(() => ` AND text LIKE ? ESCAPE '\\'`).join("") : "";
+  const likeParams = likeTokens.map((token) => `%${escapeLikePattern(token)}%`);
+  const rankSelect = useMatch ? `bm25(${params.ftsTable}) AS rank` : `0 AS rank`;
+  const whereClause = useMatch ? `${params.ftsTable} MATCH ?` : "1 = 1";
+  const queryParams = useMatch ? [ftsQuery] : [];
 
   const rows = params.db
     .prepare(
       `SELECT id, path, source, start_line, end_line, text,\n` +
-        `       bm25(${params.ftsTable}) AS rank\n` +
+        `       ${rankSelect}\n` +
         `  FROM ${params.ftsTable}\n` +
-        ` WHERE ${params.ftsTable} MATCH ?${modelClause}${params.sourceFilter.sql}\n` +
-        ` ORDER BY rank ASC\n` +
+        ` WHERE ${whereClause}${modelClause}${params.sourceFilter.sql}${likeClause}\n` +
+        ` ORDER BY rank ASC, rowid DESC\n` +
         ` LIMIT ?`,
     )
-    .all(ftsQuery, ...modelParams, ...params.sourceFilter.params, params.limit) as Array<{
+    .all(
+      ...queryParams,
+      ...modelParams,
+      ...params.sourceFilter.params,
+      ...likeParams,
+      params.limit,
+    ) as Array<{
     id: string;
     path: string;
     source: SearchSource;
