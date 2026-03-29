@@ -210,7 +210,7 @@ export function createXSearchTool(options?: {
         return jsonResult({
           error: "missing_xai_api_key",
           message:
-            "x_search needs an xAI API key. Set XAI_API_KEY in the Gateway environment, or configure tools.web.x_search.apiKey or plugins.entries.xai.config.webSearch.apiKey.",
+            "x_search needs xAI auth. If Grok is already your active model, this tool should reuse the same xAI auth profile after a gateway restart or re-running configure. Otherwise set XAI_API_KEY in the Gateway environment, or configure tools.web.x_search.apiKey or plugins.entries.xai.config.webSearch.apiKey.",
           docs: "https://docs.openclaw.ai/tools/web",
         });
       }

@@ -180,6 +180,7 @@ describe("xai web search config resolution", () => {
 
       await expect(maybeTool.execute({ query: "OpenClaw" })).resolves.toMatchObject({
         error: "missing_xai_api_key",
+        message: expect.stringContaining("If Grok is already your active model"),
       });
     });
   });

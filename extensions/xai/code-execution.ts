@@ -112,7 +112,7 @@ export function createCodeExecutionTool(options?: {
         return jsonResult({
           error: "missing_xai_api_key",
           message:
-            "code_execution needs an xAI API key. Set XAI_API_KEY in the Gateway environment, or configure plugins.entries.xai.config.webSearch.apiKey.",
+            "code_execution needs xAI auth. If Grok is already your active model, this tool should reuse the same xAI auth profile after a gateway restart or re-running configure. Otherwise set XAI_API_KEY in the Gateway environment, or configure plugins.entries.xai.config.webSearch.apiKey.",
           docs: "https://docs.openclaw.ai/tools/code-execution",
         });
       }

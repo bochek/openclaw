@@ -256,7 +256,7 @@ export function createXaiWebSearchProvider(): WebSearchProviderPlugin {
             return {
               error: "missing_xai_api_key",
               message:
-                "web_search (grok) needs an xAI API key. Set XAI_API_KEY in the Gateway environment, or configure plugins.entries.xai.config.webSearch.apiKey.",
+                "web_search (grok) needs xAI auth. If Grok is already your active model, this tool should reuse the same xAI auth profile after a gateway restart or re-running configure. Otherwise set XAI_API_KEY in the Gateway environment, or configure plugins.entries.xai.config.webSearch.apiKey.",
               docs: "https://docs.openclaw.ai/tools/web",
             };
           }
