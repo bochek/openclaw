@@ -66,6 +66,17 @@ describe("searchKeyword trigram fallback", () => {
     expect(results[0]?.snippet).toContain("方案");
   });
 
+  it("falls back to substring search for 1-char Chinese queries", async () => {
+    const db = createTrigramDb();
+    dbs.push(db);
+    insertChunk(db, "之前讨论的那个方案");
+
+    const results = await runKeywordSearch(db, "案");
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.snippet).toContain("方案");
+  });
+
   it("keeps long trigram terms and filters short CJK terms with LIKE", async () => {
     const db = createTrigramDb();
     dbs.push(db);
@@ -87,5 +98,16 @@ describe("searchKeyword trigram fallback", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0]?.snippet).toContain("バグ");
+  });
+
+  it("falls back for short Korean terms in trigram mode", async () => {
+    const db = createTrigramDb();
+    dbs.push(db);
+    insertChunk(db, "어제 논의한 배포 전략 메모");
+
+    const results = await runKeywordSearch(db, "배포");
+
+    expect(results).toHaveLength(1);
+    expect(results[0]?.snippet).toContain("배포");
   });
 });
