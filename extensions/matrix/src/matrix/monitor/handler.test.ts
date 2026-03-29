@@ -1129,6 +1129,7 @@ describe("matrix monitor handler pairing account scope", () => {
 describe("matrix monitor handler durable inbound dedupe", () => {
   it("skips replayed inbound events before session recording", async () => {
     const inboundDeduper = {
+      isOlderThanStartupWatermark: vi.fn(() => false),
       isOlderThanCommittedWatermark: vi.fn(() => false),
       claimEvent: vi.fn(() => false),
       commitEvent: vi.fn(async () => undefined),
@@ -1162,6 +1163,7 @@ describe("matrix monitor handler durable inbound dedupe", () => {
   it("commits inbound events only after queued replies finish delivering", async () => {
     const callOrder: string[] = [];
     const inboundDeduper = {
+      isOlderThanStartupWatermark: vi.fn(() => false),
       isOlderThanCommittedWatermark: vi.fn(() => false),
       claimEvent: vi.fn(() => {
         callOrder.push("claim");
@@ -1230,6 +1232,7 @@ describe("matrix monitor handler durable inbound dedupe", () => {
 
   it("drops stale pre-startup replay events older than the committed room watermark", async () => {
     const inboundDeduper = {
+      isOlderThanStartupWatermark: vi.fn(() => true),
       isOlderThanCommittedWatermark: vi.fn(() => true),
       claimEvent: vi.fn(() => true),
       commitEvent: vi.fn(async () => undefined),
@@ -1261,7 +1264,7 @@ describe("matrix monitor handler durable inbound dedupe", () => {
       }),
     );
 
-    expect(inboundDeduper.isOlderThanCommittedWatermark).toHaveBeenCalledWith({
+    expect(inboundDeduper.isOlderThanStartupWatermark).toHaveBeenCalledWith({
       roomId: "!room:example.org",
       eventTs: 900,
     });
@@ -1272,6 +1275,7 @@ describe("matrix monitor handler durable inbound dedupe", () => {
 
   it("releases a claimed event when reply dispatch fails before completion", async () => {
     const inboundDeduper = {
+      isOlderThanStartupWatermark: vi.fn(() => false),
       isOlderThanCommittedWatermark: vi.fn(() => false),
       claimEvent: vi.fn(() => true),
       commitEvent: vi.fn(async () => undefined),
@@ -1310,6 +1314,7 @@ describe("matrix monitor handler durable inbound dedupe", () => {
 
   it("releases a claimed event when queued final delivery fails", async () => {
     const inboundDeduper = {
+      isOlderThanStartupWatermark: vi.fn(() => false),
       isOlderThanCommittedWatermark: vi.fn(() => false),
       claimEvent: vi.fn(() => true),
       commitEvent: vi.fn(async () => undefined),
@@ -1360,6 +1365,7 @@ describe("matrix monitor handler durable inbound dedupe", () => {
     "releases a claimed event when queued %s delivery fails and no final reply exists",
     async (kind) => {
       const inboundDeduper = {
+        isOlderThanStartupWatermark: vi.fn(() => false),
         isOlderThanCommittedWatermark: vi.fn(() => false),
         claimEvent: vi.fn(() => true),
         commitEvent: vi.fn(async () => undefined),
@@ -1414,6 +1420,7 @@ describe("matrix monitor handler durable inbound dedupe", () => {
   it("commits a claimed event when dispatch completes without a final reply", async () => {
     const callOrder: string[] = [];
     const inboundDeduper = {
+      isOlderThanStartupWatermark: vi.fn(() => false),
       isOlderThanCommittedWatermark: vi.fn(() => false),
       claimEvent: vi.fn(() => {
         callOrder.push("claim");

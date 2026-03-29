@@ -38,6 +38,7 @@ export type MatrixInboundEventDeduper = {
   claimEvent: (params: { roomId: string; eventId: string }) => boolean;
   commitEvent: (params: { roomId: string; eventId: string; eventTs?: number }) => Promise<void>;
   releaseEvent: (params: { roomId: string; eventId: string }) => void;
+  isOlderThanStartupWatermark: (params: { roomId: string; eventTs: number }) => boolean;
   isOlderThanCommittedWatermark: (params: { roomId: string; eventTs: number }) => boolean;
   flush: () => Promise<void>;
   stop: () => Promise<void>;
@@ -302,6 +303,7 @@ export async function createMatrixInboundEventDeduper(params: {
 
   const seen = new Map<string, number>();
   const roomWatermarks = new Map<string, MatrixInboundRoomWatermark>();
+  const startupRoomWatermarks = new Map<string, MatrixInboundRoomWatermark>();
   const pending = new Set<string>();
   const persistLock = createAsyncLock();
 
@@ -338,6 +340,9 @@ export async function createMatrixInboundEventDeduper(params: {
       maxEntries: maxRoomWatermarks,
       nowMs: nowMs(),
     });
+    for (const [roomId, watermark] of roomWatermarks) {
+      startupRoomWatermarks.set(roomId, { ...watermark });
+    }
   } catch (err) {
     LogService.warn("MatrixInboundDedupe", "Failed loading Matrix inbound dedupe store:", err);
   }
@@ -445,6 +450,8 @@ export async function createMatrixInboundEventDeduper(params: {
       }
       pending.delete(key);
     },
+    isOlderThanStartupWatermark: ({ roomId, eventTs }) =>
+      hasOlderCommittedRoomEvent({ roomWatermarks: startupRoomWatermarks, roomId, eventTs }),
     isOlderThanCommittedWatermark: ({ roomId, eventTs }) =>
       hasOlderCommittedRoomEvent({ roomWatermarks, roomId, eventTs }),
     flush,

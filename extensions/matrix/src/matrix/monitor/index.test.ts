@@ -9,6 +9,7 @@ const hoisted = vi.hoisted(() => {
     startClientError: null as Error | null,
   };
   const inboundDeduper = {
+    isOlderThanStartupWatermark: vi.fn(() => false),
     isOlderThanCommittedWatermark: vi.fn(() => false),
     claimEvent: vi.fn(() => true),
     commitEvent: vi.fn(async () => undefined),

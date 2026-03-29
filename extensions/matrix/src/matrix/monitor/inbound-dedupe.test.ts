@@ -150,6 +150,12 @@ describe("Matrix inbound event dedupe", () => {
     });
 
     expect(
+      second.isOlderThanStartupWatermark({
+        roomId: "!room:example.org",
+        eventTs: 199,
+      }),
+    ).toBe(true);
+    expect(
       second.isOlderThanCommittedWatermark({
         roomId: "!room:example.org",
         eventTs: 199,
@@ -167,6 +173,49 @@ describe("Matrix inbound event dedupe", () => {
         eventTs: 199,
       }),
     ).toBe(false);
+  });
+
+  it("keeps startup backlog fencing pinned to the persisted startup watermark", async () => {
+    const storagePath = createStoragePath();
+    const first = await createMatrixInboundEventDeduper({
+      auth: auth as never,
+      storagePath,
+      nowMs: () => 1_000,
+    });
+
+    expect(first.claimEvent({ roomId: "!room:example.org", eventId: "$persisted" })).toBe(true);
+    await first.commitEvent({
+      roomId: "!room:example.org",
+      eventId: "$persisted",
+      eventTs: 200,
+    });
+    await first.stop();
+
+    const second = await createMatrixInboundEventDeduper({
+      auth: auth as never,
+      storagePath,
+      nowMs: () => 1_000,
+    });
+
+    expect(second.claimEvent({ roomId: "!room:example.org", eventId: "$newer" })).toBe(true);
+    await second.commitEvent({
+      roomId: "!room:example.org",
+      eventId: "$newer",
+      eventTs: 300,
+    });
+
+    expect(
+      second.isOlderThanStartupWatermark({
+        roomId: "!room:example.org",
+        eventTs: 250,
+      }),
+    ).toBe(false);
+    expect(
+      second.isOlderThanCommittedWatermark({
+        roomId: "!room:example.org",
+        eventTs: 250,
+      }),
+    ).toBe(true);
   });
 
   it("ignores implausibly future room watermarks when loading persisted state", async () => {

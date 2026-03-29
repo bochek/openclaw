@@ -80,7 +80,7 @@ export type MatrixMonitorHandlerParams = {
   dropPreStartupMessages: boolean;
   inboundDeduper?: Pick<
     MatrixInboundEventDeduper,
-    "claimEvent" | "commitEvent" | "releaseEvent" | "isOlderThanCommittedWatermark"
+    "claimEvent" | "commitEvent" | "releaseEvent" | "isOlderThanStartupWatermark"
   >;
   directTracker: {
     isDirectMessage: (params: {
@@ -308,12 +308,16 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         if (dropPreStartupMessages) {
           return;
         }
+        // Restart backlog fencing only makes sense against the watermark that
+        // existed when this process started. Events that only carry an age
+        // value also bypass the fence because there is no concrete timestamp
+        // to compare safely.
         if (
           typeof eventTs === "number" &&
-          inboundDeduper?.isOlderThanCommittedWatermark({ roomId, eventTs })
+          inboundDeduper?.isOlderThanStartupWatermark({ roomId, eventTs })
         ) {
           logVerboseMessage(
-            `matrix: drop stale startup backlog room=${roomId} id=${eventId ?? "unknown"} ts=${eventTs}`,
+            `matrix: drop stale startup backlog room=${roomId} id=${eventId || "unknown"} ts=${eventTs}`,
           );
           return;
         }
