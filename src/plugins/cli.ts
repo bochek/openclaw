@@ -1,7 +1,6 @@
 import type { Command } from "commander";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
-import { reparseProgramFromActionArgs } from "../cli/program/action-reparse.js";
-import { removeCommandByName } from "../cli/program/command-tree.js";
+import { registerLazyCommand } from "../cli/program/register-lazy-command.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { loadConfig } from "../config/config.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
@@ -17,6 +16,17 @@ type PluginCliRegistrationMode = "eager" | "lazy";
 type RegisterPluginCliOptions = {
   mode?: PluginCliRegistrationMode;
 };
+
+function canRegisterPluginCliLazily(entry: {
+  commands: string[];
+  descriptors: OpenClawPluginCliCommandDescriptor[];
+}): boolean {
+  if (entry.descriptors.length === 0) {
+    return false;
+  }
+  const descriptorNames = new Set(entry.descriptors.map((descriptor) => descriptor.name));
+  return entry.commands.every((command) => descriptorNames.has(command));
+}
 
 function loadPluginCliRegistry(
   cfg?: OpenClawConfig,
@@ -104,20 +114,24 @@ export function registerPluginCliCommands(
           workspaceDir,
           logger,
         });
-      if (mode === "lazy" && entry.descriptors.length > 0) {
+      if (mode === "lazy" && canRegisterPluginCliLazily(entry)) {
         for (const descriptor of entry.descriptors) {
-          const placeholder = program.command(descriptor.name).description(descriptor.description);
-          placeholder.allowUnknownOption(true);
-          placeholder.allowExcessArguments(true);
-          placeholder.action(async (...actionArgs) => {
-            for (const command of entry.commands) {
-              removeCommandByName(program, command);
-            }
-            await registerEntry();
-            await reparseProgramFromActionArgs(program, actionArgs);
+          registerLazyCommand({
+            program,
+            name: descriptor.name,
+            description: descriptor.description,
+            removeNames: entry.commands,
+            register: async () => {
+              await registerEntry();
+            },
           });
         }
       } else {
+        if (mode === "lazy" && entry.descriptors.length > 0) {
+          log.debug(
+            `plugin CLI lazy register fallback to eager (${entry.pluginId}): descriptors do not cover all command roots`,
+          );
+        }
         const result = registerEntry();
         if (result && typeof result.then === "function") {
           void result.catch((err) => {

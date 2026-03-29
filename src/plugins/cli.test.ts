@@ -193,4 +193,32 @@ describe("registerPluginCliCommands", () => {
     expect(mocks.memoryRegister).toHaveBeenCalledTimes(1);
     expect(mocks.reparseProgramFromActionArgs).toHaveBeenCalledTimes(1);
   });
+
+  it("falls back to eager registration when descriptors do not cover every command root", () => {
+    mocks.loadOpenClawPlugins.mockReturnValue({
+      cliRegistrars: [
+        {
+          pluginId: "memory-core",
+          register: mocks.memoryRegister,
+          commands: ["memory", "memory-admin"],
+          descriptors: [
+            {
+              name: "memory",
+              description: "Search, inspect, and reindex memory files",
+              hasSubcommands: true,
+            },
+          ],
+          source: "bundled",
+        },
+      ],
+    });
+
+    const program = createProgram();
+    registerPluginCliCommands(program, {} as OpenClawConfig, undefined, undefined, {
+      mode: "lazy",
+    });
+
+    expect(mocks.memoryRegister).toHaveBeenCalledTimes(1);
+    expect(mocks.reparseProgramFromActionArgs).not.toHaveBeenCalled();
+  });
 });
