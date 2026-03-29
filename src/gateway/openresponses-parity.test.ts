@@ -195,16 +195,14 @@ describe("OpenResponses Feature Parity", () => {
         tools: [
           {
             type: "function" as const,
-            function: {
-              name: "get_weather",
-              description: "Get weather for a location",
-              parameters: {
-                type: "object",
-                properties: {
-                  location: { type: "string" },
-                },
-                required: ["location"],
+            name: "get_weather",
+            description: "Get weather for a location",
+            parameters: {
+              type: "object",
+              properties: {
+                location: { type: "string" },
               },
+              required: ["location"],
             },
           },
         ],
@@ -243,10 +241,8 @@ describe("OpenResponses Feature Parity", () => {
         tools: [
           {
             type: "function" as const,
-            function: {
-              name: "get_weather",
-              description: "Get weather for a location",
-            },
+            name: "get_weather",
+            description: "Get weather for a location",
           },
         ],
       };
