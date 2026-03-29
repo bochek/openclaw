@@ -1,5 +1,6 @@
 import type { Command } from "commander";
 import { resolveAgentWorkspaceDir, resolveDefaultAgentId } from "../agents/agent-scope.js";
+import { removeCommandByName } from "../cli/program/command-tree.js";
 import { registerLazyCommand } from "../cli/program/register-lazy-command.js";
 import type { OpenClawConfig } from "../config/config.js";
 import { loadConfig } from "../config/config.js";
@@ -15,6 +16,7 @@ type PluginCliRegistrationMode = "eager" | "lazy";
 
 type RegisterPluginCliOptions = {
   mode?: PluginCliRegistrationMode;
+  primary?: string | null;
 };
 
 function canRegisterPluginCliLazily(entry: {
@@ -82,7 +84,7 @@ export function getPluginCliCommandDescriptors(
   }
 }
 
-export function registerPluginCliCommands(
+export async function registerPluginCliCommands(
   program: Command,
   cfg?: OpenClawConfig,
   env?: NodeJS.ProcessEnv,
@@ -91,10 +93,31 @@ export function registerPluginCliCommands(
 ) {
   const { config, workspaceDir, logger, registry } = loadPluginCliRegistry(cfg, env, loaderOptions);
   const mode = options?.mode ?? "eager";
+  const primary = options?.primary ?? null;
 
   const existingCommands = new Set(program.commands.map((cmd) => cmd.name()));
 
   for (const entry of registry.cliRegistrars) {
+    const registerEntry = async () => {
+      await entry.register({
+        program,
+        config,
+        workspaceDir,
+        logger,
+      });
+    };
+
+    if (primary && entry.commands.includes(primary)) {
+      for (const commandName of new Set(entry.commands)) {
+        removeCommandByName(program, commandName);
+      }
+      await registerEntry();
+      for (const command of entry.commands) {
+        existingCommands.add(command);
+      }
+      continue;
+    }
+
     if (entry.commands.length > 0) {
       const overlaps = entry.commands.filter((command) => existingCommands.has(command));
       if (overlaps.length > 0) {
@@ -106,14 +129,8 @@ export function registerPluginCliCommands(
         continue;
       }
     }
+
     try {
-      const registerEntry = () =>
-        entry.register({
-          program,
-          config,
-          workspaceDir,
-          logger,
-        });
       if (mode === "lazy" && canRegisterPluginCliLazily(entry)) {
         for (const descriptor of entry.descriptors) {
           registerLazyCommand({
@@ -132,12 +149,7 @@ export function registerPluginCliCommands(
             `plugin CLI lazy register fallback to eager (${entry.pluginId}): descriptors do not cover all command roots`,
           );
         }
-        const result = registerEntry();
-        if (result && typeof result.then === "function") {
-          void result.catch((err) => {
-            log.warn(`plugin CLI register failed (${entry.pluginId}): ${String(err)}`);
-          });
-        }
+        await registerEntry();
       }
       for (const command of entry.commands) {
         existingCommands.add(command);

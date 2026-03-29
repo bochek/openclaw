@@ -5,9 +5,9 @@ import type { OpenClawConfig } from "../config/config.js";
 const mocks = vi.hoisted(() => ({
   memoryRegister: vi.fn(),
   otherRegister: vi.fn(),
+  memoryListAction: vi.fn(),
   loadOpenClawPlugins: vi.fn(),
   applyPluginAutoEnable: vi.fn(),
-  reparseProgramFromActionArgs: vi.fn(),
 }));
 
 vi.mock("./loader.js", () => ({
@@ -16,10 +16,6 @@ vi.mock("./loader.js", () => ({
 
 vi.mock("../config/plugin-auto-enable.js", () => ({
   applyPluginAutoEnable: (...args: unknown[]) => mocks.applyPluginAutoEnable(...args),
-}));
-
-vi.mock("../cli/program/action-reparse.js", () => ({
-  reparseProgramFromActionArgs: (...args: unknown[]) => mocks.reparseProgramFromActionArgs(...args),
 }));
 
 import { registerPluginCliCommands } from "./cli.js";
@@ -32,14 +28,27 @@ function createProgram(existingCommandName?: string) {
   return program;
 }
 
-function createCliRegistry() {
+function createCliRegistry(params?: {
+  memoryCommands?: string[];
+  memoryDescriptors?: Array<{
+    name: string;
+    description: string;
+    hasSubcommands: boolean;
+  }>;
+}) {
   return {
     cliRegistrars: [
       {
         pluginId: "memory-core",
         register: mocks.memoryRegister,
-        commands: ["memory"],
-        descriptors: [],
+        commands: params?.memoryCommands ?? ["memory"],
+        descriptors: params?.memoryDescriptors ?? [
+          {
+            name: "memory",
+            description: "Memory commands",
+            hasSubcommands: true,
+          },
+        ],
         source: "bundled",
       },
       {
@@ -88,53 +97,37 @@ function expectAutoEnabledCliLoad(params: {
   expectPluginLoaderConfig(params.autoEnabledConfig);
 }
 
-function expectCliRegistrarCalledWithConfig(config: OpenClawConfig) {
-  expect(mocks.memoryRegister).toHaveBeenCalledWith(
-    expect.objectContaining({
-      config,
-    }),
-  );
-}
-
-function runRegisterPluginCliCommands(params: {
-  existingCommandName?: string;
-  config: OpenClawConfig;
-  env?: NodeJS.ProcessEnv;
-}) {
-  const program = createProgram(params.existingCommandName);
-  registerPluginCliCommands(program, params.config, params.env);
-  return program;
-}
-
 describe("registerPluginCliCommands", () => {
   beforeEach(() => {
-    mocks.memoryRegister.mockClear();
-    mocks.otherRegister.mockClear();
+    mocks.memoryRegister.mockReset();
+    mocks.memoryRegister.mockImplementation(({ program }: { program: Command }) => {
+      const memory = program.command("memory").description("Memory commands");
+      memory.command("list").action(mocks.memoryListAction);
+    });
+    mocks.otherRegister.mockReset();
+    mocks.otherRegister.mockImplementation(({ program }: { program: Command }) => {
+      program.command("other").description("Other commands");
+    });
+    mocks.memoryListAction.mockReset();
     mocks.loadOpenClawPlugins.mockReset();
     mocks.loadOpenClawPlugins.mockReturnValue(createCliRegistry());
     mocks.applyPluginAutoEnable.mockReset();
     mocks.applyPluginAutoEnable.mockImplementation(({ config }) => ({ config, changes: [] }));
-    mocks.reparseProgramFromActionArgs.mockReset();
-    mocks.reparseProgramFromActionArgs.mockResolvedValue(undefined);
   });
 
-  it("skips plugin CLI registrars when commands already exist", () => {
-    runRegisterPluginCliCommands({
-      existingCommandName: "memory",
-      config: {} as OpenClawConfig,
-    });
+  it("skips plugin CLI registrars when commands already exist", async () => {
+    const program = createProgram("memory");
+
+    await registerPluginCliCommands(program, {} as OpenClawConfig);
 
     expect(mocks.memoryRegister).not.toHaveBeenCalled();
     expect(mocks.otherRegister).toHaveBeenCalledTimes(1);
   });
 
-  it("forwards an explicit env to plugin loading", () => {
+  it("forwards an explicit env to plugin loading", async () => {
     const env = { OPENCLAW_HOME: "/srv/openclaw-home" } as NodeJS.ProcessEnv;
 
-    runRegisterPluginCliCommands({
-      config: {} as OpenClawConfig,
-      env,
-    });
+    await registerPluginCliCommands(createProgram(), {} as OpenClawConfig, env);
 
     expect(mocks.loadOpenClawPlugins).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -143,82 +136,77 @@ describe("registerPluginCliCommands", () => {
     );
   });
 
-  it("loads plugin CLI commands from the auto-enabled config snapshot", () => {
+  it("loads plugin CLI commands from the auto-enabled config snapshot", async () => {
     const { rawConfig, autoEnabledConfig } = createAutoEnabledCliFixture();
     mocks.applyPluginAutoEnable.mockReturnValue({ config: autoEnabledConfig, changes: [] });
 
-    runRegisterPluginCliCommands({
-      config: rawConfig,
-    });
+    await registerPluginCliCommands(createProgram(), rawConfig);
 
     expectAutoEnabledCliLoad({ rawConfig, autoEnabledConfig });
-    expectCliRegistrarCalledWithConfig(autoEnabledConfig);
+    expect(mocks.memoryRegister).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config: autoEnabledConfig,
+      }),
+    );
   });
 
-  it("registers descriptor-backed plugin commands lazily when requested", async () => {
-    mocks.loadOpenClawPlugins.mockReturnValue({
-      cliRegistrars: [
-        {
-          pluginId: "memory-core",
-          register: ({ program }: { program: Command }) => {
-            mocks.memoryRegister();
-            program.command("memory").action(() => {});
-          },
-          commands: ["memory"],
-          descriptors: [
-            {
-              name: "memory",
-              description: "Search, inspect, and reindex memory files",
-              hasSubcommands: true,
-            },
-          ],
-          source: "bundled",
-        },
-      ],
-    });
-
+  it("lazy-registers descriptor-backed plugin commands on first invocation", async () => {
     const program = createProgram();
-    registerPluginCliCommands(program, {} as OpenClawConfig, undefined, undefined, {
+    program.exitOverride();
+
+    await registerPluginCliCommands(program, {} as OpenClawConfig, undefined, undefined, {
       mode: "lazy",
     });
 
+    expect(program.commands.map((command) => command.name())).toEqual(["memory", "other"]);
     expect(mocks.memoryRegister).not.toHaveBeenCalled();
-    expect(program.commands.map((command) => command.name())).toContain("memory");
+    expect(mocks.otherRegister).toHaveBeenCalledTimes(1);
 
-    const placeholder = program.commands.find((command) => command.name() === "memory") as
-      | (Command & { _actionHandler?: (...args: unknown[]) => Promise<void> | void })
-      | undefined;
-    await placeholder?._actionHandler?.(placeholder);
+    await program.parseAsync(["memory", "list"], { from: "user" });
 
     expect(mocks.memoryRegister).toHaveBeenCalledTimes(1);
-    expect(mocks.reparseProgramFromActionArgs).toHaveBeenCalledTimes(1);
+    expect(mocks.memoryListAction).toHaveBeenCalledTimes(1);
   });
 
-  it("falls back to eager registration when descriptors do not cover every command root", () => {
-    mocks.loadOpenClawPlugins.mockReturnValue({
-      cliRegistrars: [
-        {
-          pluginId: "memory-core",
-          register: mocks.memoryRegister,
-          commands: ["memory", "memory-admin"],
-          descriptors: [
-            {
-              name: "memory",
-              description: "Search, inspect, and reindex memory files",
-              hasSubcommands: true,
-            },
-          ],
-          source: "bundled",
-        },
-      ],
+  it("falls back to eager registration when descriptors do not cover every command root", async () => {
+    mocks.loadOpenClawPlugins.mockReturnValue(
+      createCliRegistry({
+        memoryCommands: ["memory", "memory-admin"],
+        memoryDescriptors: [
+          {
+            name: "memory",
+            description: "Memory commands",
+            hasSubcommands: true,
+          },
+        ],
+      }),
+    );
+    mocks.memoryRegister.mockImplementation(({ program }: { program: Command }) => {
+      program.command("memory");
+      program.command("memory-admin");
     });
 
-    const program = createProgram();
-    registerPluginCliCommands(program, {} as OpenClawConfig, undefined, undefined, {
+    await registerPluginCliCommands(createProgram(), {} as OpenClawConfig, undefined, undefined, {
       mode: "lazy",
     });
 
     expect(mocks.memoryRegister).toHaveBeenCalledTimes(1);
-    expect(mocks.reparseProgramFromActionArgs).not.toHaveBeenCalled();
+  });
+
+  it("registers a selected plugin primary eagerly during lazy startup", async () => {
+    const program = createProgram();
+    program.exitOverride();
+
+    await registerPluginCliCommands(program, {} as OpenClawConfig, undefined, undefined, {
+      mode: "lazy",
+      primary: "memory",
+    });
+
+    expect(program.commands.filter((command) => command.name() === "memory")).toHaveLength(1);
+
+    await program.parseAsync(["memory", "list"], { from: "user" });
+
+    expect(mocks.memoryRegister).toHaveBeenCalledTimes(1);
+    expect(mocks.memoryListAction).toHaveBeenCalledTimes(1);
   });
 });
