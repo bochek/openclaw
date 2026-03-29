@@ -9,10 +9,14 @@ import {
   readStringArrayParam,
   readStringParam,
   resolveCacheTtlMs,
-  resolveProviderWebSearchPluginConfig,
   resolveTimeoutSeconds,
   writeCache,
 } from "openclaw/plugin-sdk/provider-web-search";
+import {
+  hasXaiProfileCredential,
+  resolveConfiguredXaiApiKey,
+  resolveXaiApiKey,
+} from "./src/auth-shared.js";
 import {
   buildXaiXSearchPayload,
   requestXaiXSearch,
@@ -56,29 +60,6 @@ function getSharedXSearchCache(): Map<string, XSearchCacheEntry> {
 
 const X_SEARCH_CACHE = getSharedXSearchCache();
 
-function readLegacyGrokApiKey(cfg?: OpenClawConfig): string | undefined {
-  const search = cfg?.tools?.web?.search;
-  if (!search || typeof search !== "object") {
-    return undefined;
-  }
-  const grok = (search as Record<string, unknown>).grok;
-  return readConfiguredSecretString(
-    grok && typeof grok === "object" ? (grok as Record<string, unknown>).apiKey : undefined,
-    "tools.web.search.grok.apiKey",
-  );
-}
-
-function readPluginXaiWebSearchApiKey(cfg?: OpenClawConfig): string | undefined {
-  return readConfiguredSecretString(
-    resolveProviderWebSearchPluginConfig(cfg as Record<string, unknown> | undefined, "xai")?.apiKey,
-    "plugins.entries.xai.config.webSearch.apiKey",
-  );
-}
-
-function resolveFallbackXaiApiKey(cfg?: OpenClawConfig): string | undefined {
-  return readPluginXaiWebSearchApiKey(cfg) ?? readLegacyGrokApiKey(cfg);
-}
-
 function resolveXSearchConfig(cfg?: OpenClawConfig): XSearchConfig {
   const xSearch = cfg?.tools?.web?.x_search;
   if (!xSearch || typeof xSearch !== "object") {
@@ -91,6 +72,7 @@ function resolveXSearchEnabled(params: {
   cfg?: OpenClawConfig;
   config?: XSearchConfig;
   runtimeConfig?: OpenClawConfig;
+  agentDir?: string;
 }): boolean {
   if (params.config?.enabled === false) {
     return false;
@@ -101,7 +83,7 @@ function resolveXSearchEnabled(params: {
       : undefined;
   if (
     readConfiguredSecretString(runtimeXSearchConfig?.apiKey, "tools.web.x_search.apiKey") ||
-    resolveFallbackXaiApiKey(params.runtimeConfig)
+    resolveConfiguredXaiApiKey(params.runtimeConfig)
   ) {
     return true;
   }
@@ -111,26 +93,9 @@ function resolveXSearchEnabled(params: {
   );
   return Boolean(
     configuredApiKey ||
-    resolveFallbackXaiApiKey(params.cfg) ||
+    resolveConfiguredXaiApiKey(params.cfg) ||
+    hasXaiProfileCredential(params.agentDir) ||
     readProviderEnvValue(["XAI_API_KEY"]),
-  );
-}
-
-function resolveXSearchApiKey(params: {
-  sourceConfig?: OpenClawConfig;
-  runtimeConfig?: OpenClawConfig;
-}): string | undefined {
-  const sourceXSearchConfig = resolveXSearchConfig(params.sourceConfig);
-  const runtimeXSearchConfig =
-    params.runtimeConfig && params.runtimeConfig !== params.sourceConfig
-      ? resolveXSearchConfig(params.runtimeConfig)
-      : undefined;
-  return (
-    readConfiguredSecretString(runtimeXSearchConfig?.apiKey, "tools.web.x_search.apiKey") ??
-    readConfiguredSecretString(sourceXSearchConfig?.apiKey, "tools.web.x_search.apiKey") ??
-    resolveFallbackXaiApiKey(params.runtimeConfig) ??
-    resolveFallbackXaiApiKey(params.sourceConfig) ??
-    readProviderEnvValue(["XAI_API_KEY"])
   );
 }
 
@@ -182,6 +147,7 @@ function buildXSearchCacheKey(params: {
 export function createXSearchTool(options?: {
   config?: OpenClawConfig;
   runtimeConfig?: OpenClawConfig | null;
+  agentDir?: string;
 }) {
   const xSearchConfig = resolveXSearchConfig(options?.config);
   const runtimeConfig = options?.runtimeConfig ?? getRuntimeConfigSnapshot();
@@ -190,6 +156,7 @@ export function createXSearchTool(options?: {
       cfg: options?.config,
       config: xSearchConfig,
       runtimeConfig: runtimeConfig ?? undefined,
+      agentDir: options?.agentDir,
     })
   ) {
     return null;
@@ -199,7 +166,7 @@ export function createXSearchTool(options?: {
     label: "X Search",
     name: "x_search",
     description:
-      "Search X (formerly Twitter) using xAI, including targeted post or thread lookups. For per-post stats like reposts, replies, bookmarks, or views, prefer the exact post URL or status ID.",
+      "Search X (formerly Twitter) using xAI, including targeted post or thread lookups. If this tool is available, it is configured enough to try and should be used for X/Twitter requests instead of claiming search is unavailable. For per-post stats like reposts, replies, bookmarks, or views, prefer the exact post URL or status ID, and include the post text and direct post URL in the final answer when available.",
     parameters: Type.Object({
       query: Type.String({ description: "X search query string." }),
       allowed_x_handles: Type.Optional(
@@ -226,10 +193,19 @@ export function createXSearchTool(options?: {
       ),
     }),
     execute: async (_toolCallId: string, args: Record<string, unknown>) => {
-      const apiKey = resolveXSearchApiKey({
-        sourceConfig: options?.config,
-        runtimeConfig: runtimeConfig ?? undefined,
-      });
+      const sourceXSearchConfig = resolveXSearchConfig(options?.config);
+      const runtimeXSearchConfig =
+        runtimeConfig && runtimeConfig !== options?.config
+          ? resolveXSearchConfig(runtimeConfig)
+          : undefined;
+      const apiKey =
+        readConfiguredSecretString(runtimeXSearchConfig?.apiKey, "tools.web.x_search.apiKey") ??
+        readConfiguredSecretString(sourceXSearchConfig?.apiKey, "tools.web.x_search.apiKey") ??
+        (await resolveXaiApiKey({
+          sourceConfig: options?.config,
+          runtimeConfig: runtimeConfig ?? undefined,
+          agentDir: options?.agentDir,
+        }));
       if (!apiKey) {
         return jsonResult({
           error: "missing_xai_api_key",

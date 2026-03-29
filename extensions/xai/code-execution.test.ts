@@ -1,4 +1,11 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  clearRuntimeAuthProfileStoreSnapshots,
+  upsertAuthProfile,
+} from "../../src/agents/auth-profiles.js";
 import { withFetchPreconnect } from "../../test/helpers/plugins/fetch-mock.js";
 import { createCodeExecutionTool } from "./code-execution.js";
 
@@ -41,6 +48,7 @@ function parseFirstRequestBody(mockFetch: ReturnType<typeof installCodeExecution
 }
 
 afterEach(() => {
+  clearRuntimeAuthProfileStoreSnapshots();
   vi.restoreAllMocks();
 });
 
@@ -155,5 +163,37 @@ describe("xai code_execution tool", () => {
     expect((request?.headers as Record<string, string> | undefined)?.Authorization).toBe(
       "Bearer xai-legacy-key",
     );
+  });
+
+  it("reuses xAI auth profile keys for code_execution requests", async () => {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-code-execution-"));
+    try {
+      upsertAuthProfile({
+        profileId: "xai:default",
+        agentDir,
+        credential: {
+          type: "api_key",
+          provider: "xai",
+          key: "xai-profile-key",
+        },
+      });
+      const mockFetch = installCodeExecutionFetch();
+      const tool = createCodeExecutionTool({
+        config: {},
+        agentDir,
+      });
+
+      expect(tool?.name).toBe("code_execution");
+      await tool?.execute?.("code-execution:profile-key", {
+        task: "Summarize the median of [1, 2, 3]",
+      });
+
+      const request = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+      expect((request?.headers as Record<string, string> | undefined)?.Authorization).toBe(
+        "Bearer xai-profile-key",
+      );
+    } finally {
+      fs.rmSync(agentDir, { recursive: true, force: true });
+    }
   });
 });

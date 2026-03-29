@@ -20,6 +20,7 @@ import {
   type WebSearchProviderPlugin,
   writeCache,
 } from "openclaw/plugin-sdk/provider-web-search";
+import { hasXaiProfileCredential, resolveXaiApiKey } from "./src/auth-shared.js";
 import {
   buildXaiWebSearchPayload,
   extractXaiWebSearchContent,
@@ -225,11 +226,14 @@ export function createXaiWebSearchProvider(): WebSearchProviderPlugin {
       setProviderWebSearchPluginConfigValue(configTarget, "xai", "apiKey", value);
     },
     runSetup: runXaiSearchProviderSetup,
+    hasCredential: (ctx) =>
+      Boolean(resolveXaiWebSearchCredential(resolveXaiToolSearchConfig(ctx))) ||
+      hasXaiProfileCredential(ctx.agentDir),
     createTool: (ctx) => {
       const searchConfig = resolveXaiToolSearchConfig(ctx);
       return {
         description:
-          "Search the web using xAI Grok. Returns AI-synthesized answers with citations from real-time web search.",
+          "Search the web using xAI Grok. Returns AI-synthesized answers with citations from real-time web search. If this tool is available, it is configured enough to try and should be used instead of telling the user web search is unavailable.",
         parameters: Type.Object({
           query: Type.String({ description: "Search query string." }),
           count: Type.Optional(
@@ -241,7 +245,12 @@ export function createXaiWebSearchProvider(): WebSearchProviderPlugin {
           ),
         }),
         execute: async (args: Record<string, unknown>) => {
-          const apiKey = resolveXaiWebSearchCredential(searchConfig);
+          const apiKey =
+            resolveXaiWebSearchCredential(searchConfig) ??
+            (await resolveXaiApiKey({
+              sourceConfig: ctx.config,
+              agentDir: ctx.agentDir,
+            }));
 
           if (!apiKey) {
             return {

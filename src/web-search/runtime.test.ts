@@ -31,6 +31,7 @@ function createProvider(params: {
   credentialPath: string;
   autoDetectOrder?: number;
   requiresCredential?: boolean;
+  hasCredential?: PluginWebSearchProviderEntry["hasCredential"];
   getCredentialValue?: PluginWebSearchProviderEntry["getCredentialValue"];
   getConfiguredCredentialValue?: PluginWebSearchProviderEntry["getConfiguredCredentialValue"];
   createTool?: PluginWebSearchProviderEntry["createTool"];
@@ -46,6 +47,7 @@ function createProvider(params: {
     credentialPath: params.credentialPath,
     autoDetectOrder: params.autoDetectOrder,
     requiresCredential: params.requiresCredential,
+    hasCredential: params.hasCredential,
     getCredentialValue: params.getCredentialValue ?? (() => undefined),
     setCredentialValue: () => {},
     getConfiguredCredentialValue: params.getConfiguredCredentialValue,
@@ -145,6 +147,34 @@ describe("web search runtime", () => {
     await expect(
       runWebSearch({
         config,
+        args: { query: "hello" },
+      }),
+    ).resolves.toEqual({
+      provider: "custom",
+      result: { query: "hello", ok: true },
+    });
+  });
+
+  it("auto-detects a provider from provider-owned credential hooks", async () => {
+    const provider = createProvider({
+      pluginId: "custom-search",
+      id: "custom",
+      credentialPath: "plugins.entries.custom-search.config.webSearch.apiKey",
+      autoDetectOrder: 1,
+      hasCredential: () => true,
+      createTool: () => ({
+        description: "custom",
+        parameters: {},
+        execute: async (args) => ({ ...args, ok: true }),
+      }),
+    });
+    resolveRuntimeWebSearchProvidersMock.mockReturnValue([provider]);
+    resolveBundledPluginWebSearchProvidersMock.mockReturnValue([provider]);
+
+    await expect(
+      runWebSearch({
+        config: {},
+        agentDir: "/tmp/openclaw-agent",
         args: { query: "hello" },
       }),
     ).resolves.toEqual({

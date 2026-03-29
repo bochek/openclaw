@@ -13,6 +13,7 @@ export function createWebSearchTool(options?: {
   config?: OpenClawConfig;
   sandboxed?: boolean;
   runtimeWebSearch?: RuntimeWebSearchMetadata;
+  agentDir?: string;
 }): AnyAgentTool | null {
   const runtimeProviderId =
     options?.runtimeWebSearch?.selectedProvider ?? options?.runtimeWebSearch?.providerConfigured;

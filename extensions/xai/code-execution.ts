@@ -1,13 +1,12 @@
 import { Type } from "@sinclair/typebox";
 import { getRuntimeConfigSnapshot } from "openclaw/plugin-sdk/config-runtime";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/plugin-entry";
+import { jsonResult, readStringParam } from "openclaw/plugin-sdk/provider-web-search";
 import {
-  jsonResult,
-  readConfiguredSecretString,
-  readProviderEnvValue,
-  readStringParam,
-  resolveProviderWebSearchPluginConfig,
-} from "openclaw/plugin-sdk/provider-web-search";
+  hasXaiProfileCredential,
+  resolveConfiguredXaiApiKey,
+  resolveXaiApiKey,
+} from "./src/auth-shared.js";
 import {
   buildXaiCodeExecutionPayload,
   requestXaiCodeExecution,
@@ -36,18 +35,6 @@ function readCodeExecutionConfigRecord(
   return config && typeof config === "object" ? (config as Record<string, unknown>) : undefined;
 }
 
-function readLegacyGrokApiKey(cfg?: OpenClawConfig): string | undefined {
-  const search = cfg?.tools?.web?.search;
-  if (!search || typeof search !== "object") {
-    return undefined;
-  }
-  const grok = (search as Record<string, unknown>).grok;
-  return readConfiguredSecretString(
-    grok && typeof grok === "object" ? (grok as Record<string, unknown>).apiKey : undefined,
-    "tools.web.search.grok.apiKey",
-  );
-}
-
 function readPluginCodeExecutionConfig(cfg?: OpenClawConfig): CodeExecutionConfig | undefined {
   const entries = cfg?.plugins?.entries;
   if (!entries || typeof entries !== "object") {
@@ -68,34 +55,26 @@ function readPluginCodeExecutionConfig(cfg?: OpenClawConfig): CodeExecutionConfi
   return codeExecution as CodeExecutionConfig;
 }
 
-function resolveFallbackXaiApiKey(cfg?: OpenClawConfig): string | undefined {
-  return (
-    readConfiguredSecretString(
-      resolveProviderWebSearchPluginConfig(cfg as Record<string, unknown> | undefined, "xai")
-        ?.apiKey,
-      "plugins.entries.xai.config.webSearch.apiKey",
-    ) ?? readLegacyGrokApiKey(cfg)
-  );
-}
-
 function resolveCodeExecutionEnabled(params: {
   sourceConfig?: OpenClawConfig;
   runtimeConfig?: OpenClawConfig;
   config?: CodeExecutionConfig;
+  agentDir?: string;
 }): boolean {
   if (readCodeExecutionConfigRecord(params.config)?.enabled === false) {
     return false;
   }
   return Boolean(
-    resolveFallbackXaiApiKey(params.runtimeConfig) ??
-    resolveFallbackXaiApiKey(params.sourceConfig) ??
-    readProviderEnvValue(["XAI_API_KEY"]),
+    resolveConfiguredXaiApiKey(params.runtimeConfig) ??
+    resolveConfiguredXaiApiKey(params.sourceConfig) ??
+    hasXaiProfileCredential(params.agentDir),
   );
 }
 
 export function createCodeExecutionTool(options?: {
   config?: OpenClawConfig;
   runtimeConfig?: OpenClawConfig | null;
+  agentDir?: string;
 }) {
   const runtimeConfig = options?.runtimeConfig ?? getRuntimeConfigSnapshot();
   const codeExecutionConfig =
@@ -106,6 +85,7 @@ export function createCodeExecutionTool(options?: {
       sourceConfig: options?.config,
       runtimeConfig: runtimeConfig ?? undefined,
       config: codeExecutionConfig,
+      agentDir: options?.agentDir,
     })
   ) {
     return null;
@@ -115,7 +95,7 @@ export function createCodeExecutionTool(options?: {
     label: "Code Execution",
     name: "code_execution",
     description:
-      "Run sandboxed Python analysis with xAI. Use for calculations, tabulation, summaries, and chart-style analysis without local machine access.",
+      "Run sandboxed Python analysis with xAI. Use for calculations, tabulation, summaries, and chart-style analysis without local machine access. If this tool is available, it is configured enough to try instead of claiming remote analysis is unavailable.",
     parameters: Type.Object({
       task: Type.String({
         description:
@@ -123,10 +103,11 @@ export function createCodeExecutionTool(options?: {
       }),
     }),
     execute: async (_toolCallId: string, args: Record<string, unknown>) => {
-      const apiKey =
-        resolveFallbackXaiApiKey(runtimeConfig ?? undefined) ??
-        resolveFallbackXaiApiKey(options?.config) ??
-        readProviderEnvValue(["XAI_API_KEY"]);
+      const apiKey = await resolveXaiApiKey({
+        sourceConfig: options?.config,
+        runtimeConfig: runtimeConfig ?? undefined,
+        agentDir: options?.agentDir,
+      });
       if (!apiKey) {
         return jsonResult({
           error: "missing_xai_api_key",

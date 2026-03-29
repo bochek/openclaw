@@ -1189,6 +1189,7 @@ export type WebSearchProviderContext = {
   config?: OpenClawConfig;
   searchConfig?: Record<string, unknown>;
   runtimeMetadata?: RuntimeWebSearchMetadata;
+  agentDir?: string;
 };
 
 export type WebSearchCredentialResolutionSource = "config" | "secretRef" | "env" | "missing";
@@ -1240,6 +1241,7 @@ export type WebSearchProviderPlugin = {
   setConfiguredCredentialValue?: (configTarget: OpenClawConfig, value: unknown) => void;
   applySelectionConfig?: (config: OpenClawConfig) => OpenClawConfig;
   runSetup?: (ctx: WebSearchProviderSetupContext) => OpenClawConfig | Promise<OpenClawConfig>;
+  hasCredential?: (ctx: WebSearchProviderContext) => boolean;
   resolveRuntimeMetadata?: (
     ctx: WebSearchRuntimeMetadataContext,
   ) => Partial<RuntimeWebSearchMetadata> | Promise<Partial<RuntimeWebSearchMetadata>>;

@@ -1,8 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  clearRuntimeAuthProfileStoreSnapshots,
+  upsertAuthProfile,
+} from "../../src/agents/auth-profiles.js";
 import { NON_ENV_SECRETREF_MARKER } from "../../src/agents/model-auth-markers.js";
 import { capturePluginRegistration } from "../../src/plugins/captured-registration.js";
 import { createNonExitingRuntime } from "../../src/runtime.js";
 import { withEnv } from "../../test/helpers/plugins/env.js";
+import { withFetchPreconnect } from "../../test/helpers/plugins/fetch-mock.js";
 import { createWizardPrompter } from "../../test/helpers/wizard-prompter.js";
 import xaiPlugin from "./index.js";
 import { resolveXaiCatalogEntry } from "./model-definitions.js";
@@ -16,6 +24,39 @@ const {
   resolveXaiWebSearchCredential,
   resolveXaiWebSearchModel,
 } = __testing;
+
+function installWebSearchFetch(payload?: Record<string, unknown>) {
+  const mockFetch = vi.fn((_input?: unknown, _init?: unknown) =>
+    Promise.resolve({
+      ok: true,
+      json: () =>
+        Promise.resolve(
+          payload ?? {
+            output: [
+              {
+                type: "message",
+                content: [
+                  {
+                    type: "output_text",
+                    text: "Found matching posts",
+                    annotations: [{ type: "url_citation", url: "https://x.com/openclaw/status/1" }],
+                  },
+                ],
+              },
+            ],
+            citations: ["https://x.com/openclaw/status/1"],
+          },
+        ),
+    } as Response),
+  );
+  global.fetch = withFetchPreconnect(mockFetch);
+  return mockFetch;
+}
+
+afterEach(() => {
+  clearRuntimeAuthProfileStoreSnapshots();
+  vi.restoreAllMocks();
+});
 
 describe("xai web search config resolution", () => {
   it("prefers configured api keys and resolves grok scoped defaults", () => {
@@ -34,6 +75,37 @@ describe("xai web search config resolution", () => {
     withEnv({ XAI_API_KEY: undefined }, () => {
       expect(resolveXaiWebSearchCredential({})).toBeUndefined();
     });
+  });
+
+  it("uses xAI auth profiles as a fallback credential source", async () => {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-xai-web-search-"));
+    try {
+      upsertAuthProfile({
+        profileId: "xai:default",
+        agentDir,
+        credential: {
+          type: "api_key",
+          provider: "xai",
+          key: "xai-profile-key",
+        },
+      });
+      const mockFetch = installWebSearchFetch();
+      const provider = createXaiWebSearchProvider();
+      expect(provider.hasCredential?.({ config: {}, agentDir })).toBe(true);
+
+      const tool = provider.createTool({
+        config: {},
+        agentDir,
+      });
+      await tool?.execute({ query: "latest OpenClaw announcements" });
+
+      const request = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+      expect((request?.headers as Record<string, string> | undefined)?.Authorization).toBe(
+        "Bearer xai-profile-key",
+      );
+    } finally {
+      fs.rmSync(agentDir, { recursive: true, force: true });
+    }
   });
 
   it("resolves env SecretRefs without requiring a runtime snapshot", () => {

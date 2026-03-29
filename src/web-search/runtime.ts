@@ -25,6 +25,7 @@ export type ResolveWebSearchDefinitionParams = {
   runtimeWebSearch?: RuntimeWebSearchMetadata;
   providerId?: string;
   preferRuntimeProviders?: boolean;
+  agentDir?: string;
 };
 
 export type RunWebSearchParams = ResolveWebSearchDefinitionParams & {
@@ -75,12 +76,23 @@ function hasEntryCredential(
     | "envVars"
     | "getConfiguredCredentialValue"
     | "getCredentialValue"
+    | "hasCredential"
     | "requiresCredential"
   >,
   config: OpenClawConfig | undefined,
   search: WebSearchConfig | undefined,
+  agentDir?: string,
 ): boolean {
   if (!providerRequiresCredential(provider)) {
+    return true;
+  }
+  if (
+    provider.hasCredential?.({
+      config,
+      searchConfig: search as Record<string, unknown> | undefined,
+      agentDir,
+    })
+  ) {
     return true;
   }
   const rawValue =
@@ -123,6 +135,7 @@ export function resolveWebSearchProviderId(params: {
   search?: WebSearchConfig;
   config?: OpenClawConfig;
   providers?: PluginWebSearchProviderEntry[];
+  agentDir?: string;
 }): string {
   const providers = sortWebSearchProvidersForAutoDetect(
     params.providers ??
@@ -150,7 +163,7 @@ export function resolveWebSearchProviderId(params: {
         keylessFallbackProviderId ||= provider.id;
         continue;
       }
-      if (!hasEntryCredential(provider, params.config, params.search)) {
+      if (!hasEntryCredential(provider, params.config, params.search, params.agentDir)) {
         continue;
       }
       logVerbose(
@@ -197,12 +210,23 @@ export function resolveWebSearchDefinition(
     options?.providerId ??
     runtimeWebSearch?.selectedProvider ??
     runtimeWebSearch?.providerConfigured ??
-    resolveWebSearchProviderId({ config: options?.config, search, providers });
+    resolveWebSearchProviderId({
+      config: options?.config,
+      search,
+      providers,
+      agentDir: options?.agentDir,
+    });
   const provider =
     providers.find((entry) => entry.id === providerId) ??
     providers.find(
       (entry) =>
-        entry.id === resolveWebSearchProviderId({ config: options?.config, search, providers }),
+        entry.id ===
+        resolveWebSearchProviderId({
+          config: options?.config,
+          search,
+          providers,
+          agentDir: options?.agentDir,
+        }),
     ) ??
     providers[0];
   if (!provider) {
@@ -213,6 +237,7 @@ export function resolveWebSearchDefinition(
     config: options?.config,
     searchConfig: search as Record<string, unknown> | undefined,
     runtimeMetadata: runtimeWebSearch,
+    agentDir: options?.agentDir,
   });
   if (!definition) {
     return null;

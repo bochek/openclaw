@@ -233,8 +233,11 @@ export function buildAgentSystemPrompt(params: {
     ls: "List directory contents",
     exec: "Run shell commands (pty available for TTY-required CLIs)",
     process: "Manage background exec sessions",
-    web_search: "Search the web",
+    web_search:
+      "Search the web. If this tool is available, it is configured enough to try; use it instead of claiming web search is unavailable.",
     web_fetch: "Fetch and extract readable content from a URL",
+    x_search:
+      "Search X posts. If this tool is available, use it by default for X/Twitter requests instead of claiming X search is unavailable. For specific post stats, prefer the exact post URL or status ID and include the post text plus direct post URL in the final answer when available.",
     // Channel docking: add login tools here when a channel needs interactive linking.
     browser: "Control web browser",
     canvas: "Present/eval/snapshot the Canvas",
@@ -270,6 +273,7 @@ export function buildAgentSystemPrompt(params: {
     "process",
     "code_execution",
     "web_search",
+    "x_search",
     "web_fetch",
     "browser",
     "canvas",

@@ -1,4 +1,11 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  clearRuntimeAuthProfileStoreSnapshots,
+  upsertAuthProfile,
+} from "../../src/agents/auth-profiles.js";
 import { withFetchPreconnect } from "../../test/helpers/plugins/fetch-mock.js";
 import { createXSearchTool } from "./x-search.js";
 
@@ -40,6 +47,7 @@ function parseFirstRequestBody(mockFetch: ReturnType<typeof installXSearchFetch>
 }
 
 afterEach(() => {
+  clearRuntimeAuthProfileStoreSnapshots();
   vi.restoreAllMocks();
 });
 
@@ -152,6 +160,38 @@ describe("xai x_search tool", () => {
     expect((request?.headers as Record<string, string> | undefined)?.Authorization).toBe(
       "Bearer xai-plugin-key",
     );
+  });
+
+  it("reuses xAI auth profile keys for x_search requests", async () => {
+    const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-x-search-"));
+    try {
+      upsertAuthProfile({
+        profileId: "xai:default",
+        agentDir,
+        credential: {
+          type: "api_key",
+          provider: "xai",
+          key: "xai-profile-key",
+        },
+      });
+      const mockFetch = installXSearchFetch();
+      const tool = createXSearchTool({
+        config: {},
+        agentDir,
+      });
+
+      expect(tool?.name).toBe("x_search");
+      await tool?.execute?.("x-search:profile-key", {
+        query: "latest post from huntharo",
+      });
+
+      const request = mockFetch.mock.calls[0]?.[1] as RequestInit | undefined;
+      expect((request?.headers as Record<string, string> | undefined)?.Authorization).toBe(
+        "Bearer xai-profile-key",
+      );
+    } finally {
+      fs.rmSync(agentDir, { recursive: true, force: true });
+    }
   });
 
   it("prefers the active runtime config for SecretRef-backed x_search keys", async () => {
