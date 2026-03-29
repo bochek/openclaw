@@ -1,5 +1,6 @@
 import { defineChannelPluginEntry } from "openclaw/plugin-sdk/core";
 import { matrixPlugin } from "./src/channel.js";
+import { registerMatrixCli } from "./src/cli.js";
 import { setMatrixRuntime } from "./src/runtime.js";
 
 export { matrixPlugin } from "./src/channel.js";
@@ -40,8 +41,7 @@ export default defineChannelPluginEntry({
     });
 
     api.registerCli(
-      async ({ program }) => {
-        const { registerMatrixCli } = await import("./src/cli.js");
+      ({ program }) => {
         registerMatrixCli({ program });
       },
       { commands: ["matrix"] },
