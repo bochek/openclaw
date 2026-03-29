@@ -4,6 +4,7 @@ import { prepareProviderRuntimeAuth } from "../../../plugins/provider-runtime.js
 import {
   type AuthProfileStore,
   isProfileInCooldown,
+  resolveAuthStorePathForDisplay,
   resolveProfilesUnavailableReason,
 } from "../../auth-profiles.js";
 import { FailoverError, resolveFailoverStatus } from "../../failover-error.js";
@@ -15,7 +16,11 @@ import {
   type FailoverReason,
 } from "../../pi-embedded-helpers.js";
 import { clampRuntimeAuthRefreshDelayMs } from "../../runtime-auth-refresh.js";
-import { shouldTraceProviderAuth, summarizeProviderAuthKey } from "../../xai-auth-trace.js";
+import {
+  shouldLogProviderAuthSummaryOnce,
+  shouldTraceProviderAuth,
+  summarizeProviderAuthKey,
+} from "../../xai-auth-trace.js";
 import { describeUnknownError } from "../utils.js";
 import {
   RUNTIME_AUTH_REFRESH_MARGIN_MS,
@@ -357,6 +362,20 @@ export function createEmbeddedRunAuthController(params: {
         );
       }
       params.setRuntimeAuthState(null);
+    }
+    const authSummarySource = apiKeyInfo.profileId
+      ? `auth profile ${apiKeyInfo.profileId} (${resolveAuthStorePathForDisplay(params.agentDir)})`
+      : apiKeyInfo.source;
+    const runtimeMode = preparedAuth?.apiKey ? "prepared runtime auth" : "direct runtime key";
+    if (
+      shouldLogProviderAuthSummaryOnce(
+        runtimeModel.provider,
+        `${apiKeyInfo.profileId ?? apiKeyInfo.source}:${runtimeMode}:${runtimeModel.baseUrl ?? "default"}`,
+      )
+    ) {
+      params.log.info(
+        `[xai-auth] using ${authSummarySource}; mode=${apiKeyInfo.mode}; transport=${runtimeModel.api}; runtime=${runtimeMode}. Set OPENCLAW_DEBUG_XAI_AUTH=1 for per-request traces.`,
+      );
     }
     params.setLastProfileId(apiKeyInfo.profileId);
   };

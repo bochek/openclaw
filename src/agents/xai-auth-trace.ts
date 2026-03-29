@@ -1,6 +1,7 @@
 import { isNonSecretApiKeyMarker } from "./model-auth-markers.js";
 
 const DEFAULT_KEY_PREVIEW = { head: 4, tail: 4 };
+const loggedProviderAuthSummaries = new Set<string>();
 
 function formatApiKeyPreview(raw: string): string {
   const trimmed = raw.trim();
@@ -19,8 +20,23 @@ function formatApiKeyPreview(raw: string): string {
   return `${trimmed.slice(0, head)}…${trimmed.slice(-tail)}`;
 }
 
-export function shouldTraceProviderAuth(provider: string): boolean {
-  return provider.trim().toLowerCase() === "xai";
+export function shouldTraceProviderAuth(
+  provider: string,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return provider.trim().toLowerCase() === "xai" && env.OPENCLAW_DEBUG_XAI_AUTH === "1";
+}
+
+export function shouldLogProviderAuthSummaryOnce(provider: string, summaryKey: string): boolean {
+  if (provider.trim().toLowerCase() !== "xai") {
+    return false;
+  }
+  const key = `${provider.trim().toLowerCase()}:${summaryKey}`;
+  if (loggedProviderAuthSummaries.has(key)) {
+    return false;
+  }
+  loggedProviderAuthSummaries.add(key);
+  return true;
 }
 
 export function summarizeProviderAuthKey(apiKey: string | undefined): string {
