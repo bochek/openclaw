@@ -1,8 +1,11 @@
 import { resolveHumanDelayConfig } from "openclaw/plugin-sdk/agent-runtime";
 import {
+  createStatusReactionController,
+  DEFAULT_TIMING,
   logAckFailure,
   logTypingFailure,
   removeAckReactionAfterReply,
+  type StatusReactionAdapter,
 } from "openclaw/plugin-sdk/channel-feedback";
 import { createChannelReplyPipeline } from "openclaw/plugin-sdk/channel-reply-pipeline";
 import { resolveStorePath, updateLastRoute } from "openclaw/plugin-sdk/config-runtime";
@@ -35,6 +38,39 @@ import {
   resolveSlackThreadTs,
 } from "../replies.js";
 import type { PreparedSlackMessage } from "./types.js";
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Slack reactions.add/remove expect shortcode names, not raw unicode emoji.
+const UNICODE_TO_SLACK: Record<string, string> = {
+  "👀": "eyes",
+  "🤔": "thinking_face",
+  "🔥": "fire",
+  "👨‍💻": "male-technologist",
+  "👨💻": "male-technologist",
+  "👩‍💻": "female-technologist",
+  "⚡": "zap",
+  "🌐": "globe_with_meridians",
+  "✅": "white_check_mark",
+  "👍": "thumbsup",
+  "❌": "x",
+  "😱": "scream",
+  "🥱": "yawning_face",
+  "😨": "fearful",
+  "⏳": "hourglass_flowing_sand",
+  "⚠️": "warning",
+  "✍": "writing_hand",
+  "🧠": "brain",
+  "🛠️": "hammer_and_wrench",
+  "💻": "computer",
+};
+
+function toSlackEmojiName(emoji: string): string {
+  const trimmed = emoji.trim().replace(/^:+|:+$/g, "");
+  return UNICODE_TO_SLACK[trimmed] ?? trimmed;
+}
 
 function hasMedia(payload: ReplyPayload): boolean {
   return resolveSendableOutboundReplyParts(payload).hasMedia;
@@ -157,6 +193,55 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
   const messageTs = message.ts ?? message.event_ts;
   const incomingThreadTs = message.thread_ts;
   let didSetStatus = false;
+  const statusReactionsEnabled =
+    Boolean(prepared.ackReactionPromise) && cfg.messages?.statusReactions?.enabled !== false;
+  const slackStatusAdapter: StatusReactionAdapter = {
+    setReaction: async (emoji) => {
+      await reactSlackMessage(message.channel, message.ts ?? "", toSlackEmojiName(emoji), {
+        token: ctx.botToken,
+        client: ctx.app.client,
+      }).catch((err) => {
+        if (String(err).includes("already_reacted")) {
+          return;
+        }
+        throw err;
+      });
+    },
+    removeReaction: async (emoji) => {
+      await removeSlackReaction(message.channel, message.ts ?? "", toSlackEmojiName(emoji), {
+        token: ctx.botToken,
+        client: ctx.app.client,
+      }).catch((err) => {
+        if (String(err).includes("no_reaction")) {
+          return;
+        }
+        throw err;
+      });
+    },
+  };
+  const statusReactionTiming = {
+    ...DEFAULT_TIMING,
+    ...cfg.messages?.statusReactions?.timing,
+  };
+  const statusReactions = createStatusReactionController({
+    enabled: statusReactionsEnabled,
+    adapter: slackStatusAdapter,
+    initialEmoji: prepared.ackReactionValue || "eyes",
+    emojis: cfg.messages?.statusReactions?.emojis,
+    timing: cfg.messages?.statusReactions?.timing,
+    onError: (err) => {
+      logAckFailure({
+        log: logVerbose,
+        channel: "slack",
+        target: `${message.channel}/${message.ts}`,
+        error: err,
+      });
+    },
+  });
+
+  if (statusReactionsEnabled) {
+    void statusReactions.setQueued();
+  }
 
   // Shared mutable ref for "replyToMode=first". Both tool + auto-reply flows
   // mark this to ensure only the first reply is threaded.
@@ -471,34 +556,97 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
         }
       };
 
-  const { queuedFinal, counts } = await dispatchInboundMessage({
-    ctx: prepared.ctxPayload,
-    cfg,
-    dispatcher,
-    replyOptions: {
-      ...replyOptions,
-      skillFilter: prepared.channelConfig?.skills,
-      hasRepliedRef,
-      disableBlockStreaming: useStreaming
-        ? true
-        : typeof account.config.blockStreaming === "boolean"
-          ? !account.config.blockStreaming
-          : undefined,
-      onModelSelected,
-      onPartialReply: useStreaming
-        ? undefined
-        : !previewStreamingEnabled
+  let dispatchError = false;
+  let queuedFinal = false;
+  let counts: { final?: number; block?: number } = {};
+  try {
+    const result = await dispatchInboundMessage({
+      ctx: prepared.ctxPayload,
+      cfg,
+      dispatcher,
+      replyOptions: {
+        ...replyOptions,
+        skillFilter: prepared.channelConfig?.skills,
+        hasRepliedRef,
+        disableBlockStreaming: useStreaming
+          ? true
+          : typeof account.config.blockStreaming === "boolean"
+            ? !account.config.blockStreaming
+            : undefined,
+        onModelSelected,
+        onPartialReply: useStreaming
           ? undefined
-          : async (payload) => {
-              updateDraftFromPartial(payload.text);
+          : !previewStreamingEnabled
+            ? undefined
+            : async (payload) => {
+                updateDraftFromPartial(payload.text);
+              },
+        onAssistantMessageStart: onDraftBoundary,
+        onReasoningEnd: onDraftBoundary,
+        onReasoningStream: statusReactionsEnabled
+          ? async () => {
+              await statusReactions.setThinking();
+            }
+          : undefined,
+        onToolStart: statusReactionsEnabled
+          ? async (payload) => {
+              await statusReactions.setTool(payload.name);
+            }
+          : undefined,
+      },
+    });
+    queuedFinal = result.queuedFinal;
+    counts = result.counts;
+  } catch (err) {
+    dispatchError = true;
+    throw err;
+  } finally {
+    await draftStream?.flush();
+    draftStream?.stop();
+    markDispatchIdle();
+
+    if (statusReactionsEnabled) {
+      if (dispatchError) {
+        await statusReactions.setError();
+      } else {
+        await statusReactions.setDone();
+      }
+      if (ctx.removeAckAfterReply) {
+        void (async () => {
+          await sleep(
+            dispatchError ? statusReactionTiming.errorHoldMs : statusReactionTiming.doneHoldMs,
+          );
+          await statusReactions.clear();
+        })();
+      } else {
+        void statusReactions.restoreInitial();
+      }
+    } else {
+      removeAckReactionAfterReply({
+        removeAfterReply: ctx.removeAckAfterReply,
+        ackReactionPromise: prepared.ackReactionPromise,
+        ackReactionValue: prepared.ackReactionValue,
+        remove: () =>
+          removeSlackReaction(
+            message.channel,
+            prepared.ackReactionMessageTs ?? "",
+            prepared.ackReactionValue,
+            {
+              token: ctx.botToken,
+              client: ctx.app.client,
             },
-      onAssistantMessageStart: onDraftBoundary,
-      onReasoningEnd: onDraftBoundary,
-    },
-  });
-  await draftStream?.flush();
-  draftStream?.stop();
-  markDispatchIdle();
+          ),
+        onError: (err) => {
+          logAckFailure({
+            log: logVerbose,
+            channel: "slack",
+            target: `${message.channel}/${message.ts}`,
+            error: err,
+          });
+        },
+      });
+    }
+  }
 
   // -----------------------------------------------------------------------
   // Finalize the stream if one was started
@@ -540,30 +688,6 @@ export async function dispatchPreparedSlackMessage(prepared: PreparedSlackMessag
       `slack: delivered ${finalCount} reply${finalCount === 1 ? "" : "ies"} to ${prepared.replyTarget}`,
     );
   }
-
-  removeAckReactionAfterReply({
-    removeAfterReply: ctx.removeAckAfterReply,
-    ackReactionPromise: prepared.ackReactionPromise,
-    ackReactionValue: prepared.ackReactionValue,
-    remove: () =>
-      removeSlackReaction(
-        message.channel,
-        prepared.ackReactionMessageTs ?? "",
-        prepared.ackReactionValue,
-        {
-          token: ctx.botToken,
-          client: ctx.app.client,
-        },
-      ),
-    onError: (err) => {
-      logAckFailure({
-        log: logVerbose,
-        channel: "slack",
-        target: `${message.channel}/${message.ts}`,
-        error: err,
-      });
-    },
-  });
 
   if (prepared.isRoomish) {
     clearHistoryEntriesIfEnabled({

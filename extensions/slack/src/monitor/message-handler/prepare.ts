@@ -555,8 +555,10 @@ export async function prepareSlackMessage(params: {
     );
 
   const ackReactionMessageTs = message.ts;
+  const statusReactionsWillHandle =
+    cfg.messages?.statusReactions?.enabled !== false && shouldAckReaction();
   const ackReactionPromise =
-    shouldAckReaction() && ackReactionMessageTs && ackReactionValue
+    !statusReactionsWillHandle && shouldAckReaction() && ackReactionMessageTs && ackReactionValue
       ? reactSlackMessage(message.channel, ackReactionMessageTs, ackReactionValue, {
           token: ctx.botToken,
           client: ctx.app.client,
@@ -567,7 +569,9 @@ export async function prepareSlackMessage(params: {
             return false;
           },
         )
-      : null;
+      : statusReactionsWillHandle
+        ? Promise.resolve(true)
+        : null;
 
   const roomLabel = channelName ? `#${channelName}` : `#${message.channel}`;
   const senderName = await resolveSenderName();
