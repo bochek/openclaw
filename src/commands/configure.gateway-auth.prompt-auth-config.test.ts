@@ -104,6 +104,7 @@ function createApplyAuthChoiceConfig(includeMinimaxProvider = false) {
 async function runPromptAuthConfigWithAllowlist(includeMinimaxProvider = false) {
   mocks.promptAuthChoiceGrouped.mockResolvedValue("kilocode-api-key");
   mocks.applyAuthChoice.mockResolvedValue(createApplyAuthChoiceConfig(includeMinimaxProvider));
+  mocks.promptDefaultModel.mockResolvedValue({});
   mocks.promptModelAllowlist.mockResolvedValue({
     models: ["kilocode/kilo/auto"],
   });
@@ -114,6 +115,56 @@ async function runPromptAuthConfigWithAllowlist(includeMinimaxProvider = false) 
 }
 
 describe("promptAuthConfig", () => {
+  it("prompts for the default model after a provider auth choice and applies it", async () => {
+    mocks.promptAuthChoiceGrouped.mockResolvedValue("xai-api-key");
+    mocks.resolvePreferredProviderForAuthChoice.mockResolvedValue("xai");
+    mocks.applyAuthChoice.mockResolvedValue({
+      config: {
+        agents: {
+          defaults: {
+            model: { primary: "xai/grok-4" },
+          },
+        },
+        models: {
+          providers: {
+            xai: {
+              baseUrl: "https://api.x.ai/v1",
+              api: "openai-responses",
+              models: [
+                { id: "grok-4", name: "Grok 4" },
+                {
+                  id: "grok-4.20-beta-latest-reasoning",
+                  name: "Grok 4.20 Beta Latest (Reasoning)",
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+    mocks.promptDefaultModel.mockResolvedValue({
+      model: "xai/grok-4.20-beta-latest-reasoning",
+    });
+    mocks.promptModelAllowlist.mockResolvedValue({
+      models: ["xai/grok-4.20-beta-latest-reasoning"],
+    });
+
+    const result = await promptAuthConfig({}, makeRuntime(), noopPrompter);
+
+    expect(mocks.promptDefaultModel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        preferredProvider: "xai",
+        ignoreAllowlist: true,
+      }),
+    );
+    expect(result.agents?.defaults?.model).toEqual({
+      primary: "xai/grok-4.20-beta-latest-reasoning",
+    });
+    expect(Object.keys(result.agents?.defaults?.models ?? {})).toEqual([
+      "xai/grok-4.20-beta-latest-reasoning",
+    ]);
+  });
+
   it("keeps Kilo provider models while applying allowlist defaults", async () => {
     const result = await runPromptAuthConfigWithAllowlist();
     expect(result.models?.providers?.kilocode?.models?.map((model) => model.id)).toEqual([
