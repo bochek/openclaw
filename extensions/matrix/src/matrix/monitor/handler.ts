@@ -78,10 +78,7 @@ export type MatrixMonitorHandlerParams = {
   startupMs: number;
   startupGraceMs: number;
   dropPreStartupMessages: boolean;
-  inboundDeduper?: Pick<
-    MatrixInboundEventDeduper,
-    "claimEvent" | "commitEvent" | "releaseEvent" | "isOlderThanStartupWatermark"
-  >;
+  inboundDeduper?: Pick<MatrixInboundEventDeduper, "claimEvent" | "commitEvent" | "releaseEvent">;
   directTracker: {
     isDirectMessage: (params: {
       roomId: string;
@@ -146,21 +143,6 @@ function resolveMatrixAllowBotsMode(value?: boolean | "mentions"): MatrixAllowBo
     return "mentions";
   }
   return "off";
-}
-
-function isPreStartupMatrixEvent(params: {
-  eventTs: number | undefined;
-  eventAge: number | undefined;
-  startupMs: number;
-  startupGraceMs: number;
-}): boolean {
-  if (typeof params.eventTs === "number") {
-    return params.eventTs < params.startupMs - params.startupGraceMs;
-  }
-  if (typeof params.eventAge === "number") {
-    return params.eventAge > params.startupGraceMs;
-  }
-  return false;
 }
 
 export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParams) {
@@ -295,30 +277,18 @@ export function createMatrixRoomMessageHandler(params: MatrixMonitorHandlerParam
         if (!claimedInboundEvent || !inboundDeduper || !eventId) {
           return;
         }
-        await inboundDeduper.commitEvent({ roomId, eventId, eventTs: eventTs ?? undefined });
+        await inboundDeduper.commitEvent({ roomId, eventId });
         claimedInboundEvent = false;
       };
-      const isPreStartupEvent = isPreStartupMatrixEvent({
-        eventTs: typeof eventTs === "number" ? eventTs : undefined,
-        eventAge: typeof eventAge === "number" ? eventAge : undefined,
-        startupMs,
-        startupGraceMs,
-      });
-      if (isPreStartupEvent) {
-        if (dropPreStartupMessages) {
+      if (dropPreStartupMessages) {
+        if (typeof eventTs === "number" && eventTs < startupMs - startupGraceMs) {
           return;
         }
-        // Restart backlog fencing only makes sense against the watermark that
-        // existed when this process started. Events that only carry an age
-        // value also bypass the fence because there is no concrete timestamp
-        // to compare safely.
         if (
-          typeof eventTs === "number" &&
-          inboundDeduper?.isOlderThanStartupWatermark({ roomId, eventTs })
+          typeof eventTs !== "number" &&
+          typeof eventAge === "number" &&
+          eventAge > startupGraceMs
         ) {
-          logVerboseMessage(
-            `matrix: drop stale startup backlog room=${roomId} id=${eventId || "unknown"} ts=${eventTs}`,
-          );
           return;
         }
       }
