@@ -262,6 +262,7 @@ function extractClientTools(body: CreateResponseBody): ClientToolDefinition[] {
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters,
+      strict: tool.strict,
     },
   }));
 }
