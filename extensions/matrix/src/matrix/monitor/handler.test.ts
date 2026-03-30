@@ -1383,6 +1383,62 @@ describe("matrix monitor handler semantic bot loop termination", () => {
     expect(runMatrixSemanticLoopJudgeMock).toHaveBeenCalledTimes(2);
     expect(dispatchReplyFromConfig).toHaveBeenCalledTimes(2);
   });
+
+  it("does not reopen a terminated chain when human message is dropped by mention gate", async () => {
+    const dispatchReplyFromConfig = vi.fn(async () => ({
+      queuedFinal: true,
+      counts: { final: 1, block: 0, tool: 0 },
+    }));
+    const { handler } = createMatrixHandlerTestHarness({
+      isDirectMessage: false,
+      accountAllowBots: true,
+      configuredBotUserIds: new Set(["@ops:example.org"]),
+      roomsConfig: {
+        "!room:example.org": { requireMention: true },
+      },
+      mentionRegexes: [/@bot/i],
+      dispatchReplyFromConfig,
+      getMemberDisplayName: async () => "sender",
+    });
+    runMatrixSemanticLoopJudgeMock.mockResolvedValueOnce({
+      decision: "stop_loop",
+      confidence: 0.97,
+      reasonCode: "no_new_information",
+      reasonShort: "No meaningful information gain.",
+    });
+
+    await handler(
+      "!room:example.org",
+      createMatrixTextMessageEvent({
+        eventId: "$bot-chain-stop-gated",
+        sender: "@ops:example.org",
+        body: "@bot restating the same plan",
+        mentions: { user_ids: ["@bot:example.org"] },
+      }),
+    );
+
+    await handler(
+      "!room:example.org",
+      createMatrixTextMessageEvent({
+        eventId: "$human-no-mention",
+        sender: "@alice:example.org",
+        body: "this should not reopen because no mention",
+      }),
+    );
+
+    await handler(
+      "!room:example.org",
+      createMatrixTextMessageEvent({
+        eventId: "$bot-still-blocked",
+        sender: "@ops:example.org",
+        body: "@bot still repeating",
+        mentions: { user_ids: ["@bot:example.org"] },
+      }),
+    );
+
+    expect(runMatrixSemanticLoopJudgeMock).toHaveBeenCalledTimes(1);
+    expect(dispatchReplyFromConfig).not.toHaveBeenCalled();
+  });
 });
 
 describe("matrix monitor handler durable inbound dedupe", () => {
