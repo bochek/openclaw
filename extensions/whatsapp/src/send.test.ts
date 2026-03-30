@@ -205,6 +205,26 @@ describe("web outbound", () => {
     });
   });
 
+  it("forwards quoted reply metadata to the active listener", async () => {
+    const quotedMessageKey = {
+      id: "quoted-1",
+      remoteJid: "1555@s.whatsapp.net",
+      fromMe: false,
+      participant: "1555@s.whatsapp.net",
+      body: "original",
+    };
+
+    await sendMessageWhatsApp("+1555", "reply", {
+      verbose: false,
+      quotedMessageKey,
+    });
+
+    expect(sendMessage).toHaveBeenLastCalledWith("+1555", "reply", undefined, undefined, {
+      quotedMessageKey,
+      accountId: undefined,
+    });
+  });
+
   it("maps image with caption", async () => {
     const buf = Buffer.from("img");
     loadWebMediaMock.mockResolvedValueOnce({
