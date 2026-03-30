@@ -36,6 +36,7 @@ function makeMsg(): WebInboundMsg {
     from: "+10000000000",
     to: "+20000000000",
     id: "msg-1",
+    chatId: "10000000000@s.whatsapp.net",
     reply: vi.fn(async () => undefined),
     sendMedia: vi.fn(async () => undefined),
   } as unknown as WebInboundMsg;
@@ -116,6 +117,7 @@ describe("deliverWebReply", () => {
     expect(msg.reply).toHaveBeenCalledTimes(1);
     expect(msg.reply).toHaveBeenCalledWith(
       "Intro line\nReasoning: appears in content but is not a prefix",
+      undefined,
     );
   });
 
@@ -132,8 +134,8 @@ describe("deliverWebReply", () => {
     });
 
     expect(msg.reply).toHaveBeenCalledTimes(2);
-    expect(msg.reply).toHaveBeenNthCalledWith(1, "aaa");
-    expect(msg.reply).toHaveBeenNthCalledWith(2, "aaa");
+    expect(msg.reply).toHaveBeenNthCalledWith(1, "aaa", undefined);
+    expect(msg.reply).toHaveBeenNthCalledWith(2, "aaa", undefined);
     expect(replyLogger.info).toHaveBeenCalledWith(expect.any(Object), "auto-reply sent (text)");
   });
 
@@ -184,8 +186,9 @@ describe("deliverWebReply", () => {
         caption: "aaa",
         mimetype: "image/jpeg",
       }),
+      undefined,
     );
-    expect(msg.reply).toHaveBeenCalledWith("aaa");
+    expect(msg.reply).toHaveBeenCalledWith("aaa", undefined);
     expect(replyLogger.info).toHaveBeenCalledWith(expect.any(Object), "auto-reply sent (media)");
     expect(logVerbose).toHaveBeenCalled();
   });
@@ -261,6 +264,7 @@ describe("deliverWebReply", () => {
         mimetype: "audio/ogg",
         caption: "cap",
       }),
+      undefined,
     );
   });
 
@@ -289,6 +293,7 @@ describe("deliverWebReply", () => {
         caption: "cap",
         mimetype: "video/mp4",
       }),
+      undefined,
     );
   });
 
@@ -319,6 +324,106 @@ describe("deliverWebReply", () => {
         caption: "cap",
         mimetype: "application/octet-stream",
       }),
+      undefined,
     );
+  });
+
+  describe("reply quoting", () => {
+    const expectedQuote = expect.objectContaining({
+      quoted: expect.objectContaining({
+        key: expect.objectContaining({ id: "msg-1" }),
+      }),
+    });
+
+    it("quotes every text chunk when replyToMode is all", async () => {
+      const msg = makeMsg();
+      await deliverWebReply({
+        replyResult: { text: "aaa bbb", replyToId: "msg-1" },
+        msg,
+        replyToMode: "all",
+        maxMediaBytes: 1024 * 1024,
+        textLimit: 3,
+        replyLogger,
+        skipLog: true,
+      });
+      expect(msg.reply).toHaveBeenCalledTimes(2);
+      expect((msg.reply as ReturnType<typeof vi.fn>).mock.calls[0][1]).toEqual(expectedQuote);
+      expect((msg.reply as ReturnType<typeof vi.fn>).mock.calls[1][1]).toEqual(expectedQuote);
+    });
+
+    it("quotes only the first text chunk when replyToMode is first", async () => {
+      const msg = makeMsg();
+      await deliverWebReply({
+        replyResult: { text: "aaa bbb", replyToId: "msg-1" },
+        msg,
+        replyToMode: "first",
+        maxMediaBytes: 1024 * 1024,
+        textLimit: 3,
+        replyLogger,
+        skipLog: true,
+      });
+      expect(msg.reply).toHaveBeenCalledTimes(2);
+      expect((msg.reply as ReturnType<typeof vi.fn>).mock.calls[0][1]).toEqual(expectedQuote);
+      expect((msg.reply as ReturnType<typeof vi.fn>).mock.calls[1][1]).toBeUndefined();
+    });
+
+    it("preserves quote for text fallback when media send fails", async () => {
+      const msg = makeMsg();
+      mockLoadedImageMedia();
+      mockFirstSendMediaFailure(msg, "upload failed");
+
+      await deliverWebReply({
+        replyResult: {
+          text: "caption",
+          mediaUrl: "http://example.com/img.jpg",
+          replyToId: "msg-1",
+        },
+        msg,
+        maxMediaBytes: 1024 * 1024,
+        textLimit: 200,
+        replyLogger,
+        skipLog: true,
+      });
+      expect(msg.reply).toHaveBeenCalled();
+      expect((msg.reply as ReturnType<typeof vi.fn>).mock.calls[0][1]).toEqual(expectedQuote);
+    });
+
+    it("consumes the quote after the first successful media send in first mode", async () => {
+      const msg = makeMsg();
+      mockLoadedImageMedia();
+
+      await deliverWebReply({
+        replyResult: {
+          text: "aaaaaa",
+          mediaUrl: "http://example.com/img.jpg",
+          replyToId: "msg-1",
+        },
+        msg,
+        replyToMode: "first",
+        maxMediaBytes: 1024 * 1024,
+        textLimit: 3,
+        replyLogger,
+        skipLog: true,
+      });
+
+      expect(msg.sendMedia).toHaveBeenCalledTimes(1);
+      expect((msg.sendMedia as ReturnType<typeof vi.fn>).mock.calls[0][1]).toEqual(expectedQuote);
+      expect(msg.reply).toHaveBeenCalledTimes(1);
+      expect((msg.reply as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBeUndefined();
+    });
+
+    it("does not quote when replyToId is absent", async () => {
+      const msg = makeMsg();
+      await deliverWebReply({
+        replyResult: { text: "hello" },
+        msg,
+        maxMediaBytes: 1024 * 1024,
+        textLimit: 200,
+        replyLogger,
+        skipLog: true,
+      });
+      expect(msg.reply).toHaveBeenCalledTimes(1);
+      expect((msg.reply as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBeUndefined();
+    });
   });
 });

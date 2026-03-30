@@ -238,6 +238,28 @@ describe("gateway send mirroring", () => {
     );
   });
 
+  it("forwards reply threading into outbound delivery", async () => {
+    mockDeliverySuccess("m-reply");
+
+    await runSend({
+      to: "channel:C1",
+      message: "hi",
+      channel: "slack",
+      replyToId: "post123",
+      replyToParticipant: "+15551234567",
+      threadId: "topic456",
+      idempotencyKey: "idem-reply-threading",
+    });
+
+    expect(mocks.deliverOutboundPayloads).toHaveBeenCalledWith(
+      expect.objectContaining({
+        replyToId: "post123",
+        replyToParticipant: "+15551234567",
+        threadId: "topic456",
+      }),
+    );
+  });
+
   it("forwards an empty gateway scope array into outbound delivery", async () => {
     mockDeliverySuccess("m-empty-scope");
 

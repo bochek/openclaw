@@ -354,6 +354,7 @@ export async function processMessage(params: {
       ...replyPipeline,
       responsePrefix,
     },
+    replyToMode: account.replyToMode ?? "off",
     replyResolver: params.replyResolver,
     route: params.route,
     shouldClearGroupHistory,

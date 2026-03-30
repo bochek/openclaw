@@ -201,6 +201,16 @@ describe("sendMessage replyToId threading", () => {
       field: "threadId",
       expected: "topic456",
     },
+    {
+      name: "passes replyToParticipant through to the outbound adapter",
+      params: {
+        content: "group reply",
+        replyToId: "post123",
+        replyToParticipant: "+15551234567",
+      },
+      field: "replyToParticipant",
+      expected: "+15551234567",
+    },
   ])("$name", async ({ params, field, expected }) => {
     const capturedCtx = setupMattermostCapture();
 
@@ -305,6 +315,21 @@ describe("gateway url override hardening", () => {
       expected: {
         params: {
           agentId: "work",
+        },
+      },
+    },
+    {
+      name: "forwards reply threading fields in gateway send params",
+      params: {
+        replyToId: "post123",
+        replyToParticipant: "+15551234567",
+        threadId: "topic456",
+      },
+      expected: {
+        params: {
+          replyToId: "post123",
+          replyToParticipant: "+15551234567",
+          threadId: "topic456",
         },
       },
     },

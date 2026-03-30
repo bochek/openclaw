@@ -115,6 +115,8 @@ export const sendHandlers: GatewayRequestHandlers = {
       channel?: string;
       accountId?: string;
       agentId?: string;
+      replyToId?: string;
+      replyToParticipant?: string;
       threadId?: string;
       sessionKey?: string;
       idempotencyKey: string;
@@ -168,6 +170,14 @@ export const sendHandlers: GatewayRequestHandlers = {
     const accountId =
       typeof request.accountId === "string" && request.accountId.trim().length
         ? request.accountId.trim()
+        : undefined;
+    const replyToId =
+      typeof request.replyToId === "string" && request.replyToId.trim().length
+        ? request.replyToId.trim()
+        : undefined;
+    const replyToParticipant =
+      typeof request.replyToParticipant === "string" && request.replyToParticipant.trim().length
+        ? request.replyToParticipant.trim()
         : undefined;
     const threadId =
       typeof request.threadId === "string" && request.threadId.trim().length
@@ -240,6 +250,7 @@ export const sendHandlers: GatewayRequestHandlers = {
               accountId,
               target: deliveryTarget,
               resolvedTarget: idLikeTarget,
+              replyToId,
               threadId,
             })
           : null;
@@ -265,6 +276,8 @@ export const sendHandlers: GatewayRequestHandlers = {
           payloads: [{ text: message, mediaUrl, mediaUrls }],
           session: outboundSession,
           gifPlayback: request.gifPlayback,
+          replyToId,
+          replyToParticipant,
           threadId: threadId ?? null,
           deps: outboundDeps,
           gatewayClientScopes: client?.connect?.scopes ?? [],

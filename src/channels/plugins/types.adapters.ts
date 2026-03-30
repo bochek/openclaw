@@ -148,6 +148,7 @@ export type ChannelOutboundContext = {
   /** Send image as document to avoid Telegram compression. */
   forceDocument?: boolean;
   replyToId?: string | null;
+  replyToParticipant?: string | null;
   threadId?: string | number | null;
   accountId?: string | null;
   identity?: OutboundIdentity;
@@ -191,6 +192,10 @@ export type ChannelOutboundAdapter = {
     accountId?: string | null;
     fallbackLimit?: number;
   }) => number | undefined;
+  consumeReplyToAfterFirstMediaSend?: (params: {
+    cfg: OpenClawConfig;
+    accountId?: string | null;
+  }) => boolean;
   shouldSuppressLocalPayloadPrompt?: (params: {
     cfg: OpenClawConfig;
     accountId?: string | null;

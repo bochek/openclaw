@@ -361,6 +361,253 @@ describe("runMessageAction plugin dispatch", () => {
     });
   });
 
+  describe("media caption behavior", () => {
+    afterEach(() => {
+      setActivePluginRegistry(createTestRegistry([]));
+    });
+
+    it("promotes caption to message for media sends when message is empty", async () => {
+      const sendMedia = vi.fn().mockResolvedValue({
+        channel: "testchat",
+        messageId: "m1",
+        chatId: "c1",
+      });
+      setActivePluginRegistry(
+        createTestRegistry([
+          {
+            pluginId: "testchat",
+            source: "test",
+            plugin: createOutboundTestPlugin({
+              id: "testchat",
+              outbound: {
+                deliveryMode: "direct",
+                sendText: vi.fn().mockResolvedValue({
+                  channel: "testchat",
+                  messageId: "t1",
+                  chatId: "c1",
+                }),
+                sendMedia,
+              },
+            }),
+          },
+        ]),
+      );
+      const cfg = {
+        channels: {
+          testchat: {
+            enabled: true,
+          },
+        },
+      } as OpenClawConfig;
+
+      const result = await runMessageAction({
+        cfg,
+        action: "send",
+        params: {
+          channel: "testchat",
+          target: "channel:abc",
+          media: "https://example.com/cat.png",
+          caption: "caption-only text",
+        },
+        dryRun: false,
+      });
+
+      expect(result.kind).toBe("send");
+      expect(sendMedia).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "caption-only text",
+          mediaUrl: "https://example.com/cat.png",
+        }),
+      );
+    });
+
+    it("does not misclassify send as poll when zero-valued poll params are present", async () => {
+      const sendMedia = vi.fn().mockResolvedValue({
+        channel: "testchat",
+        messageId: "m2",
+        chatId: "c1",
+      });
+      setActivePluginRegistry(
+        createTestRegistry([
+          {
+            pluginId: "testchat",
+            source: "test",
+            plugin: createOutboundTestPlugin({
+              id: "testchat",
+              outbound: {
+                deliveryMode: "direct",
+                sendText: vi.fn().mockResolvedValue({
+                  channel: "testchat",
+                  messageId: "t2",
+                  chatId: "c1",
+                }),
+                sendMedia,
+              },
+            }),
+          },
+        ]),
+      );
+      const cfg = {
+        channels: {
+          testchat: {
+            enabled: true,
+          },
+        },
+      } as OpenClawConfig;
+
+      const result = await runMessageAction({
+        cfg,
+        action: "send",
+        params: {
+          channel: "testchat",
+          target: "channel:abc",
+          media: "https://example.com/file.txt",
+          message: "hello",
+          pollDurationHours: 0,
+          pollDurationSeconds: 0,
+          pollMulti: false,
+          pollQuestion: "",
+          pollOption: [],
+        },
+        dryRun: false,
+      });
+
+      expect(result.kind).toBe("send");
+      expect(sendMedia).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "hello",
+          mediaUrl: "https://example.com/file.txt",
+        }),
+      );
+    });
+
+    it("infers whatsapp reply participants for same-chat replies", async () => {
+      const sendText = vi.fn().mockResolvedValue({
+        channel: "whatsapp",
+        messageId: "w1",
+      });
+      setActivePluginRegistry(
+        createTestRegistry([
+          {
+            pluginId: "whatsapp",
+            source: "test",
+            plugin: createOutboundTestPlugin({
+              id: "whatsapp",
+              messaging: {
+                targetResolver: {
+                  looksLikeId: () => true,
+                  hint: "<jid>",
+                },
+              },
+              outbound: {
+                deliveryMode: "direct",
+                sendText,
+                sendMedia: vi.fn().mockResolvedValue({
+                  channel: "whatsapp",
+                  messageId: "w2",
+                }),
+              },
+            }),
+          },
+        ]),
+      );
+      const cfg = {
+        channels: {
+          whatsapp: {
+            enabled: true,
+          },
+        },
+      } as OpenClawConfig;
+
+      await runMessageAction({
+        cfg,
+        action: "send",
+        params: {
+          channel: "whatsapp",
+          target: "120363000000000000@g.us",
+          message: "reply",
+          replyTo: "quoted-1",
+        },
+        requesterSenderId: "+15551234567",
+        toolContext: {
+          currentChannelProvider: "whatsapp",
+          currentChannelId: "whatsapp:120363000000000000@g.us",
+        },
+        dryRun: false,
+      });
+
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          replyToId: "quoted-1",
+          replyToParticipant: "+15551234567",
+        }),
+      );
+    });
+
+    it("does not infer whatsapp reply participants across chats", async () => {
+      const sendText = vi.fn().mockResolvedValue({
+        channel: "whatsapp",
+        messageId: "w1",
+      });
+      setActivePluginRegistry(
+        createTestRegistry([
+          {
+            pluginId: "whatsapp",
+            source: "test",
+            plugin: createOutboundTestPlugin({
+              id: "whatsapp",
+              messaging: {
+                targetResolver: {
+                  looksLikeId: () => true,
+                  hint: "<jid>",
+                },
+              },
+              outbound: {
+                deliveryMode: "direct",
+                sendText,
+                sendMedia: vi.fn().mockResolvedValue({
+                  channel: "whatsapp",
+                  messageId: "w2",
+                }),
+              },
+            }),
+          },
+        ]),
+      );
+      const cfg = {
+        channels: {
+          whatsapp: {
+            enabled: true,
+          },
+        },
+      } as OpenClawConfig;
+
+      await runMessageAction({
+        cfg,
+        action: "send",
+        params: {
+          channel: "whatsapp",
+          target: "120363999999999999@g.us",
+          message: "reply",
+          replyTo: "quoted-1",
+        },
+        requesterSenderId: "+15551234567",
+        toolContext: {
+          currentChannelProvider: "whatsapp",
+          currentChannelId: "whatsapp:120363000000000000@g.us",
+        },
+        dryRun: false,
+      });
+
+      expect(sendText).toHaveBeenCalledWith(
+        expect.objectContaining({
+          replyToId: "quoted-1",
+          replyToParticipant: undefined,
+        }),
+      );
+    });
+  });
+
   describe("card-only send behavior", () => {
     const handleAction = vi.fn(async ({ params }: { params: Record<string, unknown> }) =>
       jsonResult({
