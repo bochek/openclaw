@@ -26,6 +26,7 @@ export function registerMessageSendCommand(message: Command, helpers: MessageCli
         .option("--components <json>", "Discord components payload as JSON")
         .option("--card <json>", "Adaptive Card JSON object (when supported by the channel)")
         .option("--reply-to <id>", "Reply-to message id")
+        .option("--participant <id>", "WhatsApp reply participant (group replies)")
         .option("--thread-id <id>", "Thread id (Telegram forum thread)")
         .option("--gif-playback", "Treat video media as GIF playback (WhatsApp only).", false)
         .option(

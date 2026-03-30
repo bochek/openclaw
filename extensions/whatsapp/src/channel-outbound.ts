@@ -1,4 +1,5 @@
 import { chunkText } from "openclaw/plugin-sdk/reply-runtime";
+import { resolveWhatsAppAccount } from "./accounts.js";
 import { createWhatsAppOutboundBase } from "./outbound-base.js";
 import { resolveWhatsAppOutboundTarget } from "./resolve-outbound-target.js";
 import { getWhatsAppRuntime } from "./runtime.js";
@@ -14,6 +15,8 @@ export const whatsappChannelOutbound = {
     sendMessageWhatsApp,
     sendPollWhatsApp,
     shouldLogVerbose: () => getWhatsAppRuntime().logging.shouldLogVerbose(),
+    resolveReplyToMode: ({ cfg, accountId }) =>
+      resolveWhatsAppAccount({ cfg, accountId }).replyToMode ?? "off",
     resolveTarget: ({ to, allowFrom, mode }) =>
       resolveWhatsAppOutboundTarget({ to, allowFrom, mode }),
   }),

@@ -1,4 +1,5 @@
 import type { ReactionLevel } from "../utils/reaction-level.js";
+import type { ReplyToMode } from "./types.base.js";
 import type {
   BlockStreamingCoalesceConfig,
   ContextVisibilityMode,
@@ -97,6 +98,13 @@ type WhatsAppSharedConfig = {
   heartbeat?: ChannelHeartbeatVisibilityConfig;
   /** Channel health monitor overrides for this channel/account. */
   healthMonitor?: ChannelHealthMonitorConfig;
+  /**
+   * Controls whether the bot's reply quotes the triggering message.
+   * - "off": never quote (default)
+   * - "first": quote the first reply chunk
+   * - "all": quote every reply chunk
+   */
+  replyToMode?: ReplyToMode;
 };
 
 type WhatsAppConfigCore = {
