@@ -171,15 +171,18 @@ describe("POST /sessions/:sessionKey/kill", () => {
 
   it("rejects remote kills when a caller forges a requester session header", async () => {
     isLocalDirectRequestMock.mockReturnValue(false);
-    authMock.mockResolvedValueOnce({ ok: true });
     loadSessionEntryMock.mockReturnValue({
       entry: { sessionId: "sess-worker", updatedAt: Date.now() },
       canonicalKey: "agent:main:subagent:worker",
     });
 
-    const response = await post("/sessions/agent%3Amain%3Asubagent%3Aworker/kill", "", {
-      "x-openclaw-requester-session-key": "agent:main:main",
-    });
+    const response = await post(
+      "/sessions/agent%3Amain%3Asubagent%3Aworker/kill",
+      TEST_GATEWAY_TOKEN,
+      {
+        "x-openclaw-requester-session-key": "agent:main:main",
+      },
+    );
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toMatchObject({
       ok: false,
