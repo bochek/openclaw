@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, statSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { requireNodeSqlite } from "../../../src/infra/node-sqlite.js";
 import {
   createTaskRecord,
   deleteTaskRecordById,
@@ -10,6 +11,7 @@ import {
 } from "./task-registry.js";
 import { resolveTaskRegistryDir, resolveTaskRegistrySqlitePath } from "./task-registry.paths.js";
 import { configureTaskRegistryRuntime, type TaskRegistryHookEvent } from "./task-registry.store.js";
+import { loadTaskRegistryStateFromSqlite } from "./task-registry.store.sqlite.js";
 import type { TaskRecord } from "./task-registry.types.js";
 
 function createStoredTask(): TaskRecord {
@@ -117,6 +119,53 @@ describe("task-registry store runtime", () => {
     });
   });
 
+  it("prefers atomic task-plus-delivery persistence when the store provides it", () => {
+    const upsertTaskWithDeliveryState = vi.fn();
+    const deleteTaskWithDeliveryState = vi.fn();
+    configureTaskRegistryRuntime({
+      store: {
+        loadSnapshot: () => ({
+          tasks: new Map(),
+          deliveryStates: new Map(),
+        }),
+        saveSnapshot: vi.fn(),
+        upsertTaskWithDeliveryState,
+        deleteTaskWithDeliveryState,
+      },
+    });
+
+    const created = createTaskRecord({
+      runtime: "acp",
+      requesterSessionKey: "agent:main:main",
+      requesterOrigin: {
+        channel: "telegram",
+        to: "telegram:123",
+      },
+      childSessionKey: "agent:codex:acp:new",
+      runId: "run-atomic",
+      task: "Atomic task",
+      status: "running",
+      deliveryStatus: "pending",
+    });
+
+    expect(upsertTaskWithDeliveryState).toHaveBeenCalledWith({
+      task: expect.objectContaining({
+        taskId: created.taskId,
+        runId: "run-atomic",
+      }),
+      deliveryState: expect.objectContaining({
+        taskId: created.taskId,
+        requesterOrigin: {
+          channel: "telegram",
+          to: "telegram:123",
+        },
+      }),
+    });
+
+    expect(deleteTaskRecordById(created.taskId)).toBe(true);
+    expect(deleteTaskWithDeliveryState).toHaveBeenCalledWith(created.taskId);
+  });
+
   it("restores persisted tasks from the default sqlite store", () => {
     const created = createTaskRecord({
       runtime: "cron",
@@ -156,6 +205,40 @@ describe("task-registry store runtime", () => {
       parentFlowId: "flow-123",
       task: "Linked task",
     });
+  });
+
+  it("ignores orphaned delivery rows during sqlite restore", () => {
+    const stateDir = mkdtempSync(path.join(os.tmpdir(), "openclaw-task-store-orphan-"));
+    process.env.OPENCLAW_STATE_DIR = stateDir;
+
+    const created = createTaskRecord({
+      runtime: "acp",
+      requesterSessionKey: "agent:main:main",
+      requesterOrigin: {
+        channel: "telegram",
+        to: "telegram:123",
+      },
+      childSessionKey: "agent:codex:acp:orphan",
+      runId: "run-orphan",
+      task: "Task with delivery metadata",
+      status: "running",
+      deliveryStatus: "pending",
+    });
+
+    const sqlitePath = resolveTaskRegistrySqlitePath(process.env);
+    const { DatabaseSync } = requireNodeSqlite();
+    const db = new DatabaseSync(sqlitePath);
+    db.prepare("DELETE FROM task_runs WHERE task_id = ?").run(created.taskId);
+    db.close();
+
+    resetTaskRegistryForTests({ persist: false });
+
+    const restored = loadTaskRegistryStateFromSqlite();
+    expect(restored.tasks.size).toBe(0);
+    expect(restored.deliveryStates.size).toBe(0);
+
+    resetTaskRegistryForTests();
+    rmSync(stateDir, { recursive: true, force: true });
   });
 
   it("hardens the sqlite task store directory and file modes", () => {
