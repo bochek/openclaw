@@ -1,18 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "./test-helpers/fast-core-tools.js";
 import {
-  getCallGatewayMock,
-  getSessionsSpawnTool,
-  resetSessionsSpawnConfigOverride,
-  setSessionsSpawnConfigOverride,
-  setupSessionsSpawnGatewayMock,
+  createSessionsSpawnTestHarness,
 } from "./openclaw-tools.subagents.sessions-spawn.test-harness.js";
 import { resetSubagentRegistryForTests } from "./subagent-registry.js";
 
 const MAIN_SESSION_KEY = "agent:test:main";
+const harness = createSessionsSpawnTestHarness();
 
 function configureDefaultsWithoutTimeout() {
-  setSessionsSpawnConfigOverride({
+  harness.setSessionsSpawnConfigOverride({
     session: { mainKey: "main", scope: "per-sender" },
     agents: { defaults: { subagents: { maxConcurrent: 8 } } },
   });
@@ -32,15 +29,15 @@ function readSpawnTimeout(calls: Array<{ method?: string; params?: unknown }>): 
 
 describe("sessions_spawn default runTimeoutSeconds (config absent)", () => {
   beforeEach(() => {
-    resetSessionsSpawnConfigOverride();
+    harness.resetSessionsSpawnConfigOverride();
     resetSubagentRegistryForTests();
-    getCallGatewayMock().mockClear();
+    harness.getCallGatewayMock().mockClear();
   });
 
   it("falls back to 0 (no timeout) when config key is absent", async () => {
     configureDefaultsWithoutTimeout();
-    const gateway = setupSessionsSpawnGatewayMock({});
-    const tool = await getSessionsSpawnTool({ agentSessionKey: MAIN_SESSION_KEY });
+    const gateway = harness.setupSessionsSpawnGatewayMock({});
+    const tool = await harness.getSessionsSpawnTool({ agentSessionKey: MAIN_SESSION_KEY });
 
     const result = await tool.execute("call-1", { task: "hello" });
     expect(result.details).toMatchObject({ status: "accepted" });

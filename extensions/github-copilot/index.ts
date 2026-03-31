@@ -11,15 +11,21 @@ import { fetchCopilotUsage } from "./usage.js";
 
 const COPILOT_ENV_VARS = ["COPILOT_GITHUB_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"];
 const COPILOT_XHIGH_MODEL_IDS = ["gpt-5.2", "gpt-5.2-codex"] as const;
+const githubCopilotDeps = {
+  ensureAuthProfileStore,
+  listProfilesForProvider,
+  githubCopilotLoginCommand,
+  resolveCopilotApiToken,
+};
 
 function resolveFirstGithubToken(params: { agentDir?: string; env: NodeJS.ProcessEnv }): {
   githubToken: string;
   hasProfile: boolean;
 } {
-  const authStore = ensureAuthProfileStore(params.agentDir, {
+  const authStore = githubCopilotDeps.ensureAuthProfileStore(params.agentDir, {
     allowKeychainPrompt: false,
   });
-  const hasProfile = listProfilesForProvider(authStore, PROVIDER_ID).length > 0;
+  const hasProfile = githubCopilotDeps.listProfilesForProvider(authStore, PROVIDER_ID).length > 0;
   const envToken =
     params.env.COPILOT_GITHUB_TOKEN ?? params.env.GH_TOKEN ?? params.env.GITHUB_TOKEN ?? "";
   const githubToken = envToken.trim();
@@ -27,7 +33,7 @@ function resolveFirstGithubToken(params: { agentDir?: string; env: NodeJS.Proces
     return { githubToken, hasProfile };
   }
 
-  const profileId = listProfilesForProvider(authStore, PROVIDER_ID)[0];
+  const profileId = githubCopilotDeps.listProfilesForProvider(authStore, PROVIDER_ID)[0];
   const profile = profileId ? authStore.profiles[profileId] : undefined;
   if (profile?.type !== "token") {
     return { githubToken: "", hasProfile };
@@ -61,13 +67,16 @@ async function runGitHubCopilotAuth(ctx: ProviderAuthContext) {
   }
 
   try {
-    await githubCopilotLoginCommand({ yes: true, profileId: "github-copilot:github" }, ctx.runtime);
+    await githubCopilotDeps.githubCopilotLoginCommand(
+      { yes: true, profileId: "github-copilot:github" },
+      ctx.runtime,
+    );
   } catch (err) {
     await ctx.prompter.note(`GitHub Copilot login failed: ${String(err)}`, "GitHub Copilot");
     return { profiles: [] };
   }
 
-  const authStore = ensureAuthProfileStore(undefined, {
+  const authStore = githubCopilotDeps.ensureAuthProfileStore(undefined, {
     allowKeychainPrompt: false,
   });
   const credential = authStore.profiles["github-copilot:github"];
@@ -126,7 +135,7 @@ export default definePluginEntry({
           let baseUrl = DEFAULT_COPILOT_API_BASE_URL;
           if (githubToken) {
             try {
-              const token = await resolveCopilotApiToken({
+              const token = await githubCopilotDeps.resolveCopilotApiToken({
                 githubToken,
                 env: ctx.env,
               });
@@ -150,7 +159,7 @@ export default definePluginEntry({
       supportsXHighThinking: ({ modelId }) =>
         COPILOT_XHIGH_MODEL_IDS.includes(modelId.trim().toLowerCase() as never),
       prepareRuntimeAuth: async (ctx) => {
-        const token = await resolveCopilotApiToken({
+        const token = await githubCopilotDeps.resolveCopilotApiToken({
           githubToken: ctx.apiKey,
           env: ctx.env,
         });
@@ -166,3 +175,15 @@ export default definePluginEntry({
     });
   },
 });
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof githubCopilotDeps>) {
+    Object.assign(githubCopilotDeps, overrides);
+  },
+  resetDepsForTest() {
+    githubCopilotDeps.ensureAuthProfileStore = ensureAuthProfileStore;
+    githubCopilotDeps.listProfilesForProvider = listProfilesForProvider;
+    githubCopilotDeps.githubCopilotLoginCommand = githubCopilotLoginCommand;
+    githubCopilotDeps.resolveCopilotApiToken = resolveCopilotApiToken;
+  },
+};

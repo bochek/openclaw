@@ -11,7 +11,11 @@ import {
   readConnectErrorDetailCode,
 } from "../../../src/gateway/protocol/connect-error-details.js";
 import { clearDeviceAuthToken, loadDeviceAuthToken, storeDeviceAuthToken } from "./device-auth.ts";
-import { loadOrCreateDeviceIdentity, signDevicePayload } from "./device-identity.ts";
+import {
+  loadOrCreateDeviceIdentity,
+  signDevicePayload,
+  type DeviceIdentity,
+} from "./device-identity.ts";
 import { generateUUID } from "./uuid.ts";
 
 export type GatewayEventFrame = {
@@ -180,7 +184,7 @@ type ConnectPlan = {
   explicitGatewayToken?: string;
   selectedAuth: SelectedConnectAuth;
   auth?: GatewayConnectAuth;
-  deviceIdentity: Awaited<ReturnType<typeof loadOrCreateDeviceIdentity>> | null;
+  deviceIdentity: DeviceIdentity | null;
   device?: GatewayConnectDevice;
 };
 
@@ -188,7 +192,7 @@ type DeviceTokenRetryDecision = {
   deviceTokenRetryBudgetUsed: boolean;
   authDeviceToken?: string;
   explicitGatewayToken?: string;
-  deviceIdentity: Awaited<ReturnType<typeof loadOrCreateDeviceIdentity>> | null;
+  deviceIdentity: DeviceIdentity | null;
   storedToken?: string;
   canRetryWithDeviceTokenHint: boolean;
   url: string;
@@ -209,6 +213,17 @@ export type GatewayBrowserClientOptions = {
   onGap?: (info: { expected: number; received: number }) => void;
 };
 
+const gatewayClientTiming = {
+  connectSendDelayMs: 750,
+  initialBackoffMs: 800,
+  maxBackoffMs: 15_000,
+};
+
+const gatewayClientDeps = {
+  loadOrCreateDeviceIdentity,
+  signDevicePayload,
+};
+
 // 4008 = application-defined code (browser rejects 1008 "Policy Violation")
 const CONNECT_FAILED_CLOSE_CODE = 4008;
 
@@ -227,7 +242,7 @@ function buildGatewayConnectAuth(
 }
 
 async function buildGatewayConnectDevice(params: {
-  deviceIdentity: Awaited<ReturnType<typeof loadOrCreateDeviceIdentity>> | null;
+  deviceIdentity: DeviceIdentity | null;
   client: GatewayConnectClientInfo;
   role: string;
   scopes: string[];
@@ -250,7 +265,7 @@ async function buildGatewayConnectDevice(params: {
     token: params.authToken ?? null,
     nonce,
   });
-  const signature = await signDevicePayload(deviceIdentity.privateKey, payload);
+  const signature = await gatewayClientDeps.signDevicePayload(deviceIdentity.privateKey, payload);
   return {
     id: deviceIdentity.deviceId,
     publicKey: deviceIdentity.publicKey,
@@ -280,7 +295,7 @@ export class GatewayBrowserClient {
   private connectNonce: string | null = null;
   private connectSent = false;
   private connectTimer: number | null = null;
-  private backoffMs = 800;
+  private backoffMs = gatewayClientTiming.initialBackoffMs;
   private pendingConnectError: GatewayErrorInfo | undefined;
   private pendingDeviceTokenRetry = false;
   private deviceTokenRetryBudgetUsed = false;
@@ -346,8 +361,14 @@ export class GatewayBrowserClient {
       return;
     }
     const delay = this.backoffMs;
-    this.backoffMs = Math.min(this.backoffMs * 1.7, 15_000);
-    window.setTimeout(() => this.connect(), delay);
+    this.backoffMs = Math.min(this.backoffMs * 1.7, gatewayClientTiming.maxBackoffMs);
+    if (this.connectTimer !== null) {
+      window.clearTimeout(this.connectTimer);
+    }
+    this.connectTimer = window.setTimeout(() => {
+      this.connectTimer = null;
+      this.connect();
+    }, delay);
   }
 
   private flushPending(err: Error) {
@@ -393,7 +414,7 @@ export class GatewayBrowserClient {
     // Over plain HTTP, we skip device identity and fall back to token-only auth.
     // Gateways may reject this unless gateway.controlUi.allowInsecureAuth is enabled.
     const isSecureContext = typeof crypto !== "undefined" && !!crypto.subtle;
-    let deviceIdentity: Awaited<ReturnType<typeof loadOrCreateDeviceIdentity>> | null = null;
+    let deviceIdentity: DeviceIdentity | null = null;
     let selectedAuth: SelectedConnectAuth = {
       authToken: explicitGatewayToken,
       authPassword: explicitPassword,
@@ -401,7 +422,7 @@ export class GatewayBrowserClient {
     };
 
     if (isSecureContext) {
-      deviceIdentity = await loadOrCreateDeviceIdentity();
+      deviceIdentity = await gatewayClientDeps.loadOrCreateDeviceIdentity();
       selectedAuth = this.selectConnectAuth({
         role,
         deviceId: deviceIdentity.deviceId,
@@ -441,7 +462,7 @@ export class GatewayBrowserClient {
         scopes: hello.auth.scopes ?? [],
       });
     }
-    this.backoffMs = 800;
+    this.backoffMs = gatewayClientTiming.initialBackoffMs;
     this.opts.onHello?.(hello);
   }
 
@@ -617,6 +638,24 @@ export class GatewayBrowserClient {
     }
     this.connectTimer = window.setTimeout(() => {
       void this.sendConnect();
-    }, 750);
+    }, gatewayClientTiming.connectSendDelayMs);
   }
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof gatewayClientDeps>) {
+    Object.assign(gatewayClientDeps, overrides);
+  },
+  resetDepsForTest() {
+    gatewayClientDeps.loadOrCreateDeviceIdentity = loadOrCreateDeviceIdentity;
+    gatewayClientDeps.signDevicePayload = signDevicePayload;
+  },
+  setTimingForTest(overrides: Partial<typeof gatewayClientTiming>) {
+    Object.assign(gatewayClientTiming, overrides);
+  },
+  resetTimingForTest() {
+    gatewayClientTiming.connectSendDelayMs = 750;
+    gatewayClientTiming.initialBackoffMs = 800;
+    gatewayClientTiming.maxBackoffMs = 15_000;
+  },
+};

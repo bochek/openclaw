@@ -1,4 +1,7 @@
-import { listMatrixDirectoryGroupsLive, listMatrixDirectoryPeersLive } from "./directory-live.js";
+import {
+  listMatrixDirectoryGroupsLive as listMatrixDirectoryGroupsLiveImpl,
+  listMatrixDirectoryPeersLive as listMatrixDirectoryPeersLiveImpl,
+} from "./directory-live.js";
 import { isMatrixQualifiedUserId, normalizeMatrixMessagingTarget } from "./matrix/target-ids.js";
 import type {
   ChannelDirectoryEntry,
@@ -9,6 +12,17 @@ import type {
 
 function normalizeLookupQuery(query: string): string {
   return query.trim().toLowerCase();
+}
+
+let listMatrixDirectoryPeersLiveForTest: typeof listMatrixDirectoryPeersLiveImpl | undefined;
+let listMatrixDirectoryGroupsLiveForTest: typeof listMatrixDirectoryGroupsLiveImpl | undefined;
+
+export function setMatrixDirectoryLookupsForTest(params?: {
+  groups?: typeof listMatrixDirectoryGroupsLiveImpl;
+  peers?: typeof listMatrixDirectoryPeersLiveImpl;
+}): void {
+  listMatrixDirectoryPeersLiveForTest = params?.peers;
+  listMatrixDirectoryGroupsLiveForTest = params?.groups;
 }
 
 function findExactDirectoryMatches(
@@ -122,7 +136,7 @@ export async function resolveMatrixTargets(params: {
       }
       try {
         const matches = await readCachedMatches(userLookupCache, trimmed, (query) =>
-          listMatrixDirectoryPeersLive({
+          (listMatrixDirectoryPeersLiveForTest ?? listMatrixDirectoryPeersLiveImpl)({
             cfg: params.cfg,
             accountId: params.accountId,
             query,
@@ -150,10 +164,10 @@ export async function resolveMatrixTargets(params: {
     }
     try {
       const matches = await readCachedMatches(groupLookupCache, trimmed, (query) =>
-        listMatrixDirectoryGroupsLive({
-          cfg: params.cfg,
-          accountId: params.accountId,
-          query,
+          (listMatrixDirectoryGroupsLiveForTest ?? listMatrixDirectoryGroupsLiveImpl)({
+            cfg: params.cfg,
+            accountId: params.accountId,
+            query,
           limit: 5,
         }),
       );

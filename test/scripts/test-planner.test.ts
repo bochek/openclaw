@@ -12,7 +12,6 @@ import {
   buildExecutionPlan,
   explainExecutionTarget,
 } from "../../scripts/test-planner/planner.mjs";
-import { bundledPluginFile } from "../helpers/bundled-plugin-paths.js";
 
 describe("test planner", () => {
   it("builds a capability-aware plan for mid-memory local runs", () => {
@@ -149,39 +148,6 @@ describe("test planner", () => {
     expect(hotspotUnit).toBeTruthy();
     expect(hotspotUnit?.isolate).toBe(true);
     expect(hotspotUnit?.reasons).toContain("extensions-timed-heavy");
-    artifacts.cleanupTempArtifacts();
-  });
-
-  it("auto-isolates timed-heavy channel suites in CI", () => {
-    const env = {
-      CI: "true",
-      GITHUB_ACTIONS: "true",
-      RUNNER_OS: "Linux",
-      OPENCLAW_TEST_HOST_CPU_COUNT: "4",
-      OPENCLAW_TEST_HOST_MEMORY_GIB: "16",
-    };
-    const artifacts = createExecutionArtifacts(env);
-    const plan = buildExecutionPlan(
-      {
-        profile: null,
-        mode: "ci",
-        surfaces: ["channels"],
-        passthroughArgs: [],
-      },
-      {
-        env,
-        platform: "linux",
-        writeTempJsonArtifact: artifacts.writeTempJsonArtifact,
-      },
-    );
-
-    const hotspotUnit = plan.selectedUnits.find(
-      (unit) => unit.id === "channels-bot-native-commands.plugin-auth-isolated",
-    );
-
-    expect(hotspotUnit).toBeTruthy();
-    expect(hotspotUnit?.isolate).toBe(true);
-    expect(hotspotUnit?.reasons).toContain("channels-timed-heavy");
     artifacts.cleanupTempArtifacts();
   });
 
@@ -346,10 +312,7 @@ describe("test planner", () => {
         surfaces: [],
         passthroughArgs: [
           "src/auto-reply/reply/followup-runner.test.ts",
-          bundledPluginFile(
-            "discord",
-            "src/monitor/message-handler.preflight.acp-bindings.test.ts",
-          ),
+          "extensions/discord/src/monitor/message-handler.preflight.acp-bindings.test.ts",
         ],
       },
       {
@@ -468,25 +431,6 @@ describe("test planner", () => {
     expect(explanation.surface).toBe("extensions");
     expect(explanation.isolate).toBe(true);
     expect(explanation.reasons).toContain("extensions-timed-heavy");
-  });
-
-  it("explains timed-heavy channel suites as isolated", () => {
-    const explanation = explainExecutionTarget(
-      {
-        mode: "ci",
-        fileFilters: ["extensions/telegram/src/bot-native-commands.plugin-auth.test.ts"],
-      },
-      {
-        env: {
-          CI: "true",
-          GITHUB_ACTIONS: "true",
-        },
-      },
-    );
-
-    expect(explanation.surface).toBe("channels");
-    expect(explanation.isolate).toBe(true);
-    expect(explanation.reasons).toContain("channels-timed-heavy");
   });
 
   it("does not leak default-plan shard assignments into targeted units with the same id", () => {
@@ -625,13 +569,13 @@ describe("test planner", () => {
 
     expect(manifest.jobs.buildArtifacts.enabled).toBe(true);
     expect(manifest.shardCounts.unit).toBe(4);
-    expect(manifest.shardCounts.channels).toBe(4);
+    expect(manifest.shardCounts.channels).toBe(3);
     expect(manifest.shardCounts.extensionFast).toBeGreaterThanOrEqual(4);
     expect(manifest.shardCounts.extensionFast).toBeLessThanOrEqual(5);
     expect(manifest.shardCounts.windows).toBe(6);
     expect(manifest.shardCounts.macosNode).toBe(9);
     expect(manifest.shardCounts.bun).toBe(6);
-    expect(manifest.jobs.checks.matrix.include).toHaveLength(8);
+    expect(manifest.jobs.checks.matrix.include).toHaveLength(7);
     expect(manifest.jobs.checksWindows.matrix.include).toHaveLength(6);
     expect(manifest.jobs.bunChecks.matrix.include).toHaveLength(6);
     expect(manifest.jobs.macosNode.matrix.include).toHaveLength(9);

@@ -14,6 +14,16 @@ import { getTerminalTableWidth, renderTable } from "../../terminal/table.js";
 import { theme } from "../../terminal/theme.js";
 import { parseTimeoutMsOrExit, resolveUpdateRoot, type UpdateStatusOptions } from "./shared.js";
 
+type UpdateStatusDeps = {
+  defaultRuntime: typeof defaultRuntime;
+};
+
+const defaultUpdateStatusDeps: UpdateStatusDeps = {
+  defaultRuntime,
+};
+
+let updateStatusDeps: UpdateStatusDeps = defaultUpdateStatusDeps;
+
 function formatGitStatusLine(params: {
   branch: string | null;
   tag: string | null;
@@ -70,7 +80,7 @@ export async function updateStatusCommand(opts: UpdateStatusOptions): Promise<vo
   const updateLine = formatUpdateOneLiner(update).replace(/^Update:\s*/i, "");
 
   if (opts.json) {
-    defaultRuntime.writeJson({
+    updateStatusDeps.defaultRuntime.writeJson({
       update,
       channel: {
         value: channelInfo.channel,
@@ -101,9 +111,9 @@ export async function updateStatusCommand(opts: UpdateStatusOptions): Promise<vo
     },
   ];
 
-  defaultRuntime.log(theme.heading("OpenClaw update status"));
-  defaultRuntime.log("");
-  defaultRuntime.log(
+  updateStatusDeps.defaultRuntime.log(theme.heading("OpenClaw update status"));
+  updateStatusDeps.defaultRuntime.log("");
+  updateStatusDeps.defaultRuntime.log(
     renderTable({
       width: tableWidth,
       columns: [
@@ -113,10 +123,19 @@ export async function updateStatusCommand(opts: UpdateStatusOptions): Promise<vo
       rows,
     }).trimEnd(),
   );
-  defaultRuntime.log("");
+  updateStatusDeps.defaultRuntime.log("");
 
   const updateHint = formatUpdateAvailableHint(update);
   if (updateHint) {
-    defaultRuntime.log(theme.warn(updateHint));
+    updateStatusDeps.defaultRuntime.log(theme.warn(updateHint));
   }
 }
+
+export const __testing = {
+  setDepsForTest(next: Partial<UpdateStatusDeps>) {
+    updateStatusDeps = { ...updateStatusDeps, ...next };
+  },
+  resetDepsForTest() {
+    updateStatusDeps = defaultUpdateStatusDeps;
+  },
+};

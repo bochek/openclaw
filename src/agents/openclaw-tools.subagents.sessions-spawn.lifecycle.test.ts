@@ -1,28 +1,17 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { loadConfig } from "../config/config.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
+import { resetAgentEventsForTest } from "../infra/agent-events.js";
 import "./test-helpers/fast-core-tools.js";
 import {
-  getCallGatewayMock,
-  getSessionsSpawnTool,
-  resetSessionsSpawnAnnounceFlowOverride,
-  resetSessionsSpawnConfigOverride,
-  resetSessionsSpawnHookRunnerOverride,
-  setSessionsSpawnAnnounceFlowOverride,
-  setSessionsSpawnHookRunnerOverride,
-  setupSessionsSpawnGatewayMock,
-  setSessionsSpawnConfigOverride,
+  createSessionsSpawnTestHarness,
 } from "./openclaw-tools.subagents.sessions-spawn.test-harness.js";
 import { resolveRequesterStoreKey } from "./subagent-announce-delivery.js";
 import { resetSubagentRegistryForTests } from "./subagent-registry.js";
 
-const fastModeEnv = vi.hoisted(() => {
-  const previous = process.env.OPENCLAW_TEST_FAST;
-  process.env.OPENCLAW_TEST_FAST = "1";
-  return { previous };
-});
+const previousFastModeEnv = process.env.OPENCLAW_TEST_FAST;
+process.env.OPENCLAW_TEST_FAST = "1";
 
-const hookRunnerMocks = vi.hoisted(() => ({
+const hookRunnerMocks = {
   runSubagentSpawning: vi.fn(async (event: unknown) => {
     const input = event as {
       threadRequested?: boolean;
@@ -37,31 +26,20 @@ const hookRunnerMocks = vi.hoisted(() => ({
   }),
   runSubagentSpawned: vi.fn(async () => {}),
   runSubagentEnded: vi.fn(async () => {}),
-}));
+};
 
-vi.mock("./pi-embedded.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./pi-embedded.js")>();
-  return {
-    ...actual,
-    isEmbeddedPiRunActive: () => false,
-    isEmbeddedPiRunStreaming: () => false,
-    queueEmbeddedPiMessage: () => false,
-    waitForEmbeddedPiRunEnd: async () => true,
-  };
-});
-
-vi.mock("./tools/agent-step.js", () => ({
-  readLatestAssistantReply: async () => "done",
-}));
-
-const callGatewayMock = getCallGatewayMock();
+const harness = createSessionsSpawnTestHarness();
+const callGatewayMock = harness.getCallGatewayMock();
 const RUN_TIMEOUT_SECONDS = 1;
 
 function installDeterministicAnnounceFlow() {
-  setSessionsSpawnAnnounceFlowOverride(async (params) => {
+  harness.setSessionsSpawnAnnounceFlowOverride(async (params) => {
     const statusLabel =
       params.outcome?.status === "timeout" ? "timed out" : "completed successfully";
-    const requesterSessionKey = resolveRequesterStoreKey(loadConfig(), params.requesterSessionKey);
+    const requesterSessionKey = resolveRequesterStoreKey(
+      harness.loadConfig(),
+      params.requesterSessionKey,
+    );
 
     await callGatewayMock({
       method: "agent",
@@ -121,7 +99,7 @@ const waitFor = async (predicate: () => boolean, timeoutMs = 1_500) => {
 };
 
 async function getDiscordGroupSpawnTool() {
-  return await getSessionsSpawnTool({
+  return await harness.getSessionsSpawnTool({
     agentSessionKey: "discord:group:req",
     agentChannel: "discord",
   });
@@ -141,7 +119,7 @@ async function executeSpawnAndExpectAccepted(params: {
   });
   expect(result.details).toMatchObject({
     status: "accepted",
-    runId: "run-1",
+    runId: expect.any(String),
   });
   return result;
 }
@@ -151,8 +129,7 @@ async function emitLifecycleEndAndFlush(params: {
   startedAt: number;
   endedAt: number;
 }) {
-  vi.useFakeTimers();
-  try {
+  await harness.runWithSessionsSpawnDeps(async () => {
     emitAgentEvent({
       runId: params.runId,
       stream: "lifecycle",
@@ -162,19 +139,17 @@ async function emitLifecycleEndAndFlush(params: {
         endedAt: params.endedAt,
       },
     });
-
-    await vi.runAllTimersAsync();
-  } finally {
-    vi.useRealTimers();
-  }
+    await Promise.resolve();
+  });
 }
 
 describe("openclaw-tools: subagents (sessions_spawn lifecycle)", () => {
   beforeEach(() => {
-    resetSessionsSpawnAnnounceFlowOverride();
-    resetSessionsSpawnHookRunnerOverride();
-    resetSessionsSpawnConfigOverride();
-    setSessionsSpawnConfigOverride({
+    resetAgentEventsForTest();
+    harness.resetSessionsSpawnAnnounceFlowOverride();
+    harness.resetSessionsSpawnHookRunnerOverride();
+    harness.resetSessionsSpawnConfigOverride();
+    harness.setSessionsSpawnConfigOverride({
       session: {
         mainKey: "main",
         scope: "per-sender",
@@ -189,7 +164,7 @@ describe("openclaw-tools: subagents (sessions_spawn lifecycle)", () => {
     hookRunnerMocks.runSubagentSpawning.mockClear();
     hookRunnerMocks.runSubagentSpawned.mockClear();
     hookRunnerMocks.runSubagentEnded.mockClear();
-    setSessionsSpawnHookRunnerOverride({
+    harness.setSessionsSpawnHookRunnerOverride({
       hasHooks: (hookName: string) =>
         hookName === "subagent_spawning" ||
         hookName === "subagent_spawned" ||
@@ -203,17 +178,18 @@ describe("openclaw-tools: subagents (sessions_spawn lifecycle)", () => {
   });
 
   afterAll(() => {
-    if (fastModeEnv.previous === undefined) {
+    resetAgentEventsForTest();
+    if (previousFastModeEnv === undefined) {
       delete process.env.OPENCLAW_TEST_FAST;
       return;
     }
-    process.env.OPENCLAW_TEST_FAST = fastModeEnv.previous;
+    process.env.OPENCLAW_TEST_FAST = previousFastModeEnv;
   });
 
   it("sessions_spawn runs cleanup flow after subagent completion", async () => {
     const patchCalls: Array<{ key?: string; label?: string }> = [];
 
-    const ctx = setupSessionsSpawnGatewayMock({
+    const ctx = harness.setupSessionsSpawnGatewayMock({
       includeSessionsList: true,
       includeChatHistory: true,
       onSessionsPatch: (params) => {
@@ -222,7 +198,7 @@ describe("openclaw-tools: subagents (sessions_spawn lifecycle)", () => {
       },
     });
 
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "main",
       agentChannel: "whatsapp",
     });
@@ -272,7 +248,7 @@ describe("openclaw-tools: subagents (sessions_spawn lifecycle)", () => {
 
   it("sessions_spawn runs cleanup via lifecycle events", async () => {
     let deletedKey: string | undefined;
-    const ctx = setupSessionsSpawnGatewayMock({
+    const ctx = harness.setupSessionsSpawnGatewayMock({
       ...buildDiscordCleanupHooks((key) => {
         deletedKey = key;
       }),
@@ -338,7 +314,7 @@ describe("openclaw-tools: subagents (sessions_spawn lifecycle)", () => {
 
   it("sessions_spawn deletes session when cleanup=delete via agent.wait", async () => {
     let deletedKey: string | undefined;
-    const ctx = setupSessionsSpawnGatewayMock({
+    const ctx = harness.setupSessionsSpawnGatewayMock({
       includeChatHistory: true,
       ...buildDiscordCleanupHooks((key) => {
         deletedKey = key;
@@ -390,7 +366,7 @@ describe("openclaw-tools: subagents (sessions_spawn lifecycle)", () => {
   });
 
   it("sessions_spawn reports timed out when agent.wait returns timeout", async () => {
-    const ctx = setupSessionsSpawnGatewayMock({
+    const ctx = harness.setupSessionsSpawnGatewayMock({
       includeChatHistory: true,
       chatHistoryText: "still working",
       agentWaitResult: { status: "timeout", startedAt: 6000, endedAt: 7000 },
@@ -418,9 +394,9 @@ describe("openclaw-tools: subagents (sessions_spawn lifecycle)", () => {
   });
 
   it("sessions_spawn announces with requester accountId", async () => {
-    const ctx = setupSessionsSpawnGatewayMock({});
+    const ctx = harness.setupSessionsSpawnGatewayMock({});
 
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "main",
       agentChannel: "whatsapp",
       agentAccountId: "kev",

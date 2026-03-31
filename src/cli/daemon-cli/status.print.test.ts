@@ -43,9 +43,13 @@ vi.mock("../../infra/wsl.js", () => ({
   isWSLEnv: () => false,
 }));
 
-vi.mock("../../logging.js", () => ({
-  getResolvedLoggerSettings: () => ({ file: "/tmp/openclaw.log" }),
-}));
+vi.mock("../../logging.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../logging.js")>();
+  return {
+    ...actual,
+    getResolvedLoggerSettings: () => ({ file: "/tmp/openclaw.log" }),
+  };
+});
 
 vi.mock("./shared.js", () => ({
   createCliStatusTextStyles: () => ({

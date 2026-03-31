@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const chatHistoryMock = vi.fn<(sessionKey: string) => Promise<{ messages?: Array<unknown> }>>(
   async (_sessionKey: string) => ({ messages: [] }),
@@ -18,14 +18,10 @@ describe("captureSubagentCompletionReply", () => {
   let previousFastTestEnv: string | undefined;
   let captureSubagentCompletionReply: (typeof import("./subagent-announce.js"))["captureSubagentCompletionReply"];
 
-  async function loadFreshSubagentAnnounceModuleForTest() {
-    vi.resetModules();
-    ({ captureSubagentCompletionReply } = await import("./subagent-announce.js"));
-  }
-
   beforeAll(async () => {
     previousFastTestEnv = process.env.OPENCLAW_TEST_FAST;
     process.env.OPENCLAW_TEST_FAST = "1";
+    ({ captureSubagentCompletionReply } = await import("./subagent-announce.js"));
   });
 
   afterAll(() => {
@@ -36,9 +32,17 @@ describe("captureSubagentCompletionReply", () => {
     process.env.OPENCLAW_TEST_FAST = previousFastTestEnv;
   });
 
-  beforeEach(async () => {
-    await loadFreshSubagentAnnounceModuleForTest();
+  beforeEach(() => {
     chatHistoryMock.mockReset().mockResolvedValue({ messages: [] });
+  });
+
+  afterEach(() => {
+    try {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    } catch {
+      // Bun throws if fake timers were never activated in the test body.
+    }
   });
 
   it("returns immediate assistant output from history without polling", async () => {
@@ -58,7 +62,6 @@ describe("captureSubagentCompletionReply", () => {
   });
 
   it("polls briefly and returns late tool output once available", async () => {
-    vi.useFakeTimers();
     chatHistoryMock
       .mockResolvedValueOnce({ messages: [] })
       .mockResolvedValueOnce({ messages: [] })
@@ -76,26 +79,19 @@ describe("captureSubagentCompletionReply", () => {
         ],
       });
 
-    const pending = captureSubagentCompletionReply("agent:main:subagent:child");
-    await vi.runAllTimersAsync();
-    const result = await pending;
+    const result = await captureSubagentCompletionReply("agent:main:subagent:child");
 
     expect(result).toBe("Late tool result completion");
     expect(chatHistoryMock).toHaveBeenCalledTimes(3);
-    vi.useRealTimers();
   });
 
   it("returns undefined when no completion output arrives before retry window closes", async () => {
-    vi.useFakeTimers();
     chatHistoryMock.mockResolvedValue({ messages: [] });
 
-    const pending = captureSubagentCompletionReply("agent:main:subagent:child");
-    await vi.runAllTimersAsync();
-    const result = await pending;
+    const result = await captureSubagentCompletionReply("agent:main:subagent:child");
 
     expect(result).toBeUndefined();
     expect(chatHistoryMock).toHaveBeenCalled();
-    vi.useRealTimers();
   });
 
   it("returns partial assistant progress when the latest assistant turn is tool-only", async () => {

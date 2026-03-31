@@ -285,7 +285,6 @@ aggregates:
 - `hooks.gmail.allowUnsafeExternalContent=true`
 - `hooks.mappings[<index>].allowUnsafeExternalContent=true`
 - `tools.exec.applyPatch.workspaceOnly=false`
-- `plugins.entries.acpx.config.permissionMode=approve-all`
 
 Complete `dangerous*` / `dangerously*` config keys defined in OpenClaw config
 schema:
@@ -446,7 +445,7 @@ Plugins run **in-process** with the Gateway. Treat them as trusted code:
 - Review plugin config before enabling.
 - Restart the Gateway after plugin changes.
 - If you install plugins (`openclaw plugins install <package>`), treat it like running untrusted code:
-  - The install path is the per-plugin directory under the active plugin install root.
+  - The install path is `~/.openclaw/extensions/<pluginId>/` (or `$OPENCLAW_STATE_DIR/extensions/<pluginId>/`).
   - OpenClaw uses `npm pack` and then runs `npm install --omit=dev` in that directory (npm lifecycle scripts can execute code during install).
   - Prefer pinned, exact versions (`@scope/pkg@1.2.3`), and inspect the unpacked code on disk before enabling.
 
@@ -806,7 +805,7 @@ Important boundary note:
 - Treat credentials that can call `/v1/chat/completions`, `/v1/responses`, or `/api/channels/*` as full-access operator secrets for that gateway.
 - On the OpenAI-compatible HTTP surface, shared-secret bearer auth restores the full default operator scopes and owner semantics for agent turns; narrower `x-openclaw-scopes` values do not reduce that shared-secret path.
 - Per-request scope semantics on HTTP only apply when the request comes from an identity-bearing mode such as trusted proxy auth or `gateway.auth.mode="none"` on a private ingress.
-- `/tools/invoke` follows the same shared-secret rule: token/password bearer auth is treated as full operator access there too, while identity-bearing modes still honor declared scopes.
+- `/tools/invoke` is stricter: shared-secret bearer auth is rejected there, and the endpoint only runs when the HTTP request carries a trusted operator identity plus declared scopes.
 - Do not share these credentials with untrusted callers; prefer separate gateways per trust boundary.
 
 **Trust assumption:** tokenless Serve auth assumes the gateway host is trusted.
@@ -852,7 +851,7 @@ Assume anything under `~/.openclaw/` (or `$OPENCLAW_STATE_DIR/`) may contain sec
 - `secrets.json` (optional): file-backed secret payload used by `file` SecretRef providers (`secrets.providers`).
 - `agents/<agentId>/agent/auth.json`: legacy compatibility file. Static `api_key` entries are scrubbed when discovered.
 - `agents/<agentId>/sessions/**`: session transcripts (`*.jsonl`) + routing metadata (`sessions.json`) that can contain private messages and tool output.
-- bundled plugin packages: installed plugins (plus their `node_modules/`).
+- `extensions/**`: installed plugins (plus their `node_modules/`).
 - `sandboxes/**`: tool sandbox workspaces; can accumulate copies of files you read/write inside the sandbox.
 
 Hardening tips:

@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock } from "vitest";
 import { resolveSessionTranscriptPath } from "../config/sessions.js";
 import { emitAgentEvent } from "../infra/agent-events.js";
 import { captureEnv } from "../test-utils/env.js";
@@ -75,8 +75,9 @@ async function emitLifecycleAssistantReply(params: {
   });
 }
 
-beforeAll(async () => {
+beforeEach(async () => {
   envSnapshot = captureEnv(["OPENCLAW_GATEWAY_PORT", "OPENCLAW_GATEWAY_TOKEN"]);
+  cachedSessionsSendTool = null;
   gatewayPort = await getFreePort();
   testState.gatewayAuth = { mode: "token", token: gatewayToken };
   process.env.OPENCLAW_GATEWAY_PORT = String(gatewayPort);
@@ -100,7 +101,7 @@ beforeAll(async () => {
   server = await startGatewayServer(gatewayPort);
 });
 
-afterAll(async () => {
+afterEach(async () => {
   await server.close();
   envSnapshot.restore();
 });

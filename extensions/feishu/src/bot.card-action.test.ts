@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { createRuntimeEnv } from "../../../test/helpers/plugins/runtime-env.js";
+import { createRuntimeEnv } from "../../../test/helpers/extensions/runtime-env.js";
 import type { ClawdbotConfig, RuntimeEnv } from "../runtime-api.js";
 import {
   handleFeishuCardAction,
@@ -14,10 +14,14 @@ import {
 } from "./card-ux-approval.js";
 
 // Mock account resolution
-vi.mock("./accounts.js", () => ({
-  resolveFeishuAccount: vi.fn().mockReturnValue({ accountId: "mock-account" }),
-  resolveFeishuRuntimeAccount: vi.fn().mockReturnValue({ accountId: "mock-account" }),
-}));
+vi.mock("./accounts.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./accounts.js")>();
+  return {
+    ...actual,
+    resolveFeishuAccount: vi.fn().mockReturnValue({ accountId: "mock-account" }),
+    resolveFeishuRuntimeAccount: vi.fn().mockReturnValue({ accountId: "mock-account" }),
+  };
+});
 
 // Mock bot.js to verify handleFeishuMessage call
 vi.mock("./bot.js", () => ({

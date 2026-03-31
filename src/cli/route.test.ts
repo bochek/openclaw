@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const emitCliBannerMock = vi.hoisted(() => vi.fn());
 const ensureConfigReadyMock = vi.hoisted(() => vi.fn(async () => {}));
@@ -34,19 +34,33 @@ vi.mock("../runtime.js", () => ({
 
 describe("tryRouteCli", () => {
   let tryRouteCli: typeof import("./route.js").tryRouteCli;
-  // After vi.resetModules(), reimported modules get fresh loggingState.
-  // Capture the same reference that route.js uses.
+  let routeTesting: typeof import("./route.js").__testing;
   let loggingState: typeof import("../logging/state.js").loggingState;
   let originalDisableRouteFirst: string | undefined;
   let originalForceStderr: boolean;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
+    ({ tryRouteCli, __testing: routeTesting } = await import("./route.js"));
+    ({ loggingState } = await import("../logging/state.js"));
+    routeTesting.setDepsForTest({
+      findRoutedCommand: findRoutedCommandMock,
+      loadBannerModule: async () => ({ emitCliBanner: emitCliBannerMock }),
+      loadVersionModule: async () => ({ VERSION: "9.9.9-test" }),
+      loadConfigGuardModule: async () => ({ ensureConfigReady: ensureConfigReadyMock }),
+      loadPluginRegistryModule: async () => ({
+        ensurePluginRegistryLoaded: ensurePluginRegistryLoadedMock,
+      }),
+    });
+  });
+
+  afterAll(() => {
+    routeTesting.resetDepsForTest();
+  });
+
+  beforeEach(() => {
     vi.clearAllMocks();
     originalDisableRouteFirst = process.env.OPENCLAW_DISABLE_ROUTE_FIRST;
     delete process.env.OPENCLAW_DISABLE_ROUTE_FIRST;
-    vi.resetModules();
-    ({ tryRouteCli } = await import("./route.js"));
-    ({ loggingState } = await import("../logging/state.js"));
     originalForceStderr = loggingState.forceConsoleToStderr;
     loggingState.forceConsoleToStderr = false;
     findRoutedCommandMock.mockReturnValue({

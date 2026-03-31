@@ -47,8 +47,16 @@ if (module.enableCompileCache && !process.env.NODE_DISABLE_COMPILE_CACHE) {
   }
 }
 
-const isModuleNotFoundError = (err) =>
-  err && typeof err === "object" && "code" in err && err.code === "ERR_MODULE_NOT_FOUND";
+const isModuleNotFoundError = (err) => {
+  if (!err || typeof err !== "object") {
+    return false;
+  }
+  if ("code" in err && (err.code === "ERR_MODULE_NOT_FOUND" || err.code === "MODULE_NOT_FOUND")) {
+    return true;
+  }
+  const message = "message" in err && typeof err.message === "string" ? err.message : "";
+  return message.includes("Cannot find module");
+};
 
 const isDirectModuleNotFoundError = (err, specifier) => {
   if (!isModuleNotFoundError(err)) {
@@ -63,26 +71,38 @@ const isDirectModuleNotFoundError = (err, specifier) => {
   const message = "message" in err && typeof err.message === "string" ? err.message : "";
   const expectedPath = fileURLToPath(expectedUrl);
   return (
+    message.includes(`Cannot find module '${specifier}'`) ||
+    message.includes(`Cannot find module "${specifier}"`) ||
     message.includes(`Cannot find module '${expectedPath}'`) ||
     message.includes(`Cannot find module "${expectedPath}"`)
   );
 };
 
-const installProcessWarningFilter = async () => {
-  // Keep bootstrap warnings consistent with the TypeScript runtime.
-  for (const specifier of ["./dist/warning-filter.js", "./dist/warning-filter.mjs"]) {
+const isBunRuntime = () => typeof process.versions?.bun === "string";
+
+const tryImportFirst = async (specifiers) => {
+  for (const specifier of specifiers) {
     try {
-      const mod = await import(specifier);
-      if (typeof mod.installProcessWarningFilter === "function") {
-        mod.installProcessWarningFilter();
-        return;
-      }
+      return await import(specifier);
     } catch (err) {
       if (isDirectModuleNotFoundError(err, specifier)) {
         continue;
       }
       throw err;
     }
+  }
+  return null;
+};
+
+const installProcessWarningFilter = async () => {
+  // Keep bootstrap warnings consistent with the TypeScript runtime.
+  const specifiers = ["./dist/warning-filter.js", "./dist/warning-filter.mjs"];
+  if (isBunRuntime()) {
+    specifiers.push("./dist/infra/warning-filter.js", "./src/infra/warning-filter.ts");
+  }
+  const mod = await tryImportFirst(specifiers);
+  if (typeof mod?.installProcessWarningFilter === "function") {
+    mod.installProcessWarningFilter();
   }
 };
 
@@ -149,19 +169,14 @@ const tryOutputBareRootHelp = async () => {
     process.stdout.write(precomputed);
     return true;
   }
-  for (const specifier of ["./dist/cli/program/root-help.js", "./dist/cli/program/root-help.mjs"]) {
-    try {
-      const mod = await import(specifier);
-      if (typeof mod.outputRootHelp === "function") {
-        mod.outputRootHelp();
-        return true;
-      }
-    } catch (err) {
-      if (isDirectModuleNotFoundError(err, specifier)) {
-        continue;
-      }
-      throw err;
-    }
+  const specifiers = ["./dist/cli/program/root-help.js", "./dist/cli/program/root-help.mjs"];
+  if (isBunRuntime()) {
+    specifiers.push("./src/cli/program/root-help.ts");
+  }
+  const mod = await tryImportFirst(specifiers);
+  if (typeof mod?.outputRootHelp === "function") {
+    mod.outputRootHelp();
+    return true;
   }
   return false;
 };

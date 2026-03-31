@@ -19,6 +19,18 @@ type ExecFileError = NodeJS.ErrnoException & {
   cause?: unknown;
 };
 
+type PortsDeps = {
+  execFileSync: typeof execFileSync;
+  tryListenOnPort: typeof tryListenOnPort;
+};
+
+const defaultPortsDeps: PortsDeps = {
+  execFileSync,
+  tryListenOnPort,
+};
+
+let portsDeps: PortsDeps = { ...defaultPortsDeps };
+
 const FUSER_SIGNALS: Record<"SIGTERM" | "SIGKILL", string> = {
   SIGTERM: "TERM",
   SIGKILL: "KILL",
@@ -95,7 +107,7 @@ function parseFuserPidList(output: string): number[] {
 function killPortWithFuser(port: number, signal: "SIGTERM" | "SIGKILL"): PortProcess[] {
   const args = ["-k", `-${FUSER_SIGNALS[signal]}`, `${port}/tcp`];
   try {
-    const stdout = execFileSync("fuser", args, {
+    const stdout = portsDeps.execFileSync("fuser", args, {
       encoding: "utf-8",
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -127,7 +139,7 @@ function killPortWithFuser(port: number, signal: "SIGTERM" | "SIGKILL"): PortPro
 
 async function isPortBusy(port: number): Promise<boolean> {
   try {
-    await tryListenOnPort({ port, exclusive: true });
+    await portsDeps.tryListenOnPort({ port, exclusive: true });
     return false;
   } catch (err: unknown) {
     const code = (err as NodeJS.ErrnoException).code;
@@ -161,7 +173,7 @@ export function parseLsofOutput(output: string): PortProcess[] {
 export function listPortListeners(port: number): PortProcess[] {
   if (process.platform === "win32") {
     try {
-      const out = execFileSync("netstat", ["-ano", "-p", "TCP"], { encoding: "utf-8" });
+      const out = portsDeps.execFileSync("netstat", ["-ano", "-p", "TCP"], { encoding: "utf-8" });
       const lines = out.split(/\r?\n/).filter(Boolean);
       const results: PortProcess[] = [];
       for (const line of lines) {
@@ -187,7 +199,7 @@ export function listPortListeners(port: number): PortProcess[] {
 
   try {
     const lsof = resolveLsofCommandSync();
-    const out = execFileSync(lsof, ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-FpFc"], {
+    const out = portsDeps.execFileSync(lsof, ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-FpFc"], {
       encoding: "utf-8",
     });
     return parseLsofOutput(out);
@@ -325,6 +337,15 @@ export async function forceFreePortAndWait(
     `port ${port} still has listeners after --force: ${still.map((p) => p.pid).join(", ")}`,
   );
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<PortsDeps>) {
+    portsDeps = overrides ? { ...portsDeps, ...overrides } : { ...defaultPortsDeps };
+  },
+  resetDepsForTest() {
+    portsDeps = { ...defaultPortsDeps };
+  },
+};
 
 /**
  * Attempt a real TCP bind to verify the port is available at the OS level.

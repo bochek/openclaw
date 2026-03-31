@@ -411,7 +411,7 @@ Do not use the legacy skill-only publish alias here; plugin packages should use
 ## File structure
 
 ```
-<bundled-plugin-root>/acme-ai/
+extensions/acme-ai/
 ├── package.json              # openclaw.providers metadata
 ├── openclaw.plugin.json      # Manifest with providerAuthEnvVars
 ├── index.ts                  # definePluginEntry + registerProvider

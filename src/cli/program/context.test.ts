@@ -5,6 +5,8 @@ const resolveCliChannelOptionsMock = vi.hoisted(() => vi.fn(() => ["telegram", "
 
 vi.mock("../../version.js", () => ({
   VERSION: "9.9.9-test",
+  resolveRuntimeServiceVersion: vi.fn(() => "9.9.9-test"),
+  resolveCompatibilityHostVersion: vi.fn(() => "9.9.9-test"),
 }));
 
 vi.mock("../channel-options.js", () => ({

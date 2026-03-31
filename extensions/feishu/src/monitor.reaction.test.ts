@@ -19,6 +19,19 @@ import type { ResolvedFeishuAccount } from "./types.js";
 
 const handleFeishuMessageMock = vi.hoisted(() => vi.fn(async (_params: { event?: unknown }) => {}));
 const createEventDispatcherMock = vi.hoisted(() => vi.fn());
+const createFeishuClientMock = vi.hoisted(() =>
+  vi.fn(() => ({
+    im: {
+      message: {
+        create: vi.fn(),
+        get: vi.fn(),
+        list: vi.fn(),
+        patch: vi.fn(),
+        reply: vi.fn(),
+      },
+    },
+  })),
+);
 const monitorWebSocketMock = vi.hoisted(() => vi.fn(async () => {}));
 const monitorWebhookMock = vi.hoisted(() => vi.fn(async () => {}));
 const createFeishuThreadBindingManagerMock = vi.hoisted(() => vi.fn(() => ({ stop: vi.fn() })));
@@ -27,6 +40,7 @@ let handlers: Record<string, (data: unknown) => Promise<void>> = {};
 
 vi.mock("./client.js", () => ({
   createEventDispatcher: createEventDispatcherMock,
+  createFeishuClient: createFeishuClientMock,
 }));
 
 vi.mock("./bot.js", async () => {
@@ -525,6 +539,7 @@ describe("Feishu inbound debounce regressions", () => {
   });
 
   afterEach(() => {
+    vi.clearAllTimers();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -660,7 +675,8 @@ describe("Feishu inbound debounce regressions", () => {
     await Promise.resolve();
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(25);
-
+    await Promise.resolve();
+    await Promise.resolve();
     const dispatched = expectSingleDispatchedEvent();
     expect(dispatched.message.message_id).toBe("om_new_2");
     const combined = JSON.parse(dispatched.message.content) as { text?: string };

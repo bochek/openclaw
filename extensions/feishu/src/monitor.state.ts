@@ -1,12 +1,17 @@
 import * as http from "http";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import {
+  type RuntimeEnv,
   createFixedWindowRateLimiter,
   createWebhookAnomalyTracker,
-  type RuntimeEnv,
   WEBHOOK_ANOMALY_COUNTER_DEFAULTS as WEBHOOK_ANOMALY_COUNTER_DEFAULTS_FROM_SDK,
   WEBHOOK_RATE_LIMIT_DEFAULTS as WEBHOOK_RATE_LIMIT_DEFAULTS_FROM_SDK,
-} from "../runtime-api.js";
+} from "./api.js";
+
+type CloseableHttpServer = http.Server & {
+  closeIdleConnections?: () => void;
+  closeAllConnections?: () => void;
+};
 
 export const wsClients = new Map<string, Lark.WSClient>();
 export const httpServers = new Map<string, http.Server>();
@@ -113,6 +118,20 @@ function closeWsClient(client: Lark.WSClient | undefined): void {
   }
 }
 
+function closeHttpServer(server: http.Server | undefined): void {
+  if (!server) {
+    return;
+  }
+  const closeableServer = server as CloseableHttpServer;
+  try {
+    closeableServer.closeIdleConnections?.();
+    closeableServer.closeAllConnections?.();
+    server.close();
+  } catch {
+    /* Best-effort cleanup */
+  }
+}
+
 export function clearFeishuWebhookRateLimitStateForTest(): void {
   feishuWebhookRateLimiter.clear();
   feishuWebhookAnomalyTracker.clear();
@@ -145,11 +164,8 @@ export function stopFeishuMonitorState(accountId?: string): void {
   if (accountId) {
     closeWsClient(wsClients.get(accountId));
     wsClients.delete(accountId);
-    const server = httpServers.get(accountId);
-    if (server) {
-      server.close();
-      httpServers.delete(accountId);
-    }
+    closeHttpServer(httpServers.get(accountId));
+    httpServers.delete(accountId);
     botOpenIds.delete(accountId);
     botNames.delete(accountId);
     return;
@@ -160,7 +176,7 @@ export function stopFeishuMonitorState(accountId?: string): void {
   }
   wsClients.clear();
   for (const server of httpServers.values()) {
-    server.close();
+    closeHttpServer(server);
   }
   httpServers.clear();
   botOpenIds.clear();

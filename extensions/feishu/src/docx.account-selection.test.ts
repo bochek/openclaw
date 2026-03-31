@@ -19,15 +19,14 @@ vi.mock("@larksuiteoapi/node-sdk", () => {
   };
 });
 
-describe("feishu_doc account selection", () => {
-  let registerFeishuDocTools: typeof import("./docx.js").registerFeishuDocTools;
+let registerFeishuDocTools: typeof import("./docx.js").registerFeishuDocTools;
 
+describe("feishu_doc account selection", () => {
   beforeEach(async () => {
     vi.resetModules();
     ({ registerFeishuDocTools } = await import("./docx.js"));
     vi.clearAllMocks();
   });
-
   function createDocEnabledConfig(): OpenClawPluginApi["config"] {
     return {
       channels: {

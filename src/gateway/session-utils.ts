@@ -17,6 +17,7 @@ import {
 } from "../agents/model-selection.js";
 import {
   getSessionDisplaySubagentRunByChildSessionKey,
+  getLatestSubagentRunByChildSessionKey,
   getSubagentSessionRuntimeMs,
   getSubagentSessionStartedAt,
   listSubagentRunsForController,
@@ -270,7 +271,7 @@ function resolveChildSessionKeys(
     if (!childSessionKey) {
       continue;
     }
-    const latest = getSessionDisplaySubagentRunByChildSessionKey(childSessionKey);
+    const latest = getLatestSubagentRunByChildSessionKey(childSessionKey);
     const latestControllerSessionKey =
       latest?.controllerSessionKey?.trim() || latest?.requesterSessionKey?.trim();
     if (latestControllerSessionKey !== controllerSessionKey) {
@@ -287,7 +288,7 @@ function resolveChildSessionKeys(
     if (spawnedBy !== controllerSessionKey && parentSessionKey !== controllerSessionKey) {
       continue;
     }
-    const latest = getSessionDisplaySubagentRunByChildSessionKey(key);
+    const latest = getLatestSubagentRunByChildSessionKey(key);
     if (latest) {
       const latestControllerSessionKey =
         latest.controllerSessionKey?.trim() || latest.requesterSessionKey?.trim();
@@ -313,8 +314,6 @@ function resolveTranscriptUsageFallback(params: {
   totalTokens?: number;
   totalTokensFresh?: boolean;
   contextTokens?: number;
-  modelProvider?: string;
-  model?: string;
 } | null {
   const entry = params.entry;
   if (!entry?.sessionId) {
@@ -355,8 +354,6 @@ function resolveTranscriptUsageFallback(params: {
     },
   });
   return {
-    modelProvider,
-    model,
     totalTokens: resolvePositiveNumber(snapshot.totalTokens),
     totalTokensFresh: snapshot.totalTokensFresh === true,
     contextTokens: resolvePositiveNumber(contextTokens),
@@ -1196,46 +1193,26 @@ export function buildGatewaySessionRow(params: {
     sessionAgentId,
     subagentRun?.model,
   );
-  const runtimeModelPresent =
-    Boolean(entry?.model?.trim()) || Boolean(entry?.modelProvider?.trim());
-  const needsTranscriptTotalTokens =
-    resolvePositiveNumber(resolveFreshSessionTotalTokens(entry)) === undefined;
-  const needsTranscriptContextTokens = resolvePositiveNumber(entry?.contextTokens) === undefined;
-  const needsTranscriptEstimatedCostUsd =
+  const modelProvider = resolvedModel.provider;
+  const model = resolvedModel.model ?? DEFAULT_MODEL;
+  const transcriptUsage =
+    resolvePositiveNumber(resolveFreshSessionTotalTokens(entry)) === undefined ||
+    resolvePositiveNumber(entry?.contextTokens) === undefined ||
     resolveEstimatedSessionCostUsd({
       cfg,
-      provider: resolvedModel.provider,
-      model: resolvedModel.model ?? DEFAULT_MODEL,
+      provider: modelProvider,
+      model,
       entry,
-    }) === undefined;
-  const transcriptUsage =
-    needsTranscriptTotalTokens || needsTranscriptContextTokens || needsTranscriptEstimatedCostUsd
+    }) === undefined
       ? resolveTranscriptUsageFallback({
           cfg,
           key,
           entry,
           storePath,
-          fallbackProvider: resolvedModel.provider,
-          fallbackModel: resolvedModel.model ?? DEFAULT_MODEL,
+          fallbackProvider: modelProvider,
+          fallbackModel: model,
         })
       : null;
-  const preferLiveSubagentModelIdentity =
-    Boolean(subagentRun?.model?.trim()) && subagentStatus === "running";
-  const shouldUseTranscriptModelIdentity =
-    runtimeModelPresent &&
-    !preferLiveSubagentModelIdentity &&
-    (needsTranscriptTotalTokens || needsTranscriptContextTokens);
-  const resolvedModelIdentity = {
-    provider: resolvedModel.provider,
-    model: resolvedModel.model ?? DEFAULT_MODEL,
-  };
-  const modelIdentity = shouldUseTranscriptModelIdentity
-    ? {
-        provider: transcriptUsage?.modelProvider ?? resolvedModelIdentity.provider,
-        model: transcriptUsage?.model ?? resolvedModelIdentity.model,
-      }
-    : resolvedModelIdentity;
-  const { provider: modelProvider, model } = modelIdentity;
   const totalTokens =
     resolvePositiveNumber(resolveFreshSessionTotalTokens(entry)) ??
     resolvePositiveNumber(transcriptUsage?.totalTokens);
@@ -1405,7 +1382,7 @@ export function listSessionsFromStore(params: {
       if (key === "unknown" || key === "global") {
         return false;
       }
-      const latest = getSessionDisplaySubagentRunByChildSessionKey(key);
+      const latest = getLatestSubagentRunByChildSessionKey(key);
       if (latest) {
         const latestControllerSessionKey =
           latest.controllerSessionKey?.trim() || latest.requesterSessionKey?.trim();

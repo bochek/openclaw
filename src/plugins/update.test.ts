@@ -1,12 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { bundledPluginRootAt } from "../../test/helpers/bundled-plugin-paths.js";
 import type { OpenClawConfig } from "../config/config.js";
-
-const APP_ROOT = "/app";
-
-function appBundledPluginRoot(pluginId: string): string {
-  return bundledPluginRootAt(APP_ROOT, pluginId);
-}
 
 const installPluginFromNpmSpecMock = vi.fn();
 const installPluginFromMarketplaceMock = vi.fn();
@@ -138,7 +131,7 @@ function createBundledPathInstallConfig(params: {
       installs: {
         feishu: {
           source: "path",
-          sourcePath: params.sourcePath ?? appBundledPluginRoot("feishu"),
+          sourcePath: params.sourcePath ?? "/app/extensions/feishu",
           installPath: params.installPath,
           ...(params.spec ? { spec: params.spec } : {}),
         },
@@ -185,7 +178,7 @@ function createBundledSource(params?: { pluginId?: string; localPath?: string; n
   const pluginId = params?.pluginId ?? "feishu";
   return {
     pluginId,
-    localPath: params?.localPath ?? appBundledPluginRoot(pluginId),
+    localPath: params?.localPath ?? `/app/extensions/${pluginId}`,
     npmSpec: params?.npmSpec ?? `@openclaw/${pluginId}`,
   };
 }
@@ -617,13 +610,13 @@ describe("syncPluginsForUpdateChannel", () => {
     {
       name: "keeps bundled path installs on beta without reinstalling from npm",
       config: createBundledPathInstallConfig({
-        loadPaths: [appBundledPluginRoot("feishu")],
-        installPath: appBundledPluginRoot("feishu"),
+        loadPaths: ["/app/extensions/feishu"],
+        installPath: "/app/extensions/feishu",
         spec: "@openclaw/feishu",
       }),
       expectedChanged: false,
-      expectedLoadPaths: [appBundledPluginRoot("feishu")],
-      expectedInstallPath: appBundledPluginRoot("feishu"),
+      expectedLoadPaths: ["/app/extensions/feishu"],
+      expectedInstallPath: "/app/extensions/feishu",
     },
     {
       name: "repairs bundled install metadata when the load path is re-added",
@@ -633,8 +626,8 @@ describe("syncPluginsForUpdateChannel", () => {
         spec: "@openclaw/feishu",
       }),
       expectedChanged: true,
-      expectedLoadPaths: [appBundledPluginRoot("feishu")],
-      expectedInstallPath: appBundledPluginRoot("feishu"),
+      expectedLoadPaths: ["/app/extensions/feishu"],
+      expectedInstallPath: "/app/extensions/feishu",
     },
   ] as const)(
     "$name",
@@ -652,7 +645,7 @@ describe("syncPluginsForUpdateChannel", () => {
       expect(result.config.plugins?.load?.paths).toEqual(expectedLoadPaths);
       expectBundledPathInstall({
         install: result.config.plugins?.installs?.feishu,
-        sourcePath: appBundledPluginRoot("feishu"),
+        sourcePath: "/app/extensions/feishu",
         installPath: expectedInstallPath,
         spec: "@openclaw/feishu",
       });

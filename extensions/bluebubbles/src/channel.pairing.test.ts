@@ -1,27 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "./runtime-api.js";
+import { __testing as channelTesting, bluebubblesPlugin } from "./channel.js";
 
 const sendMessageBlueBubblesMock = vi.hoisted(() => vi.fn());
-
-vi.mock("./channel.runtime.js", () => ({
-  blueBubblesChannelRuntime: {
-    sendMessageBlueBubbles: sendMessageBlueBubblesMock,
-  },
-}));
 
 vi.mock("../../../src/channels/plugins/bundled.js", () => ({
   bundledChannelPlugins: [],
   bundledChannelSetupPlugins: [],
 }));
 
-let bluebubblesPlugin: typeof import("./channel.js").bluebubblesPlugin;
-
 describe("bluebubblesPlugin.pairing.notifyApproval", () => {
-  beforeEach(async () => {
-    vi.resetModules();
+  beforeEach(() => {
+    channelTesting.setLoadBlueBubblesChannelRuntimeForTest(
+      async () =>
+        ({
+          sendMessageBlueBubbles: sendMessageBlueBubblesMock,
+        }) as never,
+    );
     sendMessageBlueBubblesMock.mockReset();
     sendMessageBlueBubblesMock.mockResolvedValue({ messageId: "bb-pairing" });
-    ({ bluebubblesPlugin } = await import("./channel.js"));
   });
 
   it("preserves accountId when sending pairing approvals", async () => {

@@ -3,6 +3,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { encodeRecoveryKey } from "matrix-js-sdk/lib/crypto-api/recovery-key.js";
+import { MatrixClient } from "./sdk.js";
 
 class FakeMatrixEvent extends EventEmitter {
   private readonly roomId: string;
@@ -175,12 +177,11 @@ function createMatrixJsClientStub(): MatrixJsClientStub {
 let matrixJsClient = createMatrixJsClientStub();
 let lastCreateClientOpts: Record<string, unknown> | null = null;
 
-vi.mock("matrix-js-sdk/lib/matrix.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("matrix-js-sdk/lib/matrix.js")>();
+vi.mock("matrix-js-sdk/lib/matrix.js", () => {
   return {
-    ...actual,
     ClientEvent: { Event: "event", Room: "Room" },
     MatrixEventEvent: { Decrypted: "decrypted" },
+    Preset: { TrustedPrivateChat: "trusted_private_chat" },
     createClient: vi.fn((opts: Record<string, unknown>) => {
       lastCreateClientOpts = opts;
       return matrixJsClient;
@@ -188,8 +189,15 @@ vi.mock("matrix-js-sdk/lib/matrix.js", async (importOriginal) => {
   };
 });
 
-const { encodeRecoveryKey } = await import("matrix-js-sdk/lib/crypto-api/recovery-key.js");
-const { MatrixClient } = await import("./sdk.js");
+vi.mock("./client/file-sync-store.js", () => ({
+  FileBackedMatrixSyncStore: class FileBackedMatrixSyncStore {
+    constructor(_storagePath: string) {}
+
+    markCleanShutdown(): void {}
+
+    async flush(): Promise<void> {}
+  },
+}));
 
 describe("MatrixClient request hardening", () => {
   beforeEach(() => {
@@ -491,9 +499,13 @@ describe("MatrixClient request hardening", () => {
   });
 
   it("aborts requests after timeout", async () => {
-    vi.useFakeTimers();
+    vi.useRealTimers();
     const fetchMock = vi.fn((_: URL | string, init?: RequestInit) => {
       return new Promise<Response>((_, reject) => {
+        if (init?.signal?.aborted) {
+          reject(new Error("aborted"));
+          return;
+        }
         init?.signal?.addEventListener("abort", () => {
           reject(new Error("aborted"));
         });
@@ -502,15 +514,13 @@ describe("MatrixClient request hardening", () => {
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
     const client = new MatrixClient("http://127.0.0.1:8008", "token", {
-      localTimeoutMs: 25,
+      localTimeoutMs: 1,
       ssrfPolicy: { allowPrivateNetwork: true },
     });
 
-    const pending = client.doRequest("GET", "/_matrix/client/v3/account/whoami");
-    const assertion = expect(pending).rejects.toThrow("aborted");
-    await vi.advanceTimersByTimeAsync(30);
-
-    await assertion;
+    await expect(client.doRequest("GET", "/_matrix/client/v3/account/whoami")).rejects.toThrow(
+      "aborted",
+    );
   });
 
   it("wires the sync store into the SDK and flushes it on shutdown", async () => {
@@ -796,7 +806,7 @@ describe("MatrixClient event bridge", () => {
   });
 
   it("stops decryption retries after hitting retry cap", async () => {
-    vi.useFakeTimers();
+    vi.useRealTimers();
     const client = new MatrixClient("https://matrix.example.org", "token");
     const failed: string[] = [];
 
@@ -824,10 +834,8 @@ describe("MatrixClient event bridge", () => {
 
     expect(failed).toEqual(["missing room key"]);
 
-    await vi.advanceTimersByTimeAsync(200_000);
-    expect(matrixJsClient.decryptEventIfNeeded).toHaveBeenCalledTimes(8);
-
-    await vi.advanceTimersByTimeAsync(200_000);
+    client.stopSyncWithoutPersist();
+    await client.drainPendingDecryptions("test retry cap");
     expect(matrixJsClient.decryptEventIfNeeded).toHaveBeenCalledTimes(8);
   });
 

@@ -1,4 +1,5 @@
-import { beforeAll, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import * as mod from "./pw-tools-core.js";
 import {
   installPwToolsCoreTestHooks,
   setPwToolsCoreCurrentPage,
@@ -6,14 +7,8 @@ import {
 } from "./pw-tools-core.test-harness.js";
 
 installPwToolsCoreTestHooks();
-let mod: typeof import("./pw-tools-core.js");
 
 describe("pw-tools-core", () => {
-  beforeAll(async () => {
-    vi.resetModules();
-    mod = await import("./pw-tools-core.js");
-  });
-
   it("clamps timeoutMs for scrollIntoView", async () => {
     const scrollIntoViewIfNeeded = vi.fn(async () => {});
     setPwToolsCoreCurrentRefLocator({ scrollIntoViewIfNeeded });

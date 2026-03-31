@@ -4,54 +4,53 @@ import type { OpenClawConfig } from "../../config/config.js";
 import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../../plugins/runtime.js";
 import { createOutboundTestPlugin, createTestRegistry } from "../../test-utils/channel-plugins.js";
 
-const whatsappAccountMocks = vi.hoisted(() => ({
-  resolveWhatsAppAccount: vi.fn<() => { allowFrom: string[] }>(() => ({ allowFrom: [] })),
+const sessionMocks = vi.hoisted(() => ({
+  loadSessionStore: vi.fn(() => ({})),
+  resolveAgentMainSessionKey: vi.fn(() => "agent:test:main"),
+  resolveStorePath: vi.fn(() => "/tmp/test-store.json"),
 }));
 
-vi.mock("../../config/sessions.js", () => ({
-  loadSessionStore: vi.fn().mockReturnValue({}),
-  resolveAgentMainSessionKey: vi.fn().mockReturnValue("agent:test:main"),
-  resolveStorePath: vi.fn().mockReturnValue("/tmp/test-store.json"),
-}));
-
-vi.mock("../../infra/outbound/channel-selection.js", () => ({
+const channelSelectionMocks = vi.hoisted(() => ({
   resolveMessageChannelSelection: vi
     .fn()
     .mockResolvedValue({ channel: "telegram", configured: ["telegram"] }),
 }));
 
-vi.mock("../../infra/outbound/target-resolver.js", () => ({
+const targetResolverMocks = vi.hoisted(() => ({
   maybeResolveIdLikeTarget: vi.fn(),
 }));
 
-vi.mock("../../pairing/pairing-store.js", () => ({
+const pairingStoreMocks = vi.hoisted(() => ({
   readChannelAllowFromStoreSync: vi.fn(() => []),
+}));
+
+const whatsappAccountMocks = vi.hoisted(() => ({
+  resolveWhatsAppAccount: vi.fn<() => { allowFrom: string[] }>(() => ({ allowFrom: [] })),
+}));
+
+vi.mock("../../config/sessions.js", () => ({
+  loadSessionStore: sessionMocks.loadSessionStore,
+  resolveAgentMainSessionKey: sessionMocks.resolveAgentMainSessionKey,
+  resolveStorePath: sessionMocks.resolveStorePath,
+}));
+
+vi.mock("../../infra/outbound/channel-selection.js", () => ({
+  resolveMessageChannelSelection: channelSelectionMocks.resolveMessageChannelSelection,
+}));
+
+vi.mock("../../infra/outbound/target-resolver.js", () => ({
+  maybeResolveIdLikeTarget: targetResolverMocks.maybeResolveIdLikeTarget,
+}));
+
+vi.mock("../../pairing/pairing-store.js", () => ({
+  readChannelAllowFromStoreSync: pairingStoreMocks.readChannelAllowFromStoreSync,
 }));
 
 vi.mock("../../plugin-sdk/whatsapp.js", () => ({
   resolveWhatsAppAccount: whatsappAccountMocks.resolveWhatsAppAccount,
 }));
 
-const mockedModuleIds = [
-  "../../config/sessions.js",
-  "../../infra/outbound/channel-selection.js",
-  "../../infra/outbound/target-resolver.js",
-  "../../pairing/pairing-store.js",
-  "../../plugin-sdk/whatsapp.js",
-];
-
-import { loadSessionStore } from "../../config/sessions.js";
-import { resolveMessageChannelSelection } from "../../infra/outbound/channel-selection.js";
-import { maybeResolveIdLikeTarget } from "../../infra/outbound/target-resolver.js";
-import { readChannelAllowFromStoreSync } from "../../pairing/pairing-store.js";
 import { resolveDeliveryTarget } from "./delivery-target.js";
-
-afterAll(() => {
-  for (const id of mockedModuleIds) {
-    vi.doUnmock(id);
-  }
-  vi.resetModules();
-});
 
 function createStubOutbound(label: string): ChannelOutboundAdapter {
   return {
@@ -118,11 +117,11 @@ const DEFAULT_TARGET = {
   to: "123456",
 };
 
-type SessionStore = ReturnType<typeof loadSessionStore>;
+type SessionStore = Record<string, Record<string, unknown>>;
 
 function setMainSessionEntry(entry?: SessionStore[string]) {
   const store = entry ? ({ "agent:test:main": entry } as SessionStore) : ({} as SessionStore);
-  vi.mocked(loadSessionStore).mockReturnValue(store);
+  sessionMocks.loadSessionStore.mockReturnValue(store);
 }
 
 function setLastSessionEntry(params: {
@@ -143,11 +142,11 @@ function setLastSessionEntry(params: {
 }
 
 function setWhatsAppAllowFrom(allowFrom: string[]) {
-  vi.mocked(whatsappAccountMocks.resolveWhatsAppAccount).mockReturnValue({ allowFrom });
+  whatsappAccountMocks.resolveWhatsAppAccount.mockReturnValue({ allowFrom });
 }
 
 function setStoredWhatsAppAllowFrom(allowFrom: string[]) {
-  vi.mocked(readChannelAllowFromStoreSync).mockReturnValue(allowFrom);
+  pairingStoreMocks.readChannelAllowFromStoreSync.mockReturnValue(allowFrom);
 }
 
 async function resolveForAgent(params: {
@@ -240,8 +239,8 @@ describe("resolveDeliveryTarget", () => {
 
   it("applies id-like target normalization before returning delivery targets", async () => {
     setMainSessionEntry(undefined);
-    vi.mocked(maybeResolveIdLikeTarget).mockClear();
-    vi.mocked(maybeResolveIdLikeTarget).mockResolvedValueOnce({
+    targetResolverMocks.maybeResolveIdLikeTarget.mockClear();
+    targetResolverMocks.maybeResolveIdLikeTarget.mockResolvedValueOnce({
       to: "user:123456789",
       kind: "user",
       source: "directory",
@@ -254,7 +253,7 @@ describe("resolveDeliveryTarget", () => {
 
     expect(result.ok).toBe(true);
     expect(result.to).toBe("user:123456789");
-    expect(maybeResolveIdLikeTarget).toHaveBeenCalledWith(
+    expect(targetResolverMocks.maybeResolveIdLikeTarget).toHaveBeenCalledWith(
       expect.objectContaining({
         channel: "telegram",
         input: "123456789",
@@ -340,7 +339,7 @@ describe("resolveDeliveryTarget", () => {
 
   it("returns an error when channel selection is ambiguous", async () => {
     setMainSessionEntry(undefined);
-    vi.mocked(resolveMessageChannelSelection).mockRejectedValueOnce(
+    channelSelectionMocks.resolveMessageChannelSelection.mockRejectedValueOnce(
       new Error("Channel is required when multiple channels are configured: telegram, slack"),
     );
 
@@ -355,7 +354,7 @@ describe("resolveDeliveryTarget", () => {
   });
 
   it("uses sessionKey thread entry before main session entry", async () => {
-    vi.mocked(loadSessionStore).mockReturnValue({
+    sessionMocks.loadSessionStore.mockReturnValue({
       "agent:test:main": {
         sessionId: "main-session",
         updatedAt: 1000,

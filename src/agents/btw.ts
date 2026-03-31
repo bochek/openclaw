@@ -2,6 +2,7 @@ import {
   streamSimple,
   type Api,
   type AssistantMessageEvent,
+  type ThinkingLevel as SimpleThinkingLevel,
   type Message,
   type Model,
 } from "@mariozechner/pi-ai";
@@ -21,6 +22,7 @@ import { ensureOpenClawModelsJson } from "./models-config.js";
 import { EmbeddedBlockChunker, type BlockReplyChunking } from "./pi-embedded-block-chunker.js";
 import { resolveModelWithRegistry } from "./pi-embedded-runner/model.js";
 import { getActiveEmbeddedRunSnapshot } from "./pi-embedded-runner/runs.js";
+import { mapThinkingLevel } from "./pi-embedded-runner/utils.js";
 import { discoverAuthStorage, discoverModels } from "./pi-model-discovery.js";
 import { stripToolResultDetails } from "./session-transcript-repair.js";
 
@@ -35,6 +37,36 @@ type SessionManagerLike = {
   resetLeaf?: () => void;
   buildSessionContext: () => { messages?: unknown[] };
 };
+
+type BtwDeps = {
+  streamSimple: typeof streamSimple;
+  SessionManager: Pick<typeof SessionManager, "open">;
+  ensureOpenClawModelsJson: typeof ensureOpenClawModelsJson;
+  discoverAuthStorage: typeof discoverAuthStorage;
+  discoverModels: typeof discoverModels;
+  resolveModelWithRegistry: typeof resolveModelWithRegistry;
+  getApiKeyForModel: typeof getApiKeyForModel;
+  requireApiKey: typeof requireApiKey;
+  resolveSessionAuthProfileOverride: typeof resolveSessionAuthProfileOverride;
+  getActiveEmbeddedRunSnapshot: typeof getActiveEmbeddedRunSnapshot;
+  diagDebug: typeof diag.debug;
+};
+
+const defaultBtwDeps: BtwDeps = {
+  streamSimple,
+  SessionManager,
+  ensureOpenClawModelsJson,
+  discoverAuthStorage,
+  discoverModels,
+  resolveModelWithRegistry,
+  getApiKeyForModel,
+  requireApiKey,
+  resolveSessionAuthProfileOverride,
+  getActiveEmbeddedRunSnapshot,
+  diagDebug: (...args) => diag.debug(...args),
+};
+
+let btwDeps: BtwDeps = defaultBtwDeps;
 
 function collectTextContent(content: Array<{ type?: string; text?: string }>): string {
   return content
@@ -95,6 +127,13 @@ function toSimpleContextMessages(messages: unknown[]): Message[] {
   ) as Message[];
 }
 
+function resolveSimpleThinkingLevel(level?: ThinkLevel): SimpleThinkingLevel | undefined {
+  if (!level || level === "off") {
+    return undefined;
+  }
+  return mapThinkingLevel(level) as SimpleThinkingLevel;
+}
+
 function resolveSessionTranscriptPath(params: {
   sessionId: string;
   sessionEntry?: SessionEntry;
@@ -109,7 +148,7 @@ function resolveSessionTranscriptPath(params: {
     });
     return resolveSessionFilePath(params.sessionId, params.sessionEntry, pathOpts);
   } catch (error) {
-    diag.debug(
+    btwDeps.diagDebug(
       `resolveSessionTranscriptPath failed: sessionId=${params.sessionId} err=${String(error)}`,
     );
     return undefined;
@@ -131,10 +170,10 @@ async function resolveRuntimeModel(params: {
   authProfileId?: string;
   authProfileIdSource?: "auto" | "user";
 }> {
-  await ensureOpenClawModelsJson(params.cfg, params.agentDir);
-  const authStorage = discoverAuthStorage(params.agentDir);
-  const modelRegistry = discoverModels(authStorage, params.agentDir);
-  const model = resolveModelWithRegistry({
+  await btwDeps.ensureOpenClawModelsJson(params.cfg, params.agentDir);
+  const authStorage = btwDeps.discoverAuthStorage(params.agentDir);
+  const modelRegistry = btwDeps.discoverModels(authStorage, params.agentDir);
+  const model = btwDeps.resolveModelWithRegistry({
     provider: params.provider,
     modelId: params.model,
     modelRegistry,
@@ -144,7 +183,7 @@ async function resolveRuntimeModel(params: {
     throw new Error(`Unknown model: ${params.provider}/${params.model}`);
   }
 
-  const authProfileId = await resolveSessionAuthProfileOverride({
+  const authProfileId = await btwDeps.resolveSessionAuthProfileOverride({
     cfg: params.cfg,
     provider: params.provider,
     agentDir: params.agentDir,
@@ -197,8 +236,8 @@ export async function runBtwSideQuestion(
     throw new Error("No active session transcript.");
   }
 
-  const sessionManager = SessionManager.open(sessionFile) as SessionManagerLike;
-  const activeRunSnapshot = getActiveEmbeddedRunSnapshot(sessionId);
+  const sessionManager = btwDeps.SessionManager.open(sessionFile) as SessionManagerLike;
+  const activeRunSnapshot = btwDeps.getActiveEmbeddedRunSnapshot(sessionId);
   let messages: Message[] = [];
   let inFlightPrompt: string | undefined;
   if (Array.isArray(activeRunSnapshot?.messages) && activeRunSnapshot.messages.length > 0) {
@@ -210,7 +249,7 @@ export async function runBtwSideQuestion(
       try {
         sessionManager.branch(activeRunSnapshot.transcriptLeafId);
       } catch (error) {
-        diag.debug(
+        btwDeps.diagDebug(
           `btw snapshot leaf unavailable: sessionId=${sessionId} leaf=${activeRunSnapshot.transcriptLeafId} err=${String(error)}`,
         );
         sessionManager.resetLeaf?.();
@@ -249,13 +288,13 @@ export async function runBtwSideQuestion(
     storePath: params.storePath,
     isNewSession: params.isNewSession,
   });
-  const apiKeyInfo = await getApiKeyForModel({
+  const apiKeyInfo = await btwDeps.getApiKeyForModel({
     model,
     cfg: params.cfg,
     profileId: authProfileId,
     agentDir: params.agentDir,
   });
-  const apiKey = requireApiKey(apiKeyInfo, model.provider);
+  const apiKey = btwDeps.requireApiKey(apiKeyInfo, model.provider);
 
   const chunker =
     params.opts?.onBlockReply && params.blockReplyChunking
@@ -283,7 +322,7 @@ export async function runBtwSideQuestion(
     await blockEmitChain;
   };
 
-  const stream = streamSimple(
+  const stream = btwDeps.streamSimple(
     model,
     {
       systemPrompt: buildBtwSystemPrompt(),
@@ -303,9 +342,7 @@ export async function runBtwSideQuestion(
     },
     {
       apiKey,
-      // BTW is intentionally a lightweight side question path. Keep provider
-      // reasoning off so we reliably receive answer text instead of thinking-only output.
-      reasoning: undefined,
+      reasoning: resolveSimpleThinkingLevel(params.resolvedThinkLevel),
       signal: params.opts?.abortSignal,
     },
   );
@@ -382,3 +419,14 @@ export async function runBtwSideQuestion(
 
   return { text: answer };
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<BtwDeps>) {
+    btwDeps = overrides
+      ? {
+          ...defaultBtwDeps,
+          ...overrides,
+        }
+      : defaultBtwDeps;
+  },
+};

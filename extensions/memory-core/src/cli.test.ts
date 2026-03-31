@@ -51,14 +51,19 @@ let registerMemoryCli: typeof import("./cli.js").registerMemoryCli;
 let defaultRuntime: typeof import("openclaw/plugin-sdk/memory-core-host-runtime-cli").defaultRuntime;
 let isVerbose: typeof import("openclaw/plugin-sdk/memory-core-host-runtime-cli").isVerbose;
 let setVerbose: typeof import("openclaw/plugin-sdk/memory-core-host-runtime-cli").setVerbose;
+let runtimeTesting: typeof import("./cli.runtime.js").__testing;
+let lastExitCode: number | undefined;
 
 beforeAll(async () => {
   ({ registerMemoryCli } = await import("./cli.js"));
+  ({ __testing: runtimeTesting } = await import("./cli.runtime.js"));
   ({ defaultRuntime, isVerbose, setVerbose } =
     await import("openclaw/plugin-sdk/memory-core-host-runtime-cli"));
 });
 
 beforeEach(() => {
+  lastExitCode = undefined;
+  runtimeTesting.resetDepsForTest();
   getMemorySearchManager.mockReset();
   loadConfig.mockReset().mockReturnValue({});
   resolveDefaultAgentId.mockReset().mockReturnValue("main");
@@ -66,12 +71,22 @@ beforeEach(() => {
     resolvedConfig: config,
     diagnostics: [] as string[],
   }));
+  runtimeTesting.setDepsForTest({
+    getMemorySearchManager,
+    loadConfig,
+    resolveDefaultAgentId,
+    resolveCommandSecretRefsViaGateway,
+    setExitCode: (code) => {
+      lastExitCode = code;
+    },
+  });
 });
 
 afterEach(() => {
+  runtimeTesting.resetDepsForTest();
   vi.restoreAllMocks();
-  process.exitCode = undefined;
   setVerbose(false);
+  lastExitCode = undefined;
 });
 
 describe("memory cli", () => {
@@ -126,6 +141,7 @@ describe("memory cli", () => {
     program.name("test");
     registerMemoryCli(program);
     await program.parseAsync(["memory", ...args], { from: "user" });
+    return lastExitCode;
   }
 
   function captureHelpOutput(command: Command | undefined) {
@@ -180,7 +196,6 @@ describe("memory cli", () => {
     expect(error).toHaveBeenCalledWith(
       expect.stringContaining("Memory manager close failed: close boom"),
     );
-    expect(process.exitCode).toBeUndefined();
   }
 
   it("prints vector status when available", async () => {
@@ -374,7 +389,7 @@ describe("memory cli", () => {
       mockManager({ sync, status: () => ({ backend: "qmd", dbPath }), close });
 
       const log = spyRuntimeLogs(defaultRuntime);
-      await runMemoryCli(["index"]);
+      const exitCode = await runMemoryCli(["index"]);
 
       expectCliSync(sync);
       expect(log).toHaveBeenCalledWith(expect.stringContaining("QMD index: "));
@@ -390,14 +405,14 @@ describe("memory cli", () => {
       mockManager({ sync, status: () => ({ backend: "qmd", dbPath }), close });
 
       const error = spyRuntimeErrors(defaultRuntime);
-      await runMemoryCli(["index"]);
+      const exitCode = await runMemoryCli(["index"]);
 
       expectCliSync(sync);
       expect(error).toHaveBeenCalledWith(
         expect.stringContaining("Memory index failed (main): QMD index file is empty"),
       );
       expect(close).toHaveBeenCalled();
-      expect(process.exitCode).toBe(1);
+      expect(exitCode).toBe(1);
     });
   });
 
@@ -439,12 +454,12 @@ describe("memory cli", () => {
     mockManager({ search, close });
 
     const error = spyRuntimeErrors(defaultRuntime);
-    await runMemoryCli(["search", "oops"]);
+    const exitCode = await runMemoryCli(["search", "oops"]);
 
     expect(search).toHaveBeenCalled();
     expect(close).toHaveBeenCalled();
     expect(error).toHaveBeenCalledWith(expect.stringContaining("Memory search failed: boom"));
-    expect(process.exitCode).toBe(1);
+    expect(exitCode).toBe(1);
   });
 
   it("prints status json output when requested", async () => {
@@ -540,7 +555,6 @@ describe("memory cli", () => {
     });
     expect(log).toHaveBeenCalledWith("No matches.");
     expect(close).toHaveBeenCalled();
-    expect(process.exitCode).toBeUndefined();
   });
 
   it("prefers --query when positional and flag are both provided", async () => {
@@ -561,13 +575,13 @@ describe("memory cli", () => {
 
   it("fails when neither positional query nor --query is provided", async () => {
     const error = spyRuntimeErrors(defaultRuntime);
-    await runMemoryCli(["search"]);
+    const exitCode = await runMemoryCli(["search"]);
 
     expect(error).toHaveBeenCalledWith(
       "Missing search query. Provide a positional query or use --query <text>.",
     );
     expect(getMemorySearchManager).not.toHaveBeenCalled();
-    expect(process.exitCode).toBe(1);
+    expect(exitCode).toBe(1);
   });
 
   it("prints search results as json when requested", async () => {

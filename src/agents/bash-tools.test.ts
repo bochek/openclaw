@@ -177,15 +177,36 @@ function useCapturedEnv(keys: string[], afterCapture?: () => void) {
   });
 }
 
+async function pollUntil<T>(params: {
+  read: () => Promise<T> | T;
+  until: (value: T) => boolean;
+  timeoutMs: number;
+  intervalMs: number;
+  describe: string;
+}): Promise<T> {
+  const deadline = Date.now() + params.timeoutMs;
+  let lastValue: T | undefined;
+  while (Date.now() <= deadline) {
+    lastValue = await params.read();
+    if (params.until(lastValue)) {
+      return lastValue;
+    }
+    await new Promise((resolve) => setTimeout(resolve, params.intervalMs));
+  }
+  throw new Error(
+    `pollUntil timed out waiting for ${params.describe}; lastValue=${JSON.stringify(lastValue)}`,
+  );
+}
+
 async function waitForCompletion(sessionId: string) {
-  let status = PROCESS_STATUS_RUNNING;
-  await expect
-    .poll(async () => {
-      status = (await pollProcessSession({ tool: processTool, sessionId })).status;
-      return status;
-    }, BACKGROUND_POLL_OPTIONS)
-    .not.toBe(PROCESS_STATUS_RUNNING);
-  return status;
+  const result = await pollUntil({
+    read: () => pollProcessSession({ tool: processTool, sessionId }),
+    until: (pollResult) => pollResult.status !== PROCESS_STATUS_RUNNING,
+    timeoutMs: BACKGROUND_POLL_OPTIONS.timeout,
+    intervalMs: BACKGROUND_POLL_OPTIONS.interval,
+    describe: `background completion for ${sessionId}`,
+  });
+  return result.status;
 }
 
 function requireSessionId(details: { sessionId?: string }): string {
@@ -207,13 +228,17 @@ async function waitForNotifyEvent(sessionId: string) {
   const prefix = sessionId.slice(0, 8);
   let finished = getFinishedSession(sessionId);
   let hasEvent = hasNotifyEventForPrefix(prefix);
-  await expect
-    .poll(() => {
+  await pollUntil({
+    read: () => {
       finished = getFinishedSession(sessionId);
       hasEvent = hasNotifyEventForPrefix(prefix);
       return Boolean(finished && hasEvent);
-    }, NOTIFY_POLL_OPTIONS)
-    .toBe(true);
+    },
+    until: Boolean,
+    timeoutMs: NOTIFY_POLL_OPTIONS.timeout,
+    intervalMs: NOTIFY_POLL_OPTIONS.interval,
+    describe: `notify event for ${sessionId}`,
+  });
   return {
     finished: finished ?? getFinishedSession(sessionId),
     hasEvent: hasEvent || hasNotifyEventForPrefix(prefix),
@@ -437,13 +462,17 @@ describe("exec tool backgrounding", () => {
       const sessionId = requireRunningSessionId(result);
 
       let output = "";
-      await expect
-        .poll(async () => {
+      await pollUntil({
+        read: async () => {
           const pollResult = await pollProcessSession({ tool: processTool, sessionId });
           output = pollResult.output ?? "";
           return pollResult.status;
-        }, BACKGROUND_POLL_OPTIONS)
-        .toBe(PROCESS_STATUS_COMPLETED);
+        },
+        until: (status) => status === PROCESS_STATUS_COMPLETED,
+        timeoutMs: BACKGROUND_POLL_OPTIONS.timeout,
+        intervalMs: BACKGROUND_POLL_OPTIONS.interval,
+        describe: `completed background output for ${sessionId}`,
+      });
 
       expect(output).toContain(OUTPUT_DONE);
     },
@@ -533,12 +562,17 @@ describe("exec notifyOnExit", () => {
     try {
       const sessionId = await startBackgroundCommand(tool, echoAfterDelay("notify"));
 
-      await expect
-        .poll(() => wakeHandler.mock.calls[0]?.[0], NOTIFY_POLL_OPTIONS)
-        .toMatchObject({
-          reason: `exec:${sessionId}:exit`,
-          sessionKey: DEFAULT_NOTIFY_SESSION_KEY,
-        });
+      const wakePayload = await pollUntil({
+        read: () => wakeHandler.mock.calls[0]?.[0],
+        until: (value) => Boolean(value),
+        timeoutMs: NOTIFY_POLL_OPTIONS.timeout,
+        intervalMs: NOTIFY_POLL_OPTIONS.interval,
+        describe: `notifyOnExit wake for ${sessionId}`,
+      });
+      expect(wakePayload).toMatchObject({
+        reason: `exec:${sessionId}:exit`,
+        sessionKey: DEFAULT_NOTIFY_SESSION_KEY,
+      });
     } finally {
       dispose();
     }
@@ -553,11 +587,16 @@ describe("exec notifyOnExit", () => {
     try {
       const sessionId = await startBackgroundCommand(tool, echoAfterDelay("notify"));
 
-      await expect
-        .poll(() => wakeHandler.mock.calls[0]?.[0], NOTIFY_POLL_OPTIONS)
-        .toEqual({
-          reason: `exec:${sessionId}:exit`,
-        });
+      const wakePayload = await pollUntil({
+        read: () => wakeHandler.mock.calls[0]?.[0],
+        until: (value) => Boolean(value),
+        timeoutMs: NOTIFY_POLL_OPTIONS.timeout,
+        intervalMs: NOTIFY_POLL_OPTIONS.interval,
+        describe: `notifyOnExit wake for ${sessionId}`,
+      });
+      expect(wakePayload).toEqual({
+        reason: `exec:${sessionId}:exit`,
+      });
     } finally {
       dispose();
     }

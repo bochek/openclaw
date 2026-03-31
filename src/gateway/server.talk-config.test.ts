@@ -16,6 +16,7 @@ import {
   connectOk,
   installGatewayTestHooks,
   readConnectChallengeNonce,
+  resetTestPluginRegistry,
   rpcReq,
 } from "./test-helpers.js";
 import { withServer } from "./test-with-server.js";
@@ -278,6 +279,7 @@ describe("gateway talk.config", () => {
 
     try {
       await withServer(async (ws) => {
+        resetTestPluginRegistry();
         await connectOperator(ws, ["operator.read", "operator.write"]);
         const res = await fetchTalkSpeak(ws, {
           text: "Hello from talk mode.",
@@ -308,6 +310,13 @@ describe("gateway talk.config", () => {
   it("resolves talk voice aliases case-insensitively and forwards output format", async () => {
     const { writeConfigFile } = await import("../config/config.js");
     await writeConfigFile({
+      plugins: {
+        entries: {
+          elevenlabs: {
+            enabled: true,
+          },
+        },
+      },
       talk: {
         provider: "elevenlabs",
         providers: {
@@ -332,6 +341,7 @@ describe("gateway talk.config", () => {
 
     try {
       await withServer(async (ws) => {
+        resetTestPluginRegistry();
         await connectOperator(ws, ["operator.read", "operator.write"]);
         const res = await fetchTalkSpeak(ws, {
           text: "Hello from talk mode.",
@@ -389,6 +399,26 @@ describe("gateway talk.config", () => {
 
     try {
       await withServer(async (ws) => {
+        setActivePluginRegistry({
+          ...createEmptyPluginRegistry(),
+          speechProviders: [
+            {
+              pluginId: "acme-plugin",
+              source: "test",
+              provider: {
+                id: "acme",
+                label: "Acme Speech",
+                isConfigured: () => true,
+                synthesize: async () => ({
+                  audioBuffer: Buffer.from([7, 8, 9]),
+                  outputFormat: "mp3",
+                  fileExtension: ".mp3",
+                  voiceCompatible: false,
+                }),
+              },
+            },
+          ],
+        });
         await connectOperator(ws, ["operator.read", "operator.write"]);
         const res = await fetchTalkSpeak(ws, {
           text: "Hello from plugin talk mode.",

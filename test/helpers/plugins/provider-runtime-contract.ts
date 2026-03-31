@@ -13,13 +13,6 @@ import { registerProviderPlugin, requireRegisteredProvider } from "./provider-re
 const CONTRACT_SETUP_TIMEOUT_MS = 300_000;
 
 const refreshOpenAICodexTokenMock = vi.hoisted(() => vi.fn());
-const getOAuthProvidersMock = vi.hoisted(() =>
-  vi.fn(() => [
-    { id: "anthropic", envApiKey: "ANTHROPIC_API_KEY", oauthTokenEnv: "ANTHROPIC_OAUTH_TOKEN" },
-    { id: "google", envApiKey: "GOOGLE_API_KEY", oauthTokenEnv: "GOOGLE_OAUTH_TOKEN" },
-    { id: "openai-codex", envApiKey: "OPENAI_API_KEY", oauthTokenEnv: "OPENAI_OAUTH_TOKEN" },
-  ]),
-);
 const providerRuntimeContractModules = vi.hoisted(() => ({
   anthropicIndexModuleUrl: new URL("../../../extensions/anthropic/index.ts", import.meta.url).href,
   githubCopilotIndexModuleUrl: new URL(
@@ -28,6 +21,10 @@ const providerRuntimeContractModules = vi.hoisted(() => ({
   ).href,
   googleIndexModuleUrl: new URL("../../../extensions/google/index.ts", import.meta.url).href,
   openAIIndexModuleUrl: new URL("../../../extensions/openai/index.ts", import.meta.url).href,
+  openAICodexProviderModuleUrl: new URL(
+    "../../../extensions/openai/openai-codex-provider.ts",
+    import.meta.url,
+  ).href,
   openAICodexProviderRuntimeModuleId: new URL(
     "../../../extensions/openai/openai-codex-provider.runtime.js",
     import.meta.url,
@@ -38,17 +35,6 @@ const providerRuntimeContractModules = vi.hoisted(() => ({
   xAIIndexModuleUrl: new URL("../../../extensions/xai/index.ts", import.meta.url).href,
   zaiIndexModuleUrl: new URL("../../../extensions/zai/index.ts", import.meta.url).href,
 }));
-
-vi.mock("@mariozechner/pi-ai/oauth", async () => {
-  const actual = await vi.importActual<typeof import("@mariozechner/pi-ai/oauth")>(
-    "@mariozechner/pi-ai/oauth",
-  );
-  return {
-    ...actual,
-    refreshOpenAICodexToken: refreshOpenAICodexTokenMock,
-    getOAuthProviders: getOAuthProvidersMock,
-  };
-});
 
 vi.mock(providerRuntimeContractModules.openAICodexProviderRuntimeModuleId, () => ({
   refreshOpenAICodexToken: refreshOpenAICodexTokenMock,
@@ -112,10 +98,21 @@ const PROVIDER_RUNTIME_CONTRACT_FIXTURES: readonly ProviderRuntimeContractFixtur
     providerIds: ["openai", "openai-codex"],
     pluginId: "openai",
     name: "OpenAI",
-    load: async () =>
-      await importBundledProviderPlugin<{
-        default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
-      }>(providerRuntimeContractModules.openAIIndexModuleUrl),
+    load: async () => {
+      const token = Date.now();
+      const [plugin, codexProvider] = await Promise.all([
+        import(`${providerRuntimeContractModules.openAIIndexModuleUrl}?t=${token}`) as Promise<{
+          default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
+        }>,
+        import(`${providerRuntimeContractModules.openAICodexProviderModuleUrl}?t=${token}`) as Promise<{
+          __setLoadRefreshOpenAICodexTokenForTest: (
+            loader: () => typeof refreshOpenAICodexTokenMock,
+          ) => void;
+        }>,
+      ]);
+      codexProvider.__setLoadRefreshOpenAICodexTokenForTest(() => refreshOpenAICodexTokenMock);
+      return plugin;
+    },
   },
   {
     providerIds: ["openrouter"],
@@ -193,7 +190,6 @@ function installRuntimeHooks() {
 
   beforeEach(() => {
     refreshOpenAICodexTokenMock.mockReset();
-    getOAuthProvidersMock.mockClear();
   }, CONTRACT_SETUP_TIMEOUT_MS);
 }
 
@@ -599,7 +595,7 @@ export function describeOpenAIProviderRuntimeContract() {
         id: "gpt-5.4",
         provider: "openai-codex",
         api: "openai-codex-responses",
-        contextWindow: 272_000,
+        contextWindow: 1_050_000,
         maxTokens: 128_000,
       });
     });

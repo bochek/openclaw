@@ -8,9 +8,13 @@ vi.mock("./send.js", () => ({
   sendMessageSlack: sendMessageSlackMock,
 }));
 
-vi.mock("openclaw/plugin-sdk/plugin-runtime", () => ({
-  getGlobalHookRunner: getGlobalHookRunnerMock,
-}));
+vi.mock("openclaw/plugin-sdk/plugin-runtime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/plugin-runtime")>();
+  return {
+    ...actual,
+    getGlobalHookRunner: getGlobalHookRunnerMock,
+  };
+});
 
 let slackOutbound: typeof import("./outbound-adapter.js").slackOutbound;
 

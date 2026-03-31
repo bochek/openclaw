@@ -1,28 +1,15 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveMatrixAccountStorageRoot } from "../../../runtime-api.js";
 import { installMatrixTestRuntime } from "../../test-runtime.js";
 import {
+  __testing as storageTesting,
   maybeMigrateLegacyStorage,
   resolveMatrixStateFilePath,
   resolveMatrixStoragePaths,
 } from "./storage.js";
-
-const createBackupArchiveMock = vi.hoisted(() =>
-  vi.fn(async (_params: unknown) => ({
-    createdAt: "2026-03-17T00:00:00.000Z",
-    archiveRoot: "2026-03-17-openclaw-backup",
-    archivePath: "/tmp/matrix-migration-snapshot.tar.gz",
-    dryRun: false,
-    includeWorkspace: false,
-    onlyConfig: false,
-    verified: false,
-    assets: [],
-    skipped: [],
-  })),
-);
 
 const maybeCreateMatrixMigrationSnapshotMock = vi.hoisted(() =>
   vi.fn(async (_params: unknown) => ({
@@ -32,17 +19,6 @@ const maybeCreateMatrixMigrationSnapshotMock = vi.hoisted(() =>
   })),
 );
 
-vi.mock("../../../../../src/infra/backup-create.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../../../../src/infra/backup-create.js")>();
-  return {
-    ...actual,
-    createBackupArchive: (params: unknown) => createBackupArchiveMock(params),
-  };
-});
-vi.mock("./migration-snapshot.runtime.js", () => ({
-  maybeCreateMatrixMigrationSnapshot: (params: unknown) =>
-    maybeCreateMatrixMigrationSnapshotMock(params),
-}));
 describe("matrix client storage paths", () => {
   const tempDirs: string[] = [];
   const defaultStorageAuth = {
@@ -51,19 +27,10 @@ describe("matrix client storage paths", () => {
     accessToken: "secret-token",
   };
 
+  beforeEach(() => {});
+
   afterEach(() => {
-    createBackupArchiveMock.mockReset();
-    createBackupArchiveMock.mockImplementation(async (_params: unknown) => ({
-      createdAt: "2026-03-17T00:00:00.000Z",
-      archiveRoot: "2026-03-17-openclaw-backup",
-      archivePath: "/tmp/matrix-migration-snapshot.tar.gz",
-      dryRun: false,
-      includeWorkspace: false,
-      onlyConfig: false,
-      verified: false,
-      assets: [],
-      skipped: [],
-    }));
+    storageTesting.resetMigrationSnapshotDepsForTest();
     maybeCreateMatrixMigrationSnapshotMock.mockReset().mockResolvedValue({
       created: true,
       archivePath: "/tmp/matrix-migration-snapshot.tar.gz",
@@ -96,6 +63,10 @@ describe("matrix client storage paths", () => {
         }),
       },
       stateDir,
+    });
+    storageTesting.setMigrationSnapshotDepsForTest({
+      maybeCreateMatrixMigrationSnapshot: (params: unknown) =>
+        maybeCreateMatrixMigrationSnapshotMock(params),
     });
     return stateDir;
   }
@@ -367,7 +338,7 @@ describe("matrix client storage paths", () => {
         env,
       }),
     ).rejects.toThrow(/defaultAccount is not set/i);
-    expect(createBackupArchiveMock).not.toHaveBeenCalled();
+    expect(maybeCreateMatrixMigrationSnapshotMock).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(legacyRoot, "bot-storage.json"))).toBe(true);
   });
 
@@ -402,7 +373,7 @@ describe("matrix client storage paths", () => {
         env,
       }),
     ).rejects.toThrow(/targets account "ops"/i);
-    expect(createBackupArchiveMock).not.toHaveBeenCalled();
+    expect(maybeCreateMatrixMigrationSnapshotMock).not.toHaveBeenCalled();
     expect(fs.existsSync(path.join(legacyRoot, "bot-storage.json"))).toBe(true);
   });
 

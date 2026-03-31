@@ -35,10 +35,37 @@ import {
 } from "./session-utils.js";
 
 const ACP_RUNTIME_CLEANUP_TIMEOUT_MS = 15_000;
+
+function createDefaultSessionResetDeps() {
+  return {
+    getAcpSessionManager,
+    clearBootstrapSnapshot,
+    stopSubagentsForRequester,
+    clearSessionQueues,
+    createInternalHookEvent,
+    triggerInternalHook,
+    closeTrackedBrowserTabsForSessions,
+    getGlobalHookRunner,
+    createPluginRuntime,
+  };
+}
+
+let sessionResetDeps = createDefaultSessionResetDeps();
 let cachedChannelRuntime: ReturnType<typeof createPluginRuntime>["channel"] | undefined;
 
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof sessionResetDeps>) {
+    sessionResetDeps = { ...sessionResetDeps, ...overrides };
+    cachedChannelRuntime = undefined;
+  },
+  resetDepsForTest() {
+    sessionResetDeps = createDefaultSessionResetDeps();
+    cachedChannelRuntime = undefined;
+  },
+};
+
 function getChannelRuntime() {
-  cachedChannelRuntime ??= createPluginRuntime().channel;
+  cachedChannelRuntime ??= sessionResetDeps.createPluginRuntime().channel;
   return cachedChannelRuntime;
 }
 
@@ -92,7 +119,7 @@ export async function emitSessionUnboundLifecycleEvent(params: {
     return;
   }
 
-  const hookRunner = getGlobalHookRunner();
+  const hookRunner = sessionResetDeps.getGlobalHookRunner();
   if (!hookRunner?.hasHooks("subagent_ended")) {
     return;
   }
@@ -123,7 +150,7 @@ async function ensureSessionRuntimeCleanup(params: {
       ...params.target.storeKeys,
       params.sessionId ?? "",
     ]);
-    return await closeTrackedBrowserTabsForSessions({
+    return await sessionResetDeps.closeTrackedBrowserTabsForSessions({
       sessionKeys: [...closeKeys],
       onWarn: (message) => logVerbose(message),
     });
@@ -134,16 +161,19 @@ async function ensureSessionRuntimeCleanup(params: {
   if (params.sessionId) {
     queueKeys.add(params.sessionId);
   }
-  clearSessionQueues([...queueKeys]);
-  stopSubagentsForRequester({ cfg: params.cfg, requesterSessionKey: params.target.canonicalKey });
+  sessionResetDeps.clearSessionQueues([...queueKeys]);
+  sessionResetDeps.stopSubagentsForRequester({
+    cfg: params.cfg,
+    requesterSessionKey: params.target.canonicalKey,
+  });
   if (!params.sessionId) {
-    clearBootstrapSnapshot(params.target.canonicalKey);
+    sessionResetDeps.clearBootstrapSnapshot(params.target.canonicalKey);
     await closeTrackedBrowserTabs();
     return undefined;
   }
   abortEmbeddedPiRun(params.sessionId);
   const ended = await waitForEmbeddedPiRunEnd(params.sessionId, 15_000);
-  clearBootstrapSnapshot(params.target.canonicalKey);
+  sessionResetDeps.clearBootstrapSnapshot(params.target.canonicalKey);
   if (ended) {
     await closeTrackedBrowserTabs();
     return undefined;
@@ -181,7 +211,7 @@ async function closeAcpRuntimeForSession(params: {
   if (!params.entry?.acp) {
     return undefined;
   }
-  const acpManager = getAcpSessionManager();
+  const acpManager = sessionResetDeps.getAcpSessionManager();
   const cancelOutcome = await runAcpCleanupStep({
     op: async () => {
       await acpManager.cancelSession({
@@ -269,7 +299,7 @@ export async function performGatewaySessionReset(params: {
   })();
   const { entry, legacyKey, canonicalKey } = loadSessionEntry(params.key);
   const hadExistingEntry = Boolean(entry);
-  const hookEvent = createInternalHookEvent(
+  const hookEvent = sessionResetDeps.createInternalHookEvent(
     "command",
     params.reason,
     target.canonicalKey ?? params.key,
@@ -280,7 +310,7 @@ export async function performGatewaySessionReset(params: {
       cfg,
     },
   );
-  await triggerInternalHook(hookEvent);
+  await sessionResetDeps.triggerInternalHook(hookEvent);
   const mutationCleanupError = await cleanupSessionBeforeMutation({
     cfg,
     key: params.key,

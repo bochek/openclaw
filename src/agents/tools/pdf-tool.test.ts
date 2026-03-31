@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
+import { listKnownProviderAuthEnvVarNames } from "../../secrets/provider-env-vars.js";
 import {
   coercePdfAssistantText,
   coercePdfModelConfig,
@@ -10,29 +11,9 @@ import {
   providerSupportsNativePdf,
   resolvePdfToolMaxTokens,
 } from "./pdf-tool.helpers.js";
+import { __testing, createPdfTool, resolvePdfModelConfigForTool } from "./pdf-tool.js";
 
 const completeMock = vi.hoisted(() => vi.fn());
-
-type PdfToolModule = typeof import("./pdf-tool.js");
-let createPdfTool: PdfToolModule["createPdfTool"];
-let resolvePdfModelConfigForTool: PdfToolModule["resolvePdfModelConfigForTool"];
-let pdfToolModulePromise: Promise<PdfToolModule> | null = null;
-
-async function importPdfToolModule(): Promise<PdfToolModule> {
-  if (pdfToolModulePromise) {
-    return await pdfToolModulePromise;
-  }
-  vi.resetModules();
-  vi.doMock("@mariozechner/pi-ai", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("@mariozechner/pi-ai")>();
-    return {
-      ...actual,
-      complete: completeMock,
-    };
-  });
-  pdfToolModulePromise = import("./pdf-tool.js");
-  return await pdfToolModulePromise;
-}
 
 async function withTempAgentDir<T>(run: (agentDir: string) => Promise<T>): Promise<T> {
   const agentDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-pdf-"));
@@ -112,15 +93,9 @@ function makeGeminiAnalyzeParams(
 }
 
 function resetAuthEnv() {
-  vi.stubEnv("OPENAI_API_KEY", "");
-  vi.stubEnv("ANTHROPIC_API_KEY", "");
-  vi.stubEnv("ANTHROPIC_OAUTH_TOKEN", "");
-  vi.stubEnv("GEMINI_API_KEY", "");
-  vi.stubEnv("GOOGLE_API_KEY", "");
-  vi.stubEnv("MINIMAX_API_KEY", "");
-  vi.stubEnv("ZAI_API_KEY", "");
-  vi.stubEnv("Z_AI_API_KEY", "");
-  vi.stubEnv("COPILOT_GITHUB_TOKEN", "");
+  for (const envVar of listKnownProviderAuthEnvVarNames()) {
+    vi.stubEnv(envVar, "");
+  }
   vi.stubEnv("GH_TOKEN", "");
   vi.stubEnv("GITHUB_TOKEN", "");
 }
@@ -256,15 +231,18 @@ describe("providerSupportsNativePdf", () => {
 describe("resolvePdfModelConfigForTool", () => {
   const priorFetch = global.fetch;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     resetAuthEnv();
     completeMock.mockReset();
-    ({ resolvePdfModelConfigForTool } = await importPdfToolModule());
+    __testing.setDepsForTest({
+      complete: (...args) => completeMock(...args),
+    });
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
     global.fetch = priorFetch;
+    __testing.setDepsForTest();
   });
 
   it("returns null without any auth", async () => {
@@ -337,16 +315,19 @@ describe("resolvePdfModelConfigForTool", () => {
 describe("createPdfTool", () => {
   const priorFetch = global.fetch;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     resetAuthEnv();
     completeMock.mockReset();
-    ({ createPdfTool } = await importPdfToolModule());
+    __testing.setDepsForTest({
+      complete: (...args) => completeMock(...args),
+    });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     global.fetch = priorFetch;
+    __testing.setDepsForTest();
   });
 
   it("returns null without agentDir and no explicit config", () => {

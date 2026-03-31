@@ -1,5 +1,5 @@
 // Private helper surface for the bundled nostr plugin.
-// Keep this list additive and scoped to the bundled Nostr surface.
+// Keep this list additive and scoped to symbols used under extensions/nostr.
 
 import { createOptionalChannelSetupSurface } from "./channel-setup.js";
 

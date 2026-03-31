@@ -2,7 +2,10 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { CONTROL_UI_BOOTSTRAP_CONFIG_PATH } from "../../../../src/gateway/control-ui-contract.js";
+import { registerBrowserGlobalsHooks } from "../../test-helpers/browser-globals.ts";
 import { loadControlUiBootstrapConfig } from "./control-ui-bootstrap.ts";
+
+registerBrowserGlobalsHooks();
 
 describe("loadControlUiBootstrapConfig", () => {
   it("loads assistant identity from the bootstrap endpoint", async () => {

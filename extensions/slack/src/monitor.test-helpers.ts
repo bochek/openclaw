@@ -30,6 +30,8 @@ const slackTestState: SlackTestState = vi.hoisted(() => ({
 
 export const getSlackTestState = (): SlackTestState => slackTestState;
 
+const SLACK_TEST_WAIT_TIMEOUT_MS = 5_000;
+
 type SlackClient = {
   auth: { test: Mock<(...args: unknown[]) => Promise<Record<string, unknown>>> };
   conversations: {
@@ -47,7 +49,6 @@ type SlackClient = {
   };
   reactions: {
     add: (...args: unknown[]) => unknown;
-    remove: (...args: unknown[]) => unknown;
   };
 };
 
@@ -88,7 +89,6 @@ function ensureSlackTestRuntime(): {
       },
       reactions: {
         add: (...args: unknown[]) => slackTestState.reactMock(...args),
-        remove: (...args: unknown[]) => slackTestState.reactMock(...args),
       },
     };
   }
@@ -100,13 +100,38 @@ function ensureSlackTestRuntime(): {
 
 export const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-export async function waitForSlackEvent(name: string) {
-  for (let i = 0; i < 10; i += 1) {
-    if (getSlackHandlers()?.has(name)) {
-      return;
+async function withSlackTestTimeout<T>(label: string, task: Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`slack test timeout: ${label}`));
+        }, SLACK_TEST_WAIT_TIMEOUT_MS);
+        timer.unref?.();
+      }),
+    ]);
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
     }
-    await flush();
   }
+}
+
+export async function waitForSlackEvent(name: string) {
+  await withSlackTestTimeout(
+    `wait for Slack event ${name}`,
+    (async () => {
+      for (let i = 0; i < 10; i += 1) {
+        if (getSlackHandlers()?.has(name)) {
+          return;
+        }
+        await flush();
+      }
+      throw new Error(`Slack ${name} handler not registered`);
+    })(),
+  );
 }
 
 export function startSlackMonitor(
@@ -138,7 +163,7 @@ export async function stopSlackMonitor(params: {
 }) {
   await flush();
   params.controller.abort();
-  await params.run;
+  await withSlackTestTimeout("stop Slack monitor", params.run);
 }
 
 export async function runSlackEventOnce(
@@ -147,10 +172,15 @@ export async function runSlackEventOnce(
   args: unknown,
   opts?: { botToken?: string; appToken?: string },
 ) {
+  console.error(`[slack-test-helpers] event:${name}:start`);
   const { controller, run } = startSlackMonitor(monitorSlackProvider, opts);
+  console.error(`[slack-test-helpers] event:${name}:after start`);
   const handler = await getSlackHandlerOrThrow(name);
-  await handler(args);
+  console.error(`[slack-test-helpers] event:${name}:before handler`);
+  await withSlackTestTimeout(`run Slack ${name} handler`, handler(args));
+  console.error(`[slack-test-helpers] event:${name}:after handler`);
   await stopSlackMonitor({ controller, run });
+  console.error(`[slack-test-helpers] event:${name}:after stop`);
 }
 
 export async function runSlackMessageOnce(
@@ -204,8 +234,20 @@ vi.mock("openclaw/plugin-sdk/config-runtime", async (importOriginal) => {
 
 vi.mock("openclaw/plugin-sdk/reply-runtime", async (importOriginal) => {
   const actual = await importOriginal<typeof import("openclaw/plugin-sdk/reply-runtime")>();
-  const replyResolver: typeof actual.getReplyFromConfig = (...args) =>
-    slackTestState.replyMock(...args) as ReturnType<typeof actual.getReplyFromConfig>;
+  const replyResolver: typeof actual.getReplyFromConfig = (...args) => {
+    console.error("[slack-test-helpers] replyResolver:before mock");
+    const result = slackTestState.replyMock(...args) as ReturnType<
+      typeof actual.getReplyFromConfig
+    >;
+    if (result && typeof (result as PromiseLike<unknown>).then === "function") {
+      return (result as PromiseLike<unknown>).then((value) => {
+        console.error("[slack-test-helpers] replyResolver:after mock");
+        return value as Awaited<ReturnType<typeof actual.getReplyFromConfig>>;
+      }) as ReturnType<typeof actual.getReplyFromConfig>;
+    }
+    console.error("[slack-test-helpers] replyResolver:after mock sync");
+    return result;
+  };
   return {
     ...actual,
     getReplyFromConfig: replyResolver,

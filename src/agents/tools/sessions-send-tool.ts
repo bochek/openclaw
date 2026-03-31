@@ -323,6 +323,14 @@ export function createSessionsSendTool(opts?: {
         });
       }
 
+      const historyBefore = await gatewayCall<{ messages: Array<unknown> }>({
+        method: "chat.history",
+        params: { sessionKey: resolvedKey, limit: SESSIONS_SEND_REPLY_HISTORY_LIMIT },
+      });
+      const baselineReply = resolveLatestAssistantReplySnapshot(
+        stripToolMessages(Array.isArray(historyBefore?.messages) ? historyBefore.messages : []),
+      );
+
       const start = await startAgentRun({
         callGateway: gatewayCall,
         runId,
@@ -333,14 +341,6 @@ export function createSessionsSendTool(opts?: {
         return start.result;
       }
       runId = start.runId;
-
-      const historyBefore = await gatewayCall<{ messages: Array<unknown> }>({
-        method: "chat.history",
-        params: { sessionKey: resolvedKey, limit: SESSIONS_SEND_REPLY_HISTORY_LIMIT },
-      });
-      const baselineReply = resolveLatestAssistantReplySnapshot(
-        stripToolMessages(Array.isArray(historyBefore?.messages) ? historyBefore.messages : []),
-      );
 
       let waitStatus: string | undefined;
       let waitError: string | undefined;

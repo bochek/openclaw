@@ -57,6 +57,7 @@ function createCardSchemaPlugin(params: {
 
 const mocks = vi.hoisted(() => ({
   runMessageAction: vi.fn(),
+  getToolResult: vi.fn((result: { toolResult?: unknown }) => result.toolResult),
   loadConfig: vi.fn(() => ({})),
   resolveCommandSecretRefsViaGateway: vi.fn(async ({ config }: { config: unknown }) => ({
     resolvedConfig: config,
@@ -64,20 +65,15 @@ const mocks = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock("../../infra/outbound/message-action-runner.js", async () => {
-  const actual = await vi.importActual<
-    typeof import("../../infra/outbound/message-action-runner.js")
-  >("../../infra/outbound/message-action-runner.js");
+vi.mock("../../infra/outbound/message-action-runner.js", () => {
   return {
-    ...actual,
     runMessageAction: mocks.runMessageAction,
+    getToolResult: mocks.getToolResult,
   };
 });
 
-vi.mock("../../config/config.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../config/config.js")>();
+vi.mock("../../config/config.js", () => {
   return {
-    ...actual,
     loadConfig: mocks.loadConfig,
   };
 });
@@ -115,6 +111,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   mocks.runMessageAction.mockReset();
+  mocks.getToolResult.mockReset().mockImplementation((result: { toolResult?: unknown }) => result.toolResult);
   mocks.loadConfig.mockReset().mockReturnValue({});
   mocks.resolveCommandSecretRefsViaGateway.mockReset().mockImplementation(async ({ config }) => ({
     resolvedConfig: config,

@@ -32,6 +32,47 @@ import type {
   ProfileRuntimeState,
 } from "./server-context.types.js";
 
+const deps = {
+  closeChromeMcpSession,
+  ensureChromeMcpAvailable,
+  isChromeCdpReady,
+  isChromeReachable,
+  launchOpenClawChrome,
+  listChromeMcpTabs,
+  stopOpenClawChrome,
+};
+
+const timing = {
+  cdpReadyAfterLaunchMaxTimeoutMs: CDP_READY_AFTER_LAUNCH_MAX_TIMEOUT_MS,
+  cdpReadyAfterLaunchMinTimeoutMs: CDP_READY_AFTER_LAUNCH_MIN_TIMEOUT_MS,
+  cdpReadyAfterLaunchPollMs: CDP_READY_AFTER_LAUNCH_POLL_MS,
+  cdpReadyAfterLaunchWindowMs: CDP_READY_AFTER_LAUNCH_WINDOW_MS,
+};
+
+export type AvailabilityTestDeps = typeof deps;
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<AvailabilityTestDeps>) {
+    deps.closeChromeMcpSession = overrides?.closeChromeMcpSession ?? closeChromeMcpSession;
+    deps.ensureChromeMcpAvailable = overrides?.ensureChromeMcpAvailable ?? ensureChromeMcpAvailable;
+    deps.isChromeCdpReady = overrides?.isChromeCdpReady ?? isChromeCdpReady;
+    deps.isChromeReachable = overrides?.isChromeReachable ?? isChromeReachable;
+    deps.launchOpenClawChrome = overrides?.launchOpenClawChrome ?? launchOpenClawChrome;
+    deps.listChromeMcpTabs = overrides?.listChromeMcpTabs ?? listChromeMcpTabs;
+    deps.stopOpenClawChrome = overrides?.stopOpenClawChrome ?? stopOpenClawChrome;
+  },
+  setTimingForTest(overrides?: Partial<typeof timing>) {
+    timing.cdpReadyAfterLaunchMaxTimeoutMs =
+      overrides?.cdpReadyAfterLaunchMaxTimeoutMs ?? CDP_READY_AFTER_LAUNCH_MAX_TIMEOUT_MS;
+    timing.cdpReadyAfterLaunchMinTimeoutMs =
+      overrides?.cdpReadyAfterLaunchMinTimeoutMs ?? CDP_READY_AFTER_LAUNCH_MIN_TIMEOUT_MS;
+    timing.cdpReadyAfterLaunchPollMs =
+      overrides?.cdpReadyAfterLaunchPollMs ?? CDP_READY_AFTER_LAUNCH_POLL_MS;
+    timing.cdpReadyAfterLaunchWindowMs =
+      overrides?.cdpReadyAfterLaunchWindowMs ?? CDP_READY_AFTER_LAUNCH_WINDOW_MS;
+  },
+};
+
 type AvailabilityDeps = {
   opts: ContextOptions;
   profile: ResolvedBrowserProfile;
@@ -66,11 +107,11 @@ export function createProfileAvailability({
   const isReachable = async (timeoutMs?: number) => {
     if (capabilities.usesChromeMcp) {
       // listChromeMcpTabs creates the session if needed — no separate ensureChromeMcpAvailable call required
-      await listChromeMcpTabs(profile.name, profile.userDataDir);
+      await deps.listChromeMcpTabs(profile.name, profile.userDataDir);
       return true;
     }
     const { httpTimeoutMs, wsTimeoutMs } = resolveTimeouts(timeoutMs);
-    return await isChromeCdpReady(
+    return await deps.isChromeCdpReady(
       profile.cdpUrl,
       httpTimeoutMs,
       wsTimeoutMs,
@@ -83,7 +124,7 @@ export function createProfileAvailability({
       return await isReachable(timeoutMs);
     }
     const { httpTimeoutMs } = resolveTimeouts(timeoutMs);
-    return await isChromeReachable(profile.cdpUrl, httpTimeoutMs, state().resolved.ssrfPolicy);
+    return await deps.isChromeReachable(profile.cdpUrl, httpTimeoutMs, state().resolved.ssrfPolicy);
   };
 
   const attachRunning = (running: NonNullable<ProfileRuntimeState["running"]>) => {
@@ -124,7 +165,7 @@ export function createProfileAvailability({
       setProfileRunning(null);
     }
     if (getBrowserProfileCapabilities(previousProfile).usesChromeMcp) {
-      await closeChromeMcpSession(previousProfile.name).catch(() => false);
+      await deps.closeChromeMcpSession(previousProfile.name).catch(() => false);
     }
     await closePlaywrightBrowserConnectionForProfile(previousProfile.cdpUrl);
     if (previousProfile.cdpUrl !== profile.cdpUrl) {
@@ -135,18 +176,18 @@ export function createProfileAvailability({
   const waitForCdpReadyAfterLaunch = async (): Promise<void> => {
     // launchOpenClawChrome() can return before Chrome is fully ready to serve /json/version + CDP WS.
     // If a follow-up call races ahead, we can hit PortInUseError trying to launch again on the same port.
-    const deadlineMs = Date.now() + CDP_READY_AFTER_LAUNCH_WINDOW_MS;
+    const deadlineMs = Date.now() + timing.cdpReadyAfterLaunchWindowMs;
     while (Date.now() < deadlineMs) {
       const remainingMs = Math.max(0, deadlineMs - Date.now());
       // Keep each attempt short; loopback profiles derive a WS timeout from this value.
       const attemptTimeoutMs = Math.max(
-        CDP_READY_AFTER_LAUNCH_MIN_TIMEOUT_MS,
-        Math.min(CDP_READY_AFTER_LAUNCH_MAX_TIMEOUT_MS, remainingMs),
+        timing.cdpReadyAfterLaunchMinTimeoutMs,
+        Math.min(timing.cdpReadyAfterLaunchMaxTimeoutMs, remainingMs),
       );
       if (await isReachable(attemptTimeoutMs)) {
         return;
       }
-      await new Promise((r) => setTimeout(r, CDP_READY_AFTER_LAUNCH_POLL_MS));
+      await new Promise((r) => setTimeout(r, timing.cdpReadyAfterLaunchPollMs));
     }
     throw new Error(
       `Chrome CDP websocket for profile "${profile.name}" is not reachable after start.`,
@@ -158,7 +199,7 @@ export function createProfileAvailability({
     let lastError: unknown;
     while (Date.now() < deadlineMs) {
       try {
-        await listChromeMcpTabs(profile.name, profile.userDataDir);
+        await deps.listChromeMcpTabs(profile.name, profile.userDataDir);
         return;
       } catch (err) {
         lastError = err;
@@ -180,7 +221,7 @@ export function createProfileAvailability({
           `Browser user data directory not found for profile "${profile.name}": ${profile.userDataDir}`,
         );
       }
-      await ensureChromeMcpAvailable(profile.name, profile.userDataDir);
+      await deps.ensureChromeMcpAvailable(profile.name, profile.userDataDir);
       await waitForChromeMcpReadyAfterAttach();
       return;
     }
@@ -215,12 +256,12 @@ export function createProfileAvailability({
             : `Browser attachOnly is enabled and profile "${profile.name}" is not running.`,
         );
       }
-      const launched = await launchOpenClawChrome(current.resolved, profile);
+      const launched = await deps.launchOpenClawChrome(current.resolved, profile);
       attachRunning(launched);
       try {
         await waitForCdpReadyAfterLaunch();
       } catch (err) {
-        await stopOpenClawChrome(launched).catch(() => {});
+        await deps.stopOpenClawChrome(launched).catch(() => {});
         setProfileRunning(null);
         throw err;
       }
@@ -256,7 +297,7 @@ export function createProfileAvailability({
       );
     }
 
-    await stopOpenClawChrome(profileState.running);
+    await deps.stopOpenClawChrome(profileState.running);
     setProfileRunning(null);
 
     const relaunched = await launchOpenClawChrome(current.resolved, profile);

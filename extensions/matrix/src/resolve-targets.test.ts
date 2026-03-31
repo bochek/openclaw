@@ -1,14 +1,9 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChannelDirectoryEntry } from "../runtime-api.js";
+import { resolveMatrixTargets, setMatrixDirectoryLookupsForTest } from "./resolve-targets.js";
 
-vi.mock("./directory-live.js", () => ({
-  listMatrixDirectoryPeersLive: vi.fn(),
-  listMatrixDirectoryGroupsLive: vi.fn(),
-}));
-
-let listMatrixDirectoryGroupsLive: typeof import("./directory-live.js").listMatrixDirectoryGroupsLive;
-let listMatrixDirectoryPeersLive: typeof import("./directory-live.js").listMatrixDirectoryPeersLive;
-let resolveMatrixTargets: typeof import("./resolve-targets.js").resolveMatrixTargets;
+const listMatrixDirectoryGroupsLiveMock = vi.fn();
+const listMatrixDirectoryPeersLiveMock = vi.fn();
 
 async function resolveUserTarget(input = "Alice") {
   const [result] = await resolveMatrixTargets({
@@ -20,26 +15,32 @@ async function resolveUserTarget(input = "Alice") {
 }
 
 describe("resolveMatrixTargets (users)", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-    ({ listMatrixDirectoryGroupsLive, listMatrixDirectoryPeersLive } =
-      await import("./directory-live.js"));
-    ({ resolveMatrixTargets } = await import("./resolve-targets.js"));
-    vi.mocked(listMatrixDirectoryPeersLive).mockReset();
-    vi.mocked(listMatrixDirectoryGroupsLive).mockReset();
+  beforeEach(() => {
+    listMatrixDirectoryPeersLiveMock.mockReset();
+    listMatrixDirectoryGroupsLiveMock.mockReset();
+    setMatrixDirectoryLookupsForTest({
+      peers:
+        listMatrixDirectoryPeersLiveMock as typeof import("./directory-live.js").listMatrixDirectoryPeersLive,
+      groups:
+        listMatrixDirectoryGroupsLiveMock as typeof import("./directory-live.js").listMatrixDirectoryGroupsLive,
+    });
+  });
+
+  afterEach(() => {
+    setMatrixDirectoryLookupsForTest(undefined);
   });
 
   it("resolves exact unique display name matches", async () => {
     const matches: ChannelDirectoryEntry[] = [
       { kind: "user", id: "@alice:example.org", name: "Alice" },
     ];
-    vi.mocked(listMatrixDirectoryPeersLive).mockResolvedValue(matches);
+    listMatrixDirectoryPeersLiveMock.mockResolvedValue(matches);
 
     const result = await resolveUserTarget();
 
     expect(result?.resolved).toBe(true);
     expect(result?.id).toBe("@alice:example.org");
-    expect(listMatrixDirectoryPeersLive).toHaveBeenCalledWith({
+    expect(listMatrixDirectoryPeersLiveMock).toHaveBeenCalledWith({
       cfg: {},
       accountId: undefined,
       query: "Alice",
@@ -52,7 +53,7 @@ describe("resolveMatrixTargets (users)", () => {
       { kind: "user", id: "@alice:example.org", name: "Alice" },
       { kind: "user", id: "@alice:evil.example", name: "Alice" },
     ];
-    vi.mocked(listMatrixDirectoryPeersLive).mockResolvedValue(matches);
+    listMatrixDirectoryPeersLiveMock.mockResolvedValue(matches);
 
     const result = await resolveUserTarget();
 
@@ -65,7 +66,7 @@ describe("resolveMatrixTargets (users)", () => {
       { kind: "group", id: "!one:example.org", name: "General", handle: "#general" },
       { kind: "group", id: "!two:example.org", name: "Team", handle: "#team" },
     ];
-    vi.mocked(listMatrixDirectoryGroupsLive).mockResolvedValue(matches);
+    listMatrixDirectoryGroupsLiveMock.mockResolvedValue(matches);
 
     const [result] = await resolveMatrixTargets({
       cfg: {},
@@ -76,7 +77,7 @@ describe("resolveMatrixTargets (users)", () => {
     expect(result?.resolved).toBe(true);
     expect(result?.id).toBe("!two:example.org");
     expect(result?.note).toBeUndefined();
-    expect(listMatrixDirectoryGroupsLive).toHaveBeenCalledWith({
+    expect(listMatrixDirectoryGroupsLiveMock).toHaveBeenCalledWith({
       cfg: {},
       accountId: undefined,
       query: "#team",
@@ -85,10 +86,10 @@ describe("resolveMatrixTargets (users)", () => {
   });
 
   it("threads accountId into live Matrix target lookups", async () => {
-    vi.mocked(listMatrixDirectoryPeersLive).mockResolvedValue([
+    listMatrixDirectoryPeersLiveMock.mockResolvedValue([
       { kind: "user", id: "@alice:example.org", name: "Alice" },
     ]);
-    vi.mocked(listMatrixDirectoryGroupsLive).mockResolvedValue([
+    listMatrixDirectoryGroupsLiveMock.mockResolvedValue([
       { kind: "group", id: "!team:example.org", name: "Team", handle: "#team" },
     ]);
 
@@ -105,13 +106,13 @@ describe("resolveMatrixTargets (users)", () => {
       kind: "group",
     });
 
-    expect(listMatrixDirectoryPeersLive).toHaveBeenCalledWith({
+    expect(listMatrixDirectoryPeersLiveMock).toHaveBeenCalledWith({
       cfg: {},
       accountId: "ops",
       query: "Alice",
       limit: 5,
     });
-    expect(listMatrixDirectoryGroupsLive).toHaveBeenCalledWith({
+    expect(listMatrixDirectoryGroupsLiveMock).toHaveBeenCalledWith({
       cfg: {},
       accountId: "ops",
       query: "#team",
@@ -120,10 +121,10 @@ describe("resolveMatrixTargets (users)", () => {
   });
 
   it("reuses directory lookups for normalized duplicate inputs", async () => {
-    vi.mocked(listMatrixDirectoryPeersLive).mockResolvedValue([
+    listMatrixDirectoryPeersLiveMock.mockResolvedValue([
       { kind: "user", id: "@alice:example.org", name: "Alice" },
     ]);
-    vi.mocked(listMatrixDirectoryGroupsLive).mockResolvedValue([
+    listMatrixDirectoryGroupsLiveMock.mockResolvedValue([
       { kind: "group", id: "!team:example.org", name: "Team", handle: "#team" },
     ]);
 
@@ -140,8 +141,8 @@ describe("resolveMatrixTargets (users)", () => {
 
     expect(userResults.every((entry) => entry.resolved)).toBe(true);
     expect(groupResults.every((entry) => entry.resolved)).toBe(true);
-    expect(listMatrixDirectoryPeersLive).toHaveBeenCalledTimes(1);
-    expect(listMatrixDirectoryGroupsLive).toHaveBeenCalledTimes(1);
+    expect(listMatrixDirectoryPeersLiveMock).toHaveBeenCalledTimes(1);
+    expect(listMatrixDirectoryGroupsLiveMock).toHaveBeenCalledTimes(1);
   });
 
   it("accepts prefixed fully qualified ids without directory lookups", async () => {
@@ -170,7 +171,7 @@ describe("resolveMatrixTargets (users)", () => {
         id: "!team:example.org",
       },
     ]);
-    expect(listMatrixDirectoryPeersLive).not.toHaveBeenCalled();
-    expect(listMatrixDirectoryGroupsLive).not.toHaveBeenCalled();
+    expect(listMatrixDirectoryPeersLiveMock).not.toHaveBeenCalled();
+    expect(listMatrixDirectoryGroupsLiveMock).not.toHaveBeenCalled();
   });
 });

@@ -14,7 +14,6 @@ type SecretInputModule = typeof import("../src/secret-input.js");
 const monitorModuleUrl = new URL("../src/monitor.ts", import.meta.url).href;
 const secretInputModuleUrl = new URL("../src/secret-input.ts", import.meta.url).href;
 const apiModuleId = new URL("../src/api.js", import.meta.url).pathname;
-const runtimeModuleId = new URL("../src/runtime.js", import.meta.url).pathname;
 
 const lifecycleMocks = vi.hoisted(() => ({
   setWebhookMock: vi.fn(async () => ({ ok: true, result: { url: "" } })),
@@ -53,10 +52,6 @@ function installLifecycleModuleMocks() {
       setWebhook: lifecycleMocks.setWebhookMock,
     };
   });
-
-  vi.doMock(runtimeModuleId, () => ({
-    getZaloRuntime: lifecycleMocks.getZaloRuntimeMock,
-  }));
 }
 
 async function importMonitorModule(params: {
@@ -68,9 +63,24 @@ async function importMonitorModule(params: {
     installLifecycleModuleMocks();
   } else {
     vi.doUnmock(apiModuleId);
-    vi.doUnmock(runtimeModuleId);
   }
-  return (await import(`${monitorModuleUrl}?t=${params.cacheBust}-${Date.now()}`)) as MonitorModule;
+  const module = (await import(`${monitorModuleUrl}?t=${params.cacheBust}-${Date.now()}`)) as MonitorModule;
+  if (params.mocked) {
+    module.__setResolveZaloRuntimeForTest(() => lifecycleMocks.getZaloRuntimeMock());
+    module.__setResolveZaloApiForTest(() => ({
+      deleteWebhook: lifecycleMocks.deleteWebhookMock,
+      getUpdates: lifecycleMocks.getUpdatesMock,
+      getWebhookInfo: lifecycleMocks.getWebhookInfoMock,
+      sendChatAction: lifecycleMocks.sendChatActionMock,
+      sendMessage: lifecycleMocks.sendMessageMock,
+      sendPhoto: lifecycleMocks.sendPhotoMock,
+      setWebhook: lifecycleMocks.setWebhookMock,
+    }));
+  } else {
+    module.__resetResolveZaloRuntimeForTest();
+    module.__resetResolveZaloApiForTest();
+  }
+  return module;
 }
 
 async function importSecretInputModule(cacheBust: string): Promise<SecretInputModule> {

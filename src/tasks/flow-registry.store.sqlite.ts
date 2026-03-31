@@ -4,7 +4,7 @@ import { requireNodeSqlite } from "../infra/node-sqlite.js";
 import type { DeliveryContext } from "../utils/delivery-context.js";
 import { resolveFlowRegistryDir, resolveFlowRegistrySqlitePath } from "./flow-registry.paths.js";
 import type { FlowRegistryStoreSnapshot } from "./flow-registry.store.js";
-import type { FlowOutputBag, FlowRecord, FlowShape } from "./flow-registry.types.js";
+import type { FlowRecord, FlowShape } from "./flow-registry.types.js";
 
 type FlowRegistryRow = {
   flow_id: string;
@@ -15,8 +15,6 @@ type FlowRegistryRow = {
   notify_policy: FlowRecord["notifyPolicy"];
   goal: string;
   current_step: string | null;
-  waiting_on_task_id: string | null;
-  outputs_json: string | null;
   blocked_task_id: string | null;
   blocked_summary: string | null;
   created_at: number | bigint;
@@ -67,7 +65,6 @@ function parseJsonValue<T>(raw: string | null): T | undefined {
 function rowToFlowRecord(row: FlowRegistryRow): FlowRecord {
   const endedAt = normalizeNumber(row.ended_at);
   const requesterOrigin = parseJsonValue<DeliveryContext>(row.requester_origin_json);
-  const outputs = parseJsonValue<FlowOutputBag>(row.outputs_json);
   return {
     flowId: row.flow_id,
     shape: row.shape === "linear" ? "linear" : "single_task",
@@ -77,8 +74,6 @@ function rowToFlowRecord(row: FlowRegistryRow): FlowRecord {
     notifyPolicy: row.notify_policy,
     goal: row.goal,
     ...(row.current_step ? { currentStep: row.current_step } : {}),
-    ...(row.waiting_on_task_id ? { waitingOnTaskId: row.waiting_on_task_id } : {}),
-    ...(outputs ? { outputs } : {}),
     ...(row.blocked_task_id ? { blockedTaskId: row.blocked_task_id } : {}),
     ...(row.blocked_summary ? { blockedSummary: row.blocked_summary } : {}),
     createdAt: normalizeNumber(row.created_at) ?? 0,
@@ -97,8 +92,6 @@ function bindFlowRecord(record: FlowRecord) {
     notify_policy: record.notifyPolicy,
     goal: record.goal,
     current_step: record.currentStep ?? null,
-    waiting_on_task_id: record.waitingOnTaskId ?? null,
-    outputs_json: serializeJson(record.outputs),
     blocked_task_id: record.blockedTaskId ?? null,
     blocked_summary: record.blockedSummary ?? null,
     created_at: record.createdAt,
@@ -119,8 +112,6 @@ function createStatements(db: DatabaseSync): FlowRegistryStatements {
         notify_policy,
         goal,
         current_step,
-        waiting_on_task_id,
-        outputs_json,
         blocked_task_id,
         blocked_summary,
         created_at,
@@ -139,8 +130,6 @@ function createStatements(db: DatabaseSync): FlowRegistryStatements {
         notify_policy,
         goal,
         current_step,
-        waiting_on_task_id,
-        outputs_json,
         blocked_task_id,
         blocked_summary,
         created_at,
@@ -155,8 +144,6 @@ function createStatements(db: DatabaseSync): FlowRegistryStatements {
         @notify_policy,
         @goal,
         @current_step,
-        @waiting_on_task_id,
-        @outputs_json,
         @blocked_task_id,
         @blocked_summary,
         @created_at,
@@ -171,8 +158,6 @@ function createStatements(db: DatabaseSync): FlowRegistryStatements {
         notify_policy = excluded.notify_policy,
         goal = excluded.goal,
         current_step = excluded.current_step,
-        waiting_on_task_id = excluded.waiting_on_task_id,
-        outputs_json = excluded.outputs_json,
         blocked_task_id = excluded.blocked_task_id,
         blocked_summary = excluded.blocked_summary,
         created_at = excluded.created_at,
@@ -195,8 +180,6 @@ function ensureSchema(db: DatabaseSync) {
       notify_policy TEXT NOT NULL,
       goal TEXT NOT NULL,
       current_step TEXT,
-      waiting_on_task_id TEXT,
-      outputs_json TEXT,
       blocked_task_id TEXT,
       blocked_summary TEXT,
       created_at INTEGER NOT NULL,
@@ -205,8 +188,6 @@ function ensureSchema(db: DatabaseSync) {
     );
   `);
   ensureColumn(db, "flow_runs", "shape", "TEXT");
-  ensureColumn(db, "flow_runs", "waiting_on_task_id", "TEXT");
-  ensureColumn(db, "flow_runs", "outputs_json", "TEXT");
   ensureColumn(db, "flow_runs", "blocked_task_id", "TEXT");
   ensureColumn(db, "flow_runs", "blocked_summary", "TEXT");
   db.exec(`CREATE INDEX IF NOT EXISTS idx_flow_runs_status ON flow_runs(status);`);

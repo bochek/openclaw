@@ -1,8 +1,12 @@
+import "../../test-helpers/browser-globals-install.ts";
 import { render } from "lit";
 import { describe, expect, it, vi } from "vitest";
+import { registerBrowserGlobalsHooks } from "../../test-helpers/browser-globals.ts";
 import { DEFAULT_CRON_FORM } from "../app-defaults.ts";
 import type { CronJob } from "../types.ts";
 import { renderCron, type CronProps } from "./cron.ts";
+
+registerBrowserGlobalsHooks();
 
 function createJob(id: string): CronJob {
   return {
@@ -486,10 +490,10 @@ describe("cron view", () => {
       container,
     );
 
-    const agentInput = container.querySelector('input[placeholder="main or ops"]');
+    const agentInput = container.querySelector<HTMLInputElement>('input[placeholder="main or ops"]');
     expect(agentInput).not.toBeNull();
-    expect(agentInput instanceof HTMLInputElement).toBe(true);
-    expect(agentInput instanceof HTMLInputElement ? agentInput.disabled : false).toBe(true);
+    expect(agentInput?.tagName).toBe("INPUT");
+    expect(agentInput?.disabled).toBe(true);
   });
 
   it("renders sectioned cron form layout", () => {

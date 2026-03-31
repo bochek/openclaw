@@ -19,7 +19,7 @@ import {
   updateMatrixAccountConfig,
 } from "./matrix/config-update.js";
 import { ensureMatrixSdkInstalled, isMatrixSdkAvailable } from "./matrix/deps.js";
-import { resolveMatrixTargets } from "./resolve-targets.js";
+import { resolveMatrixTargets as resolveMatrixTargetsImpl } from "./resolve-targets.js";
 import type { DmPolicy } from "./runtime-api.js";
 import {
   addWildcardAllowFrom,
@@ -37,6 +37,14 @@ import {
 import type { CoreConfig } from "./types.js";
 
 const channel = "matrix" as const;
+
+let resolveMatrixTargetsForTest: typeof resolveMatrixTargetsImpl | undefined;
+
+export function setMatrixResolveTargetsForTest(
+  resolver?: typeof resolveMatrixTargetsImpl,
+): void {
+  resolveMatrixTargetsForTest = resolver;
+}
 
 type MatrixOnboardingStatus = {
   channel: typeof channel;
@@ -177,7 +185,7 @@ async function promptMatrixAllowFrom(params: {
     }
 
     if (pending.length > 0) {
-      const results = await resolveMatrixTargets({
+      const results = await (resolveMatrixTargetsForTest ?? resolveMatrixTargetsImpl)({
         cfg,
         accountId,
         inputs: pending,

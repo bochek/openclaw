@@ -5,8 +5,7 @@ import {
   createEmptyChannelResult,
   createRawChannelSendResultAdapter,
 } from "openclaw/plugin-sdk/channel-send-result";
-import { createStaticReplyToModeResolver } from "openclaw/plugin-sdk/conversation-runtime";
-import { createChatChannelPlugin } from "openclaw/plugin-sdk/core";
+import { createChatChannelPlugin, createStaticReplyToModeResolver } from "openclaw/plugin-sdk/core";
 import { buildPassiveProbedChannelStatusSummary } from "openclaw/plugin-sdk/extension-shared";
 import {
   createAsyncComputedAccountStatusAdapter,
@@ -64,12 +63,23 @@ import {
 } from "./zalo-js.js";
 
 const ZALOUSER_TEXT_CHUNK_LIMIT = 2000;
+const channelDeps = {
+  sendMessageZalouser,
+  sendReactionZalouser,
+  listZaloFriendsMatching,
+  listZaloGroupMembers,
+  listZaloGroupsMatching,
+  logoutZaloProfile,
+  startZaloQrLogin,
+  waitForZaloQrLogin,
+  getZaloUserInfo,
+};
 const zalouserRawSendResultAdapter = createRawChannelSendResultAdapter({
   channel: "zalouser",
   sendText: async ({ to, text, accountId, cfg }) => {
     const account = resolveZalouserAccountSync({ cfg: cfg, accountId });
     const target = parseZalouserOutboundTarget(to);
-    return await sendMessageZalouser(target.threadId, text, {
+    return await channelDeps.sendMessageZalouser(target.threadId, text, {
       profile: account.profile,
       isGroup: target.isGroup,
       textMode: "markdown",
@@ -80,7 +90,7 @@ const zalouserRawSendResultAdapter = createRawChannelSendResultAdapter({
   sendMedia: async ({ to, text, mediaUrl, accountId, cfg, mediaLocalRoots }) => {
     const account = resolveZalouserAccountSync({ cfg: cfg, accountId });
     const target = parseZalouserOutboundTarget(to);
-    return await sendMessageZalouser(target.threadId, text, {
+    return await channelDeps.sendMessageZalouser(target.threadId, text, {
       profile: account.profile,
       isGroup: target.isGroup,
       mediaUrl,
@@ -215,7 +225,7 @@ const zalouserMessageActions: ChannelMessageActionAdapter = {
         "Zalouser react requires messageId + cliMsgId (or a current message context id).",
       );
     }
-    const result = await sendReactionZalouser({
+    const result = await channelDeps.sendReactionZalouser({
       profile: account.profile,
       threadId,
       isGroup: params.isGroup === true,
@@ -278,7 +288,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
       directory: {
         self: async ({ cfg, accountId }) => {
           const account = resolveZalouserAccountSync({ cfg: cfg, accountId });
-          const parsed = await getZaloUserInfo(account.profile);
+          const parsed = await channelDeps.getZaloUserInfo(account.profile);
           if (!parsed?.userId) {
             return null;
           }
@@ -291,7 +301,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
         },
         listPeers: async ({ cfg, accountId, query, limit }) => {
           const account = resolveZalouserAccountSync({ cfg: cfg, accountId });
-          const friends = await listZaloFriendsMatching(account.profile, query);
+          const friends = await channelDeps.listZaloFriendsMatching(account.profile, query);
           const rows = friends.map((friend) =>
             mapUser({
               id: String(friend.userId),
@@ -304,7 +314,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
         },
         listGroups: async ({ cfg, accountId, query, limit }) => {
           const account = resolveZalouserAccountSync({ cfg: cfg, accountId });
-          const groups = await listZaloGroupsMatching(account.profile, query);
+          const groups = await channelDeps.listZaloGroupsMatching(account.profile, query);
           const rows = groups.map((group) =>
             mapGroup({
               id: `group:${String(group.groupId)}`,
@@ -317,7 +327,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
         listGroupMembers: async ({ cfg, accountId, groupId, limit }) => {
           const account = resolveZalouserAccountSync({ cfg: cfg, accountId });
           const normalizedGroupId = parseZalouserDirectoryGroupId(groupId);
-          const members = await listZaloGroupMembers(account.profile, normalizedGroupId);
+          const members = await channelDeps.listZaloGroupMembers(account.profile, normalizedGroupId);
           const rows = members.map((member) =>
             mapUser({
               id: member.userId,
@@ -348,7 +358,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
                 accountId: accountId ?? DEFAULT_ACCOUNT_ID,
               });
               if (kind === "user") {
-                const friends = await listZaloFriendsMatching(account.profile, trimmed);
+                const friends = await channelDeps.listZaloFriendsMatching(account.profile, trimmed);
                 const best = friends[0];
                 results.push({
                   input,
@@ -358,7 +368,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
                   note: friends.length > 1 ? "multiple matches; chose first" : undefined,
                 });
               } else {
-                const groups = await listZaloGroupsMatching(account.profile, trimmed);
+                const groups = await channelDeps.listZaloGroupsMatching(account.profile, trimmed);
                 const best =
                   groups.find((group) => group.name.toLowerCase() === trimmed.toLowerCase()) ??
                   groups[0];
@@ -389,7 +399,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
             `Generating QR login for Zalo Personal (account: ${account.accountId}, profile: ${account.profile})...`,
           );
 
-          const started = await startZaloQrLogin({
+          const started = await channelDeps.startZaloQrLogin({
             profile: account.profile,
             timeoutMs: 35_000,
           });
@@ -404,7 +414,10 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
             runtime.log("QR generated but could not be written to a temp file.");
           }
 
-          const waited = await waitForZaloQrLogin({ profile: account.profile, timeoutMs: 180_000 });
+          const waited = await channelDeps.waitForZaloQrLogin({
+            profile: account.profile,
+            timeoutMs: 180_000,
+          });
           if (!waited.connected) {
             throw new Error(waited.message || "Zalouser login failed");
           }
@@ -468,7 +481,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
         },
         loginWithQrStart: async (params) => {
           const profile = resolveZalouserQrProfile(params.accountId);
-          return await startZaloQrLogin({
+          return await channelDeps.startZaloQrLogin({
             profile,
             force: params.force,
             timeoutMs: params.timeoutMs,
@@ -476,13 +489,15 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
         },
         loginWithQrWait: async (params) => {
           const profile = resolveZalouserQrProfile(params.accountId);
-          return await waitForZaloQrLogin({
+          return await channelDeps.waitForZaloQrLogin({
             profile,
             timeoutMs: params.timeoutMs,
           });
         },
         logoutAccount: async (ctx) =>
-          await logoutZaloProfile(ctx.account.profile || resolveZalouserQrProfile(ctx.accountId)),
+          await channelDeps.logoutZaloProfile(
+            ctx.account.profile || resolveZalouserQrProfile(ctx.accountId),
+          ),
       },
     },
     security: {
@@ -502,7 +517,7 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
           if (!authenticated) {
             throw new Error("Zalouser not authenticated");
           }
-          await sendMessageZalouser(id, message, {
+          await channelDeps.sendMessageZalouser(id, message, {
             profile: account.profile,
           });
         },
@@ -522,5 +537,22 @@ export const zalouserPlugin: ChannelPlugin<ResolvedZalouserAccount, ZalouserProb
       ...zalouserRawSendResultAdapter,
     },
   });
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof channelDeps>) {
+    Object.assign(channelDeps, overrides);
+  },
+  resetDepsForTest() {
+    channelDeps.sendMessageZalouser = sendMessageZalouser;
+    channelDeps.sendReactionZalouser = sendReactionZalouser;
+    channelDeps.listZaloFriendsMatching = listZaloFriendsMatching;
+    channelDeps.listZaloGroupMembers = listZaloGroupMembers;
+    channelDeps.listZaloGroupsMatching = listZaloGroupsMatching;
+    channelDeps.logoutZaloProfile = logoutZaloProfile;
+    channelDeps.startZaloQrLogin = startZaloQrLogin;
+    channelDeps.waitForZaloQrLogin = waitForZaloQrLogin;
+    channelDeps.getZaloUserInfo = getZaloUserInfo;
+  },
+};
 
 export type { ResolvedZalouserAccount };

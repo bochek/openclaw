@@ -363,6 +363,11 @@ export class EmbeddedBlockChunker {
       }
       const fence = findFenceSpanAt(fenceSpans, offset + maxChars);
       if (fence) {
+        const fenceEndIndex = fence.end - offset;
+        const overshootAllowance = fence.marker.length + 1;
+        if (fenceEndIndex > maxChars && fenceEndIndex <= maxChars + overshootAllowance) {
+          return { index: fenceEndIndex };
+        }
         return {
           index: maxChars,
           fenceSplit: {

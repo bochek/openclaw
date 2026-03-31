@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NON_ENV_SECRETREF_MARKER } from "./model-auth-markers.js";
 import { resolveImplicitProvidersForTest } from "./models-config.e2e-harness.js";
+import { createProviderAuthResolver } from "./models-config.providers.secrets.js";
 
 type AuthProfilesFile = {
   version: 1;
@@ -12,33 +13,14 @@ type AuthProfilesFile = {
 };
 
 describe("provider discovery auth marker guardrails", () => {
-  let originalVitest: string | undefined;
-  let originalNodeEnv: string | undefined;
-  let originalFetch: typeof globalThis.fetch | undefined;
+  const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    if (originalVitest !== undefined) {
-      process.env.VITEST = originalVitest;
-    } else {
-      delete process.env.VITEST;
-    }
-    if (originalNodeEnv !== undefined) {
-      process.env.NODE_ENV = originalNodeEnv;
-    } else {
-      delete process.env.NODE_ENV;
-    }
-    if (originalFetch) {
-      globalThis.fetch = originalFetch;
-    }
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
-
-  function enableDiscovery() {
-    originalVitest = process.env.VITEST;
-    originalNodeEnv = process.env.NODE_ENV;
-    originalFetch = globalThis.fetch;
-    delete process.env.VITEST;
-    delete process.env.NODE_ENV;
-  }
 
   function installFetchMock(response?: unknown) {
     const fetchMock =
@@ -59,8 +41,7 @@ describe("provider discovery auth marker guardrails", () => {
     return agentDir;
   }
 
-  it("does not send marker value as vLLM bearer token during discovery", async () => {
-    enableDiscovery();
+  it("preserves marker-backed vLLM auth without probing local discovery in test mode", async () => {
     const fetchMock = installFetchMock({ data: [] });
     const agentDir = await createAgentDirWithAuthProfiles({
       "vllm:default": {
@@ -70,16 +51,16 @@ describe("provider discovery auth marker guardrails", () => {
       },
     });
 
-    const providers = await resolveImplicitProvidersForTest({ agentDir, env: {} });
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: {},
+      onlyPluginIds: ["vllm"],
+    });
     expect(providers?.vllm?.apiKey).toBe(NON_ENV_SECRETREF_MARKER);
-    const request = fetchMock.mock.calls[0]?.[1] as
-      | { headers?: Record<string, string> }
-      | undefined;
-    expect(request?.headers?.Authorization).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does not call Hugging Face discovery with marker-backed credentials", async () => {
-    enableDiscovery();
     const fetchMock = installFetchMock();
     const agentDir = await createAgentDirWithAuthProfiles({
       "huggingface:default": {
@@ -89,7 +70,11 @@ describe("provider discovery auth marker guardrails", () => {
       },
     });
 
-    const providers = await resolveImplicitProvidersForTest({ agentDir, env: {} });
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: {},
+      onlyPluginIds: ["huggingface"],
+    });
     expect(providers?.huggingface?.apiKey).toBe(NON_ENV_SECRETREF_MARKER);
     const huggingfaceCalls = fetchMock.mock.calls.filter(([url]) =>
       String(url).includes("router.huggingface.co"),
@@ -97,8 +82,7 @@ describe("provider discovery auth marker guardrails", () => {
     expect(huggingfaceCalls).toHaveLength(0);
   });
 
-  it("keeps all-caps plaintext API keys for authenticated discovery", async () => {
-    enableDiscovery();
+  it("keeps all-caps plaintext API keys for vLLM summaries without probing local discovery in test mode", async () => {
     const fetchMock = installFetchMock({ data: [{ id: "vllm/test-model" }] });
     const agentDir = await createAgentDirWithAuthProfiles({
       "vllm:default": {
@@ -108,19 +92,20 @@ describe("provider discovery auth marker guardrails", () => {
       },
     });
 
-    await resolveImplicitProvidersForTest({ agentDir, env: {} });
-    const vllmCall = fetchMock.mock.calls.find(([url]) => String(url).includes(":8000"));
-    const request = vllmCall?.[1] as { headers?: Record<string, string> } | undefined;
-    expect(request?.headers?.Authorization).toBe("Bearer ALLCAPS_SAMPLE");
-  });
-
-  it("surfaces xai provider auth from legacy grok web search config without persisting plaintext", async () => {
-    const agentDir = await createAgentDirWithAuthProfiles({});
-
     const providers = await resolveImplicitProvidersForTest({
       agentDir,
       env: {},
-      config: {
+      onlyPluginIds: ["vllm"],
+    });
+    expect(providers?.vllm?.apiKey).toBe("ALLCAPS_SAMPLE");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("surfaces xai provider auth from legacy grok web search config without persisting plaintext", async () => {
+    const auth = createProviderAuthResolver(
+      {},
+      { version: 1, profiles: {} },
+      {
         tools: {
           web: {
             search: {
@@ -131,18 +116,16 @@ describe("provider discovery auth marker guardrails", () => {
           },
         },
       },
-    });
+    );
 
-    expect(providers?.xai?.apiKey).toBe(NON_ENV_SECRETREF_MARKER);
+    expect(auth("xai").apiKey).toBe(NON_ENV_SECRETREF_MARKER);
   });
 
   it("surfaces xai provider auth from SecretRef-backed legacy grok web search config", async () => {
-    const agentDir = await createAgentDirWithAuthProfiles({});
-
-    const providers = await resolveImplicitProvidersForTest({
-      agentDir,
-      env: {},
-      config: {
+    const auth = createProviderAuthResolver(
+      {},
+      { version: 1, profiles: {} },
+      {
         tools: {
           web: {
             search: {
@@ -153,18 +136,16 @@ describe("provider discovery auth marker guardrails", () => {
           },
         },
       },
-    });
+    );
 
-    expect(providers?.xai?.apiKey).toBe(NON_ENV_SECRETREF_MARKER);
+    expect(auth("xai").apiKey).toBe(NON_ENV_SECRETREF_MARKER);
   });
 
   it("does not surface xai provider auth when the xai plugin is disabled", async () => {
-    const agentDir = await createAgentDirWithAuthProfiles({});
-
-    const providers = await resolveImplicitProvidersForTest({
-      agentDir,
-      env: {},
-      config: {
+    const auth = createProviderAuthResolver(
+      {},
+      { version: 1, profiles: {} },
+      {
         plugins: {
           entries: {
             xai: {
@@ -178,8 +159,8 @@ describe("provider discovery auth marker guardrails", () => {
           },
         },
       },
-    });
+    );
 
-    expect(providers?.xai).toBeUndefined();
+    expect(auth("xai").apiKey).toBeUndefined();
   });
 });

@@ -6,6 +6,27 @@ import { GatewayClient } from "./client.js";
 import { READ_SCOPE } from "./method-scopes.js";
 import { isLoopbackHost } from "./net.js";
 
+const gatewayProbeDeps = {
+  loadOrCreateDeviceIdentity: async () => {
+    const { loadOrCreateDeviceIdentity } = await import("../infra/device-identity.js");
+    return loadOrCreateDeviceIdentity();
+  },
+};
+
+export const __testing = {
+  setLoadOrCreateDeviceIdentityForTest(
+    loadOrCreateDeviceIdentity: typeof gatewayProbeDeps.loadOrCreateDeviceIdentity,
+  ) {
+    gatewayProbeDeps.loadOrCreateDeviceIdentity = loadOrCreateDeviceIdentity;
+  },
+  resetDepsForTest() {
+    gatewayProbeDeps.loadOrCreateDeviceIdentity = async () => {
+      const { loadOrCreateDeviceIdentity } = await import("../infra/device-identity.js");
+      return loadOrCreateDeviceIdentity();
+    };
+  },
+};
+
 export type GatewayProbeAuth = {
   token?: string;
   password?: string;
@@ -69,8 +90,7 @@ export async function probeGateway(opts: {
       return null;
     }
     try {
-      const { loadOrCreateDeviceIdentity } = await import("../infra/device-identity.js");
-      return loadOrCreateDeviceIdentity();
+      return await gatewayProbeDeps.loadOrCreateDeviceIdentity();
     } catch {
       // Read-only or restricted environments should still be able to run
       // token/password-auth detail probes without crashing on identity persistence.

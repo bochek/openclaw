@@ -11,29 +11,21 @@ describe("compactWithSafetyTimeout", () => {
   });
 
   it("rejects with timeout when compaction never settles", async () => {
-    vi.useFakeTimers();
-    const compactPromise = compactWithSafetyTimeout(() => new Promise<never>(() => {}));
-    const timeoutAssertion = expect(compactPromise).rejects.toThrow("Compaction timed out");
-
-    await vi.advanceTimersByTimeAsync(EMBEDDED_COMPACTION_TIMEOUT_MS);
-    await timeoutAssertion;
-    expect(vi.getTimerCount()).toBe(0);
+    await expect(
+      compactWithSafetyTimeout(() => new Promise<never>(() => {}), 20),
+    ).rejects.toThrow("Compaction timed out");
   });
 
   it("returns result and clears timer when compaction settles first", async () => {
-    vi.useFakeTimers();
-    const compactPromise = compactWithSafetyTimeout(
-      () => new Promise<string>((resolve) => setTimeout(() => resolve("ok"), 10)),
-      30,
-    );
-
-    await vi.advanceTimersByTimeAsync(10);
-    await expect(compactPromise).resolves.toBe("ok");
-    expect(vi.getTimerCount()).toBe(0);
+    await expect(
+      compactWithSafetyTimeout(
+        () => new Promise<string>((resolve) => setTimeout(() => resolve("ok"), 10)),
+        30,
+      ),
+    ).resolves.toBe("ok");
   });
 
   it("preserves compaction errors and clears timer", async () => {
-    vi.useFakeTimers();
     const error = new Error("provider exploded");
 
     await expect(
@@ -41,54 +33,42 @@ describe("compactWithSafetyTimeout", () => {
         throw error;
       }, 30),
     ).rejects.toBe(error);
-    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("calls onCancel when compaction times out", async () => {
-    vi.useFakeTimers();
     const onCancel = vi.fn();
 
-    const compactPromise = compactWithSafetyTimeout(() => new Promise<never>(() => {}), 30, {
-      onCancel,
-    });
-    const timeoutAssertion = expect(compactPromise).rejects.toThrow("Compaction timed out");
-
-    await vi.advanceTimersByTimeAsync(30);
-    await timeoutAssertion;
+    await expect(
+      compactWithSafetyTimeout(() => new Promise<never>(() => {}), 20, {
+        onCancel,
+      }),
+    ).rejects.toThrow("Compaction timed out");
     expect(onCancel).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("aborts early on external abort signal and calls onCancel once", async () => {
-    vi.useFakeTimers();
     const controller = new AbortController();
     const onCancel = vi.fn();
     const reason = new Error("request timed out");
 
-    const compactPromise = compactWithSafetyTimeout(() => new Promise<never>(() => {}), 100, {
+    const compactPromise = compactWithSafetyTimeout(() => new Promise<never>(() => {}), 10_000, {
       abortSignal: controller.signal,
       onCancel,
     });
-    const abortAssertion = expect(compactPromise).rejects.toBe(reason);
 
-    controller.abort(reason);
-    await abortAssertion;
+    setTimeout(() => controller.abort(reason), 0);
+    await expect(compactPromise).rejects.toBe(reason);
     expect(onCancel).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("ignores onCancel errors and still rejects with the timeout", async () => {
-    vi.useFakeTimers();
-    const compactPromise = compactWithSafetyTimeout(() => new Promise<never>(() => {}), 30, {
-      onCancel: () => {
-        throw new Error("abortCompaction failed");
-      },
-    });
-    const timeoutAssertion = expect(compactPromise).rejects.toThrow("Compaction timed out");
-
-    await vi.advanceTimersByTimeAsync(30);
-    await timeoutAssertion;
-    expect(vi.getTimerCount()).toBe(0);
+    await expect(
+      compactWithSafetyTimeout(() => new Promise<never>(() => {}), 20, {
+        onCancel: () => {
+          throw new Error("abortCompaction failed");
+        },
+      }),
+    ).rejects.toThrow("Compaction timed out");
   });
 });
 

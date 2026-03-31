@@ -1,6 +1,10 @@
+import "../../test-helpers/browser-globals-install.ts";
 import { render } from "lit";
 import { describe, expect, it } from "vitest";
+import { registerBrowserGlobalsHooks } from "../../test-helpers/browser-globals.ts";
 import { renderAgentTools } from "./agents-panels-tools-skills.ts";
+
+registerBrowserGlobalsHooks();
 
 function createBaseParams(overrides: Partial<Parameters<typeof renderAgentTools>[0]> = {}) {
   return {

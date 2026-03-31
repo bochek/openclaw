@@ -55,7 +55,7 @@ import {
   resolveHookDeliver,
 } from "./hooks.js";
 import { sendGatewayAuthFailure, setDefaultSecurityHeaders } from "./http-common.js";
-import { getBearerToken, resolveHttpBrowserOriginPolicy } from "./http-utils.js";
+import { getBearerToken } from "./http-utils.js";
 import { handleOpenAiModelsHttpRequest } from "./models-http.js";
 import { resolveRequestClientIp } from "./net.js";
 import { handleOpenAiHttpRequest } from "./openai-http.js";
@@ -217,7 +217,6 @@ async function canRevealReadinessDetails(params: {
     req: params.req,
     trustedProxies: params.trustedProxies,
     allowRealIpFallback: params.allowRealIpFallback,
-    browserOriginPolicy: resolveHttpBrowserOriginPolicy(params.req),
   });
   return authResult.ok;
 }

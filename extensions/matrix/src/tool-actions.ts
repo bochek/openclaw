@@ -68,6 +68,34 @@ const verificationActions = new Set([
   "verificationBackupRestore",
 ]);
 
+const toolActionRuntimeDefaults = {
+  applyMatrixProfileUpdate,
+  getMatrixMemberInfo,
+  getMatrixRoomInfo,
+  listMatrixPins,
+  listMatrixReactions,
+  reactMatrixMessage,
+  removeMatrixReactions,
+  sendMatrixMessage,
+  voteMatrixPoll,
+};
+
+let toolActionRuntime = { ...toolActionRuntimeDefaults };
+
+export const __testing = {
+  setToolActionRuntimeForTest(
+    overrides: Partial<typeof toolActionRuntimeDefaults>,
+  ) {
+    toolActionRuntime = {
+      ...toolActionRuntimeDefaults,
+      ...overrides,
+    };
+  },
+  resetToolActionRuntimeForTest() {
+    toolActionRuntime = { ...toolActionRuntimeDefaults };
+  },
+};
+
 function readRoomId(params: Record<string, unknown>, required = true): string {
   const direct = readStringParam(params, "roomId") ?? readStringParam(params, "channelId");
   if (direct) {
@@ -171,17 +199,17 @@ export async function handleMatrixAction(
         removeErrorMessage: "Emoji is required to remove a Matrix reaction.",
       });
       if (remove || isEmpty) {
-        const result = await removeMatrixReactions(roomId, messageId, {
+        const result = await toolActionRuntime.removeMatrixReactions(roomId, messageId, {
           ...clientOpts,
           emoji: remove ? emoji : undefined,
         });
         return jsonResult({ ok: true, removed: result.removed });
       }
-      await reactMatrixMessage(roomId, messageId, emoji, clientOpts);
+      await toolActionRuntime.reactMatrixMessage(roomId, messageId, emoji, clientOpts);
       return jsonResult({ ok: true, added: emoji });
     }
     const limit = readNumberParam(params, "limit", { integer: true });
-    const reactions = await listMatrixReactions(roomId, messageId, {
+    const reactions = await toolActionRuntime.listMatrixReactions(roomId, messageId, {
       ...clientOpts,
       limit: limit ?? undefined,
     });
@@ -204,7 +232,7 @@ export async function handleMatrixAction(
       ...readNumericArrayParam(params, "pollOptionIndexes", { integer: true }),
       ...(optionIndex !== undefined ? [optionIndex] : []),
     ];
-    const result = await voteMatrixPoll(roomId, pollId, {
+    const result = await toolActionRuntime.voteMatrixPoll(roomId, pollId, {
       ...clientOpts,
       optionIds,
       optionIndexes,
@@ -237,7 +265,7 @@ export async function handleMatrixAction(
             : typeof readRawParam(params, "asVoice") === "boolean"
               ? (readRawParam(params, "asVoice") as boolean)
               : undefined;
-        const result = await sendMatrixMessage(to, content, {
+        const result = await toolActionRuntime.sendMatrixMessage(to, content, {
           mediaUrl: mediaUrl ?? undefined,
           mediaLocalRoots: opts.mediaLocalRoots,
           replyToId: replyToId ?? undefined,
@@ -297,7 +325,7 @@ export async function handleMatrixAction(
       const result = await unpinMatrixMessage(roomId, messageId, clientOpts);
       return jsonResult({ ok: true, pinned: result.pinned });
     }
-    const result = await listMatrixPins(roomId, clientOpts);
+    const result = await toolActionRuntime.listMatrixPins(roomId, clientOpts);
     return jsonResult({ ok: true, pinned: result.pinned, events: result.events });
   }
 
@@ -309,7 +337,7 @@ export async function handleMatrixAction(
       readStringParam(params, "avatarPath") ??
       readStringParam(params, "path") ??
       readStringParam(params, "filePath");
-    const result = await applyMatrixProfileUpdate({
+    const result = await toolActionRuntime.applyMatrixProfileUpdate({
       cfg,
       account: accountId,
       displayName: readStringParam(params, "displayName") ?? readStringParam(params, "name"),
@@ -326,7 +354,7 @@ export async function handleMatrixAction(
     }
     const userId = readStringParam(params, "userId", { required: true });
     const roomId = readStringParam(params, "roomId") ?? readStringParam(params, "channelId");
-    const result = await getMatrixMemberInfo(userId, {
+    const result = await toolActionRuntime.getMatrixMemberInfo(userId, {
       roomId: roomId ?? undefined,
       ...clientOpts,
     });
@@ -338,7 +366,7 @@ export async function handleMatrixAction(
       throw new Error("Matrix room info is disabled.");
     }
     const roomId = readRoomId(params);
-    const result = await getMatrixRoomInfo(roomId, clientOpts);
+    const result = await toolActionRuntime.getMatrixRoomInfo(roomId, clientOpts);
     return jsonResult({ ok: true, room: result });
   }
 

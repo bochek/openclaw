@@ -41,6 +41,13 @@ let findTaskByRunId: typeof import("../../tasks/task-registry.js").findTaskByRun
 let resetTaskRegistryForTests: typeof import("../../tasks/task-registry.js").resetTaskRegistryForTests;
 let resetFlowRegistryForTests: typeof import("../../tasks/flow-registry.js").resetFlowRegistryForTests;
 let installInMemoryTaskAndFlowRegistryRuntime: typeof import("../../test-utils/task-flow-registry-runtime.js").installInMemoryTaskAndFlowRegistryRuntime;
+let setManagerTimerDepsForTests: typeof import("./manager.js").__testing.setManagerTimerDepsForTests;
+
+const acceleratedManagerTimerDeps = {
+  setTimeout: ((callback: (...args: unknown[]) => void, delay?: number, ...args: unknown[]) =>
+    scheduleNativeTimeout(callback, Math.min(typeof delay === "number" ? delay : 0, 5), ...args)) as typeof setTimeout,
+  clearTimeout,
+};
 
 const baseCfg = {
   acp: {
@@ -176,12 +183,22 @@ function extractRuntimeOptionsFromUpserts(): Array<AcpSessionRuntimeOptions | un
   return options;
 }
 
+async function waitForFlagToFlip(readFlag: () => boolean, attempts = 20): Promise<void> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (readFlag()) {
+      return;
+    }
+    await sleep(0);
+  }
+  expect(readFlag()).toBe(true);
+}
+
 describe("AcpSessionManager", () => {
   beforeAll(async () => {
     vi.resetModules();
     ({
       AcpSessionManager,
-      __testing: { resetAcpSessionManagerForTests },
+      __testing: { resetAcpSessionManagerForTests, setManagerTimerDepsForTests },
     } = await import("./manager.js"));
     ({ AcpRuntimeError } = await import("../runtime/errors.js"));
     ({ findTaskByRunId, resetTaskRegistryForTests } = await import("../../tasks/task-registry.js"));
@@ -192,6 +209,7 @@ describe("AcpSessionManager", () => {
 
   beforeEach(() => {
     resetAcpSessionManagerForTests();
+    setManagerTimerDepsForTests();
     vi.useRealTimers();
     hoisted.listAcpSessionEntriesMock.mockReset().mockResolvedValue([]);
     hoisted.readAcpSessionEntryMock.mockReset();
@@ -467,18 +485,17 @@ describe("AcpSessionManager", () => {
   });
 
   it("times out a hung persistent turn without closing the session and lets queued work continue", async () => {
-    vi.useFakeTimers();
-    try {
-      const runtimeState = createRuntime();
-      hoisted.requireAcpRuntimeBackendMock.mockReturnValue({
-        id: "acpx",
-        runtime: runtimeState.runtime,
-      });
-      hoisted.readAcpSessionEntryMock.mockReturnValue({
-        sessionKey: "agent:codex:acp:session-1",
-        storeSessionKey: "agent:codex:acp:session-1",
-        acp: readySessionMeta(),
-      });
+    setManagerTimerDepsForTests(acceleratedManagerTimerDeps);
+    const runtimeState = createRuntime();
+    hoisted.requireAcpRuntimeBackendMock.mockReturnValue({
+      id: "acpx",
+      runtime: runtimeState.runtime,
+    });
+    hoisted.readAcpSessionEntryMock.mockReturnValue({
+      sessionKey: "agent:codex:acp:session-1",
+      storeSessionKey: "agent:codex:acp:session-1",
+      acp: readySessionMeta(),
+    });
 
       let firstTurnStarted = false;
       runtimeState.runTurn.mockImplementation(async function* (input: { requestId: string }) {
@@ -507,9 +524,7 @@ describe("AcpSessionManager", () => {
         requestId: "r1",
       });
       void first.catch(() => undefined);
-      await vi.waitFor(() => {
-        expect(firstTurnStarted).toBe(true);
-      });
+      await waitForFlagToFlip(() => firstTurnStarted);
 
       const second = manager.runTurn({
         cfg,
@@ -519,7 +534,7 @@ describe("AcpSessionManager", () => {
         requestId: "r2",
       });
 
-      await vi.advanceTimersByTimeAsync(3_500);
+      await sleep(20);
 
       await expect(first).rejects.toMatchObject({
         code: "ACP_TURN_FAILED",
@@ -547,34 +562,30 @@ describe("AcpSessionManager", () => {
         },
       });
 
-      const states = extractStatesFromUpserts();
-      expect(states).toContain("error");
-      expect(states.at(-1)).toBe("idle");
-    } finally {
-      vi.useRealTimers();
-    }
+    const states = extractStatesFromUpserts();
+    expect(states).toContain("error");
+    expect(states.at(-1)).toBe("idle");
   });
 
   it("keeps timed-out runtime handles counted until timeout cleanup finishes", async () => {
-    vi.useFakeTimers();
-    try {
-      const runtimeState = createRuntime();
-      runtimeState.cancel.mockImplementation(() => new Promise(() => {}));
-      hoisted.requireAcpRuntimeBackendMock.mockReturnValue({
-        id: "acpx",
-        runtime: runtimeState.runtime,
-      });
-      hoisted.readAcpSessionEntryMock.mockImplementation((paramsUnknown: unknown) => {
-        const sessionKey = (paramsUnknown as { sessionKey?: string }).sessionKey ?? "";
-        return {
-          sessionKey,
-          storeSessionKey: sessionKey,
-          acp: {
-            ...readySessionMeta(),
-            runtimeSessionName: `runtime:${sessionKey}`,
-          },
-        };
-      });
+    setManagerTimerDepsForTests(acceleratedManagerTimerDeps);
+    const runtimeState = createRuntime();
+    runtimeState.cancel.mockImplementation(() => new Promise(() => {}));
+    hoisted.requireAcpRuntimeBackendMock.mockReturnValue({
+      id: "acpx",
+      runtime: runtimeState.runtime,
+    });
+    hoisted.readAcpSessionEntryMock.mockImplementation((paramsUnknown: unknown) => {
+      const sessionKey = (paramsUnknown as { sessionKey?: string }).sessionKey ?? "";
+      return {
+        sessionKey,
+        storeSessionKey: sessionKey,
+        acp: {
+          ...readySessionMeta(),
+          runtimeSessionName: `runtime:${sessionKey}`,
+        },
+      };
+    });
 
       let firstTurnStarted = false;
       runtimeState.runTurn.mockImplementation(async function* (input: { requestId: string }) {
@@ -607,11 +618,9 @@ describe("AcpSessionManager", () => {
         requestId: "r1",
       });
       void first.catch(() => undefined);
-      await vi.waitFor(() => {
-        expect(firstTurnStarted).toBe(true);
-      });
+      await waitForFlagToFlip(() => firstTurnStarted);
 
-      await vi.advanceTimersByTimeAsync(4_500);
+      await sleep(20);
 
       await expect(first).rejects.toMatchObject({
         code: "ACP_TURN_FAILED",
@@ -619,22 +628,19 @@ describe("AcpSessionManager", () => {
       });
       expect(manager.getObservabilitySnapshot(cfg).runtimeCache.activeSessions).toBe(1);
 
-      await expect(
-        manager.runTurn({
-          cfg,
-          sessionKey: "agent:codex:acp:session-b",
-          text: "second",
-          mode: "prompt",
-          requestId: "r2",
-        }),
-      ).rejects.toMatchObject({
-        code: "ACP_SESSION_INIT_FAILED",
-        message: expect.stringContaining("max concurrent sessions"),
-      });
-      expect(runtimeState.ensureSession).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.useRealTimers();
-    }
+    await expect(
+      manager.runTurn({
+        cfg,
+        sessionKey: "agent:codex:acp:session-b",
+        text: "second",
+        mode: "prompt",
+        requestId: "r2",
+      }),
+    ).rejects.toMatchObject({
+      code: "ACP_SESSION_INIT_FAILED",
+      message: expect.stringContaining("max concurrent sessions"),
+    });
+    expect(runtimeState.ensureSession).toHaveBeenCalledTimes(1);
   });
 
   it("runs turns for different ACP sessions in parallel", async () => {
@@ -1180,9 +1186,10 @@ describe("AcpSessionManager", () => {
   });
 
   it("evicts idle cached runtimes before enforcing max concurrent limits", async () => {
-    vi.useFakeTimers();
+    const baseNow = new Date("2026-02-23T00:00:00.000Z").getTime();
+    let now = baseNow;
+    const dateNowSpy = vi.spyOn(Date, "now").mockImplementation(() => now);
     try {
-      vi.setSystemTime(new Date("2026-02-23T00:00:00.000Z"));
       const runtimeState = createRuntime();
       hoisted.requireAcpRuntimeBackendMock.mockReturnValue({
         id: "acpx",
@@ -1218,7 +1225,7 @@ describe("AcpSessionManager", () => {
         requestId: "r1",
       });
 
-      vi.advanceTimersByTime(2_000);
+      now += 2_000;
       await manager.runTurn({
         cfg,
         sessionKey: "agent:codex:acp:session-b",
@@ -1237,7 +1244,7 @@ describe("AcpSessionManager", () => {
         }),
       );
     } finally {
-      vi.useRealTimers();
+      dateNowSpy.mockRestore();
     }
   });
 

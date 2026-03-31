@@ -5,6 +5,7 @@ import type { CallManager } from "./manager.js";
 import type { VoiceCallProvider } from "./providers/base.js";
 import type { CallRecord, NormalizedEvent } from "./types.js";
 import { VoiceCallWebhookServer } from "./webhook.js";
+import { startStaleCallReaper } from "./webhook/stale-call-reaper.js";
 
 const provider: VoiceCallProvider = {
   name: "mock",
@@ -94,15 +95,16 @@ async function runStaleCallReaperCase(params: {
 
   const call = createCall(now.getTime() - params.callAgeMs);
   const { manager, endCall } = createManager([call]);
-  const config = createConfig({ staleCallReaperSeconds: params.staleCallReaperSeconds });
-  const server = new VoiceCallWebhookServer(config, manager, provider);
+  const stopReaper = startStaleCallReaper({
+    manager,
+    staleCallReaperSeconds: params.staleCallReaperSeconds,
+  });
 
   try {
-    await server.start();
     await vi.advanceTimersByTimeAsync(params.advanceMs);
     return { call, endCall };
   } finally {
-    await server.stop();
+    stopReaper?.();
   }
 }
 
@@ -209,16 +211,11 @@ describe("VoiceCallWebhookServer stale call reaper", () => {
 
     const call = createCall(now.getTime() - 120_000);
     const { manager, endCall } = createManager([call]);
-    const config = createConfig({ staleCallReaperSeconds: 0 });
-    const server = new VoiceCallWebhookServer(config, manager, provider);
+    const stopReaper = startStaleCallReaper({ manager, staleCallReaperSeconds: 0 });
 
-    try {
-      await server.start();
-      await vi.advanceTimersByTimeAsync(60_000);
-      expect(endCall).not.toHaveBeenCalled();
-    } finally {
-      await server.stop();
-    }
+    expect(stopReaper).toBeNull();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(endCall).not.toHaveBeenCalled();
   });
 });
 

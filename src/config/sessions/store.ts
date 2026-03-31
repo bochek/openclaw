@@ -47,7 +47,9 @@ const log = createSubsystemLogger("sessions/store");
 let sessionArchiveRuntimePromise: Promise<
   typeof import("../../gateway/session-archive.runtime.js")
 > | null = null;
-let sessionWriteLockAcquirerForTests: typeof acquireSessionWriteLock | null = null;
+const storeDeps = {
+  acquireSessionWriteLock,
+};
 
 function loadSessionArchiveRuntime() {
   sessionArchiveRuntimePromise ??= import("../../gateway/session-archive.runtime.js");
@@ -170,11 +172,11 @@ export function clearSessionStoreCacheForTest(): void {
 export function setSessionWriteLockAcquirerForTests(
   acquirer: typeof acquireSessionWriteLock | null,
 ): void {
-  sessionWriteLockAcquirerForTests = acquirer;
+  storeDeps.acquireSessionWriteLock = acquirer ?? acquireSessionWriteLock;
 }
 
 export function resetSessionStoreLockRuntimeForTests(): void {
-  sessionWriteLockAcquirerForTests = null;
+  storeDeps.acquireSessionWriteLock = acquireSessionWriteLock;
 }
 
 export async function drainSessionStoreLockQueuesForTest(): Promise<void> {
@@ -775,7 +777,7 @@ async function drainSessionStoreLockQueue(storePath: string): Promise<void> {
         let failed: unknown;
         let hasFailure = false;
         try {
-          lock = await (sessionWriteLockAcquirerForTests ?? acquireSessionWriteLock)({
+          lock = await storeDeps.acquireSessionWriteLock({
             sessionFile: storePath,
             timeoutMs: remainingTimeoutMs,
             staleMs: task.staleMs,
@@ -869,6 +871,15 @@ export async function updateSessionStoreEntry(params: {
     });
   });
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof storeDeps>) {
+    Object.assign(storeDeps, overrides);
+  },
+  resetDepsForTest() {
+    storeDeps.acquireSessionWriteLock = acquireSessionWriteLock;
+  },
+};
 
 export async function recordSessionMetaFromInbound(params: {
   storePath: string;

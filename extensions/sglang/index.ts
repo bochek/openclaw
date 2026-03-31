@@ -12,6 +12,9 @@ import {
 } from "./api.js";
 
 const PROVIDER_ID = "sglang";
+const sglangDeps = {
+  buildSglangProvider,
+};
 
 async function loadProviderSetup() {
   return await import("openclaw/plugin-sdk/provider-setup");
@@ -65,7 +68,7 @@ export default definePluginEntry({
           return await providerSetup.discoverOpenAICompatibleSelfHostedProvider({
             ctx,
             providerId: PROVIDER_ID,
-            buildProvider: buildSglangProvider,
+            buildProvider: sglangDeps.buildSglangProvider,
           });
         },
       },
@@ -88,3 +91,12 @@ export default definePluginEntry({
     });
   },
 });
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof sglangDeps>) {
+    Object.assign(sglangDeps, overrides);
+  },
+  resetDepsForTest() {
+    sglangDeps.buildSglangProvider = buildSglangProvider;
+  },
+};

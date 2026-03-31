@@ -34,10 +34,34 @@ const processedCardActionTokens = new Map<
   string,
   { status: "inflight" | "completed"; expiresAt: number }
 >();
+type FeishuCardActionDeps = {
+  resolveFeishuRuntimeAccount: typeof resolveFeishuRuntimeAccount;
+  handleFeishuMessage: typeof handleFeishuMessage;
+  sendCardFeishu: typeof sendCardFeishu;
+  sendMessageFeishu: typeof sendMessageFeishu;
+};
+const defaultFeishuCardActionDeps: FeishuCardActionDeps = {
+  resolveFeishuRuntimeAccount,
+  handleFeishuMessage,
+  sendCardFeishu,
+  sendMessageFeishu,
+};
+let feishuCardActionDeps: FeishuCardActionDeps = defaultFeishuCardActionDeps;
 
 export function resetProcessedFeishuCardActionTokensForTests(): void {
   processedCardActionTokens.clear();
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<FeishuCardActionDeps>): void {
+    feishuCardActionDeps = overrides
+      ? { ...defaultFeishuCardActionDeps, ...overrides }
+      : defaultFeishuCardActionDeps;
+  },
+  resetDepsForTest(): void {
+    feishuCardActionDeps = defaultFeishuCardActionDeps;
+  },
+};
 
 function pruneProcessedCardActionTokens(now: number): void {
   for (const [key, entry] of processedCardActionTokens.entries()) {
@@ -134,7 +158,7 @@ async function dispatchSyntheticCommand(params: {
   accountId?: string;
   chatType?: "p2p" | "group";
 }): Promise<void> {
-  await handleFeishuMessage({
+  await feishuCardActionDeps.handleFeishuMessage({
     cfg: params.cfg,
     event: buildSyntheticMessageEvent(params.event, params.command, params.chatType),
     botOpenId: params.botOpenId,
@@ -158,7 +182,7 @@ async function sendInvalidInteractionNotice(params: {
           ? "This card action belongs to a different conversation."
           : "This card action payload is invalid.";
 
-  await sendMessageFeishu({
+  await feishuCardActionDeps.sendMessageFeishu({
     cfg: params.cfg,
     to: resolveCallbackTarget(params.event),
     text: `⚠️ ${reasonText}`,
@@ -174,7 +198,7 @@ export async function handleFeishuCardAction(params: {
   accountId?: string;
 }): Promise<void> {
   const { cfg, event, runtime, accountId } = params;
-  const account = resolveFeishuRuntimeAccount({ cfg, accountId });
+  const account = feishuCardActionDeps.resolveFeishuRuntimeAccount({ cfg, accountId });
   const log = runtime?.log ?? console.log;
   const decoded = decodeFeishuCardAction({ event });
   const claimedToken = beginFeishuCardActionToken({
@@ -223,7 +247,7 @@ export async function handleFeishuCardAction(params: {
           typeof envelope.m?.prompt === "string" && envelope.m.prompt.trim()
             ? envelope.m.prompt
             : `Run \`${command}\` in this Feishu conversation?`;
-        await sendCardFeishu({
+        await feishuCardActionDeps.sendCardFeishu({
           cfg,
           to: resolveCallbackTarget(event),
           card: createApprovalCard({
@@ -243,7 +267,7 @@ export async function handleFeishuCardAction(params: {
       }
 
       if (envelope.a === FEISHU_APPROVAL_CANCEL_ACTION) {
-        await sendMessageFeishu({
+        await feishuCardActionDeps.sendMessageFeishu({
           cfg,
           to: resolveCallbackTarget(event),
           text: "Cancelled.",

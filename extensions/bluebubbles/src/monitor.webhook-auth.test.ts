@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResolvedBlueBubblesAccount } from "./accounts.js";
-import { fetchBlueBubblesHistory } from "./history.js";
-import { handleBlueBubblesWebhookRequest, resolveBlueBubblesMessageId } from "./monitor.js";
+import {
+  __testing as blueBubblesMonitorTesting,
+  handleBlueBubblesWebhookRequest,
+  resolveBlueBubblesMessageId,
+} from "./monitor.js";
 import {
   LOOPBACK_REMOTE_ADDRESSES_FOR_TEST,
   createWebhookDispatchForTest,
@@ -21,6 +24,7 @@ import {
   type WebhookRequestParams,
 } from "./monitor.webhook.test-helpers.js";
 import type { OpenClawConfig, PluginRuntime } from "./runtime-api.js";
+import { readWebhookBodyOrReject } from "./runtime-api.js";
 import {
   createBlueBubblesMonitorTestRuntime,
   EMPTY_DISPATCH_RESULT,
@@ -32,11 +36,22 @@ const { TEST_WEBHOOK_RATE_LIMIT_MAX_REQUESTS } = vi.hoisted(() => ({
   TEST_WEBHOOK_RATE_LIMIT_MAX_REQUESTS: 3,
 }));
 
-// Mock dependencies
-vi.mock("./send.js", () => ({
+const reactionsMocks = vi.hoisted(() => ({
+  normalizeBlueBubblesReactionInput: vi.fn((emoji: string) => emoji),
+  sendBlueBubblesReaction: vi.fn().mockResolvedValue(undefined),
+}));
+
+const sendMocks = vi.hoisted(() => ({
   resolveChatGuidForTarget: vi.fn().mockResolvedValue("iMessage;-;+15551234567"),
   sendMessageBlueBubbles: vi.fn().mockResolvedValue({ messageId: "msg-123" }),
 }));
+
+const historyMocks = vi.hoisted(() => ({
+  fetchBlueBubblesHistory: vi.fn().mockResolvedValue({ entries: [], resolved: true }),
+}));
+
+// Mock dependencies
+vi.mock("./send.js", () => sendMocks);
 
 vi.mock("./chat.js", () => ({
   markBlueBubblesChatRead: vi.fn().mockResolvedValue(undefined),
@@ -50,28 +65,9 @@ vi.mock("./attachments.js", () => ({
   }),
 }));
 
-vi.mock("./reactions.js", async () => {
-  const actual = await vi.importActual<typeof import("./reactions.js")>("./reactions.js");
-  return {
-    ...actual,
-    sendBlueBubblesReaction: vi.fn().mockResolvedValue(undefined),
-  };
-});
+vi.mock("./reactions.js", () => reactionsMocks);
 
-vi.mock("./history.js", () => ({
-  fetchBlueBubblesHistory: vi.fn().mockResolvedValue({ entries: [], resolved: true }),
-}));
-
-vi.mock("./runtime-api.js", async () => {
-  const actual = await vi.importActual<typeof import("./runtime-api.js")>("./runtime-api.js");
-  return {
-    ...actual,
-    WEBHOOK_RATE_LIMIT_DEFAULTS: {
-      ...actual.WEBHOOK_RATE_LIMIT_DEFAULTS,
-      maxRequests: TEST_WEBHOOK_RATE_LIMIT_MAX_REQUESTS,
-    },
-  };
-});
+vi.mock("./history.js", () => historyMocks);
 
 // Mock runtime
 const mockEnqueueSystemEvent = vi.fn();
@@ -121,7 +117,7 @@ const mockChunkByNewline = vi.fn((text: string) => (text ? [text] : []));
 const mockChunkTextWithMode = vi.fn((text: string) => (text ? [text] : []));
 const mockChunkMarkdownTextWithMode = vi.fn((text: string) => (text ? [text] : []));
 const mockResolveChunkMode = vi.fn(() => "length" as const);
-const mockFetchBlueBubblesHistory = vi.mocked(fetchBlueBubblesHistory);
+const mockFetchBlueBubblesHistory = historyMocks.fetchBlueBubblesHistory;
 const mockFetch = vi.fn();
 const TEST_WEBHOOK_PASSWORD = "secret-token";
 
@@ -158,6 +154,10 @@ describe("BlueBubbles webhook monitor", () => {
   let unregister: () => void;
 
   beforeEach(() => {
+    blueBubblesMonitorTesting.setDepsForTest();
+    blueBubblesMonitorTesting.setRateLimitDefaultsForTest({
+      maxRequests: TEST_WEBHOOK_RATE_LIMIT_MAX_REQUESTS,
+    });
     vi.stubGlobal("fetch", mockFetch);
     mockFetch.mockReset();
     mockFetch.mockResolvedValue({
@@ -178,6 +178,8 @@ describe("BlueBubbles webhook monitor", () => {
 
   afterEach(() => {
     unregister?.();
+    blueBubblesMonitorTesting.setDepsForTest();
+    blueBubblesMonitorTesting.setRateLimitDefaultsForTest();
     vi.unstubAllGlobals();
   });
 
@@ -368,8 +370,14 @@ describe("BlueBubbles webhook monitor", () => {
     });
 
     it("returns 408 when request body times out (Slow-Loris protection)", async () => {
-      vi.useFakeTimers();
       try {
+        blueBubblesMonitorTesting.setDepsForTest({
+          readWebhookBodyOrReject: (params) =>
+            readWebhookBodyOrReject({
+              ...params,
+              timeoutMs: 10,
+            }),
+        });
         setupWebhookTarget();
 
         // Create a request that never sends data or ends (simulates slow-loris)
@@ -377,15 +385,12 @@ describe("BlueBubbles webhook monitor", () => {
 
         const { res, handledPromise } = createWebhookDispatchForTest(req);
 
-        // Advance past the 30s timeout
-        await vi.advanceTimersByTimeAsync(31_000);
-
         const handled = await handledPromise;
         expect(handled).toBe(true);
         expect(res.statusCode).toBe(408);
         expect(destroyMock).toHaveBeenCalled();
       } finally {
-        vi.useRealTimers();
+        blueBubblesMonitorTesting.setDepsForTest();
       }
     });
 
@@ -623,8 +628,7 @@ describe("BlueBubbles webhook monitor", () => {
     });
 
     it("parses chatId when provided as a string (webhook variant)", async () => {
-      const { resolveChatGuidForTarget } = await import("./send.js");
-      vi.mocked(resolveChatGuidForTarget).mockClear();
+      sendMocks.resolveChatGuidForTarget.mockClear();
 
       const payload = createTimestampedNewMessagePayloadForTest({
         text: "hello from group",
@@ -634,7 +638,7 @@ describe("BlueBubbles webhook monitor", () => {
 
       await dispatchRegisteredWebhookPayload(payload);
 
-      expect(resolveChatGuidForTarget).toHaveBeenCalledWith(
+      expect(sendMocks.resolveChatGuidForTarget).toHaveBeenCalledWith(
         expect.objectContaining({
           target: { kind: "chat_id", chatId: 123 },
         }),
@@ -642,9 +646,8 @@ describe("BlueBubbles webhook monitor", () => {
     });
 
     it("extracts chatGuid from nested chat object fields (webhook variant)", async () => {
-      const { sendMessageBlueBubbles, resolveChatGuidForTarget } = await import("./send.js");
-      vi.mocked(sendMessageBlueBubbles).mockClear();
-      vi.mocked(resolveChatGuidForTarget).mockClear();
+      sendMocks.sendMessageBlueBubbles.mockClear();
+      sendMocks.resolveChatGuidForTarget.mockClear();
 
       mockDispatchReplyWithBufferedBlockDispatcher.mockImplementationOnce(async (params) => {
         await params.dispatcherOptions.deliver({ text: "replying now" }, { kind: "final" });
@@ -659,8 +662,8 @@ describe("BlueBubbles webhook monitor", () => {
 
       await dispatchRegisteredWebhookPayload(payload);
 
-      expect(resolveChatGuidForTarget).not.toHaveBeenCalled();
-      expect(sendMessageBlueBubbles).toHaveBeenCalledWith(
+      expect(sendMocks.resolveChatGuidForTarget).not.toHaveBeenCalled();
+      expect(sendMocks.sendMessageBlueBubbles).toHaveBeenCalledWith(
         "chat_guid:iMessage;+;chat123456",
         expect.any(String),
         expect.any(Object),

@@ -286,11 +286,12 @@ export function buildTalkConfigResponse(value: unknown): TalkConfigResponse | un
   if (normalized.providers && Object.keys(normalized.providers).length > 0) {
     payload.providers = normalized.providers;
   }
+  const resolved = resolveActiveTalkProviderConfig(normalized);
   if (typeof normalized.provider === "string") {
     payload.provider = normalized.provider;
+  } else if (resolved?.provider) {
+    payload.provider = resolved.provider;
   }
-
-  const resolved = resolveActiveTalkProviderConfig(normalized);
   if (resolved) {
     payload.resolved = resolved;
   }

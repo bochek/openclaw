@@ -128,25 +128,15 @@ async function ensureDockerNetwork(
   await execDocker(["network", "create", "--driver", "bridge", network]);
 }
 
-export async function ensureSandboxBrowser(params: {
+function resolveSandboxBrowserSetup(params: {
   scopeKey: string;
   workspaceDir: string;
   agentWorkspaceDir: string;
   cfg: SandboxConfig;
-  evaluateEnabled?: boolean;
-  bridgeAuth?: { token?: string; password?: string };
-}): Promise<SandboxBrowserContext | null> {
-  if (!params.cfg.browser.enabled) {
-    return null;
-  }
-  if (!isToolAllowed(params.cfg.tools, "browser")) {
-    return null;
-  }
-
+}) {
   const slug = params.cfg.scope === "shared" ? "shared" : slugifySessionKey(params.scopeKey);
   const name = `${params.cfg.browser.containerPrefix}${slug}`;
   const containerName = name.slice(0, 63);
-  const state = await dockerContainerState(containerName);
   const browserImage = params.cfg.browser.image ?? DEFAULT_SANDBOX_BROWSER_IMAGE;
   const cdpSourceRange = params.cfg.browser.cdpSourceRange?.trim() || undefined;
   const browserDockerCfg = resolveSandboxBrowserDockerCreateConfig({
@@ -169,13 +159,105 @@ export async function ensureSandboxBrowser(params: {
     agentWorkspaceDir: params.agentWorkspaceDir,
     mountFormatVersion: SANDBOX_MOUNT_FORMAT_VERSION,
   });
+  return {
+    browserDockerCfg,
+    browserImage,
+    cdpSourceRange,
+    containerName,
+    expectedHash,
+    noVncEnabled: isNoVncEnabled(params.cfg.browser),
+  };
+}
 
+function buildSandboxBrowserCreateArgs(params: {
+  scopeKey: string;
+  workspaceDir: string;
+  agentWorkspaceDir: string;
+  cfg: SandboxConfig;
+  browserDockerCfg: ReturnType<typeof resolveSandboxBrowserDockerCreateConfig>;
+  browserImage: string;
+  containerName: string;
+  expectedHash: string;
+  cdpSourceRange?: string;
+  noVncEnabled: boolean;
+  noVncPassword?: string;
+}) {
+  const args = buildSandboxCreateArgs({
+    name: params.containerName,
+    cfg: params.browserDockerCfg,
+    scopeKey: params.scopeKey,
+    labels: {
+      "openclaw.sandboxBrowser": "1",
+      "openclaw.browserConfigEpoch": SANDBOX_BROWSER_SECURITY_HASH_EPOCH,
+    },
+    configHash: params.expectedHash,
+    includeBinds: false,
+    bindSourceRoots: [params.workspaceDir, params.agentWorkspaceDir],
+  });
+  appendWorkspaceMountArgs({
+    args,
+    workspaceDir: params.workspaceDir,
+    agentWorkspaceDir: params.agentWorkspaceDir,
+    workdir: params.cfg.docker.workdir,
+    workspaceAccess: params.cfg.workspaceAccess,
+  });
+  if (params.browserDockerCfg.binds?.length) {
+    for (const bind of params.browserDockerCfg.binds) {
+      args.push("-v", bind);
+    }
+  }
+  args.push("-p", `127.0.0.1::${params.cfg.browser.cdpPort}`);
+  if (params.noVncEnabled) {
+    args.push("-p", `127.0.0.1::${params.cfg.browser.noVncPort}`);
+  }
+  args.push("-e", `OPENCLAW_BROWSER_HEADLESS=${params.cfg.browser.headless ? "1" : "0"}`);
+  args.push("-e", `OPENCLAW_BROWSER_ENABLE_NOVNC=${params.cfg.browser.enableNoVnc ? "1" : "0"}`);
+  args.push("-e", `OPENCLAW_BROWSER_CDP_PORT=${params.cfg.browser.cdpPort}`);
+  if (params.cdpSourceRange) {
+    args.push("-e", `${CDP_SOURCE_RANGE_ENV_KEY}=${params.cdpSourceRange}`);
+  }
+  args.push("-e", `OPENCLAW_BROWSER_VNC_PORT=${params.cfg.browser.vncPort}`);
+  args.push("-e", `OPENCLAW_BROWSER_NOVNC_PORT=${params.cfg.browser.noVncPort}`);
+  // Chromium's setuid/namespace sandbox cannot work inside Docker containers
+  // (PID namespace creation requires privileges Docker does not grant by default).
+  // The container itself provides isolation, so --no-sandbox is safe here.
+  args.push("-e", "OPENCLAW_BROWSER_NO_SANDBOX=1");
+  if (params.noVncEnabled && params.noVncPassword) {
+    args.push("-e", `${NOVNC_PASSWORD_ENV_KEY}=${params.noVncPassword}`);
+  }
+  args.push(params.browserImage);
+  return args;
+}
+
+export async function ensureSandboxBrowser(params: {
+  scopeKey: string;
+  workspaceDir: string;
+  agentWorkspaceDir: string;
+  cfg: SandboxConfig;
+  evaluateEnabled?: boolean;
+  bridgeAuth?: { token?: string; password?: string };
+}): Promise<SandboxBrowserContext | null> {
+  if (!params.cfg.browser.enabled) {
+    return null;
+  }
+  if (!isToolAllowed(params.cfg.tools, "browser")) {
+    return null;
+  }
+
+  const {
+    browserDockerCfg,
+    browserImage,
+    cdpSourceRange,
+    containerName,
+    expectedHash,
+    noVncEnabled,
+  } = resolveSandboxBrowserSetup(params);
+  const state = await dockerContainerState(containerName);
   const now = Date.now();
   let hasContainer = state.exists;
   let running = state.running;
   let currentHash: string | null = null;
   let hashMismatch = false;
-  const noVncEnabled = isNoVncEnabled(params.cfg.browser);
   let noVncPassword: string | undefined;
 
   if (hasContainer) {
@@ -225,50 +307,19 @@ export async function ensureSandboxBrowser(params: {
       allowContainerNamespaceJoin: browserDockerCfg.dangerouslyAllowContainerNamespaceJoin === true,
     });
     await ensureSandboxBrowserImage(browserImage);
-    const args = buildSandboxCreateArgs({
-      name: containerName,
-      cfg: browserDockerCfg,
+    const args = buildSandboxBrowserCreateArgs({
       scopeKey: params.scopeKey,
-      labels: {
-        "openclaw.sandboxBrowser": "1",
-        "openclaw.browserConfigEpoch": SANDBOX_BROWSER_SECURITY_HASH_EPOCH,
-      },
-      configHash: expectedHash,
-      includeBinds: false,
-      bindSourceRoots: [params.workspaceDir, params.agentWorkspaceDir],
-    });
-    appendWorkspaceMountArgs({
-      args,
       workspaceDir: params.workspaceDir,
       agentWorkspaceDir: params.agentWorkspaceDir,
-      workdir: params.cfg.docker.workdir,
-      workspaceAccess: params.cfg.workspaceAccess,
+      cfg: params.cfg,
+      browserDockerCfg,
+      browserImage,
+      containerName,
+      expectedHash,
+      cdpSourceRange,
+      noVncEnabled,
+      noVncPassword,
     });
-    if (browserDockerCfg.binds?.length) {
-      for (const bind of browserDockerCfg.binds) {
-        args.push("-v", bind);
-      }
-    }
-    args.push("-p", `127.0.0.1::${params.cfg.browser.cdpPort}`);
-    if (noVncEnabled) {
-      args.push("-p", `127.0.0.1::${params.cfg.browser.noVncPort}`);
-    }
-    args.push("-e", `OPENCLAW_BROWSER_HEADLESS=${params.cfg.browser.headless ? "1" : "0"}`);
-    args.push("-e", `OPENCLAW_BROWSER_ENABLE_NOVNC=${params.cfg.browser.enableNoVnc ? "1" : "0"}`);
-    args.push("-e", `OPENCLAW_BROWSER_CDP_PORT=${params.cfg.browser.cdpPort}`);
-    if (cdpSourceRange) {
-      args.push("-e", `${CDP_SOURCE_RANGE_ENV_KEY}=${cdpSourceRange}`);
-    }
-    args.push("-e", `OPENCLAW_BROWSER_VNC_PORT=${params.cfg.browser.vncPort}`);
-    args.push("-e", `OPENCLAW_BROWSER_NOVNC_PORT=${params.cfg.browser.noVncPort}`);
-    // Chromium's setuid/namespace sandbox cannot work inside Docker containers
-    // (PID namespace creation requires privileges Docker does not grant by default).
-    // The container itself provides isolation, so --no-sandbox is safe here.
-    args.push("-e", "OPENCLAW_BROWSER_NO_SANDBOX=1");
-    if (noVncEnabled && noVncPassword) {
-      args.push("-e", `${NOVNC_PASSWORD_ENV_KEY}=${noVncPassword}`);
-    }
-    args.push(browserImage);
     await execDocker(args);
     await execDocker(["start", containerName]);
   } else if (!running) {
@@ -402,3 +453,20 @@ export async function ensureSandboxBrowser(params: {
     containerName,
   };
 }
+
+export const __testing = {
+  buildSandboxBrowserCreateArgs(params: {
+    scopeKey: string;
+    workspaceDir: string;
+    agentWorkspaceDir: string;
+    cfg: SandboxConfig;
+    noVncPassword?: string;
+  }) {
+    const setup = resolveSandboxBrowserSetup(params);
+    return buildSandboxBrowserCreateArgs({
+      ...params,
+      ...setup,
+      noVncPassword: params.noVncPassword,
+    });
+  },
+};

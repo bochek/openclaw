@@ -16,11 +16,22 @@ import {
 } from "./manifest.js";
 
 let pluginInstallRuntimePromise: Promise<typeof import("./install.runtime.js")> | undefined;
+let pluginInstallRuntimeOverride: typeof import("./install.runtime.js") | undefined;
 
 async function loadPluginInstallRuntime() {
+  if (pluginInstallRuntimeOverride) {
+    return pluginInstallRuntimeOverride;
+  }
   pluginInstallRuntimePromise ??= import("./install.runtime.js");
   return pluginInstallRuntimePromise;
 }
+
+export const __testing = {
+  setPluginInstallRuntimeForTest(runtime: typeof import("./install.runtime.js") | undefined) {
+    pluginInstallRuntimeOverride = runtime;
+    pluginInstallRuntimePromise = runtime ? Promise.resolve(runtime) : undefined;
+  },
+};
 
 type PluginInstallLogger = {
   info?: (message: string) => void;

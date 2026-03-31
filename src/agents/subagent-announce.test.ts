@@ -35,26 +35,18 @@ const { subagentRegistryRuntimeMock } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../config/config.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config/config.js")>();
-  return {
-    ...actual,
-    loadConfig: () => mockConfig,
-    resolveGatewayPort: () => 18789,
-  };
-});
+vi.mock("../config/config.js", () => ({
+  loadConfig: () => mockConfig,
+  resolveGatewayPort: () => 18789,
+}));
 
-vi.mock("../config/sessions.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config/sessions.js")>();
-  return {
-    ...actual,
-    loadSessionStore: (storePath: string) => loadSessionStoreMock(storePath),
-    resolveAgentIdFromSessionKey: (sessionKey: string) =>
-      resolveAgentIdFromSessionKeyMock(sessionKey),
-    resolveMainSessionKey: (cfg: unknown) => resolveMainSessionKeyMock(cfg),
-    resolveStorePath: (store: unknown, options: unknown) => resolveStorePathMock(store, options),
-  };
-});
+vi.mock("../config/sessions.js", () => ({
+  loadSessionStore: (storePath: string) => loadSessionStoreMock(storePath),
+  resolveAgentIdFromSessionKey: (sessionKey: string) =>
+    resolveAgentIdFromSessionKeyMock(sessionKey),
+  resolveMainSessionKey: (cfg: unknown) => resolveMainSessionKeyMock(cfg),
+  resolveStorePath: (store: unknown, options: unknown) => resolveStorePathMock(store, options),
+}));
 
 vi.mock("../gateway/call.js", () => ({
   callGateway: (request: unknown) => callGatewayMock(request),
@@ -64,36 +56,24 @@ vi.mock("../plugins/hook-runner-global.js", () => ({
   getGlobalHookRunner: () => ({ hasHooks: () => false }),
 }));
 
-vi.mock("./pi-embedded.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./pi-embedded.js")>();
-  return {
-    ...actual,
-    isEmbeddedPiRunActive: (sessionId: string) => isEmbeddedPiRunActiveMock(sessionId),
-    queueEmbeddedPiMessage: (sessionId: string, text: string) =>
-      queueEmbeddedPiMessageMock(sessionId, text),
-    waitForEmbeddedPiRunEnd: (sessionId: string, timeoutMs?: number) =>
-      waitForEmbeddedPiRunEndMock(sessionId, timeoutMs),
-  };
-});
+vi.mock("./pi-embedded.js", () => ({
+  isEmbeddedPiRunActive: (sessionId: string) => isEmbeddedPiRunActiveMock(sessionId),
+  queueEmbeddedPiMessage: (sessionId: string, text: string) =>
+    queueEmbeddedPiMessageMock(sessionId, text),
+  waitForEmbeddedPiRunEnd: (sessionId: string, timeoutMs?: number) =>
+    waitForEmbeddedPiRunEndMock(sessionId, timeoutMs),
+}));
 
 vi.mock("./tools/agent-step.js", () => ({
   readLatestAssistantReply: (params?: unknown) => readLatestAssistantReplyMock(params),
 }));
 
-vi.mock("./subagent-registry.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./subagent-registry.js")>();
-  return {
-    ...actual,
-    ...subagentRegistryRuntimeMock,
-  };
-});
-vi.mock("./subagent-registry-runtime.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./subagent-registry-runtime.js")>();
-  return {
-    ...actual,
-    ...subagentRegistryRuntimeMock,
-  };
-});
+vi.mock("./subagent-registry.js", () => ({
+  ...subagentRegistryRuntimeMock,
+}));
+vi.mock("./subagent-registry-runtime.js", () => ({
+  ...subagentRegistryRuntimeMock,
+}));
 import { runSubagentAnnounceFlow } from "./subagent-announce.js";
 
 describe("subagent announce seam flow", () => {

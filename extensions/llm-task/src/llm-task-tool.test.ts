@@ -1,14 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("@sinclair/typebox", () => ({
-  Type: {
+vi.mock("@sinclair/typebox", () => {
+  const Type = {
     Object: (schema: unknown) => schema,
     String: (schema?: unknown) => schema,
     Optional: (schema: unknown) => schema,
     Unknown: (schema?: unknown) => schema,
     Number: (schema?: unknown) => schema,
-  },
-}));
+  };
+  return { Type };
+});
 
 vi.mock("ajv", () => ({
   default: class MockAjv {

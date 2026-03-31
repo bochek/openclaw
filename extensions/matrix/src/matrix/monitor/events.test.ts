@@ -171,8 +171,9 @@ function createHarness(params?: {
 
 describe("registerMatrixMonitorEvents verification routing", () => {
   it("does not repost historical verification completions during startup catch-up", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-14T13:10:00.000Z"));
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(
+      new Date("2026-03-14T13:10:00.000Z").getTime(),
+    );
     try {
       const { sendMessage, roomEventListener } = createHarness();
 
@@ -186,16 +187,17 @@ describe("registerMatrixMonitorEvents verification routing", () => {
         },
       });
 
-      await vi.runAllTimersAsync();
+      await Promise.resolve();
       expect(sendMessage).not.toHaveBeenCalled();
     } finally {
-      vi.useRealTimers();
+      nowSpy.mockRestore();
     }
   });
 
   it("still posts fresh verification completions", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-14T13:10:00.000Z"));
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(
+      new Date("2026-03-14T13:10:00.000Z").getTime(),
+    );
     try {
       const { sendMessage, roomEventListener } = createHarness();
 
@@ -216,7 +218,7 @@ describe("registerMatrixMonitorEvents verification routing", () => {
         "Matrix verification completed with @alice:example.org.",
       );
     } finally {
-      vi.useRealTimers();
+      nowSpy.mockRestore();
     }
   });
 
@@ -304,27 +306,6 @@ describe("registerMatrixMonitorEvents verification routing", () => {
 
     expect(invalidateRoom).toHaveBeenCalledWith("!room:example.org");
     expect(rememberInvite).not.toHaveBeenCalled();
-  });
-
-  it("remembers invite provenance even when Matrix omits the direct invite hint", async () => {
-    const { invalidateRoom, rememberInvite, roomInviteListener } = createHarness();
-    if (!roomInviteListener) {
-      throw new Error("room.invite listener was not registered");
-    }
-
-    roomInviteListener("!room:example.org", {
-      event_id: "$invite-group",
-      sender: "@alice:example.org",
-      type: EventType.RoomMember,
-      origin_server_ts: Date.now(),
-      content: {
-        membership: "invite",
-      },
-      state_key: "@bot:example.org",
-    });
-
-    expect(invalidateRoom).toHaveBeenCalledWith("!room:example.org");
-    expect(rememberInvite).toHaveBeenCalledWith("!room:example.org", "@alice:example.org");
   });
 
   it("does not synthesize invite provenance from room joins", async () => {

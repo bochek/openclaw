@@ -1,4 +1,56 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+const hoisted = vi.hoisted(() => ({
+  state: {
+    tools: [
+      { name: "exec", label: "Exec", description: "Run shell commands" },
+      { name: "docs_lookup", label: "Docs Lookup", description: "Search docs" },
+    ] as Array<{
+      name: string;
+      label?: string;
+      description?: string;
+      displaySummary?: string;
+    }>,
+    pluginMeta: {} as Record<string, { pluginId: string } | undefined>,
+    channelMeta: {} as Record<string, { channelId: string } | undefined>,
+    effectivePolicy: {} as { profile?: string; providerProfile?: string },
+    resolvedModelCompat: undefined as Record<string, unknown> | undefined,
+  },
+  createToolsMock: vi.fn(),
+  resolveModelMock: vi.fn(),
+}));
+
+vi.mock("./agent-scope.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./agent-scope.js")>();
+  return {
+    ...actual,
+    resolveSessionAgentId: () => "main",
+    resolveAgentWorkspaceDir: () => "/tmp/workspace-main",
+    resolveAgentDir: () => "/tmp/agents/main/agent",
+  };
+});
+
+vi.mock("./pi-tools.js", () => ({
+  createOpenClawCodingTools: hoisted.createToolsMock,
+}));
+
+vi.mock("./pi-embedded-runner/model.js", () => ({
+  resolveModel: hoisted.resolveModelMock,
+}));
+
+vi.mock("../plugins/tools.js", () => ({
+  getPluginToolMeta: (tool: { name: string }) => hoisted.state.pluginMeta[tool.name],
+}));
+
+vi.mock("./channel-tools.js", () => ({
+  getChannelAgentToolMeta: (tool: { name: string }) => hoisted.state.channelMeta[tool.name],
+}));
+
+vi.mock("./pi-tools.policy.js", () => ({
+  resolveEffectiveToolPolicy: () => hoisted.state.effectivePolicy,
+}));
+
+let resolveEffectiveToolInventory: typeof import("./tools-effective-inventory.js").resolveEffectiveToolInventory;
 
 async function loadHarness(options?: {
   tools?: Array<{ name: string; label?: string; description?: string; displaySummary?: string }>;
@@ -8,46 +60,44 @@ async function loadHarness(options?: {
   effectivePolicy?: { profile?: string; providerProfile?: string };
   resolvedModelCompat?: Record<string, unknown>;
 }) {
-  vi.resetModules();
-  vi.doMock("./agent-scope.js", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("./agent-scope.js")>();
-    return {
-      ...actual,
-      resolveSessionAgentId: () => "main",
-      resolveAgentWorkspaceDir: () => "/tmp/workspace-main",
-      resolveAgentDir: () => "/tmp/agents/main/agent",
-    };
+  hoisted.state.tools =
+    options?.tools ?? [
+      { name: "exec", label: "Exec", description: "Run shell commands" },
+      { name: "docs_lookup", label: "Docs Lookup", description: "Search docs" },
+    ];
+  hoisted.state.pluginMeta = options?.pluginMeta ?? {};
+  hoisted.state.channelMeta = options?.channelMeta ?? {};
+  hoisted.state.effectivePolicy = options?.effectivePolicy ?? {};
+  hoisted.state.resolvedModelCompat = options?.resolvedModelCompat;
+  hoisted.createToolsMock.mockImplementation(
+    options?.createToolsMock ?? (() => hoisted.state.tools),
+  );
+  hoisted.resolveModelMock.mockReturnValue({
+    model: hoisted.state.resolvedModelCompat
+      ? { compat: hoisted.state.resolvedModelCompat }
+      : undefined,
+    authStorage: {} as never,
+    modelRegistry: {} as never,
   });
-  const createToolsMock =
-    options?.createToolsMock ??
-    vi.fn(
-      () =>
-        options?.tools ?? [
-          { name: "exec", label: "Exec", description: "Run shell commands" },
-          { name: "docs_lookup", label: "Docs Lookup", description: "Search docs" },
-        ],
-    );
-  vi.doMock("./pi-tools.js", () => ({
-    createOpenClawCodingTools: createToolsMock,
-  }));
-  vi.doMock("./pi-embedded-runner/model.js", () => ({
-    resolveModel: vi.fn(() => ({
-      model: options?.resolvedModelCompat ? { compat: options.resolvedModelCompat } : undefined,
-      authStorage: {} as never,
-      modelRegistry: {} as never,
-    })),
-  }));
-  vi.doMock("../plugins/tools.js", () => ({
-    getPluginToolMeta: (tool: { name: string }) => options?.pluginMeta?.[tool.name],
-  }));
-  vi.doMock("./channel-tools.js", () => ({
-    getChannelAgentToolMeta: (tool: { name: string }) => options?.channelMeta?.[tool.name],
-  }));
-  vi.doMock("./pi-tools.policy.js", () => ({
-    resolveEffectiveToolPolicy: () => options?.effectivePolicy ?? {},
-  }));
-  return await import("./tools-effective-inventory.js");
+  return { resolveEffectiveToolInventory };
 }
+
+beforeAll(async () => {
+  ({ resolveEffectiveToolInventory } = await import("./tools-effective-inventory.js"));
+});
+
+beforeEach(() => {
+  hoisted.state.tools = [
+    { name: "exec", label: "Exec", description: "Run shell commands" },
+    { name: "docs_lookup", label: "Docs Lookup", description: "Search docs" },
+  ];
+  hoisted.state.pluginMeta = {};
+  hoisted.state.channelMeta = {};
+  hoisted.state.effectivePolicy = {};
+  hoisted.state.resolvedModelCompat = undefined;
+  hoisted.createToolsMock.mockReset();
+  hoisted.resolveModelMock.mockReset();
+});
 
 describe("resolveEffectiveToolInventory", () => {
   it("groups core, plugin, and channel tools from the effective runtime set", async () => {

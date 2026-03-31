@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   rewriteUpdateFlagArgv,
-  resolveMissingBrowserCommandMessage,
   shouldEnsureCliPath,
   shouldRegisterPrimarySubcommand,
   shouldSkipPluginCommandRegistration,
@@ -135,41 +134,5 @@ describe("shouldUseRootHelpFastPath", () => {
     expect(shouldUseRootHelpFastPath(["node", "openclaw", "--profile", "work", "-h"])).toBe(true);
     expect(shouldUseRootHelpFastPath(["node", "openclaw", "status", "--help"])).toBe(false);
     expect(shouldUseRootHelpFastPath(["node", "openclaw", "--help", "status"])).toBe(false);
-  });
-});
-
-describe("resolveMissingBrowserCommandMessage", () => {
-  it("explains plugins.allow misses for the browser command", () => {
-    expect(
-      resolveMissingBrowserCommandMessage({
-        plugins: {
-          allow: ["telegram"],
-        },
-      }),
-    ).toContain('`plugins.allow` excludes "browser"');
-  });
-
-  it("explains explicit bundled browser disablement", () => {
-    expect(
-      resolveMissingBrowserCommandMessage({
-        plugins: {
-          entries: {
-            browser: {
-              enabled: false,
-            },
-          },
-        },
-      }),
-    ).toContain("plugins.entries.browser.enabled=false");
-  });
-
-  it("returns null when browser is already allowed", () => {
-    expect(
-      resolveMissingBrowserCommandMessage({
-        plugins: {
-          allow: ["browser"],
-        },
-      }),
-    ).toBeNull();
   });
 });

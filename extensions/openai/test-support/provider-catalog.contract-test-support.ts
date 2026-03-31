@@ -4,7 +4,6 @@ import {
   expectCodexBuiltInSuppression,
   expectCodexMissingAuthHint,
   importProviderRuntimeCatalogModule,
-  loadBundledPluginPublicSurfaceSync,
 } from "../../../test/helpers/plugins/provider-catalog.js";
 import type { ProviderPlugin } from "../../../test/helpers/plugins/provider-catalog.js";
 import {
@@ -25,17 +24,13 @@ const resolveOwningPluginIdsForProviderMock = vi.hoisted(() =>
 const resolveCatalogHookProviderPluginIdsMock = vi.hoisted(() =>
   vi.fn<ResolveCatalogHookProviderPluginIds>((_) => [] as string[]),
 );
-
-vi.mock("../../../src/plugins/providers.js", () => ({
-  resolveOwningPluginIdsForProvider: (params: unknown) =>
-    resolveOwningPluginIdsForProviderMock(params as never),
-  resolveCatalogHookProviderPluginIds: (params: unknown) =>
-    resolveCatalogHookProviderPluginIdsMock(params as never),
+const providerCatalogContractModules = vi.hoisted(() => ({
+  openAIIndexModuleUrl: new URL("../index.ts", import.meta.url).href,
 }));
 
-vi.mock("../../../src/plugins/providers.runtime.js", () => ({
-  resolvePluginProviders: (params: unknown) => resolvePluginProvidersMock(params as never),
-}));
+async function importBundledProviderPlugin<T>(moduleUrl: string): Promise<T> {
+  return (await import(`${moduleUrl}?t=${Date.now()}`)) as T;
+}
 
 export function describeOpenAIProviderCatalogContract() {
   let augmentModelCatalogWithProviderPlugins: Awaited<
@@ -44,6 +39,12 @@ export function describeOpenAIProviderCatalogContract() {
   let resetProviderRuntimeHookCacheForTest: Awaited<
     ReturnType<typeof importProviderRuntimeCatalogModule>
   >["resetProviderRuntimeHookCacheForTest"];
+  let resetProviderRuntimeResolversForTest: Awaited<
+    ReturnType<typeof importProviderRuntimeCatalogModule>
+  >["__resetProviderRuntimeResolversForTest"];
+  let setProviderRuntimeResolversForTest: Awaited<
+    ReturnType<typeof importProviderRuntimeCatalogModule>
+  >["__setProviderRuntimeResolversForTest"];
   let resolveProviderBuiltInModelSuppression: Awaited<
     ReturnType<typeof importProviderRuntimeCatalogModule>
   >["resolveProviderBuiltInModelSuppression"];
@@ -55,13 +56,9 @@ export function describeOpenAIProviderCatalogContract() {
     { timeout: PROVIDER_CATALOG_CONTRACT_TIMEOUT_MS },
     () => {
       beforeAll(async () => {
-        vi.resetModules();
-        const openaiPlugin = loadBundledPluginPublicSurfaceSync<{
+        const openaiPlugin = await importBundledProviderPlugin<{
           default: Parameters<typeof registerProviderPlugin>[0]["plugin"];
-        }>({
-          pluginId: "openai",
-          artifactBasename: "index.js",
-        });
+        }>(providerCatalogContractModules.openAIIndexModuleUrl);
         openaiProviders = registerProviderPlugin({
           plugin: openaiPlugin.default,
           id: "openai",
@@ -70,6 +67,8 @@ export function describeOpenAIProviderCatalogContract() {
         openaiProvider = requireRegisteredProvider(openaiProviders, "openai", "provider");
         ({
           augmentModelCatalogWithProviderPlugins,
+          __resetProviderRuntimeResolversForTest: resetProviderRuntimeResolversForTest,
+          __setProviderRuntimeResolversForTest: setProviderRuntimeResolversForTest,
           resetProviderRuntimeHookCacheForTest,
           resolveProviderBuiltInModelSuppression,
         } = await importProviderRuntimeCatalogModule());
@@ -77,6 +76,7 @@ export function describeOpenAIProviderCatalogContract() {
 
       beforeEach(() => {
         resetProviderRuntimeHookCacheForTest();
+        resetProviderRuntimeResolversForTest();
 
         resolvePluginProvidersMock.mockReset();
         resolvePluginProvidersMock.mockImplementation((params?: { onlyPluginIds?: string[] }) => {
@@ -101,6 +101,14 @@ export function describeOpenAIProviderCatalogContract() {
 
         resolveCatalogHookProviderPluginIdsMock.mockReset();
         resolveCatalogHookProviderPluginIdsMock.mockReturnValue(["openai"]);
+
+        setProviderRuntimeResolversForTest({
+          resolvePluginProviders: (params) => resolvePluginProvidersMock(params),
+          resolveOwningPluginIdsForProvider: (params) =>
+            resolveOwningPluginIdsForProviderMock(params),
+          resolveCatalogHookProviderPluginIds: (params) =>
+            resolveCatalogHookProviderPluginIdsMock(params),
+        });
       });
 
       it("keeps codex-only missing-auth hints wired through the provider runtime", () => {

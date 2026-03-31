@@ -22,17 +22,17 @@ import {
   createComputedAccountStatusAdapter,
   createDefaultChannelRuntimeState,
 } from "openclaw/plugin-sdk/status-helpers";
+import { parseTelegramTopicConversation } from "../runtime-api.js";
 import {
   buildTokenChannelStatusSummary,
   clearAccountEntryFields,
   DEFAULT_ACCOUNT_ID,
   PAIRING_APPROVED_MESSAGE,
-  parseTelegramTopicConversation,
   projectCredentialSnapshotFields,
   resolveConfiguredFromCredentialStatuses,
   type ChannelMessageActionAdapter,
   type OpenClawConfig,
-} from "openclaw/plugin-sdk/telegram-core";
+} from "../runtime-api.js";
 import {
   listTelegramAccountIds,
   resolveTelegramAccount,

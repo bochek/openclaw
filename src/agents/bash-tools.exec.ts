@@ -55,6 +55,18 @@ export type {
   ExecToolDetails,
 } from "./bash-tools.exec-types.js";
 
+type CreateExecToolDeps = {
+  getShellPathFromLoginShell: typeof getShellPathFromLoginShell;
+  resolveShellEnvFallbackTimeoutMs: typeof resolveShellEnvFallbackTimeoutMs;
+};
+
+const defaultCreateExecToolDeps: CreateExecToolDeps = {
+  getShellPathFromLoginShell,
+  resolveShellEnvFallbackTimeoutMs,
+};
+
+let createExecToolDeps: CreateExecToolDeps = defaultCreateExecToolDeps;
+
 function buildExecForegroundResult(params: {
   outcome: ExecProcessOutcome;
   cwd?: string;
@@ -629,10 +641,7 @@ export function createExecTool(
         });
         workdir = resolved.hostWorkdir;
         containerWorkdir = resolved.containerWorkdir;
-      } else if (host !== "node") {
-        // Skip local workdir resolution for remote node execution: the remote node's
-        // filesystem is not visible to the gateway, so resolveWorkdir() would incorrectly
-        // fall back to the gateway's cwd. The node is responsible for validating its own cwd.
+      } else {
         workdir = resolveWorkdir(rawWorkdir, warnings);
       }
       rejectExecApprovalShellCommand(params.command);
@@ -692,9 +701,9 @@ export function createExecTool(
           : (hostEnvResult?.env ?? inheritedBaseEnv);
 
       if (!sandbox && host === "gateway" && !params.env?.PATH) {
-        const shellPath = getShellPathFromLoginShell({
+        const shellPath = createExecToolDeps.getShellPathFromLoginShell({
           env: process.env,
-          timeoutMs: resolveShellEnvFallbackTimeoutMs(process.env),
+          timeoutMs: createExecToolDeps.resolveShellEnvFallbackTimeoutMs(process.env),
         });
         applyShellPath(env, shellPath);
       }
@@ -895,5 +904,16 @@ export function createExecTool(
     },
   };
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<CreateExecToolDeps>) {
+    createExecToolDeps = overrides
+      ? {
+          ...defaultCreateExecToolDeps,
+          ...overrides,
+        }
+      : defaultCreateExecToolDeps;
+  },
+};
 
 export const execTool = createExecTool();

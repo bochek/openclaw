@@ -14,9 +14,15 @@ export type ResolvedIMessageAccount = {
   configured: boolean;
 };
 
-const { listAccountIds, resolveDefaultAccountId } = createAccountListHelpers("imessage");
-export const listIMessageAccountIds = listAccountIds;
-export const resolveDefaultIMessageAccountId = resolveDefaultAccountId;
+const imessageAccountHelpers = createAccountListHelpers("imessage");
+
+export function listIMessageAccountIds(cfg: OpenClawConfig): string[] {
+  return imessageAccountHelpers.listAccountIds(cfg);
+}
+
+export function resolveDefaultIMessageAccountId(cfg: OpenClawConfig): string {
+  return imessageAccountHelpers.resolveDefaultAccountId(cfg);
+}
 
 function mergeIMessageAccountConfig(cfg: OpenClawConfig, accountId: string): IMessageAccountConfig {
   return resolveMergedAccountConfig<IMessageAccountConfig>({

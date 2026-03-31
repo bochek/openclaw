@@ -1,5 +1,23 @@
 import { withProgress } from "../progress.js";
 
+type ProbeGatewayDeps = {
+  callGateway: typeof import("../../gateway/call.js").callGateway;
+  probeGateway: typeof import("../../gateway/probe.js").probeGateway;
+};
+
+const defaultProbeGatewayDeps: ProbeGatewayDeps = {
+  callGateway: async (params) => {
+    const { callGateway } = await import("../../gateway/call.js");
+    return await callGateway(params);
+  },
+  probeGateway: async (params) => {
+    const { probeGateway } = await import("../../gateway/probe.js");
+    return await probeGateway(params);
+  },
+};
+
+let probeGatewayDeps: ProbeGatewayDeps = defaultProbeGatewayDeps;
+
 function resolveProbeFailureMessage(result: {
   error?: string | null;
   close?: { code: number; reason: string } | null;
@@ -32,8 +50,7 @@ export async function probeGatewayStatus(opts: {
       },
       async () => {
         if (opts.requireRpc) {
-          const { callGateway } = await import("../../gateway/call.js");
-          await callGateway({
+          await probeGatewayDeps.callGateway({
             url: opts.url,
             token: opts.token,
             password: opts.password,
@@ -44,8 +61,7 @@ export async function probeGatewayStatus(opts: {
           });
           return { ok: true } as const;
         }
-        const { probeGateway } = await import("../../gateway/probe.js");
-        return await probeGateway({
+        return await probeGatewayDeps.probeGateway({
           url: opts.url,
           auth: {
             token: opts.token,
@@ -71,3 +87,12 @@ export async function probeGatewayStatus(opts: {
     } as const;
   }
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<ProbeGatewayDeps>): void {
+    probeGatewayDeps = { ...defaultProbeGatewayDeps, ...overrides };
+  },
+  resetDepsForTest(): void {
+    probeGatewayDeps = defaultProbeGatewayDeps;
+  },
+};

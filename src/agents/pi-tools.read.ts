@@ -35,6 +35,20 @@ export {
   wrapToolParamNormalization,
 } from "./pi-tools.params.js";
 
+type PiToolsReadDeps = {
+  createEditTool: typeof createEditTool;
+  createReadTool: typeof createReadTool;
+  createWriteTool: typeof createWriteTool;
+};
+
+const defaultPiToolsReadDeps: PiToolsReadDeps = {
+  createEditTool,
+  createReadTool,
+  createWriteTool,
+};
+
+let piToolsReadDeps: PiToolsReadDeps = defaultPiToolsReadDeps;
+
 // NOTE(steipete): Upstream read now does file-magic MIME detection; we keep the wrapper
 // to normalize payloads and sanitize oversized images before they hit providers.
 type ToolContentBlock = AgentToolResult<unknown>["content"][number];
@@ -587,7 +601,7 @@ type SandboxToolParams = {
 };
 
 export function createSandboxedReadTool(params: SandboxToolParams) {
-  const base = createReadTool(params.root, {
+  const base = piToolsReadDeps.createReadTool(params.root, {
     operations: createSandboxReadOperations(params),
   }) as unknown as AnyAgentTool;
   return createOpenClawReadTool(base, {
@@ -597,14 +611,14 @@ export function createSandboxedReadTool(params: SandboxToolParams) {
 }
 
 export function createSandboxedWriteTool(params: SandboxToolParams) {
-  const base = createWriteTool(params.root, {
+  const base = piToolsReadDeps.createWriteTool(params.root, {
     operations: createSandboxWriteOperations(params),
   }) as unknown as AnyAgentTool;
   return wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.write);
 }
 
 export function createSandboxedEditTool(params: SandboxToolParams) {
-  const base = createEditTool(params.root, {
+  const base = piToolsReadDeps.createEditTool(params.root, {
     operations: createSandboxEditOperations(params),
   }) as unknown as AnyAgentTool;
   const withRecovery = wrapEditToolWithRecovery(base, {
@@ -616,14 +630,14 @@ export function createSandboxedEditTool(params: SandboxToolParams) {
 }
 
 export function createHostWorkspaceWriteTool(root: string, options?: { workspaceOnly?: boolean }) {
-  const base = createWriteTool(root, {
+  const base = piToolsReadDeps.createWriteTool(root, {
     operations: createHostWriteOperations(root, options),
   }) as unknown as AnyAgentTool;
   return wrapToolParamNormalization(base, CLAUDE_PARAM_GROUPS.write);
 }
 
 export function createHostWorkspaceEditTool(root: string, options?: { workspaceOnly?: boolean }) {
-  const base = createEditTool(root, {
+  const base = piToolsReadDeps.createEditTool(root, {
     operations: createHostEditOperations(root, options),
   }) as unknown as AnyAgentTool;
   const withRecovery = wrapEditToolWithRecovery(base, {
@@ -664,6 +678,17 @@ export function createOpenClawReadTool(
     },
   };
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<PiToolsReadDeps>) {
+    piToolsReadDeps = overrides
+      ? {
+          ...defaultPiToolsReadDeps,
+          ...overrides,
+        }
+      : defaultPiToolsReadDeps;
+  },
+} as const;
 
 function createSandboxReadOperations(params: SandboxToolParams) {
   return {

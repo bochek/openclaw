@@ -5,6 +5,24 @@ import { setMatrixRuntime } from "./src/runtime.js";
 export { matrixPlugin } from "./src/channel.js";
 export { setMatrixRuntime } from "./src/runtime.js";
 
+let loadRegisterMatrixCli = async () => {
+  const { registerMatrixCli } = await import("./src/cli.js");
+  return registerMatrixCli;
+};
+
+export function __setLoadRegisterMatrixCliForTest(
+  loader: typeof loadRegisterMatrixCli,
+): void {
+  loadRegisterMatrixCli = loader;
+}
+
+export function __resetLoadRegisterMatrixCliForTest(): void {
+  loadRegisterMatrixCli = async () => {
+    const { registerMatrixCli } = await import("./src/cli.js");
+    return registerMatrixCli;
+  };
+}
+
 export default defineChannelPluginEntry({
   id: "matrix",
   name: "Matrix",
@@ -14,7 +32,7 @@ export default defineChannelPluginEntry({
   registerCliMetadata(api) {
     api.registerCli(
       async ({ program }) => {
-        const { registerMatrixCli } = await import("./src/cli.js");
+        const registerMatrixCli = await loadRegisterMatrixCli();
         registerMatrixCli({ program });
       },
       {

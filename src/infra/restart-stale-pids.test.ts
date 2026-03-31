@@ -10,25 +10,38 @@ const mockSpawnSync = vi.hoisted(() => vi.fn());
 const mockResolveGatewayPort = vi.hoisted(() => vi.fn(() => 18789));
 const mockRestartWarn = vi.hoisted(() => vi.fn());
 
-vi.mock("node:child_process", () => ({
-  spawnSync: (...args: unknown[]) => mockSpawnSync(...args),
-  execFileSync: vi.fn(),
-}));
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return {
+    ...actual,
+    spawnSync: (...args: unknown[]) => mockSpawnSync(...args),
+    execFileSync: vi.fn(),
+  };
+});
 
-vi.mock("../config/paths.js", () => ({
-  resolveGatewayPort: () => mockResolveGatewayPort(),
-}));
+vi.mock("../config/paths.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../config/paths.js")>();
+  return {
+    ...actual,
+    resolveGatewayPort: () => mockResolveGatewayPort(),
+  };
+});
 
 vi.mock("./ports-lsof.js", () => ({
   resolveLsofCommandSync: vi.fn(() => "lsof"),
 }));
 
 vi.mock("../logging/subsystem.js", () => ({
-  createSubsystemLogger: vi.fn(() => ({
-    warn: (...args: unknown[]) => mockRestartWarn(...args),
-    info: vi.fn(),
-    error: vi.fn(),
-  })),
+  createSubsystemLogger: vi.fn(() => {
+    const logger = {
+      child: vi.fn(() => logger),
+      warn: (...args: unknown[]) => mockRestartWarn(...args),
+      info: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+    };
+    return logger;
+  }),
 }));
 
 import { resolveLsofCommandSync } from "./ports-lsof.js";

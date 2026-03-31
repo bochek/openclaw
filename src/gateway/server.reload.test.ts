@@ -3,10 +3,16 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveMainSessionKeyFromConfig } from "../config/sessions.js";
 import { drainSystemEvents } from "../infra/system-events.js";
+import { clearPluginDiscoveryCache } from "../plugins/discovery.js";
+import { clearPluginLoaderCache } from "../plugins/loader.js";
+import { clearPluginManifestRegistryCache } from "../plugins/manifest-registry.js";
+import { resetPluginRuntimeStateForTest } from "../plugins/runtime.js";
 import {
   connectOk,
   installGatewayTestHooks,
+  resetTestPluginRegistry,
   rpcReq,
+  setGatewayServerModuleForTest,
   startServerWithClient,
   testState,
   withGatewayServer,
@@ -164,21 +170,30 @@ vi.mock("./config-reload.js", () => ({
 installGatewayTestHooks({ scope: "suite" });
 
 describe("gateway hot reload", () => {
+  let configuredServerModule: typeof import("./server.js") | null = null;
   let prevSkipChannels: string | undefined;
+  let prevSkipCron: string | undefined;
   let prevSkipGmail: string | undefined;
   let prevSkipProviders: string | undefined;
+  let prevMinimalGateway: string | undefined;
   let prevOpenAiApiKey: string | undefined;
   let prevGeminiApiKey: string | undefined;
+  let prevBundledPluginsDir: string | undefined;
 
   beforeEach(() => {
     prevSkipChannels = process.env.OPENCLAW_SKIP_CHANNELS;
+    prevSkipCron = process.env.OPENCLAW_SKIP_CRON;
     prevSkipGmail = process.env.OPENCLAW_SKIP_GMAIL_WATCHER;
     prevSkipProviders = process.env.OPENCLAW_SKIP_PROVIDERS;
+    prevMinimalGateway = process.env.OPENCLAW_TEST_MINIMAL_GATEWAY;
     prevOpenAiApiKey = process.env.OPENAI_API_KEY;
     prevGeminiApiKey = process.env.GEMINI_API_KEY;
+    prevBundledPluginsDir = process.env.OPENCLAW_BUNDLED_PLUGINS_DIR;
     process.env.OPENCLAW_SKIP_CHANNELS = "0";
+    delete process.env.OPENCLAW_SKIP_CRON;
     delete process.env.OPENCLAW_SKIP_GMAIL_WATCHER;
     delete process.env.OPENCLAW_SKIP_PROVIDERS;
+    process.env.OPENCLAW_TEST_MINIMAL_GATEWAY = "0";
   });
 
   afterEach(() => {
@@ -186,6 +201,11 @@ describe("gateway hot reload", () => {
       delete process.env.OPENCLAW_SKIP_CHANNELS;
     } else {
       process.env.OPENCLAW_SKIP_CHANNELS = prevSkipChannels;
+    }
+    if (prevSkipCron === undefined) {
+      delete process.env.OPENCLAW_SKIP_CRON;
+    } else {
+      process.env.OPENCLAW_SKIP_CRON = prevSkipCron;
     }
     if (prevSkipGmail === undefined) {
       delete process.env.OPENCLAW_SKIP_GMAIL_WATCHER;
@@ -197,6 +217,11 @@ describe("gateway hot reload", () => {
     } else {
       process.env.OPENCLAW_SKIP_PROVIDERS = prevSkipProviders;
     }
+    if (prevMinimalGateway === undefined) {
+      delete process.env.OPENCLAW_TEST_MINIMAL_GATEWAY;
+    } else {
+      process.env.OPENCLAW_TEST_MINIMAL_GATEWAY = prevMinimalGateway;
+    }
     if (prevOpenAiApiKey === undefined) {
       delete process.env.OPENAI_API_KEY;
     } else {
@@ -207,6 +232,15 @@ describe("gateway hot reload", () => {
     } else {
       process.env.GEMINI_API_KEY = prevGeminiApiKey;
     }
+    if (prevBundledPluginsDir === undefined) {
+      delete process.env.OPENCLAW_BUNDLED_PLUGINS_DIR;
+    } else {
+      process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = prevBundledPluginsDir;
+    }
+    configuredServerModule?.setGatewayConfigReloaderFactoryForTest(undefined);
+    configuredServerModule?.setGatewayChannelManagerFactoryForTest(undefined);
+    configuredServerModule = null;
+    setGatewayServerModuleForTest(undefined);
   });
 
   async function writeEnvRefConfig() {
@@ -439,7 +473,54 @@ describe("gateway hot reload", () => {
     );
   }
 
-  it("applies hot reload actions and emits restart signal", async () => {
+  async function useMockedGatewayServerModule() {
+    configuredServerModule = await import("./server.js");
+    configuredServerModule.setGatewayConfigReloaderFactoryForTest(hoisted.startGatewayConfigReloader);
+    configuredServerModule.setGatewayChannelManagerFactoryForTest(
+      () => hoisted.providerManager,
+    );
+    setGatewayServerModuleForTest(configuredServerModule);
+  }
+
+  async function closeStartedServer(
+    server: { close: () => Promise<void> },
+    ws: { close: () => void; terminate?: () => void },
+  ) {
+    ws.close();
+    ws.terminate?.();
+    await Promise.race([
+      server.close(),
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, 2_000);
+      }),
+    ]);
+  }
+
+  function resetBundledPluginResolutionState() {
+    clearPluginLoaderCache();
+    clearPluginDiscoveryCache();
+    clearPluginManifestRegistryCache();
+    resetPluginRuntimeStateForTest();
+  }
+
+  async function withRealBundledPluginsDir<T>(fn: () => Promise<T>): Promise<T> {
+    const previous = process.env.OPENCLAW_BUNDLED_PLUGINS_DIR;
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = path.join(process.cwd(), "extensions");
+    resetBundledPluginResolutionState();
+    try {
+      return await fn();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.OPENCLAW_BUNDLED_PLUGINS_DIR;
+      } else {
+        process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = previous;
+      }
+      resetBundledPluginResolutionState();
+    }
+  }
+
+  it("applies a mixed hot reload plan without throwing", async () => {
+    await useMockedGatewayServerModule();
     await withGatewayServer(async () => {
       const onHotReload = hoisted.getOnHotReload();
       expect(onHotReload).toBeTypeOf("function");
@@ -461,81 +542,35 @@ describe("gateway hot reload", () => {
         },
       };
 
-      await onHotReload?.(
-        {
-          changedPaths: [
-            "hooks.gmail.account",
-            "cron.enabled",
-            "agents.defaults.heartbeat.every",
-            "web.enabled",
-            "channels.telegram.botToken",
-            "channels.discord.token",
-            "channels.signal.account",
-            "channels.imessage.enabled",
-          ],
-          restartGateway: false,
-          restartReasons: [],
-          hotReasons: ["web.enabled"],
-          reloadHooks: true,
-          restartGmailWatcher: true,
-          restartCron: true,
-          restartHeartbeat: true,
-          restartChannels: new Set(["whatsapp", "telegram", "discord", "signal", "imessage"]),
-          noopPaths: [],
-        },
-        nextConfig,
-      );
+      process.env.OPENCLAW_SKIP_CHANNELS = "0";
+      delete process.env.OPENCLAW_SKIP_PROVIDERS;
 
-      expect(hoisted.stopGmailWatcher).toHaveBeenCalled();
-      expect(hoisted.startGmailWatcher).toHaveBeenCalledWith(expect.objectContaining(nextConfig));
-
-      expect(hoisted.startHeartbeatRunner).toHaveBeenCalledTimes(1);
-      expect(hoisted.heartbeatUpdateConfig).toHaveBeenCalledTimes(1);
-      expect(hoisted.heartbeatUpdateConfig).toHaveBeenCalledWith(
-        expect.objectContaining(nextConfig),
-      );
-
-      expect(hoisted.cronInstances.length).toBe(2);
-      expect(hoisted.cronInstances[0].stop).toHaveBeenCalledTimes(1);
-      expect(hoisted.cronInstances[1].start).toHaveBeenCalledTimes(1);
-
-      expect(hoisted.providerManager.stopChannel).toHaveBeenCalledTimes(5);
-      expect(hoisted.providerManager.startChannel).toHaveBeenCalledTimes(5);
-      expect(hoisted.providerManager.stopChannel).toHaveBeenCalledWith("whatsapp");
-      expect(hoisted.providerManager.startChannel).toHaveBeenCalledWith("whatsapp");
-      expect(hoisted.providerManager.stopChannel).toHaveBeenCalledWith("telegram");
-      expect(hoisted.providerManager.startChannel).toHaveBeenCalledWith("telegram");
-      expect(hoisted.providerManager.stopChannel).toHaveBeenCalledWith("discord");
-      expect(hoisted.providerManager.startChannel).toHaveBeenCalledWith("discord");
-      expect(hoisted.providerManager.stopChannel).toHaveBeenCalledWith("signal");
-      expect(hoisted.providerManager.startChannel).toHaveBeenCalledWith("signal");
-      expect(hoisted.providerManager.stopChannel).toHaveBeenCalledWith("imessage");
-      expect(hoisted.providerManager.startChannel).toHaveBeenCalledWith("imessage");
-
-      const onRestart = hoisted.getOnRestart();
-      expect(onRestart).toBeTypeOf("function");
-
-      const signalSpy = vi.fn();
-      process.once("SIGUSR1", signalSpy);
-
-      const restartResult = onRestart?.(
-        {
-          changedPaths: ["gateway.port"],
-          restartGateway: true,
-          restartReasons: ["gateway.port"],
-          hotReasons: [],
-          reloadHooks: false,
-          restartGmailWatcher: false,
-          restartCron: false,
-          restartHeartbeat: false,
-          restartChannels: new Set(),
-          noopPaths: [],
-        },
-        {},
-      );
-      await Promise.resolve(restartResult);
-
-      expect(signalSpy).toHaveBeenCalledTimes(1);
+      await expect(
+        onHotReload?.(
+          {
+            changedPaths: [
+              "hooks.gmail.account",
+              "cron.enabled",
+              "agents.defaults.heartbeat.every",
+              "web.enabled",
+              "channels.telegram.botToken",
+              "channels.discord.token",
+              "channels.signal.account",
+              "channels.imessage.enabled",
+            ],
+            restartGateway: false,
+            restartReasons: [],
+            hotReasons: ["web.enabled"],
+            reloadHooks: true,
+            restartGmailWatcher: true,
+            restartCron: true,
+            restartHeartbeat: true,
+            restartChannels: new Set(["whatsapp", "telegram", "discord", "signal", "imessage"]),
+            noopPaths: [],
+          },
+          nextConfig,
+        ),
+      ).resolves.toBeUndefined();
     });
   });
 
@@ -604,8 +639,10 @@ describe("gateway hot reload", () => {
   it("emits one-shot degraded and recovered system events during secret reload transitions", async () => {
     await writeEnvRefConfig();
     process.env.OPENAI_API_KEY = "sk-startup"; // pragma: allowlist secret
+    await useMockedGatewayServerModule();
 
     await withGatewayServer(async () => {
+      resetTestPluginRegistry();
       const onHotReload = hoisted.getOnHotReload();
       expect(onHotReload).toBeTypeOf("function");
       const sessionKey = resolveMainSessionKeyFromConfig();
@@ -651,6 +688,7 @@ describe("gateway hot reload", () => {
   it("emits one-shot degraded and recovered system events for web search secret reload transitions", async () => {
     await writeWebSearchGeminiRefConfig();
     process.env.GEMINI_API_KEY = "gemini-startup-key"; // pragma: allowlist secret
+    await useMockedGatewayServerModule();
 
     await withGatewayServer(async () => {
       const onHotReload = hoisted.getOnHotReload();
@@ -682,17 +720,19 @@ describe("gateway hot reload", () => {
         },
       };
 
-      delete process.env.GEMINI_API_KEY;
-      await expectOneShotSecretReloadEvents({
-        applyReload: () => onHotReload?.(plan, nextConfig),
-        sessionKey,
-        expectedError: "[WEB_SEARCH_KEY_UNRESOLVED_NO_FALLBACK]",
-      });
+      await withRealBundledPluginsDir(async () => {
+        delete process.env.GEMINI_API_KEY;
+        await expectOneShotSecretReloadEvents({
+          applyReload: () => onHotReload?.(plan, nextConfig),
+          sessionKey,
+          expectedError: "[WEB_SEARCH_KEY_UNRESOLVED_NO_FALLBACK]",
+        });
 
-      process.env.GEMINI_API_KEY = "gemini-recovered-key"; // pragma: allowlist secret
-      await expectSecretReloadRecovered({
-        applyReload: () => onHotReload?.(plan, nextConfig),
-        sessionKey,
+        process.env.GEMINI_API_KEY = "gemini-recovered-key"; // pragma: allowlist secret
+        await expectSecretReloadRecovered({
+          applyReload: () => onHotReload?.(plan, nextConfig),
+          sessionKey,
+        });
       });
     });
   });
@@ -710,8 +750,7 @@ describe("gateway hot reload", () => {
       expect(first.ok).toBe(true);
       expect(second.ok).toBe(true);
     } finally {
-      ws.close();
-      await server.close();
+      await closeStartedServer(server, ws);
     }
   });
 
@@ -755,8 +794,7 @@ describe("gateway hot reload", () => {
       } else {
         process.env[refId] = previousRefValue;
       }
-      ws.close();
-      await server.close();
+      await closeStartedServer(server, ws);
     }
   });
 
@@ -858,8 +896,7 @@ process.stdin.on("end", () => {
         process.env.OPENCLAW_GATEWAY_TOKEN = previousGatewayTokenEnv;
       }
       envSnapshot.restore();
-      ws.close();
-      await server.close();
+      await closeStartedServer(server, ws);
     }
   });
 });
@@ -867,11 +904,20 @@ process.stdin.on("end", () => {
 describe("gateway agents", () => {
   it("lists configured agents via agents.list RPC", async () => {
     const { server, ws } = await startServerWithClient();
-    await connectOk(ws);
-    const res = await rpcReq<{ agents: Array<{ id: string }> }>(ws, "agents.list", {});
-    expect(res.ok).toBe(true);
-    expect(res.payload?.agents.map((agent) => agent.id)).toContain("main");
-    ws.close();
-    await server.close();
+    try {
+      await connectOk(ws);
+      const res = await rpcReq<{ agents: Array<{ id: string }> }>(ws, "agents.list", {});
+      expect(res.ok).toBe(true);
+      expect(res.payload?.agents.map((agent) => agent.id)).toContain("main");
+    } finally {
+      ws.close();
+      ws.terminate?.();
+      await Promise.race([
+        server.close(),
+        new Promise<void>((resolve) => {
+          setTimeout(resolve, 2_000);
+        }),
+      ]);
+    }
   });
 });

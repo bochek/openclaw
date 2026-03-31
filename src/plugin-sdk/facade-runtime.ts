@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "jiti";
@@ -21,6 +22,7 @@ const CURRENT_MODULE_PATH = fileURLToPath(import.meta.url);
 const PUBLIC_SURFACE_SOURCE_EXTENSIONS = [".ts", ".mts", ".js", ".mjs", ".cts", ".cjs"] as const;
 const jitiLoaders = new Map<string, ReturnType<typeof createJiti>>();
 const loadedFacadeModules = new Map<string, unknown>();
+const syncRequire = createRequire(import.meta.url);
 
 function resolveSourceFirstPublicSurfacePath(params: {
   bundledPluginsDir?: string;
@@ -104,6 +106,40 @@ function getJiti(modulePath: string) {
   });
   jitiLoaders.set(cacheKey, loader);
   return loader;
+}
+
+function loadFacadeModuleSync<T>(modulePath: string): T {
+  if (typeof Bun !== "undefined") {
+    return syncRequire(modulePath) as T;
+  }
+  return getJiti(modulePath)(modulePath) as T;
+}
+
+function resolveEmptyFacadeLoadError(params: {
+  modulePath: string;
+  dirName: string;
+  artifactBasename: string;
+}): Error {
+  const source = fs.readFileSync(params.modulePath, "utf8");
+  const explicitThrowMatch = source.match(/throw\s+new\s+Error\((["'`])([\s\S]*?)\1\)/u);
+  if (explicitThrowMatch) {
+    return new Error(explicitThrowMatch[2]);
+  }
+  return new Error(
+    `Bundled plugin public surface ${params.dirName}/${params.artifactBasename} exported no symbols`,
+  );
+}
+
+function hasMeaningfulFacadeExports(value: unknown): boolean {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const ownNames = Object.getOwnPropertyNames(record).filter((name) => name !== "__esModule");
+  if (ownNames.length > 0) {
+    return true;
+  }
+  return Object.prototype.hasOwnProperty.call(record, "default") && record.default !== undefined;
 }
 
 function createLazyFacadeValueLoader<T>(load: () => T): () => T {
@@ -211,7 +247,14 @@ export function loadBundledPluginPublicSurfaceModuleSync<T extends object>(param
 
   let loaded: T;
   try {
-    loaded = getJiti(location.modulePath)(location.modulePath) as T;
+    loaded = loadFacadeModuleSync<T>(location.modulePath);
+    if (!hasMeaningfulFacadeExports(loaded) && fs.readFileSync(location.modulePath, "utf8").trim().length > 0) {
+      throw resolveEmptyFacadeLoadError({
+        modulePath: location.modulePath,
+        dirName: params.dirName,
+        artifactBasename: params.artifactBasename,
+      });
+    }
     Object.assign(sentinel, loaded);
   } catch (err) {
     loadedFacadeModules.delete(location.modulePath);

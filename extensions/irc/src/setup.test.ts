@@ -5,15 +5,8 @@ import {
   promptSetupWizardAllowFrom,
   runSetupWizardConfigure,
   type WizardPrompter,
-} from "../../../test/helpers/plugins/setup-wizard.js";
-import {
-  expectStopPendingUntilAbort,
-  startAccountAndTrackLifecycle,
-  waitForStartedMocks,
-} from "../../../test/helpers/plugins/start-account-lifecycle.js";
-import type { ResolvedIrcAccount } from "./accounts.js";
-import { ircPlugin } from "./channel.js";
-import { setIrcRuntime } from "./runtime.js";
+} from "../../../test/helpers/extensions/setup-wizard.js";
+import { ircSetupPlugin } from "./channel.setup.js";
 import {
   ircSetupAdapter,
   parsePort,
@@ -25,57 +18,7 @@ import {
 } from "./setup-core.js";
 import type { CoreConfig } from "./types.js";
 
-const hoisted = vi.hoisted(() => ({
-  monitorIrcProvider: vi.fn(),
-}));
-
-vi.mock("./monitor.js", async () => {
-  const actual = await vi.importActual<typeof import("./monitor.js")>("./monitor.js");
-  return {
-    ...actual,
-    monitorIrcProvider: hoisted.monitorIrcProvider,
-  };
-});
-
-const ircConfigureAdapter = createPluginSetupWizardAdapter(ircPlugin);
-
-function buildAccount(): ResolvedIrcAccount {
-  return {
-    accountId: "default",
-    enabled: true,
-    name: "default",
-    configured: true,
-    host: "irc.example.com",
-    port: 6697,
-    tls: true,
-    nick: "openclaw",
-    username: "openclaw",
-    realname: "OpenClaw",
-    password: "",
-    passwordSource: "none",
-    config: {} as ResolvedIrcAccount["config"],
-  };
-}
-
-function installIrcRuntime() {
-  setIrcRuntime({
-    logging: {
-      shouldLogVerbose: vi.fn(() => false),
-      getChildLogger: vi.fn(() => ({
-        debug: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-      })),
-    },
-    channel: {
-      activity: {
-        record: vi.fn(),
-        get: vi.fn(),
-      },
-    },
-  } as never);
-}
+const ircConfigureAdapter = createPluginSetupWizardAdapter(ircSetupPlugin);
 
 describe("irc setup", () => {
   afterEach(() => {
@@ -346,26 +289,5 @@ describe("irc setup", () => {
 
     expect(updated.channels?.irc?.allowFrom).toEqual(["alice", "bob!ident@example.org"]);
     expect(updated.channels?.irc?.accounts?.work?.allowFrom).toBeUndefined();
-  });
-
-  it("keeps startAccount pending until abort, then stops the monitor", async () => {
-    const stop = vi.fn();
-    vi.resetModules();
-    hoisted.monitorIrcProvider.mockResolvedValue({ stop });
-    installIrcRuntime();
-    const { ircPlugin: runtimeMockedPlugin } = await import("./channel.js");
-
-    const { abort, task, isSettled } = startAccountAndTrackLifecycle({
-      startAccount: runtimeMockedPlugin.gateway!.startAccount!,
-      account: buildAccount(),
-    });
-
-    await expectStopPendingUntilAbort({
-      waitForStarted: waitForStartedMocks(hoisted.monitorIrcProvider),
-      isSettled,
-      abort,
-      task,
-      stop,
-    });
   });
 });

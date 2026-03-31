@@ -35,11 +35,15 @@ import { resolveWorkspaceRoot } from "./workspace-dir.js";
 
 type OpenClawToolsDeps = {
   callGateway: typeof callGateway;
+  createCanvasTool: typeof createCanvasTool;
+  resolvePluginTools: typeof resolvePluginTools;
   config?: OpenClawConfig;
 };
 
 const defaultOpenClawToolsDeps: OpenClawToolsDeps = {
   callGateway,
+  createCanvasTool,
+  resolvePluginTools,
 };
 
 let openClawToolsDeps: OpenClawToolsDeps = defaultOpenClawToolsDeps;
@@ -99,6 +103,8 @@ export function createOpenClawTools(
     onYield?: (message: string) => Promise<void> | void;
     /** Allow plugin tools for this tool set to late-bind the gateway subagent. */
     allowGatewaySubagentBinding?: boolean;
+    /** Explicit env override for plugin/runtime resolution in tests or embedded callers. */
+    env?: NodeJS.ProcessEnv;
   } & SpawnedToolContext,
 ): AnyAgentTool[] {
   const resolvedConfig = options?.config ?? openClawToolsDeps.config;
@@ -182,7 +188,7 @@ export function createOpenClawTools(
         requesterSenderId: options?.requesterSenderId ?? undefined,
       });
   const tools: AnyAgentTool[] = [
-    createCanvasTool({ config: options?.config }),
+    openClawToolsDeps.createCanvasTool({ config: options?.config }),
     createNodesTool({
       agentSessionKey: options?.agentSessionKey,
       agentChannel: options?.agentChannel,
@@ -209,6 +215,7 @@ export function createOpenClawTools(
     createAgentsListTool({
       agentSessionKey: options?.agentSessionKey,
       requesterAgentIdOverride: options?.requesterAgentIdOverride,
+      config: resolvedConfig,
     }),
     createSessionsListTool({
       agentSessionKey: options?.agentSessionKey,
@@ -248,6 +255,7 @@ export function createOpenClawTools(
     }),
     createSubagentsTool({
       agentSessionKey: options?.agentSessionKey,
+      config: resolvedConfig,
     }),
     createSessionStatusTool({
       agentSessionKey: options?.agentSessionKey,
@@ -260,7 +268,7 @@ export function createOpenClawTools(
     ...(pdfTool ? [pdfTool] : []),
   ];
 
-  const pluginTools = resolvePluginTools({
+  const pluginTools = openClawToolsDeps.resolvePluginTools({
     context: {
       config: options?.config,
       runtimeConfig: runtimeSnapshot?.config,
@@ -283,6 +291,7 @@ export function createOpenClawTools(
     existingToolNames: new Set(tools.map((tool) => tool.name)),
     toolAllowlist: options?.pluginToolAllowlist,
     allowGatewaySubagentBinding: options?.allowGatewaySubagentBinding,
+    env: options?.env,
   });
 
   const wrappedPluginTools = applyPluginToolDeliveryDefaults({

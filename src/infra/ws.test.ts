@@ -16,6 +16,6 @@ describe("rawDataToString", () => {
   });
 
   it("falls back to string coercion for other raw data shapes", () => {
-    expect(rawDataToString(Uint8Array.from([1, 2, 3]) as never)).toBe("1,2,3");
+    expect(rawDataToString(Uint8Array.from([1, 2, 3]) as never)).toBe("\u0001\u0002\u0003");
   });
 });

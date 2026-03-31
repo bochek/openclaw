@@ -32,6 +32,33 @@ type ExecApprovalsCliOpts = NodesRpcOpts & {
   agent?: string;
 };
 
+type ExecApprovalsCliDeps = {
+  callGatewayFromCli: typeof callGatewayFromCli;
+  readExecApprovalsSnapshot: typeof readExecApprovalsSnapshot;
+  resolveNodeId: typeof resolveNodeId;
+  runtime: typeof defaultRuntime;
+  saveExecApprovals: typeof saveExecApprovals;
+};
+
+const defaultExecApprovalsCliDeps: ExecApprovalsCliDeps = {
+  callGatewayFromCli,
+  readExecApprovalsSnapshot,
+  resolveNodeId,
+  runtime: defaultRuntime,
+  saveExecApprovals,
+};
+
+let execApprovalsCliDeps: ExecApprovalsCliDeps = defaultExecApprovalsCliDeps;
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<ExecApprovalsCliDeps>): void {
+    execApprovalsCliDeps = { ...defaultExecApprovalsCliDeps, ...overrides };
+  },
+  resetDepsForTest(): void {
+    execApprovalsCliDeps = defaultExecApprovalsCliDeps;
+  },
+};
+
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
@@ -48,7 +75,7 @@ async function resolveTargetNodeId(opts: ExecApprovalsCliOpts): Promise<string |
   if (!raw) {
     return null;
   }
-  return await resolveNodeId(opts as NodesRpcOpts, raw);
+  return await execApprovalsCliDeps.resolveNodeId(opts as NodesRpcOpts, raw);
 }
 
 async function loadSnapshot(
@@ -57,12 +84,16 @@ async function loadSnapshot(
 ): Promise<ExecApprovalsSnapshot> {
   const method = nodeId ? "exec.approvals.node.get" : "exec.approvals.get";
   const params = nodeId ? { nodeId } : {};
-  const snapshot = (await callGatewayFromCli(method, opts, params)) as ExecApprovalsSnapshot;
+  const snapshot = (await execApprovalsCliDeps.callGatewayFromCli(
+    method,
+    opts,
+    params,
+  )) as ExecApprovalsSnapshot;
   return snapshot;
 }
 
 function loadSnapshotLocal(): ExecApprovalsSnapshot {
-  const snapshot = readExecApprovalsSnapshot();
+  const snapshot = execApprovalsCliDeps.readExecApprovalsSnapshot();
   return {
     path: snapshot.path,
     exists: snapshot.exists,
@@ -72,7 +103,7 @@ function loadSnapshotLocal(): ExecApprovalsSnapshot {
 }
 
 function saveSnapshotLocal(file: ExecApprovalsFile): ExecApprovalsSnapshot {
-  saveExecApprovals(file);
+  execApprovalsCliDeps.saveExecApprovals(file);
   return loadSnapshotLocal();
 }
 
@@ -90,8 +121,8 @@ async function loadSnapshotTarget(opts: ExecApprovalsCliOpts): Promise<{
 }
 
 function exitWithError(message: string): never {
-  defaultRuntime.error(message);
-  defaultRuntime.exit(1);
+  execApprovalsCliDeps.runtime.error(message);
+  execApprovalsCliDeps.runtime.exit(1);
   throw new Error(message);
 }
 
@@ -112,7 +143,7 @@ async function loadWritableSnapshotTarget(opts: ExecApprovalsCliOpts): Promise<{
 }> {
   const { snapshot, nodeId, source } = await loadSnapshotTarget(opts);
   if (source === "local") {
-    defaultRuntime.log(theme.muted("Writing local approvals."));
+    execApprovalsCliDeps.runtime.log(theme.muted("Writing local approvals."));
   }
   const targetLabel = source === "local" ? "local" : nodeId ? `node:${nodeId}` : "gateway";
   const baseHash = snapshot.hash;
@@ -135,10 +166,10 @@ async function saveSnapshotTargeted(params: {
       ? saveSnapshotLocal(params.file)
       : await saveSnapshot(params.opts, params.nodeId, params.file, params.baseHash);
   if (params.opts.json) {
-    defaultRuntime.writeJson(next, 0);
+    execApprovalsCliDeps.runtime.writeJson(next, 0);
     return;
   }
-  defaultRuntime.log(theme.muted(`Target: ${params.targetLabel}`));
+  execApprovalsCliDeps.runtime.log(theme.muted(`Target: ${params.targetLabel}`));
   renderApprovalsSnapshot(next, params.targetLabel);
 }
 
@@ -196,8 +227,8 @@ function renderApprovalsSnapshot(snapshot: ExecApprovalsSnapshot, targetLabel: s
     { Field: "Allowlist", Value: String(allowlistRows.length) },
   ];
 
-  defaultRuntime.log(heading("Approvals"));
-  defaultRuntime.log(
+  execApprovalsCliDeps.runtime.log(heading("Approvals"));
+  execApprovalsCliDeps.runtime.log(
     renderTable({
       width: tableWidth,
       columns: [
@@ -209,14 +240,14 @@ function renderApprovalsSnapshot(snapshot: ExecApprovalsSnapshot, targetLabel: s
   );
 
   if (allowlistRows.length === 0) {
-    defaultRuntime.log("");
-    defaultRuntime.log(muted("No allowlist entries."));
+    execApprovalsCliDeps.runtime.log("");
+    execApprovalsCliDeps.runtime.log(muted("No allowlist entries."));
     return;
   }
 
-  defaultRuntime.log("");
-  defaultRuntime.log(heading("Allowlist"));
-  defaultRuntime.log(
+  execApprovalsCliDeps.runtime.log("");
+  execApprovalsCliDeps.runtime.log(heading("Allowlist"));
+  execApprovalsCliDeps.runtime.log(
     renderTable({
       width: tableWidth,
       columns: [
@@ -238,7 +269,11 @@ async function saveSnapshot(
 ): Promise<ExecApprovalsSnapshot> {
   const method = nodeId ? "exec.approvals.node.set" : "exec.approvals.set";
   const params = nodeId ? { nodeId, file, baseHash } : { file, baseHash };
-  const snapshot = (await callGatewayFromCli(method, opts, params)) as ExecApprovalsSnapshot;
+  const snapshot = (await execApprovalsCliDeps.callGatewayFromCli(
+    method,
+    opts,
+    params,
+  )) as ExecApprovalsSnapshot;
   return snapshot;
 }
 
@@ -318,8 +353,8 @@ async function runAllowlistMutation(
       targetLabel: context.targetLabel,
     });
   } catch (err) {
-    defaultRuntime.error(formatCliError(err));
-    defaultRuntime.exit(1);
+    execApprovalsCliDeps.runtime.error(formatCliError(err));
+    execApprovalsCliDeps.runtime.exit(1);
   }
 }
 
@@ -365,20 +400,20 @@ export function registerExecApprovalsCli(program: Command) {
       try {
         const { snapshot, nodeId, source } = await loadSnapshotTarget(opts);
         if (opts.json) {
-          defaultRuntime.writeJson(snapshot, 0);
+          execApprovalsCliDeps.runtime.writeJson(snapshot, 0);
           return;
         }
 
         const muted = (text: string) => (isRich() ? theme.muted(text) : text);
         if (source === "local") {
-          defaultRuntime.log(muted("Showing local approvals."));
-          defaultRuntime.log("");
+          execApprovalsCliDeps.runtime.log(muted("Showing local approvals."));
+          execApprovalsCliDeps.runtime.log("");
         }
         const targetLabel = source === "local" ? "local" : nodeId ? `node:${nodeId}` : "gateway";
         renderApprovalsSnapshot(snapshot, targetLabel);
       } catch (err) {
-        defaultRuntime.error(formatCliError(err));
-        defaultRuntime.exit(1);
+        execApprovalsCliDeps.runtime.error(formatCliError(err));
+        execApprovalsCliDeps.runtime.exit(1);
       }
     });
   nodesCallOpts(getCmd);
@@ -409,8 +444,8 @@ export function registerExecApprovalsCli(program: Command) {
         file.version = 1;
         await saveSnapshotTargeted({ opts, source, nodeId, file, baseHash, targetLabel });
       } catch (err) {
-        defaultRuntime.error(formatCliError(err));
-        defaultRuntime.exit(1);
+        execApprovalsCliDeps.runtime.error(formatCliError(err));
+        execApprovalsCliDeps.runtime.exit(1);
       }
     });
   nodesCallOpts(setCmd);
@@ -442,7 +477,7 @@ export function registerExecApprovalsCli(program: Command) {
     description: "Add a glob pattern to an allowlist",
     mutate: ({ trimmedPattern, file, agent, agentKey, allowlistEntries }) => {
       if (allowlistEntries.some((entry) => normalizeAllowlistEntry(entry) === trimmedPattern)) {
-        defaultRuntime.log("Already allowlisted.");
+        execApprovalsCliDeps.runtime.log("Already allowlisted.");
         return false;
       }
       allowlistEntries.push({ pattern: trimmedPattern, lastUsedAt: Date.now() });
@@ -461,7 +496,7 @@ export function registerExecApprovalsCli(program: Command) {
         (entry) => normalizeAllowlistEntry(entry) !== trimmedPattern,
       );
       if (nextEntries.length === allowlistEntries.length) {
-        defaultRuntime.log("Pattern not found.");
+        execApprovalsCliDeps.runtime.log("Pattern not found.");
         return false;
       }
       if (nextEntries.length === 0) {

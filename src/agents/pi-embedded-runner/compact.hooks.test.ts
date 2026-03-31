@@ -1,7 +1,6 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import { getApiProvider, unregisterApiProviders } from "@mariozechner/pi-ai";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { getCustomApiRegistrySourceId } from "../custom-api-registry.js";
+import { getApiProvider } from "@mariozechner/pi-ai";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import {
   contextEngineCompactMock,
   ensureRuntimePluginsLoaded,
@@ -25,6 +24,14 @@ let compactEmbeddedPiSessionDirect: typeof import("./compact.js").compactEmbedde
 let compactEmbeddedPiSession: typeof import("./compact.js").compactEmbeddedPiSession;
 let compactTesting: typeof import("./compact.js").__testing;
 let onSessionTranscriptUpdate: typeof import("../../sessions/transcript-events.js").onSessionTranscriptUpdate;
+
+beforeAll(async () => {
+  const loaded = await loadCompactHooksHarness();
+  compactEmbeddedPiSessionDirect = loaded.compactEmbeddedPiSessionDirect;
+  compactEmbeddedPiSession = loaded.compactEmbeddedPiSession;
+  compactTesting = loaded.__testing;
+  onSessionTranscriptUpdate = loaded.onSessionTranscriptUpdate;
+});
 
 const TEST_SESSION_ID = "session-1";
 const TEST_SESSION_KEY = "agent:main:session-1";
@@ -132,38 +139,68 @@ async function runCompactionHooks(params: { sessionKey?: string; messageProvider
   });
 }
 
-beforeAll(async () => {
-  const loaded = await loadCompactHooksHarness();
-  compactEmbeddedPiSessionDirect = loaded.compactEmbeddedPiSessionDirect;
-  compactEmbeddedPiSession = loaded.compactEmbeddedPiSession;
-  compactTesting = loaded.__testing;
-  onSessionTranscriptUpdate = loaded.onSessionTranscriptUpdate;
-});
-
-beforeEach(() => {
+function resetDirectCompactionHooksState() {
   resetCompactHooksHarnessMocks();
-});
+  compactTesting.setCompactionHooksDepsForTest({
+    getActiveMemorySearchManager: (...args) =>
+      getMemorySearchManagerMock(...(args as Parameters<typeof getMemorySearchManagerMock>)),
+    resolveMemorySearchConfig: (...args) =>
+      resolveMemorySearchConfigMock(...(args as Parameters<typeof resolveMemorySearchConfigMock>)),
+    resolveSessionAgentId: (...args) =>
+      resolveSessionAgentIdMock(...(args as Parameters<typeof resolveSessionAgentIdMock>)),
+  });
+  ensureRuntimePluginsLoaded.mockReset();
+  triggerInternalHook.mockClear();
+  hookRunner.hasHooks.mockReset();
+  hookRunner.runBeforeCompaction.mockReset();
+  hookRunner.runAfterCompaction.mockReset();
+  mockResolvedModel();
+  sessionCompactImpl.mockReset();
+  sessionCompactImpl.mockResolvedValue({
+    summary: "summary",
+    firstKeptEntryId: "entry-1",
+    tokensBefore: 120,
+    details: { ok: true },
+  });
+  resetCompactSessionStateMocks();
+}
+
+function resetOwnsCompactionEngineState() {
+  resetCompactHooksHarnessMocks();
+  compactTesting.setCompactionHooksDepsForTest({
+    getActiveMemorySearchManager: (...args) =>
+      getMemorySearchManagerMock(...(args as Parameters<typeof getMemorySearchManagerMock>)),
+    resolveMemorySearchConfig: (...args) =>
+      resolveMemorySearchConfigMock(...(args as Parameters<typeof resolveMemorySearchConfigMock>)),
+    resolveSessionAgentId: (...args) =>
+      resolveSessionAgentIdMock(...(args as Parameters<typeof resolveSessionAgentIdMock>)),
+  });
+  hookRunner.hasHooks.mockReset();
+  hookRunner.runBeforeCompaction.mockReset();
+  hookRunner.runAfterCompaction.mockReset();
+  resolveContextEngineMock.mockReset();
+  resolveContextEngineMock.mockResolvedValue({
+    info: { ownsCompaction: true },
+    compact: contextEngineCompactMock,
+  });
+  contextEngineCompactMock.mockReset();
+  contextEngineCompactMock.mockResolvedValue({
+    ok: true,
+    compacted: true,
+    reason: undefined,
+    result: { summary: "engine-summary", tokensAfter: 50 },
+  });
+  mockResolvedModel();
+}
 
 describe("compactEmbeddedPiSessionDirect hooks", () => {
-  beforeEach(() => {
-    ensureRuntimePluginsLoaded.mockReset();
-    triggerInternalHook.mockClear();
-    hookRunner.hasHooks.mockReset();
-    hookRunner.runBeforeCompaction.mockReset();
-    hookRunner.runAfterCompaction.mockReset();
-    mockResolvedModel();
-    sessionCompactImpl.mockReset();
-    sessionCompactImpl.mockResolvedValue({
-      summary: "summary",
-      firstKeptEntryId: "entry-1",
-      tokensBefore: 120,
-      details: { ok: true },
+  const directIt = (name: string, fn: () => Promise<void> | void) =>
+    it(name, async () => {
+      resetDirectCompactionHooksState();
+      await fn();
     });
-    resetCompactSessionStateMocks();
-    unregisterApiProviders(getCustomApiRegistrySourceId("ollama"));
-  });
 
-  it("bootstraps runtime plugins with the resolved workspace", async () => {
+  directIt("bootstraps runtime plugins with the resolved workspace", async () => {
     // This assertion only cares about bootstrap wiring, so stop before the
     // rest of the compaction pipeline can pull in unrelated runtime surfaces.
     resolveModelMock.mockReturnValue({
@@ -185,7 +222,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     });
   });
 
-  it("forwards gateway subagent binding opt-in during compaction bootstrap", async () => {
+  directIt("forwards gateway subagent binding opt-in during compaction bootstrap", async () => {
     // Coding-tool forwarding is covered elsewhere; this compaction test only
     // owns the runtime bootstrap wiring.
     resolveModelMock.mockReturnValue({
@@ -209,7 +246,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     });
   });
 
-  it("emits internal + plugin compaction hooks with counts", async () => {
+  directIt("emits internal + plugin compaction hooks with counts", async () => {
     hookRunner.hasHooks.mockReturnValue(true);
     await runCompactionHooks({
       sessionKey: TEST_SESSION_KEY,
@@ -255,7 +292,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     );
   });
 
-  it("uses sessionId as hook session key fallback when sessionKey is missing", async () => {
+  directIt("uses sessionId as hook session key fallback when sessionKey is missing", async () => {
     hookRunner.hasHooks.mockReturnValue(true);
     await runCompactionHooks({});
 
@@ -271,7 +308,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     );
   });
 
-  it("applies validated transcript before hooks even when it becomes empty", async () => {
+  directIt("applies validated transcript before hooks even when it becomes empty", async () => {
     hookRunner.hasHooks.mockReturnValue(true);
     const beforeMetrics = compactTesting.buildBeforeCompactionHookMetrics({
       originalMessages: [],
@@ -295,7 +332,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
       tokenCount: 0,
     });
   });
-  it("emits a transcript update after successful compaction", async () => {
+  directIt("emits a transcript update after successful compaction", async () => {
     const listener = vi.fn();
     const cleanup = onSessionTranscriptUpdate(listener);
 
@@ -312,7 +349,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     }
   });
 
-  it("preserves tokensAfter when full-session context exceeds result.tokensBefore", async () => {
+  directIt("preserves tokensAfter when full-session context exceeds result.tokensBefore", async () => {
     estimateTokensMock.mockImplementation((message: unknown) => {
       const role = (message as { role?: string }).role;
       if (role === "user") {
@@ -332,7 +369,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     expect(tokensAfter).toBe(30);
   });
 
-  it("treats pre-compaction token estimation failures as a no-op sanity check", async () => {
+  directIt("treats pre-compaction token estimation failures as a no-op sanity check", async () => {
     estimateTokensMock.mockImplementation((message: unknown) => {
       const role = (message as { role?: string }).role;
       if (role === "assistant") {
@@ -359,7 +396,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     expect(tokensAfter).toBe(30);
   });
 
-  it("skips sync in await mode when postCompactionForce is false", async () => {
+  directIt("skips sync in await mode when postCompactionForce is false", async () => {
     const sync = vi.fn(async () => {});
     getMemorySearchManagerMock.mockResolvedValue({ manager: { sync } });
     resolveMemorySearchConfigMock.mockReturnValue({
@@ -385,7 +422,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     expect(sync).not.toHaveBeenCalled();
   });
 
-  it("awaits post-compaction memory sync in await mode when postCompactionForce is true", async () => {
+  directIt("awaits post-compaction memory sync in await mode when postCompactionForce is true", async () => {
     const syncStarted = createDeferred<PostCompactionSyncParams>();
     const syncRelease = createDeferred<void>();
     const sync = vi.fn<PostCompactionSync>(async (params) => {
@@ -414,7 +451,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     expect(settled).toBe(true);
   });
 
-  it("skips post-compaction memory sync when the mode is off", async () => {
+  directIt("skips post-compaction memory sync when the mode is off", async () => {
     const sync = vi.fn(async () => {});
     getMemorySearchManagerMock.mockResolvedValue({ manager: { sync } });
 
@@ -429,7 +466,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     expect(sync).not.toHaveBeenCalled();
   });
 
-  it("fires post-compaction memory sync without awaiting it in async mode", async () => {
+  directIt("fires post-compaction memory sync without awaiting it in async mode", async () => {
     const sync = vi.fn<PostCompactionSync>(async () => {});
     const managerRequested = createDeferred<void>();
     const managerGate = createDeferred<{ manager: { sync: PostCompactionSync } }>();
@@ -464,7 +501,9 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     });
   });
 
-  it("skips compaction when the transcript only contains boilerplate replies and tool output", async () => {
+  directIt(
+    "skips compaction when the transcript only contains boilerplate replies and tool output",
+    async () => {
     const messages = [
       { role: "user", content: "<b>HEARTBEAT_OK</b>", timestamp: 1 },
       {
@@ -480,7 +519,9 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     expect(compactTesting.containsRealConversationMessages(messages)).toBe(false);
   });
 
-  it("skips compaction when the transcript only contains heartbeat boilerplate and reasoning blocks", async () => {
+  directIt(
+    "skips compaction when the transcript only contains heartbeat boilerplate and reasoning blocks",
+    async () => {
     const messages = [
       { role: "user", content: "<b>HEARTBEAT_OK</b>", timestamp: 1 },
       {
@@ -493,7 +534,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     expect(compactTesting.containsRealConversationMessages(messages)).toBe(false);
   });
 
-  it("does not treat assistant-only tool-call blocks as meaningful conversation", () => {
+  directIt("does not treat assistant-only tool-call blocks as meaningful conversation", () => {
     expect(
       compactTesting.hasMeaningfulConversationContent({
         role: "assistant",
@@ -502,7 +543,9 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     ).toBe(false);
   });
 
-  it("counts tool output as real only when a meaningful user ask exists in the lookback window", () => {
+  directIt(
+    "counts tool output as real only when a meaningful user ask exists in the lookback window",
+    () => {
     const heartbeatToolResultWindow = [
       { role: "user", content: "<b>HEARTBEAT_OK</b>" },
       {
@@ -539,7 +582,7 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
     ).toBe(true);
   });
 
-  it("registers the Ollama api provider before compaction", async () => {
+  directIt("registers the Ollama api provider before compaction", async () => {
     resolveModelMock.mockReturnValue({
       model: {
         provider: "ollama",
@@ -570,11 +613,10 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
       workspaceDir: "/tmp",
       customInstructions: "focus on decisions",
     });
-
     expect(result.ok).toBe(true);
   });
 
-  it("aborts in-flight compaction when the caller abort signal fires", async () => {
+  directIt("aborts in-flight compaction when the caller abort signal fires", async () => {
     const { compactWithSafetyTimeout } = await vi.importActual<
       typeof import("./compaction-safety-timeout.js")
     >("./compaction-safety-timeout.js");
@@ -604,26 +646,13 @@ describe("compactEmbeddedPiSessionDirect hooks", () => {
 });
 
 describe("compactEmbeddedPiSession hooks (ownsCompaction engine)", () => {
-  beforeEach(() => {
-    hookRunner.hasHooks.mockReset();
-    hookRunner.runBeforeCompaction.mockReset();
-    hookRunner.runAfterCompaction.mockReset();
-    resolveContextEngineMock.mockReset();
-    resolveContextEngineMock.mockResolvedValue({
-      info: { ownsCompaction: true },
-      compact: contextEngineCompactMock,
+  const engineIt = (name: string, fn: () => Promise<void> | void) =>
+    it(name, async () => {
+      resetOwnsCompactionEngineState();
+      await fn();
     });
-    contextEngineCompactMock.mockReset();
-    contextEngineCompactMock.mockResolvedValue({
-      ok: true,
-      compacted: true,
-      reason: undefined,
-      result: { summary: "engine-summary", tokensAfter: 50 },
-    });
-    mockResolvedModel();
-  });
 
-  it("fires before_compaction with sentinel -1 and after_compaction on success", async () => {
+  engineIt("fires before_compaction with sentinel -1 and after_compaction on success", async () => {
     hookRunner.hasHooks.mockReturnValue(true);
 
     const result = await compactEmbeddedPiSession(
@@ -656,7 +685,9 @@ describe("compactEmbeddedPiSession hooks (ownsCompaction engine)", () => {
     );
   });
 
-  it("emits a transcript update and post-compaction memory sync on the engine-owned path", async () => {
+  engineIt(
+    "emits a transcript update and post-compaction memory sync on the engine-owned path",
+    async () => {
     const listener = vi.fn();
     const cleanup = onSessionTranscriptUpdate(listener);
     const sync = vi.fn(async () => {});
@@ -682,7 +713,7 @@ describe("compactEmbeddedPiSession hooks (ownsCompaction engine)", () => {
     }
   });
 
-  it("runs maintain after successful compaction with a transcript rewrite helper", async () => {
+  engineIt("runs maintain after successful compaction with a transcript rewrite helper", async () => {
     const maintain = vi.fn(async (_params?: unknown) => ({
       changed: false,
       bytesFreed: 0,
@@ -712,7 +743,7 @@ describe("compactEmbeddedPiSession hooks (ownsCompaction engine)", () => {
     expect(typeof runtimeContext?.rewriteTranscriptEntries).toBe("function");
   });
 
-  it("does not fire after_compaction when compaction fails", async () => {
+  engineIt("does not fire after_compaction when compaction fails", async () => {
     hookRunner.hasHooks.mockReturnValue(true);
     const sync = vi.fn(async () => {});
     getMemorySearchManagerMock.mockResolvedValue({ manager: { sync } });
@@ -731,7 +762,9 @@ describe("compactEmbeddedPiSession hooks (ownsCompaction engine)", () => {
     expect(sync).not.toHaveBeenCalled();
   });
 
-  it("does not duplicate transcript updates or sync in the wrapper when the engine delegates compaction", async () => {
+  engineIt(
+    "does not duplicate transcript updates or sync in the wrapper when the engine delegates compaction",
+    async () => {
     const listener = vi.fn();
     const cleanup = onSessionTranscriptUpdate(listener);
     const sync = vi.fn(async () => {});
@@ -756,7 +789,7 @@ describe("compactEmbeddedPiSession hooks (ownsCompaction engine)", () => {
     }
   });
 
-  it("catches and logs hook exceptions without aborting compaction", async () => {
+  engineIt("catches and logs hook exceptions without aborting compaction", async () => {
     hookRunner.hasHooks.mockReturnValue(true);
     hookRunner.runBeforeCompaction.mockRejectedValue(new Error("hook boom"));
 

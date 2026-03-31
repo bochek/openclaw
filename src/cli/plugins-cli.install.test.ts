@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { installedPluginRoot } from "../../test/helpers/bundled-plugin-paths.js";
 import type { OpenClawConfig } from "../config/config.js";
 import {
   applyExclusiveSlotSelection,
@@ -16,17 +15,11 @@ import {
   recordHookInstall,
   recordPluginInstall,
   resetPluginsCliTestState,
-  runPluginsCommand,
+  runPluginInstallDirect,
   runtimeErrors,
   runtimeLogs,
   writeConfigFile,
 } from "./plugins-cli-test-helpers.js";
-
-const CLI_STATE_ROOT = "/tmp/openclaw-state";
-
-function cliInstallPath(pluginId: string): string {
-  return installedPluginRoot(CLI_STATE_ROOT, pluginId);
-}
 
 function createEnabledPluginConfig(pluginId: string): OpenClawConfig {
   return {
@@ -65,7 +58,7 @@ function createClawHubInstallResult(params: {
   return {
     ok: true,
     pluginId: params.pluginId,
-    targetDir: cliInstallPath(params.pluginId),
+    targetDir: `/tmp/openclaw-state/extensions/${params.pluginId}`,
     version: params.version,
     packageName: params.packageName,
     clawhub: {
@@ -88,7 +81,10 @@ describe("plugins cli install", () => {
 
   it("exits when --marketplace is combined with --link", async () => {
     await expect(
-      runPluginsCommand(["plugins", "install", "alpha", "--marketplace", "local/repo", "--link"]),
+      runPluginInstallDirect({
+        raw: "alpha",
+        opts: { marketplace: "local/repo", link: true },
+      }),
     ).rejects.toThrow("__exit__:1");
 
     expect(runtimeErrors.at(-1)).toContain("`--link` is not supported with `--marketplace`.");
@@ -97,7 +93,10 @@ describe("plugins cli install", () => {
 
   it("exits when marketplace install fails", async () => {
     await expect(
-      runPluginsCommand(["plugins", "install", "alpha", "--marketplace", "local/repo"]),
+      runPluginInstallDirect({
+        raw: "alpha",
+        opts: { marketplace: "local/repo" },
+      }),
     ).rejects.toThrow("__exit__:1");
 
     expect(installPluginFromMarketplace).toHaveBeenCalledWith(
@@ -129,7 +128,7 @@ describe("plugins cli install", () => {
       legacyIssues: [],
     });
 
-    await expect(runPluginsCommand(["plugins", "install", "alpha"])).rejects.toThrow("__exit__:1");
+    await expect(runPluginInstallDirect({ raw: "alpha", opts: {} })).rejects.toThrow("__exit__:1");
 
     expect(runtimeErrors.at(-1)).toContain(
       "Config invalid; run `openclaw doctor --fix` before installing plugins.",
@@ -161,7 +160,7 @@ describe("plugins cli install", () => {
         installs: {
           alpha: {
             source: "marketplace",
-            installPath: cliInstallPath("alpha"),
+            installPath: "/tmp/openclaw-state/extensions/alpha",
           },
         },
       },
@@ -171,7 +170,7 @@ describe("plugins cli install", () => {
     installPluginFromMarketplace.mockResolvedValue({
       ok: true,
       pluginId: "alpha",
-      targetDir: cliInstallPath("alpha"),
+      targetDir: "/tmp/openclaw-state/extensions/alpha",
       version: "1.2.3",
       marketplaceName: "Claude",
       marketplaceSource: "local/repo",
@@ -188,7 +187,7 @@ describe("plugins cli install", () => {
       warnings: ["slot adjusted"],
     });
 
-    await runPluginsCommand(["plugins", "install", "alpha", "--marketplace", "local/repo"]);
+    await runPluginInstallDirect({ raw: "alpha", opts: { marketplace: "local/repo" } });
 
     expect(clearPluginManifestRegistryCache).toHaveBeenCalledTimes(1);
     expect(writeConfigFile).toHaveBeenCalledWith(installedCfg);
@@ -208,7 +207,7 @@ describe("plugins cli install", () => {
       install: {
         source: "clawhub",
         spec: "clawhub:demo@1.2.3",
-        installPath: cliInstallPath("demo"),
+        installPath: "/tmp/openclaw-state/extensions/demo",
         clawhubPackage: "demo",
         clawhubFamily: "code-plugin",
         clawhubChannel: "official",
@@ -232,7 +231,7 @@ describe("plugins cli install", () => {
       warnings: [],
     });
 
-    await runPluginsCommand(["plugins", "install", "clawhub:demo"]);
+    await runPluginInstallDirect({ raw: "clawhub:demo", opts: {} });
 
     expect(installPluginFromClawHub).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -267,7 +266,7 @@ describe("plugins cli install", () => {
       install: {
         source: "clawhub",
         spec: "clawhub:demo@1.2.3",
-        installPath: cliInstallPath("demo"),
+        installPath: "/tmp/openclaw-state/extensions/demo",
         clawhubPackage: "demo",
       },
     });
@@ -288,7 +287,7 @@ describe("plugins cli install", () => {
       warnings: [],
     });
 
-    await runPluginsCommand(["plugins", "install", "demo"]);
+    await runPluginInstallDirect({ raw: "demo", opts: {} });
 
     expect(installPluginFromClawHub).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -324,7 +323,7 @@ describe("plugins cli install", () => {
     installPluginFromNpmSpec.mockResolvedValue({
       ok: true,
       pluginId: "demo",
-      targetDir: cliInstallPath("demo"),
+      targetDir: "/tmp/openclaw-state/extensions/demo",
       version: "1.2.3",
       npmResolution: {
         packageName: "demo",
@@ -339,7 +338,7 @@ describe("plugins cli install", () => {
       warnings: [],
     });
 
-    await runPluginsCommand(["plugins", "install", "demo"]);
+    await runPluginInstallDirect({ raw: "demo", opts: {} });
 
     expect(installPluginFromClawHub).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -360,7 +359,7 @@ describe("plugins cli install", () => {
       code: "skill_package",
     });
 
-    await expect(runPluginsCommand(["plugins", "install", "demo"])).rejects.toThrow("__exit__:1");
+    await expect(runPluginInstallDirect({ raw: "demo", opts: {} })).rejects.toThrow("__exit__:1");
 
     expect(installPluginFromNpmSpec).not.toHaveBeenCalled();
     expect(runtimeErrors.at(-1)).toContain('Use "openclaw skills install demo" instead.');
@@ -405,7 +404,7 @@ describe("plugins cli install", () => {
     });
     recordHookInstall.mockReturnValue(installedCfg);
 
-    await runPluginsCommand(["plugins", "install", "@acme/demo-hooks"]);
+    await runPluginInstallDirect({ raw: "@acme/demo-hooks", opts: {} });
 
     expect(installHooksFromNpmSpec).toHaveBeenCalledWith(
       expect.objectContaining({

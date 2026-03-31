@@ -6,8 +6,6 @@ import {
   toAgentModelListLike,
 } from "../config/model-input.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
-import { normalizeGoogleModelId } from "../plugin-sdk/google.js";
-import { normalizeXaiModelId } from "../plugin-sdk/xai.js";
 import { sanitizeForLog } from "../terminal/ansi.js";
 import {
   resolveAgentConfig,
@@ -17,6 +15,7 @@ import {
 import { resolveConfiguredProviderFallback } from "./configured-provider-fallback.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "./defaults.js";
 import type { ModelCatalogEntry } from "./model-catalog.js";
+import { normalizeBuiltInProviderModelId } from "./model-ref-normalize.js";
 import { splitTrailingAuthProfile } from "./model-ref-profile.js";
 import {
   findNormalizedProviderKey,
@@ -115,59 +114,16 @@ export function isCliProvider(provider: string, cfg?: OpenClawConfig): boolean {
   return Object.keys(backends).some((key) => normalizeProviderId(key) === normalized);
 }
 
-function normalizeAnthropicModelId(model: string): string {
-  const trimmed = model.trim();
-  if (!trimmed) {
-    return trimmed;
-  }
-  const lower = trimmed.toLowerCase();
-  // Keep alias resolution local so bundled startup paths cannot trip a TDZ on
-  // a module-level alias table while config parsing is still initializing.
-  switch (lower) {
-    case "opus-4.6":
-      return "claude-opus-4-6";
-    case "opus-4.5":
-      return "claude-opus-4-5";
-    case "sonnet-4.6":
-      return "claude-sonnet-4-6";
-    case "sonnet-4.5":
-      return "claude-sonnet-4-5";
-    default:
-      return trimmed;
-  }
-}
-
 function normalizeProviderModelId(provider: string, model: string): string {
-  if (provider === "anthropic") {
-    return normalizeAnthropicModelId(model);
-  }
-  if (provider === "google" || provider === "google-vertex") {
-    return normalizeGoogleModelId(model);
-  }
-  if (provider === "openai") {
-    return model;
-  }
-  if (provider === "openrouter") {
-    return model.includes("/") ? model : `openrouter/${model}`;
-  }
-  if (provider === "xai") {
-    return normalizeXaiModelId(model);
-  }
-  if (provider === "vercel-ai-gateway" && !model.includes("/")) {
-    // Allow Vercel-specific Claude refs without an upstream prefix.
-    const normalizedAnthropicModel = normalizeAnthropicModelId(model);
-    if (normalizedAnthropicModel.startsWith("claude-")) {
-      return `anthropic/${normalizedAnthropicModel}`;
-    }
-  }
+  const normalizedModel = normalizeBuiltInProviderModelId(provider, model);
   return (
     normalizeProviderModelIdWithRuntime({
       provider,
       context: {
         provider,
-        modelId: model,
+        modelId: normalizedModel,
       },
-    }) ?? model
+    }) ?? normalizedModel
   );
 }
 

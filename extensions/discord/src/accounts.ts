@@ -17,9 +17,15 @@ export type ResolvedDiscordAccount = {
   config: DiscordAccountConfig;
 };
 
-const { listAccountIds, resolveDefaultAccountId } = createAccountListHelpers("discord");
-export const listDiscordAccountIds = listAccountIds;
-export const resolveDefaultDiscordAccountId = resolveDefaultAccountId;
+const discordAccountHelpers = createAccountListHelpers("discord");
+
+export function listDiscordAccountIds(cfg: OpenClawConfig): string[] {
+  return discordAccountHelpers.listAccountIds(cfg);
+}
+
+export function resolveDefaultDiscordAccountId(cfg: OpenClawConfig): string {
+  return discordAccountHelpers.resolveDefaultAccountId(cfg);
+}
 
 export function resolveDiscordAccountConfig(
   cfg: OpenClawConfig,

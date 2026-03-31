@@ -26,11 +26,15 @@ const ENV_SERVICE_ACCOUNT = "GOOGLE_CHAT_SERVICE_ACCOUNT";
 const ENV_SERVICE_ACCOUNT_FILE = "GOOGLE_CHAT_SERVICE_ACCOUNT_FILE";
 const JsonRecordSchema = z.record(z.string(), z.unknown());
 
-const {
-  listAccountIds: listGoogleChatAccountIds,
-  resolveDefaultAccountId: resolveDefaultGoogleChatAccountId,
-} = createAccountListHelpers("googlechat");
-export { listGoogleChatAccountIds, resolveDefaultGoogleChatAccountId };
+const googleChatAccountHelpers = createAccountListHelpers("googlechat");
+
+export function listGoogleChatAccountIds(cfg: OpenClawConfig): string[] {
+  return googleChatAccountHelpers.listAccountIds(cfg);
+}
+
+export function resolveDefaultGoogleChatAccountId(cfg: OpenClawConfig): string {
+  return googleChatAccountHelpers.resolveDefaultAccountId(cfg);
+}
 
 function mergeGoogleChatAccountConfig(
   cfg: OpenClawConfig,

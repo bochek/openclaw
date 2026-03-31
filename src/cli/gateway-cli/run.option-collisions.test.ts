@@ -26,13 +26,17 @@ const configState = vi.hoisted(() => ({
 
 const { runtimeErrors, defaultRuntime, resetRuntimeCapture } = createCliRuntimeCapture();
 
-vi.mock("../../config/config.js", () => ({
-  getConfigPath: () => "/tmp/openclaw-test-missing-config.json",
-  loadConfig: () => configState.cfg,
-  readConfigFileSnapshot: async () => configState.snapshot,
-  resolveStateDir: () => "/tmp",
-  resolveGatewayPort: () => 18789,
-}));
+vi.mock("../../config/config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../config/config.js")>();
+  return {
+    ...actual,
+    getConfigPath: () => "/tmp/openclaw-test-missing-config.json",
+    loadConfig: () => configState.cfg,
+    readConfigFileSnapshot: async () => configState.snapshot,
+    resolveStateDir: () => "/tmp",
+    resolveGatewayPort: () => 18789,
+  };
+});
 
 vi.mock("../../gateway/auth.js", () => ({
   resolveGatewayAuth: (params: {
@@ -87,11 +91,15 @@ vi.mock("../../logging/console.js", () => ({
 }));
 
 vi.mock("../../logging/subsystem.js", () => ({
-  createSubsystemLogger: () => ({
-    info: () => undefined,
-    warn: () => undefined,
-    error: () => undefined,
-  }),
+  createSubsystemLogger: () => {
+    const logger = {
+      child: () => logger,
+      info: () => undefined,
+      warn: () => undefined,
+      error: () => undefined,
+    };
+    return logger;
+  },
 }));
 
 vi.mock("../../runtime.js", () => ({

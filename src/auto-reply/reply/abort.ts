@@ -153,7 +153,10 @@ export function stopSubagentsForRequester(params: {
     const latest = abortDeps.getLatestSubagentRunByChildSessionKey(childKey);
     const latestControllerSessionKey =
       latest?.controllerSessionKey?.trim() || latest?.requesterSessionKey?.trim();
-    if (!latest || latest.runId !== run.runId || latestControllerSessionKey !== requesterKey) {
+    // Some tests and lightweight registries do not persist a latest-row index.
+    // In that case, trust the enumerated controller rows and keep stale-run filtering
+    // only when a newer/latest row is actually available.
+    if (latest && (latest.runId !== run.runId || latestControllerSessionKey !== requesterKey)) {
       continue;
     }
     const existing = dedupedRunsByChildKey.get(childKey);

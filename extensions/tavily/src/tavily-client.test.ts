@@ -12,10 +12,14 @@ vi.mock("openclaw/plugin-sdk/provider-web-search", () => ({
   writeCache: vi.fn(),
 }));
 
-vi.mock("openclaw/plugin-sdk/security-runtime", () => ({
-  wrapExternalContent: (v: string) => v,
-  wrapWebContent: (v: string) => v,
-}));
+vi.mock("openclaw/plugin-sdk/security-runtime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/security-runtime")>();
+  return {
+    ...actual,
+    wrapExternalContent: (v: string) => v,
+    wrapWebContent: (v: string) => v,
+  };
+});
 
 vi.mock("./config.js", () => ({
   DEFAULT_TAVILY_BASE_URL: "https://api.tavily.com",

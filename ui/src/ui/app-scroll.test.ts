@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanupBrowserGlobals, installBrowserGlobals } from "../test-helpers/browser-globals.ts";
 import { handleChatScroll, scheduleChatScroll, resetChatScroll } from "./app-scroll.ts";
 
 /* ------------------------------------------------------------------ */
@@ -21,21 +22,18 @@ function createScrollHost(
     overflowY = "auto",
   } = overrides;
 
-  const container = {
-    scrollHeight,
-    scrollTop,
-    clientHeight,
-    style: { overflowY } as unknown as CSSStyleDeclaration,
-  };
-
-  // Make getComputedStyle return the overflowY value
-  vi.spyOn(window, "getComputedStyle").mockReturnValue({
-    overflowY,
-  } as unknown as CSSStyleDeclaration);
+  const container = document.createElement("div");
+  container.className = "chat-thread";
+  container.style.overflowY = overflowY;
+  Object.defineProperties(container, {
+    scrollHeight: { value: scrollHeight, writable: true },
+    scrollTop: { value: scrollTop, writable: true },
+    clientHeight: { value: clientHeight, writable: true },
+  });
 
   const host = {
     updateComplete: Promise.resolve(),
-    querySelector: vi.fn().mockReturnValue(container),
+    querySelector: vi.fn((selectors: string) => (selectors === ".chat-thread" ? container : null)),
     style: { setProperty: vi.fn() } as unknown as CSSStyleDeclaration,
     chatScrollFrame: null as number | null,
     chatScrollTimeout: null as number | null,
@@ -61,6 +59,15 @@ function createScrollEvent(scrollHeight: number, scrollTop: number, clientHeight
 /* ------------------------------------------------------------------ */
 
 describe("handleChatScroll", () => {
+  beforeEach(() => {
+    installBrowserGlobals();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    cleanupBrowserGlobals();
+  });
+
   it("sets chatUserNearBottom=true when within the 450px threshold", () => {
     const { host } = createScrollHost({});
     // distanceFromBottom = 2000 - 1600 - 400 = 0 → clearly near bottom
@@ -109,8 +116,9 @@ describe("handleChatScroll", () => {
 
 describe("scheduleChatScroll", () => {
   beforeEach(() => {
+    installBrowserGlobals();
     vi.useFakeTimers();
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+    vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb) => {
       cb(0);
       return 1;
     });
@@ -119,6 +127,7 @@ describe("scheduleChatScroll", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    cleanupBrowserGlobals();
   });
 
   it("scrolls to bottom when user is near bottom (no force)", async () => {
@@ -209,8 +218,9 @@ describe("scheduleChatScroll", () => {
 
 describe("streaming scroll behavior", () => {
   beforeEach(() => {
+    installBrowserGlobals();
     vi.useFakeTimers();
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+    vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((cb) => {
       cb(0);
       return 1;
     });
@@ -219,6 +229,7 @@ describe("streaming scroll behavior", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
+    cleanupBrowserGlobals();
   });
 
   it("multiple rapid scheduleChatScroll calls do not scroll when user is scrolled up", async () => {
@@ -262,6 +273,15 @@ describe("streaming scroll behavior", () => {
 /* ------------------------------------------------------------------ */
 
 describe("resetChatScroll", () => {
+  beforeEach(() => {
+    installBrowserGlobals();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    cleanupBrowserGlobals();
+  });
+
   it("resets state for new chat session", () => {
     const { host } = createScrollHost({});
     host.chatHasAutoScrolled = true;

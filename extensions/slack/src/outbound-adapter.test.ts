@@ -8,15 +8,18 @@ vi.mock("./send.js", () => ({
   sendMessageSlack: (...args: unknown[]) => sendMessageSlackMock(...args),
 }));
 
-vi.mock("openclaw/plugin-sdk/plugin-runtime", () => ({
-  getGlobalHookRunner: () => ({
-    hasHooks: (...args: unknown[]) => hasHooksMock(...args),
-    runMessageSending: (...args: unknown[]) => runMessageSendingMock(...args),
-  }),
-}));
+vi.mock("openclaw/plugin-sdk/plugin-runtime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/plugin-runtime")>();
+  return {
+    ...actual,
+    getGlobalHookRunner: () => ({
+      hasHooks: (...args: unknown[]) => hasHooksMock(...args),
+      runMessageSending: (...args: unknown[]) => runMessageSendingMock(...args),
+    }),
+  };
+});
 
 let slackOutbound: typeof import("./outbound-adapter.js").slackOutbound;
-({ slackOutbound } = await import("./outbound-adapter.js"));
 
 describe("slackOutbound", () => {
   const cfg = {
@@ -28,11 +31,13 @@ describe("slackOutbound", () => {
     },
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules();
     sendMessageSlackMock.mockReset();
     hasHooksMock.mockReset();
     runMessageSendingMock.mockReset();
     hasHooksMock.mockReturnValue(false);
+    ({ slackOutbound } = await import("./outbound-adapter.js"));
   });
 
   it("sends payload media first, then finalizes with blocks", async () => {

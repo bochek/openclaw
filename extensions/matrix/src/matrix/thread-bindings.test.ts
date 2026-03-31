@@ -2,11 +2,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { getSessionBindingService, __testing } from "openclaw/plugin-sdk/conversation-runtime";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginRuntime } from "../../runtime-api.js";
 import { setMatrixRuntime } from "../runtime.js";
 import { resolveMatrixStateFilePath, resolveMatrixStoragePaths } from "./client/storage.js";
 import {
+  __testing as threadBindingTesting,
   createMatrixThreadBindingManager,
   resetMatrixThreadBindingsForTests,
   setMatrixThreadBindingIdleTimeoutBySessionKey,
@@ -21,14 +22,6 @@ const sendMessageMatrixMock = vi.hoisted(() =>
 );
 const actualRename = fs.rename.bind(fs);
 const renameMock = vi.spyOn(fs, "rename");
-
-vi.mock("./send.js", async () => {
-  const actual = await vi.importActual<typeof import("./send.js")>("./send.js");
-  return {
-    ...actual,
-    sendMessageMatrix: sendMessageMatrixMock,
-  };
-});
 
 describe("matrix thread bindings", () => {
   let stateDir: string;
@@ -103,6 +96,9 @@ describe("matrix thread bindings", () => {
   beforeEach(async () => {
     stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "matrix-thread-bindings-"));
     __testing.resetSessionBindingAdaptersForTests();
+    threadBindingTesting.setThreadBindingRuntimeForTest({
+      sendMessageMatrix: sendMessageMatrixMock,
+    });
     resetMatrixThreadBindingsForTests();
     sendMessageMatrixMock.mockClear();
     renameMock.mockReset();
@@ -112,6 +108,12 @@ describe("matrix thread bindings", () => {
         resolveStateDir: () => stateDir,
       },
     } as PluginRuntime);
+  });
+
+  afterEach(() => {
+    resetMatrixThreadBindingsForTests();
+    __testing.resetSessionBindingAdaptersForTests();
+    threadBindingTesting.resetThreadBindingRuntimeForTest();
   });
 
   it("creates child Matrix thread bindings from a top-level room context", async () => {
@@ -258,6 +260,7 @@ describe("matrix thread bindings", () => {
 
       await vi.advanceTimersByTimeAsync(61_000);
       await Promise.resolve();
+      vi.useRealTimers();
 
       await vi.waitFor(async () => {
         const persistedRaw = await fs.readFile(resolveBindingsFilePath(), "utf-8");
@@ -299,7 +302,7 @@ describe("matrix thread bindings", () => {
 
       renameMock.mockRejectedValueOnce(new Error("disk full"));
       await vi.advanceTimersByTimeAsync(61_000);
-      await Promise.resolve();
+      vi.useRealTimers();
 
       await vi.waitFor(() => {
         expect(
@@ -310,7 +313,6 @@ describe("matrix thread bindings", () => {
           ),
         ).toBe(true);
       });
-
       await vi.waitFor(() => {
         expect(logVerboseMessage).toHaveBeenCalledWith(
           expect.stringContaining("matrix: auto-unbinding $thread due to idle-expired"),
@@ -612,6 +614,7 @@ describe("matrix thread bindings", () => {
       expect(await readPersistedLastActivityAt(bindingsPath)).toBe(originalLastActivityAt);
 
       await vi.advanceTimersByTimeAsync(1_000);
+      vi.useRealTimers();
       await vi.waitFor(async () => {
         expect(await readPersistedLastActivityAt(bindingsPath)).toBe(secondTouchedAt);
       });

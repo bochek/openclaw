@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawnSync as childProcessSpawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -85,6 +85,24 @@ function isMissingExecutableError(error: unknown): boolean {
 }
 
 const SOURCE_FILE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"];
+type LoadChannelConfigSurfaceDeps = {
+  spawnSync: typeof childProcessSpawnSync;
+};
+const defaultLoadChannelConfigSurfaceDeps: LoadChannelConfigSurfaceDeps = {
+  spawnSync: childProcessSpawnSync,
+};
+const loadChannelConfigSurfaceDeps: LoadChannelConfigSurfaceDeps = {
+  ...defaultLoadChannelConfigSurfaceDeps,
+};
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<LoadChannelConfigSurfaceDeps>) {
+    Object.assign(loadChannelConfigSurfaceDeps, overrides);
+  },
+  resetDepsForTest() {
+    Object.assign(loadChannelConfigSurfaceDeps, defaultLoadChannelConfigSurfaceDeps);
+  },
+};
 
 function resolveImportCandidates(basePath: string): string[] {
   const extension = path.extname(basePath);
@@ -231,7 +249,7 @@ export async function loadChannelConfigSurfaceModule(
       };
       process.stdout.write(JSON.stringify(resolve(imported)));
     `;
-    const result = spawnSync("bun", ["-e", script], {
+    const result = loadChannelConfigSurfaceDeps.spawnSync("bun", ["-e", script], {
       cwd: repoRoot,
       encoding: "utf8",
       env: {

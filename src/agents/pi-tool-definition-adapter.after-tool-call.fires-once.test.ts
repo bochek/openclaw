@@ -10,7 +10,6 @@ import type { AgentTool } from "@mariozechner/pi-agent-core";
 import { Type } from "@sinclair/typebox";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createBaseToolHandlerState } from "./pi-tool-handler-state.test-helpers.js";
-
 const hookMocks = vi.hoisted(() => ({
   runner: {
     hasHooks: vi.fn(() => true),
@@ -27,6 +26,26 @@ const beforeToolCallMocks = vi.hoisted(() => ({
     params,
   })),
 }));
+
+vi.mock("../plugins/hook-runner-global.js", () => ({
+  getGlobalHookRunner: () => hookMocks.runner,
+}));
+
+vi.mock("../infra/agent-events.js", () => ({
+  emitAgentEvent: vi.fn(),
+}));
+
+vi.mock("./pi-tools.before-tool-call.js", () => ({
+  consumeAdjustedParamsForToolCall: beforeToolCallMocks.consumeAdjustedParamsForToolCall,
+  isToolWrappedWithBeforeToolCallHook: beforeToolCallMocks.isToolWrappedWithBeforeToolCallHook,
+  runBeforeToolCallHook: beforeToolCallMocks.runBeforeToolCallHook,
+}));
+
+import {
+  handleToolExecutionEnd,
+  handleToolExecutionStart,
+} from "./pi-embedded-subscribe.handlers.tools.js";
+import { toToolDefinitions } from "./pi-tool-definition-adapter.js";
 
 function createTestTool(name: string) {
   return {
@@ -75,30 +94,8 @@ function createToolHandlerCtx() {
   };
 }
 
-let toToolDefinitions: typeof import("./pi-tool-definition-adapter.js").toToolDefinitions;
-let handleToolExecutionStart: typeof import("./pi-embedded-subscribe.handlers.tools.js").handleToolExecutionStart;
-let handleToolExecutionEnd: typeof import("./pi-embedded-subscribe.handlers.tools.js").handleToolExecutionEnd;
-
-async function loadFreshAfterToolCallModulesForTest() {
-  vi.resetModules();
-  vi.doMock("../plugins/hook-runner-global.js", () => ({
-    getGlobalHookRunner: () => hookMocks.runner,
-  }));
-  vi.doMock("../infra/agent-events.js", () => ({
-    emitAgentEvent: vi.fn(),
-  }));
-  vi.doMock("./pi-tools.before-tool-call.js", () => ({
-    consumeAdjustedParamsForToolCall: beforeToolCallMocks.consumeAdjustedParamsForToolCall,
-    isToolWrappedWithBeforeToolCallHook: beforeToolCallMocks.isToolWrappedWithBeforeToolCallHook,
-    runBeforeToolCallHook: beforeToolCallMocks.runBeforeToolCallHook,
-  }));
-  ({ toToolDefinitions } = await import("./pi-tool-definition-adapter.js"));
-  ({ handleToolExecutionStart, handleToolExecutionEnd } =
-    await import("./pi-embedded-subscribe.handlers.tools.js"));
-}
-
 describe("after_tool_call fires exactly once in embedded runs", () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     hookMocks.runner.hasHooks.mockClear();
     hookMocks.runner.hasHooks.mockReturnValue(true);
     hookMocks.runner.runAfterToolCall.mockClear();
@@ -114,7 +111,6 @@ describe("after_tool_call fires exactly once in embedded runs", () => {
       blocked: false,
       params,
     }));
-    await loadFreshAfterToolCallModulesForTest();
   });
 
   function resolveAdapterDefinition(tool: Parameters<typeof toToolDefinitions>[0][number]) {

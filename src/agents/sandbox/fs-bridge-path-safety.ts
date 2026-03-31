@@ -44,13 +44,21 @@ type RunCommand = (
   },
 ) => Promise<{ stdout: Buffer }>;
 
+type OpenBoundaryFileFn = typeof openBoundaryFile;
+
 export class SandboxFsPathGuard {
   private readonly mountsByContainer: SandboxFsMount[];
   private readonly runCommand: RunCommand;
+  private readonly openBoundaryFile: OpenBoundaryFileFn;
 
-  constructor(params: { mountsByContainer: SandboxFsMount[]; runCommand: RunCommand }) {
+  constructor(params: {
+    mountsByContainer: SandboxFsMount[];
+    runCommand: RunCommand;
+    openBoundaryFile?: OpenBoundaryFileFn;
+  }) {
     this.mountsByContainer = params.mountsByContainer;
     this.runCommand = params.runCommand;
+    this.openBoundaryFile = params.openBoundaryFile ?? openBoundaryFile;
   }
 
   async assertPathChecks(checks: PathSafetyCheck[]): Promise<void> {
@@ -149,7 +157,7 @@ export class SandboxFsPathGuard {
     },
   ): Promise<BoundaryFileOpenResult> {
     const lexicalMount = this.resolveRequiredMount(target.containerPath, action);
-    const guarded = await openBoundaryFile({
+    const guarded = await this.openBoundaryFile({
       absolutePath: target.hostPath,
       rootPath: lexicalMount.hostRoot,
       boundaryLabel: "sandbox mount root",

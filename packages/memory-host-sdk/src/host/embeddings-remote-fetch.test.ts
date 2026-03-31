@@ -1,18 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fetchRemoteEmbeddingVectors } from "./embeddings-remote-fetch.js";
 
 const postJsonMock = vi.hoisted(() => vi.fn());
-
-type EmbeddingsRemoteFetchModule = typeof import("./embeddings-remote-fetch.js");
-
-let fetchRemoteEmbeddingVectors: EmbeddingsRemoteFetchModule["fetchRemoteEmbeddingVectors"];
+vi.mock("./post-json.js", () => ({
+  postJson: postJsonMock,
+}));
 
 describe("fetchRemoteEmbeddingVectors", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-    vi.doMock("./post-json.js", () => ({
-      postJson: postJsonMock,
-    }));
-    ({ fetchRemoteEmbeddingVectors } = await import("./embeddings-remote-fetch.js"));
+  beforeEach(() => {
     postJsonMock.mockReset();
   });
 

@@ -24,23 +24,31 @@ vi.mock("./client.js", () => ({
   createFeishuClient: createFeishuClientMock,
 }));
 
-vi.mock("./accounts.js", () => ({
-  resolveFeishuAccount: resolveFeishuAccountMock,
-  resolveFeishuRuntimeAccount: resolveFeishuAccountMock,
-}));
+vi.mock("./accounts.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./accounts.js")>();
+  return {
+    ...actual,
+    resolveFeishuAccount: resolveFeishuAccountMock,
+    resolveFeishuRuntimeAccount: resolveFeishuAccountMock,
+  };
+});
 
 vi.mock("./targets.js", () => ({
   normalizeFeishuTarget: normalizeFeishuTargetMock,
   resolveReceiveIdType: resolveReceiveIdTypeMock,
 }));
 
-vi.mock("./runtime.js", () => ({
-  getFeishuRuntime: () => ({
-    media: {
-      loadWebMedia: loadWebMediaMock,
-    },
-  }),
-}));
+vi.mock("./runtime.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./runtime.js")>();
+  return {
+    ...actual,
+    getFeishuRuntime: () => ({
+      media: {
+        loadWebMedia: loadWebMediaMock,
+      },
+    }),
+  };
+});
 
 vi.mock("../../../src/channels/plugins/bundled.js", () => ({
   bundledChannelPlugins: [],

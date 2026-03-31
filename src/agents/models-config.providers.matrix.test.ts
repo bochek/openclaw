@@ -18,6 +18,7 @@ type MatrixCase = {
   env?: NodeJS.ProcessEnv;
   authProfiles?: Record<string, unknown>;
   explicitProviders?: ExplicitProviders;
+  onlyPluginIds: string[];
   assertProviders: (providers: ProvidersMap) => void;
 };
 
@@ -40,6 +41,7 @@ const MATRIX_CASES: MatrixCase[] = [
   {
     name: "env api key injects a simple provider",
     env: { NVIDIA_API_KEY: "test-nvidia-key" }, // pragma: allowlist secret
+    onlyPluginIds: ["nvidia"],
     assertProviders(providers) {
       expect(providers?.nvidia?.apiKey).toBe("NVIDIA_API_KEY");
       expect(providers?.nvidia?.baseUrl).toBe("https://integrate.api.nvidia.com/v1");
@@ -49,6 +51,7 @@ const MATRIX_CASES: MatrixCase[] = [
   {
     name: "env api key injects paired plan providers",
     env: { VOLCANO_ENGINE_API_KEY: "test-volcengine-key" }, // pragma: allowlist secret
+    onlyPluginIds: ["volcengine"],
     assertProviders(providers) {
       expect(providers?.volcengine?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
       expect(providers?.["volcengine-plan"]?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
@@ -58,6 +61,7 @@ const MATRIX_CASES: MatrixCase[] = [
   {
     name: "env-backed auth profiles persist env markers",
     env: {},
+    onlyPluginIds: ["together"],
     authProfiles: {
       "together:default": {
         type: "token",
@@ -72,6 +76,7 @@ const MATRIX_CASES: MatrixCase[] = [
   {
     name: "non-env secret refs preserve compatibility markers",
     env: {},
+    onlyPluginIds: ["byteplus"],
     authProfiles: {
       "byteplus:default": {
         type: "api_key",
@@ -88,6 +93,7 @@ const MATRIX_CASES: MatrixCase[] = [
   {
     name: "oauth profiles still inject compatibility providers",
     env: {},
+    onlyPluginIds: ["openai", "minimax"],
     authProfiles: {
       "openai-codex:default": {
         type: "oauth",
@@ -117,6 +123,7 @@ const MATRIX_CASES: MatrixCase[] = [
   {
     name: "explicit vllm config suppresses implicit vllm injection",
     env: { VLLM_API_KEY: "test-vllm-key" }, // pragma: allowlist secret
+    onlyPluginIds: ["vllm"],
     explicitProviders: {
       vllm: {
         baseUrl: "http://127.0.0.1:8000/v1",
@@ -131,6 +138,7 @@ const MATRIX_CASES: MatrixCase[] = [
   {
     name: "explicit ollama models still normalize the returned provider",
     env: {},
+    onlyPluginIds: ["ollama"],
     explicitProviders: {
       ollama: {
         baseUrl: "http://remote-ollama:11434/v1",
@@ -159,7 +167,7 @@ const MATRIX_CASES: MatrixCase[] = [
 describe("implicit provider resolution matrix", () => {
   it.each(MATRIX_CASES)(
     "$name",
-    async ({ env, authProfiles, explicitProviders, assertProviders }) => {
+    async ({ env, authProfiles, explicitProviders, onlyPluginIds, assertProviders }) => {
       const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
       await writeAuthProfiles(agentDir, authProfiles);
 
@@ -167,6 +175,7 @@ describe("implicit provider resolution matrix", () => {
         agentDir,
         env,
         explicitProviders,
+        onlyPluginIds,
       });
 
       assertProviders(providers);

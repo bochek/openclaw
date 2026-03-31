@@ -58,7 +58,43 @@ const userByNameCache = new Map<string, MattermostUser>();
 const channelByNameCache = new Map<string, string>();
 const dmChannelCache = new Map<string, string>();
 
-const getCore = () => getMattermostRuntime();
+const mattermostSendDepsDefaults = {
+  resolveMarkdownTableMode,
+  convertMarkdownTables,
+  getMattermostRuntime,
+  resolveMattermostAccount,
+  createMattermostClient,
+  createMattermostDirectChannelWithRetry,
+  createMattermostPost,
+  fetchMattermostChannelByName,
+  fetchMattermostMe,
+  fetchMattermostUserByUsername,
+  fetchMattermostUserTeams,
+  normalizeMattermostBaseUrl,
+  uploadMattermostFile,
+  loadOutboundMediaFromUrl,
+} as const;
+
+const mattermostSendDeps = { ...mattermostSendDepsDefaults };
+
+export function __setMattermostSendDepsForTest(
+  overrides: Partial<typeof mattermostSendDepsDefaults>,
+): void {
+  Object.assign(mattermostSendDeps, overrides);
+}
+
+export function __resetMattermostSendDepsForTest(): void {
+  Object.assign(mattermostSendDeps, mattermostSendDepsDefaults);
+}
+
+export function __resetMattermostSendCachesForTest(): void {
+  botUserCache.clear();
+  userByNameCache.clear();
+  channelByNameCache.clear();
+  dmChannelCache.clear();
+}
+
+const getCore = () => mattermostSendDeps.getMattermostRuntime();
 
 function recordMattermostOutboundActivity(accountId: string): void {
   try {
@@ -154,8 +190,12 @@ async function resolveBotUser(
   if (cached) {
     return cached;
   }
-  const client = createMattermostClient({ baseUrl, botToken: token, allowPrivateNetwork });
-  const user = await fetchMattermostMe(client);
+  const client = mattermostSendDeps.createMattermostClient({
+    baseUrl,
+    botToken: token,
+    allowPrivateNetwork,
+  });
+  const user = await mattermostSendDeps.fetchMattermostMe(client);
   botUserCache.set(key, user);
   return user;
 }
@@ -172,12 +212,12 @@ async function resolveUserIdByUsername(params: {
   if (cached?.id) {
     return cached.id;
   }
-  const client = createMattermostClient({
+  const client = mattermostSendDeps.createMattermostClient({
     baseUrl,
     botToken: token,
     allowPrivateNetwork: params.allowPrivateNetwork,
   });
-  const user = await fetchMattermostUserByUsername(client, username);
+  const user = await mattermostSendDeps.fetchMattermostUserByUsername(client, username);
   userByNameCache.set(key, user);
   return user.id;
 }
@@ -194,16 +234,16 @@ async function resolveChannelIdByName(params: {
   if (cached) {
     return cached;
   }
-  const client = createMattermostClient({
+  const client = mattermostSendDeps.createMattermostClient({
     baseUrl,
     botToken: token,
     allowPrivateNetwork: params.allowPrivateNetwork,
   });
-  const me = await fetchMattermostMe(client);
-  const teams = await fetchMattermostUserTeams(client, me.id);
+  const me = await mattermostSendDeps.fetchMattermostMe(client);
+  const teams = await mattermostSendDeps.fetchMattermostUserTeams(client, me.id);
   for (const team of teams) {
     try {
-      const channel = await fetchMattermostChannelByName(client, team.id, name);
+      const channel = await mattermostSendDeps.fetchMattermostChannelByName(client, team.id, name);
       if (channel?.id) {
         channelByNameCache.set(key, channel.id);
         return channel.id;
@@ -275,13 +315,13 @@ async function resolveTargetChannelId(params: ResolveTargetChannelIdParams): Pro
     return cachedDm;
   }
   const botUser = await resolveBotUser(params.baseUrl, params.token, params.allowPrivateNetwork);
-  const client = createMattermostClient({
+  const client = mattermostSendDeps.createMattermostClient({
     baseUrl: params.baseUrl,
     botToken: params.token,
     allowPrivateNetwork: params.allowPrivateNetwork,
   });
 
-  const channel = await createMattermostDirectChannelWithRetry(client, [botUser.id, userId], {
+  const channel = await mattermostSendDeps.createMattermostDirectChannelWithRetry(client, [botUser.id, userId], {
     ...params.dmRetryOptions,
     onRetry: (attempt, delayMs, error) => {
       // Call user's onRetry if provided
@@ -314,7 +354,7 @@ async function resolveMattermostSendContext(
   const core = getCore();
   const logger = core.logging.getChildLogger({ module: "mattermost" });
   const cfg = opts.cfg ?? core.config.loadConfig();
-  const account = resolveMattermostAccount({
+  const account = mattermostSendDeps.resolveMattermostAccount({
     cfg,
     accountId: opts.accountId,
   });
@@ -324,7 +364,7 @@ async function resolveMattermostSendContext(
       `Mattermost bot token missing for account "${account.accountId}" (set channels.mattermost.accounts.${account.accountId}.botToken or MATTERMOST_BOT_TOKEN for default).`,
     );
   }
-  const baseUrl = normalizeMattermostBaseUrl(opts.baseUrl ?? account.baseUrl);
+  const baseUrl = mattermostSendDeps.normalizeMattermostBaseUrl(opts.baseUrl ?? account.baseUrl);
   if (!baseUrl) {
     throw new Error(
       `Mattermost baseUrl missing for account "${account.accountId}" (set channels.mattermost.accounts.${account.accountId}.baseUrl or MATTERMOST_URL for default).`,
@@ -391,14 +431,18 @@ export async function sendMessageMattermost(
   const { cfg, accountId, token, baseUrl, channelId, allowPrivateNetwork } =
     await resolveMattermostSendContext(to, opts);
 
-  const client = createMattermostClient({ baseUrl, botToken: token, allowPrivateNetwork });
+  const client = mattermostSendDeps.createMattermostClient({
+    baseUrl,
+    botToken: token,
+    allowPrivateNetwork,
+  });
   let props = opts.props;
   if (!props && Array.isArray(opts.buttons) && opts.buttons.length > 0) {
     setInteractionSecret(accountId, token);
     props = buildButtonProps({
       callbackUrl: resolveInteractionCallbackUrl(accountId, {
         gateway: cfg.gateway,
-        interactions: resolveMattermostAccount({
+        interactions: mattermostSendDeps.resolveMattermostAccount({
           cfg,
           accountId,
         }).config?.interactions,
@@ -415,10 +459,10 @@ export async function sendMessageMattermost(
   const mediaUrl = opts.mediaUrl?.trim();
   if (mediaUrl) {
     try {
-      const media = await loadOutboundMediaFromUrl(mediaUrl, {
+      const media = await mattermostSendDeps.loadOutboundMediaFromUrl(mediaUrl, {
         mediaLocalRoots: opts.mediaLocalRoots,
       });
-      const fileInfo = await uploadMattermostFile(client, {
+      const fileInfo = await mattermostSendDeps.uploadMattermostFile(client, {
         channelId,
         buffer: media.buffer,
         fileName: media.fileName ?? "upload",
@@ -437,12 +481,12 @@ export async function sendMessageMattermost(
   }
 
   if (message) {
-    const tableMode = resolveMarkdownTableMode({
+    const tableMode = mattermostSendDeps.resolveMarkdownTableMode({
       cfg,
       channel: "mattermost",
       accountId,
     });
-    message = convertMarkdownTables(message, tableMode);
+    message = mattermostSendDeps.convertMarkdownTables(message, tableMode);
   }
 
   if (!message && (!fileIds || fileIds.length === 0)) {
@@ -452,7 +496,7 @@ export async function sendMessageMattermost(
     throw new Error("Mattermost message is empty");
   }
 
-  const post = await createMattermostPost(client, {
+  const post = await mattermostSendDeps.createMattermostPost(client, {
     channelId,
     message,
     rootId: opts.replyToId,

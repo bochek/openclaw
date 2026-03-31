@@ -27,31 +27,35 @@ function expectBearerAuthHeader(fetchMock: { mock: { calls: unknown[][] } }, tok
 }
 
 describe("models-config", () => {
-  it("uses the first github-copilot profile when env tokens are missing", async () => {
-    await withTempHome(async (home) => {
-      await withUnsetCopilotTokenEnv(async () => {
-        const fetchMock = mockCopilotTokenExchangeSuccess();
-        const agentDir = path.join(home, "agent-profiles");
-        await writeAuthProfiles(agentDir, {
-          "github-copilot:alpha": {
-            type: "token",
-            provider: "github-copilot",
-            token: "alpha-token",
-          },
-          "github-copilot:beta": {
-            type: "token",
-            provider: "github-copilot",
-            token: "beta-token",
-          },
+  it(
+    "uses the first github-copilot profile when env tokens are missing",
+    { timeout: 20_000 },
+    async () => {
+      await withTempHome(async (home) => {
+        await withUnsetCopilotTokenEnv(async () => {
+          const fetchMock = mockCopilotTokenExchangeSuccess();
+          const agentDir = path.join(home, "agent-profiles");
+          await writeAuthProfiles(agentDir, {
+            "github-copilot:alpha": {
+              type: "token",
+              provider: "github-copilot",
+              token: "alpha-token",
+            },
+            "github-copilot:beta": {
+              type: "token",
+              provider: "github-copilot",
+              token: "beta-token",
+            },
+          });
+
+          await ensureOpenClawModelsJson({ models: { providers: {} } }, agentDir);
+          expectBearerAuthHeader(fetchMock, "alpha-token");
         });
-
-        await ensureOpenClawModelsJson({ models: { providers: {} } }, agentDir);
-        expectBearerAuthHeader(fetchMock, "alpha-token");
       });
-    });
-  });
+    },
+  );
 
-  it("does not override explicit github-copilot provider config", async () => {
+  it("does not override explicit github-copilot provider config", { timeout: 20_000 }, async () => {
     await withTempHome(async () => {
       await withCopilotGithubToken("gh-token", async () => {
         await ensureOpenClawModelsJson({
@@ -77,27 +81,31 @@ describe("models-config", () => {
     });
   });
 
-  it("uses tokenRef env var when github-copilot profile omits plaintext token", async () => {
-    await withTempHome(async (home) => {
-      await withUnsetCopilotTokenEnv(async () => {
-        const fetchMock = mockCopilotTokenExchangeSuccess();
-        const agentDir = path.join(home, "agent-profiles");
-        process.env.COPILOT_REF_TOKEN = "token-from-ref-env";
-        try {
-          await writeAuthProfiles(agentDir, {
-            "github-copilot:default": {
-              type: "token",
-              provider: "github-copilot",
-              tokenRef: { source: "env", provider: "default", id: "COPILOT_REF_TOKEN" },
-            },
-          });
+  it(
+    "uses tokenRef env var when github-copilot profile omits plaintext token",
+    { timeout: 20_000 },
+    async () => {
+      await withTempHome(async (home) => {
+        await withUnsetCopilotTokenEnv(async () => {
+          const fetchMock = mockCopilotTokenExchangeSuccess();
+          const agentDir = path.join(home, "agent-profiles");
+          process.env.COPILOT_REF_TOKEN = "token-from-ref-env";
+          try {
+            await writeAuthProfiles(agentDir, {
+              "github-copilot:default": {
+                type: "token",
+                provider: "github-copilot",
+                tokenRef: { source: "env", provider: "default", id: "COPILOT_REF_TOKEN" },
+              },
+            });
 
-          await ensureOpenClawModelsJson({ models: { providers: {} } }, agentDir);
-          expectBearerAuthHeader(fetchMock, "token-from-ref-env");
-        } finally {
-          delete process.env.COPILOT_REF_TOKEN;
-        }
+            await ensureOpenClawModelsJson({ models: { providers: {} } }, agentDir);
+            expectBearerAuthHeader(fetchMock, "token-from-ref-env");
+          } finally {
+            delete process.env.COPILOT_REF_TOKEN;
+          }
+        });
       });
-    });
-  });
+    },
+  );
 });

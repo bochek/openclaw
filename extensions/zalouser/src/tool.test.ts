@@ -1,34 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { sendImageZalouser, sendLinkZalouser, sendMessageZalouser } from "./send.js";
-import { createZalouserTool, executeZalouserTool } from "./tool.js";
 import {
-  checkZaloAuthenticated,
-  getZaloUserInfo,
-  listZaloFriendsMatching,
-  listZaloGroupsMatching,
-} from "./zalo-js.js";
+  __resetZalouserToolDepsForTest,
+  __setZalouserToolDepsForTest,
+  createZalouserTool,
+  executeZalouserTool,
+} from "./tool.js";
 
-vi.mock("./send.js", () => ({
-  sendMessageZalouser: vi.fn(),
-  sendImageZalouser: vi.fn(),
-  sendLinkZalouser: vi.fn(),
-  sendReactionZalouser: vi.fn(),
-}));
-
-vi.mock("./zalo-js.js", () => ({
-  checkZaloAuthenticated: vi.fn(),
-  getZaloUserInfo: vi.fn(),
-  listZaloFriendsMatching: vi.fn(),
-  listZaloGroupsMatching: vi.fn(),
-}));
-
-const mockSendMessage = vi.mocked(sendMessageZalouser);
-const mockSendImage = vi.mocked(sendImageZalouser);
-const mockSendLink = vi.mocked(sendLinkZalouser);
-const mockCheckAuth = vi.mocked(checkZaloAuthenticated);
-const mockGetUserInfo = vi.mocked(getZaloUserInfo);
-const mockListFriends = vi.mocked(listZaloFriendsMatching);
-const mockListGroups = vi.mocked(listZaloGroupsMatching);
+const mockSendMessage = vi.fn();
+const mockSendImage = vi.fn();
+const mockSendLink = vi.fn();
+const mockCheckAuth = vi.fn();
+const mockGetUserInfo = vi.fn();
+const mockListFriends = vi.fn();
+const mockListGroups = vi.fn();
 
 function extractDetails(result: { content?: Array<{ type: string; text?: string }> }): unknown {
   const text = result.content?.[0]?.text ?? "{}";
@@ -37,6 +21,16 @@ function extractDetails(result: { content?: Array<{ type: string; text?: string 
 
 describe("executeZalouserTool", () => {
   beforeEach(() => {
+    __resetZalouserToolDepsForTest();
+    __setZalouserToolDepsForTest({
+      sendMessageZalouser: mockSendMessage,
+      sendImageZalouser: mockSendImage,
+      sendLinkZalouser: mockSendLink,
+      checkZaloAuthenticated: mockCheckAuth,
+      getZaloUserInfo: mockGetUserInfo,
+      listZaloFriendsMatching: mockListFriends,
+      listZaloGroupsMatching: mockListGroups,
+    });
     mockSendMessage.mockReset();
     mockSendImage.mockReset();
     mockSendLink.mockReset();

@@ -49,11 +49,15 @@ const probeGateway = vi.fn<
 const isRestartEnabled = vi.fn<(config?: { commands?: unknown }) => boolean>(() => true);
 const loadConfig = vi.fn(() => ({}));
 
-vi.mock("../../config/config.js", () => ({
-  loadConfig: () => loadConfig(),
-  readBestEffortConfig: async () => loadConfig(),
-  resolveGatewayPort,
-}));
+vi.mock("../../config/config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../config/config.js")>();
+  return {
+    ...actual,
+    loadConfig: () => loadConfig(),
+    readBestEffortConfig: async () => loadConfig(),
+    resolveGatewayPort,
+  };
+});
 
 vi.mock("../../infra/gateway-processes.js", () => ({
   findVerifiedGatewayListenerPidsOnPortSync: (port: number) =>

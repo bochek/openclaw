@@ -3,6 +3,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import {
   loadConfig,
   resetPluginsCliTestState,
+  runPluginUpdateDirect,
   runPluginsCommand,
   runtimeErrors,
   runtimeLogs,
@@ -63,7 +64,7 @@ describe("plugins cli update", () => {
       ],
     });
 
-    await runPluginsCommand(["plugins", "update", "demo-hooks"]);
+    await runPluginUpdateDirect({ id: "demo-hooks", opts: {} });
 
     expect(updateNpmInstalledHookPacks).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -72,9 +73,6 @@ describe("plugins cli update", () => {
       }),
     );
     expect(writeConfigFile).toHaveBeenCalledWith(nextConfig);
-    expect(
-      runtimeLogs.some((line) => line.includes("Restart the gateway to load plugins and hooks.")),
-    ).toBe(true);
   });
 
   it("exits when update is called without id and without --all", async () => {
@@ -84,7 +82,7 @@ describe("plugins cli update", () => {
       },
     } as OpenClawConfig);
 
-    await expect(runPluginsCommand(["plugins", "update"])).rejects.toThrow("__exit__:1");
+    await expect(runPluginUpdateDirect({ opts: {} })).rejects.toThrow("__exit__:1");
 
     expect(runtimeErrors.at(-1)).toContain("Provide a plugin or hook-pack id, or use --all.");
     expect(updateNpmInstalledPlugins).not.toHaveBeenCalled();

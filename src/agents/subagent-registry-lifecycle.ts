@@ -60,6 +60,9 @@ export function createSubagentRegistryLifecycleController(params: {
   resumeSubagentRun(runId: string): void;
   captureSubagentCompletionReply: typeof captureSubagentCompletionReply;
   runSubagentAnnounceFlow: typeof runSubagentAnnounceFlow;
+  completeTaskRunByRunId: typeof completeTaskRunByRunId;
+  failTaskRunByRunId: typeof failTaskRunByRunId;
+  setDetachedTaskDeliveryStatusByRunId: typeof setDetachedTaskDeliveryStatusByRunId;
   warn(message: string, meta?: Record<string, unknown>): void;
 }) {
   const freezeRunResultAtCompletion = async (entry: SubagentRunRecord): Promise<boolean> => {
@@ -158,7 +161,7 @@ export function createSubagentRegistryLifecycleController(params: {
     entry: SubagentRunRecord;
     reason: "retry-limit" | "expiry";
   }) => {
-    setDetachedTaskDeliveryStatusByRunId({
+    params.setDetachedTaskDeliveryStatusByRunId({
       runId: giveUpParams.runId,
       deliveryStatus: "failed",
     });
@@ -274,7 +277,7 @@ export function createSubagentRegistryLifecycleController(params: {
       return;
     }
     if (didAnnounce) {
-      setDetachedTaskDeliveryStatusByRunId({
+      params.setDetachedTaskDeliveryStatusByRunId({
         runId,
         deliveryStatus: "delivered",
       });
@@ -330,7 +333,7 @@ export function createSubagentRegistryLifecycleController(params: {
     }
 
     if (deferredDecision.kind === "give-up") {
-      setDetachedTaskDeliveryStatusByRunId({
+      params.setDetachedTaskDeliveryStatusByRunId({
         runId,
         deliveryStatus: "failed",
       });
@@ -464,7 +467,7 @@ export function createSubagentRegistryLifecycleController(params: {
       params.persist();
     }
     if (completeParams.outcome.status === "ok") {
-      completeTaskRunByRunId({
+      params.completeTaskRunByRunId({
         runId: entry.runId,
         endedAt: entry.endedAt,
         lastEventAt: entry.endedAt ?? Date.now(),
@@ -472,7 +475,7 @@ export function createSubagentRegistryLifecycleController(params: {
         terminalSummary: null,
       });
     } else {
-      failTaskRunByRunId({
+      params.failTaskRunByRunId({
         runId: entry.runId,
         status: completeParams.outcome.status === "timeout" ? "timed_out" : "failed",
         endedAt: entry.endedAt,

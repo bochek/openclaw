@@ -2,27 +2,29 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  __testing as resetTesting,
+  createProfileResetOps,
+} from "./server-context.reset.js";
 
 const trashMocks = vi.hoisted(() => ({
   movePathToTrash: vi.fn(async (from: string) => `${from}.trashed`),
 }));
 
-const pwAiMocks = vi.hoisted(() => ({
-  closePlaywrightBrowserConnection: vi.fn(async () => {}),
+const resetMocks = vi.hoisted(() => ({
+  closePlaywrightBrowserConnectionForProfile: vi.fn(async () => {}),
 }));
-
-vi.mock("./trash.js", () => trashMocks);
-vi.mock("./pw-ai.js", () => pwAiMocks);
-
-let createProfileResetOps: typeof import("./server-context.reset.js").createProfileResetOps;
 
 afterEach(() => {
   vi.clearAllMocks();
 });
 
-beforeEach(async () => {
-  vi.resetModules();
-  ({ createProfileResetOps } = await import("./server-context.reset.js"));
+beforeEach(() => {
+  resetTesting.setDepsForTest({
+    movePathToTrash: trashMocks.movePathToTrash,
+    closePlaywrightBrowserConnectionForProfile:
+      resetMocks.closePlaywrightBrowserConnectionForProfile,
+  });
 });
 
 function localOpenClawProfile(): Parameters<typeof createProfileResetOps>[0]["profile"] {
@@ -96,9 +98,9 @@ describe("createProfileResetOps", () => {
     });
     expect(isHttpReachable).toHaveBeenCalledWith(300);
     expect(stopRunningBrowser).toHaveBeenCalledTimes(1);
-    expect(pwAiMocks.closePlaywrightBrowserConnection).toHaveBeenCalledWith({
-      cdpUrl: "http://127.0.0.1:18800",
-    });
+    expect(resetMocks.closePlaywrightBrowserConnectionForProfile).toHaveBeenCalledWith(
+      "http://127.0.0.1:18800",
+    );
     expect(trashMocks.movePathToTrash).toHaveBeenCalledWith(profileDir);
   });
 
@@ -117,12 +119,14 @@ describe("createProfileResetOps", () => {
 
     await ops.resetProfile();
     expect(stopRunningBrowser).not.toHaveBeenCalled();
-    expect(pwAiMocks.closePlaywrightBrowserConnection).toHaveBeenCalledTimes(2);
-    expect(pwAiMocks.closePlaywrightBrowserConnection).toHaveBeenNthCalledWith(1, {
-      cdpUrl: "http://127.0.0.1:18800",
-    });
-    expect(pwAiMocks.closePlaywrightBrowserConnection).toHaveBeenNthCalledWith(2, {
-      cdpUrl: "http://127.0.0.1:18800",
-    });
+    expect(resetMocks.closePlaywrightBrowserConnectionForProfile).toHaveBeenCalledTimes(2);
+    expect(resetMocks.closePlaywrightBrowserConnectionForProfile).toHaveBeenNthCalledWith(
+      1,
+      "http://127.0.0.1:18800",
+    );
+    expect(resetMocks.closePlaywrightBrowserConnectionForProfile).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:18800",
+    );
   });
 });

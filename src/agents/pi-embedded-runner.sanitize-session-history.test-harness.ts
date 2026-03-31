@@ -1,6 +1,8 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { SessionManager } from "@mariozechner/pi-coding-agent";
 import { expect, vi } from "vitest";
+import * as mockedHelpers from "./pi-embedded-helpers.js";
+import { sanitizeSessionHistory } from "./pi-embedded-runner/google.js";
 
 export type SessionEntry = { type: string; customType: string; data: unknown };
 export type SanitizeSessionHistoryFn = (params: {
@@ -58,14 +60,11 @@ export function makeSimpleUserMessages(): AgentMessage[] {
   return messages as unknown as AgentMessage[];
 }
 
-export async function loadSanitizeSessionHistoryWithCleanMocks(): Promise<SanitizeSessionHistoryHarness> {
-  vi.resetModules();
-  vi.resetAllMocks();
-  const mockedHelpers = await import("./pi-embedded-helpers.js");
+export function loadSanitizeSessionHistoryWithCleanMocks(): SanitizeSessionHistoryHarness {
+  vi.clearAllMocks();
   vi.mocked(mockedHelpers.sanitizeSessionMessagesImages).mockImplementation(async (msgs) => msgs);
-  const mod = await import("./pi-embedded-runner/google.js");
   return {
-    sanitizeSessionHistory: mod.sanitizeSessionHistory,
+    sanitizeSessionHistory,
     mockedHelpers,
   };
 }

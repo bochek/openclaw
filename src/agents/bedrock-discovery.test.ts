@@ -182,7 +182,6 @@ describe("bedrock discovery", () => {
       }).models?.map((model) => model.id),
     ).toEqual(["amazon.nova-micro-v1:0"]);
   });
-
   it("merges implicit Bedrock discovery into provider catalog config", async () => {
     vi.resetModules();
     const bedrockApi = await import("../plugin-sdk/amazon-bedrock.js");

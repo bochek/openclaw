@@ -2,13 +2,13 @@ import * as http from "http";
 import crypto from "node:crypto";
 import * as Lark from "@larksuiteoapi/node-sdk";
 import {
+  type RuntimeEnv,
   applyBasicWebhookRequestGuards,
   isRequestBodyLimitError,
-  type RuntimeEnv,
   installRequestBodyLimitGuard,
   readRequestBodyWithLimit,
   requestBodyErrorToText,
-} from "../runtime-api.js";
+} from "./api.js";
 import { createFeishuWSClient } from "./client.js";
 import {
   botNames,
@@ -29,6 +29,42 @@ export type MonitorTransportParams = {
   abortSignal?: AbortSignal;
   eventDispatcher: Lark.EventDispatcher;
 };
+
+type MonitorTransportDeps = {
+  createFeishuWSClient: typeof createFeishuWSClient;
+};
+
+const defaultDeps: MonitorTransportDeps = {
+  createFeishuWSClient,
+};
+
+let createFeishuWSClientImpl: MonitorTransportDeps["createFeishuWSClient"] =
+  defaultDeps.createFeishuWSClient;
+
+type CloseableHttpServer = http.Server & {
+  closeIdleConnections?: () => void;
+  closeAllConnections?: () => void;
+};
+
+async function closeWebhookServer(server: http.Server): Promise<void> {
+  const closeableServer = server as CloseableHttpServer;
+  closeableServer.closeIdleConnections?.();
+
+  await new Promise<void>((resolve, reject) => {
+    server.close((err) => {
+      if (err && (err as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING") {
+        reject(err);
+        return;
+      }
+      resolve();
+    });
+
+    // Undici keeps localhost webhook sockets alive across requests. Drain both idle
+    // and active connections so monitor shutdown actually releases the event loop.
+    closeableServer.closeIdleConnections?.();
+    closeableServer.closeAllConnections?.();
+  });
+}
 
 function isFeishuWebhookPayload(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -103,7 +139,7 @@ export async function monitorWebSocket({
   const error = runtime?.error ?? console.error;
   log(`feishu[${accountId}]: starting WebSocket connection...`);
 
-  const wsClient = createFeishuWSClient(account);
+  const wsClient = createFeishuWSClientImpl(account);
   wsClients.set(accountId, wsClient);
 
   return new Promise((resolve, reject) => {
@@ -262,22 +298,27 @@ export async function monitorWebhook({
   httpServers.set(accountId, server);
 
   return new Promise((resolve, reject) => {
-    const cleanup = () => {
-      server.close();
+    let cleanedUp = false;
+
+    const cleanup = async () => {
+      if (cleanedUp) {
+        return;
+      }
+      cleanedUp = true;
+      abortSignal?.removeEventListener("abort", handleAbort);
       httpServers.delete(accountId);
       botOpenIds.delete(accountId);
       botNames.delete(accountId);
+      await closeWebhookServer(server);
     };
 
     const handleAbort = () => {
       log(`feishu[${accountId}]: abort signal received, stopping Webhook server`);
-      cleanup();
-      resolve();
+      void cleanup().then(resolve, reject);
     };
 
     if (abortSignal?.aborted) {
-      cleanup();
-      resolve();
+      void cleanup().then(resolve, reject);
       return;
     }
 
@@ -289,8 +330,13 @@ export async function monitorWebhook({
 
     server.on("error", (err) => {
       error(`feishu[${accountId}]: Webhook server error: ${err}`);
-      abortSignal?.removeEventListener("abort", handleAbort);
-      reject(err);
+      void cleanup().finally(() => reject(err));
     });
   });
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<MonitorTransportDeps>): void {
+    createFeishuWSClientImpl = overrides?.createFeishuWSClient ?? defaultDeps.createFeishuWSClient;
+  },
+};

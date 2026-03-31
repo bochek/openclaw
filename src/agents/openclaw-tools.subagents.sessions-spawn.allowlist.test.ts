@@ -1,18 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import "./test-helpers/fast-core-tools.js";
-import {
-  getCallGatewayMock,
-  getSessionsSpawnTool,
-  resetSessionsSpawnConfigOverride,
-  setSessionsSpawnConfigOverride,
-} from "./openclaw-tools.subagents.sessions-spawn.test-harness.js";
+import { createSessionsSpawnTestHarness } from "./openclaw-tools.subagents.sessions-spawn.test-harness.js";
 import { resetSubagentRegistryForTests } from "./subagent-registry.js";
 
-const callGatewayMock = getCallGatewayMock();
+const harness = createSessionsSpawnTestHarness();
+const callGatewayMock = harness.getCallGatewayMock();
 
 describe("openclaw-tools: subagents (sessions_spawn allowlist)", () => {
   function setAllowAgents(allowAgents: string[]) {
-    setSessionsSpawnConfigOverride({
+    harness.setSessionsSpawnConfigOverride({
       session: {
         mainKey: "main",
         scope: "per-sender",
@@ -48,7 +44,7 @@ describe("openclaw-tools: subagents (sessions_spawn allowlist)", () => {
   }
 
   async function executeSpawn(callId: string, agentId: string, sandbox?: "inherit" | "require") {
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "main",
       agentChannel: "whatsapp",
     });
@@ -56,7 +52,7 @@ describe("openclaw-tools: subagents (sessions_spawn allowlist)", () => {
   }
 
   function setResearchUnsandboxedConfig(params?: { includeSandboxedDefault?: boolean }) {
-    setSessionsSpawnConfigOverride({
+    harness.setSessionsSpawnConfigOverride({
       session: {
         mainKey: "main",
         scope: "per-sender",
@@ -108,13 +104,13 @@ describe("openclaw-tools: subagents (sessions_spawn allowlist)", () => {
   }
 
   async function expectInvalidAgentId(callId: string, agentId: string) {
-    setSessionsSpawnConfigOverride({
+    harness.setSessionsSpawnConfigOverride({
       session: { mainKey: "main", scope: "per-sender" },
       agents: {
         list: [{ id: "main", subagents: { allowAgents: ["*"] } }],
       },
     });
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "main",
       agentChannel: "whatsapp",
     });
@@ -126,13 +122,13 @@ describe("openclaw-tools: subagents (sessions_spawn allowlist)", () => {
   }
 
   beforeEach(() => {
-    resetSessionsSpawnConfigOverride();
+    harness.resetSessionsSpawnConfigOverride();
     resetSubagentRegistryForTests();
     callGatewayMock.mockClear();
   });
 
   it("sessions_spawn only allows same-agent by default", async () => {
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "main",
       agentChannel: "whatsapp",
     });
@@ -148,7 +144,7 @@ describe("openclaw-tools: subagents (sessions_spawn allowlist)", () => {
   });
 
   it("sessions_spawn forbids cross-agent spawning when not allowed", async () => {
-    setSessionsSpawnConfigOverride({
+    harness.setSessionsSpawnConfigOverride({
       session: {
         mainKey: "main",
         scope: "per-sender",
@@ -165,7 +161,7 @@ describe("openclaw-tools: subagents (sessions_spawn allowlist)", () => {
       },
     });
 
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "main",
       agentChannel: "whatsapp",
     });
@@ -319,13 +315,13 @@ describe("openclaw-tools: subagents (sessions_spawn allowlist)", () => {
   });
 
   it("rejects error-message-like strings as agentId (#31311)", async () => {
-    setSessionsSpawnConfigOverride({
+    harness.setSessionsSpawnConfigOverride({
       session: { mainKey: "main", scope: "per-sender" },
       agents: {
         list: [{ id: "main", subagents: { allowAgents: ["*"] } }, { id: "research" }],
       },
     });
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "main",
       agentChannel: "whatsapp",
     });
@@ -349,7 +345,7 @@ describe("openclaw-tools: subagents (sessions_spawn allowlist)", () => {
   });
 
   it("accepts well-formed agentId with hyphens and underscores (#31311)", async () => {
-    setSessionsSpawnConfigOverride({
+    harness.setSessionsSpawnConfigOverride({
       session: { mainKey: "main", scope: "per-sender" },
       agents: {
         list: [{ id: "main", subagents: { allowAgents: ["*"] } }, { id: "my-research_agent01" }],
@@ -362,7 +358,7 @@ describe("openclaw-tools: subagents (sessions_spawn allowlist)", () => {
   });
 
   it("allows allowlisted-but-unconfigured agentId (#31311)", async () => {
-    setSessionsSpawnConfigOverride({
+    harness.setSessionsSpawnConfigOverride({
       session: { mainKey: "main", scope: "per-sender" },
       agents: {
         list: [

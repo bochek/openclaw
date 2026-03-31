@@ -5,6 +5,36 @@ import { getBrowserProfileCapabilities } from "./profile-capabilities.js";
 import type { ProfileRuntimeState } from "./server-context.types.js";
 import { movePathToTrash } from "./trash.js";
 
+const deps = {
+  movePathToTrash,
+  closePlaywrightBrowserConnectionForProfile: async (cdpUrl?: string): Promise<void> => {
+    try {
+      const mod = await import("./pw-ai.js");
+      await mod.closePlaywrightBrowserConnection(cdpUrl ? { cdpUrl } : undefined);
+    } catch {
+      // ignore
+    }
+  },
+};
+
+export type ResetTestDeps = typeof deps;
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<ResetTestDeps>) {
+    deps.movePathToTrash = overrides?.movePathToTrash ?? movePathToTrash;
+    deps.closePlaywrightBrowserConnectionForProfile =
+      overrides?.closePlaywrightBrowserConnectionForProfile ??
+      (async (cdpUrl?: string) => {
+        try {
+          const mod = await import("./pw-ai.js");
+          await mod.closePlaywrightBrowserConnection(cdpUrl ? { cdpUrl } : undefined);
+        } catch {
+          // ignore
+        }
+      });
+  },
+};
+
 type ResetDeps = {
   profile: ResolvedBrowserProfile;
   getProfileState: () => ProfileRuntimeState;
@@ -16,15 +46,6 @@ type ResetDeps = {
 type ResetOps = {
   resetProfile: () => Promise<{ moved: boolean; from: string; to?: string }>;
 };
-
-async function closePlaywrightBrowserConnectionForProfile(cdpUrl?: string): Promise<void> {
-  try {
-    const mod = await import("./pw-ai.js");
-    await mod.closePlaywrightBrowserConnection(cdpUrl ? { cdpUrl } : undefined);
-  } catch {
-    // ignore
-  }
-}
 
 export function createProfileResetOps({
   profile,
@@ -46,20 +67,20 @@ export function createProfileResetOps({
     const httpReachable = await isHttpReachable(300);
     if (httpReachable && !profileState.running) {
       // Port in use but not by us - kill it.
-      await closePlaywrightBrowserConnectionForProfile(profile.cdpUrl);
+      await deps.closePlaywrightBrowserConnectionForProfile(profile.cdpUrl);
     }
 
     if (profileState.running) {
       await stopRunningBrowser();
     }
 
-    await closePlaywrightBrowserConnectionForProfile(profile.cdpUrl);
+    await deps.closePlaywrightBrowserConnectionForProfile(profile.cdpUrl);
 
     if (!fs.existsSync(userDataDir)) {
       return { moved: false, from: userDataDir };
     }
 
-    const moved = await movePathToTrash(userDataDir);
+    const moved = await deps.movePathToTrash(userDataDir);
     return { moved: true, from: userDataDir, to: moved };
   };
 

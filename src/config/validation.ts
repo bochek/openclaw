@@ -53,6 +53,9 @@ const bundledChannelSchemaById = new Map<string, unknown>(
     (entry) => [entry.channelId, entry.schema] as const,
   ),
 );
+const validationDeps = {
+  loadPluginManifestRegistry,
+};
 
 function toIssueRecord(value: unknown): UnknownIssueRecord | null {
   if (!value || typeof value !== "object") {
@@ -544,6 +547,15 @@ export function validateConfigObjectRawWithPlugins(
   return validateConfigObjectWithPluginsBase(raw, { applyDefaults: false, env: params?.env });
 }
 
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof validationDeps>) {
+    Object.assign(validationDeps, overrides);
+  },
+  resetDepsForTest() {
+    validationDeps.loadPluginManifestRegistry = loadPluginManifestRegistry;
+  },
+};
+
 function validateConfigObjectWithPluginsBase(
   raw: unknown,
   opts: { applyDefaults: boolean; env?: NodeJS.ProcessEnv },
@@ -601,7 +613,7 @@ function validateConfigObjectWithPluginsBase(
     const bundledWebSearchPluginIds = new Set(listBundledWebSearchPluginIds());
     const workspaceDir = resolveAgentWorkspaceDir(config, resolveDefaultAgentId(config));
     const seenCompatPluginIds = new Set<string>();
-    const compatPluginIds = loadPluginManifestRegistry({
+    const compatPluginIds = validationDeps.loadPluginManifestRegistry({
       config,
       workspaceDir: workspaceDir ?? undefined,
       env: opts.env,
@@ -633,7 +645,7 @@ function validateConfigObjectWithPluginsBase(
       effectiveConfig,
       resolveDefaultAgentId(effectiveConfig),
     );
-    const registry = loadPluginManifestRegistry({
+    const registry = validationDeps.loadPluginManifestRegistry({
       config: effectiveConfig,
       workspaceDir: workspaceDir ?? undefined,
       env: opts.env,

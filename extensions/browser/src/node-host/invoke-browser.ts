@@ -51,6 +51,12 @@ function resolveBrowserProxyConfig() {
 
 let browserControlReady: Promise<void> | null = null;
 
+export const __testing = {
+  resetForTest() {
+    browserControlReady = null;
+  },
+};
+
 async function ensureBrowserControlService(): Promise<void> {
   if (browserControlReady) {
     return browserControlReady;

@@ -365,6 +365,7 @@ export class VoiceCallWebhookServer {
     }
     this.pendingDisconnectHangups.clear();
     this.webhookInFlightLimiter.clear();
+    this.mediaStreamHandler?.close();
 
     if (this.stopStaleCallReaper) {
       this.stopStaleCallReaper();
@@ -372,6 +373,14 @@ export class VoiceCallWebhookServer {
     }
     return new Promise((resolve) => {
       if (this.server) {
+        this.server.closeAllConnections?.();
+        this.server.closeIdleConnections?.();
+        if (!this.server.listening) {
+          this.server = null;
+          this.listeningUrl = null;
+          resolve();
+          return;
+        }
         this.server.close(() => {
           this.server = null;
           this.listeningUrl = null;

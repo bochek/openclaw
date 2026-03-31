@@ -57,6 +57,19 @@ function normalizeChoiceId(choiceId: string): string {
   return choiceId.trim();
 }
 
+function resolveHookTargetProviderId(rawModel: string): string | null {
+  const trimmed = rawModel.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const slash = trimmed.indexOf("/");
+  if (slash === -1) {
+    return normalizeProviderId(DEFAULT_PROVIDER);
+  }
+  const provider = normalizeProviderId(trimmed.slice(0, slash));
+  return provider || null;
+}
+
 function resolveWizardSetupChoiceId(
   provider: ProviderPlugin,
   wizard: ProviderPluginWizardSetup,
@@ -332,16 +345,8 @@ export async function runProviderModelSelectedHook(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
 }): Promise<void> {
-  const rawModel = params.model.trim();
-  if (!rawModel) {
-    return;
-  }
-  const slashIndex = rawModel.indexOf("/");
-  const selectedProviderId =
-    slashIndex === -1
-      ? DEFAULT_PROVIDER
-      : normalizeProviderId(rawModel.slice(0, slashIndex).trim());
-  if (!selectedProviderId || (slashIndex !== -1 && !rawModel.slice(slashIndex + 1).trim())) {
+  const providerId = resolveHookTargetProviderId(params.model);
+  if (!providerId) {
     return;
   }
 
@@ -350,7 +355,7 @@ export async function runProviderModelSelectedHook(params: {
     workspaceDir: params.workspaceDir,
     env: params.env,
   });
-  const provider = providers.find((entry) => normalizeProviderId(entry.id) === selectedProviderId);
+  const provider = providers.find((entry) => normalizeProviderId(entry.id) === providerId);
   if (!provider?.onModelSelected) {
     return;
   }

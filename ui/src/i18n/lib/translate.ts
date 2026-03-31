@@ -148,3 +148,9 @@ class I18nManager {
 
 export const i18n = new I18nManager();
 export const t = (key: string, params?: Record<string, string>) => i18n.t(key, params);
+
+export const __testing = {
+  createManagerForTest() {
+    return new I18nManager();
+  },
+};

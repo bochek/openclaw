@@ -24,35 +24,28 @@ describe("Zalo API request methods", () => {
   });
 
   it("aborts sendChatAction when the typing timeout elapses", async () => {
-    vi.useFakeTimers();
-    try {
-      const fetcher = vi.fn<ZaloFetch>(
-        (_, init) =>
-          new Promise<Response>((_, reject) => {
-            init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), {
-              once: true,
-            });
-          }),
-      );
+    const fetcher = vi.fn<ZaloFetch>(
+      (_, init) =>
+        new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        }),
+    );
 
-      const promise = sendChatAction(
+    await expect(
+      sendChatAction(
         "test-token",
         {
           chat_id: "chat-123",
           action: "typing",
         },
         fetcher,
-        25,
-      );
-      const rejected = expect(promise).rejects.toThrow("aborted");
+        10,
+      ),
+    ).rejects.toThrow("aborted");
 
-      await vi.advanceTimersByTimeAsync(25);
-
-      await rejected;
-      const [, init] = fetcher.mock.calls[0] ?? [];
-      expect(init?.signal?.aborted).toBe(true);
-    } finally {
-      vi.useRealTimers();
-    }
+    const [, init] = fetcher.mock.calls[0] ?? [];
+    expect(init?.signal?.aborted).toBe(true);
   });
 });

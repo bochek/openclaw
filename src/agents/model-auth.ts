@@ -39,6 +39,27 @@ export { requireApiKey, resolveAwsSdkEnvVarName } from "./model-auth-runtime-sha
 export type { ResolvedProviderAuth } from "./model-auth-runtime-shared.js";
 
 const log = createSubsystemLogger("model-auth");
+const defaultModelAuthDeps = {
+  buildProviderMissingAuthMessageWithPlugin,
+  resolveProviderSyntheticAuthWithPlugin,
+};
+let modelAuthDeps = defaultModelAuthDeps;
+
+function logProviderAuthDecision(params: {
+  provider: string;
+  stage: string;
+  source?: string;
+  mode?: string;
+  profileId?: string;
+  apiKey?: string;
+}): void {
+  if (!shouldTraceProviderAuth(params.provider)) {
+    return;
+  }
+  log.info(
+    `[xai-auth] ${params.stage}: source=${params.source ?? "unknown"} mode=${params.mode ?? "unknown"} profile=${params.profileId ?? "none"} key=${summarizeProviderAuthKey(params.apiKey)}`,
+  );
+}
 function resolveProviderConfig(
   cfg: OpenClawConfig | undefined,
   provider: string,
@@ -175,7 +196,7 @@ function resolveProviderSyntheticRuntimeAuth(params: {
     config: OpenClawConfig | undefined,
   ): ResolvedProviderAuth | undefined => {
     const providerConfig = resolveProviderConfig(config, params.provider);
-    return resolveProviderSyntheticAuthWithPlugin({
+    return modelAuthDeps.resolveProviderSyntheticAuthWithPlugin({
       provider: params.provider,
       config,
       context: {
@@ -409,7 +430,7 @@ export async function resolveApiKeyForProvider(params: {
       })
     : undefined;
   if (owningPluginIds?.length) {
-    const pluginMissingAuthMessage = buildProviderMissingAuthMessageWithPlugin({
+    const pluginMissingAuthMessage = modelAuthDeps.buildProviderMissingAuthMessageWithPlugin({
       provider,
       config: cfg,
       context: {
@@ -586,3 +607,9 @@ export function applyLocalNoAuthHeaderOverride<T extends Model<Api>>(
     headers,
   };
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<typeof defaultModelAuthDeps>) {
+    modelAuthDeps = overrides ? { ...defaultModelAuthDeps, ...overrides } : defaultModelAuthDeps;
+  },
+};

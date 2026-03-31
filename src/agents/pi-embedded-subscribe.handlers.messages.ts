@@ -296,10 +296,6 @@ export function handleMessageUpdate(
     ctx.state.lastStreamedAssistant = next;
     ctx.state.lastStreamedAssistantCleaned = cleanedText;
 
-    if (ctx.params.silentExpected) {
-      shouldEmit = false;
-    }
-
     if (shouldEmit) {
       const data = buildAssistantStreamData({
         text: cleanedText,
@@ -322,20 +318,11 @@ export function handleMessageUpdate(
     }
   }
 
-  if (
-    !ctx.params.silentExpected &&
-    ctx.params.onBlockReply &&
-    ctx.blockChunking &&
-    ctx.state.blockReplyBreak === "text_end"
-  ) {
+  if (ctx.params.onBlockReply && ctx.blockChunking && ctx.state.blockReplyBreak === "text_end") {
     ctx.blockChunker?.drain({ force: false, emit: ctx.emitBlockChunk });
   }
 
-  if (
-    !ctx.params.silentExpected &&
-    evtType === "text_end" &&
-    ctx.state.blockReplyBreak === "text_end"
-  ) {
+  if (evtType === "text_end" && ctx.state.blockReplyBreak === "text_end") {
     ctx.flushBlockReplyBuffer();
   }
 }
@@ -414,30 +401,25 @@ export function handleMessageEnd(
     ctx.state.emittedAssistantUpdate = true;
   }
 
-  const silentExpectedWithoutSentinel =
-    ctx.params.silentExpected && !isSilentReplyText(trimmedText, SILENT_REPLY_TOKEN);
-  const finalAssistantText = silentExpectedWithoutSentinel ? "" : text;
   const addedDuringMessage = ctx.state.assistantTexts.length > ctx.state.assistantTextBaseline;
   const chunkerHasBuffered = ctx.blockChunker?.hasBuffered() ?? false;
-  ctx.finalizeAssistantTexts({
-    text: finalAssistantText,
-    addedDuringMessage,
-    chunkerHasBuffered,
-  });
+  ctx.finalizeAssistantTexts({ text, addedDuringMessage, chunkerHasBuffered });
 
   const onBlockReply = ctx.params.onBlockReply;
   const emitBlockReplySafely = (payload: Parameters<NonNullable<typeof onBlockReply>>[0]) => {
     if (!onBlockReply) {
       return;
     }
-    void Promise.resolve()
-      .then(() => onBlockReply(payload))
-      .catch((err) => {
+    try {
+      const result = onBlockReply(payload);
+      void Promise.resolve(result).catch((err) => {
         ctx.log.warn(`block reply callback failed: ${String(err)}`);
       });
+    } catch (err) {
+      ctx.log.warn(`block reply callback failed: ${String(err)}`);
+    }
   };
   const shouldEmitReasoning = Boolean(
-    !ctx.params.silentExpected &&
     ctx.state.includeReasoning &&
     formattedReasoning &&
     onBlockReply &&
@@ -485,7 +467,6 @@ export function handleMessageEnd(
   };
 
   if (
-    !ctx.params.silentExpected &&
     (ctx.state.blockReplyBreak === "message_end" ||
       (ctx.blockChunker ? ctx.blockChunker.hasBuffered() : ctx.state.blockBuffer.length > 0)) &&
     text &&
@@ -516,11 +497,11 @@ export function handleMessageEnd(
   if (!shouldEmitReasoningBeforeAnswer) {
     maybeEmitReasoning();
   }
-  if (!ctx.params.silentExpected && ctx.state.streamReasoning && rawThinking) {
+  if (ctx.state.streamReasoning && rawThinking) {
     ctx.emitReasoningStream(rawThinking);
   }
 
-  if (!ctx.params.silentExpected && ctx.state.blockReplyBreak === "text_end" && onBlockReply) {
+  if (ctx.state.blockReplyBreak === "text_end" && onBlockReply) {
     emitSplitResultAsBlockReply(ctx.consumeReplyDirectives("", { final: true }));
   }
 

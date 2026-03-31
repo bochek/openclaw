@@ -1,12 +1,19 @@
-import { describe, expect, it } from "vitest";
-import "./test-helpers/fast-core-tools.js";
-import { createOpenClawTools } from "./openclaw-tools.js";
+import { beforeEach, describe, expect, it } from "vitest";
+import { __testing, createOpenClawTools } from "./openclaw-tools.js";
+import { stubTool } from "./test-helpers/fast-tool-stubs.js";
 
 function readToolByName() {
-  return new Map(createOpenClawTools().map((tool) => [tool.name, tool]));
+  return new Map(createOpenClawTools({ config: {} as never }).map((tool) => [tool.name, tool]));
 }
 
 describe("createOpenClawTools owner authorization", () => {
+  beforeEach(() => {
+    __testing.setDepsForTest({
+      createCanvasTool: () => stubTool("canvas"),
+      resolvePluginTools: () => [],
+    });
+  });
+
   it("marks owner-only core tools in raw registration", () => {
     const tools = readToolByName();
     expect(tools.get("cron")?.ownerOnly).toBe(true);

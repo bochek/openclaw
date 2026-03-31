@@ -2,7 +2,6 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import type { OpenClawConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
 import { normalizeEnv } from "../infra/env.js";
 import { formatUncaughtError } from "../infra/errors.js";
@@ -10,7 +9,6 @@ import { isMainModule } from "../infra/is-main.js";
 import { ensureOpenClawCliOnPath } from "../infra/path-env.js";
 import { assertSupportedRuntime } from "../infra/runtime-guard.js";
 import { enableConsoleCapture } from "../logging.js";
-import { normalizePluginId } from "../plugins/config-state.js";
 import { hasMemoryRuntime } from "../plugins/memory-state.js";
 import {
   getCommandPathWithRootOptions,
@@ -23,13 +21,69 @@ import { applyCliProfileEnv, parseCliProfileArgs } from "./profile.js";
 import { tryRouteCli } from "./route.js";
 import { normalizeWindowsArgv } from "./windows-argv.js";
 
+type RunCliDeps = {
+  setProcessExitCode: (code: number) => void;
+  shouldLoadCliDotEnv: (env?: NodeJS.ProcessEnv) => boolean | Promise<boolean>;
+  loadCliDotEnv: (params: { quiet: boolean }) => void | Promise<void>;
+  outputRootHelp: () => Promise<void>;
+  buildProgram: () => unknown | Promise<unknown>;
+  installUnhandledRejectionHandler: () => void | Promise<void>;
+  getProgramContext: (program: unknown) => unknown | Promise<unknown>;
+  registerCoreCliByName: (
+    program: unknown,
+    ctx: unknown,
+    primary: string,
+    argv: string[],
+  ) => Promise<void>;
+  registerSubCliByName: (program: unknown, primary: string) => Promise<void>;
+  loadValidatedConfigForPluginRegistration: () => Promise<OpenClawConfig | null | undefined>;
+  registerPluginCliCommands: (
+    program: unknown,
+    config: OpenClawConfig,
+  ) => void | Promise<void>;
+  closeActiveMemorySearchManagers: () => Promise<void>;
+};
+
+const defaultRunCliDeps: RunCliDeps = {
+  setProcessExitCode: (code) => {
+    process.exitCode = code;
+  },
+  shouldLoadCliDotEnv,
+  loadCliDotEnv: async (params) => (await import("./dotenv.js")).loadCliDotEnv(params),
+  outputRootHelp: async () => await (await import("./program/root-help.js")).outputRootHelp(),
+  buildProgram: async () => (await import("./program.js")).buildProgram(),
+  installUnhandledRejectionHandler: async () =>
+    (await import("../infra/unhandled-rejections.js")).installUnhandledRejectionHandler(),
+  getProgramContext: async (program) =>
+    (await import("./program/program-context.js")).getProgramContext(program as never),
+  registerCoreCliByName: async (program, ctx, primary, argv) =>
+    await (await import("./program/command-registry.js")).registerCoreCliByName(
+      program as never,
+      ctx as never,
+      primary,
+      argv,
+    ),
+  registerSubCliByName: async (program, primary) =>
+    await (await import("./program/register.subclis.js")).registerSubCliByName(
+      program as never,
+      primary,
+    ),
+  loadValidatedConfigForPluginRegistration: async () =>
+    await (await import("./program/register.subclis.js")).loadValidatedConfigForPluginRegistration(),
+  registerPluginCliCommands: async (program, config) =>
+    (await import("../plugins/cli.js")).registerPluginCliCommands(program as never, config),
+  closeActiveMemorySearchManagers: async () =>
+    await (await import("../plugins/memory-runtime.js")).closeActiveMemorySearchManagers(),
+};
+
+let runCliDeps: RunCliDeps = { ...defaultRunCliDeps };
+
 async function closeCliMemoryManagers(): Promise<void> {
   if (!hasMemoryRuntime()) {
     return;
   }
   try {
-    const { closeActiveMemorySearchManagers } = await import("../plugins/memory-runtime.js");
-    await closeActiveMemorySearchManagers();
+    await runCliDeps.closeActiveMemorySearchManagers();
   } catch {
     // Best-effort teardown for short-lived CLI processes.
   }
@@ -88,28 +142,6 @@ export function shouldUseRootHelpFastPath(argv: string[]): boolean {
   return isRootHelpInvocation(argv);
 }
 
-export function resolveMissingBrowserCommandMessage(config?: OpenClawConfig): string | null {
-  const allow =
-    Array.isArray(config?.plugins?.allow) && config.plugins.allow.length > 0
-      ? config.plugins.allow
-          .filter((entry): entry is string => typeof entry === "string")
-          .map((entry) => normalizePluginId(entry))
-      : [];
-  if (allow.length > 0 && !allow.includes("browser")) {
-    return (
-      'The `openclaw browser` command is unavailable because `plugins.allow` excludes "browser". ' +
-      'Add "browser" to `plugins.allow` if you want the bundled browser CLI and tool.'
-    );
-  }
-  if (config?.plugins?.entries?.browser?.enabled === false) {
-    return (
-      "The `openclaw browser` command is unavailable because `plugins.entries.browser.enabled=false`. " +
-      "Re-enable that entry if you want the bundled browser CLI and tool."
-    );
-  }
-  return null;
-}
-
 function shouldLoadCliDotEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   if (existsSync(path.join(process.cwd(), ".env"))) {
     return true;
@@ -139,15 +171,14 @@ export async function runCli(argv: string[] = process.argv) {
   const containerTarget = maybeRunCliInContainer(originalArgv);
   if (containerTarget.handled) {
     if (containerTarget.exitCode !== 0) {
-      process.exitCode = containerTarget.exitCode;
+      runCliDeps.setProcessExitCode(containerTarget.exitCode);
     }
     return;
   }
   let normalizedArgv = parsedProfile.argv;
 
-  if (shouldLoadCliDotEnv()) {
-    const { loadCliDotEnv } = await import("./dotenv.js");
-    loadCliDotEnv({ quiet: true });
+  if (await runCliDeps.shouldLoadCliDotEnv(process.env)) {
+    await runCliDeps.loadCliDotEnv({ quiet: true });
   }
   normalizeEnv();
   if (shouldEnsureCliPath(normalizedArgv)) {
@@ -159,8 +190,7 @@ export async function runCli(argv: string[] = process.argv) {
 
   try {
     if (shouldUseRootHelpFastPath(normalizedArgv)) {
-      const { outputRootHelp } = await import("./program/root-help.js");
-      await outputRootHelp();
+      await runCliDeps.outputRootHelp();
       return;
     }
 
@@ -171,13 +201,13 @@ export async function runCli(argv: string[] = process.argv) {
     // Capture all console output into structured logs while keeping stdout/stderr behavior.
     enableConsoleCapture();
 
-    const { buildProgram } = await import("./program.js");
-    const program = buildProgram();
-    const { installUnhandledRejectionHandler } = await import("../infra/unhandled-rejections.js");
+    const program = (await runCliDeps.buildProgram()) as Awaited<
+      ReturnType<typeof import("./program.js").buildProgram>
+    >;
 
     // Global error handlers to prevent silent crashes from unhandled rejections/exceptions.
     // These log the error and exit gracefully instead of crashing without trace.
-    installUnhandledRejectionHandler();
+    await runCliDeps.installUnhandledRejectionHandler();
 
     process.on("uncaughtException", (error) => {
       console.error("[openclaw] Uncaught exception:", formatUncaughtError(error));
@@ -189,14 +219,11 @@ export async function runCli(argv: string[] = process.argv) {
     // are correct even with lazy command registration.
     const primary = getPrimaryCommand(parseArgv);
     if (primary) {
-      const { getProgramContext } = await import("./program/program-context.js");
-      const ctx = getProgramContext(program);
+      const ctx = await runCliDeps.getProgramContext(program);
       if (ctx) {
-        const { registerCoreCliByName } = await import("./program/command-registry.js");
-        await registerCoreCliByName(program, ctx, primary, parseArgv);
+        await runCliDeps.registerCoreCliByName(program, ctx, primary, parseArgv);
       }
-      const { registerSubCliByName } = await import("./program/register.subclis.js");
-      await registerSubCliByName(program, primary);
+      await runCliDeps.registerSubCliByName(program, primary);
     }
 
     const hasBuiltinPrimary =
@@ -208,24 +235,9 @@ export async function runCli(argv: string[] = process.argv) {
     });
     if (!shouldSkipPluginRegistration) {
       // Register plugin CLI commands before parsing
-      const { registerPluginCliCommands } = await import("../plugins/cli.js");
-      const { loadValidatedConfigForPluginRegistration } =
-        await import("./program/register.subclis.js");
-      const config = await loadValidatedConfigForPluginRegistration();
+      const config = await runCliDeps.loadValidatedConfigForPluginRegistration();
       if (config) {
-        await registerPluginCliCommands(program, config, undefined, undefined, {
-          mode: "lazy",
-          primary,
-        });
-        if (
-          primary === "browser" &&
-          !program.commands.some((command) => command.name() === "browser")
-        ) {
-          const browserCommandMessage = resolveMissingBrowserCommandMessage(config);
-          if (browserCommandMessage) {
-            throw new Error(browserCommandMessage);
-          }
-        }
+        await runCliDeps.registerPluginCliCommands(program, config);
       }
     }
 
@@ -238,3 +250,15 @@ export async function runCli(argv: string[] = process.argv) {
 export function isCliMainModule(): boolean {
   return isMainModule({ currentFile: fileURLToPath(import.meta.url) });
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<RunCliDeps>) {
+    runCliDeps = {
+      ...runCliDeps,
+      ...overrides,
+    };
+  },
+  resetDepsForTest() {
+    runCliDeps = { ...defaultRunCliDeps };
+  },
+};

@@ -6,6 +6,16 @@ import { copyChannelAgentToolMeta } from "./channel-tools.js";
 import type { AnyAgentTool } from "./pi-tools.types.js";
 import { cleanSchemaForGemini } from "./schema/clean-for-gemini.js";
 
+type PiToolsSchemaDeps = {
+  copyPluginToolMeta: typeof copyPluginToolMeta;
+};
+
+const defaultPiToolsSchemaDeps: PiToolsSchemaDeps = {
+  copyPluginToolMeta,
+};
+
+let piToolsSchemaDeps: PiToolsSchemaDeps = defaultPiToolsSchemaDeps;
+
 function extractEnumValues(schema: unknown): unknown[] | undefined {
   if (!schema || typeof schema !== "object") {
     return undefined;
@@ -72,7 +82,7 @@ export function normalizeToolParameters(
   options?: { modelProvider?: string; modelId?: string; modelCompat?: ModelCompatConfig },
 ): AnyAgentTool {
   function preserveToolMeta(target: AnyAgentTool): AnyAgentTool {
-    copyPluginToolMeta(tool, target);
+    piToolsSchemaDeps.copyPluginToolMeta(tool, target);
     copyChannelAgentToolMeta(tool as never, target as never);
     return target;
   }
@@ -214,3 +224,14 @@ export function normalizeToolParameters(
 export function cleanToolSchemaForGemini(schema: Record<string, unknown>): unknown {
   return cleanSchemaForGemini(schema);
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<PiToolsSchemaDeps>) {
+    piToolsSchemaDeps = overrides
+      ? {
+          ...defaultPiToolsSchemaDeps,
+          ...overrides,
+        }
+      : defaultPiToolsSchemaDeps;
+  },
+} as const;

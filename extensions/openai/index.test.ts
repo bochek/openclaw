@@ -13,7 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   registerProviderPlugin,
   requireRegisteredProvider,
-} from "../../test/helpers/plugins/provider-registration.js";
+} from "../../test/helpers/extensions/provider-registration.js";
 import { buildOpenAIImageGenerationProvider } from "./image-generation-provider.js";
 import plugin from "./index.js";
 
@@ -22,9 +22,13 @@ const runtimeMocks = vi.hoisted(() => ({
   refreshOpenAICodexToken: vi.fn(),
 }));
 
-vi.mock("openclaw/plugin-sdk/runtime-env", () => ({
-  ensureGlobalUndiciEnvProxyDispatcher: runtimeMocks.ensureGlobalUndiciEnvProxyDispatcher,
-}));
+vi.mock("openclaw/plugin-sdk/runtime-env", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/runtime-env")>();
+  return {
+    ...actual,
+    ensureGlobalUndiciEnvProxyDispatcher: runtimeMocks.ensureGlobalUndiciEnvProxyDispatcher,
+  };
+});
 
 vi.mock("@mariozechner/pi-ai/oauth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@mariozechner/pi-ai/oauth")>();
@@ -58,7 +62,7 @@ function resolveTemplateModelId(modelId: string) {
 }
 
 function createTemplateModelRegistry(modelId: string): ModelRegistry {
-  const registry = ModelRegistry.inMemory(AuthStorage.inMemory());
+  const registry = new ModelRegistry(AuthStorage.inMemory());
   const template = getModel("openai", resolveTemplateModelId(modelId));
   registry.registerProvider("openai", {
     apiKey: "test",

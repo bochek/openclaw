@@ -1,5 +1,6 @@
 /* @vitest-environment jsdom */
 
+import "../../test-helpers/browser-globals-install.ts";
 import { render } from "lit";
 import { describe, expect, it } from "vitest";
 import { extractToolCards, renderToolCardSidebar } from "./tool-cards.ts";

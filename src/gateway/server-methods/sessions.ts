@@ -82,6 +82,25 @@ import type {
 } from "./types.js";
 import { assertValidParams } from "./validation.js";
 
+function createDefaultSessionsHandlerDeps() {
+  return {
+    clearSessionQueues,
+    hasInternalHookListeners,
+    triggerInternalHook,
+  };
+}
+
+let sessionsHandlerDeps = createDefaultSessionsHandlerDeps();
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof sessionsHandlerDeps>) {
+    sessionsHandlerDeps = { ...sessionsHandlerDeps, ...overrides };
+  },
+  resetDepsForTest() {
+    sessionsHandlerDeps = createDefaultSessionsHandlerDeps();
+  },
+};
+
 function requireSessionKey(key: unknown, respond: RespondFn): string | null {
   const raw =
     typeof key === "string"
@@ -359,7 +378,7 @@ async function interruptSessionRunIfActive(params: {
     abortEmbeddedPiRun(params.sessionId);
   }
 
-  clearSessionQueues([params.requestedKey, params.canonicalKey, params.sessionId]);
+  sessionsHandlerDeps.clearSessionQueues([params.requestedKey, params.canonicalKey, params.sessionId]);
 
   if (hasEmbeddedRun && params.sessionId) {
     const ended = await waitForEmbeddedPiRunEnd(params.sessionId, 15_000);
@@ -939,7 +958,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
       return;
     }
 
-    if (hasInternalHookListeners("session", "patch")) {
+    if (sessionsHandlerDeps.hasInternalHookListeners("session", "patch")) {
       const hookContext: SessionPatchHookContext = structuredClone({
         sessionEntry: applied.entry,
         patch: p,
@@ -953,7 +972,7 @@ export const sessionsHandlers: GatewayRequestHandlers = {
         timestamp: new Date(),
         messages: [],
       };
-      void triggerInternalHook(hookEvent);
+      void sessionsHandlerDeps.triggerInternalHook(hookEvent);
     }
 
     const parsed = parseAgentSessionKey(target.canonicalKey ?? key);

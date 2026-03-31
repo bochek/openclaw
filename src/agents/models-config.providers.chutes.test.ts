@@ -2,15 +2,16 @@ import { mkdtempSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { CHUTES_BASE_URL } from "./chutes-models.js";
 import { resolveOAuthApiKeyMarker } from "./model-auth-markers.js";
 import { resolveImplicitProvidersForTest } from "./models-config.e2e-harness.js";
-import { resolveImplicitProviders } from "./models-config.providers.implicit.js";
 
 const CHUTES_OAUTH_MARKER = resolveOAuthApiKeyMarker("chutes");
-const ORIGINAL_VITEST_ENV = process.env.VITEST;
-const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+const TEST_ENV = {
+  VITEST: "true",
+  NODE_ENV: "test",
+} as NodeJS.ProcessEnv;
 
 function createTempAgentDir() {
   return mkdtempSync(join(tmpdir(), "openclaw-test-"));
@@ -67,11 +68,11 @@ async function writeChutesAuthProfiles(agentDir: string, profiles: ChutesAuthPro
 
 async function resolveChutesProvidersForProfiles(
   profiles: ChutesAuthProfiles,
-  env: NodeJS.ProcessEnv = {},
+  env: NodeJS.ProcessEnv = TEST_ENV,
 ) {
   const agentDir = createTempAgentDir();
   await writeChutesAuthProfiles(agentDir, profiles);
-  return resolveImplicitProvidersForTest({ agentDir, env });
+  return resolveImplicitProvidersForTest({ agentDir, env, onlyPluginIds: ["chutes"] });
 }
 
 function expectChutesApiKeyProvider(
@@ -93,45 +94,30 @@ function expectChutesOAuthMarkerProvider(
 async function withRealChutesDiscovery<T>(
   run: (fetchMock: ReturnType<typeof vi.fn>) => Promise<T>,
 ) {
-  const originalVitest = process.env.VITEST;
-  const originalNodeEnv = process.env.NODE_ENV;
-  const originalFetch = globalThis.fetch;
-  delete process.env.VITEST;
-  delete process.env.NODE_ENV;
-
   const fetchMock = vi.fn().mockResolvedValue({
     ok: true,
     json: async () => ({ data: [{ id: "chutes/private-model" }] }),
   });
-  globalThis.fetch = fetchMock as unknown as typeof fetch;
-
-  try {
-    return await run(fetchMock);
-  } finally {
-    process.env.VITEST = originalVitest;
-    process.env.NODE_ENV = originalNodeEnv;
-    globalThis.fetch = originalFetch;
-  }
+  vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+  return run(fetchMock);
 }
 
 describe("chutes implicit provider auth mode", () => {
-  beforeEach(() => {
-    process.env.VITEST = "true";
-    process.env.NODE_ENV = "test";
-  });
-
-  afterAll(() => {
-    process.env.VITEST = ORIGINAL_VITEST_ENV;
-    process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
   it("auto-loads bundled chutes discovery for env api keys", async () => {
     const agentDir = createTempAgentDir();
-    const providers = await resolveImplicitProviders({
+    const providers = await resolveImplicitProvidersForTest({
       agentDir,
       env: {
+        ...TEST_ENV,
         CHUTES_API_KEY: "env-chutes-api-key",
       } as NodeJS.ProcessEnv,
+      onlyPluginIds: ["chutes"],
     });
 
     expect(providers?.chutes?.baseUrl).toBe(CHUTES_BASE_URL);
@@ -163,9 +149,14 @@ describe("chutes implicit provider auth mode", () => {
 
   it("forwards oauth access token to chutes model discovery", async () => {
     await withRealChutesDiscovery(async (fetchMock) => {
-      const providers = await resolveChutesProvidersForProfiles({
-        "chutes:default": createChutesOAuthProfile("my-chutes-access-token"),
-      });
+      vi.stubEnv("VITEST", "");
+      vi.stubEnv("NODE_ENV", "development");
+      const providers = await resolveChutesProvidersForProfiles(
+        {
+          "chutes:default": createChutesOAuthProfile("my-chutes-access-token"),
+        },
+        {},
+      );
       expectChutesOAuthMarkerProvider(providers);
       const chutesCalls = fetchMock.mock.calls.filter(([url]) => String(url).includes("chutes.ai"));
       expect(chutesCalls.length).toBeGreaterThan(0);

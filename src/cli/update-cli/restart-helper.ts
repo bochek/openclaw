@@ -10,6 +10,16 @@ import {
   resolveGatewayWindowsTaskName,
 } from "../../daemon/constants.js";
 
+type RestartHelperDeps = {
+  spawn: typeof spawn;
+};
+
+const defaultRestartHelperDeps: RestartHelperDeps = {
+  spawn,
+};
+
+let restartHelperDeps: RestartHelperDeps = { ...defaultRestartHelperDeps };
+
 /**
  * Shell-escape a string for embedding in single-quoted shell arguments.
  * Replaces every `'` with `'\''` (end quote, escaped quote, resume quote).
@@ -166,10 +176,21 @@ export async function runRestartScript(scriptPath: string): Promise<void> {
   const file = isWindows ? "cmd.exe" : "/bin/sh";
   const args = isWindows ? ["/d", "/s", "/c", quoteCmdScriptArg(scriptPath)] : [scriptPath];
 
-  const child = spawn(file, args, {
+  const child = restartHelperDeps.spawn(file, args, {
     detached: true,
     stdio: "ignore",
     windowsHide: true,
   });
   child.unref();
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<RestartHelperDeps>) {
+    restartHelperDeps = overrides
+      ? { ...restartHelperDeps, ...overrides }
+      : { ...defaultRestartHelperDeps };
+  },
+  resetDepsForTest() {
+    restartHelperDeps = { ...defaultRestartHelperDeps };
+  },
+};

@@ -13,6 +13,24 @@ import {
 } from "./runtime-api.js";
 import type { CoreConfig } from "./types.js";
 
+let loadHandleMatrixAction = async () => {
+  const { handleMatrixAction } = await import("./tool-actions.runtime.js");
+  return handleMatrixAction;
+};
+
+export function __setLoadHandleMatrixActionForTest(
+  loader: typeof loadHandleMatrixAction,
+): void {
+  loadHandleMatrixAction = loader;
+}
+
+export function __resetLoadHandleMatrixActionForTest(): void {
+  loadHandleMatrixAction = async () => {
+    const { handleMatrixAction } = await import("./tool-actions.runtime.js");
+    return handleMatrixAction;
+  };
+}
+
 const MATRIX_PLUGIN_HANDLED_ACTIONS = new Set<ChannelMessageActionName>([
   "send",
   "poll-vote",
@@ -144,7 +162,7 @@ export const matrixMessageActions: ChannelMessageActionAdapter = {
     return { to };
   },
   handleAction: async (ctx: ChannelMessageActionContext) => {
-    const { handleMatrixAction } = await import("./tool-actions.runtime.js");
+    const handleMatrixAction = await loadHandleMatrixAction();
     const { action, params, cfg, accountId, mediaLocalRoots } = ctx;
     const dispatch = async (actionParams: Record<string, unknown>) =>
       await handleMatrixAction(

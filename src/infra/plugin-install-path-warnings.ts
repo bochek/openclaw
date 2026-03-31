@@ -53,7 +53,7 @@ export function formatPluginInstallPathIssue(params: {
   issue: PluginInstallPathIssue;
   pluginLabel: string;
   defaultInstallCommand: string;
-  repoInstallCommand?: string | null;
+  repoInstallCommand: string;
   formatCommand?: (command: string) => string;
 }): string[] {
   const formatCommand = params.formatCommand ?? ((command: string) => command);
@@ -62,20 +62,12 @@ export function formatPluginInstallPathIssue(params: {
       `${params.pluginLabel} is installed from a custom path: ${params.issue.path}`,
       `Main updates will not automatically replace that plugin with the repo's default ${params.pluginLabel} package.`,
       `Reinstall with "${formatCommand(params.defaultInstallCommand)}" when you want to return to the standard ${params.pluginLabel} plugin.`,
-      ...(params.repoInstallCommand
-        ? [
-            `If you are intentionally running from a repo checkout, reinstall that checkout explicitly with "${formatCommand(params.repoInstallCommand)}" after updates.`,
-          ]
-        : []),
+      `If you are intentionally running from a repo checkout, reinstall that checkout explicitly with "${formatCommand(params.repoInstallCommand)}" after updates.`,
     ];
   }
   return [
     `${params.pluginLabel} is installed from a custom path that no longer exists: ${params.issue.path}`,
     `Reinstall with "${formatCommand(params.defaultInstallCommand)}".`,
-    ...(params.repoInstallCommand
-      ? [
-          `If you are running from a repo checkout, you can also use "${formatCommand(params.repoInstallCommand)}".`,
-        ]
-      : []),
+    `If you are running from a repo checkout, you can also use "${formatCommand(params.repoInstallCommand)}".`,
   ];
 }

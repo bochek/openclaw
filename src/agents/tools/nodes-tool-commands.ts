@@ -20,7 +20,30 @@ export type NodeCommandAction =
   | keyof typeof NODE_READ_ACTION_COMMANDS
   | "notifications_action"
   | "location_get"
+  | "run"
   | "invoke";
+
+function parseEnvList(input: unknown): Record<string, string> | undefined {
+  if (!Array.isArray(input)) {
+    return undefined;
+  }
+  const entries = input
+    .filter((value): value is string => typeof value === "string")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (entries.length === 0) {
+    return undefined;
+  }
+  const env: Record<string, string> = {};
+  for (const entry of entries) {
+    const index = entry.indexOf("=");
+    if (index <= 0) {
+      continue;
+    }
+    env[entry.slice(0, index)] = entry.slice(index + 1);
+  }
+  return Object.keys(env).length > 0 ? env : undefined;
+}
 
 export async function executeNodeCommandAction(params: {
   action: NodeCommandAction;
@@ -112,6 +135,113 @@ export async function executeNodeCommandAction(params: {
         },
       });
       return jsonResult(payload);
+    }
+    case "run": {
+      const node = readStringParam(params.input, "node", { required: true });
+      const nodeId = await resolveNodeId(params.gatewayOpts, node);
+      const command = Array.isArray(params.input.command)
+        ? params.input.command.filter((value): value is string => typeof value === "string")
+        : [];
+      if (command.length === 0) {
+        throw new Error("command must be a non-empty string array");
+      }
+      const cwd =
+        typeof params.input.cwd === "string" && params.input.cwd.trim()
+          ? params.input.cwd.trim()
+          : undefined;
+      const agentId =
+        typeof params.input.agentId === "string" && params.input.agentId.trim()
+          ? params.input.agentId.trim()
+          : undefined;
+      const env = parseEnvList(params.input.env);
+      const commandTimeoutMs = parseTimeoutMs(params.input.commandTimeoutMs);
+      const invokeTimeoutMs = parseTimeoutMs(params.input.invokeTimeoutMs);
+      const prepareRaw = await callGatewayTool<{ payload?: { plan?: Record<string, unknown> } }>(
+        "node.invoke",
+        params.gatewayOpts,
+        {
+          nodeId,
+          command: "system.run.prepare",
+          params: {
+            command,
+            rawCommand: command.join(" "),
+            cwd,
+            agentId,
+          },
+          idempotencyKey: crypto.randomUUID(),
+        },
+      );
+      const prepared = prepareRaw?.payload?.plan;
+      if (!prepared || typeof prepared !== "object") {
+        throw new Error("invalid system.run.prepare response");
+      }
+      const preparedArgv = Array.isArray(prepared.argv)
+        ? prepared.argv.filter((value): value is string => typeof value === "string")
+        : command;
+      const preparedCommandText =
+        typeof prepared.commandText === "string" && prepared.commandText.trim()
+          ? prepared.commandText.trim()
+          : command.join(" ");
+      const preparedCwd =
+        typeof prepared.cwd === "string" && prepared.cwd.trim() ? prepared.cwd.trim() : cwd;
+      const preparedAgentId =
+        typeof prepared.agentId === "string" && prepared.agentId.trim()
+          ? prepared.agentId.trim()
+          : agentId;
+      const invokeRun = async (approvalDecision?: "allow-once" | "allow-always") =>
+        await callGatewayTool(
+          "node.invoke",
+          { ...params.gatewayOpts, timeoutMs: invokeTimeoutMs },
+          {
+            nodeId,
+            command: "system.run",
+            params: {
+              command: preparedArgv,
+              rawCommand: preparedCommandText,
+              cwd: preparedCwd,
+              env,
+              timeoutMs: commandTimeoutMs,
+              agentId: preparedAgentId,
+              approved: approvalDecision ? true : undefined,
+              approvalDecision,
+              runId: approvalDecision ? crypto.randomUUID() : undefined,
+            },
+            idempotencyKey: crypto.randomUUID(),
+          },
+        );
+
+      try {
+        return jsonResult((await invokeRun()) ?? {});
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        if (!message.includes("SYSTEM_RUN_DENIED: approval required")) {
+          throw err;
+        }
+        const approvalId = crypto.randomUUID();
+        const approval = await callGatewayTool<{ decision?: unknown }>(
+          "exec.approval.request",
+          params.gatewayOpts,
+          {
+            id: approvalId,
+            systemRunPlan: prepared,
+            nodeId,
+            host: "node",
+            timeoutMs: 120_000,
+          },
+        );
+        const decision =
+          typeof approval?.decision === "string" ? approval.decision.trim().toLowerCase() : "";
+        if (!decision) {
+          throw new Error("exec denied: approval timed out");
+        }
+        if (decision === "deny") {
+          throw new Error("exec denied: user denied");
+        }
+        if (decision !== "allow-once" && decision !== "allow-always") {
+          throw new Error("exec denied: invalid approval decision");
+        }
+        return jsonResult((await invokeRun(decision)) ?? {});
+      }
     }
     case "invoke": {
       const node = readStringParam(params.input, "node", { required: true });

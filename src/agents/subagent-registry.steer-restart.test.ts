@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const noop = () => {};
 let lifecycleHandler:
@@ -14,32 +14,22 @@ let lifecycleHandler:
       };
     }) => void)
   | undefined;
-
-vi.mock("../gateway/call.js", () => ({
-  callGateway: vi.fn(async (opts: unknown) => {
-    const request = opts as { method?: string };
-    if (request.method === "agent.wait") {
-      return { status: "timeout" };
-    }
-    return {};
-  }),
+const callGatewayMock = vi.fn(async (opts: unknown) => {
+  const request = opts as { method?: string };
+  if (request.method === "agent.wait") {
+    return { status: "timeout" };
+  }
+  return {};
+});
+const onAgentEventMock = vi.fn((handler: typeof lifecycleHandler) => {
+  lifecycleHandler = handler;
+  return noop;
+});
+const loadConfigMock = vi.fn(() => ({
+  agents: { defaults: { subagents: { archiveAfterMinutes: 0 } } },
 }));
-
-vi.mock("../infra/agent-events.js", () => ({
-  onAgentEvent: vi.fn((handler: typeof lifecycleHandler) => {
-    lifecycleHandler = handler;
-    return noop;
-  }),
-}));
-
-vi.mock("../config/config.js", () => ({
-  loadConfig: vi.fn(() => ({
-    agents: { defaults: { subagents: { archiveAfterMinutes: 0 } } },
-  })),
-}));
-
-vi.mock("../config/sessions.js", () => {
-  const sessionStore = new Proxy<Record<string, { sessionId: string; updatedAt: number }>>(
+const loadSessionStoreMock = vi.fn(() => {
+  return new Proxy<Record<string, { sessionId: string; updatedAt: number }>>(
     {},
     {
       get(target, prop, receiver) {
@@ -50,16 +40,31 @@ vi.mock("../config/sessions.js", () => {
       },
     },
   );
+});
+const updateSessionStoreMock = vi.fn();
 
+vi.mock("../gateway/call.js", () => ({
+  callGateway: callGatewayMock,
+}));
+
+vi.mock("../infra/agent-events.js", () => ({
+  onAgentEvent: onAgentEventMock,
+}));
+
+vi.mock("../config/config.js", () => ({
+  loadConfig: loadConfigMock,
+}));
+
+vi.mock("../config/sessions.js", () => {
   return {
-    loadSessionStore: vi.fn(() => sessionStore),
+    loadSessionStore: loadSessionStoreMock,
     resolveAgentIdFromSessionKey: (key: string) => {
       const match = key.match(/^agent:([^:]+)/);
       return match?.[1] ?? "main";
     },
     resolveMainSessionKey: () => "agent:main:main",
     resolveStorePath: () => "/tmp/test-store",
-    updateSessionStore: vi.fn(),
+    updateSessionStore: updateSessionStoreMock,
   };
 });
 
@@ -90,16 +95,68 @@ vi.mock("./subagent-registry.store.js", () => ({
   saveSubagentRegistryToDisk: vi.fn(() => {}),
 }));
 
+let mod: typeof import("./subagent-registry.js");
+
 describe("subagent registry steer restarts", () => {
-  let mod: typeof import("./subagent-registry.js");
+  beforeAll(async () => {
+    vi.resetModules();
+    mod = await import("./subagent-registry.js");
+  });
+
   type RegisterSubagentRunInput = Parameters<typeof mod.registerSubagentRun>[0];
   const MAIN_REQUESTER_SESSION_KEY = "agent:main:main";
   const MAIN_REQUESTER_DISPLAY_KEY = "main";
 
-  beforeEach(async () => {
-    vi.resetModules();
+  beforeEach(() => {
     lifecycleHandler = undefined;
-    mod = await import("./subagent-registry.js");
+    callGatewayMock.mockReset();
+    callGatewayMock.mockImplementation(async (opts: unknown) => {
+      const request = opts as { method?: string };
+      if (request.method === "agent.wait") {
+        return { status: "timeout" };
+      }
+      return {};
+    });
+    onAgentEventMock.mockClear();
+    onAgentEventMock.mockImplementation((handler: typeof lifecycleHandler) => {
+      lifecycleHandler = handler;
+      return noop;
+    });
+    loadConfigMock.mockReset();
+    loadConfigMock.mockReturnValue({
+      agents: { defaults: { subagents: { archiveAfterMinutes: 0 } } },
+    });
+    loadSessionStoreMock.mockReset();
+    loadSessionStoreMock.mockImplementation(() => {
+      return new Proxy<Record<string, { sessionId: string; updatedAt: number }>>(
+        {},
+        {
+          get(target, prop, receiver) {
+            if (typeof prop !== "string" || prop in target) {
+              return Reflect.get(target, prop, receiver);
+            }
+            return { sessionId: `sess-${prop}`, updatedAt: 1 };
+          },
+        },
+      );
+    });
+    updateSessionStoreMock.mockReset();
+    announceSpy.mockReset();
+    announceSpy.mockResolvedValue(true);
+    runSubagentEndedHookMock.mockReset();
+    runSubagentEndedHookMock.mockResolvedValue(undefined);
+    emitSessionLifecycleEventMock.mockReset();
+    mod.__testing.setDepsForTest({
+      callGateway: async (request) => callGatewayMock(request),
+      loadConfig: () => loadConfigMock(),
+      onAgentEvent: (handler) => onAgentEventMock(handler),
+      captureSubagentCompletionReply: async () => undefined,
+      runSubagentAnnounceFlow: async (params) => announceSpy(params),
+      completeTaskRunByRunId: () => undefined,
+      failTaskRunByRunId: () => undefined,
+      setDetachedTaskDeliveryStatusByRunId: () => undefined,
+    });
+    mod.resetSubagentRegistryForTests({ persist: false });
   });
 
   const flushAnnounce = async () => {
@@ -107,15 +164,14 @@ describe("subagent registry steer restarts", () => {
   };
 
   const withPendingAgentWait = async <T>(run: () => Promise<T>): Promise<T> => {
-    const callGateway = vi.mocked((await import("../gateway/call.js")).callGateway);
-    const originalCallGateway = callGateway.getMockImplementation();
-    callGateway.mockImplementation(async (request: unknown) => {
+    const originalCallGateway = callGatewayMock.getMockImplementation();
+    callGatewayMock.mockImplementation(async (request: unknown) => {
       const typed = request as { method?: string };
       if (typed.method === "agent.wait") {
         return new Promise<unknown>(() => undefined);
       }
       if (originalCallGateway) {
-        return originalCallGateway(request as Parameters<typeof callGateway>[0]);
+        return originalCallGateway(request as Parameters<typeof callGatewayMock>[0]);
       }
       return {};
     });
@@ -124,7 +180,7 @@ describe("subagent registry steer restarts", () => {
       return await run();
     } finally {
       if (originalCallGateway) {
-        callGateway.mockImplementation(originalCallGateway);
+        callGatewayMock.mockImplementation(originalCallGateway);
       }
     }
   };
@@ -231,6 +287,7 @@ describe("subagent registry steer restarts", () => {
     runSubagentEndedHookMock.mockClear();
     emitSessionLifecycleEventMock.mockClear();
     lifecycleHandler = undefined;
+    mod.__testing.setDepsForTest();
     mod.resetSubagentRegistryForTests({ persist: false });
   });
 

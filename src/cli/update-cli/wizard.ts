@@ -21,12 +21,30 @@ import {
 } from "./shared.js";
 import { updateCommand } from "./update-command.js";
 
+type UpdateWizardDeps = {
+  defaultRuntime: typeof defaultRuntime;
+  confirm: typeof confirm;
+  isCancel: typeof isCancel;
+  selectStyled: typeof selectStyled;
+  updateCommand: typeof updateCommand;
+};
+
+const defaultUpdateWizardDeps: UpdateWizardDeps = {
+  defaultRuntime,
+  confirm,
+  isCancel,
+  selectStyled,
+  updateCommand,
+};
+
+let updateWizardDeps: UpdateWizardDeps = defaultUpdateWizardDeps;
+
 export async function updateWizardCommand(opts: UpdateWizardOptions = {}): Promise<void> {
   if (!process.stdin.isTTY) {
-    defaultRuntime.error(
+    updateWizardDeps.defaultRuntime.error(
       "Update wizard requires a TTY. Use `openclaw update --channel <stable|beta|dev>` instead.",
     );
-    defaultRuntime.exit(1);
+    updateWizardDeps.defaultRuntime.exit(1);
     return;
   }
 
@@ -63,7 +81,7 @@ export async function updateWizardCommand(opts: UpdateWizardOptions = {}): Promi
     gitBranch: updateStatus.git?.branch ?? null,
   });
 
-  const pickedChannel = await selectStyled({
+  const pickedChannel = await updateWizardDeps.selectStyled({
     message: "Update channel",
     options: [
       {
@@ -90,9 +108,9 @@ export async function updateWizardCommand(opts: UpdateWizardOptions = {}): Promi
     initialValue: "keep",
   });
 
-  if (isCancel(pickedChannel)) {
-    defaultRuntime.log(theme.muted("Update cancelled."));
-    defaultRuntime.exit(0);
+  if (updateWizardDeps.isCancel(pickedChannel)) {
+    updateWizardDeps.defaultRuntime.log(theme.muted("Update cancelled."));
+    updateWizardDeps.defaultRuntime.exit(0);
     return;
   }
 
@@ -106,46 +124,55 @@ export async function updateWizardCommand(opts: UpdateWizardOptions = {}): Promi
       if (dirExists) {
         const empty = await isEmptyDir(gitDir);
         if (!empty) {
-          defaultRuntime.error(
+          updateWizardDeps.defaultRuntime.error(
             `OPENCLAW_GIT_DIR points at a non-git directory: ${gitDir}. Set OPENCLAW_GIT_DIR to an empty folder or an openclaw checkout.`,
           );
-          defaultRuntime.exit(1);
+          updateWizardDeps.defaultRuntime.exit(1);
           return;
         }
       }
 
-      const ok = await confirm({
+      const ok = await updateWizardDeps.confirm({
         message: stylePromptMessage(
           `Create a git checkout at ${gitDir}? (override via OPENCLAW_GIT_DIR)`,
         ),
         initialValue: true,
       });
-      if (isCancel(ok) || !ok) {
-        defaultRuntime.log(theme.muted("Update cancelled."));
-        defaultRuntime.exit(0);
+      if (updateWizardDeps.isCancel(ok) || !ok) {
+        updateWizardDeps.defaultRuntime.log(theme.muted("Update cancelled."));
+        updateWizardDeps.defaultRuntime.exit(0);
         return;
       }
     }
   }
 
-  const restart = await confirm({
+  const restart = await updateWizardDeps.confirm({
     message: stylePromptMessage("Restart the gateway service after update?"),
     initialValue: true,
   });
-  if (isCancel(restart)) {
-    defaultRuntime.log(theme.muted("Update cancelled."));
-    defaultRuntime.exit(0);
+  if (updateWizardDeps.isCancel(restart)) {
+    updateWizardDeps.defaultRuntime.log(theme.muted("Update cancelled."));
+    updateWizardDeps.defaultRuntime.exit(0);
     return;
   }
 
   try {
-    await updateCommand({
+    await updateWizardDeps.updateCommand({
       channel: requestedChannel ?? undefined,
       restart: Boolean(restart),
       timeout: opts.timeout,
     });
   } catch (err) {
-    defaultRuntime.error(String(err));
-    defaultRuntime.exit(1);
+    updateWizardDeps.defaultRuntime.error(String(err));
+    updateWizardDeps.defaultRuntime.exit(1);
   }
 }
+
+export const __testing = {
+  setDepsForTest(next: Partial<UpdateWizardDeps>) {
+    updateWizardDeps = { ...updateWizardDeps, ...next };
+  },
+  resetDepsForTest() {
+    updateWizardDeps = defaultUpdateWizardDeps;
+  },
+};

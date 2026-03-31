@@ -3,60 +3,49 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { withEnvAsync } from "../test-utils/env.js";
+import { createOpenClawTools } from "./openclaw-tools.js";
+import { __testing as gatewayToolTesting } from "./tools/gateway-tool.js";
 import "./test-helpers/fast-core-tools.js";
 
-function createGatewayToolModuleMocks() {
-  return {
-    callGatewayTool: vi.fn(async (method: string) => {
-      if (method === "config.get") {
-        return {
-          hash: "hash-1",
-          config: {
-            tools: {
-              exec: {
-                ask: "on-miss",
-                security: "allowlist",
-              },
-            },
+const callGatewayTool = vi.fn(async (method: string) => {
+  if (method === "config.get") {
+    return {
+      hash: "hash-1",
+      config: {
+        tools: {
+          exec: {
+            ask: "on-miss",
+            security: "allowlist",
           },
-        };
-      }
-      if (method === "config.schema.lookup") {
-        return {
-          path: "gateway.auth",
-          schema: {
-            type: "object",
-          },
-          hint: { label: "Gateway Auth" },
-          hintPath: "gateway.auth",
-          children: [
-            {
-              key: "token",
-              path: "gateway.auth.token",
-              type: "string",
-              required: true,
-              hasChildren: false,
-              hint: { label: "Token", sensitive: true },
-              hintPath: "gateway.auth.token",
-            },
-          ],
-        };
-      }
-      return { ok: true };
-    }),
-    readGatewayCallOptions: vi.fn(() => ({})),
-  };
-}
+        },
+      },
+    };
+  }
+  if (method === "config.schema.lookup") {
+    return {
+      path: "gateway.auth",
+      schema: {
+        type: "object",
+      },
+      hint: { label: "Gateway Auth" },
+      hintPath: "gateway.auth",
+      children: [
+        {
+          key: "token",
+          path: "gateway.auth.token",
+          type: "string",
+          required: true,
+          hasChildren: false,
+          hint: { label: "Token", sensitive: true },
+          hintPath: "gateway.auth.token",
+        },
+      ],
+    };
+  }
+  return { ok: true };
+});
 
-vi.mock("./tools/gateway.js", () => createGatewayToolModuleMocks());
-
-let createOpenClawTools: typeof import("./openclaw-tools.js").createOpenClawTools;
-
-async function loadFreshOpenClawToolsModuleForTest() {
-  vi.resetModules();
-  vi.doMock("./tools/gateway.js", () => createGatewayToolModuleMocks());
-  ({ createOpenClawTools } = await import("./openclaw-tools.js"));
-}
+const readGatewayCallOptions = vi.fn(() => ({}));
 
 function requireGatewayTool(agentSessionKey?: string) {
   const tool = createOpenClawTools({
@@ -93,8 +82,48 @@ function expectConfigMutationCall(params: {
 }
 
 describe("gateway tool", () => {
-  beforeEach(async () => {
-    await loadFreshOpenClawToolsModuleForTest();
+  beforeEach(() => {
+    callGatewayTool.mockReset();
+    callGatewayTool.mockImplementation(async (method: string) => {
+      if (method === "config.get") {
+        return {
+          hash: "hash-1",
+          config: {
+            tools: {
+              exec: {
+                ask: "on-miss",
+                security: "allowlist",
+              },
+            },
+          },
+        };
+      }
+      if (method === "config.schema.lookup") {
+        return {
+          path: "gateway.auth",
+          schema: {
+            type: "object",
+          },
+          hint: { label: "Gateway Auth" },
+          hintPath: "gateway.auth",
+          children: [
+            {
+              key: "token",
+              path: "gateway.auth.token",
+              type: "string",
+              required: true,
+              hasChildren: false,
+              hint: { label: "Token", sensitive: true },
+              hintPath: "gateway.auth.token",
+            },
+          ],
+        };
+      }
+      return { ok: true };
+    });
+    readGatewayCallOptions.mockReset();
+    readGatewayCallOptions.mockReturnValue({});
+    gatewayToolTesting.setDepsForTest({ callGatewayTool, readGatewayCallOptions });
   });
 
   it("marks gateway as owner-only", async () => {
@@ -147,7 +176,6 @@ describe("gateway tool", () => {
   });
 
   it("passes config.apply through gateway call", async () => {
-    const { callGatewayTool } = await import("./tools/gateway.js");
     const sessionKey = "agent:main:whatsapp:dm:+15555550123";
     const tool = requireGatewayTool(sessionKey);
 
@@ -159,7 +187,7 @@ describe("gateway tool", () => {
     });
 
     expectConfigMutationCall({
-      callGatewayTool: vi.mocked(callGatewayTool),
+      callGatewayTool,
       action: "config.apply",
       raw,
       sessionKey,
@@ -167,7 +195,6 @@ describe("gateway tool", () => {
   });
 
   it("passes config.patch through gateway call", async () => {
-    const { callGatewayTool } = await import("./tools/gateway.js");
     const sessionKey = "agent:main:whatsapp:dm:+15555550123";
     const tool = requireGatewayTool(sessionKey);
 
@@ -178,7 +205,7 @@ describe("gateway tool", () => {
     });
 
     expectConfigMutationCall({
-      callGatewayTool: vi.mocked(callGatewayTool),
+      callGatewayTool,
       action: "config.patch",
       raw,
       sessionKey,
@@ -186,7 +213,6 @@ describe("gateway tool", () => {
   });
 
   it("rejects config.patch when it changes exec approval settings", async () => {
-    const { callGatewayTool } = await import("./tools/gateway.js");
     const tool = requireGatewayTool();
 
     await expect(
@@ -203,34 +229,25 @@ describe("gateway tool", () => {
     );
   });
 
-  it("rejects config.patch when a legacy tools.bash alias changes exec security", async () => {
-    const { callGatewayTool } = await import("./tools/gateway.js");
-    vi.mocked(callGatewayTool).mockImplementationOnce(async (method: string) => {
-      if (method === "config.get") {
-        return { hash: "hash-1", config: {} };
-      }
-      return { ok: true };
-    });
-    const tool = requireGatewayTool();
+  it("passes through removed legacy tools.bash aliases without treating them as exec mutations", async () => {
+    const sessionKey = "agent:main:whatsapp:dm:+15555550123";
+    const raw = '{ tools: { bash: { security: "full" } } }';
+    const tool = requireGatewayTool(sessionKey);
 
-    await expect(
-      tool.execute("call-legacy-protected-patch", {
-        action: "config.patch",
-        raw: '{ tools: { bash: { security: "full" } } }',
-      }),
-    ).rejects.toThrow(
-      "gateway config.patch cannot change protected config paths: tools.exec.security",
-    );
-    expect(callGatewayTool).toHaveBeenCalledWith("config.get", expect.any(Object), {});
-    expect(callGatewayTool).not.toHaveBeenCalledWith(
-      "config.patch",
-      expect.any(Object),
-      expect.anything(),
-    );
+    await tool.execute("call-legacy-protected-patch", {
+      action: "config.patch",
+      raw,
+    });
+
+    expectConfigMutationCall({
+      callGatewayTool,
+      action: "config.patch",
+      raw,
+      sessionKey,
+    });
   });
 
   it("rejects config.apply when it changes exec security settings", async () => {
-    const { callGatewayTool } = await import("./tools/gateway.js");
     const tool = requireGatewayTool();
 
     await expect(
@@ -250,7 +267,6 @@ describe("gateway tool", () => {
   });
 
   it("rejects config.apply when protected exec settings are omitted", async () => {
-    const { callGatewayTool } = await import("./tools/gateway.js");
     const tool = requireGatewayTool();
 
     await expect(
@@ -270,7 +286,6 @@ describe("gateway tool", () => {
   });
 
   it("passes update.run through gateway call", async () => {
-    const { callGatewayTool } = await import("./tools/gateway.js");
     const sessionKey = "agent:main:whatsapp:dm:+15555550123";
     const tool = requireGatewayTool(sessionKey);
 
@@ -287,9 +302,7 @@ describe("gateway tool", () => {
         sessionKey,
       }),
     );
-    const updateCall = vi
-      .mocked(callGatewayTool)
-      .mock.calls.find((call) => call[0] === "update.run");
+    const updateCall = callGatewayTool.mock.calls.find((call) => call[0] === "update.run");
     expect(updateCall).toBeDefined();
     if (updateCall) {
       const [, opts, params] = updateCall;
@@ -299,7 +312,6 @@ describe("gateway tool", () => {
   });
 
   it("returns a path-scoped schema lookup result", async () => {
-    const { callGatewayTool } = await import("./tools/gateway.js");
     const tool = requireGatewayTool();
 
     const result = await tool.execute("call5", {

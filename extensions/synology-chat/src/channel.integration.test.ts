@@ -1,11 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  dispatchReplyWithBufferedBlockDispatcher,
-  finalizeInboundContextMock,
-  registerPluginHttpRouteMock,
-  resolveAgentRouteMock,
-} from "./channel.test-mocks.js";
+import { createSynologyChatPlugin } from "./channel.ts";
+import { __testing as gatewayRuntimeTesting } from "./gateway-runtime.js";
 import { makeFormBody, makeReq, makeRes } from "./test-http-utils.js";
 
 type RegisteredRoute = {
@@ -14,16 +10,52 @@ type RegisteredRoute = {
   handler: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
 };
 
-let createSynologyChatPlugin: typeof import("./channel.js").createSynologyChatPlugin;
-const freshChannelModulePath: string = "./channel.js?channel-integration-test";
+const registerPluginHttpRouteMock = vi.fn<(params: RegisteredRoute) => () => void>(() => vi.fn());
+const dispatchReplyWithBufferedBlockDispatcher = vi.fn(async () => ({ counts: {} }));
+const finalizeInboundContextMock = vi.fn((ctx: Record<string, unknown>) => ctx);
+const resolveAgentRouteMock = vi.fn((params: { accountId?: string }) => {
+  const accountId = params.accountId?.trim() || "default";
+  return {
+    agentId: `agent-${accountId}`,
+    sessionKey: `agent:agent-${accountId}:main`,
+    accountId,
+  };
+});
+
 describe("Synology channel wiring integration", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-    ({ createSynologyChatPlugin } = await import(freshChannelModulePath));
+  beforeEach(() => {
     registerPluginHttpRouteMock.mockClear();
     dispatchReplyWithBufferedBlockDispatcher.mockClear();
     finalizeInboundContextMock.mockClear();
     resolveAgentRouteMock.mockClear();
+    registerPluginHttpRouteMock.mockImplementation(() => vi.fn());
+    resolveAgentRouteMock.mockImplementation((params) => {
+      const accountId = params.accountId?.trim() || "default";
+      return {
+        agentId: `agent-${accountId}`,
+        sessionKey: `agent:agent-${accountId}:main`,
+        accountId,
+      };
+    });
+    gatewayRuntimeTesting.resetDepsForTest();
+    gatewayRuntimeTesting.setDepsForTest({
+      registerPluginHttpRoute: registerPluginHttpRouteMock,
+      dispatchSynologyChatInboundTurn: vi.fn(async ({ account, msg }) => {
+        const route = resolveAgentRouteMock({ accountId: account.accountId });
+        const sessionKey = `agent:${route.agentId}:synology-chat:${account.accountId}:direct:${msg.from}`;
+        finalizeInboundContextMock({
+          AccountId: account.accountId,
+          SessionKey: sessionKey,
+        });
+        await dispatchReplyWithBufferedBlockDispatcher({
+          ctx: {
+            AccountId: account.accountId,
+            SessionKey: sessionKey,
+          },
+        });
+        return null;
+      }),
+    });
   });
 
   it("registers real webhook handler with resolved account config and enforces allowlist", async () => {

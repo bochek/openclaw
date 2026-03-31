@@ -132,13 +132,33 @@ vi.mock("../infra/clawhub.js", () => ({
   parseClawHubPluginSpec: (...args: unknown[]) => parseClawHubPluginSpec(...args),
 }));
 
-const { registerPluginsCli } = await import("./plugins-cli.js");
+const { registerPluginsCli, __testing: pluginsCliTesting } = await import("./plugins-cli.js");
+const { runPluginInstallCommand, __testing: pluginInstallTesting } = await import(
+  "./plugins-install-command.js"
+);
+const { runPluginUpdateCommand, __testing: pluginUpdateTesting } = await import(
+  "./plugins-update-command.js"
+);
 
 export function runPluginsCommand(argv: string[]) {
   const program = new Command();
   program.exitOverride();
   registerPluginsCli(program);
   return program.parseAsync(argv, { from: "user" });
+}
+
+export function runPluginInstallDirect(params: {
+  raw: string;
+  opts: { link?: boolean; pin?: boolean; marketplace?: string };
+}) {
+  return runPluginInstallCommand(params);
+}
+
+export function runPluginUpdateDirect(params: {
+  id?: string;
+  opts: { all?: boolean; dryRun?: boolean };
+}) {
+  return runPluginUpdateCommand(params);
 }
 
 export function resetPluginsCliTestState() {
@@ -250,4 +270,75 @@ export function resetPluginsCliTestState() {
     error: "hook npm install disabled in test",
   });
   recordHookInstall.mockImplementation((cfg: OpenClawConfig) => cfg);
+  pluginUpdateTesting.setDepsForTest({
+    updateNpmInstalledPlugins: (params) => updateNpmInstalledPlugins(params),
+    updateNpmInstalledHookPacks: (params) => updateNpmInstalledHookPacks(params),
+    loadConfig: () => loadConfig(),
+    readConfigFileSnapshot: (...args) => readConfigFileSnapshot(...args),
+    replaceConfigFile: (params) => replaceConfigFile(params),
+    runtime: defaultRuntime,
+  });
+  pluginsCliTesting.resetDepsForTest();
+  pluginsCliTesting.setDepsForTest({
+    readConfigFileSnapshot: (...args) => readConfigFileSnapshot(...args),
+    replaceConfigFile: (params) => replaceConfigFile(params),
+    resolveStateDir: (...args) => resolveStateDir(...args),
+    parseClawHubPluginSpec: (...args) => parseClawHubPluginSpec(...args),
+    buildPluginStatusReport: (...args) => buildPluginStatusReport(...args),
+    uninstallPlugin: (...args) => uninstallPlugin(...args),
+    promptYesNo: (...args) => promptYesNo(...args),
+    runtime: defaultRuntime,
+  });
+  pluginInstallTesting.setDepsForTest({
+    loadConfig: () => loadConfig(),
+    readConfigFileSnapshot: (...args) => readConfigFileSnapshot(...args),
+    resolveMarketplaceInstallShortcut: (...args) => resolveMarketplaceInstallShortcut(...args),
+    installPluginFromMarketplace: (...args) => installPluginFromMarketplace(...args),
+    installPluginFromClawHub: (...args) => installPluginFromClawHub(...args),
+    installPluginFromNpmSpec: (...args) => installPluginFromNpmSpec(...args),
+    installPluginFromPath: (...args) => installPluginFromPath(...args),
+    installHooksFromNpmSpec: (...args) => installHooksFromNpmSpec(...args),
+    installHooksFromPath: (...args) => installHooksFromPath(...args),
+    parseClawHubPluginSpec: (...args) => parseClawHubPluginSpec(...args),
+    clearPluginManifestRegistryCache: () => clearPluginManifestRegistryCache(),
+    persistPluginInstall: async (params) => {
+      const nextEnabled = enablePluginInConfig(params.config, params.pluginId).config;
+      const recorded = recordPluginInstall(nextEnabled, {
+        pluginId: params.pluginId,
+        ...params.install,
+      });
+      const registry = buildPluginStatusReport({ config: recorded });
+      const plugin = registry.plugins.find((entry) => entry.id === params.pluginId);
+      const slotResult = plugin
+        ? applyExclusiveSlotSelection({
+            config: recorded,
+            selectedId: plugin.id,
+            selectedKind: plugin.kind,
+            registry,
+          })
+        : { config: recorded, warnings: [] };
+      await replaceConfigFile({ nextConfig: slotResult.config });
+      for (const warning of slotResult.warnings) {
+        defaultRuntime.log(warning);
+      }
+      if (params.warningMessage) {
+        defaultRuntime.log(params.warningMessage);
+      }
+      defaultRuntime.log(params.successMessage ?? `Installed plugin: ${params.pluginId}`);
+      defaultRuntime.log("Restart the gateway to load plugins.");
+      return slotResult.config;
+    },
+    persistHookPackInstall: async (params) => {
+      const next = recordHookInstall(params.config, {
+        hookId: params.hookPackId,
+        hooks: params.hooks,
+        ...params.install,
+      });
+      await replaceConfigFile({ nextConfig: next });
+      defaultRuntime.log(params.successMessage ?? `Installed hook pack: ${params.hookPackId}`);
+      defaultRuntime.log("Restart the gateway to load hooks.");
+      return next;
+    },
+    runtime: defaultRuntime,
+  });
 }

@@ -1,12 +1,33 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import * as authModule from "../../../../src/agents/model-auth.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  buildGeminiEmbeddingRequest,
+  buildGeminiTextEmbeddingRequest,
+  createGeminiEmbeddingProvider,
+  DEFAULT_GEMINI_EMBEDDING_MODEL,
+  GEMINI_EMBEDDING_2_MODELS,
+  isGeminiEmbedding2Model,
+  resolveGeminiOutputDimensionality,
+} from "./embeddings-gemini.js";
 import { mockPublicPinnedHostname } from "./test-helpers/ssrf.js";
 
-vi.mock("../../../../src/agents/model-auth.js", async () => {
-  const { createModelAuthMockModule } =
-    await import("../../../../src/test-utils/model-auth-mock.js");
-  return createModelAuthMockModule();
-});
+const resolveApiKeyForProviderMock = vi.hoisted(() => vi.fn());
+const requireApiKeyMock = vi.hoisted(() =>
+  vi.fn((resolved: { apiKey?: string } | string | undefined, provider: string) => {
+    if (typeof resolved === "string" && resolved.trim()) {
+      return resolved;
+    }
+    const apiKey = resolved && typeof resolved === "object" ? resolved.apiKey : undefined;
+    if (typeof apiKey === "string" && apiKey.trim()) {
+      return apiKey;
+    }
+    throw new Error(`Missing API key for provider '${provider}'`);
+  }),
+);
+
+vi.mock("../../../../src/agents/model-auth.js", () => ({
+  requireApiKey: requireApiKeyMock,
+  resolveApiKeyForProvider: resolveApiKeyForProviderMock,
+}));
 
 const createGeminiFetchMock = (embeddingValues = [1, 2, 3]) =>
   vi.fn(async (_input?: unknown, _init?: unknown) => ({
@@ -38,41 +59,23 @@ function magnitude(values: number[]) {
   return Math.sqrt(values.reduce((sum, value) => sum + value * value, 0));
 }
 
-let buildGeminiEmbeddingRequest: typeof import("./embeddings-gemini.js").buildGeminiEmbeddingRequest;
-let buildGeminiTextEmbeddingRequest: typeof import("./embeddings-gemini.js").buildGeminiTextEmbeddingRequest;
-let createGeminiEmbeddingProvider: typeof import("./embeddings-gemini.js").createGeminiEmbeddingProvider;
-let DEFAULT_GEMINI_EMBEDDING_MODEL: typeof import("./embeddings-gemini.js").DEFAULT_GEMINI_EMBEDDING_MODEL;
-let GEMINI_EMBEDDING_2_MODELS: typeof import("./embeddings-gemini.js").GEMINI_EMBEDDING_2_MODELS;
-let isGeminiEmbedding2Model: typeof import("./embeddings-gemini.js").isGeminiEmbedding2Model;
-let resolveGeminiOutputDimensionality: typeof import("./embeddings-gemini.js").resolveGeminiOutputDimensionality;
-
-beforeAll(async () => {
-  vi.doUnmock("undici");
-  vi.resetModules();
-  ({
-    buildGeminiEmbeddingRequest,
-    buildGeminiTextEmbeddingRequest,
-    createGeminiEmbeddingProvider,
-    DEFAULT_GEMINI_EMBEDDING_MODEL,
-    GEMINI_EMBEDDING_2_MODELS,
-    isGeminiEmbedding2Model,
-    resolveGeminiOutputDimensionality,
-  } = await import("./embeddings-gemini.js"));
-});
-
 beforeEach(() => {
   vi.useRealTimers();
-  vi.doUnmock("undici");
+  vi.clearAllMocks();
+  requireApiKeyMock.mockImplementation((resolved: { apiKey?: string } | string | undefined) => {
+    if (typeof resolved === "string") {
+      return resolved;
+    }
+    return resolved?.apiKey ?? "";
+  });
 });
 
 afterEach(() => {
-  vi.doUnmock("undici");
-  vi.resetAllMocks();
   vi.unstubAllGlobals();
 });
 
 function mockResolvedProviderKey(apiKey = "test-key") {
-  vi.mocked(authModule.resolveApiKeyForProvider).mockResolvedValue({
+  resolveApiKeyForProviderMock.mockResolvedValue({
     apiKey,
     mode: "api-key",
     source: "test",

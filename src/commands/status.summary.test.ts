@@ -103,7 +103,9 @@ vi.mock("../routing/session-key.js", () => ({
 }));
 
 vi.mock("../version.js", () => ({
+  VERSION: "2026.3.8",
   resolveRuntimeServiceVersion: vi.fn(() => "2026.3.8"),
+  resolveCompatibilityHostVersion: vi.fn(() => "2026.3.8"),
 }));
 
 vi.mock("./status.link-channel.js", () => ({

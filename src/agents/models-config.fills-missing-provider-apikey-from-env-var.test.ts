@@ -269,7 +269,7 @@ async function expectMoonshotTokenLimits(params: {
 }
 
 describe("models-config", () => {
-  it("keeps anthropic api defaults when model entries omit api", async () => {
+  it("keeps anthropic api defaults when model entries omit api", { timeout: 20_000 }, async () => {
     await withTempHome(async () => {
       const validated = validateConfigObject({
         models: {
@@ -298,88 +298,100 @@ describe("models-config", () => {
     });
   });
 
-  it("fills missing provider.apiKey from env var name when models exist", async () => {
-    await withTempHome(async () => {
-      await withEnvVar("MINIMAX_API_KEY", "sk-minimax-test", async () => {
-        const cfg: OpenClawConfig = {
-          models: {
-            providers: {
-              minimax: {
-                baseUrl: "https://api.minimax.io/anthropic",
-                api: "anthropic-messages",
-                models: [
-                  {
-                    id: "MiniMax-M2.7",
-                    name: "MiniMax M2.7",
-                    reasoning: false,
-                    input: ["text"],
-                    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-                    contextWindow: 200000,
-                    maxTokens: 8192,
-                  },
-                ],
+  it(
+    "fills missing provider.apiKey from env var name when models exist",
+    { timeout: 20_000 },
+    async () => {
+      await withTempHome(async () => {
+        await withEnvVar("MINIMAX_API_KEY", "sk-minimax-test", async () => {
+          const cfg: OpenClawConfig = {
+            models: {
+              providers: {
+                minimax: {
+                  baseUrl: "https://api.minimax.io/anthropic",
+                  api: "anthropic-messages",
+                  models: [
+                    {
+                      id: "MiniMax-M2.7",
+                      name: "MiniMax M2.7",
+                      reasoning: false,
+                      input: ["text"],
+                      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+                      contextWindow: 200000,
+                      maxTokens: 8192,
+                    },
+                  ],
+                },
               },
             },
-          },
-        };
+          };
 
-        await ensureOpenClawModelsJson(cfg);
+          await ensureOpenClawModelsJson(cfg);
 
-        const parsed = await readGeneratedModelsJson<{
-          providers: Record<string, { apiKey?: string; models?: Array<{ id: string }> }>;
-        }>();
-        expect(parsed.providers.minimax?.apiKey).toBe("MINIMAX_API_KEY"); // pragma: allowlist secret
-      });
-    });
-  });
-
-  it("fills anthropic-vertex apiKey with the ADC sentinel when models exist", async () => {
-    await withTempHome(async () => {
-      const adcDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-adc-"));
-      const credentialsPath = path.join(adcDir, "application_default_credentials.json");
-      await fs.writeFile(credentialsPath, JSON.stringify({ project_id: "vertex-project" }), "utf8");
-      const previousCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-
-      try {
-        process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
-
-        await ensureOpenClawModelsJson({
-          models: {
-            providers: {
-              "anthropic-vertex": {
-                baseUrl: "https://us-central1-aiplatform.googleapis.com",
-                api: "anthropic-messages",
-                models: [
-                  {
-                    id: "claude-sonnet-4-6",
-                    name: "Claude Sonnet 4.6",
-                    reasoning: true,
-                    input: ["text", "image"],
-                    cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-                    contextWindow: 200000,
-                    maxTokens: 64000,
-                  },
-                ],
-              },
-            },
-          },
+          const parsed = await readGeneratedModelsJson<{
+            providers: Record<string, { apiKey?: string; models?: Array<{ id: string }> }>;
+          }>();
+          expect(parsed.providers.minimax?.apiKey).toBe("MINIMAX_API_KEY"); // pragma: allowlist secret
         });
+      });
+    },
+  );
 
-        const parsed = await readGeneratedModelsJson<{
-          providers: Record<string, { apiKey?: string }>;
-        }>();
-        expect(parsed.providers["anthropic-vertex"]?.apiKey).toBe("gcp-vertex-credentials");
-      } finally {
-        if (previousCredentials === undefined) {
-          delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
-        } else {
-          process.env.GOOGLE_APPLICATION_CREDENTIALS = previousCredentials;
+  it(
+    "fills anthropic-vertex apiKey with the ADC sentinel when models exist",
+    { timeout: 20_000 },
+    async () => {
+      await withTempHome(async () => {
+        const adcDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-adc-"));
+        const credentialsPath = path.join(adcDir, "application_default_credentials.json");
+        await fs.writeFile(
+          credentialsPath,
+          JSON.stringify({ project_id: "vertex-project" }),
+          "utf8",
+        );
+        const previousCredentials = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
+        try {
+          process.env.GOOGLE_APPLICATION_CREDENTIALS = credentialsPath;
+
+          await ensureOpenClawModelsJson({
+            models: {
+              providers: {
+                "anthropic-vertex": {
+                  baseUrl: "https://us-central1-aiplatform.googleapis.com",
+                  api: "anthropic-messages",
+                  models: [
+                    {
+                      id: "claude-sonnet-4-6",
+                      name: "Claude Sonnet 4.6",
+                      reasoning: true,
+                      input: ["text", "image"],
+                      cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
+                      contextWindow: 200000,
+                      maxTokens: 64000,
+                    },
+                  ],
+                },
+              },
+            },
+          });
+
+          const parsed = await readGeneratedModelsJson<{
+            providers: Record<string, { apiKey?: string }>;
+          }>();
+          expect(parsed.providers["anthropic-vertex"]?.apiKey).toBe("gcp-vertex-credentials");
+        } finally {
+          if (previousCredentials === undefined) {
+            delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+          } else {
+            process.env.GOOGLE_APPLICATION_CREDENTIALS = previousCredentials;
+          }
+          await fs.rm(adcDir, { recursive: true, force: true });
         }
-        await fs.rm(adcDir, { recursive: true, force: true });
-      }
-    });
-  });
-  it("merges providers by default", async () => {
+      });
+    },
+  );
+  it("merges providers by default", { timeout: 20_000 }, async () => {
     await withTempHome(async () => {
       await writeAgentModelsJson({
         providers: {
@@ -414,191 +426,243 @@ describe("models-config", () => {
     });
   });
 
-  it("preserves non-empty agent apiKey but lets explicit config baseUrl win in merge mode", async () => {
-    await expectCustomProviderMergeResult({
-      expectedApiKey: "AGENT_KEY",
-      expectedBaseUrl: "https://config.example/v1",
-    });
-  });
-
-  it("lets explicit config baseUrl win in merge mode when the config provider key is normalized", async () => {
-    await expectCustomProviderMergeResult({
-      existingProviderKey: "custom",
-      configProviderKey: " custom ",
-      expectedApiKey: "AGENT_KEY",
-      expectedBaseUrl: "https://config.example/v1",
-    });
-  });
-
-  it("replaces stale merged baseUrl when the provider api changes", async () => {
-    await expectCustomProviderMergeResult({
-      seedProvider: createAgentSeedProvider({ api: "openai-completions" }),
-      expectedApiKey: "AGENT_KEY",
-      expectedBaseUrl: "https://config.example/v1",
-    });
-  });
-
-  it("replaces stale merged baseUrl when only model-level apis change", async () => {
-    await withTempHome(async () => {
-      const parsed = await runCustomProviderMergeTest({
-        seedProvider: {
-          baseUrl: "https://agent.example/v1",
-          apiKey: "AGENT_KEY", // pragma: allowlist secret
-          api: "",
-          models: [
-            {
-              id: "agent-model",
-              name: "Agent model",
-              input: ["text"],
-              api: "openai-completions",
-            },
-          ],
-        },
+  it(
+    "preserves non-empty agent apiKey but lets explicit config baseUrl win in merge mode",
+    { timeout: 20_000 },
+    async () => {
+      await expectCustomProviderMergeResult({
+        expectedApiKey: "AGENT_KEY",
+        expectedBaseUrl: "https://config.example/v1",
       });
-      expect(parsed.providers.custom?.apiKey).toBe("AGENT_KEY");
-      expect(parsed.providers.custom?.baseUrl).toBe("https://config.example/v1");
-    });
-  });
+    },
+  );
 
-  it("replaces stale merged apiKey when provider is SecretRef-managed in current config", async () => {
-    await expectCustomProviderApiKeyRewrite({
-      existingApiKey: "STALE_AGENT_KEY", // pragma: allowlist secret
-      configuredApiKey: {
-        source: "env",
-        provider: "default",
-        id: "CUSTOM_PROVIDER_API_KEY", // pragma: allowlist secret
-      },
-      expectedApiKey: "CUSTOM_PROVIDER_API_KEY", // pragma: allowlist secret
-    });
-  });
+  it(
+    "lets explicit config baseUrl win in merge mode when the config provider key is normalized",
+    { timeout: 20_000 },
+    async () => {
+      await expectCustomProviderMergeResult({
+        existingProviderKey: "custom",
+        configProviderKey: " custom ",
+        expectedApiKey: "AGENT_KEY",
+        expectedBaseUrl: "https://config.example/v1",
+      });
+    },
+  );
 
-  it("replaces stale merged apiKey when provider is SecretRef-managed via auth-profiles", async () => {
-    await withTempHome(async () => {
-      const agentDir = resolveOpenClawAgentDir();
-      await fs.mkdir(agentDir, { recursive: true });
-      await fs.writeFile(
-        path.join(agentDir, "auth-profiles.json"),
-        `${JSON.stringify(
-          {
-            version: 1,
-            profiles: {
-              "minimax:default": {
-                type: "api_key",
-                provider: "minimax",
-                keyRef: { source: "env", provider: "default", id: "MINIMAX_API_KEY" }, // pragma: allowlist secret
+  it(
+    "replaces stale merged baseUrl when the provider api changes",
+    { timeout: 20_000 },
+    async () => {
+      await expectCustomProviderMergeResult({
+        seedProvider: createAgentSeedProvider({ api: "openai-completions" }),
+        expectedApiKey: "AGENT_KEY",
+        expectedBaseUrl: "https://config.example/v1",
+      });
+    },
+  );
+
+  it(
+    "replaces stale merged baseUrl when only model-level apis change",
+    { timeout: 20_000 },
+    async () => {
+      await withTempHome(async () => {
+        const parsed = await runCustomProviderMergeTest({
+          seedProvider: {
+            baseUrl: "https://agent.example/v1",
+            apiKey: "AGENT_KEY", // pragma: allowlist secret
+            api: "",
+            models: [
+              {
+                id: "agent-model",
+                name: "Agent model",
+                input: ["text"],
+                api: "openai-completions",
+              },
+            ],
+          },
+        });
+        expect(parsed.providers.custom?.apiKey).toBe("AGENT_KEY");
+        expect(parsed.providers.custom?.baseUrl).toBe("https://config.example/v1");
+      });
+    },
+  );
+
+  it(
+    "replaces stale merged apiKey when provider is SecretRef-managed in current config",
+    { timeout: 20_000 },
+    async () => {
+      await expectCustomProviderApiKeyRewrite({
+        existingApiKey: "STALE_AGENT_KEY", // pragma: allowlist secret
+        configuredApiKey: {
+          source: "env",
+          provider: "default",
+          id: "CUSTOM_PROVIDER_API_KEY", // pragma: allowlist secret
+        },
+        expectedApiKey: "CUSTOM_PROVIDER_API_KEY", // pragma: allowlist secret
+      });
+    },
+  );
+
+  it(
+    "replaces stale merged apiKey when provider is SecretRef-managed via auth-profiles",
+    { timeout: 20_000 },
+    async () => {
+      await withTempHome(async () => {
+        const agentDir = resolveOpenClawAgentDir();
+        await fs.mkdir(agentDir, { recursive: true });
+        await fs.writeFile(
+          path.join(agentDir, "auth-profiles.json"),
+          `${JSON.stringify(
+            {
+              version: 1,
+              profiles: {
+                "minimax:default": {
+                  type: "api_key",
+                  provider: "minimax",
+                  keyRef: { source: "env", provider: "default", id: "MINIMAX_API_KEY" }, // pragma: allowlist secret
+                },
               },
             },
+            null,
+            2,
+          )}\n`,
+          "utf8",
+        );
+        await writeAgentModelsJson({
+          providers: {
+            minimax: {
+              baseUrl: "https://api.minimax.io/anthropic",
+              apiKey: "STALE_AGENT_KEY", // pragma: allowlist secret
+              api: "anthropic-messages",
+              models: [{ id: "MiniMax-M2.7", name: "MiniMax M2.7", input: ["text"] }],
+            },
           },
-          null,
-          2,
-        )}\n`,
-        "utf8",
-      );
-      await writeAgentModelsJson({
-        providers: {
-          minimax: {
-            baseUrl: "https://api.minimax.io/anthropic",
-            apiKey: "STALE_AGENT_KEY", // pragma: allowlist secret
-            api: "anthropic-messages",
-            models: [{ id: "MiniMax-M2.7", name: "MiniMax M2.7", input: ["text"] }],
+        });
+
+        await ensureOpenClawModelsJson({
+          models: {
+            mode: "merge",
+            providers: {},
           },
-        },
-      });
-
-      await ensureOpenClawModelsJson({
-        models: {
-          mode: "merge",
-          providers: {},
-        },
-      });
-
-      const parsed = await readGeneratedModelsJson<{
-        providers: Record<string, { apiKey?: string }>;
-      }>();
-      expect(parsed.providers.minimax?.apiKey).toBe("MINIMAX_API_KEY"); // pragma: allowlist secret
-    });
-  });
-
-  it("replaces stale non-env marker when provider transitions back to plaintext config", async () => {
-    await expectCustomProviderApiKeyRewrite({
-      existingApiKey: NON_ENV_SECRETREF_MARKER,
-      configuredApiKey: "ALLCAPS_SAMPLE", // pragma: allowlist secret
-      expectedApiKey: "ALLCAPS_SAMPLE", // pragma: allowlist secret
-    });
-  });
-
-  it("uses config apiKey/baseUrl when existing agent values are empty", async () => {
-    await withTempHome(async () => {
-      const parsed = await runCustomProviderMergeTest({
-        seedProvider: {
-          baseUrl: "",
-          apiKey: "",
-          api: "openai-responses",
-          models: [{ id: "agent-model", name: "Agent model", input: ["text"] }],
-        },
-      });
-      expect(parsed.providers.custom?.apiKey).toBe("CONFIG_KEY");
-      expect(parsed.providers.custom?.baseUrl).toBe("https://config.example/v1");
-    });
-  });
-
-  it("refreshes moonshot capabilities while preserving explicit token limits", async () => {
-    await withTempHome(async () => {
-      await withEnvVar("MOONSHOT_API_KEY", "sk-moonshot-test", async () => {
-        const cfg = createMoonshotConfig({ contextWindow: 1024, maxTokens: 256 });
-
-        await ensureOpenClawModelsJson(cfg);
+        });
 
         const parsed = await readGeneratedModelsJson<{
-          providers: Record<
-            string,
-            {
-              models?: Array<{
-                id: string;
-                input?: string[];
-                reasoning?: boolean;
-                contextWindow?: number;
-                maxTokens?: number;
-                cost?: { input?: number; output?: number };
-              }>;
-            }
-          >;
+          providers: Record<string, { apiKey?: string }>;
         }>();
-        const kimi = parsed.providers.moonshot?.models?.find((model) => model.id === "kimi-k2.5");
-        expect(kimi?.input).toEqual(["text", "image"]);
-        expect(kimi?.reasoning).toBe(false);
-        expect(kimi?.contextWindow).toBe(1024);
-        expect(kimi?.maxTokens).toBe(256);
-        // Preserve explicit user pricing overrides when refreshing capabilities.
-        expect(kimi?.cost?.input).toBe(123);
-        expect(kimi?.cost?.output).toBe(456);
+        expect(parsed.providers.minimax?.apiKey).toBe("MINIMAX_API_KEY"); // pragma: allowlist secret
       });
-    });
-  });
+    },
+  );
 
-  it("does not persist resolved env var value as plaintext in models.json", async () => {
-    await expectOpenAiEnvMarkerApiKey();
-  });
+  it(
+    "replaces stale non-env marker when provider transitions back to plaintext config",
+    { timeout: 20_000 },
+    async () => {
+      await expectCustomProviderApiKeyRewrite({
+        existingApiKey: NON_ENV_SECRETREF_MARKER,
+        configuredApiKey: "ALLCAPS_SAMPLE", // pragma: allowlist secret
+        expectedApiKey: "ALLCAPS_SAMPLE", // pragma: allowlist secret
+      });
+    },
+  );
 
-  it("replaces stale merged apiKey when config key normalizes to a known env marker", async () => {
-    await expectOpenAiEnvMarkerApiKey({ seedMergedProvider: true });
-  });
+  it(
+    "uses config apiKey/baseUrl when existing agent values are empty",
+    { timeout: 20_000 },
+    async () => {
+      await withTempHome(async () => {
+        const parsed = await runCustomProviderMergeTest({
+          seedProvider: {
+            baseUrl: "",
+            apiKey: "",
+            api: "openai-responses",
+            models: [{ id: "agent-model", name: "Agent model", input: ["text"] }],
+          },
+        });
+        expect(parsed.providers.custom?.apiKey).toBe("CONFIG_KEY");
+        expect(parsed.providers.custom?.baseUrl).toBe("https://config.example/v1");
+      });
+    },
+  );
 
-  it("preserves explicit larger token limits when they exceed implicit catalog defaults", async () => {
-    await expectMoonshotTokenLimits({
-      contextWindow: 350000,
-      maxTokens: 16384,
-      expectedContextWindow: 350000,
-      expectedMaxTokens: 16384,
-    });
-  });
+  it(
+    "refreshes moonshot capabilities while preserving explicit token limits",
+    { timeout: 20_000 },
+    async () => {
+      await withTempHome(async () => {
+        await withEnvVar("MOONSHOT_API_KEY", "sk-moonshot-test", async () => {
+          const cfg = createMoonshotConfig({ contextWindow: 1024, maxTokens: 256 });
 
-  it("falls back to implicit token limits when explicit values are invalid", async () => {
-    await expectMoonshotTokenLimits({
-      contextWindow: 0,
-      maxTokens: -1,
-      expectedContextWindow: 262144,
-      expectedMaxTokens: 262144,
-    });
-  });
+          await ensureOpenClawModelsJson(cfg);
+
+          const parsed = await readGeneratedModelsJson<{
+            providers: Record<
+              string,
+              {
+                models?: Array<{
+                  id: string;
+                  input?: string[];
+                  reasoning?: boolean;
+                  contextWindow?: number;
+                  maxTokens?: number;
+                  cost?: { input?: number; output?: number };
+                }>;
+              }
+            >;
+          }>();
+          const kimi = parsed.providers.moonshot?.models?.find((model) => model.id === "kimi-k2.5");
+          expect(kimi?.input).toEqual(["text", "image"]);
+          expect(kimi?.reasoning).toBe(false);
+          expect(kimi?.contextWindow).toBe(1024);
+          expect(kimi?.maxTokens).toBe(256);
+          // Preserve explicit user pricing overrides when refreshing capabilities.
+          expect(kimi?.cost?.input).toBe(123);
+          expect(kimi?.cost?.output).toBe(456);
+        });
+      });
+    },
+  );
+
+  it(
+    "does not persist resolved env var value as plaintext in models.json",
+    { timeout: 20_000 },
+    async () => {
+      await expectOpenAiEnvMarkerApiKey();
+    },
+  );
+
+  it(
+    "replaces stale merged apiKey when config key normalizes to a known env marker",
+    { timeout: 20_000 },
+    async () => {
+      await expectOpenAiEnvMarkerApiKey({ seedMergedProvider: true });
+    },
+  );
+
+  it(
+    "preserves explicit larger token limits when they exceed implicit catalog defaults",
+    { timeout: 20_000 },
+    async () => {
+      await expectMoonshotTokenLimits({
+        contextWindow: 350000,
+        maxTokens: 16384,
+        expectedContextWindow: 350000,
+        expectedMaxTokens: 16384,
+      });
+    },
+  );
+
+  it(
+    "falls back to implicit token limits when explicit values are invalid",
+    { timeout: 20_000 },
+    async () => {
+      await expectMoonshotTokenLimits({
+        contextWindow: 0,
+        maxTokens: -1,
+        expectedContextWindow: 262144,
+        expectedMaxTokens: 262144,
+      });
+    },
+  );
 });

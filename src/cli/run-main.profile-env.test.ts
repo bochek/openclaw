@@ -22,20 +22,6 @@ const maybeRunCliInContainerMock = vi.hoisted(() =>
   vi.fn((argv: string[]) => ({ handled: false, argv })),
 );
 
-vi.mock("node:fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:fs")>();
-  type ExistsSyncPath = Parameters<typeof actual.existsSync>[0];
-  return {
-    ...actual,
-    existsSync: vi.fn((target: ExistsSyncPath) => {
-      if (typeof target === "string" && target.endsWith(".env")) {
-        return fileState.hasCliDotEnv;
-      }
-      return actual.existsSync(target);
-    }),
-  };
-});
-
 vi.mock("./dotenv.js", () => ({
   loadCliDotEnv: dotenvState.loadDotEnv,
 }));
@@ -60,15 +46,27 @@ vi.mock("./windows-argv.js", () => ({
   normalizeWindowsArgv: (argv: string[]) => argv,
 }));
 
-vi.mock("./container-target.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./container-target.js")>();
+vi.mock("./container-target.js", () => {
+  const parseCliContainerArgs = (argv: string[]) => {
+    const index = argv.indexOf("--container");
+    if (index === -1) {
+      return { ok: true as const, container: null, argv };
+    }
+    const container = argv[index + 1];
+    if (!container) {
+      return { ok: false as const, error: "Missing value for --container" };
+    }
+    const next = [...argv];
+    next.splice(index, 2);
+    return { ok: true as const, container, argv: next };
+  };
   return {
-    ...actual,
     maybeRunCliInContainer: maybeRunCliInContainerMock,
+    parseCliContainerArgs,
   };
 });
 
-import { runCli } from "./run-main.js";
+import { runCli, __testing as runMainTesting } from "./run-main.js";
 
 describe("runCli profile env bootstrap", () => {
   const originalProfile = process.env.OPENCLAW_PROFILE;
@@ -94,6 +92,20 @@ describe("runCli profile env bootstrap", () => {
     dotenvState.loadDotEnv.mockClear();
     maybeRunCliInContainerMock.mockClear();
     fileState.hasCliDotEnv = false;
+    runMainTesting.resetDepsForTest();
+    runMainTesting.setDepsForTest({
+      shouldLoadCliDotEnv: () => fileState.hasCliDotEnv,
+      loadCliDotEnv: (params) => dotenvState.loadDotEnv(params),
+      outputRootHelp: async () => undefined,
+      buildProgram: () => ({ commands: [], parseAsync: async () => undefined }),
+      installUnhandledRejectionHandler: () => undefined,
+      getProgramContext: () => null,
+      registerCoreCliByName: async () => undefined,
+      registerSubCliByName: async () => undefined,
+      loadValidatedConfigForPluginRegistration: async () => null,
+      registerPluginCliCommands: () => undefined,
+      closeActiveMemorySearchManagers: async () => undefined,
+    });
   });
 
   afterEach(() => {

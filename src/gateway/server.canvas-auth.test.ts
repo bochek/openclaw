@@ -1,3 +1,4 @@
+import http from "node:http";
 import { describe, expect, test } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
 import { A2UI_PATH, CANVAS_HOST_PATH, CANVAS_WS_PATH } from "../canvas-host/a2ui.js";
@@ -28,9 +29,15 @@ async function listen(
     host,
     port,
     close: async () => {
-      await new Promise<void>((resolve, reject) =>
-        server.close((err) => (err ? reject(err) : resolve())),
-      );
+      await new Promise<void>((resolve, reject) => {
+        const closable = server as typeof server & {
+          closeIdleConnections?: () => void;
+          closeAllConnections?: () => void;
+        };
+        server.close((err) => (err ? reject(err) : resolve()));
+        closable.closeIdleConnections?.();
+        closable.closeAllConnections?.();
+      });
     },
   };
 }
@@ -40,23 +47,44 @@ async function expectWsRejected(
   headers: Record<string, string>,
   expectedStatus = 401,
 ): Promise<void> {
+  const parsed = new URL(url);
   await new Promise<void>((resolve, reject) => {
-    const ws = new WebSocket(url, { headers });
-    const timer = setTimeout(() => reject(new Error("timeout")), WS_REJECT_TIMEOUT_MS);
-    ws.once("open", () => {
+    const req = http.request({
+      host: parsed.hostname,
+      port: parsed.port,
+      path: `${parsed.pathname}${parsed.search}`,
+      headers: {
+        Connection: "Upgrade",
+        Upgrade: "websocket",
+        "Sec-WebSocket-Key": "dGVzdC1rZXktMDEyMzQ1Ng==",
+        "Sec-WebSocket-Version": "13",
+        ...headers,
+      },
+    });
+    const timer = setTimeout(() => {
+      req.destroy(new Error("timeout"));
+      reject(new Error("timeout"));
+    }, WS_REJECT_TIMEOUT_MS);
+    req.once("upgrade", (_res, socket) => {
       clearTimeout(timer);
-      ws.terminate();
+      socket.destroy();
       reject(new Error("expected ws to reject"));
     });
-    ws.once("unexpected-response", (_req, res) => {
+    req.once("response", (res) => {
       clearTimeout(timer);
       expect(res.statusCode).toBe(expectedStatus);
-      resolve();
+      res.resume();
+      res.once("end", resolve);
     });
-    ws.once("error", () => {
+    req.once("error", (error) => {
       clearTimeout(timer);
-      resolve();
+      if ((error as NodeJS.ErrnoException | undefined)?.code === "ECONNRESET") {
+        resolve();
+        return;
+      }
+      reject(error);
     });
+    req.end();
   });
 }
 
@@ -65,15 +93,16 @@ async function expectWsConnected(url: string): Promise<void> {
     const ws = new WebSocket(url);
     const timer = setTimeout(() => reject(new Error("timeout")), WS_CONNECT_TIMEOUT_MS);
     ws.once("open", () => {
+      ws.close();
+    });
+    ws.once("close", () => {
       clearTimeout(timer);
-      ws.terminate();
       resolve();
     });
-    ws.once("unexpected-response", (_req, res) => {
+    ws.once("error", (error) => {
       clearTimeout(timer);
-      reject(new Error(`unexpected response ${res.statusCode}`));
+      reject(error);
     });
-    ws.once("error", reject);
   });
 }
 

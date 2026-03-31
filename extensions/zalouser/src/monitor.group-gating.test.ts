@@ -243,10 +243,17 @@ function createDmMessage(overrides: Partial<ZaloInboundMessage> = {}): ZaloInbou
 
 describe("zalouser monitor group mention gating", () => {
   beforeEach(() => {
+    __testing.resetDepsForTest();
     sendMessageZalouserMock.mockClear();
     sendTypingZalouserMock.mockClear();
     sendDeliveredZalouserMock.mockClear();
     sendSeenZalouserMock.mockClear();
+    __testing.setDepsForTest({
+      sendMessageZalouser: sendMessageZalouserMock,
+      sendTypingZalouser: sendTypingZalouserMock,
+      sendDeliveredZalouser: sendDeliveredZalouserMock,
+      sendSeenZalouser: sendSeenZalouserMock,
+    });
   });
 
   async function processMessageWithDefaults(params: {

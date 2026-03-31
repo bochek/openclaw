@@ -48,6 +48,54 @@ function loadStatusUpdateModule() {
   return statusUpdateModulePromise;
 }
 
+function createDefaultStatusScanJsonCoreDeps() {
+  return {
+    ensurePluginRegistryLoaded: async (options?: { scope?: "configured-channels" }) => {
+      const { ensurePluginRegistryLoaded } = await loadPluginRegistryModule();
+      ensurePluginRegistryLoaded(options);
+    },
+    getUpdateCheckResult: async (params: {
+      timeoutMs: number;
+      fetchGit: boolean;
+      includeRegistry: boolean;
+    }) => {
+      const { getUpdateCheckResult } = await loadStatusUpdateModule();
+      return await getUpdateCheckResult(params);
+    },
+    getAgentLocalStatuses: async (cfg: OpenClawConfig) => {
+      const { getAgentLocalStatuses } = await loadStatusAgentLocalModule();
+      return await getAgentLocalStatuses(cfg);
+    },
+    getStatusSummary: async (params: { config: OpenClawConfig; sourceConfig: OpenClawConfig }) => {
+      const { getStatusSummary } = await loadStatusSummaryModule();
+      return await getStatusSummary(params);
+    },
+    getTailnetHostname: async (
+      run: (cmd: string, args: string[]) => Promise<{ stdout?: string | null } | string | null>,
+    ) => {
+      const { getTailnetHostname } = await loadStatusScanDepsRuntimeModule();
+      return await getTailnetHostname(run);
+    },
+    resolveGatewayProbeSnapshot,
+    resolveMemoryPluginStatus,
+    buildTailscaleHttpsUrl,
+    pickGatewaySelfPresence,
+    runExec,
+    loggingState,
+  };
+}
+
+let statusScanJsonCoreDeps = createDefaultStatusScanJsonCoreDeps();
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof statusScanJsonCoreDeps>) {
+    statusScanJsonCoreDeps = { ...statusScanJsonCoreDeps, ...overrides };
+  },
+  resetDepsForTest() {
+    statusScanJsonCoreDeps = createDefaultStatusScanJsonCoreDeps();
+  },
+};
+
 export function buildColdStartUpdateResult(): UpdateCheckResult {
   return {
     root: null,
@@ -104,14 +152,13 @@ export async function scanStatusJsonCore(params: {
 }): Promise<StatusScanResult> {
   const { cfg, sourceConfig, secretDiagnostics, hasConfiguredChannels, opts } = params;
   if (hasConfiguredChannels) {
-    const { ensurePluginRegistryLoaded } = await loadPluginRegistryModule();
     // Route plugin registration logs to stderr so they don't corrupt JSON on stdout.
-    const previousForceStderr = loggingState.forceConsoleToStderr;
-    loggingState.forceConsoleToStderr = true;
+    const previousForceStderr = statusScanJsonCoreDeps.loggingState.forceConsoleToStderr;
+    statusScanJsonCoreDeps.loggingState.forceConsoleToStderr = true;
     try {
-      ensurePluginRegistryLoaded({ scope: "configured-channels" });
+      await statusScanJsonCoreDeps.ensurePluginRegistryLoaded({ scope: "configured-channels" });
     } finally {
-      loggingState.forceConsoleToStderr = previousForceStderr;
+      statusScanJsonCoreDeps.loggingState.forceConsoleToStderr = previousForceStderr;
     }
   }
 
@@ -122,32 +169,26 @@ export async function scanStatusJsonCore(params: {
     params.coldStart && !hasConfiguredChannels && opts.all !== true;
   const updatePromise = skipColdStartNetworkChecks
     ? Promise.resolve(buildColdStartUpdateResult())
-    : loadStatusUpdateModule().then(({ getUpdateCheckResult }) =>
-        getUpdateCheckResult({
-          timeoutMs: updateTimeoutMs,
-          fetchGit: true,
-          includeRegistry: true,
-        }),
-      );
+    : statusScanJsonCoreDeps.getUpdateCheckResult({
+        timeoutMs: updateTimeoutMs,
+        fetchGit: true,
+        includeRegistry: true,
+      });
   const agentStatusPromise = skipColdStartNetworkChecks
     ? Promise.resolve(buildColdStartAgentLocalStatuses())
-    : loadStatusAgentLocalModule().then(({ getAgentLocalStatuses }) => getAgentLocalStatuses(cfg));
+    : statusScanJsonCoreDeps.getAgentLocalStatuses(cfg);
   const summaryPromise = skipColdStartNetworkChecks
     ? Promise.resolve(buildColdStartStatusSummary())
-    : loadStatusSummaryModule().then(({ getStatusSummary }) =>
-        getStatusSummary({ config: cfg, sourceConfig }),
-      );
+    : statusScanJsonCoreDeps.getStatusSummary({ config: cfg, sourceConfig });
   const tailscaleDnsPromise =
     tailscaleMode === "off"
       ? Promise.resolve<string | null>(null)
-      : loadStatusScanDepsRuntimeModule()
-          .then(({ getTailnetHostname }) =>
-            getTailnetHostname((cmd, args) =>
-              runExec(cmd, args, { timeoutMs: 1200, maxBuffer: 200_000 }),
-            ),
+      : statusScanJsonCoreDeps
+          .getTailnetHostname((cmd, args) =>
+            statusScanJsonCoreDeps.runExec(cmd, args, { timeoutMs: 1200, maxBuffer: 200_000 }),
           )
           .catch(() => null);
-  const gatewayProbePromise = resolveGatewayProbeSnapshot({
+  const gatewayProbePromise = statusScanJsonCoreDeps.resolveGatewayProbeSnapshot({
     cfg,
     opts: {
       ...opts,
@@ -162,7 +203,7 @@ export async function scanStatusJsonCore(params: {
     gatewayProbePromise,
     summaryPromise,
   ]);
-  const tailscaleHttpsUrl = buildTailscaleHttpsUrl({
+  const tailscaleHttpsUrl = statusScanJsonCoreDeps.buildTailscaleHttpsUrl({
     tailscaleMode,
     tailscaleDns,
     controlUiBasePath: cfg.gateway?.controlUi?.basePath,
@@ -178,9 +219,9 @@ export async function scanStatusJsonCore(params: {
   } = gatewaySnapshot;
   const gatewayReachable = gatewayProbe?.ok === true;
   const gatewaySelf = gatewayProbe?.presence
-    ? pickGatewaySelfPresence(gatewayProbe.presence)
+    ? statusScanJsonCoreDeps.pickGatewaySelfPresence(gatewayProbe.presence)
     : null;
-  const memoryPlugin = resolveMemoryPluginStatus(cfg);
+  const memoryPlugin = statusScanJsonCoreDeps.resolveMemoryPluginStatus(cfg);
   const memory = await params.resolveMemory({
     cfg,
     agentStatus,

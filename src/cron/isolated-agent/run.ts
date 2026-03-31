@@ -95,6 +95,36 @@ export type RunCronAgentTurnResult = {
 type ResolvedCronDeliveryTarget = Awaited<ReturnType<typeof resolveDeliveryTarget>>;
 
 type IsolatedDeliveryContract = "cron-owned" | "shared";
+type RunCronIsolatedAgentTurnDeps = {
+  countActiveDescendantRuns: typeof countActiveDescendantRuns;
+  listDescendantRunsForRequester: typeof listDescendantRunsForRequester;
+  loadModelCatalog: typeof loadModelCatalog;
+  runCliAgent: typeof runCliAgent;
+  runEmbeddedPiAgent: typeof runEmbeddedPiAgent;
+  updateSessionStore: typeof updateSessionStore;
+};
+
+const defaultRunCronIsolatedAgentTurnDeps: RunCronIsolatedAgentTurnDeps = {
+  countActiveDescendantRuns,
+  listDescendantRunsForRequester,
+  loadModelCatalog,
+  runCliAgent,
+  runEmbeddedPiAgent,
+  updateSessionStore,
+};
+
+const runCronIsolatedAgentTurnDeps: RunCronIsolatedAgentTurnDeps = {
+  ...defaultRunCronIsolatedAgentTurnDeps,
+};
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<RunCronIsolatedAgentTurnDeps>) {
+    Object.assign(runCronIsolatedAgentTurnDeps, overrides);
+  },
+  resetDepsForTest() {
+    Object.assign(runCronIsolatedAgentTurnDeps, defaultRunCronIsolatedAgentTurnDeps);
+  },
+};
 
 function resolveCronToolPolicy(params: {
   deliveryRequested: boolean;
@@ -217,18 +247,13 @@ export async function runCronIsolatedAgentTurn(params: {
   let catalog: Awaited<ReturnType<typeof loadModelCatalog>> | undefined;
   const loadCatalog = async () => {
     if (!catalog) {
-      catalog = await loadModelCatalog({ config: cfgWithAgentDefaults });
+      catalog = await runCronIsolatedAgentTurnDeps.loadModelCatalog({ config: cfgWithAgentDefaults });
     }
     return catalog;
   };
 
   const baseSessionKey = (params.sessionKey?.trim() || `cron:${params.job.id}`).trim();
-  const agentSessionKey = resolveCronAgentSessionKey({
-    sessionKey: baseSessionKey,
-    agentId,
-    mainKey: params.cfg.session?.mainKey,
-    cfg: params.cfg,
-  });
+  const agentSessionKey = resolveCronAgentSessionKey({ sessionKey: baseSessionKey, agentId });
   const payloadHookExternalContentSource =
     params.job.payload.kind === "agentTurn" ? params.job.payload.externalContentSource : undefined;
   const hookExternalContentSource =
@@ -265,7 +290,7 @@ export async function runCronIsolatedAgentTurn(params: {
     if (runSessionKey !== agentSessionKey) {
       cronSession.store[runSessionKey] = cronSession.sessionEntry;
     }
-    await updateSessionStore(cronSession.storePath, (store) => {
+    await runCronIsolatedAgentTurnDeps.updateSessionStore(cronSession.storePath, (store) => {
       store[agentSessionKey] = cronSession.sessionEntry;
       if (runSessionKey !== agentSessionKey) {
         store[runSessionKey] = cronSession.sessionEntry;
@@ -503,7 +528,7 @@ export async function runCronIsolatedAgentTurn(params: {
             const cliSessionId = cronSession.isNewSession
               ? undefined
               : getCliSessionId(cronSession.sessionEntry, providerOverride);
-            const result = await runCliAgent({
+            const result = await runCronIsolatedAgentTurnDeps.runCliAgent({
               sessionId: cronSession.sessionEntry.sessionId,
               sessionKey: agentSessionKey,
               agentId,
@@ -525,7 +550,7 @@ export async function runCronIsolatedAgentTurn(params: {
             );
             return result;
           }
-          const result = await runEmbeddedPiAgent({
+          const result = await runCronIsolatedAgentTurnDeps.runEmbeddedPiAgent({
             sessionId: cronSession.sessionEntry.sessionId,
             sessionKey: agentSessionKey,
             agentId,
@@ -638,7 +663,9 @@ export async function runCronIsolatedAgentTurn(params: {
         runLevelError: interimRunResult.meta?.error,
       });
       const interimText = interimOutputText?.trim() ?? "";
-      const hasDescendantsSinceRunStart = listDescendantRunsForRequester(agentSessionKey).some(
+      const hasDescendantsSinceRunStart = runCronIsolatedAgentTurnDeps
+        .listDescendantRunsForRequester(agentSessionKey)
+        .some(
         (entry) => {
           const descendantStartedAt =
             typeof entry.startedAt === "number" ? entry.startedAt : entry.createdAt;
@@ -650,7 +677,7 @@ export async function runCronIsolatedAgentTurn(params: {
         !interimRunResult.didSendViaMessagingTool &&
         !interimPayloadHasStructuredContent &&
         !interimPayloads.some((payload) => payload?.isError === true) &&
-        countActiveDescendantRuns(agentSessionKey) === 0 &&
+        runCronIsolatedAgentTurnDeps.countActiveDescendantRuns(agentSessionKey) === 0 &&
         !hasDescendantsSinceRunStart &&
         isLikelyInterimCronMessage(interimText);
 

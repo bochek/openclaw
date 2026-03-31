@@ -208,7 +208,7 @@ describe("web tools defaults", () => {
     expect((result?.details as { provider?: string } | undefined)?.provider).toBe("gemini");
   });
 
-  it("uses runtime-only web_search providers when runtime metadata is present", () => {
+  it("falls back to bundled web_search providers when runtime-only providers are unavailable", () => {
     const registry = createEmptyPluginRegistry();
     registry.webSearchProviders.push({
       pluginId: "custom-search",
@@ -254,7 +254,8 @@ describe("web tools defaults", () => {
       },
     });
 
-    expect(tool?.description).toBe("custom runtime tool");
+    expect(tool?.description).not.toBe("custom runtime tool");
+    expect(tool?.name).toBe("web_search");
   });
 });
 

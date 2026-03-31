@@ -1,20 +1,36 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { afterEach, describe, expect, it, vi } from "vitest";
-
-vi.hoisted(() => {
-  vi.resetModules();
-});
-
-import "./server-context.chrome-test-harness.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   PROFILE_ATTACH_RETRY_TIMEOUT_MS,
   PROFILE_HTTP_REACHABILITY_TIMEOUT_MS,
 } from "./cdp-timeouts.js";
-import * as chromeModule from "./chrome.js";
+import type { ResolvedBrowserProfile } from "./config.js";
 import type { RunningChrome } from "./chrome.js";
-import type { BrowserServerState } from "./server-context.js";
-import { createBrowserRouteContext } from "./server-context.js";
+import {
+  __testing as availabilityTesting,
+  createProfileAvailability,
+} from "./server-context.availability.js";
+import type { BrowserServerState, ProfileRuntimeState } from "./server-context.js";
+
+const availabilityMocks = vi.hoisted(() => ({
+  closeChromeMcpSession: vi.fn(async () => false),
+  ensureChromeMcpAvailable: vi.fn(async () => {}),
+  isChromeCdpReady: vi.fn(async () => true),
+  isChromeReachable: vi.fn(async () => true),
+  launchOpenClawChrome: vi.fn(async () => {
+    throw new Error("unexpected launch");
+  }),
+  listChromeMcpTabs: vi.fn(async () => []),
+  stopOpenClawChrome: vi.fn(async () => {}),
+}));
+
+const TEST_CDP_READY_TIMING = {
+  cdpReadyAfterLaunchMaxTimeoutMs: 10,
+  cdpReadyAfterLaunchMinTimeoutMs: 1,
+  cdpReadyAfterLaunchPollMs: 1,
+  cdpReadyAfterLaunchWindowMs: 20,
+};
 
 function makeBrowserState(): BrowserServerState {
   return {
@@ -62,24 +78,52 @@ function mockLaunchedChrome(
   });
 }
 
-function setupEnsureBrowserAvailableHarness() {
-  vi.useFakeTimers();
+function makeProfile(): ResolvedBrowserProfile {
+  return {
+    name: "openclaw",
+    cdpPort: 18800,
+    cdpUrl: "http://127.0.0.1:18800",
+    cdpHost: "127.0.0.1",
+    cdpIsLoopback: true,
+    color: "#FF4500",
+    driver: "openclaw",
+    attachOnly: false,
+  };
+}
 
-  const launchOpenClawChrome = vi.mocked(chromeModule.launchOpenClawChrome);
-  const stopOpenClawChrome = vi.mocked(chromeModule.stopOpenClawChrome);
-  const isChromeReachable = vi.mocked(chromeModule.isChromeReachable);
-  const isChromeCdpReady = vi.mocked(chromeModule.isChromeCdpReady);
+function setupEnsureBrowserAvailableHarness() {
+  const launchOpenClawChrome = availabilityMocks.launchOpenClawChrome;
+  const stopOpenClawChrome = availabilityMocks.stopOpenClawChrome;
+  const isChromeReachable = availabilityMocks.isChromeReachable;
+  const isChromeCdpReady = availabilityMocks.isChromeCdpReady;
   isChromeReachable.mockResolvedValue(false);
 
   const state = makeBrowserState();
-  const ctx = createBrowserRouteContext({ getState: () => state });
-  const profile = ctx.forProfile("openclaw");
+  const profileState: ProfileRuntimeState = {
+    profile: makeProfile(),
+    running: null,
+    lastTargetId: null,
+    reconcile: null,
+  };
+  const profile = createProfileAvailability({
+    opts: { getState: () => state },
+    profile: profileState.profile,
+    state: () => state,
+    getProfileState: () => profileState,
+    setProfileRunning: (next) => {
+      profileState.running = next;
+    },
+  });
 
   return { launchOpenClawChrome, stopOpenClawChrome, isChromeCdpReady, profile };
 }
 
+beforeEach(() => {
+  availabilityTesting.setDepsForTest(availabilityMocks);
+  availabilityTesting.setTimingForTest(TEST_CDP_READY_TIMING);
+});
+
 afterEach(() => {
-  vi.useRealTimers();
   vi.clearAllMocks();
   vi.restoreAllMocks();
 });
@@ -91,9 +135,7 @@ describe("browser server-context ensureBrowserAvailable", () => {
     isChromeCdpReady.mockResolvedValueOnce(false).mockResolvedValue(true);
     mockLaunchedChrome(launchOpenClawChrome, 123);
 
-    const promise = profile.ensureBrowserAvailable();
-    await vi.advanceTimersByTimeAsync(100);
-    await expect(promise).resolves.toBeUndefined();
+    await expect(profile.ensureBrowserAvailable()).resolves.toBeUndefined();
 
     expect(launchOpenClawChrome).toHaveBeenCalledTimes(1);
     expect(isChromeCdpReady).toHaveBeenCalled();
@@ -106,10 +148,7 @@ describe("browser server-context ensureBrowserAvailable", () => {
     isChromeCdpReady.mockResolvedValue(false);
     mockLaunchedChrome(launchOpenClawChrome, 321);
 
-    const promise = profile.ensureBrowserAvailable();
-    const rejected = expect(promise).rejects.toThrow("not reachable after start");
-    await vi.advanceTimersByTimeAsync(8100);
-    await rejected;
+    await expect(profile.ensureBrowserAvailable()).rejects.toThrow("not reachable after start");
 
     expect(launchOpenClawChrome).toHaveBeenCalledTimes(1);
     expect(stopOpenClawChrome).toHaveBeenCalledTimes(1);
@@ -118,7 +157,7 @@ describe("browser server-context ensureBrowserAvailable", () => {
   it("reuses a pre-existing loopback browser after an initial short probe miss", async () => {
     const { launchOpenClawChrome, stopOpenClawChrome, isChromeCdpReady, profile } =
       setupEnsureBrowserAvailableHarness();
-    const isChromeReachable = vi.mocked(chromeModule.isChromeReachable);
+    const isChromeReachable = availabilityMocks.isChromeReachable;
 
     isChromeReachable.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     isChromeCdpReady.mockResolvedValueOnce(true);

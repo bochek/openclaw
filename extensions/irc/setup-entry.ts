@@ -1,4 +1,6 @@
 import { defineSetupPluginEntry } from "openclaw/plugin-sdk/core";
-import { ircPlugin } from "./src/channel.js";
+import { ircSetupPlugin } from "./src/channel.setup.js";
 
-export default defineSetupPluginEntry(ircPlugin);
+export { ircSetupPlugin } from "./src/channel.setup.js";
+
+export default defineSetupPluginEntry(ircSetupPlugin);

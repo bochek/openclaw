@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   clearFastTestEnv,
   loadRunCronIsolatedAgentTurn,
@@ -10,7 +10,7 @@ import {
   runEmbeddedPiAgentMock,
 } from "./run.test-harness.js";
 
-const runCronIsolatedAgentTurn = await loadRunCronIsolatedAgentTurn();
+let runCronIsolatedAgentTurn: Awaited<ReturnType<typeof loadRunCronIsolatedAgentTurn>>;
 
 function makeParams() {
   return {
@@ -31,6 +31,10 @@ function makeParams() {
 
 describe("runCronIsolatedAgentTurn message tool policy", () => {
   let previousFastTestEnv: string | undefined;
+
+  beforeAll(async () => {
+    runCronIsolatedAgentTurn = await loadRunCronIsolatedAgentTurn();
+  });
 
   async function expectMessageToolDisabledForPlan(plan: {
     requested: boolean;

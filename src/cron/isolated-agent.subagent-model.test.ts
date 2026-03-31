@@ -1,13 +1,12 @@
 import "./isolated-agent.mocks.js";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { withTempHome as withTempHomeHelper } from "../../test/helpers/temp-home.js";
-import { loadModelCatalog } from "../agents/model-catalog.js";
-import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
 import type { CliDeps } from "../cli/deps.js";
 import type { OpenClawConfig } from "../config/config.js";
-import { runCronIsolatedAgentTurn } from "./isolated-agent.js";
+import { loadModelCatalogMock, runEmbeddedPiAgentMock } from "./isolated-agent.mocks.js";
+import { __testing as isolatedAgentTesting, runCronIsolatedAgentTurn } from "./isolated-agent.js";
 import type { CronJob } from "./types.js";
 
 async function withTempHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
@@ -82,7 +81,7 @@ function makeJob(): CronJob {
 }
 
 function mockEmbeddedAgent() {
-  vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+  runEmbeddedPiAgentMock.mockResolvedValue({
     payloads: [{ text: "ok" }],
     meta: {
       durationMs: 5,
@@ -116,13 +115,21 @@ async function runSubagentModelCase(params: {
     lane: "cron",
   });
 
-  return vi.mocked(runEmbeddedPiAgent).mock.calls[0]?.[0];
+  return runEmbeddedPiAgentMock.mock.calls[0]?.[0];
 }
 
 describe("runCronIsolatedAgentTurn: subagent model resolution (#11461)", () => {
   beforeEach(() => {
-    vi.mocked(runEmbeddedPiAgent).mockReset();
-    vi.mocked(loadModelCatalog).mockResolvedValue([]);
+    isolatedAgentTesting.setDepsForTest({
+      loadModelCatalog: (...args) => loadModelCatalogMock(...args),
+      runEmbeddedPiAgent: (...args) => runEmbeddedPiAgentMock(...args),
+    });
+    runEmbeddedPiAgentMock.mockReset();
+    loadModelCatalogMock.mockResolvedValue([]);
+  });
+
+  afterAll(() => {
+    isolatedAgentTesting.resetDepsForTest();
   });
 
   it.each([

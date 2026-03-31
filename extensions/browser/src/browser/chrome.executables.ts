@@ -11,6 +11,22 @@ export type BrowserExecutable = {
 
 const CHROME_VERSION_RE = /(\d+)(?:\.\d+){0,3}/;
 
+type ChromeExecutableDeps = {
+  execFileSync: typeof execFileSync;
+  existsSync: typeof fs.existsSync;
+  homedir: typeof os.homedir;
+  readFileSync: typeof fs.readFileSync;
+};
+
+const defaultChromeExecutableDeps: ChromeExecutableDeps = {
+  execFileSync,
+  existsSync: fs.existsSync.bind(fs),
+  homedir: os.homedir.bind(os),
+  readFileSync: fs.readFileSync.bind(fs),
+};
+
+let chromeExecutableDeps = defaultChromeExecutableDeps;
+
 const CHROMIUM_BUNDLE_IDS = new Set([
   "com.google.Chrome",
   "com.google.Chrome.beta",
@@ -96,7 +112,7 @@ const CHROMIUM_EXE_NAMES = new Set([
 
 function exists(filePath: string) {
   try {
-    return fs.existsSync(filePath);
+    return chromeExecutableDeps.existsSync(filePath);
   } catch {
     return false;
   }
@@ -109,7 +125,7 @@ function execText(
   maxBuffer = 1024 * 1024,
 ): string | null {
   try {
-    const output = execFileSync(command, args, {
+    const output = chromeExecutableDeps.execFileSync(command, args, {
       timeout: timeoutMs,
       encoding: "utf8",
       maxBuffer,
@@ -209,7 +225,7 @@ function detectDefaultChromiumExecutableMac(): BrowserExecutable | null {
 
 function detectDefaultBrowserBundleIdMac(): string | null {
   const plistPath = path.join(
-    os.homedir(),
+    chromeExecutableDeps.homedir(),
     "Library/Preferences/com.apple.LaunchServices/com.apple.launchservices.secure.plist",
   );
   if (!exists(plistPath)) {
@@ -316,7 +332,7 @@ function detectDefaultChromiumExecutableWindows(): BrowserExecutable | null {
 
 function findDesktopFilePath(desktopId: string): string | null {
   const candidates = [
-    path.join(os.homedir(), ".local", "share", "applications", desktopId),
+    path.join(chromeExecutableDeps.homedir(), ".local", "share", "applications", desktopId),
     path.join("/usr/local/share/applications", desktopId),
     path.join("/usr/share/applications", desktopId),
     path.join("/var/lib/snapd/desktop/applications", desktopId),
@@ -331,7 +347,7 @@ function findDesktopFilePath(desktopId: string): string | null {
 
 function readDesktopExecLine(desktopPath: string): string | null {
   try {
-    const raw = fs.readFileSync(desktopPath, "utf8");
+    const raw = chromeExecutableDeps.readFileSync(desktopPath, "utf8");
     const lines = raw.split(/\r?\n/);
     for (const line of lines) {
       if (line.startsWith("Exec=")) {
@@ -485,7 +501,10 @@ export function findChromeExecutableMac(): BrowserExecutable | null {
     },
     {
       kind: "chrome",
-      path: path.join(os.homedir(), "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+      path: path.join(
+        chromeExecutableDeps.homedir(),
+        "Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      ),
     },
     {
       kind: "brave",
@@ -493,7 +512,10 @@ export function findChromeExecutableMac(): BrowserExecutable | null {
     },
     {
       kind: "brave",
-      path: path.join(os.homedir(), "Applications/Brave Browser.app/Contents/MacOS/Brave Browser"),
+      path: path.join(
+        chromeExecutableDeps.homedir(),
+        "Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+      ),
     },
     {
       kind: "edge",
@@ -502,7 +524,7 @@ export function findChromeExecutableMac(): BrowserExecutable | null {
     {
       kind: "edge",
       path: path.join(
-        os.homedir(),
+        chromeExecutableDeps.homedir(),
         "Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
       ),
     },
@@ -512,7 +534,10 @@ export function findChromeExecutableMac(): BrowserExecutable | null {
     },
     {
       kind: "chromium",
-      path: path.join(os.homedir(), "Applications/Chromium.app/Contents/MacOS/Chromium"),
+      path: path.join(
+        chromeExecutableDeps.homedir(),
+        "Applications/Chromium.app/Contents/MacOS/Chromium",
+      ),
     },
     {
       kind: "canary",
@@ -521,7 +546,7 @@ export function findChromeExecutableMac(): BrowserExecutable | null {
     {
       kind: "canary",
       path: path.join(
-        os.homedir(),
+        chromeExecutableDeps.homedir(),
         "Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
       ),
     },
@@ -533,10 +558,13 @@ export function findChromeExecutableMac(): BrowserExecutable | null {
 export function findGoogleChromeExecutableMac(): BrowserExecutable | null {
   return findFirstChromeExecutable([
     "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-    path.join(os.homedir(), "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+    path.join(
+      chromeExecutableDeps.homedir(),
+      "Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    ),
     "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
     path.join(
-      os.homedir(),
+      chromeExecutableDeps.homedir(),
       "Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
     ),
   ]);
@@ -718,3 +746,12 @@ export function resolveBrowserExecutableForPlatform(
   }
   return null;
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<ChromeExecutableDeps>) {
+    chromeExecutableDeps = {
+      ...defaultChromeExecutableDeps,
+      ...overrides,
+    };
+  },
+};

@@ -44,6 +44,16 @@ export type MonitorMSTeamsResult = {
 };
 
 const MSTEAMS_WEBHOOK_MAX_BODY_BYTES = DEFAULT_WEBHOOK_MAX_BODY_BYTES;
+type MSTeamsExpressModule = Awaited<typeof import("express")>;
+
+let loadMSTeamsExpressModuleForTest: (() => Promise<MSTeamsExpressModule>) | undefined;
+
+export function setLoadMSTeamsExpressModuleForTest(
+  loader?: () => Promise<MSTeamsExpressModule>,
+): void {
+  loadMSTeamsExpressModuleForTest = loader;
+}
+
 export async function monitorMSTeamsProvider(
   opts: MonitorMSTeamsOpts,
 ): Promise<MonitorMSTeamsResult> {
@@ -227,7 +237,10 @@ export async function monitorMSTeamsProvider(
   log.info(`starting provider (port ${port})`);
 
   // Dynamic import to avoid loading SDK when provider is disabled
-  const express = await import("express");
+  const express =
+    loadMSTeamsExpressModuleForTest != null
+      ? await loadMSTeamsExpressModuleForTest()
+      : await import("express");
 
   const { sdk, app } = await loadMSTeamsSdkWithAuth(creds);
 

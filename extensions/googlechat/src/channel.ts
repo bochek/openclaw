@@ -64,6 +64,38 @@ const loadGoogleChatChannelRuntime = createLazyRuntimeNamedExport(
   () => import("./channel.runtime.js"),
   "googleChatChannelRuntime",
 );
+const loadSendGoogleChatMessage = createLazyRuntimeNamedExport(
+  () => import("./api.js"),
+  "sendGoogleChatMessage",
+);
+const loadUploadGoogleChatAttachment = createLazyRuntimeNamedExport(
+  () => import("./api.js"),
+  "uploadGoogleChatAttachment",
+);
+
+type GoogleChatStartAccountRuntime = {
+  resolveGoogleChatWebhookPath: typeof import("./monitor.js").resolveGoogleChatWebhookPath;
+  startGoogleChatMonitor: typeof import("./monitor.js").startGoogleChatMonitor;
+};
+
+const defaultLoadGoogleChatStartAccountRuntime = async (): Promise<GoogleChatStartAccountRuntime> => {
+  const monitor = await import("./monitor.js");
+  return {
+    resolveGoogleChatWebhookPath: monitor.resolveGoogleChatWebhookPath,
+    startGoogleChatMonitor: monitor.startGoogleChatMonitor,
+  };
+};
+
+let loadGoogleChatStartAccountRuntime = defaultLoadGoogleChatStartAccountRuntime;
+
+export const __testing = {
+  setStartAccountRuntimeForTest(loader: () => Promise<GoogleChatStartAccountRuntime>) {
+    loadGoogleChatStartAccountRuntime = loader;
+  },
+  resetStartAccountRuntimeForTest() {
+    loadGoogleChatStartAccountRuntime = defaultLoadGoogleChatStartAccountRuntime;
+  },
+};
 
 const formatAllowFromEntry = (entry: string) =>
   entry
@@ -281,7 +313,7 @@ export const googlechatPlugin = createChatChannelPlugin({
         });
         ctx.log?.info(`[${account.accountId}] starting Google Chat webhook`);
         const { resolveGoogleChatWebhookPath, startGoogleChatMonitor } =
-          await loadGoogleChatChannelRuntime();
+          await loadGoogleChatStartAccountRuntime();
         statusSink({
           running: true,
           lastStartAt: Date.now(),
@@ -327,7 +359,7 @@ export const googlechatPlugin = createChatChannelPlugin({
         const user = normalizeGoogleChatTarget(id) ?? id;
         const target = isGoogleChatUserTarget(user) ? user : `users/${user}`;
         const space = await resolveGoogleChatOutboundSpace({ account, target });
-        const { sendGoogleChatMessage } = await loadGoogleChatChannelRuntime();
+        const sendGoogleChatMessage = await loadSendGoogleChatMessage();
         await sendGoogleChatMessage({
           account,
           space,
@@ -384,7 +416,7 @@ export const googlechatPlugin = createChatChannelPlugin({
         });
         const space = await resolveGoogleChatOutboundSpace({ account, target: to });
         const thread = (threadId ?? replyToId ?? undefined) as string | undefined;
-        const { sendGoogleChatMessage } = await loadGoogleChatChannelRuntime();
+        const sendGoogleChatMessage = await loadSendGoogleChatMessage();
         const result = await sendGoogleChatMessage({
           account,
           space,
@@ -436,8 +468,8 @@ export const googlechatPlugin = createChatChannelPlugin({
               maxBytes: effectiveMaxBytes,
               localRoots: mediaLocalRoots?.length ? mediaLocalRoots : undefined,
             });
-        const { sendGoogleChatMessage, uploadGoogleChatAttachment } =
-          await loadGoogleChatChannelRuntime();
+        const sendGoogleChatMessage = await loadSendGoogleChatMessage();
+        const uploadGoogleChatAttachment = await loadUploadGoogleChatAttachment();
         const upload = await uploadGoogleChatAttachment({
           account,
           space,

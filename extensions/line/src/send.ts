@@ -4,6 +4,7 @@ import { loadConfig, type OpenClawConfig } from "openclaw/plugin-sdk/config-runt
 import { logVerbose } from "openclaw/plugin-sdk/runtime-env";
 import { resolveLineAccount } from "./accounts.js";
 import { resolveLineChannelAccessToken } from "./channel-access-token.js";
+import { createQuickReplyItems } from "./quick-replies.js";
 import type { LineSendResult } from "./types.js";
 
 type Message = messagingApi.Message;
@@ -16,13 +17,22 @@ type FlexMessage = messagingApi.FlexMessage;
 type FlexContainer = messagingApi.FlexContainer;
 type TemplateMessage = messagingApi.TemplateMessage;
 type QuickReply = messagingApi.QuickReply;
-type QuickReplyItem = messagingApi.QuickReplyItem;
 
 const userProfileCache = new Map<
   string,
   { displayName: string; pictureUrl?: string; fetchedAt: number }
 >();
 const PROFILE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+let loadLineConfig = () => loadConfig();
+let resolveLineAccountForSend = resolveLineAccount;
+let resolveLineChannelAccessTokenForSend = resolveLineChannelAccessToken;
+let recordLineChannelActivity = recordChannelActivity;
+let logLineVerbose = logVerbose;
+let createLineMessagingApiClient = (channelAccessToken: string) =>
+  new messagingApi.MessagingApiClient({
+    channelAccessToken,
+  });
 
 interface LineSendOpts {
   cfg?: OpenClawConfig;
@@ -47,6 +57,46 @@ interface LinePushBehavior {
 
 interface LineReplyBehavior {
   verboseMessage?: (messageCount: number) => string;
+}
+
+export function __setLineSendRuntimeForTest(params: {
+  loadConfig?: typeof loadLineConfig;
+  resolveLineAccount?: typeof resolveLineAccount;
+  resolveLineChannelAccessToken?: typeof resolveLineChannelAccessToken;
+  recordChannelActivity?: typeof recordChannelActivity;
+  logVerbose?: typeof logVerbose;
+  createMessagingApiClient?: typeof createLineMessagingApiClient;
+}): void {
+  if (params.loadConfig) {
+    loadLineConfig = params.loadConfig;
+  }
+  if (params.resolveLineAccount) {
+    resolveLineAccountForSend = params.resolveLineAccount;
+  }
+  if (params.resolveLineChannelAccessToken) {
+    resolveLineChannelAccessTokenForSend = params.resolveLineChannelAccessToken;
+  }
+  if (params.recordChannelActivity) {
+    recordLineChannelActivity = params.recordChannelActivity;
+  }
+  if (params.logVerbose) {
+    logLineVerbose = params.logVerbose;
+  }
+  if (params.createMessagingApiClient) {
+    createLineMessagingApiClient = params.createMessagingApiClient;
+  }
+}
+
+export function __resetLineSendRuntimeForTest(): void {
+  loadLineConfig = () => loadConfig();
+  resolveLineAccountForSend = resolveLineAccount;
+  resolveLineChannelAccessTokenForSend = resolveLineChannelAccessToken;
+  recordLineChannelActivity = recordChannelActivity;
+  logLineVerbose = logVerbose;
+  createLineMessagingApiClient = (channelAccessToken: string) =>
+    new messagingApi.MessagingApiClient({
+      channelAccessToken,
+    });
 }
 
 function normalizeTarget(to: string): string {
@@ -76,15 +126,13 @@ function createLineMessagingClient(opts: LineClientOpts): {
   account: ReturnType<typeof resolveLineAccount>;
   client: messagingApi.MessagingApiClient;
 } {
-  const cfg = opts.cfg ?? loadConfig();
-  const account = resolveLineAccount({
+  const cfg = opts.cfg ?? loadLineConfig();
+  const account = resolveLineAccountForSend({
     cfg,
     accountId: opts.accountId,
   });
-  const token = resolveLineChannelAccessToken(opts.channelAccessToken, account);
-  const client = new messagingApi.MessagingApiClient({
-    channelAccessToken: token,
-  });
+  const token = resolveLineChannelAccessTokenForSend(opts.channelAccessToken, account);
+  const client = createLineMessagingApiClient(token);
   return { account, client };
 }
 
@@ -163,12 +211,12 @@ function logLineHttpError(err: unknown, context: string): void {
   };
   if (typeof body === "string") {
     const summary = status ? `${status} ${statusText ?? ""}`.trim() : "unknown status";
-    logVerbose(`line: ${context} failed (${summary}): ${body}`);
+    logLineVerbose(`line: ${context} failed (${summary}): ${body}`);
   }
 }
 
 function recordLineOutboundActivity(accountId: string): void {
-  recordChannelActivity({
+  recordLineChannelActivity({
     channel: "line",
     accountId,
     direction: "outbound",
@@ -206,7 +254,7 @@ async function pushLineMessages(
     const logMessage =
       behavior.verboseMessage?.(chatId, messages.length) ??
       `line: pushed ${messages.length} messages to ${chatId}`;
-    logVerbose(logMessage);
+    logLineVerbose(logMessage);
   }
 
   return {
@@ -231,7 +279,7 @@ async function replyLineMessages(
   recordLineOutboundActivity(account.accountId);
 
   if (opts.verbose) {
-    logVerbose(
+    logLineVerbose(
       behavior.verboseMessage?.(messages.length) ??
         `line: replied with ${messages.length} messages`,
     );
@@ -397,18 +445,6 @@ export async function pushTextMessageWithQuickReplies(
   });
 }
 
-export function createQuickReplyItems(labels: string[]): QuickReply {
-  const items: QuickReplyItem[] = labels.slice(0, 13).map((label) => ({
-    type: "action",
-    action: {
-      type: "message",
-      label: label.slice(0, 20),
-      text: label,
-    },
-  }));
-  return { items };
-}
-
 export function createTextMessageWithQuickReplies(
   text: string,
   quickReplyLabels: string[],
@@ -433,7 +469,7 @@ export async function showLoadingAnimation(
     });
     logVerbose(`line: showing loading animation to ${chatId}`);
   } catch (err) {
-    logVerbose(`line: loading animation failed (non-fatal): ${String(err)}`);
+    logLineVerbose(`line: loading animation failed (non-fatal): ${String(err)}`);
   }
 }
 

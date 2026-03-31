@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 describe("web_search shared cache", () => {
-  it("keeps cache entries module-local instead of exposing them on a global symbol", async () => {
+  it("stores cache entries in the shared runtime cache symbol", async () => {
     vi.resetModules();
     delete (globalThis as Record<PropertyKey, unknown>)[Symbol.for("openclaw.web-search.cache")];
 
@@ -10,8 +10,8 @@ describe("web_search shared cache", () => {
     module.writeCachedSearchPayload(cacheKey, { ok: true }, 60_000);
 
     expect(module.readCachedSearchPayload(cacheKey)).toEqual({ ok: true, cached: true });
-    expect(
-      (globalThis as Record<PropertyKey, unknown>)[Symbol.for("openclaw.web-search.cache")],
-    ).toBeUndefined();
+    const sharedCache = module.SEARCH_CACHE;
+    expect(sharedCache).toBeInstanceOf(Map);
+    expect(sharedCache.has(cacheKey)).toBe(true);
   });
 });

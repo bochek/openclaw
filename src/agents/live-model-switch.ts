@@ -1,11 +1,21 @@
 import { loadSessionStore, resolveStorePath, type SessionEntry } from "../config/sessions.js";
 import { resolveDefaultModelForAgent } from "./model-selection.js";
 import {
+  abortEmbeddedPiRun,
   consumeEmbeddedRunModelSwitch,
   requestEmbeddedRunModelSwitch,
   type EmbeddedRunModelSwitchRequest,
 } from "./pi-embedded-runner/runs.js";
-import { abortEmbeddedPiRun } from "./pi-embedded.js";
+
+const defaultLiveModelSwitchDeps = {
+  abortEmbeddedPiRun,
+  requestEmbeddedRunModelSwitch,
+  consumeEmbeddedRunModelSwitch,
+  resolveDefaultModelForAgent,
+  loadSessionStore,
+  resolveStorePath,
+};
+let liveModelSwitchDeps = defaultLiveModelSwitchDeps;
 
 export type LiveSessionModelSelection = EmbeddedRunModelSwitchRequest;
 
@@ -39,15 +49,15 @@ export function resolveLiveSessionModelSelection(params: {
   }
   const agentId = params.agentId?.trim();
   const defaultModelRef = agentId
-    ? resolveDefaultModelForAgent({
+    ? liveModelSwitchDeps.resolveDefaultModelForAgent({
         cfg,
         agentId,
       })
     : { provider: params.defaultProvider, model: params.defaultModel };
-  const storePath = resolveStorePath(cfg.session?.store, {
+  const storePath = liveModelSwitchDeps.resolveStorePath(cfg.session?.store, {
     agentId,
   });
-  const entry = loadSessionStore(storePath, { skipCache: true })[sessionKey];
+  const entry = liveModelSwitchDeps.loadSessionStore(storePath, { skipCache: true })[sessionKey];
   const runtimeProvider = entry?.modelProvider?.trim();
   const runtimeModel = entry?.model?.trim();
   const provider = runtimeProvider || entry?.providerOverride?.trim() || defaultModelRef.provider;
@@ -69,18 +79,18 @@ export function requestLiveSessionModelSwitch(params: {
   if (!sessionId) {
     return false;
   }
-  const aborted = abortEmbeddedPiRun(sessionId);
+  const aborted = liveModelSwitchDeps.abortEmbeddedPiRun(sessionId);
   if (!aborted) {
     return false;
   }
-  requestEmbeddedRunModelSwitch(sessionId, params.selection);
+  liveModelSwitchDeps.requestEmbeddedRunModelSwitch(sessionId, params.selection);
   return true;
 }
 
 export function consumeLiveSessionModelSwitch(
   sessionId: string,
 ): LiveSessionModelSelection | undefined {
-  return consumeEmbeddedRunModelSwitch(sessionId);
+  return liveModelSwitchDeps.consumeEmbeddedRunModelSwitch(sessionId);
 }
 
 export function hasDifferentLiveSessionModelSelection(
@@ -114,4 +124,12 @@ export function shouldTrackPersistedLiveSessionModelSelection(
   persisted: LiveSessionModelSelection | null | undefined,
 ): boolean {
   return !hasDifferentLiveSessionModelSelection(current, persisted);
+}
+
+export function setLiveModelSwitchTestDeps(
+  overrides?: Partial<typeof defaultLiveModelSwitchDeps>,
+): void {
+  liveModelSwitchDeps = overrides
+    ? { ...defaultLiveModelSwitchDeps, ...overrides }
+    : defaultLiveModelSwitchDeps;
 }

@@ -1,7 +1,18 @@
 import { describe, expect, test } from "vitest";
 import { WebSocket } from "ws";
-import { approveDevicePairing, listDevicePairing } from "../infra/device-pairing.js";
-import { approveNodePairing, getPairedNode, requestNodePairing } from "../infra/node-pairing.js";
+import {
+  approveDevicePairing,
+  listDevicePairing,
+  requestDevicePairing,
+} from "../infra/device-pairing.js";
+import { publicKeyRawBase64UrlFromPem } from "../infra/device-identity.js";
+import {
+  approveNodePairing,
+  getPairedNode,
+  listNodePairing,
+  rejectNodePairing,
+  requestNodePairing,
+} from "../infra/node-pairing.js";
 import { GATEWAY_CLIENT_MODES, GATEWAY_CLIENT_NAMES } from "../utils/message-channel.js";
 import {
   issueOperatorToken,
@@ -23,6 +34,19 @@ async function connectNodeClientWithPairing(params: {
   deviceIdentity: ReturnType<typeof loadDeviceIdentity>["identity"];
   commands: string[];
 }) {
+  const pairResult = await requestDevicePairing({
+    deviceId: params.deviceIdentity.deviceId,
+    publicKey: publicKeyRawBase64UrlFromPem(params.deviceIdentity.publicKeyPem),
+    clientId: GATEWAY_CLIENT_NAMES.NODE_HOST,
+    clientMode: GATEWAY_CLIENT_MODES.NODE,
+    role: "node",
+    scopes: [],
+    silent: false,
+  });
+  await approveDevicePairing(pairResult.request.requestId, {
+    callerScopes: pairResult.request.scopes ?? ["operator.admin"],
+  });
+
   const connect = async () =>
     await connectGatewayClient({
       url: `ws://127.0.0.1:${params.port}`,
@@ -33,6 +57,7 @@ async function connectNodeClientWithPairing(params: {
       clientVersion: "1.0.0",
       platform: "darwin",
       mode: GATEWAY_CLIENT_MODES.NODE,
+      scopes: [],
       commands: params.commands,
       deviceIdentity: params.deviceIdentity,
       timeoutMessage: "timeout waiting for paired node to connect",
@@ -47,7 +72,9 @@ async function connectNodeClientWithPairing(params: {
     }
     const pairing = await listDevicePairing();
     for (const pending of pairing.pending) {
-      await approveDevicePairing(pending.requestId);
+      await approveDevicePairing(pending.requestId, {
+        callerScopes: pending.scopes ?? ["operator.admin"],
+      });
     }
     return await connect();
   }
@@ -226,6 +253,13 @@ describe("gateway node pairing authorization", () => {
         commands: ["canvas.snapshot"],
       });
       await firstClient.stopAndWait();
+
+      const pendingList = await listNodePairing();
+      for (const pending of pendingList.pending) {
+        if (pending.nodeId === pairedNode.identity.deviceId) {
+          await rejectNodePairing(pending.requestId);
+        }
+      }
 
       const request = await requestNodePairing({
         nodeId: pairedNode.identity.deviceId,

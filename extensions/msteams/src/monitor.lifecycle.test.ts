@@ -1,5 +1,4 @@
 import { EventEmitter } from "node:events";
-import type { Request, Response } from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig, RuntimeEnv } from "../runtime-api.js";
 import type { MSTeamsConversationStore } from "./conversation-store.js";
@@ -46,14 +45,14 @@ vi.mock("../runtime-api.js", () => ({
   summarizeMapping: vi.fn(),
 }));
 
-vi.mock("express", () => {
-  const json = vi.fn(() => {
-    return (_req: unknown, _res: unknown, next?: (err?: unknown) => void) => {
-      next?.();
-    };
-  });
+const expressJson = vi.fn(() => {
+  return (_req: unknown, _res: unknown, next?: (err?: unknown) => void) => {
+    next?.();
+  };
+});
 
-  const factory = () => ({
+function createExpressApp() {
+  return {
     use: vi.fn(),
     post: vi.fn(),
     listen: vi.fn((_port: number) => {
@@ -76,19 +75,20 @@ vi.mock("express", () => {
       });
       return server;
     }),
-  });
+  };
+}
 
+function createExpressModule(): Awaited<typeof import("express")> {
   const wrappedFactory = () => {
-    const app = factory();
+    const app = createExpressApp();
     expressControl.apps.push(app);
     return app;
   };
-
   return {
     default: wrappedFactory,
-    json,
-  };
-});
+    json: expressJson,
+  } as unknown as Awaited<typeof import("express")>;
+}
 
 const registerMSTeamsHandlers = vi.hoisted(() =>
   vi.fn(() => ({
@@ -151,7 +151,7 @@ vi.mock("./runtime.js", () => ({
   }),
 }));
 
-import { monitorMSTeamsProvider } from "./monitor.js";
+import { monitorMSTeamsProvider, setLoadMSTeamsExpressModuleForTest } from "./monitor.js";
 
 function createConfig(port: number): OpenClawConfig {
   return {
@@ -192,10 +192,13 @@ describe("monitorMSTeamsProvider lifecycle", () => {
     vi.clearAllMocks();
     expressControl.mode.value = "listening";
     expressControl.apps.length = 0;
+    expressJson.mockClear();
     jwtValidate.mockReset().mockResolvedValue(true);
+    setLoadMSTeamsExpressModuleForTest(undefined);
   });
 
   it("stays active until aborted", async () => {
+    setLoadMSTeamsExpressModuleForTest(async () => createExpressModule());
     const abort = new AbortController();
     const stores = createStores();
     const task = monitorMSTeamsProvider({
@@ -220,6 +223,7 @@ describe("monitorMSTeamsProvider lifecycle", () => {
 
   it("rejects startup when webhook port is already in use", async () => {
     expressControl.mode.value = "error";
+    setLoadMSTeamsExpressModuleForTest(async () => createExpressModule());
     await expect(
       monitorMSTeamsProvider({
         cfg: createConfig(3978),
@@ -232,6 +236,7 @@ describe("monitorMSTeamsProvider lifecycle", () => {
   });
 
   it("runs JWT validation before JSON body parsing", async () => {
+    setLoadMSTeamsExpressModuleForTest(async () => createExpressModule());
     const abort = new AbortController();
     const task = monitorMSTeamsProvider({
       cfg: createConfig(0),
@@ -247,14 +252,14 @@ describe("monitorMSTeamsProvider lifecycle", () => {
     expect(app).toBeDefined();
     expect(app!.use).toHaveBeenCalledTimes(4);
 
-    const jsonMiddleware = vi.mocked((await import("express")).json).mock.results[0]?.value;
+    const jsonMiddleware = expressJson.mock.results[0]?.value;
     expect(jsonMiddleware).toBeDefined();
     expect(app!.use.mock.calls[1]?.[0]).not.toBe(jsonMiddleware);
     expect(app!.use.mock.calls[2]?.[0]).toBe(jsonMiddleware);
 
     const jwtMiddleware = app!.use.mock.calls[1]?.[0] as (
-      req: Request,
-      res: Response,
+      req: { headers: { authorization?: string } },
+      res: { json: (body: unknown) => void; status: (code: number) => { json: (body: unknown) => void } },
       next: (err?: unknown) => void,
     ) => void;
     const next = vi.fn();

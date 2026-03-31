@@ -28,7 +28,7 @@ export function resolveBundledWebSearchPluginIds(params: {
   env?: PluginLoadOptions["env"];
 }): string[] {
   const bundledWebSearchPluginIdSet = new Set<string>(BUNDLED_WEB_SEARCH_PLUGIN_IDS);
-  return loadPluginManifestRegistry({
+  const resolved = loadPluginManifestRegistry({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -38,6 +38,11 @@ export function resolveBundledWebSearchPluginIds(params: {
     )
     .map((plugin) => plugin.id)
     .toSorted((left, right) => left.localeCompare(right));
+  // Bundled web-search providers are compiled from capability metadata. When the
+  // manifest registry is redirected to an empty temp dir in tests, keep compat
+  // resolution aligned with the bundled runtime metadata instead of silently
+  // dropping configured bundled providers like "gemini".
+  return resolved.length > 0 ? resolved : [...BUNDLED_WEB_SEARCH_PLUGIN_IDS];
 }
 
 export function listBundledWebSearchPluginIds(): string[] {

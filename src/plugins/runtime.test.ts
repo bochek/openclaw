@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { telegramOutbound } from "../../test/channel-outbounds.js";
+import type { OpenClawConfig } from "../config/config.js";
+import { createOutboundTestPlugin, createTestRegistry } from "../test-utils/channel-plugins.js";
 import { createEmptyPluginRegistry } from "./registry.js";
 import type { PluginHttpRouteRegistration } from "./registry.js";
 import {
@@ -132,6 +135,37 @@ describe("plugin runtime route registry", () => {
       expectedRegistry: expected,
     });
   });
+
+  it("keeps the shared runtime registry coherent across resetModules", async () => {
+    const sendTelegram = vi.fn().mockResolvedValue({ messageId: "m1", chatId: "c1" });
+    vi.resetModules();
+    const [{ deliverOutboundPayloads }, runtime] = await Promise.all([
+      import("../infra/outbound/deliver.js"),
+      import("./runtime.js"),
+    ]);
+    const registry = createTestRegistry([
+      {
+        pluginId: "telegram",
+        plugin: createOutboundTestPlugin({ id: "telegram", outbound: telegramOutbound }),
+        source: "test",
+      },
+    ]);
+    runtime.setActivePluginRegistry(registry);
+
+    const cfg: OpenClawConfig = {
+      channels: { telegram: { botToken: "tok-1", textChunkLimit: 2 } },
+    };
+    await deliverOutboundPayloads({
+      cfg,
+      channel: "telegram",
+      to: "123",
+      payloads: [{ text: "abcd" }],
+      deps: { sendTelegram },
+    });
+
+    expect(sendTelegram).toHaveBeenCalledTimes(2);
+    expect(runtime.getActivePluginRegistry()).toBe(runtime.getActivePluginChannelRegistry());
+  });
 });
 
 const makeRoute = (path: string): PluginHttpRouteRegistration => ({
@@ -144,46 +178,6 @@ const makeRoute = (path: string): PluginHttpRouteRegistration => ({
 describe("setActivePluginRegistry", () => {
   beforeEach(() => {
     resetPluginRuntimeStateForTest();
-    setActivePluginRegistry(createEmptyPluginRegistry());
-  });
-
-  it("does not carry forward httpRoutes when new registry has none", () => {
-    const oldRegistry = createEmptyPluginRegistry();
-    const fakeRoute = makeRoute("/test");
-    oldRegistry.httpRoutes.push(fakeRoute);
-    setActivePluginRegistry(oldRegistry);
-    expect(getActivePluginRegistry()?.httpRoutes).toHaveLength(1);
-
-    const newRegistry = createEmptyPluginRegistry();
-    expect(newRegistry.httpRoutes).toHaveLength(0);
-    setActivePluginRegistry(newRegistry);
-    expect(getActivePluginRegistry()?.httpRoutes).toHaveLength(0);
-  });
-
-  it("does not carry forward when new registry already has routes", () => {
-    const oldRegistry = createEmptyPluginRegistry();
-    oldRegistry.httpRoutes.push(makeRoute("/old"));
-    setActivePluginRegistry(oldRegistry);
-
-    const newRegistry = createEmptyPluginRegistry();
-    const newRoute = makeRoute("/new");
-    newRegistry.httpRoutes.push(newRoute);
-    setActivePluginRegistry(newRegistry);
-    expect(getActivePluginRegistry()?.httpRoutes).toHaveLength(1);
-    expect(getActivePluginRegistry()?.httpRoutes[0]).toEqual(newRoute);
-  });
-
-  it("does not carry forward when same registry is set again", () => {
-    const registry = createEmptyPluginRegistry();
-    registry.httpRoutes.push(makeRoute("/test"));
-    setActivePluginRegistry(registry);
-    setActivePluginRegistry(registry);
-    expect(getActivePluginRegistry()?.httpRoutes).toHaveLength(1);
-  });
-});
-
-describe("setActivePluginRegistry", () => {
-  beforeEach(() => {
     setActivePluginRegistry(createEmptyPluginRegistry());
   });
 

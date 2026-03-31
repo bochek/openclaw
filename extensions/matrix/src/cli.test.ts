@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { formatZonedTimestamp } from "openclaw/plugin-sdk/matrix-runtime-shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { registerMatrixCli, resetMatrixCliStateForTests } from "./cli.js";
+import { __testing, registerMatrixCli, resetMatrixCliStateForTests } from "./cli.js";
 
 const bootstrapMatrixVerificationMock = vi.fn();
 const getMatrixRoomKeyBackupStatusMock = vi.fn();
@@ -23,6 +23,7 @@ const updateMatrixOwnProfileMock = vi.fn();
 const verifyMatrixRecoveryKeyMock = vi.fn();
 const consoleLogMock = vi.fn();
 const consoleErrorMock = vi.fn();
+let exitCode: number | undefined;
 
 vi.mock("./matrix/actions/verification.js", () => ({
   bootstrapMatrixVerification: (...args: unknown[]) => bootstrapMatrixVerificationMock(...args),
@@ -114,7 +115,16 @@ describe("matrix CLI verification commands", () => {
   beforeEach(() => {
     resetMatrixCliStateForTests();
     vi.clearAllMocks();
+    exitCode = undefined;
     process.exitCode = undefined;
+    __testing.setDepsForTest({
+      setExitCode: (code) => {
+        exitCode = code;
+      },
+      getExitCode: () => exitCode,
+      scheduleExit: () => 0 as ReturnType<typeof setTimeout>,
+      clearScheduledExit: () => {},
+    });
     vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => consoleLogMock(...args));
     vi.spyOn(console, "error").mockImplementation((...args: unknown[]) =>
       consoleErrorMock(...args),
@@ -183,6 +193,8 @@ describe("matrix CLI verification commands", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    __testing.resetDepsForTest();
+    exitCode = undefined;
     process.exitCode = undefined;
   });
 
@@ -197,7 +209,7 @@ describe("matrix CLI verification commands", () => {
       from: "user",
     });
 
-    expect(process.exitCode).toBe(1);
+    expect(exitCode).toBe(1);
   });
 
   it("sets non-zero exit code for bootstrap failures in JSON mode", async () => {
@@ -213,7 +225,7 @@ describe("matrix CLI verification commands", () => {
 
     await program.parseAsync(["matrix", "verify", "bootstrap", "--json"], { from: "user" });
 
-    expect(process.exitCode).toBe(1);
+    expect(exitCode).toBe(1);
   });
 
   it("sets non-zero exit code for backup restore failures in JSON mode", async () => {
@@ -238,7 +250,7 @@ describe("matrix CLI verification commands", () => {
       from: "user",
     });
 
-    expect(process.exitCode).toBe(1);
+    expect(exitCode).toBe(1);
   });
 
   it("sets non-zero exit code for backup reset failures in JSON mode", async () => {
@@ -264,7 +276,7 @@ describe("matrix CLI verification commands", () => {
       from: "user",
     });
 
-    expect(process.exitCode).toBe(1);
+    expect(exitCode).toBe(1);
   });
 
   it("lists matrix devices", async () => {
@@ -523,7 +535,7 @@ describe("matrix CLI verification commands", () => {
     );
 
     expect(matrixRuntimeWriteConfigFileMock).toHaveBeenCalled();
-    expect(process.exitCode).toBeUndefined();
+    expect(exitCode).toBeUndefined();
     expect(console.log).toHaveBeenCalledWith("Saved matrix account: ops");
     expect(console.error).toHaveBeenCalledWith(
       "Matrix device health warning: homeserver unavailable",
@@ -553,7 +565,7 @@ describe("matrix CLI verification commands", () => {
     );
 
     expect(matrixRuntimeWriteConfigFileMock).toHaveBeenCalled();
-    expect(process.exitCode).toBeUndefined();
+    expect(exitCode).toBeUndefined();
     const jsonOutput = consoleLogMock.mock.calls.at(-1)?.[0];
     expect(typeof jsonOutput).toBe("string");
     expect(JSON.parse(String(jsonOutput))).toEqual(
@@ -645,14 +657,14 @@ describe("matrix CLI verification commands", () => {
       from: "user",
     });
 
-    expect(process.exitCode).toBe(1);
+    expect(exitCode).toBe(1);
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining('"error": "Matrix requires --homeserver"'),
     );
   });
 
   it("keeps zero exit code for successful bootstrap in JSON mode", async () => {
-    process.exitCode = 0;
+    exitCode = 0;
     bootstrapMatrixVerificationMock.mockResolvedValue({
       success: true,
       verification: {},
@@ -664,7 +676,7 @@ describe("matrix CLI verification commands", () => {
 
     await program.parseAsync(["matrix", "verify", "bootstrap", "--json"], { from: "user" });
 
-    expect(process.exitCode).toBe(0);
+    expect(exitCode).toBe(0);
   });
 
   it("prints local timezone timestamps for verify status output in verbose mode", async () => {
@@ -879,7 +891,7 @@ describe("matrix CLI verification commands", () => {
 
     await program.parseAsync(["matrix", "verify", "backup", "reset"], { from: "user" });
 
-    expect(process.exitCode).toBe(1);
+    expect(exitCode).toBe(1);
     expect(resetMatrixRoomKeyBackupMock).not.toHaveBeenCalled();
     expect(console.error).toHaveBeenCalledWith(
       "Backup reset failed: Refusing to reset Matrix room-key backup without --yes",

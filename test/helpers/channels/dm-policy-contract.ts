@@ -1,10 +1,7 @@
 import { expect, it } from "vitest";
-import { isAllowedBlueBubblesSender } from "../../../src/plugin-sdk/bluebubbles-policy.js";
-import { isMattermostSenderAllowed } from "../../../src/plugin-sdk/mattermost-policy.js";
-import {
-  isSignalSenderAllowed,
-  type SignalSender,
-} from "../../../src/plugin-sdk/signal-surface.js";
+import { isAllowedBlueBubblesSender } from "../../../extensions/bluebubbles/api.js";
+import { isMattermostSenderAllowed } from "../../../extensions/mattermost/api.js";
+import { isSignalSenderAllowed, type SignalSender } from "../../../extensions/signal/api.js";
 import {
   DM_GROUP_ACCESS_REASON,
   resolveDmGroupAccessWithLists,

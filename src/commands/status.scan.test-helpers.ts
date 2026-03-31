@@ -1,5 +1,7 @@
+import path from "node:path";
 import { vi } from "vitest";
 import type { OpenClawConfig } from "../config/types.js";
+import { resolveSharedMemoryStatusSnapshot } from "./status.scan.shared.js";
 
 export function createStatusScanSharedMocks(configPathLabel: string) {
   return {
@@ -127,33 +129,78 @@ export async function loadStatusScanModuleForTest(
     fastJson?: boolean;
   } = {},
 ) {
+  const mockModule = (specifier: string, factory: () => unknown) => {
+    vi.doMock(specifier, factory);
+    if (specifier.endsWith(".js")) {
+      vi.doMock(`${specifier.slice(0, -3)}.ts`, factory);
+    }
+  };
+
   vi.resetModules();
 
-  vi.doMock("../channels/config-presence.js", () => ({
+  if (options.fastJson) {
+    const [coreModule, fastJsonModule] = await Promise.all([
+      import("./status.scan.json-core.js"),
+      import("./status.scan.fast-json.js"),
+    ]);
+    coreModule.__testing.resetDepsForTest();
+    fastJsonModule.__testing.resetDepsForTest();
+    coreModule.__testing.setDepsForTest({
+      ensurePluginRegistryLoaded: async (options) => {
+        mocks.ensurePluginRegistryLoaded(options);
+      },
+      getUpdateCheckResult: async (params) => await mocks.getUpdateCheckResult(params),
+      getAgentLocalStatuses: async (cfg) => await mocks.getAgentLocalStatuses(cfg),
+      getStatusSummary: async (params) => await mocks.getStatusSummary(params),
+      getTailnetHostname: async () => null,
+      resolveGatewayProbeSnapshot: async ({ cfg, opts }) => ({
+        gatewayConnection: mocks.buildGatewayConnectionDetails({ config: cfg }),
+        remoteUrlMissing: false,
+        gatewayMode: "local" as const,
+        gatewayProbeAuth: {},
+        gatewayProbeAuthWarning: undefined,
+        gatewayProbe: opts?.skipProbe ? null : await mocks.probeGateway(),
+      }),
+    });
+    fastJsonModule.__testing.setDepsForTest({
+      readStatusSourceConfig: async () => await mocks.readBestEffortConfig(),
+      resolveStatusConfig: async ({ sourceConfig, commandName }) =>
+        await mocks.resolveCommandSecretRefsViaGateway({
+          config: sourceConfig,
+          commandName,
+          targetIds: mocks.getStatusCommandSecretTargetIds?.() ?? [],
+          mode: "read_only_status",
+        }),
+      hasPotentialConfiguredChannels: mocks.hasPotentialConfiguredChannels,
+      resolveOsSummary: createStatusOsSummaryModuleMock().resolveOsSummary,
+      resolveMemoryStatusSnapshot: async ({ cfg, agentStatus, memoryPlugin }) =>
+        await resolveSharedMemoryStatusSnapshot({
+          cfg,
+          agentStatus,
+          memoryPlugin,
+          resolveMemoryConfig: mocks.resolveMemorySearchConfig!,
+          getMemorySearchManager: mocks.getMemorySearchManager,
+          requireDefaultStore: () => null,
+        }),
+    });
+    return fastJsonModule;
+  }
+
+  mockModule("../channels/config-presence.js", () => ({
     hasPotentialConfiguredChannels: mocks.hasPotentialConfiguredChannels,
   }));
 
-  if (options.fastJson) {
-    vi.doMock("../config/io.js", () => ({
-      readBestEffortConfig: mocks.readBestEffortConfig,
-    }));
-    vi.doMock("../cli/command-secret-targets.js", () => ({
-      getStatusCommandSecretTargetIds: mocks.getStatusCommandSecretTargetIds,
-    }));
-    vi.doMock("../agents/memory-search.js", () => ({
-      resolveMemorySearchConfig: mocks.resolveMemorySearchConfig,
-    }));
-  } else {
-    vi.doMock("../cli/progress.js", () => ({
+  {
+    mockModule("../cli/progress.js", () => ({
       withProgress: vi.fn(async (_opts, run) => await run({ setLabel: vi.fn(), tick: vi.fn() })),
     }));
-    vi.doMock("../config/config.js", () => ({
+    mockModule("../config/config.js", () => ({
       readBestEffortConfig: mocks.readBestEffortConfig,
     }));
-    vi.doMock("./status-all/channels.js", () => ({
+    mockModule("./status-all/channels.js", () => ({
       buildChannelsTable: mocks.buildChannelsTable,
     }));
-    vi.doMock("./status.scan.runtime.js", () => ({
+    mockModule("./status.scan.runtime.js", () => ({
       statusScanRuntime: {
         buildChannelsTable: mocks.buildChannelsTable,
         collectChannelStatusIssues: vi.fn(() => []),
@@ -161,38 +208,38 @@ export async function loadStatusScanModuleForTest(
     }));
   }
 
-  vi.doMock("../config/paths.js", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../config/paths.js")>();
+  mockModule("../config/paths.js", () => {
     return {
-      ...actual,
       resolveConfigPath: mocks.resolveConfigPath,
+      resolveStateDir: vi.fn(
+        (_env: NodeJS.ProcessEnv, homedir?: string | (() => string)) =>
+          path.join(typeof homedir === "function" ? homedir() : (homedir ?? "/tmp"), ".openclaw"),
+      ),
+      resolveDefaultConfigCandidates: vi.fn(() => []),
     };
   });
 
-  vi.doMock("../cli/command-secret-gateway.js", () => ({
+  mockModule("../cli/command-secret-gateway.js", () => ({
     resolveCommandSecretRefsViaGateway: mocks.resolveCommandSecretRefsViaGateway,
   }));
-  vi.doMock("./status.update.js", () => createStatusUpdateModuleMock(mocks));
-  vi.doMock("./status.agent-local.js", () => createStatusAgentLocalModuleMock(mocks));
-  vi.doMock("./status.summary.js", () => createStatusSummaryModuleMock(mocks));
-  vi.doMock("../infra/os-summary.js", () => createStatusOsSummaryModuleMock());
-  vi.doMock("./status.scan.deps.runtime.js", () => createStatusScanDepsRuntimeModuleMock(mocks));
-  vi.doMock("../gateway/call.js", () => createStatusGatewayCallModuleMock(mocks));
-  vi.doMock("../gateway/probe.js", () => ({
+  mockModule("./status.update.js", () => createStatusUpdateModuleMock(mocks));
+  mockModule("./status.agent-local.js", () => createStatusAgentLocalModuleMock(mocks));
+  mockModule("./status.summary.js", () => createStatusSummaryModuleMock(mocks));
+  mockModule("../infra/os-summary.js", () => createStatusOsSummaryModuleMock());
+  mockModule("./status.scan.deps.runtime.js", () => createStatusScanDepsRuntimeModuleMock(mocks));
+  mockModule("../gateway/call.js", () => createStatusGatewayCallModuleMock(mocks));
+  mockModule("../gateway/probe.js", () => ({
     probeGateway: mocks.probeGateway,
   }));
-  vi.doMock("./status.gateway-probe.js", () => createStatusGatewayProbeModuleMock(mocks));
-  vi.doMock("../gateway/connection-details.js", () => ({
+  mockModule("./status.gateway-probe.js", () => createStatusGatewayProbeModuleMock(mocks));
+  mockModule("../gateway/connection-details.js", () => ({
     buildGatewayConnectionDetails: mocks.buildGatewayConnectionDetails,
     buildGatewayConnectionDetailsWithResolvers: mocks.buildGatewayConnectionDetails,
   }));
-  vi.doMock("../process/exec.js", () => createStatusExecModuleMock());
-  vi.doMock("../cli/plugin-registry.js", () => createStatusPluginRegistryModuleMock(mocks));
-  vi.doMock("../plugins/status.js", () => createStatusPluginStatusModuleMock(mocks));
+  mockModule("../process/exec.js", () => createStatusExecModuleMock());
+  mockModule("../cli/plugin-registry.js", () => createStatusPluginRegistryModuleMock(mocks));
+  mockModule("../plugins/status.js", () => createStatusPluginStatusModuleMock(mocks));
 
-  if (options.fastJson) {
-    return await import("./status.scan.fast-json.js");
-  }
   return await import("./status.scan.js");
 }
 

@@ -1,11 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { OpenClawConfig } from "../config/config.js";
-import {
-  loadConfig,
-  resolveConfigPath,
-  resolveGatewayPort,
-  resolveStateDir,
-} from "../config/config.js";
+import * as configModule from "../config/config.js";
 import { loadConfig as loadConfigFromIo } from "../config/io.js";
 import {
   resolveConfigPath as resolveConfigPathFromPaths,
@@ -86,11 +81,11 @@ export type CallGatewayOptions = CallGatewayBaseOptions & {
 const defaultCreateGatewayClient = (opts: GatewayClientOptions) => new GatewayClient(opts);
 const defaultGatewayCallDeps = {
   createGatewayClient: defaultCreateGatewayClient,
-  loadConfig,
+  loadConfig: configModule.loadConfig,
   loadOrCreateDeviceIdentity,
-  resolveGatewayPort,
-  resolveConfigPath,
-  resolveStateDir,
+  resolveGatewayPort: configModule.resolveGatewayPort,
+  resolveConfigPath: configModule.resolveConfigPath,
+  resolveStateDir: configModule.resolveStateDir,
   loadGatewayTlsRuntime,
 };
 const gatewayCallDeps = {

@@ -41,6 +41,10 @@ import type { BrowserResponse, BrowserRouteRegistrar } from "./types.js";
 import { jsonError, toBoolean, toStringOrEmpty } from "./utils.js";
 
 const CHROME_MCP_OVERLAY_ATTR = "data-openclaw-mcp-overlay";
+const snapshotRouteDeps = {
+  retryDelayMs: 800,
+  wait: (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+};
 
 async function clearChromeMcpOverlay(params: {
   profileName: string;
@@ -202,7 +206,7 @@ export async function resolveTargetIdAfterNavigate(opts: {
 
     currentTargetId = pickReplacement(await opts.listTabs());
     if (currentTargetId === opts.oldTargetId) {
-      await new Promise((r) => setTimeout(r, 800));
+      await snapshotRouteDeps.wait(snapshotRouteDeps.retryDelayMs);
       currentTargetId = pickReplacement(await opts.listTabs(), {
         allowSingleTabFallback: true,
       });
@@ -212,6 +216,17 @@ export async function resolveTargetIdAfterNavigate(opts: {
   }
   return currentTargetId;
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof snapshotRouteDeps>) {
+    Object.assign(snapshotRouteDeps, overrides);
+  },
+  resetDepsForTest() {
+    snapshotRouteDeps.retryDelayMs = 800;
+    snapshotRouteDeps.wait = (ms: number) =>
+      new Promise<void>((resolve) => setTimeout(resolve, ms));
+  },
+};
 
 export function registerBrowserAgentSnapshotRoutes(
   app: BrowserRouteRegistrar,

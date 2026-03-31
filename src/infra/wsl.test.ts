@@ -4,14 +4,18 @@ import { captureEnv } from "../test-utils/env.js";
 const readFileSyncMock = vi.hoisted(() => vi.fn());
 const readFileMock = vi.hoisted(() => vi.fn());
 
-vi.mock("node:fs", () => ({
+vi.mock("node:fs", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:fs")>()),
   readFileSync: readFileSyncMock,
 }));
 
-vi.mock("node:fs/promises", () => ({
+vi.mock("node:fs/promises", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("node:fs/promises")>()),
   default: {
+    ...(await importOriginal<typeof import("node:fs/promises")>()).default,
     readFile: readFileMock,
   },
+  readFile: readFileMock,
 }));
 
 let isWSLEnv: typeof import("./wsl.js").isWSLEnv;

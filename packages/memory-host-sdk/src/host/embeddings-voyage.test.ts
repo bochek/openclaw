@@ -1,12 +1,26 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { type FetchMock, withFetchPreconnect } from "../../../../src/test-utils/fetch-mock.js";
+import { createVoyageEmbeddingProvider, normalizeVoyageModel } from "./embeddings-voyage.js";
 import { mockPublicPinnedHostname } from "./test-helpers/ssrf.js";
 
-vi.mock("../../../../src/agents/model-auth.js", async () => {
-  const { createModelAuthMockModule } =
-    await import("../../../../src/test-utils/model-auth-mock.js");
-  return createModelAuthMockModule();
-});
+const resolveApiKeyForProviderMock = vi.hoisted(() => vi.fn());
+const requireApiKeyMock = vi.hoisted(() =>
+  vi.fn((resolved: { apiKey?: string } | string | undefined, provider: string) => {
+    if (typeof resolved === "string" && resolved.trim()) {
+      return resolved;
+    }
+    const apiKey = resolved && typeof resolved === "object" ? resolved.apiKey : undefined;
+    if (typeof apiKey === "string" && apiKey.trim()) {
+      return apiKey;
+    }
+    throw new Error(`Missing API key for provider '${provider}'`);
+  }),
+);
+
+vi.mock("../../../../src/agents/model-auth.js", () => ({
+  requireApiKey: requireApiKeyMock,
+  resolveApiKeyForProvider: resolveApiKeyForProviderMock,
+}));
 
 const createFetchMock = () => {
   const fetchMock = vi.fn<FetchMock>(
@@ -19,21 +33,13 @@ const createFetchMock = () => {
   return withFetchPreconnect(fetchMock);
 };
 
-let authModule: typeof import("../../../../src/agents/model-auth.js");
-let createVoyageEmbeddingProvider: typeof import("./embeddings-voyage.js").createVoyageEmbeddingProvider;
-let normalizeVoyageModel: typeof import("./embeddings-voyage.js").normalizeVoyageModel;
-
-beforeEach(async () => {
+beforeEach(() => {
   vi.useRealTimers();
-  vi.doUnmock("undici");
-  vi.resetModules();
-  authModule = await import("../../../../src/agents/model-auth.js");
-  ({ createVoyageEmbeddingProvider, normalizeVoyageModel } =
-    await import("./embeddings-voyage.js"));
+  vi.clearAllMocks();
 });
 
 function mockVoyageApiKey() {
-  vi.mocked(authModule.resolveApiKeyForProvider).mockResolvedValue({
+  resolveApiKeyForProviderMock.mockResolvedValue({
     apiKey: "voyage-key-123",
     mode: "api-key",
     source: "test",
@@ -57,8 +63,6 @@ async function createDefaultVoyageProvider(
 
 describe("voyage embedding provider", () => {
   afterEach(() => {
-    vi.doUnmock("undici");
-    vi.resetAllMocks();
     vi.unstubAllGlobals();
   });
 
@@ -68,7 +72,7 @@ describe("voyage embedding provider", () => {
 
     await result.provider.embedQuery("test query");
 
-    expect(authModule.resolveApiKeyForProvider).toHaveBeenCalledWith(
+    expect(resolveApiKeyForProviderMock).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "voyage" }),
     );
 

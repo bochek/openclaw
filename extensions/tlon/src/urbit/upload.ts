@@ -5,6 +5,26 @@ import { fetchWithSsrFGuard } from "../../runtime-api.js";
 import { uploadFile } from "../tlon-api.js";
 import { getDefaultSsrFPolicy } from "./context.js";
 
+const uploadDeps = {
+  fetchWithSsrFGuard,
+  uploadFile,
+};
+
+export const __testing = {
+  setDepsForTest(
+    overrides: Partial<{
+      fetchWithSsrFGuard: typeof fetchWithSsrFGuard;
+      uploadFile: typeof uploadFile;
+    }>,
+  ): void {
+    Object.assign(uploadDeps, overrides);
+  },
+  resetDepsForTest(): void {
+    uploadDeps.fetchWithSsrFGuard = fetchWithSsrFGuard;
+    uploadDeps.uploadFile = uploadFile;
+  },
+};
+
 /**
  * Fetch an image from a URL and upload it to Tlon storage.
  * Returns the uploaded URL, or falls back to the original URL on error.
@@ -22,7 +42,7 @@ export async function uploadImageFromUrl(imageUrl: string): Promise<string> {
 
     // Fetch the image with SSRF protection
     // Use fetchWithSsrFGuard directly (not urbitFetch) to preserve the full URL path
-    const { response, release } = await fetchWithSsrFGuard({
+    const { response, release } = await uploadDeps.fetchWithSsrFGuard({
       url: imageUrl,
       init: { method: "GET" },
       policy: getDefaultSsrFPolicy(),
@@ -43,7 +63,7 @@ export async function uploadImageFromUrl(imageUrl: string): Promise<string> {
       const fileName = urlPath.split("/").pop() || `upload-${Date.now()}.png`;
 
       // Upload to Tlon storage
-      const result = await uploadFile({
+      const result = await uploadDeps.uploadFile({
         blob,
         fileName,
         contentType,

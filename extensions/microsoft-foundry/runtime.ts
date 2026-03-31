@@ -14,6 +14,23 @@ import {
 const cachedTokens = new Map<string, CachedTokenEntry>();
 const refreshPromises = new Map<string, Promise<{ apiKey: string; expiresAt: number }>>();
 
+const foundryRuntimeDepsDefaults = {
+  ensureAuthProfileStore,
+  getAccessTokenResultAsync,
+} as const;
+
+const foundryRuntimeDeps = { ...foundryRuntimeDepsDefaults };
+
+export function __setFoundryRuntimeDepsForTest(
+  overrides: Partial<typeof foundryRuntimeDepsDefaults>,
+): void {
+  Object.assign(foundryRuntimeDeps, overrides);
+}
+
+export function __resetFoundryRuntimeDepsForTest(): void {
+  Object.assign(foundryRuntimeDeps, foundryRuntimeDepsDefaults);
+}
+
 export function resetFoundryRuntimeAuthCaches(): void {
   cachedTokens.clear();
   refreshPromises.clear();
@@ -23,7 +40,7 @@ async function refreshEntraToken(params?: {
   subscriptionId?: string;
   tenantId?: string;
 }): Promise<{ apiKey: string; expiresAt: number }> {
-  const result = await getAccessTokenResultAsync(params);
+  const result = await foundryRuntimeDeps.getAccessTokenResultAsync(params);
   const rawExpiry = result.expiresOn ? new Date(result.expiresOn).getTime() : Number.NaN;
   const expiresAt = Number.isFinite(rawExpiry) ? rawExpiry : Date.now() + 55 * 60 * 1000;
   cachedTokens.set(getFoundryTokenCacheKey(params), {
@@ -38,7 +55,7 @@ export async function prepareFoundryRuntimeAuth(ctx: ProviderPrepareRuntimeAuthC
     return null;
   }
   try {
-    const authStore = ensureAuthProfileStore(ctx.agentDir, {
+    const authStore = foundryRuntimeDeps.ensureAuthProfileStore(ctx.agentDir, {
       allowKeychainPrompt: false,
     });
     const credential = ctx.profileId ? authStore.profiles[ctx.profileId] : undefined;

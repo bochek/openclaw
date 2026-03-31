@@ -1,9 +1,5 @@
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  bundledPluginRoot,
-  bundledPluginRootAt,
-} from "../../../test/helpers/bundled-plugin-paths.js";
 
 vi.mock("node:fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("node:fs")>();
@@ -96,7 +92,7 @@ const baseEntry: ChannelPluginCatalogEntry = {
   },
   install: {
     npmSpec: "@openclaw/zalo",
-    localPath: bundledPluginRoot("zalo"),
+    localPath: "extensions/zalo",
   },
 };
 
@@ -138,7 +134,7 @@ async function runInitialValueForChannel(channel: "dev" | "beta") {
 function expectPluginLoadedFromLocalPath(
   result: Awaited<ReturnType<typeof ensureChannelSetupPluginInstalled>>,
 ) {
-  const expectedPath = path.resolve(process.cwd(), bundledPluginRoot("zalo"));
+  const expectedPath = path.resolve(process.cwd(), "extensions/zalo");
   expect(result.installed).toBe(true);
   expect(result.cfg.plugins?.load?.paths).toContain(expectedPath);
 }
@@ -239,7 +235,7 @@ describe("ensureChannelSetupPluginInstalled", () => {
           "zalo",
           {
             pluginId: "zalo",
-            localPath: bundledPluginRootAt("/opt/openclaw", "zalo"),
+            localPath: "/opt/openclaw/extensions/zalo",
             npmSpec: "@openclaw/zalo",
           },
         ],
@@ -259,7 +255,7 @@ describe("ensureChannelSetupPluginInstalled", () => {
         options: expect.arrayContaining([
           expect.objectContaining({
             value: "local",
-            hint: bundledPluginRootAt("/opt/openclaw", "zalo"),
+            hint: "/opt/openclaw/extensions/zalo",
           }),
         ]),
       }),
@@ -278,7 +274,7 @@ describe("ensureChannelSetupPluginInstalled", () => {
           "whatsapp",
           {
             pluginId: "whatsapp",
-            localPath: bundledPluginRootAt("/opt/openclaw", "whatsapp"),
+            localPath: "/opt/openclaw/extensions/whatsapp",
             npmSpec: "@openclaw/whatsapp",
           },
         ],

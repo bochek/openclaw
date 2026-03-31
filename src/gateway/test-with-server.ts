@@ -5,13 +5,23 @@ type StartServerWithClient = typeof startServerWithClient;
 export type GatewayWs = Awaited<ReturnType<StartServerWithClient>>["ws"];
 export type GatewayServer = Awaited<ReturnType<StartServerWithClient>>["server"];
 
+async function closeTestServer(server: GatewayServer): Promise<void> {
+  await Promise.race([
+    server.close(),
+    new Promise<void>((resolve) => {
+      setTimeout(resolve, 2_000);
+    }),
+  ]);
+}
+
 export async function withServer<T>(run: (ws: GatewayWs) => Promise<T>): Promise<T> {
   const { server, ws, envSnapshot } = await startServerWithClient("secret");
   try {
     return await run(ws);
   } finally {
     ws.close();
-    await server.close();
+    ws.terminate?.();
+    await closeTestServer(server);
     envSnapshot.restore();
   }
 }
@@ -39,8 +49,9 @@ export function installConnectedControlUiServerSuite(
 
   afterAll(async () => {
     started?.ws.close();
+    started?.ws.terminate?.();
     if (started?.server) {
-      await started.server.close();
+      await closeTestServer(started.server);
     }
     started?.envSnapshot.restore();
   });

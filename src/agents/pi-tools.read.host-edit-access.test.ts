@@ -11,31 +11,14 @@ const mocks = vi.hoisted(() => ({
   operations: undefined as CapturedEditOperations | undefined,
 }));
 
-vi.mock("@mariozechner/pi-coding-agent", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@mariozechner/pi-coding-agent")>();
-  return {
-    ...actual,
-    createEditTool: (_cwd: string, options?: { operations?: CapturedEditOperations }) => {
-      mocks.operations = options?.operations;
-      return {
-        name: "edit",
-        description: "test edit tool",
-        parameters: { type: "object", properties: {} },
-        execute: async () => ({
-          content: [{ type: "text" as const, text: "ok" }],
-        }),
-      };
-    },
-  };
-});
-
-const { createHostWorkspaceEditTool } = await import("./pi-tools.read.js");
+const { __testing, createHostWorkspaceEditTool } = await import("./pi-tools.read.js");
 
 describe("createHostWorkspaceEditTool host access mapping", () => {
   let tmpDir = "";
 
   afterEach(async () => {
     mocks.operations = undefined;
+    __testing.setDepsForTest();
     if (tmpDir) {
       await fs.rm(tmpDir, { recursive: true, force: true });
       tmpDir = "";
@@ -55,6 +38,19 @@ describe("createHostWorkspaceEditTool host access mapping", () => {
       await fs.writeFile(outsideFile, "secret", "utf8");
       await fs.symlink(outsideDir, linkDir);
 
+      __testing.setDepsForTest({
+        createEditTool: (_cwd: string, options?: { operations?: CapturedEditOperations }) => {
+          mocks.operations = options?.operations;
+          return {
+            name: "edit",
+            description: "test edit tool",
+            parameters: { type: "object", properties: {} },
+            execute: async () => ({
+              content: [{ type: "text" as const, text: "ok" }],
+            }),
+          } as never;
+        },
+      });
       createHostWorkspaceEditTool(workspaceDir, { workspaceOnly: true });
       expect(mocks.operations).toBeDefined();
 

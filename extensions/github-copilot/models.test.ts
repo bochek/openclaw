@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createProviderUsageFetch,
   makeResponse,
-} from "../../test/helpers/plugins/provider-usage-fetch.js";
+} from "../../test/helpers/extensions/provider-usage-fetch.js";
 import { buildCopilotModelDefinition, getDefaultCopilotModelIds } from "./models-defaults.js";
 import { fetchCopilotUsage } from "./usage.js";
 
@@ -17,21 +17,39 @@ vi.mock("@mariozechner/pi-ai/oauth", async () => {
   };
 });
 
-vi.mock("openclaw/plugin-sdk/provider-model-shared", () => ({
-  normalizeModelCompat: (model: Record<string, unknown>) => model,
-}));
+vi.mock("openclaw/plugin-sdk/provider-model-shared", async () => {
+  const actual = await vi.importActual<typeof import("openclaw/plugin-sdk/provider-model-shared")>(
+    "openclaw/plugin-sdk/provider-model-shared",
+  );
+  return {
+    ...actual,
+    normalizeModelCompat: (model: Record<string, unknown>) => model,
+  };
+});
 
 const loadJsonFile = vi.fn();
 const saveJsonFile = vi.fn();
 
-vi.mock("openclaw/plugin-sdk/json-store", () => ({
-  loadJsonFile,
-  saveJsonFile,
-}));
+vi.mock("openclaw/plugin-sdk/json-store", async () => {
+  const actual = await vi.importActual<typeof import("openclaw/plugin-sdk/json-store")>(
+    "openclaw/plugin-sdk/json-store",
+  );
+  return {
+    ...actual,
+    loadJsonFile,
+    saveJsonFile,
+  };
+});
 
-vi.mock("openclaw/plugin-sdk/state-paths", () => ({
-  resolveStateDir: () => "/tmp/openclaw-state",
-}));
+vi.mock("openclaw/plugin-sdk/state-paths", async () => {
+  const actual = await vi.importActual<typeof import("openclaw/plugin-sdk/state-paths")>(
+    "openclaw/plugin-sdk/state-paths",
+  );
+  return {
+    ...actual,
+    resolveStateDir: () => "/tmp/openclaw-state",
+  };
+});
 
 import type { ProviderResolveDynamicModelContext } from "openclaw/plugin-sdk/core";
 import { resolveCopilotForwardCompatModel } from "./models.js";

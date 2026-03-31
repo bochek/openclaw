@@ -5,9 +5,15 @@ import { TwilioProvider } from "./twilio.js";
 const STREAM_URL = "wss://example.ngrok.app/voice/stream";
 
 function createProvider(): TwilioProvider {
+  return createProviderWithOptions();
+}
+
+function createProviderWithOptions(
+  options: ConstructorParameters<typeof TwilioProvider>[1] = {},
+): TwilioProvider {
   return new TwilioProvider(
     { accountSid: "AC123", authToken: "secret" },
-    { publicUrl: "https://example.ngrok.app", streamPath: "/voice/stream" },
+    { publicUrl: "https://example.ngrok.app", streamPath: "/voice/stream", ...options },
   );
 }
 
@@ -292,43 +298,36 @@ describe("TwilioProvider", () => {
   });
 
   it("times out telephony synthesis in stream mode and does not send completion mark", async () => {
-    vi.useFakeTimers();
-    try {
-      const provider = createProvider();
-      provider.registerCallStream("CA-timeout", "MZ-timeout");
+    const provider = createProviderWithOptions({ ttsSynthesisTimeoutMs: 10 });
+    provider.registerCallStream("CA-timeout", "MZ-timeout");
 
-      const sendAudio = vi.fn();
-      const sendMark = vi.fn();
-      const mediaStreamHandler = {
-        queueTts: async (
-          _streamSid: string,
-          playFn: (signal: AbortSignal) => Promise<void>,
-        ): Promise<void> => {
-          await playFn(new AbortController().signal);
-        },
-        sendAudio,
-        sendMark,
-      };
+    const sendAudio = vi.fn();
+    const sendMark = vi.fn();
+    const mediaStreamHandler = {
+      queueTts: async (
+        _streamSid: string,
+        playFn: (signal: AbortSignal) => Promise<void>,
+      ): Promise<void> => {
+        await playFn(new AbortController().signal);
+      },
+      sendAudio,
+      sendMark,
+    };
 
-      provider.setMediaStreamHandler(mediaStreamHandler as never);
-      provider.setTTSProvider({
-        synthesizeForTelephony: async () => await new Promise<Buffer>(() => {}),
-      });
+    provider.setMediaStreamHandler(mediaStreamHandler as never);
+    provider.setTTSProvider({
+      synthesizeForTelephony: async () => await new Promise<Buffer>(() => {}),
+    });
 
-      const playExpectation = expect(
-        provider.playTts({
-          callId: "call-timeout",
-          providerCallId: "CA-timeout",
-          text: "Timeout me",
-        }),
-      ).rejects.toThrow("Telephony TTS synthesis timed out");
-      await vi.advanceTimersByTimeAsync(8_100);
-      await playExpectation;
-      expect(sendAudio).toHaveBeenCalled();
-      expect(sendMark).not.toHaveBeenCalled();
-    } finally {
-      vi.useRealTimers();
-    }
+    await expect(
+      provider.playTts({
+        callId: "call-timeout",
+        providerCallId: "CA-timeout",
+        text: "Timeout me",
+      }),
+    ).rejects.toThrow("Telephony TTS synthesis timed out");
+    expect(sendAudio).toHaveBeenCalled();
+    expect(sendMark).not.toHaveBeenCalled();
   });
 
   it("fails stream playback when all audio sends and completion mark are dropped", async () => {

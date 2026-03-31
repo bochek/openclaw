@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveTargetIdAfterNavigate } from "./agent.snapshot.js";
+import { __testing as snapshotTesting, resolveTargetIdAfterNavigate } from "./agent.snapshot.js";
 
 type Tab = { targetId: string; url: string };
 
@@ -10,6 +10,10 @@ function staticListTabs(tabs: Tab[]): () => Promise<Tab[]> {
 describe("resolveTargetIdAfterNavigate", () => {
   beforeEach(() => {
     vi.useRealTimers();
+    snapshotTesting.resetDepsForTest();
+    snapshotTesting.setDepsForTest({
+      retryDelayMs: 1,
+    });
   });
 
   it("returns original targetId when old target still exists (no swap)", async () => {
@@ -47,10 +51,9 @@ describe("resolveTargetIdAfterNavigate", () => {
   });
 
   it("retries and resolves targetId when first listTabs has no URL match", async () => {
-    vi.useFakeTimers();
     let calls = 0;
 
-    const result$ = resolveTargetIdAfterNavigate({
+    const result = await resolveTargetIdAfterNavigate({
       oldTargetId: "old-123",
       navigatedUrl: "https://delayed.com",
       listTabs: async () => {
@@ -62,19 +65,12 @@ describe("resolveTargetIdAfterNavigate", () => {
       },
     });
 
-    await vi.advanceTimersByTimeAsync(800);
-    const result = await result$;
-
     expect(result).toBe("delayed-999");
     expect(calls).toBe(2);
-
-    vi.useRealTimers();
   });
 
   it("falls back to original targetId when no match found after retry", async () => {
-    vi.useFakeTimers();
-
-    const result$ = resolveTargetIdAfterNavigate({
+    const result = await resolveTargetIdAfterNavigate({
       oldTargetId: "old-123",
       navigatedUrl: "https://no-match.com",
       listTabs: staticListTabs([
@@ -83,29 +79,17 @@ describe("resolveTargetIdAfterNavigate", () => {
       ]),
     });
 
-    await vi.advanceTimersByTimeAsync(800);
-    const result = await result$;
-
     expect(result).toBe("old-123");
-
-    vi.useRealTimers();
   });
 
   it("falls back to single remaining tab when no URL match after retry", async () => {
-    vi.useFakeTimers();
-
-    const result$ = resolveTargetIdAfterNavigate({
+    const result = await resolveTargetIdAfterNavigate({
       oldTargetId: "old-123",
       navigatedUrl: "https://single-tab.com",
       listTabs: staticListTabs([{ targetId: "only-tab", url: "https://some-other.com" }]),
     });
 
-    await vi.advanceTimersByTimeAsync(800);
-    const result = await result$;
-
     expect(result).toBe("only-tab");
-
-    vi.useRealTimers();
   });
 
   it("falls back to original targetId when listTabs throws", async () => {
@@ -120,9 +104,7 @@ describe("resolveTargetIdAfterNavigate", () => {
   });
 
   it("keeps the old target when multiple replacement candidates still match after retry", async () => {
-    vi.useFakeTimers();
-
-    const result$ = resolveTargetIdAfterNavigate({
+    const result = await resolveTargetIdAfterNavigate({
       oldTargetId: "old-123",
       navigatedUrl: "https://example.com",
       listTabs: staticListTabs([
@@ -131,11 +113,6 @@ describe("resolveTargetIdAfterNavigate", () => {
       ]),
     });
 
-    await vi.advanceTimersByTimeAsync(800);
-    const result = await result$;
-
     expect(result).toBe("old-123");
-
-    vi.useRealTimers();
   });
 });

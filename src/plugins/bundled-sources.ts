@@ -1,3 +1,4 @@
+import path from "node:path";
 import { discoverOpenClawPlugins } from "./discovery.js";
 import { loadPluginManifest } from "./manifest.js";
 
@@ -90,14 +91,17 @@ export function resolveBundledPluginInstallCommandHint(params: {
   workspaceDir?: string;
   /** Use an explicit env when bundled roots should resolve independently from process.env. */
   env?: NodeJS.ProcessEnv;
-}): string | null {
-  const bundledSource = findBundledPluginSource({
+}): string {
+  const source = findBundledPluginSource({
     lookup: { kind: "pluginId", value: params.pluginId },
     workspaceDir: params.workspaceDir,
     env: params.env,
   });
-  if (!bundledSource?.localPath) {
-    return null;
-  }
-  return `openclaw plugins install ${bundledSource.localPath}`;
+  const fallbackRelativePath = `./extensions/${params.pluginId}`;
+  const relativePath = source?.localPath
+    ? path.relative(params.workspaceDir ?? process.cwd(), source.localPath)
+    : fallbackRelativePath;
+  const installPath =
+    relativePath && !relativePath.startsWith(".") ? `./${relativePath}` : relativePath;
+  return `openclaw plugins install ${installPath || fallbackRelativePath}`;
 }

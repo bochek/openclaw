@@ -4,6 +4,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   callGatewayMock,
+  getSubagentsConfigOverride,
   setSubagentsConfigOverride,
 } from "./openclaw-tools.subagents.test-harness.js";
 import {
@@ -57,6 +58,7 @@ describe("openclaw-tools: subagents steer failure", () => {
 
     const tool = createSubagentsTool({
       agentSessionKey: "agent:main:main",
+      config: getSubagentsConfigOverride(),
     });
 
     const result = await tool.execute("call-steer", {

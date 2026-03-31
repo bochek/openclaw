@@ -3,7 +3,8 @@ import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import chokidar, { FSWatcher } from "chokidar";
+import * as chokidar from "chokidar";
+import type { FSWatcher } from "chokidar";
 import {
   buildCaseInsensitiveExtensionGlob,
   classifyMemoryMultimodalPath,
@@ -95,6 +96,18 @@ export function runDetachedMemorySync(sync: () => Promise<void>, reason: "interv
   void sync().catch((err) => {
     log.warn(`memory sync failed (${reason}): ${String(err)}`);
   });
+}
+
+export function openMemoryDatabaseAtPath(dbPath: string, vectorEnabled: boolean): DatabaseSync {
+  const dir = path.dirname(dbPath);
+  ensureDir(dir);
+  const { DatabaseSync } = requireNodeSqlite();
+  const db = new DatabaseSync(dbPath, { allowExtension: vectorEnabled });
+  // busy_timeout is per-connection and resets to 0 on restart.
+  // Set it on every open so concurrent processes retry instead of
+  // failing immediately with SQLITE_BUSY.
+  db.exec("PRAGMA busy_timeout = 5000");
+  return db;
 }
 
 export abstract class MemoryManagerSyncOps {
@@ -263,15 +276,7 @@ export abstract class MemoryManagerSyncOps {
   }
 
   private openDatabaseAtPath(dbPath: string): DatabaseSync {
-    const dir = path.dirname(dbPath);
-    ensureDir(dir);
-    const { DatabaseSync } = requireNodeSqlite();
-    const db = new DatabaseSync(dbPath, { allowExtension: this.settings.store.vector.enabled });
-    // busy_timeout is per-connection and resets to 0 on restart.
-    // Set it on every open so concurrent processes retry instead of
-    // failing immediately with SQLITE_BUSY.
-    db.exec("PRAGMA busy_timeout = 5000");
-    return db;
+    return openMemoryDatabaseAtPath(dbPath, this.settings.store.vector.enabled);
   }
 
   private seedEmbeddingCache(sourceDb: DatabaseSync): void {

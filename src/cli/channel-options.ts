@@ -17,6 +17,7 @@ function dedupe(values: string[]): string[] {
 }
 
 let precomputedChannelOptions: string[] | null | undefined;
+let readStartupMetadataFile = fs.readFileSync;
 
 function loadPrecomputedChannelOptions(): string[] | null {
   if (precomputedChannelOptions !== undefined) {
@@ -28,7 +29,7 @@ function loadPrecomputedChannelOptions(): string[] | null {
       "..",
       "cli-startup-metadata.json",
     );
-    const raw = fs.readFileSync(metadataPath, "utf8");
+    const raw = readStartupMetadataFile(metadataPath, "utf8");
     const parsed = JSON.parse(raw) as { channelOptions?: unknown };
     if (Array.isArray(parsed.channelOptions)) {
       precomputedChannelOptions = dedupe(
@@ -54,6 +55,10 @@ export function formatCliChannelOptions(extra: string[] = []): string {
 
 export const __testing = {
   resetPrecomputedChannelOptionsForTests(): void {
+    precomputedChannelOptions = undefined;
+  },
+  setReadStartupMetadataFileForTests(reader: typeof fs.readFileSync = fs.readFileSync): void {
+    readStartupMetadataFile = reader;
     precomputedChannelOptions = undefined;
   },
 };

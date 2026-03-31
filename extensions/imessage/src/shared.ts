@@ -5,8 +5,11 @@ import {
   formatTrimmedAllowFromEntries,
 } from "openclaw/plugin-sdk/channel-config-helpers";
 import { createRestrictSendersChannelSecurity } from "openclaw/plugin-sdk/channel-policy";
-import { createChannelPluginBase } from "openclaw/plugin-sdk/core";
-import { getChatChannelMeta, type ChannelPlugin } from "../runtime-api.js";
+import {
+  createChannelPluginBase,
+  getChatChannelMeta,
+  type ChannelPlugin,
+} from "openclaw/plugin-sdk/core";
 import {
   listIMessageAccountIds,
   resolveDefaultIMessageAccountId,

@@ -11,6 +11,29 @@ import { DEFAULT_ACCOUNT_ID, resolveTwitchAccountContext } from "./config.js";
 import { stripMarkdownForTwitch } from "./utils/markdown.js";
 import { generateMessageId, normalizeTwitchChannel } from "./utils/twitch.js";
 
+const sendDeps = {
+  getClientManager: getRegistryClientManager,
+  resolveTwitchAccountContext,
+  stripMarkdownForTwitch,
+};
+
+export const __testing = {
+  setDepsForTest(
+    overrides: Partial<{
+      getClientManager: typeof getRegistryClientManager;
+      resolveTwitchAccountContext: typeof resolveTwitchAccountContext;
+      stripMarkdownForTwitch: typeof stripMarkdownForTwitch;
+    }>,
+  ): void {
+    Object.assign(sendDeps, overrides);
+  },
+  resetDepsForTest(): void {
+    sendDeps.getClientManager = getRegistryClientManager;
+    sendDeps.resolveTwitchAccountContext = resolveTwitchAccountContext;
+    sendDeps.stripMarkdownForTwitch = stripMarkdownForTwitch;
+  },
+};
+
 /**
  * Result from sending a message to Twitch.
  */
@@ -55,7 +78,10 @@ export async function sendMessageTwitchInternal(
   stripMarkdown: boolean = true,
   logger: Console = console,
 ): Promise<SendMessageResult> {
-  const { account, configured, availableAccountIds } = resolveTwitchAccountContext(cfg, accountId);
+  const { account, configured, availableAccountIds } = sendDeps.resolveTwitchAccountContext(
+    cfg,
+    accountId,
+  );
   if (!account) {
     return {
       ok: false,
@@ -83,7 +109,7 @@ export async function sendMessageTwitchInternal(
     };
   }
 
-  const cleanedText = stripMarkdown ? stripMarkdownForTwitch(text) : text;
+  const cleanedText = stripMarkdown ? sendDeps.stripMarkdownForTwitch(text) : text;
   if (!cleanedText) {
     return {
       ok: true,
@@ -91,7 +117,7 @@ export async function sendMessageTwitchInternal(
     };
   }
 
-  const clientManager = getRegistryClientManager(accountId);
+  const clientManager = sendDeps.getClientManager(accountId);
   if (!clientManager) {
     return {
       ok: false,

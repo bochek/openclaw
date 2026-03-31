@@ -10,6 +10,8 @@ import { z } from "zod";
 
 const MIN_SEND_INTERVAL_MS = 500;
 let lastSendTime = 0;
+let getNow = () => Date.now();
+let sleepImpl = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 // --- Chat user_id resolution ---
 // Synology Chat uses two different user_id spaces:
@@ -70,6 +72,21 @@ const ChatUserListResponseSchema = z.object({
 const chatUserCache = new Map<string, ChatUserCacheEntry>();
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
+export const __testing = {
+  resetStateForTest() {
+    lastSendTime = 0;
+    chatUserCache.clear();
+    getNow = () => Date.now();
+    sleepImpl = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+  },
+  setNowForTest(now: typeof getNow) {
+    getNow = now;
+  },
+  setSleepForTest(sleep: typeof sleepImpl) {
+    sleepImpl = sleep;
+  },
+};
+
 /**
  * Send a text message to Synology Chat via the incoming webhook.
  *
@@ -89,10 +106,10 @@ export async function sendMessage(
   const body = buildWebhookBody({ text }, userId);
 
   // Internal rate limit: min 500ms between sends
-  const now = Date.now();
+  const now = getNow();
   const elapsed = now - lastSendTime;
   if (elapsed < MIN_SEND_INTERVAL_MS) {
-    await sleep(MIN_SEND_INTERVAL_MS - elapsed);
+    await sleepImpl(MIN_SEND_INTERVAL_MS - elapsed);
   }
 
   // Retry with exponential backoff (3 attempts, 300ms base)
@@ -102,14 +119,14 @@ export async function sendMessage(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const ok = await doPost(incomingUrl, body, allowInsecureSsl);
-      lastSendTime = Date.now();
+      lastSendTime = getNow();
       if (ok) return true;
     } catch {
       // will retry
     }
 
     if (attempt < maxRetries - 1) {
-      await sleep(baseDelay * Math.pow(2, attempt));
+      await sleepImpl(baseDelay * Math.pow(2, attempt));
     }
   }
 
@@ -129,7 +146,7 @@ export async function sendFileUrl(
 
   try {
     const ok = await doPost(incomingUrl, body, allowInsecureSsl);
-    lastSendTime = Date.now();
+    lastSendTime = getNow();
     return ok;
   } catch {
     return false;
@@ -148,7 +165,7 @@ export async function fetchChatUsers(
   allowInsecureSsl = true,
   log?: { warn: (...args: unknown[]) => void },
 ): Promise<ChatUser[]> {
-  const now = Date.now();
+  const now = getNow();
   const listUrl = incomingUrl.replace(/method=\w+/, "method=user_list");
   const cached = chatUserCache.get(listUrl);
   if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
@@ -289,8 +306,4 @@ function doPost(url: string, body: string, allowInsecureSsl = true): Promise<boo
     req.write(body);
     req.end();
   });
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

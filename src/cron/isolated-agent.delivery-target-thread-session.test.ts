@@ -1,48 +1,74 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
-import { telegramMessagingForTest } from "../infra/outbound/targets.test-helpers.js";
+import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../plugins/runtime.js";
+import { createOutboundTestPlugin, createTestRegistry } from "../test-utils/channel-plugins.js";
+import { resolveDeliveryTarget } from "./isolated-agent/delivery-target.js";
 
 const mockStore: Record<string, Record<string, unknown>> = {};
 
-let resolveDeliveryTarget: typeof import("./isolated-agent/delivery-target.js").resolveDeliveryTarget;
-beforeEach(async () => {
-  vi.resetModules();
-  vi.doMock("../config/sessions.js", () => ({
-    loadSessionStore: vi.fn((storePath: string) => mockStore[storePath] ?? {}),
-    resolveAgentMainSessionKey: vi.fn(
-      ({ agentId }: { agentId: string }) => `agent:${agentId}:main`,
-    ),
-    resolveStorePath: vi.fn((_store: unknown, _opts: unknown) => "/mock/store.json"),
-  }));
-  vi.doMock("../infra/outbound/channel-selection.js", () => ({
-    resolveMessageChannelSelection: vi.fn(async () => ({ channel: "telegram" })),
-  }));
-  vi.doMock("../channels/plugins/index.js", () => ({
-    getChannelPlugin: vi.fn(() => ({
-      meta: { label: "Telegram" },
-      config: {},
-      messaging: telegramMessagingForTest,
-      outbound: {
-        resolveTarget: ({ to }: { to?: string }) =>
-          to ? { ok: true, to } : { ok: false, error: new Error("missing") },
-      },
-    })),
-    normalizeChannelId: vi.fn((id: string) => id),
-  }));
-  ({ resolveDeliveryTarget } = await import("./isolated-agent/delivery-target.js"));
-  vi.clearAllMocks();
-  for (const key of Object.keys(mockStore)) {
-    delete mockStore[key];
-  }
-});
+const sessionMocks = vi.hoisted(() => ({
+  loadSessionStore: vi.fn((storePath: string) => mockStore[storePath] ?? {}),
+  resolveAgentMainSessionKey: vi.fn(
+    ({ agentId }: { agentId: string }) => `agent:${agentId}:main`,
+  ),
+  resolveStorePath: vi.fn((_store: unknown, _opts: unknown) => "/mock/store.json"),
+}));
 
-afterAll(() => {
-  vi.restoreAllMocks();
-  vi.resetModules();
-});
+const channelSelectionMocks = vi.hoisted(() => ({
+  resolveMessageChannelSelection: vi.fn(async () => ({ channel: "telegram" })),
+}));
+
+vi.mock("../config/sessions.js", () => ({
+  loadSessionStore: sessionMocks.loadSessionStore,
+  resolveAgentMainSessionKey: sessionMocks.resolveAgentMainSessionKey,
+  resolveStorePath: sessionMocks.resolveStorePath,
+}));
+
+vi.mock("../infra/outbound/channel-selection.js", () => ({
+  resolveMessageChannelSelection: channelSelectionMocks.resolveMessageChannelSelection,
+}));
 
 describe("resolveDeliveryTarget thread session lookup", () => {
   const cfg: OpenClawConfig = {};
+
+  beforeEach(() => {
+    resetPluginRuntimeStateForTest();
+    setActivePluginRegistry(
+      createTestRegistry([
+        {
+          pluginId: "telegram",
+          plugin: createOutboundTestPlugin({
+            id: "telegram",
+            messaging: {
+              parseExplicitTarget: ({ raw }: { raw: string }) => {
+                const match = /^(.+):topic:(\d+)$/.exec(raw.trim());
+                return match
+                  ? { to: match[1], threadId: Number(match[2]) }
+                  : { to: raw.trim() };
+              },
+            },
+            outbound: {
+              resolveTarget: ({ to }: { to?: string }) => {
+                if (!to) {
+                  return { ok: false, error: new Error("missing") };
+                }
+                return { ok: true, to };
+              },
+            },
+          }),
+          source: "test",
+        },
+      ]),
+    );
+    vi.clearAllMocks();
+    for (const key of Object.keys(mockStore)) {
+      delete mockStore[key];
+    }
+  });
+
+  afterEach(() => {
+    resetPluginRuntimeStateForTest();
+  });
 
   it("uses thread session entry when sessionKey is provided and entry exists", async () => {
     mockStore["/mock/store.json"] = {

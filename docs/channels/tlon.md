@@ -27,7 +27,7 @@ openclaw plugins install @openclaw/tlon
 Local checkout (when running from a git repo):
 
 ```bash
-openclaw plugins install ./path/to/local/tlon-plugin
+openclaw plugins install ./extensions/tlon
 ```
 
 Details: [Plugins](/tools/plugin)

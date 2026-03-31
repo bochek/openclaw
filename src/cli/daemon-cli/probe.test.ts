@@ -1,25 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
-import { probeGatewayStatus } from "./probe.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { __testing, probeGatewayStatus } from "./probe.js";
 
 const callGatewayMock = vi.hoisted(() => vi.fn());
 const probeGatewayMock = vi.hoisted(() => vi.fn());
 
-vi.mock("../../gateway/call.js", () => ({
-  callGateway: (...args: unknown[]) => callGatewayMock(...args),
-}));
-
-vi.mock("../../gateway/probe.js", () => ({
-  probeGateway: (...args: unknown[]) => probeGatewayMock(...args),
-}));
-
-vi.mock("../progress.js", () => ({
-  withProgress: async (_opts: unknown, fn: () => Promise<unknown>) => await fn(),
-}));
-
 describe("probeGatewayStatus", () => {
+  afterEach(() => {
+    __testing.resetDepsForTest();
+  });
+
   it("uses lightweight token-only probing for daemon status", async () => {
     callGatewayMock.mockReset();
     probeGatewayMock.mockResolvedValueOnce({ ok: true });
+    __testing.setDepsForTest({
+      callGateway: async (params) => await callGatewayMock(params),
+      probeGateway: async (params) => await probeGatewayMock(params),
+    });
 
     const result = await probeGatewayStatus({
       url: "ws://127.0.0.1:19191",
@@ -47,6 +43,10 @@ describe("probeGatewayStatus", () => {
     callGatewayMock.mockReset();
     probeGatewayMock.mockReset();
     callGatewayMock.mockResolvedValueOnce({ status: "ok" });
+    __testing.setDepsForTest({
+      callGateway: async (params) => await callGatewayMock(params),
+      probeGateway: async (params) => await probeGatewayMock(params),
+    });
 
     const result = await probeGatewayStatus({
       url: "ws://127.0.0.1:19191",
@@ -79,6 +79,10 @@ describe("probeGatewayStatus", () => {
       error: null,
       close: { code: 1008, reason: "pairing required" },
     });
+    __testing.setDepsForTest({
+      callGateway: async (params) => await callGatewayMock(params),
+      probeGateway: async (params) => await probeGatewayMock(params),
+    });
 
     const result = await probeGatewayStatus({
       url: "ws://127.0.0.1:19191",
@@ -99,6 +103,10 @@ describe("probeGatewayStatus", () => {
       error: "timeout",
       close: { code: 1008, reason: "pairing required" },
     });
+    __testing.setDepsForTest({
+      callGateway: async (params) => await callGatewayMock(params),
+      probeGateway: async (params) => await probeGatewayMock(params),
+    });
 
     const result = await probeGatewayStatus({
       url: "ws://127.0.0.1:19191",
@@ -115,6 +123,10 @@ describe("probeGatewayStatus", () => {
     callGatewayMock.mockReset();
     probeGatewayMock.mockReset();
     callGatewayMock.mockRejectedValueOnce(new Error("missing scope: operator.admin"));
+    __testing.setDepsForTest({
+      callGateway: async (params) => await callGatewayMock(params),
+      probeGateway: async (params) => await probeGatewayMock(params),
+    });
 
     const result = await probeGatewayStatus({
       url: "ws://127.0.0.1:19191",

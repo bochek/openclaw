@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   createConfigWithFallbacks,
   EXPECTED_FALLBACKS,
-} from "../../test/helpers/plugins/onboard-config.js";
+} from "../../test/helpers/extensions/onboard-config.js";
 import {
   applyOpenrouterConfig,
   applyOpenrouterProviderConfig,

@@ -1,6 +1,17 @@
+import { cleanupBrowserGlobals, installBrowserGlobals } from "../test-helpers/browser-globals.ts";
 import { marked } from "marked";
-import { describe, expect, it, vi } from "vitest";
-import { toSanitizedMarkdownHtml } from "./markdown.ts";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+
+let toSanitizedMarkdownHtml: typeof import("./markdown.ts").toSanitizedMarkdownHtml;
+
+beforeAll(async () => {
+  installBrowserGlobals();
+  ({ toSanitizedMarkdownHtml } = await import("./markdown.ts"));
+});
+
+afterAll(() => {
+  cleanupBrowserGlobals();
+});
 
 describe("toSanitizedMarkdownHtml", () => {
   it("renders basic markdown", () => {

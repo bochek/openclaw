@@ -5,6 +5,23 @@ import { resolveTwitchToken } from "./token.js";
 import type { ChannelLogSink, TwitchAccountConfig, TwitchChatMessage } from "./types.js";
 import { normalizeToken } from "./utils/twitch.js";
 
+const twitchClientDeps = {
+  resolveTwitchToken,
+};
+
+export const __testing = {
+  setDepsForTest(
+    overrides: Partial<{
+      resolveTwitchToken: typeof resolveTwitchToken;
+    }>,
+  ): void {
+    Object.assign(twitchClientDeps, overrides);
+  },
+  resetDepsForTest(): void {
+    twitchClientDeps.resolveTwitchToken = resolveTwitchToken;
+  },
+};
+
 /**
  * Manages Twitch chat client connections
  */
@@ -86,7 +103,7 @@ export class TwitchClientManager {
       return existing;
     }
 
-    const tokenResolution = resolveTwitchToken(cfg, {
+    const tokenResolution = twitchClientDeps.resolveTwitchToken(cfg, {
       accountId,
     });
 

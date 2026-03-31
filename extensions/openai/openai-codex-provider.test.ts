@@ -1,20 +1,23 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-const refreshOpenAICodexTokenMock = vi.hoisted(() => vi.fn());
-
-vi.mock("./openai-codex-provider.runtime.js", () => ({
-  refreshOpenAICodexToken: refreshOpenAICodexTokenMock,
-}));
+const refreshOpenAICodexTokenMock = vi.fn();
 
 let buildOpenAICodexProviderPlugin: typeof import("./openai-codex-provider.js").buildOpenAICodexProviderPlugin;
+let setLoadRefreshOpenAICodexTokenForTest: typeof import("./openai-codex-provider.js").__setLoadRefreshOpenAICodexTokenForTest;
+let resetLoadRefreshOpenAICodexTokenForTest: typeof import("./openai-codex-provider.js").__resetLoadRefreshOpenAICodexTokenForTest;
 
 describe("openai codex provider", () => {
   beforeAll(async () => {
-    ({ buildOpenAICodexProviderPlugin } = await import("./openai-codex-provider.js"));
+    ({
+      __resetLoadRefreshOpenAICodexTokenForTest: resetLoadRefreshOpenAICodexTokenForTest,
+      __setLoadRefreshOpenAICodexTokenForTest: setLoadRefreshOpenAICodexTokenForTest,
+      buildOpenAICodexProviderPlugin,
+    } = await import("./openai-codex-provider.js"));
   });
 
   beforeEach(() => {
     refreshOpenAICodexTokenMock.mockReset();
+    setLoadRefreshOpenAICodexTokenForTest(() => refreshOpenAICodexTokenMock);
   });
 
   it("falls back to the cached credential when accountId extraction fails", async () => {
@@ -85,5 +88,9 @@ describe("openai codex provider", () => {
     ).toBe(
       "Deprecated profile. Run `openclaw models auth login --provider openai-codex` or `openclaw configure`.",
     );
+  });
+
+  afterAll(() => {
+    resetLoadRefreshOpenAICodexTokenForTest();
   });
 });

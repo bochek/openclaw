@@ -1,5 +1,6 @@
 /* @vitest-environment jsdom */
 
+import "../../test-helpers/browser-globals-install.ts";
 import { render } from "lit";
 import { describe, expect, it, vi } from "vitest";
 import { i18n } from "../../i18n/index.ts";

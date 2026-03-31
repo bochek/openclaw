@@ -4,6 +4,19 @@ import { Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "../runtime-api.js";
 import { resolveWindowsLobsterSpawn } from "./windows-spawn.js";
 
+const lobsterRuntime = {
+  spawn,
+};
+
+export const __testing = {
+  setSpawnForTest(spawnImpl: typeof spawn) {
+    lobsterRuntime.spawn = spawnImpl;
+  },
+  resetSpawnForTest() {
+    lobsterRuntime.spawn = spawn;
+  },
+};
+
 type LobsterEnvelope =
   | {
       ok: true;
@@ -69,7 +82,7 @@ async function runLobsterSubprocessOnce(params: {
       : { command: execPath, argv };
 
   return await new Promise<{ stdout: string }>((resolve, reject) => {
-    const child = spawn(spawnTarget.command, spawnTarget.argv, {
+    const child = lobsterRuntime.spawn(spawnTarget.command, spawnTarget.argv, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
       env,

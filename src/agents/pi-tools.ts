@@ -58,6 +58,18 @@ import {
 } from "./tool-policy.js";
 import { resolveWorkspaceRoot } from "./workspace-dir.js";
 
+type PiToolsDeps = {
+  getPluginToolMeta: typeof getPluginToolMeta;
+  listChannelAgentTools: typeof listChannelAgentTools;
+};
+
+const defaultPiToolsDeps: PiToolsDeps = {
+  getPluginToolMeta,
+  listChannelAgentTools,
+};
+
+let piToolsDeps: PiToolsDeps = defaultPiToolsDeps;
+
 function isOpenAIProvider(provider?: string) {
   const normalized = provider?.trim().toLowerCase();
   return normalized === "openai" || normalized === "openai-codex";
@@ -197,6 +209,14 @@ export const __testing = {
   wrapToolParamNormalization,
   assertRequiredParams,
   applyModelProviderToolPolicy,
+  setDepsForTest(overrides?: Partial<PiToolsDeps>) {
+    piToolsDeps = overrides
+      ? {
+          ...defaultPiToolsDeps,
+          ...overrides,
+        }
+      : defaultPiToolsDeps;
+  },
 } as const;
 
 export function createOpenClawCodingTools(options?: {
@@ -502,7 +522,7 @@ export function createOpenClawCodingTools(options?: {
     execTool as unknown as AnyAgentTool,
     processTool as unknown as AnyAgentTool,
     // Channel docking: include channel-defined agent tools (login, etc.).
-    ...listChannelAgentTools({ cfg: options?.config }),
+    ...piToolsDeps.listChannelAgentTools({ cfg: options?.config }),
     ...createOpenClawTools({
       sandboxBrowserBridgeUrl: sandbox?.browser?.bridgeUrl,
       allowHostBrowserControl: sandbox ? sandbox.browserAllowHostControl : true,
@@ -585,7 +605,7 @@ export function createOpenClawCodingTools(options?: {
   const toolsByAuthorization = applyOwnerOnlyToolPolicy(toolsForModelProvider, senderIsOwner);
   const subagentFiltered = applyToolPolicyPipeline({
     tools: toolsByAuthorization,
-    toolMeta: (tool) => getPluginToolMeta(tool),
+    toolMeta: (tool) => piToolsDeps.getPluginToolMeta(tool),
     warn: logWarn,
     steps: [
       ...buildDefaultToolPolicyPipelineSteps({

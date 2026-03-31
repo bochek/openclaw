@@ -183,4 +183,17 @@ describe("resolveBundledPluginWebSearchProviders", () => {
       excludedPluginIds,
     });
   });
+
+  it("keeps bundled compat providers when the bundled plugin dir is empty", () => {
+    expectBundledWebSearchResolution({
+      options: {
+        bundledAllowlistCompat: true,
+        env: {
+          ...process.env,
+          OPENCLAW_BUNDLED_PLUGINS_DIR: "/nonexistent/bundled/plugins",
+        },
+      },
+      expectedProviders: "full",
+    });
+  });
 });

@@ -8,6 +8,26 @@ import { createWebhookHandler, type WebhookHandlerDeps } from "./webhook-handler
 
 const CHANNEL_ID = "synology-chat";
 
+const gatewayRuntimeDeps = {
+  registerPluginHttpRoute,
+  dispatchSynologyChatInboundTurn,
+};
+
+export const __testing = {
+  setDepsForTest(
+    overrides: Partial<{
+      registerPluginHttpRoute: typeof registerPluginHttpRoute;
+      dispatchSynologyChatInboundTurn: typeof dispatchSynologyChatInboundTurn;
+    }>,
+  ) {
+    Object.assign(gatewayRuntimeDeps, overrides);
+  },
+  resetDepsForTest() {
+    gatewayRuntimeDeps.registerPluginHttpRoute = registerPluginHttpRoute;
+    gatewayRuntimeDeps.dispatchSynologyChatInboundTurn = dispatchSynologyChatInboundTurn;
+  },
+};
+
 type SynologyGatewayLog = {
   info?: (message: string) => void;
   warn?: (message: string) => void;
@@ -179,14 +199,14 @@ export function registerSynologyWebhookRoute(params: {
   const handler = createWebhookHandler({
     account,
     deliver: async (msg) =>
-      await dispatchSynologyChatInboundTurn({
+      await gatewayRuntimeDeps.dispatchSynologyChatInboundTurn({
         account,
         msg,
         log: createUnknownArgsLogAdapter(log),
       }),
     log: createUnknownArgsLogAdapter(log),
   });
-  const unregister = registerPluginHttpRoute({
+  const unregister = gatewayRuntimeDeps.registerPluginHttpRoute({
     path: account.webhookPath,
     auth: "plugin",
     pluginId: CHANNEL_ID,

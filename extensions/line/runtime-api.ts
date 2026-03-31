@@ -32,30 +32,77 @@ export {
   normalizeAllowFrom,
   normalizeDmAllowFromWithStore,
 } from "./src/bot-access.js";
-export { downloadLineMedia } from "./src/download.js";
-export { probeLineBot } from "./src/probe.js";
 export { buildTemplateMessageFromPayload } from "./src/template-messages.js";
-export {
-  createQuickReplyItems,
-  pushFlexMessage,
-  pushLocationMessage,
-  pushMessageLine,
-  pushMessagesLine,
-  pushTemplateMessage,
-  pushTextMessageWithQuickReplies,
-  sendMessageLine,
-} from "./src/send.js";
-export { monitorLineProvider } from "./src/monitor.js";
+export { createQuickReplyItems } from "./src/quick-replies.js";
+
+type DownloadLineMedia = typeof import("./src/download.js").downloadLineMedia;
+type ProbeLineBot = typeof import("./src/probe.js").probeLineBot;
+type PushMessageLine = typeof import("./src/send.js").pushMessageLine;
+type PushMessagesLine = typeof import("./src/send.js").pushMessagesLine;
+type PushLocationMessage = typeof import("./src/send.js").pushLocationMessage;
+type PushFlexMessage = typeof import("./src/send.js").pushFlexMessage;
+type PushTemplateMessage = typeof import("./src/send.js").pushTemplateMessage;
+type PushTextMessageWithQuickReplies = typeof import("./src/send.js").pushTextMessageWithQuickReplies;
+type SendMessageLine = typeof import("./src/send.js").sendMessageLine;
+type MonitorLineProvider = typeof import("./src/monitor.js").monitorLineProvider;
+
+export const downloadLineMedia: DownloadLineMedia = async (...args) => {
+  const mod = await import("./src/download.js");
+  return mod.downloadLineMedia(...args);
+};
+
+export const probeLineBot: ProbeLineBot = async (...args) => {
+  const mod = await import("./src/probe.js");
+  return mod.probeLineBot(...args);
+};
+
+export const sendMessageLine: SendMessageLine = async (...args) => {
+  const mod = await import("./src/send.js");
+  return mod.sendMessageLine(...args);
+};
+
+export const pushMessageLine: PushMessageLine = async (...args) => {
+  const mod = await import("./src/send.js");
+  return mod.pushMessageLine(...args);
+};
+
+export const pushMessagesLine: PushMessagesLine = async (...args) => {
+  const mod = await import("./src/send.js");
+  return mod.pushMessagesLine(...args);
+};
+
+export const pushLocationMessage: PushLocationMessage = async (...args) => {
+  const mod = await import("./src/send.js");
+  return mod.pushLocationMessage(...args);
+};
+
+export const pushFlexMessage: PushFlexMessage = async (...args) => {
+  const mod = await import("./src/send.js");
+  return mod.pushFlexMessage(...args);
+};
+
+export const pushTemplateMessage: PushTemplateMessage = async (...args) => {
+  const mod = await import("./src/send.js");
+  return mod.pushTemplateMessage(...args);
+};
+
+export const pushTextMessageWithQuickReplies: PushTextMessageWithQuickReplies = async (...args) => {
+  const mod = await import("./src/send.js");
+  return mod.pushTextMessageWithQuickReplies(...args);
+};
+
+export const monitorLineProvider: MonitorLineProvider = async (...args) => {
+  const mod = await import("./src/monitor.js");
+  return mod.monitorLineProvider(...args);
+};
 
 export * from "./src/accounts.js";
 export * from "./src/bot-access.js";
 export * from "./src/channel-access-token.js";
 export * from "./src/config-schema.js";
-export * from "./src/download.js";
 export * from "./src/group-keys.js";
 export * from "./src/markdown-to-line.js";
-export * from "./src/probe.js";
-export * from "./src/send.js";
+export * from "./src/quick-replies.js";
 export * from "./src/signature.js";
 export * from "./src/template-messages.js";
 export type {

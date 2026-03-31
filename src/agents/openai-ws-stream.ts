@@ -186,6 +186,12 @@ export function hasWsSession(sessionId: string): boolean {
   return !!(s && !s.broken && s.manager.isConnected());
 }
 
+export function clearWsSessionsForTest(): void {
+  for (const sessionId of Array.from(wsRegistry.keys())) {
+    releaseWsSession(sessionId);
+  }
+}
+
 export {
   buildAssistantMessageFromResponse,
   convertMessagesToInputItems,
@@ -652,5 +658,8 @@ export const __testing = {
           ...overrides,
         }
       : defaultOpenAIWsStreamDeps;
+  },
+  clearSessionsForTest() {
+    clearWsSessionsForTest();
   },
 };

@@ -9,9 +9,8 @@
  * - Error handling and edge cases
  */
 
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveTwitchToken } from "./token.js";
-import { TwitchClientManager } from "./twitch-client.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __testing, TwitchClientManager } from "./twitch-client.js";
 import type { ChannelLogSink, TwitchAccountConfig, TwitchChatMessage } from "./types.js";
 
 // Mock @twurple dependencies
@@ -72,19 +71,13 @@ vi.mock("@twurple/auth", () => ({
   },
 }));
 
-// Mock token resolution - must be after @twurple/auth mock
-vi.mock("./token.js", () => ({
-  resolveTwitchToken: vi.fn(() => ({
-    token: "oauth:mock-token-from-tests",
-    source: "config" as const,
-  })),
-  DEFAULT_ACCOUNT_ID: "default",
-}));
-
 describe("TwitchClientManager", () => {
   let manager: TwitchClientManager;
   let mockLogger: ChannelLogSink;
-  let resolveTwitchTokenMock: ReturnType<typeof vi.mocked<typeof resolveTwitchToken>>;
+  const resolveTwitchTokenMock = vi.fn(() => ({
+    token: "oauth:mock-token-from-tests",
+    source: "config" as const,
+  }));
 
   const testAccount: TwitchAccountConfig = {
     username: "testbot",
@@ -102,10 +95,6 @@ describe("TwitchClientManager", () => {
     enabled: true,
   };
 
-  beforeAll(() => {
-    resolveTwitchTokenMock = vi.mocked(resolveTwitchToken);
-  });
-
   beforeEach(() => {
     // Clear all mocks first
     vi.clearAllMocks();
@@ -118,6 +107,7 @@ describe("TwitchClientManager", () => {
       token: "oauth:mock-token-from-tests",
       source: "config" as const,
     });
+    __testing.setDepsForTest({ resolveTwitchToken: resolveTwitchTokenMock });
 
     // Create mock logger
     mockLogger = {
@@ -133,7 +123,8 @@ describe("TwitchClientManager", () => {
 
   afterEach(() => {
     // Clean up manager to avoid side effects
-    manager._clearForTest();
+    manager?._clearForTest();
+    __testing.resetDepsForTest();
   });
 
   describe("getClient", () => {

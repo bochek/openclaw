@@ -6,16 +6,18 @@ import type {
   PluginCommandContext,
 } from "openclaw/plugin-sdk/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createTestPluginApi } from "../../test/helpers/plugins/plugin-api.js";
+import { createTestPluginApi } from "../../test/helpers/extensions/plugin-api.js";
 import type { OpenClawPluginApi } from "./api.js";
 import type { PendingPairingRequest } from "./notify.ts";
 
 const pluginApiMocks = vi.hoisted(() => ({
+  approveDevicePairing: vi.fn(),
   clearDeviceBootstrapTokens: vi.fn(async () => ({ removed: 2 })),
   issueDeviceBootstrapToken: vi.fn(async () => ({
     token: "boot-token",
     expiresAtMs: Date.now() + 10 * 60_000,
   })),
+  listDevicePairing: vi.fn(async () => ({ pending: [], paired: [] })),
   revokeDeviceBootstrapToken: vi.fn(async () => ({ removed: true })),
   renderQrPngBase64: vi.fn(async () => "ZmFrZXBuZw=="),
   resolveGatewayPort: vi.fn(() => 18789),
@@ -28,11 +30,11 @@ vi.mock("./api.js", () => {
       roles: ["node"],
       scopes: [],
     },
-    approveDevicePairing: vi.fn(),
+    approveDevicePairing: pluginApiMocks.approveDevicePairing,
     clearDeviceBootstrapTokens: pluginApiMocks.clearDeviceBootstrapTokens,
     definePluginEntry: vi.fn((entry) => entry),
     issueDeviceBootstrapToken: pluginApiMocks.issueDeviceBootstrapToken,
-    listDevicePairing: vi.fn(async () => ({ pending: [] })),
+    listDevicePairing: pluginApiMocks.listDevicePairing,
     renderQrPngBase64: pluginApiMocks.renderQrPngBase64,
     revokeDeviceBootstrapToken: pluginApiMocks.revokeDeviceBootstrapToken,
     resolvePreferredOpenClawTmpDir: pluginApiMocks.resolvePreferredOpenClawTmpDir,
@@ -50,7 +52,6 @@ vi.mock("./notify.js", () => ({
   registerPairingNotifierService: vi.fn(),
 }));
 
-import { approveDevicePairing, listDevicePairing } from "./api.js";
 import registerDevicePair from "./index.js";
 
 function createApi(params?: {
@@ -151,6 +152,8 @@ describe("device-pair /pair qr", () => {
       token: "boot-token",
       expiresAtMs: Date.now() + 10 * 60_000,
     });
+    pluginApiMocks.listDevicePairing.mockResolvedValue({ pending: [], paired: [] });
+    pluginApiMocks.approveDevicePairing.mockReset();
     await fs.mkdir(pluginApiMocks.resolvePreferredOpenClawTmpDir(), { recursive: true });
   });
 
@@ -439,7 +442,7 @@ describe("device-pair notify pending formatting", () => {
 
 describe("device-pair /pair approve", () => {
   it("rejects internal gateway callers without operator.pairing", async () => {
-    vi.mocked(listDevicePairing).mockResolvedValueOnce({
+    pluginApiMocks.listDevicePairing.mockResolvedValueOnce({
       pending: [
         {
           requestId: "req-1",
@@ -463,14 +466,14 @@ describe("device-pair /pair approve", () => {
       }),
     );
 
-    expect(vi.mocked(approveDevicePairing)).not.toHaveBeenCalled();
+    expect(pluginApiMocks.approveDevicePairing).not.toHaveBeenCalled();
     expect(result).toEqual({
       text: "⚠️ This command requires operator.pairing for internal gateway callers.",
     });
   });
 
   it("allows internal gateway callers with operator.pairing", async () => {
-    vi.mocked(listDevicePairing).mockResolvedValueOnce({
+    pluginApiMocks.listDevicePairing.mockResolvedValueOnce({
       pending: [
         {
           requestId: "req-1",
@@ -483,7 +486,7 @@ describe("device-pair /pair approve", () => {
       ],
       paired: [],
     });
-    vi.mocked(approveDevicePairing).mockResolvedValueOnce({
+    pluginApiMocks.approveDevicePairing.mockResolvedValueOnce({
       status: "approved",
       requestId: "req-1",
       device: {
@@ -518,14 +521,14 @@ describe("device-pair /pair approve", () => {
       }),
     );
 
-    expect(vi.mocked(approveDevicePairing)).toHaveBeenCalledWith("req-1", {
+    expect(pluginApiMocks.approveDevicePairing).toHaveBeenCalledWith("req-1", {
       callerScopes: ["operator.write", "operator.pairing"],
     });
     expect(result).toEqual({ text: "✅ Paired Victim Phone (ios)." });
   });
 
   it("does not force an empty caller scope context for external approvals", async () => {
-    vi.mocked(listDevicePairing).mockResolvedValueOnce({
+    pluginApiMocks.listDevicePairing.mockResolvedValueOnce({
       pending: [
         {
           requestId: "req-1",
@@ -538,7 +541,7 @@ describe("device-pair /pair approve", () => {
       ],
       paired: [],
     });
-    vi.mocked(approveDevicePairing).mockResolvedValueOnce({
+    pluginApiMocks.approveDevicePairing.mockResolvedValueOnce({
       status: "approved",
       requestId: "req-1",
       device: {
@@ -573,12 +576,12 @@ describe("device-pair /pair approve", () => {
       }),
     );
 
-    expect(vi.mocked(approveDevicePairing)).toHaveBeenCalledWith("req-1");
+    expect(pluginApiMocks.approveDevicePairing).toHaveBeenCalledWith("req-1");
     expect(result).toEqual({ text: "✅ Paired Victim Phone (ios)." });
   });
 
   it("rejects approvals above the caller scopes", async () => {
-    vi.mocked(listDevicePairing).mockResolvedValueOnce({
+    pluginApiMocks.listDevicePairing.mockResolvedValueOnce({
       pending: [
         {
           requestId: "req-1",
@@ -591,7 +594,7 @@ describe("device-pair /pair approve", () => {
       ],
       paired: [],
     });
-    vi.mocked(approveDevicePairing).mockResolvedValueOnce({
+    pluginApiMocks.approveDevicePairing.mockResolvedValueOnce({
       status: "forbidden",
       missingScope: "operator.admin",
     });

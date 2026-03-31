@@ -1,12 +1,12 @@
 import "./isolated-agent.mocks.js";
 import { beforeEach, describe, expect, it } from "vitest";
-import { runSubagentAnnounceFlow } from "../agents/subagent-announce.js";
 import {
   createCliDeps,
   expectDirectTelegramDelivery,
   mockAgentPayloads,
   runTelegramAnnounceTurn,
 } from "./isolated-agent.delivery.test-helpers.js";
+import { runSubagentAnnounceFlowMock } from "./isolated-agent.mocks.js";
 import { withTempCronHome, writeSessionStore } from "./isolated-agent.test-harness.js";
 import { setupIsolatedAgentTurnMocks } from "./isolated-agent.test-setup.js";
 
@@ -30,7 +30,7 @@ describe("runCronIsolatedAgentTurn forum topic delivery", () => {
 
       expect(res.status).toBe("ok");
       expect(res.delivered).toBe(true);
-      expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+      expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
       expectDirectTelegramDelivery(deps, {
         chatId: "123",
         text: "forum message",
@@ -58,7 +58,7 @@ describe("runCronIsolatedAgentTurn forum topic delivery", () => {
 
       expect(res.status).toBe("ok");
       expect(res.delivered).toBe(true);
-      expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+      expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
       expect(deps.sendMessageTelegram).toHaveBeenCalledTimes(2);
       expect(deps.sendMessageTelegram).toHaveBeenNthCalledWith(
         1,
@@ -90,7 +90,7 @@ describe("runCronIsolatedAgentTurn forum topic delivery", () => {
 
       expect(plainRes.status).toBe("ok");
       expect(plainRes.delivered).toBe(true);
-      expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+      expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
       expectDirectTelegramDelivery(deps, {
         chatId: "123",
         text: "plain message",

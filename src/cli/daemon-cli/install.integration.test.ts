@@ -124,7 +124,7 @@ describe("runDaemonInstall integration", () => {
     );
     clearConfigCache();
 
-    await runDaemonInstall({ json: true });
+    await runDaemonInstall({ json: true, runtime: "bun" });
 
     expect(serviceMock.install).toHaveBeenCalledTimes(1);
     const updated = await readJson(configPath);

@@ -6,11 +6,9 @@ const mocks = vi.hoisted(() => ({
   handleMatrixAction: vi.fn(),
 }));
 
-vi.mock("./tool-actions.js", () => ({
-  handleMatrixAction: mocks.handleMatrixAction,
-}));
+const { __setLoadHandleMatrixActionForTest, matrixMessageActions } = await import("./actions.js");
 
-const { matrixMessageActions } = await import("./actions.js");
+__setLoadHandleMatrixActionForTest(async () => mocks.handleMatrixAction);
 
 const profileAction = "set-profile" as ChannelMessageActionContext["action"];
 

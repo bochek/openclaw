@@ -24,6 +24,13 @@ type CompletionRuntimeCredential = {
   baseUrl?: string;
 };
 
+const simpleCompletionRuntimeDeps = {
+  resolveCopilotApiToken: async (params: { githubToken: string }) => {
+    const runtime = await import("./github-copilot-token.js");
+    return await runtime.resolveCopilotApiToken(params);
+  },
+};
+
 type AllowedMissingApiKeyMode = ResolvedProviderAuth["mode"];
 
 export type PreparedSimpleCompletionModel =
@@ -97,8 +104,7 @@ async function setRuntimeApiKeyForCompletion(params: {
   apiKey: string;
 }): Promise<CompletionRuntimeCredential> {
   if (params.model.provider === "github-copilot") {
-    const { resolveCopilotApiToken } = await import("./github-copilot-token.js");
-    const copilotToken = await resolveCopilotApiToken({
+    const copilotToken = await simpleCompletionRuntimeDeps.resolveCopilotApiToken({
       githubToken: params.apiKey,
     });
     params.authStorage.setRuntimeApiKey(params.model.provider, copilotToken.token);
@@ -112,6 +118,25 @@ async function setRuntimeApiKeyForCompletion(params: {
     apiKey: params.apiKey,
   };
 }
+
+export const __testing = {
+  setResolveCopilotApiTokenForTest(
+    resolver:
+      | ((
+          params: {
+            githubToken: string;
+          },
+        ) => Promise<{ token: string; baseUrl?: string }>)
+      | undefined,
+  ): void {
+    simpleCompletionRuntimeDeps.resolveCopilotApiToken =
+      resolver ??
+      (async (params) => {
+        const runtime = await import("./github-copilot-token.js");
+        return await runtime.resolveCopilotApiToken(params);
+      });
+  },
+};
 
 function hasMissingApiKeyAllowance(params: {
   mode: ResolvedProviderAuth["mode"];

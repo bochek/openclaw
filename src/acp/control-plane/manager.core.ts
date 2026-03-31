@@ -85,6 +85,18 @@ const ACP_TURN_TIMEOUT_REASON = "turn-timeout";
 const ACP_BACKGROUND_TASK_TEXT_MAX_LENGTH = 160;
 const ACP_BACKGROUND_TASK_PROGRESS_MAX_LENGTH = 240;
 
+type ManagerTimerDeps = {
+  setTimeout: typeof setTimeout;
+  clearTimeout: typeof clearTimeout;
+};
+
+const defaultManagerTimerDeps: ManagerTimerDeps = {
+  setTimeout,
+  clearTimeout,
+};
+
+let managerTimerDeps: ManagerTimerDeps = { ...defaultManagerTimerDeps };
+
 function summarizeBackgroundTaskText(text: string): string {
   const normalized = normalizeText(text) ?? "ACP background task";
   if (normalized.length <= ACP_BACKGROUND_TASK_TEXT_MAX_LENGTH) {
@@ -997,7 +1009,7 @@ export class AcpSessionManager {
     const timeoutToken = Symbol("acp-turn-timeout");
     let timer: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise<typeof timeoutToken>((resolve) => {
-      timer = setTimeout(() => resolve(timeoutToken), params.timeoutMs);
+      timer = managerTimerDeps.setTimeout(() => resolve(timeoutToken), params.timeoutMs);
       timer.unref?.();
     });
 
@@ -1023,7 +1035,7 @@ export class AcpSessionManager {
       return outcome.value;
     } finally {
       if (timer) {
-        clearTimeout(timer);
+        managerTimerDeps.clearTimeout(timer);
       }
     }
   }
@@ -1097,7 +1109,7 @@ export class AcpSessionManager {
     const timeoutToken = Symbol(`acp-timeout-${params.label}`);
     let timer: NodeJS.Timeout | undefined;
     const timeoutPromise = new Promise<typeof timeoutToken>((resolve) => {
-      timer = setTimeout(() => resolve(timeoutToken), ACP_TURN_TIMEOUT_CLEANUP_GRACE_MS);
+      timer = managerTimerDeps.setTimeout(() => resolve(timeoutToken), ACP_TURN_TIMEOUT_CLEANUP_GRACE_MS);
       timer.unref?.();
     });
 
@@ -1124,7 +1136,7 @@ export class AcpSessionManager {
       return true;
     } finally {
       if (timer) {
-        clearTimeout(timer);
+        managerTimerDeps.clearTimeout(timer);
       }
     }
   }
@@ -1954,4 +1966,12 @@ export class AcpSessionManager {
       logVerbose(`acp-manager: failed updating background task for ${runId}: ${String(error)}`);
     }
   }
+}
+
+export function setManagerTimerDepsForTests(overrides?: Partial<ManagerTimerDeps>): void {
+  managerTimerDeps = overrides ? { ...managerTimerDeps, ...overrides } : { ...defaultManagerTimerDeps };
+}
+
+export function resetManagerTimerDepsForTests(): void {
+  managerTimerDeps = { ...defaultManagerTimerDeps };
 }

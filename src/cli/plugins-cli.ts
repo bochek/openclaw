@@ -64,6 +64,34 @@ export type PluginUninstallOptions = {
   dryRun?: boolean;
 };
 
+type PluginsCliDeps = {
+  readConfigFileSnapshot: typeof readConfigFileSnapshot;
+  replaceConfigFile: typeof replaceConfigFile;
+  resolveStateDir: typeof resolveStateDir;
+  parseClawHubPluginSpec: typeof parseClawHubPluginSpec;
+  buildPluginStatusReport: typeof buildPluginStatusReport;
+  resolveUninstallChannelConfigKeys: typeof resolveUninstallChannelConfigKeys;
+  resolveUninstallDirectoryTarget: typeof resolveUninstallDirectoryTarget;
+  uninstallPlugin: typeof uninstallPlugin;
+  promptYesNo: typeof promptYesNo;
+  runtime: Pick<typeof defaultRuntime, "log" | "error" | "exit">;
+};
+
+const defaultPluginsCliDeps: PluginsCliDeps = {
+  readConfigFileSnapshot,
+  replaceConfigFile,
+  resolveStateDir,
+  parseClawHubPluginSpec,
+  buildPluginStatusReport,
+  resolveUninstallChannelConfigKeys,
+  resolveUninstallDirectoryTarget,
+  uninstallPlugin,
+  promptYesNo,
+  runtime: defaultRuntime,
+};
+
+let pluginsCliDeps: PluginsCliDeps = { ...defaultPluginsCliDeps };
+
 function resolvePluginUninstallId(params: {
   rawId: string;
   config: OpenClawConfig;
@@ -86,13 +114,13 @@ function resolvePluginUninstallId(params: {
     }
   }
 
-  const requestedClawHub = parseClawHubPluginSpec(rawId);
+  const requestedClawHub = pluginsCliDeps.parseClawHubPluginSpec(rawId);
   if (requestedClawHub) {
     for (const [pluginId, install] of Object.entries(params.config.plugins?.installs ?? {})) {
       const installedClawHubName =
         install.clawhubPackage ??
-        parseClawHubPluginSpec(install.spec ?? "")?.name ??
-        parseClawHubPluginSpec(install.resolvedSpec ?? "")?.name;
+        pluginsCliDeps.parseClawHubPluginSpec(install.spec ?? "")?.name ??
+        pluginsCliDeps.parseClawHubPluginSpec(install.resolvedSpec ?? "")?.name;
       if (installedClawHubName === requestedClawHub.name) {
         return { pluginId };
       }
@@ -588,14 +616,18 @@ export function registerPluginsCli(program: Command) {
     .option("--force", "Skip confirmation prompt", false)
     .option("--dry-run", "Show what would be removed without making changes", false)
     .action(async (id: string, opts: PluginUninstallOptions) => {
-      const snapshot = await readConfigFileSnapshot();
+      const runtime = pluginsCliDeps.runtime;
+      const snapshot = await pluginsCliDeps.readConfigFileSnapshot();
       const cfg = (snapshot.sourceConfig ?? snapshot.config) as OpenClawConfig;
-      const report = buildPluginStatusReport({ config: cfg });
-      const extensionsDir = path.join(resolveStateDir(process.env, os.homedir), "extensions");
+      const report = pluginsCliDeps.buildPluginStatusReport({ config: cfg });
+      const extensionsDir = path.join(
+        pluginsCliDeps.resolveStateDir(process.env, os.homedir),
+        "extensions",
+      );
       const keepFiles = Boolean(opts.keepFiles || opts.keepConfig);
 
       if (opts.keepConfig) {
-        defaultRuntime.log(theme.warn("`--keep-config` is deprecated, use `--keep-files`."));
+        runtime.log(theme.warn("`--keep-config` is deprecated, use `--keep-files`."));
       }
 
       const { plugin, pluginId } = resolvePluginUninstallId({
@@ -608,13 +640,13 @@ export function registerPluginsCli(program: Command) {
 
       if (!hasEntry && !hasInstall) {
         if (plugin) {
-          defaultRuntime.error(
+          runtime.error(
             `Plugin "${pluginId}" is not managed by plugins config/install records and cannot be uninstalled.`,
           );
         } else {
-          defaultRuntime.error(`Plugin not found: ${id}`);
+          runtime.error(`Plugin not found: ${id}`);
         }
-        return defaultRuntime.exit(1);
+        return runtime.exit(1);
       }
 
       const install = cfg.plugins?.installs?.[pluginId];
@@ -642,14 +674,14 @@ export function registerPluginsCli(program: Command) {
       const channelIds = plugin?.status === "loaded" ? plugin.channelIds : undefined;
       const channels = cfg.channels as Record<string, unknown> | undefined;
       if (hasInstall && channels) {
-        for (const key of resolveUninstallChannelConfigKeys(pluginId, { channelIds })) {
+        for (const key of pluginsCliDeps.resolveUninstallChannelConfigKeys(pluginId, { channelIds })) {
           if (Object.hasOwn(channels, key)) {
             preview.push(`channel config (channels.${key})`);
           }
         }
       }
       const deleteTarget = !keepFiles
-        ? resolveUninstallDirectoryTarget({
+        ? pluginsCliDeps.resolveUninstallDirectoryTarget({
             pluginId,
             hasInstall,
             installRecord: install,
@@ -661,25 +693,25 @@ export function registerPluginsCli(program: Command) {
       }
 
       const pluginName = plugin?.name || pluginId;
-      defaultRuntime.log(
+      runtime.log(
         `Plugin: ${theme.command(pluginName)}${pluginName !== pluginId ? theme.muted(` (${pluginId})`) : ""}`,
       );
-      defaultRuntime.log(`Will remove: ${preview.length > 0 ? preview.join(", ") : "(nothing)"}`);
+      runtime.log(`Will remove: ${preview.length > 0 ? preview.join(", ") : "(nothing)"}`);
 
       if (opts.dryRun) {
-        defaultRuntime.log(theme.muted("Dry run, no changes made."));
+        runtime.log(theme.muted("Dry run, no changes made."));
         return;
       }
 
       if (!opts.force) {
-        const confirmed = await promptYesNo(`Uninstall plugin "${pluginId}"?`);
+        const confirmed = await pluginsCliDeps.promptYesNo(`Uninstall plugin "${pluginId}"?`);
         if (!confirmed) {
-          defaultRuntime.log("Cancelled.");
+          runtime.log("Cancelled.");
           return;
         }
       }
 
-      const result = await uninstallPlugin({
+      const result = await pluginsCliDeps.uninstallPlugin({
         config: cfg,
         pluginId,
         channelIds,
@@ -688,14 +720,14 @@ export function registerPluginsCli(program: Command) {
       });
 
       if (!result.ok) {
-        defaultRuntime.error(result.error);
-        return defaultRuntime.exit(1);
+        runtime.error(result.error);
+        return runtime.exit(1);
       }
       for (const warning of result.warnings) {
-        defaultRuntime.log(theme.warn(warning));
+        runtime.log(theme.warn(warning));
       }
 
-      await replaceConfigFile({
+      await pluginsCliDeps.replaceConfigFile({
         nextConfig: result.config,
         ...(snapshot.hash !== undefined ? { baseHash: snapshot.hash } : {}),
       });
@@ -723,10 +755,10 @@ export function registerPluginsCli(program: Command) {
         removed.push("directory");
       }
 
-      defaultRuntime.log(
+      runtime.log(
         `Uninstalled plugin "${pluginId}". Removed: ${removed.length > 0 ? removed.join(", ") : "nothing"}.`,
       );
-      defaultRuntime.log("Restart the gateway to apply changes.");
+      runtime.log("Restart the gateway to apply changes.");
     });
 
   plugins
@@ -849,3 +881,15 @@ export function registerPluginsCli(program: Command) {
       }
     });
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<PluginsCliDeps>) {
+    pluginsCliDeps = {
+      ...pluginsCliDeps,
+      ...overrides,
+    };
+  },
+  resetDepsForTest() {
+    pluginsCliDeps = { ...defaultPluginsCliDeps };
+  },
+};

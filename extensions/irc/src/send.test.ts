@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { createSendCfgThreadingRuntime } from "../../../test/helpers/plugins/send-config.js";
+import { createSendCfgThreadingRuntime } from "../../../test/helpers/extensions/send-config.js";
 import type { IrcClient } from "./client.js";
 import { setIrcRuntime } from "./runtime.js";
 import type { CoreConfig } from "./types.js";
@@ -32,29 +32,17 @@ vi.mock("./connect-options.js", () => ({
   buildIrcConnectOptions: hoisted.buildIrcConnectOptions,
 }));
 
-vi.mock("./protocol.js", async () => {
-  const actual = await vi.importActual<typeof import("./protocol.js")>("./protocol.js");
-  return {
-    ...actual,
-    makeIrcMessageId: () => "irc-msg-1",
-  };
-});
+vi.mock("./protocol.js", () => ({
+  makeIrcMessageId: () => "irc-msg-1",
+}));
 
-vi.mock("openclaw/plugin-sdk/config-runtime", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...original,
-    resolveMarkdownTableMode: hoisted.resolveMarkdownTableMode,
-  };
-});
+vi.mock("openclaw/plugin-sdk/config-runtime", () => ({
+  resolveMarkdownTableMode: hoisted.resolveMarkdownTableMode,
+}));
 
-vi.mock("openclaw/plugin-sdk/text-runtime", async (importOriginal) => {
-  const original = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...original,
-    convertMarkdownTables: hoisted.convertMarkdownTables,
-  };
-});
+vi.mock("openclaw/plugin-sdk/text-runtime", () => ({
+  convertMarkdownTables: hoisted.convertMarkdownTables,
+}));
 
 import { sendMessageIrc } from "./send.js";
 

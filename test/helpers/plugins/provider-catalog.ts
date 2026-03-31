@@ -9,6 +9,8 @@ export { loadBundledPluginPublicSurfaceSync } from "../../../src/test-utils/bund
 type ProviderRuntimeCatalogModule = Pick<
   typeof import("../../../src/plugins/provider-runtime.js"),
   | "augmentModelCatalogWithProviderPlugins"
+  | "__resetProviderRuntimeResolversForTest"
+  | "__setProviderRuntimeResolversForTest"
   | "resetProviderRuntimeHookCacheForTest"
   | "resolveProviderBuiltInModelSuppression"
 >;
@@ -16,11 +18,15 @@ type ProviderRuntimeCatalogModule = Pick<
 export async function importProviderRuntimeCatalogModule(): Promise<ProviderRuntimeCatalogModule> {
   const {
     augmentModelCatalogWithProviderPlugins,
+    __resetProviderRuntimeResolversForTest,
+    __setProviderRuntimeResolversForTest,
     resetProviderRuntimeHookCacheForTest,
     resolveProviderBuiltInModelSuppression,
   } = await import("../../../src/plugins/provider-runtime.js");
   return {
     augmentModelCatalogWithProviderPlugins,
+    __resetProviderRuntimeResolversForTest,
+    __setProviderRuntimeResolversForTest,
     resetProviderRuntimeHookCacheForTest,
     resolveProviderBuiltInModelSuppression,
   };

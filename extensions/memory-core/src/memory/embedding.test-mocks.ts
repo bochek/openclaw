@@ -1,5 +1,9 @@
 import { vi } from "vitest";
 import "./test-runtime-mocks.js";
+import {
+  __setCreateEmbeddingProviderForTest,
+  __resetCreateEmbeddingProviderForTest,
+} from "./embeddings.js";
 
 // Avoid exporting vitest mock types (TS2742 under pnpm + d.ts emit).
 // oxlint-disable-next-line typescript/no-explicit-any
@@ -23,10 +27,7 @@ export function resetEmbeddingMocks(): void {
   hoisted.embedQuery.mockReset();
   hoisted.embedBatch.mockImplementation(async (texts: string[]) => texts.map(() => [0, 1, 0]));
   hoisted.embedQuery.mockImplementation(async () => [0, 1, 0]);
-}
-
-vi.mock("./embeddings.js", () => ({
-  createEmbeddingProvider: async () => ({
+  __setCreateEmbeddingProviderForTest(async () => ({
     requestedProvider: "openai",
     provider: {
       id: "mock",
@@ -35,5 +36,8 @@ vi.mock("./embeddings.js", () => ({
       embedQuery: hoisted.embedQuery,
       embedBatch: hoisted.embedBatch,
     },
-  }),
-}));
+  }));
+}
+
+__resetCreateEmbeddingProviderForTest();
+resetEmbeddingMocks();

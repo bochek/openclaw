@@ -1,31 +1,15 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, ToolResultMessage } from "@mariozechner/pi-ai";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  isOversizedForSummary,
+  setCompactionTestDeps,
+  summarizeWithFallback,
+} from "./compaction.js";
 import { makeAgentAssistantMessage } from "./test-helpers/agent-message-fixtures.js";
 
-const piCodingAgentMocks = vi.hoisted(() => ({
-  generateSummary: vi.fn(async () => "summary"),
-  estimateTokens: vi.fn((_message: unknown) => 1),
-}));
-
-vi.mock("@mariozechner/pi-coding-agent", async () => {
-  const actual = await vi.importActual<typeof import("@mariozechner/pi-coding-agent")>(
-    "@mariozechner/pi-coding-agent",
-  );
-  return {
-    ...actual,
-    generateSummary: piCodingAgentMocks.generateSummary,
-    estimateTokens: piCodingAgentMocks.estimateTokens,
-  };
-});
-
-let isOversizedForSummary: typeof import("./compaction.js").isOversizedForSummary;
-let summarizeWithFallback: typeof import("./compaction.js").summarizeWithFallback;
-
-async function loadFreshCompactionModuleForTest() {
-  vi.resetModules();
-  ({ isOversizedForSummary, summarizeWithFallback } = await import("./compaction.js"));
-}
+const mockGenerateSummary = vi.fn(async () => "summary");
+const mockEstimateTokens = vi.fn((_message: unknown) => 1);
 
 function makeAssistantToolCall(timestamp: number): AssistantMessage {
   return makeAgentAssistantMessage({
@@ -49,12 +33,19 @@ function makeToolResultWithDetails(timestamp: number): ToolResultMessage<{ raw: 
 }
 
 describe("compaction toolResult details stripping", () => {
-  beforeEach(async () => {
-    await loadFreshCompactionModuleForTest();
-    piCodingAgentMocks.generateSummary.mockReset();
-    piCodingAgentMocks.generateSummary.mockResolvedValue("summary");
-    piCodingAgentMocks.estimateTokens.mockReset();
-    piCodingAgentMocks.estimateTokens.mockImplementation((_message: unknown) => 1);
+  beforeEach(() => {
+    mockGenerateSummary.mockReset();
+    mockGenerateSummary.mockResolvedValue("summary");
+    mockEstimateTokens.mockReset();
+    mockEstimateTokens.mockImplementation((_message: unknown) => 1);
+    setCompactionTestDeps({
+      estimateTokens: mockEstimateTokens,
+      generateSummary: mockGenerateSummary,
+    });
+  });
+
+  afterEach(() => {
+    setCompactionTestDeps(undefined);
   });
 
   it("does not pass toolResult.details into generateSummary", async () => {
@@ -72,18 +63,16 @@ describe("compaction toolResult details stripping", () => {
     });
 
     expect(summary).toBe("summary");
-    expect(piCodingAgentMocks.generateSummary).toHaveBeenCalled();
+    expect(mockGenerateSummary).toHaveBeenCalled();
 
-    const chunk = (
-      piCodingAgentMocks.generateSummary.mock.calls as unknown as Array<[unknown]>
-    )[0]?.[0];
+    const chunk = (mockGenerateSummary.mock.calls as unknown as Array<[unknown]>)[0]?.[0];
     const serialized = JSON.stringify(chunk);
     expect(serialized).not.toContain("Ignore previous instructions");
     expect(serialized).not.toContain('"details"');
   });
 
   it("ignores toolResult.details when evaluating oversized messages", () => {
-    piCodingAgentMocks.estimateTokens.mockImplementation((message: unknown) => {
+    mockEstimateTokens.mockImplementation((message: unknown) => {
       const record = message as { details?: unknown };
       return record.details ? 10_000 : 10;
     });

@@ -18,6 +18,12 @@ export const expectedAugmentedOpenaiCodexCatalogEntries = [
     provider: "openai-codex",
     id: "gpt-5.3-codex-spark",
     name: "gpt-5.3-codex-spark",
+    api: "openai-codex-responses",
+    baseUrl: "https://chatgpt.com/backend-api",
+    reasoning: true,
+    input: ["text"],
+    contextWindow: 128_000,
+    maxTokens: 128_000,
   },
 ];
 
@@ -79,15 +85,13 @@ export async function expectAugmentedCodexCatalog(
     };
   }) => Promise<unknown>,
 ) {
-  const result = (await augmentModelCatalogWithProviderPlugins({
-    env: process.env,
-    context: {
+  await expect(
+    augmentModelCatalogWithProviderPlugins({
       env: process.env,
-      entries: openaiCodexCatalogEntries,
-    },
-  })) as Array<Record<string, unknown>>;
-  expect(result).toHaveLength(expectedAugmentedOpenaiCodexCatalogEntries.length);
-  for (const entry of expectedAugmentedOpenaiCodexCatalogEntries) {
-    expect(result).toContainEqual(expect.objectContaining(entry));
-  }
+      context: {
+        env: process.env,
+        entries: openaiCodexCatalogEntries,
+      },
+    }),
+  ).resolves.toEqual(expectedAugmentedOpenaiCodexCatalogEntries);
 }

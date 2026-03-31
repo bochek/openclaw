@@ -313,6 +313,25 @@ export function resolveMatrixStateFilePath(params: {
   return path.join(storagePaths.rootDir, params.filename);
 }
 
+const loadMigrationSnapshotDepsDefault = async () =>
+  await import("./migration-snapshot.runtime.js");
+
+let loadMigrationSnapshotDeps = loadMigrationSnapshotDepsDefault;
+
+export const __testing = {
+  setMigrationSnapshotDepsForTest(
+    deps: Pick<
+      Awaited<ReturnType<typeof loadMigrationSnapshotDepsDefault>>,
+      "maybeCreateMatrixMigrationSnapshot"
+    >,
+  ) {
+    loadMigrationSnapshotDeps = async () => deps;
+  },
+  resetMigrationSnapshotDepsForTest() {
+    loadMigrationSnapshotDeps = loadMigrationSnapshotDepsDefault;
+  },
+};
+
 export async function maybeMigrateLegacyStorage(params: {
   storagePaths: MatrixStoragePaths;
   env?: NodeJS.ProcessEnv;
@@ -337,7 +356,7 @@ export async function maybeMigrateLegacyStorage(params: {
   });
 
   const logger = getMatrixRuntime().logging.getChildLogger({ module: "matrix-storage" });
-  const { maybeCreateMatrixMigrationSnapshot } = await import("./migration-snapshot.runtime.js");
+  const { maybeCreateMatrixMigrationSnapshot } = await loadMigrationSnapshotDeps();
   await maybeCreateMatrixMigrationSnapshot({
     trigger: "matrix-client-fallback",
     env: params.env,

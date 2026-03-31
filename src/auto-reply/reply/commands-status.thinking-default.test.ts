@@ -9,7 +9,8 @@ vi.mock("../../agents/model-auth-label.js", () => ({
   resolveModelAuthLabel: () => "api-key",
 }));
 
-vi.mock("../../agents/subagent-registry.js", () => ({
+vi.mock("../../agents/subagent-registry.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../agents/subagent-registry.js")>()),
   listSubagentRunsForRequester: () => [],
 }));
 

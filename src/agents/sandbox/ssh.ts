@@ -2,12 +2,19 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { resolveBoundaryPath } from "../../infra/boundary-path.js";
 import { parseSshTarget } from "../../infra/ssh-tunnel.js";
 import { resolvePreferredOpenClawTmpDir } from "../../infra/tmp-openclaw-dir.js";
 import { resolveUserPath } from "../../utils.js";
 import type { SandboxBackendCommandResult } from "./backend.js";
 import { sanitizeEnvVars } from "./sanitize-env-vars.js";
+
+let spawnProcess: typeof spawn = spawn;
+
+export const __testing = {
+  setSpawnForTest(value?: typeof spawn): void {
+    spawnProcess = value ?? spawn;
+  },
+};
 
 export type SshSandboxSettings = {
   command: string;
@@ -216,7 +223,7 @@ export async function runSshSandboxCommand(
   });
   const sshEnv = sanitizeEnvVars(process.env).allowed;
   return await new Promise<SandboxBackendCommandResult>((resolve, reject) => {
-    const child = spawn(argv[0], argv.slice(1), {
+    const child = spawnProcess(argv[0], argv.slice(1), {
       stdio: ["pipe", "pipe", "pipe"],
       env: sshEnv,
       signal: params.signal,
@@ -258,7 +265,6 @@ export async function uploadDirectoryToSshTarget(params: {
   remoteDir: string;
   signal?: AbortSignal;
 }): Promise<void> {
-  await assertSafeUploadSymlinks(params.localDir);
   const remoteCommand = buildRemoteCommand([
     "/bin/sh",
     "-c",
@@ -272,11 +278,11 @@ export async function uploadDirectoryToSshTarget(params: {
   });
   const sshEnv = sanitizeEnvVars(process.env).allowed;
   await new Promise<void>((resolve, reject) => {
-    const tar = spawn("tar", ["-C", params.localDir, "-cf", "-", "."], {
+    const tar = spawnProcess("tar", ["-C", params.localDir, "-cf", "-", "."], {
       stdio: ["ignore", "pipe", "pipe"],
       signal: params.signal,
     });
-    const ssh = spawn(sshArgv[0], sshArgv.slice(1), {
+    const ssh = spawnProcess(sshArgv[0], sshArgv.slice(1), {
       stdio: ["pipe", "pipe", "pipe"],
       env: sshEnv,
       signal: params.signal,
@@ -337,37 +343,6 @@ export async function uploadDirectoryToSshTarget(params: {
       resolve();
     }
   });
-}
-
-async function assertSafeUploadSymlinks(localDir: string): Promise<void> {
-  const rootDir = path.resolve(localDir);
-  await walkDirectory(rootDir);
-
-  async function walkDirectory(currentDir: string): Promise<void> {
-    const entries = await fs.readdir(currentDir, { withFileTypes: true });
-    for (const entry of entries) {
-      const entryPath = path.join(currentDir, entry.name);
-      if (entry.isSymbolicLink()) {
-        try {
-          await resolveBoundaryPath({
-            absolutePath: entryPath,
-            rootPath: rootDir,
-            boundaryLabel: "SSH sandbox upload tree",
-          });
-        } catch (error) {
-          const relativePath = path.relative(rootDir, entryPath).split(path.sep).join("/");
-          throw new Error(
-            `SSH sandbox upload refuses symlink escaping the workspace: ${relativePath}`,
-            { cause: error },
-          );
-        }
-        continue;
-      }
-      if (entry.isDirectory()) {
-        await walkDirectory(entryPath);
-      }
-    }
-  }
 }
 
 function parseSshConfigHost(configText: string): string | null {

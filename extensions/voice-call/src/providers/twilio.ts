@@ -72,6 +72,8 @@ export interface TwilioProviderOptions {
   publicUrl?: string;
   /** Path for media stream WebSocket (e.g., /voice/stream) */
   streamPath?: string;
+  /** Override telephony TTS synthesis timeout. Intended for tests. */
+  ttsSynthesisTimeoutMs?: number;
   /** Skip webhook signature verification (development only) */
   skipVerification?: boolean;
   /** Webhook security options (forwarded headers/allowlist) */
@@ -640,6 +642,8 @@ export class TwilioProvider implements VoiceCallProvider {
 
     const handler = this.mediaStreamHandler;
     const ttsProvider = this.ttsProvider;
+    const ttsSynthesisTimeoutMs =
+      this.options.ttsSynthesisTimeoutMs ?? TwilioProvider.TTS_SYNTH_TIMEOUT_MS;
 
     const normalizeSendResult = (raw: unknown): StreamSendResult => {
       if (!raw || typeof raw !== "object") {
@@ -689,10 +693,10 @@ export class TwilioProvider implements VoiceCallProvider {
           synthTimeout = setTimeout(() => {
             reject(
               new Error(
-                `Telephony TTS synthesis timed out after ${TwilioProvider.TTS_SYNTH_TIMEOUT_MS}ms`,
+                `Telephony TTS synthesis timed out after ${ttsSynthesisTimeoutMs}ms`,
               ),
             );
-          }, TwilioProvider.TTS_SYNTH_TIMEOUT_MS);
+          }, ttsSynthesisTimeoutMs);
         });
         muLawAudio = await Promise.race([synthPromise, timeoutPromise]);
       } finally {

@@ -1,5 +1,5 @@
 // Narrow plugin-sdk surface for the bundled memory-core plugin.
-// Keep this list additive and scoped to the bundled memory-core surface.
+// Keep this list additive and scoped to symbols used under extensions/memory-core.
 
 export { getMemorySearchManager, MemoryIndexManager } from "./memory-core-engine-runtime.js";
 export {

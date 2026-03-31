@@ -293,7 +293,7 @@ For Slack, Matrix, Microsoft Teams, and similar chat channels, the default path 
 
           // Your inbound handler dispatches the message to OpenClaw.
           // The exact wiring depends on your platform SDK —
-          // see a real example in the bundled Microsoft Teams or Google Chat plugin package.
+          // see a real example in extensions/msteams or extensions/googlechat.
           await handleAcmeChatInbound(api, event);
 
           res.statusCode = 200;
@@ -307,7 +307,7 @@ For Slack, Matrix, Microsoft Teams, and similar chat channels, the default path 
     <Note>
       Inbound message handling is channel-specific. Each channel plugin owns
       its own inbound pipeline. Look at bundled channel plugins
-      (for example the Microsoft Teams or Google Chat plugin package) for real patterns.
+      (e.g. `extensions/msteams`, `extensions/googlechat`) for real patterns.
     </Note>
 
   </Step>
@@ -349,7 +349,7 @@ Write colocated tests in `src/channel.test.ts`:
     ```
 
     ```bash
-    pnpm test -- <bundled-plugin-root>/acme-chat/
+    pnpm test -- extensions/acme-chat/
     ```
 
     For shared test helpers, see [Testing](/plugins/sdk-testing).
@@ -360,7 +360,7 @@ Write colocated tests in `src/channel.test.ts`:
 ## File structure
 
 ```
-<bundled-plugin-root>/acme-chat/
+extensions/acme-chat/
 ├── package.json              # openclaw.channel metadata
 ├── openclaw.plugin.json      # Manifest with config schema
 ├── index.ts                  # defineChannelPluginEntry

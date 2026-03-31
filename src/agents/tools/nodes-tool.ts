@@ -32,6 +32,7 @@ const NODES_TOOL_ACTIONS = [
   "device_info",
   "device_permissions",
   "device_health",
+  "run",
   "invoke",
 ] as const;
 
@@ -122,6 +123,10 @@ const NodesToolSchema = Type.Object({
   notificationKey: Type.Optional(Type.String()),
   notificationReplyText: Type.Optional(Type.String()),
   // invoke
+  command: Type.Optional(Type.Array(Type.String())),
+  cwd: Type.Optional(Type.String()),
+  env: Type.Optional(Type.Array(Type.String())),
+  commandTimeoutMs: Type.Optional(Type.Number()),
   invokeCommand: Type.Optional(Type.String()),
   invokeParamsJson: Type.Optional(Type.String()),
   invokeTimeoutMs: Type.Optional(Type.Number()),
@@ -276,6 +281,18 @@ export function createNodesTool(options?: {
             return await executeNodeCommandAction({
               action,
               input: params,
+              gatewayOpts,
+              allowMediaInvokeCommands: options?.allowMediaInvokeCommands,
+              mediaInvokeActions: MEDIA_INVOKE_ACTIONS,
+            });
+          }
+          case "run": {
+            return await executeNodeCommandAction({
+              action,
+              input: {
+                ...params,
+                ...(agentId ? { agentId } : {}),
+              },
               gatewayOpts,
               allowMediaInvokeCommands: options?.allowMediaInvokeCommands,
               mediaInvokeActions: MEDIA_INVOKE_ACTIONS,

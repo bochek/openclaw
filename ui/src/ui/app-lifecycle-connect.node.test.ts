@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanupBrowserGlobals, installBrowserGlobals } from "../test-helpers/browser-globals.ts";
 
 const { applySettingsFromUrlMock, connectGatewayMock, loadBootstrapMock } = vi.hoisted(() => ({
   applySettingsFromUrlMock: vi.fn(),
@@ -67,9 +68,15 @@ function createHost() {
 
 describe("handleConnected", () => {
   beforeEach(() => {
+    installBrowserGlobals();
     applySettingsFromUrlMock.mockReset();
     connectGatewayMock.mockReset();
     loadBootstrapMock.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    cleanupBrowserGlobals();
   });
 
   it("waits for bootstrap load before first gateway connect", async () => {

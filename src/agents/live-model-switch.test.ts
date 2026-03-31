@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { importFreshModule } from "../../test/helpers/import-fresh.js";
+import {
+  hasDifferentLiveSessionModelSelection,
+  requestLiveSessionModelSwitch,
+  resolveLiveSessionModelSelection,
+  setLiveModelSwitchTestDeps,
+  shouldTrackPersistedLiveSessionModelSelection,
+} from "./live-model-switch.js";
 
 const state = vi.hoisted(() => ({
   abortEmbeddedPiRunMock: vi.fn(),
@@ -10,37 +16,8 @@ const state = vi.hoisted(() => ({
   resolveStorePathMock: vi.fn(),
 }));
 
-vi.mock("./pi-embedded.js", () => ({
-  abortEmbeddedPiRun: (...args: unknown[]) => state.abortEmbeddedPiRunMock(...args),
-}));
-
-vi.mock("./pi-embedded-runner/runs.js", () => ({
-  requestEmbeddedRunModelSwitch: (...args: unknown[]) =>
-    state.requestEmbeddedRunModelSwitchMock(...args),
-  consumeEmbeddedRunModelSwitch: (...args: unknown[]) =>
-    state.consumeEmbeddedRunModelSwitchMock(...args),
-}));
-
-vi.mock("./model-selection.js", () => ({
-  resolveDefaultModelForAgent: (...args: unknown[]) =>
-    state.resolveDefaultModelForAgentMock(...args),
-}));
-
-vi.mock("../config/sessions.js", () => ({
-  loadSessionStore: (...args: unknown[]) => state.loadSessionStoreMock(...args),
-  resolveStorePath: (...args: unknown[]) => state.resolveStorePathMock(...args),
-}));
-
-async function loadModule() {
-  return await importFreshModule<typeof import("./live-model-switch.js")>(
-    import.meta.url,
-    `./live-model-switch.js?scope=${Math.random().toString(36).slice(2)}`,
-  );
-}
-
 describe("live model switch", () => {
   beforeEach(() => {
-    vi.resetModules();
     state.abortEmbeddedPiRunMock.mockReset().mockReturnValue(false);
     state.requestEmbeddedRunModelSwitchMock.mockReset();
     state.consumeEmbeddedRunModelSwitchMock.mockReset();
@@ -49,9 +26,18 @@ describe("live model switch", () => {
       .mockReturnValue({ provider: "anthropic", model: "claude-opus-4-6" });
     state.loadSessionStoreMock.mockReset().mockReturnValue({});
     state.resolveStorePathMock.mockReset().mockReturnValue("/tmp/session-store.json");
+    setLiveModelSwitchTestDeps({
+      abortEmbeddedPiRun: (...args) => state.abortEmbeddedPiRunMock(...args),
+      requestEmbeddedRunModelSwitch: (...args) => state.requestEmbeddedRunModelSwitchMock(...args),
+      consumeEmbeddedRunModelSwitch: (...args) => state.consumeEmbeddedRunModelSwitchMock(...args),
+      resolveDefaultModelForAgent: (...args) => state.resolveDefaultModelForAgentMock(...args),
+      loadSessionStore: (...args) => state.loadSessionStoreMock(...args),
+      resolveStorePath: (...args) => state.resolveStorePathMock(...args),
+    });
   });
 
   afterEach(() => {
+    setLiveModelSwitchTestDeps(undefined);
     vi.clearAllMocks();
   });
 
@@ -64,8 +50,6 @@ describe("live model switch", () => {
         authProfileOverrideSource: "user",
       },
     });
-
-    const { resolveLiveSessionModelSelection } = await loadModule();
 
     expect(
       resolveLiveSessionModelSelection({
@@ -100,8 +84,6 @@ describe("live model switch", () => {
       },
     });
 
-    const { resolveLiveSessionModelSelection } = await loadModule();
-
     expect(
       resolveLiveSessionModelSelection({
         cfg: { session: { store: "/tmp/custom-store.json" } },
@@ -121,8 +103,6 @@ describe("live model switch", () => {
   it("queues a live switch only when an active run was aborted", async () => {
     state.abortEmbeddedPiRunMock.mockReturnValue(true);
 
-    const { requestLiveSessionModelSwitch } = await loadModule();
-
     expect(
       requestLiveSessionModelSwitch({
         sessionEntry: { sessionId: "session-1" },
@@ -138,8 +118,6 @@ describe("live model switch", () => {
   });
 
   it("treats auth-profile-source changes as no-op when no auth profile is selected", async () => {
-    const { hasDifferentLiveSessionModelSelection } = await loadModule();
-
     expect(
       hasDifferentLiveSessionModelSelection(
         {
@@ -156,8 +134,6 @@ describe("live model switch", () => {
   });
 
   it("does not track persisted live selection when the run started on a transient model override", async () => {
-    const { shouldTrackPersistedLiveSessionModelSelection } = await loadModule();
-
     expect(
       shouldTrackPersistedLiveSessionModelSelection(
         {

@@ -51,6 +51,15 @@ type ToolParams = {
 };
 
 type ZalouserToolContext = Pick<OpenClawPluginToolContext, "deliveryContext">;
+const zalouserToolDeps = {
+  sendImageZalouser,
+  sendLinkZalouser,
+  sendMessageZalouser,
+  checkZaloAuthenticated,
+  getZaloUserInfo,
+  listZaloFriendsMatching,
+  listZaloGroupsMatching,
+};
 
 function json(payload: unknown): AgentToolResult {
   return {
@@ -112,7 +121,7 @@ export async function executeZalouserTool(
         if (!target.threadId || !params.message) {
           throw new Error("threadId and message required for send action");
         }
-        const result = await sendMessageZalouser(target.threadId, params.message, {
+        const result = await zalouserToolDeps.sendMessageZalouser(target.threadId, params.message, {
           profile: params.profile,
           isGroup: target.isGroup,
         });
@@ -130,7 +139,7 @@ export async function executeZalouserTool(
         if (!params.url) {
           throw new Error("url required for image action");
         }
-        const result = await sendImageZalouser(target.threadId, params.url, {
+        const result = await zalouserToolDeps.sendImageZalouser(target.threadId, params.url, {
           profile: params.profile,
           caption: params.message,
           isGroup: target.isGroup,
@@ -146,7 +155,7 @@ export async function executeZalouserTool(
         if (!target.threadId || !params.url) {
           throw new Error("threadId and url required for link action");
         }
-        const result = await sendLinkZalouser(target.threadId, params.url, {
+        const result = await zalouserToolDeps.sendLinkZalouser(target.threadId, params.url, {
           profile: params.profile,
           caption: params.message,
           isGroup: target.isGroup,
@@ -158,22 +167,22 @@ export async function executeZalouserTool(
       }
 
       case "friends": {
-        const rows = await listZaloFriendsMatching(params.profile, params.query);
+        const rows = await zalouserToolDeps.listZaloFriendsMatching(params.profile, params.query);
         return json(rows);
       }
 
       case "groups": {
-        const rows = await listZaloGroupsMatching(params.profile, params.query);
+        const rows = await zalouserToolDeps.listZaloGroupsMatching(params.profile, params.query);
         return json(rows);
       }
 
       case "me": {
-        const info = await getZaloUserInfo(params.profile);
+        const info = await zalouserToolDeps.getZaloUserInfo(params.profile);
         return json(info ?? { error: "Not authenticated" });
       }
 
       case "status": {
-        const authenticated = await checkZaloAuthenticated(params.profile);
+        const authenticated = await zalouserToolDeps.checkZaloAuthenticated(params.profile);
         return json({
           authenticated,
           output: authenticated ? "authenticated" : "not authenticated",
@@ -192,6 +201,22 @@ export async function executeZalouserTool(
       error: err instanceof Error ? err.message : String(err),
     });
   }
+}
+
+export function __setZalouserToolDepsForTest(
+  overrides: Partial<typeof zalouserToolDeps>,
+): void {
+  Object.assign(zalouserToolDeps, overrides);
+}
+
+export function __resetZalouserToolDepsForTest(): void {
+  zalouserToolDeps.sendImageZalouser = sendImageZalouser;
+  zalouserToolDeps.sendLinkZalouser = sendLinkZalouser;
+  zalouserToolDeps.sendMessageZalouser = sendMessageZalouser;
+  zalouserToolDeps.checkZaloAuthenticated = checkZaloAuthenticated;
+  zalouserToolDeps.getZaloUserInfo = getZaloUserInfo;
+  zalouserToolDeps.listZaloFriendsMatching = listZaloFriendsMatching;
+  zalouserToolDeps.listZaloGroupsMatching = listZaloGroupsMatching;
 }
 
 export function createZalouserTool(context?: ZalouserToolContext): AnyAgentTool {

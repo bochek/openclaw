@@ -13,6 +13,11 @@ import {
 } from "./restart.js";
 import { listTailnetAddresses } from "./tailnet.js";
 
+async function advanceImmediateTimer(): Promise<void> {
+  // Bun's Vitest bridge does not flush setTimeout(..., 0) callbacks on a 0ms advance.
+  await vi.advanceTimersByTimeAsync(typeof Bun !== "undefined" ? 1 : 0);
+}
+
 describe("infra runtime", () => {
   function setupRestartSignalSuite() {
     beforeEach(() => {
@@ -39,7 +44,7 @@ describe("infra runtime", () => {
 
       // No pre-authorization before the scheduled emission fires.
       expect(consumeGatewaySigusr1RestartAuthorization()).toBe(false);
-      await vi.advanceTimersByTimeAsync(0);
+      await advanceImmediateTimer();
 
       expect(consumeGatewaySigusr1RestartAuthorization()).toBe(true);
       expect(consumeGatewaySigusr1RestartAuthorization()).toBe(false);
@@ -103,7 +108,7 @@ describe("infra runtime", () => {
         expect(first.coalesced).toBe(false);
         expect(first.delayMs).toBe(0);
 
-        await vi.advanceTimersByTimeAsync(0);
+        await advanceImmediateTimer();
         expect(consumeGatewaySigusr1RestartAuthorization()).toBe(true);
         markGatewaySigusr1RestartHandled();
 
@@ -132,7 +137,7 @@ describe("infra runtime", () => {
       process.on("SIGUSR1", handler);
       try {
         scheduleGatewaySigusr1Restart({ delayMs: 0 });
-        await vi.advanceTimersByTimeAsync(0);
+        await advanceImmediateTimer();
         expect(emitSpy).toHaveBeenCalledWith("SIGUSR1");
       } finally {
         process.removeListener("SIGUSR1", handler);
@@ -146,7 +151,7 @@ describe("infra runtime", () => {
       try {
         setPreRestartDeferralCheck(() => 0);
         scheduleGatewaySigusr1Restart({ delayMs: 0 });
-        await vi.advanceTimersByTimeAsync(0);
+        await advanceImmediateTimer();
         expect(emitSpy).toHaveBeenCalledWith("SIGUSR1");
       } finally {
         process.removeListener("SIGUSR1", handler);
@@ -163,7 +168,7 @@ describe("infra runtime", () => {
         scheduleGatewaySigusr1Restart({ delayMs: 0 });
 
         // After initial delay fires, deferral check returns 2 — should NOT emit yet
-        await vi.advanceTimersByTimeAsync(0);
+        await advanceImmediateTimer();
         expect(emitSpy).not.toHaveBeenCalledWith("SIGUSR1");
 
         // After one poll (500ms), still pending
@@ -188,7 +193,7 @@ describe("infra runtime", () => {
         scheduleGatewaySigusr1Restart({ delayMs: 0 });
 
         // Fire initial timeout
-        await vi.advanceTimersByTimeAsync(0);
+        await advanceImmediateTimer();
         expect(emitSpy).not.toHaveBeenCalledWith("SIGUSR1");
 
         // Advance past the 5-minute max deferral wait
@@ -208,7 +213,7 @@ describe("infra runtime", () => {
           throw new Error("boom");
         });
         scheduleGatewaySigusr1Restart({ delayMs: 0 });
-        await vi.advanceTimersByTimeAsync(0);
+        await advanceImmediateTimer();
         expect(emitSpy).toHaveBeenCalledWith("SIGUSR1");
       } finally {
         process.removeListener("SIGUSR1", handler);

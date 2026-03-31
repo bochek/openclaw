@@ -1,6 +1,10 @@
+import "../test-helpers/browser-globals-install.ts";
 import { render } from "lit";
 import { describe, expect, it, vi } from "vitest";
+import { registerBrowserGlobalsHooks } from "../test-helpers/browser-globals.ts";
 import { analyzeConfigSchema, renderConfigForm } from "./views/config-form.ts";
+
+registerBrowserGlobalsHooks();
 
 const rootSchema = {
   type: "object",

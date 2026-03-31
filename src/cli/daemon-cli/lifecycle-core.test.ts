@@ -17,10 +17,14 @@ const loadConfig = vi.fn<() => OpenClawConfig>(() => ({
   },
 }));
 
-vi.mock("../../config/config.js", () => ({
-  loadConfig: () => loadConfig(),
-  readBestEffortConfig: async () => loadConfig(),
-}));
+vi.mock("../../config/config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../config/config.js")>();
+  return {
+    ...actual,
+    loadConfig: () => loadConfig(),
+    readBestEffortConfig: async () => loadConfig(),
+  };
+});
 
 vi.mock("../../runtime.js", () => ({
   defaultRuntime,

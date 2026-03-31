@@ -30,6 +30,7 @@ vi.mock("../infra/shell-env.js", async (importOriginal) => {
 });
 
 vi.mock("../plugins/tools.js", () => ({
+  copyPluginToolMeta: () => {},
   resolvePluginTools: () => [],
   getPluginToolMeta: () => undefined,
 }));

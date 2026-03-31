@@ -17,7 +17,6 @@ import {
   detectPluginInstallPathIssue,
   formatPluginInstallPathIssue,
 } from "../../../infra/plugin-install-path-warnings.js";
-import { resolveBundledPluginInstallCommandHint } from "../../../plugins/bundled-sources.js";
 import { removePluginFromConfig } from "../../../plugins/uninstall.js";
 import { isRecord } from "../../../utils.js";
 import type { DoctorConfigMutationResult } from "../shared/config-mutation-state.js";
@@ -67,10 +66,7 @@ export async function collectMatrixInstallPathWarnings(cfg: OpenClawConfig): Pro
     issue,
     pluginLabel: "Matrix",
     defaultInstallCommand: "openclaw plugins install @openclaw/matrix",
-    repoInstallCommand: resolveBundledPluginInstallCommandHint({
-      pluginId: "matrix",
-      workspaceDir: process.cwd(),
-    }),
+    repoInstallCommand: "openclaw plugins install ./extensions/matrix",
     formatCommand: formatCliCommand,
   }).map((entry) => `- ${entry}`);
 }

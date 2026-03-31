@@ -301,7 +301,7 @@ describe("installToolResultContextGuard", () => {
 
     await expect(
       agent.transformContext?.(contextForNextCall, new AbortController().signal),
-    ).resolves.not.toThrow();
+    ).resolves.toBe(contextForNextCall);
   });
 
   it("compacts tool results before checking the preemptive overflow threshold", async () => {

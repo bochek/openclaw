@@ -1,25 +1,14 @@
 /* @vitest-environment jsdom */
 
+import "../test-helpers/browser-globals-install.ts";
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  clearPendingQueueItemsForRun,
+  handleSendChat,
+  refreshChatAvatar,
+  setChatSlashCommandExecutorForTest,
+} from "./app-chat.ts";
 import type { ChatHost } from "./app-chat.ts";
-
-const { setLastActiveSessionKeyMock } = vi.hoisted(() => ({
-  setLastActiveSessionKeyMock: vi.fn(),
-}));
-
-vi.mock("./app-settings.ts", () => ({
-  setLastActiveSessionKey: (...args: unknown[]) => setLastActiveSessionKeyMock(...args),
-}));
-
-let handleSendChat: typeof import("./app-chat.ts").handleSendChat;
-let refreshChatAvatar: typeof import("./app-chat.ts").refreshChatAvatar;
-let clearPendingQueueItemsForRun: typeof import("./app-chat.ts").clearPendingQueueItemsForRun;
-
-async function loadChatHelpers(): Promise<void> {
-  vi.resetModules();
-  ({ handleSendChat, refreshChatAvatar, clearPendingQueueItemsForRun } =
-    await import("./app-chat.ts"));
-}
 
 function makeHost(overrides?: Partial<ChatHost>): ChatHost {
   return {
@@ -41,18 +30,29 @@ function makeHost(overrides?: Partial<ChatHost>): ChatHost {
     chatModelsLoading: false,
     chatModelCatalog: [],
     refreshSessionsAfterChat: new Set<string>(),
-    updateComplete: Promise.resolve(),
+    updateComplete: new Promise(() => undefined),
     ...overrides,
   };
 }
 
 describe("refreshChatAvatar", () => {
-  beforeEach(async () => {
-    await loadChatHelpers();
+  beforeEach(() => {
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      ((cb: FrameRequestCallback) => {
+        cb(0);
+        return 1;
+      }) as typeof requestAnimationFrame,
+    );
+    vi.stubGlobal(
+      "cancelAnimationFrame",
+      ((_: number) => undefined) as typeof cancelAnimationFrame,
+    );
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    setChatSlashCommandExecutorForTest(undefined);
   });
 
   it("uses a route-relative avatar endpoint before basePath bootstrap finishes", async () => {
@@ -91,14 +91,23 @@ describe("refreshChatAvatar", () => {
 });
 
 describe("handleSendChat", () => {
-  beforeEach(async () => {
-    setLastActiveSessionKeyMock.mockReset();
-    await loadChatHelpers();
+  beforeEach(() => {
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      ((cb: FrameRequestCallback) => {
+        cb(0);
+        return 1;
+      }) as typeof requestAnimationFrame,
+    );
+    vi.stubGlobal(
+      "cancelAnimationFrame",
+      ((_: number) => undefined) as typeof cancelAnimationFrame,
+    );
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    vi.doUnmock("./chat/slash-command-executor.ts");
+    setChatSlashCommandExecutorForTest(undefined);
   });
 
   it("keeps slash-command model changes in sync with the chat header cache", async () => {
@@ -161,19 +170,12 @@ describe("handleSendChat", () => {
   });
 
   it("shows a visible pending item for /steer on the active run", async () => {
-    vi.doMock("./chat/slash-command-executor.ts", async () => {
-      const actual = await vi.importActual<typeof import("./chat/slash-command-executor.ts")>(
-        "./chat/slash-command-executor.ts",
-      );
-      return {
-        ...actual,
-        executeSlashCommand: vi.fn(async () => ({
-          content: "Steered.",
-          pendingCurrentRun: true,
-        })),
-      };
-    });
-    await loadChatHelpers();
+    setChatSlashCommandExecutorForTest(
+      vi.fn(async () => ({
+        content: "Steered.",
+        pendingCurrentRun: true,
+      })) as typeof import("./chat/slash-command-executor.ts").executeSlashCommand,
+    );
 
     const host = makeHost({
       client: { request: vi.fn() } as unknown as ChatHost["client"],
@@ -220,6 +222,5 @@ describe("handleSendChat", () => {
 });
 
 afterAll(() => {
-  vi.doUnmock("./app-settings.ts");
-  vi.resetModules();
+  setChatSlashCommandExecutorForTest(undefined);
 });

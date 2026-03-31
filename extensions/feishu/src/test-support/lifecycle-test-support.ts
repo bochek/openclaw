@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, vi } from "vitest";
 import { createPluginRuntimeMock } from "../../../../test/helpers/plugins/plugin-runtime-mock.js";
 import type { ClawdbotConfig, PluginRuntime, RuntimeEnv } from "../../runtime-api.js";
+import { installFeishuLifecycleTestDeps } from "../lifecycle.test-support.js";
 import { setFeishuRuntime } from "../runtime.js";
 import type { ResolvedFeishuAccount } from "../types.js";
 
@@ -388,6 +389,7 @@ export async function setupFeishuLifecycleHandler<T extends RuntimeEnv>(params: 
   missingHandlerMessage: string;
   once?: boolean;
 }): Promise<(data: unknown) => Promise<void>> {
+  installFeishuLifecycleTestDeps();
   const register = vi.fn((registered: Record<string, (data: unknown) => Promise<void>>) => {
     params.onRegister(registered);
   });

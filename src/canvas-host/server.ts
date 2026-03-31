@@ -9,7 +9,7 @@ import {
   clearTimeout as clearNativeTimeout,
   setTimeout as scheduleNativeTimeout,
 } from "node:timers";
-import chokidar from "chokidar";
+import * as chokidar from "chokidar";
 import { type WebSocket, WebSocketServer } from "ws";
 import { resolveStateDir } from "../config/paths.js";
 import { isTruthyEnvValue } from "../infra/env.js";

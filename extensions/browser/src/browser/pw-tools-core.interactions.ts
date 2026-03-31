@@ -21,6 +21,26 @@ type TargetOpts = {
   targetId?: string;
 };
 
+type PwToolsCoreInteractionDeps = {
+  ensurePageState: typeof ensurePageState;
+  forceDisconnectPlaywrightForTarget: typeof forceDisconnectPlaywrightForTarget;
+  getPageForTargetId: typeof getPageForTargetId;
+  refLocator: typeof refLocator;
+  restoreRoleRefsForTarget: typeof restoreRoleRefsForTarget;
+};
+
+export type PwToolsCoreInteractionTestDeps = Partial<PwToolsCoreInteractionDeps>;
+
+const defaultDeps: PwToolsCoreInteractionDeps = {
+  ensurePageState,
+  forceDisconnectPlaywrightForTarget,
+  getPageForTargetId,
+  refLocator,
+  restoreRoleRefsForTarget,
+};
+
+let deps: PwToolsCoreInteractionDeps = defaultDeps;
+
 const MAX_CLICK_DELAY_MS = 5_000;
 const MAX_WAIT_TIME_MS = 30_000;
 const MAX_BATCH_ACTIONS = 100;
@@ -37,9 +57,9 @@ function resolveBoundedDelayMs(value: number | undefined, label: string, maxMs: 
 }
 
 async function getRestoredPageForTarget(opts: TargetOpts) {
-  const page = await getPageForTargetId(opts);
-  ensurePageState(page);
-  restoreRoleRefsForTarget({ cdpUrl: opts.cdpUrl, targetId: opts.targetId, page });
+  const page = await deps.getPageForTargetId(opts);
+  deps.ensurePageState(page);
+  deps.restoreRoleRefsForTarget({ cdpUrl: opts.cdpUrl, targetId: opts.targetId, page });
   return page;
 }
 
@@ -71,7 +91,7 @@ export async function highlightViaPlaywright(opts: {
   const page = await getRestoredPageForTarget(opts);
   const ref = requireRef(opts.ref);
   try {
-    await refLocator(page, ref).highlight();
+    await deps.refLocator(page, ref).highlight();
   } catch (err) {
     throw toAIFriendlyError(err, ref);
   }
@@ -92,7 +112,7 @@ export async function clickViaPlaywright(opts: {
   const page = await getRestoredPageForTarget(opts);
   const label = resolved.ref ?? resolved.selector!;
   const locator = resolved.ref
-    ? refLocator(page, requireRef(resolved.ref))
+    ? deps.refLocator(page, requireRef(resolved.ref))
     : page.locator(resolved.selector!);
   const timeout = resolveInteractionTimeoutMs(opts.timeoutMs);
   try {
@@ -130,7 +150,7 @@ export async function hoverViaPlaywright(opts: {
   const page = await getRestoredPageForTarget(opts);
   const label = resolved.ref ?? resolved.selector!;
   const locator = resolved.ref
-    ? refLocator(page, requireRef(resolved.ref))
+    ? deps.refLocator(page, requireRef(resolved.ref))
     : page.locator(resolved.selector!);
   try {
     await locator.hover({
@@ -154,10 +174,10 @@ export async function dragViaPlaywright(opts: {
   const resolvedEnd = requireRefOrSelector(opts.endRef, opts.endSelector);
   const page = await getRestoredPageForTarget(opts);
   const startLocator = resolvedStart.ref
-    ? refLocator(page, requireRef(resolvedStart.ref))
+    ? deps.refLocator(page, requireRef(resolvedStart.ref))
     : page.locator(resolvedStart.selector!);
   const endLocator = resolvedEnd.ref
-    ? refLocator(page, requireRef(resolvedEnd.ref))
+    ? deps.refLocator(page, requireRef(resolvedEnd.ref))
     : page.locator(resolvedEnd.selector!);
   const startLabel = resolvedStart.ref ?? resolvedStart.selector!;
   const endLabel = resolvedEnd.ref ?? resolvedEnd.selector!;
@@ -185,7 +205,7 @@ export async function selectOptionViaPlaywright(opts: {
   const page = await getRestoredPageForTarget(opts);
   const label = resolved.ref ?? resolved.selector!;
   const locator = resolved.ref
-    ? refLocator(page, requireRef(resolved.ref))
+    ? deps.refLocator(page, requireRef(resolved.ref))
     : page.locator(resolved.selector!);
   try {
     await locator.selectOption(opts.values, {
@@ -206,8 +226,8 @@ export async function pressKeyViaPlaywright(opts: {
   if (!key) {
     throw new Error("key is required");
   }
-  const page = await getPageForTargetId(opts);
-  ensurePageState(page);
+  const page = await deps.getPageForTargetId(opts);
+  deps.ensurePageState(page);
   await page.keyboard.press(key, {
     delay: Math.max(0, Math.floor(opts.delayMs ?? 0)),
   });
@@ -228,7 +248,7 @@ export async function typeViaPlaywright(opts: {
   const page = await getRestoredPageForTarget(opts);
   const label = resolved.ref ?? resolved.selector!;
   const locator = resolved.ref
-    ? refLocator(page, requireRef(resolved.ref))
+    ? deps.refLocator(page, requireRef(resolved.ref))
     : page.locator(resolved.selector!);
   const timeout = resolveInteractionTimeoutMs(opts.timeoutMs);
   try {
@@ -267,7 +287,7 @@ export async function fillFormViaPlaywright(opts: {
     if (!ref) {
       continue;
     }
-    const locator = refLocator(page, ref);
+    const locator = deps.refLocator(page, ref);
     if (type === "checkbox" || type === "radio") {
       const checked =
         rawValue === true || rawValue === 1 || rawValue === "1" || rawValue === "true";
@@ -325,7 +345,7 @@ export async function evaluateViaPlaywright(opts: {
   }
   if (signal) {
     const disconnect = () => {
-      void forceDisconnectPlaywrightForTarget({
+      void deps.forceDisconnectPlaywrightForTarget({
         cdpUrl: opts.cdpUrl,
         targetId: opts.targetId,
         reason: "evaluate aborted",
@@ -349,7 +369,7 @@ export async function evaluateViaPlaywright(opts: {
 
   try {
     if (opts.ref) {
-      const locator = refLocator(page, opts.ref);
+      const locator = deps.refLocator(page, opts.ref);
       // eslint-disable-next-line @typescript-eslint/no-implied-eval -- required for browser-context eval
       const elementEvaluator = new Function(
         "el",
@@ -429,7 +449,7 @@ export async function scrollIntoViewViaPlaywright(opts: {
 
   const label = resolved.ref ?? resolved.selector!;
   const locator = resolved.ref
-    ? refLocator(page, requireRef(resolved.ref))
+    ? deps.refLocator(page, requireRef(resolved.ref))
     : page.locator(resolved.selector!);
   try {
     await locator.scrollIntoViewIfNeeded({ timeout });
@@ -450,8 +470,8 @@ export async function waitForViaPlaywright(opts: {
   fn?: string;
   timeoutMs?: number;
 }): Promise<void> {
-  const page = await getPageForTargetId(opts);
-  ensurePageState(page);
+  const page = await deps.getPageForTargetId(opts);
+  deps.ensurePageState(page);
   const timeout = normalizeTimeoutMs(opts.timeoutMs, 20_000);
 
   if (typeof opts.timeMs === "number" && Number.isFinite(opts.timeMs)) {
@@ -500,15 +520,15 @@ export async function takeScreenshotViaPlaywright(opts: {
   fullPage?: boolean;
   type?: "png" | "jpeg";
 }): Promise<{ buffer: Buffer }> {
-  const page = await getPageForTargetId(opts);
-  ensurePageState(page);
-  restoreRoleRefsForTarget({ cdpUrl: opts.cdpUrl, targetId: opts.targetId, page });
+  const page = await deps.getPageForTargetId(opts);
+  deps.ensurePageState(page);
+  deps.restoreRoleRefsForTarget({ cdpUrl: opts.cdpUrl, targetId: opts.targetId, page });
   const type = opts.type ?? "png";
   if (opts.ref) {
     if (opts.fullPage) {
       throw new Error("fullPage is not supported for element screenshots");
     }
-    const locator = refLocator(page, opts.ref);
+    const locator = deps.refLocator(page, opts.ref);
     const buffer = await locator.screenshot({ type });
     return { buffer };
   }
@@ -534,9 +554,9 @@ export async function screenshotWithLabelsViaPlaywright(opts: {
   maxLabels?: number;
   type?: "png" | "jpeg";
 }): Promise<{ buffer: Buffer; labels: number; skipped: number }> {
-  const page = await getPageForTargetId(opts);
-  ensurePageState(page);
-  restoreRoleRefsForTarget({ cdpUrl: opts.cdpUrl, targetId: opts.targetId, page });
+  const page = await deps.getPageForTargetId(opts);
+  deps.ensurePageState(page);
+  deps.restoreRoleRefsForTarget({ cdpUrl: opts.cdpUrl, targetId: opts.targetId, page });
   const type = opts.type ?? "png";
   const maxLabels =
     typeof opts.maxLabels === "number" && Number.isFinite(opts.maxLabels)
@@ -560,7 +580,7 @@ export async function screenshotWithLabelsViaPlaywright(opts: {
       continue;
     }
     try {
-      const box = await refLocator(page, ref).boundingBox();
+      const box = await deps.refLocator(page, ref).boundingBox();
       if (!box) {
         skipped += 1;
         continue;
@@ -661,9 +681,9 @@ export async function setInputFilesViaPlaywright(opts: {
   element?: string;
   paths: string[];
 }): Promise<void> {
-  const page = await getPageForTargetId(opts);
-  ensurePageState(page);
-  restoreRoleRefsForTarget({ cdpUrl: opts.cdpUrl, targetId: opts.targetId, page });
+  const page = await deps.getPageForTargetId(opts);
+  deps.ensurePageState(page);
+  deps.restoreRoleRefsForTarget({ cdpUrl: opts.cdpUrl, targetId: opts.targetId, page });
   if (!opts.paths.length) {
     throw new Error("paths are required");
   }
@@ -676,7 +696,7 @@ export async function setInputFilesViaPlaywright(opts: {
     throw new Error("inputRef or element is required");
   }
 
-  const locator = inputRef ? refLocator(page, inputRef) : page.locator(element).first();
+  const locator = inputRef ? deps.refLocator(page, inputRef) : page.locator(element).first();
   const uploadPathsResult = await resolveStrictExistingPathsWithinRoot({
     rootDir: DEFAULT_UPLOAD_DIR,
     requestedPaths: opts.paths,
@@ -706,6 +726,12 @@ export async function setInputFilesViaPlaywright(opts: {
 }
 
 const MAX_BATCH_DEPTH = 5;
+
+export const __testing = {
+  setDepsForTest(overrides?: PwToolsCoreInteractionTestDeps) {
+    deps = overrides ? { ...defaultDeps, ...overrides } : defaultDeps;
+  },
+};
 
 async function executeSingleAction(
   action: BrowserActRequest,

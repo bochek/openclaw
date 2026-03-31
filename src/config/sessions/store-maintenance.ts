@@ -14,6 +14,9 @@ const DEFAULT_SESSION_MAX_ENTRIES = 500;
 const DEFAULT_SESSION_ROTATE_BYTES = 10_485_760; // 10 MB
 const DEFAULT_SESSION_MAINTENANCE_MODE: SessionMaintenanceMode = "warn";
 const DEFAULT_SESSION_DISK_BUDGET_HIGH_WATER_RATIO = 0.8;
+const storeMaintenanceDeps = {
+  loadConfig,
+};
 
 export type SessionMaintenanceWarning = {
   activeSessionKey: string;
@@ -130,7 +133,7 @@ function resolveHighWaterBytes(
 export function resolveMaintenanceConfig(): ResolvedSessionMaintenanceConfig {
   let maintenance: SessionMaintenanceConfig | undefined;
   try {
-    maintenance = loadConfig().session?.maintenance;
+    maintenance = storeMaintenanceDeps.loadConfig().session?.maintenance;
   } catch {
     // Config may not be available (e.g. in tests). Use defaults.
   }
@@ -146,6 +149,15 @@ export function resolveMaintenanceConfig(): ResolvedSessionMaintenanceConfig {
     highWaterBytes: resolveHighWaterBytes(maintenance, maxDiskBytes),
   };
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof storeMaintenanceDeps>) {
+    Object.assign(storeMaintenanceDeps, overrides);
+  },
+  resetDepsForTest() {
+    storeMaintenanceDeps.loadConfig = loadConfig;
+  },
+};
 
 /**
  * Remove entries whose `updatedAt` is older than the configured threshold.

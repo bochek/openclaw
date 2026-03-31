@@ -12,9 +12,23 @@ type MemorySearchManagerResult = Awaited<
 >;
 
 let memoryToolRuntimePromise: Promise<MemoryToolRuntime> | null = null;
+let memoryToolRuntimeOverride: (() => Promise<MemoryToolRuntime>) | null = null;
+
+export function __setLoadMemoryToolRuntimeForTest(
+  loader: () => Promise<MemoryToolRuntime>,
+): void {
+  memoryToolRuntimeOverride = loader;
+  memoryToolRuntimePromise = null;
+}
+
+export function __resetLoadMemoryToolRuntimeForTest(): void {
+  memoryToolRuntimeOverride = null;
+  memoryToolRuntimePromise = null;
+}
 
 export async function loadMemoryToolRuntime(): Promise<MemoryToolRuntime> {
-  memoryToolRuntimePromise ??= import("./tools.runtime.js");
+  memoryToolRuntimePromise ??=
+    memoryToolRuntimeOverride?.() ?? import("./tools.runtime.js");
   return await memoryToolRuntimePromise;
 }
 

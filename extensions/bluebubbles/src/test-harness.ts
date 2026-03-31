@@ -40,8 +40,37 @@ export function resolveBlueBubblesAccountFromConfig(params: {
   };
 }
 
+export function listBlueBubblesAccountIdsFromConfig(params: {
+  cfg?: { channels?: { bluebubbles?: Record<string, unknown> } };
+}) {
+  const accounts = params.cfg?.channels?.bluebubbles?.accounts;
+  if (!accounts || typeof accounts !== "object") {
+    return ["default"];
+  }
+  const ids = Object.keys(accounts).filter(Boolean);
+  return ids.length > 0 ? ids : ["default"];
+}
+
+export function resolveDefaultBlueBubblesAccountIdFromConfig(params: {
+  cfg?: { channels?: { bluebubbles?: Record<string, unknown> } };
+}) {
+  const defaultAccount = params.cfg?.channels?.bluebubbles?.defaultAccount;
+  if (typeof defaultAccount === "string" && defaultAccount.trim().length > 0) {
+    return defaultAccount;
+  }
+  return listBlueBubblesAccountIdsFromConfig(params)[0] ?? "default";
+}
+
 export function createBlueBubblesAccountsMockModule() {
   return {
+    listBlueBubblesAccountIds: vi.fn(
+      (cfg?: { channels?: { bluebubbles?: Record<string, unknown> } }) =>
+        listBlueBubblesAccountIdsFromConfig({ cfg }),
+    ),
+    resolveDefaultBlueBubblesAccountId: vi.fn(
+      (cfg?: { channels?: { bluebubbles?: Record<string, unknown> } }) =>
+        resolveDefaultBlueBubblesAccountIdFromConfig({ cfg }),
+    ),
     resolveBlueBubblesAccount: vi.fn(resolveBlueBubblesAccountFromConfig),
   };
 }

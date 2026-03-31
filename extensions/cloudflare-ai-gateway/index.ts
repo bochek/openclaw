@@ -23,6 +23,10 @@ import { applyCloudflareAiGatewayConfig, buildCloudflareAiGatewayConfigPatch } f
 const PROVIDER_ID = "cloudflare-ai-gateway";
 const PROVIDER_ENV_VAR = "CLOUDFLARE_AI_GATEWAY_API_KEY";
 const PROFILE_ID = "cloudflare-ai-gateway:default";
+const cloudflareAiGatewayDeps = {
+  ensureAuthProfileStore,
+  listProfilesForProvider,
+};
 
 function resolveApiKeyFromCredential(
   cred: ReturnType<typeof ensureAuthProfileStore>["profiles"][string] | undefined,
@@ -159,7 +163,7 @@ export default definePluginEntry({
             };
           },
           runNonInteractive: async (ctx) => {
-            const authStore = ensureAuthProfileStore(ctx.agentDir, {
+            const authStore = cloudflareAiGatewayDeps.ensureAuthProfileStore(ctx.agentDir, {
               allowKeychainPrompt: false,
             });
             const storedMetadata = resolveMetadataFromCredential(authStore.profiles[PROFILE_ID]);
@@ -212,11 +216,14 @@ export default definePluginEntry({
       catalog: {
         order: "late",
         run: async (ctx) => {
-          const authStore = ensureAuthProfileStore(ctx.agentDir, {
+          const authStore = cloudflareAiGatewayDeps.ensureAuthProfileStore(ctx.agentDir, {
             allowKeychainPrompt: false,
           });
           const envManagedApiKey = ctx.env[PROVIDER_ENV_VAR]?.trim() ? PROVIDER_ENV_VAR : undefined;
-          for (const profileId of listProfilesForProvider(authStore, PROVIDER_ID)) {
+          for (const profileId of cloudflareAiGatewayDeps.listProfilesForProvider(
+            authStore,
+            PROVIDER_ID,
+          )) {
             const cred = authStore.profiles[profileId];
             if (!cred || cred.type !== "api_key") {
               continue;
@@ -249,3 +256,13 @@ export default definePluginEntry({
     });
   },
 });
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof cloudflareAiGatewayDeps>) {
+    Object.assign(cloudflareAiGatewayDeps, overrides);
+  },
+  resetDepsForTest() {
+    cloudflareAiGatewayDeps.ensureAuthProfileStore = ensureAuthProfileStore;
+    cloudflareAiGatewayDeps.listProfilesForProvider = listProfilesForProvider;
+  },
+};

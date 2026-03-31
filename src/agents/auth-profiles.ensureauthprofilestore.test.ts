@@ -1,11 +1,57 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __testing as externalCliSyncTesting } from "./auth-profiles/external-cli-sync.js";
 import { clearRuntimeAuthProfileStoreSnapshots, ensureAuthProfileStore } from "./auth-profiles.js";
 import { AUTH_STORE_VERSION, log } from "./auth-profiles/constants.js";
 
 describe("ensureAuthProfileStore", () => {
+  let isolatedRoot: string;
+  let previousAgentDir: string | undefined;
+  let previousPiAgentDir: string | undefined;
+  let previousStateDir: string | undefined;
+
+  beforeEach(() => {
+    isolatedRoot = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-auth-store-main-"));
+    const isolatedMainAgentDir = path.join(isolatedRoot, "main-agent");
+    fs.mkdirSync(isolatedMainAgentDir, { recursive: true });
+
+    previousAgentDir = process.env.OPENCLAW_AGENT_DIR;
+    previousPiAgentDir = process.env.PI_CODING_AGENT_DIR;
+    previousStateDir = process.env.OPENCLAW_STATE_DIR;
+
+    process.env.OPENCLAW_AGENT_DIR = isolatedMainAgentDir;
+    process.env.PI_CODING_AGENT_DIR = isolatedMainAgentDir;
+    process.env.OPENCLAW_STATE_DIR = isolatedRoot;
+
+    clearRuntimeAuthProfileStoreSnapshots();
+    externalCliSyncTesting.setExternalCliSyncProvidersForTests([]);
+  });
+
+  afterEach(() => {
+    externalCliSyncTesting.setExternalCliSyncProvidersForTests(null);
+    clearRuntimeAuthProfileStoreSnapshots();
+
+    if (previousAgentDir === undefined) {
+      delete process.env.OPENCLAW_AGENT_DIR;
+    } else {
+      process.env.OPENCLAW_AGENT_DIR = previousAgentDir;
+    }
+    if (previousPiAgentDir === undefined) {
+      delete process.env.PI_CODING_AGENT_DIR;
+    } else {
+      process.env.PI_CODING_AGENT_DIR = previousPiAgentDir;
+    }
+    if (previousStateDir === undefined) {
+      delete process.env.OPENCLAW_STATE_DIR;
+    } else {
+      process.env.OPENCLAW_STATE_DIR = previousStateDir;
+    }
+
+    fs.rmSync(isolatedRoot, { recursive: true, force: true });
+  });
+
   function withTempAgentDir<T>(prefix: string, run: (agentDir: string) => T): T {
     const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
     try {

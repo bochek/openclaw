@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   escapeNextcloudTalkMarkdown,
   formatNextcloudTalkCodeBlock,
@@ -24,6 +24,8 @@ import {
   generateNextcloudTalkSignature,
   verifyNextcloudTalkSignature,
 } from "./signature.js";
+import { __testing as roomInfoTesting, resolveNextcloudTalkRoomKind } from "./room-info.js";
+import { NextcloudTalkConfigSchema } from "./config-schema.js";
 import type { CoreConfig } from "./types.js";
 
 vi.mock("../../../src/config/bundled-channel-config-runtime.js", () => ({
@@ -39,43 +41,18 @@ vi.mock("../../../src/channels/plugins/bundled.js", () => ({
 const fetchWithSsrFGuard = vi.hoisted(() => vi.fn());
 const readFileSync = vi.hoisted(() => vi.fn());
 
-vi.mock("../runtime-api.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../runtime-api.js")>();
-  return {
-    ...actual,
-    fetchWithSsrFGuard,
-  };
-});
-
-vi.mock("openclaw/plugin-sdk/ssrf-runtime", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/ssrf-runtime")>();
-  return {
-    ...actual,
-    fetchWithSsrFGuard,
-  };
-});
-
-vi.mock("node:fs", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:fs")>();
-  return {
-    ...actual,
-    readFileSync,
-  };
-});
-
 const tempDirs: string[] = [];
-let nextcloudTalkPlugin: typeof import("./channel.js").nextcloudTalkPlugin;
-let NextcloudTalkConfigSchema: typeof import("./config-schema.js").NextcloudTalkConfigSchema;
+let nextcloudTalkPluginPromise: Promise<typeof import("./channel.js").nextcloudTalkPlugin> | undefined;
 
-beforeEach(async () => {
-  vi.resetModules();
-  ({ nextcloudTalkPlugin } = await import("./channel.js"));
-  ({ NextcloudTalkConfigSchema } = await import("./config-schema.js"));
-});
+async function getNextcloudTalkPlugin() {
+  nextcloudTalkPluginPromise ??= (async () => (await import("./channel.js")).nextcloudTalkPlugin)();
+  return await nextcloudTalkPluginPromise;
+}
 
 afterEach(async () => {
   fetchWithSsrFGuard.mockReset();
   readFileSync.mockReset();
+  roomInfoTesting.resetRoomInfoDepsForTest();
   while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (dir) {
@@ -290,7 +267,8 @@ describe("nextcloud talk core", () => {
     expect(accountBFirst).toBe(true);
   });
 
-  it("normalizes trimmed DM allowlist prefixes to lowercase ids", () => {
+  it("normalizes trimmed DM allowlist prefixes to lowercase ids", async () => {
+    const nextcloudTalkPlugin = await getNextcloudTalkPlugin();
     const resolveDmPolicy = nextcloudTalkPlugin.security?.resolveDmPolicy;
     if (!resolveDmPolicy) {
       throw new Error("resolveDmPolicy unavailable");
@@ -430,7 +408,7 @@ describe("nextcloud talk core", () => {
   });
 
   it("resolves direct rooms from the room info endpoint", async () => {
-    vi.resetModules();
+    roomInfoTesting.setFetchWithGuardForTest(fetchWithSsrFGuard as typeof fetchWithSsrFGuard);
     const release = vi.fn(async () => {});
     fetchWithSsrFGuard.mockResolvedValue({
       response: {
@@ -446,7 +424,6 @@ describe("nextcloud talk core", () => {
       release,
     });
 
-    const { resolveNextcloudTalkRoomKind } = await import("./room-info.js");
     const kind = await resolveNextcloudTalkRoomKind({
       account: {
         accountId: "acct-direct",
@@ -470,7 +447,8 @@ describe("nextcloud talk core", () => {
   });
 
   it("reads the api password from a file and logs non-ok room info responses", async () => {
-    vi.resetModules();
+    roomInfoTesting.setFetchWithGuardForTest(fetchWithSsrFGuard as typeof fetchWithSsrFGuard);
+    roomInfoTesting.setReadFileSyncForTest(readFileSync as typeof readFileSync);
     const release = vi.fn(async () => {});
     const log = vi.fn();
     const error = vi.fn();
@@ -485,7 +463,6 @@ describe("nextcloud talk core", () => {
       release,
     });
 
-    const { resolveNextcloudTalkRoomKind } = await import("./room-info.js");
     const kind = await resolveNextcloudTalkRoomKind({
       account: {
         accountId: "acct-group",
@@ -506,8 +483,7 @@ describe("nextcloud talk core", () => {
   });
 
   it("returns undefined from room info without credentials or base url", async () => {
-    vi.resetModules();
-    const { resolveNextcloudTalkRoomKind } = await import("./room-info.js");
+    roomInfoTesting.setFetchWithGuardForTest(fetchWithSsrFGuard as typeof fetchWithSsrFGuard);
 
     await expect(
       resolveNextcloudTalkRoomKind({

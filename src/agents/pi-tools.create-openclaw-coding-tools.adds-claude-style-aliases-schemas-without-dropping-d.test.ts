@@ -1,25 +1,71 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import type { AgentToolResult } from "@mariozechner/pi-agent-core";
+import { afterEach, describe, expect, it } from "vitest";
 import "./test-helpers/fast-coding-tools.js";
 import { createOpenClawCodingTools } from "./pi-tools.js";
+import { __testing as piToolsReadTesting } from "./pi-tools.read.js";
+import type { AnyAgentTool } from "./pi-tools.types.js";
 import { createHostSandboxFsBridge } from "./test-helpers/host-sandbox-fs-bridge.js";
 import { createPiToolsSandboxContext } from "./test-helpers/pi-tools-sandbox-context.js";
 
-const defaultTools = createOpenClawCodingTools();
-const tinyPngBuffer = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2f7z8AAAAASUVORK5CYII=",
-  "base64",
-);
+const TINY_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2f7z8AAAAASUVORK5CYII=";
+const tinyPngBuffer = Buffer.from(TINY_PNG_BASE64, "base64");
+
+afterEach(() => {
+  piToolsReadTesting.setDepsForTest();
+});
 
 describe("createOpenClawCodingTools", () => {
-  it("returns image-aware read metadata for images and text-only blocks for text files", async () => {
-    const readTool = defaultTools.find((tool) => tool.name === "read");
-    expect(readTool).toBeDefined();
-
+  it("returns image metadata for images and text-only blocks for text files", async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-read-"));
     try {
+      piToolsReadTesting.setDepsForTest({
+        createReadTool: () =>
+          ({
+            name: "read",
+            label: "read",
+            description: "test read tool",
+            parameters: {
+              type: "object",
+              properties: {
+                path: { type: "string" },
+              },
+              required: ["path"],
+            },
+            execute: async (_toolCallId, args) => {
+              const filePath =
+                args && typeof args === "object" && typeof args.path === "string" ? args.path : "";
+              if (filePath.endsWith(".png")) {
+                return {
+                  content: [
+                    { type: "text", text: "Read image file [image/png]" },
+                    { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" },
+                  ],
+                } satisfies AgentToolResult<unknown>;
+              }
+              const contents = await fs.readFile(filePath, "utf8");
+              return {
+                content: [{ type: "text", text: contents }],
+              } satisfies AgentToolResult<unknown>;
+            },
+          }) satisfies AnyAgentTool,
+      });
+      const sandbox = createPiToolsSandboxContext({
+        workspaceDir: tmpDir,
+        agentWorkspaceDir: tmpDir,
+        workspaceAccess: "rw",
+        fsBridge: createHostSandboxFsBridge(tmpDir),
+        tools: {
+          allow: ["read"],
+          deny: [],
+        },
+      });
+      const readTool = createOpenClawCodingTools({ sandbox }).find((tool) => tool.name === "read");
+      expect(readTool).toBeDefined();
+
       const imagePath = path.join(tmpDir, "sample.png");
       await fs.writeFile(imagePath, tinyPngBuffer);
 
@@ -27,19 +73,15 @@ describe("createOpenClawCodingTools", () => {
         path: imagePath,
       });
 
-      const imageBlocks = imageResult?.content?.filter((block) => block.type === "image") as
-        | Array<{ mimeType?: string }>
+      expect(imageResult?.content?.some((block) => block.type === "image")).toBe(true);
+      const imageText = imageResult?.content?.find((block) => block.type === "text") as
+        | { text?: string }
         | undefined;
-      const imageTextBlocks = imageResult?.content?.filter((block) => block.type === "text") as
-        | Array<{ text?: string }>
+      expect(imageText?.text ?? "").toContain("Read image file [image/png]");
+      const image = imageResult?.content?.find((block) => block.type === "image") as
+        | { mimeType?: string }
         | undefined;
-      const imageText = imageTextBlocks?.map((block) => block.text ?? "").join("\n") ?? "";
-      expect(imageText).toContain("Read image file [image/png]");
-      if ((imageBlocks?.length ?? 0) > 0) {
-        expect(imageBlocks?.every((block) => block.mimeType === "image/png")).toBe(true);
-      } else {
-        expect(imageText).toContain("[Image omitted:");
-      }
+      expect(image?.mimeType).toBe("image/png");
 
       const textPath = path.join(tmpDir, "sample.txt");
       const contents = "Hello from openclaw read tool.";
@@ -61,10 +103,10 @@ describe("createOpenClawCodingTools", () => {
     }
   });
   it("filters tools by sandbox policy", () => {
-    const sandboxDir = path.join(os.tmpdir(), "openclaw-sandbox");
+    const sandboxDir = path.join(os.tmpdir(), "moltbot-sandbox");
     const sandbox = createPiToolsSandboxContext({
       workspaceDir: sandboxDir,
-      agentWorkspaceDir: path.join(os.tmpdir(), "openclaw-workspace"),
+      agentWorkspaceDir: path.join(os.tmpdir(), "moltbot-workspace"),
       workspaceAccess: "none" as const,
       fsBridge: createHostSandboxFsBridge(sandboxDir),
       tools: {
@@ -78,10 +120,10 @@ describe("createOpenClawCodingTools", () => {
     expect(tools.some((tool) => tool.name === "browser")).toBe(false);
   });
   it("hard-disables write/edit when sandbox workspaceAccess is ro", () => {
-    const sandboxDir = path.join(os.tmpdir(), "openclaw-sandbox");
+    const sandboxDir = path.join(os.tmpdir(), "moltbot-sandbox");
     const sandbox = createPiToolsSandboxContext({
       workspaceDir: sandboxDir,
-      agentWorkspaceDir: path.join(os.tmpdir(), "openclaw-workspace"),
+      agentWorkspaceDir: path.join(os.tmpdir(), "moltbot-workspace"),
       workspaceAccess: "ro" as const,
       fsBridge: createHostSandboxFsBridge(sandboxDir),
       tools: {

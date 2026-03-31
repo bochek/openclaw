@@ -2,14 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { channelTestPrefixes } from "../../vitest.channel-paths.mjs";
 import { isUnitConfigTestFile } from "../../vitest.unit-paths.mjs";
-import {
-  BUNDLED_PLUGIN_PATH_PREFIX,
-  BUNDLED_PLUGIN_ROOT_DIR,
-} from "../lib/bundled-plugin-paths.mjs";
 import { dedupeFilesPreserveOrder, loadTestRunnerBehavior } from "../test-runner-manifest.mjs";
 
 const baseConfigPrefixes = ["src/agents/", "src/auto-reply/", "src/commands/", "test/", "ui/"];
 const contractTestPrefixes = ["src/channels/plugins/contracts/", "src/plugins/contracts/"];
+const autoIsolatedMockModulePatterns = [
+  /vi\.(?:doMock|mock)\(\s*(?:import\()?[`'"][^`'"]*config\/config\.js[`'"]/u,
+  /vi\.(?:doMock|mock)\(\s*(?:import\()?[`'"][^`'"]*runtime\.js[`'"]/u,
+  /vi\.(?:doMock|mock)\(\s*(?:import\()?[`'"]node:child_process[`'"]/u,
+  /vi\.(?:doMock|mock)\(\s*(?:import\()?[`'"][^`'"]*plugins\/provider-runtime\.js[`'"]/u,
+  /vi\.(?:doMock|mock)\(\s*(?:import\()?[`'"][^`'"]*plugins\/loader\.js[`'"]/u,
+];
 
 export const normalizeRepoPath = (value) => value.split(path.sep).join("/");
 
@@ -59,7 +62,7 @@ export function loadTestCatalog() {
   const allKnownTestFiles = [
     ...new Set([
       ...walkTestFiles("src"),
-      ...walkTestFiles(BUNDLED_PLUGIN_ROOT_DIR),
+      ...walkTestFiles("extensions"),
       ...walkTestFiles("packages"),
       ...walkTestFiles("test"),
       ...walkTestFiles(path.join("ui", "src", "ui")),
@@ -76,6 +79,14 @@ export function loadTestCatalog() {
   const baseThreadPinnedFileSet = new Set(baseThreadPinnedFiles);
   const unitThreadPinnedFileSet = new Set(unitThreadPinnedFiles);
   const unitForkIsolatedFileSet = new Set(unitForkIsolatedFiles);
+  const autoIsolatedMockFiles = allKnownTestFiles.filter((file) => {
+    if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) {
+      return false;
+    }
+    const source = fs.readFileSync(file, "utf8");
+    return autoIsolatedMockModulePatterns.some((pattern) => pattern.test(source));
+  });
+  const autoIsolatedMockFileSet = new Set(autoIsolatedMockFiles);
 
   const classifyTestFile = (fileFilter, options = {}) => {
     const normalizedFile = normalizeRepoPath(fileFilter);
@@ -83,18 +94,15 @@ export function loadTestCatalog() {
     const isolated =
       options.unitMemoryIsolatedFiles?.includes(normalizedFile) ||
       options.extensionTimedIsolatedFiles?.includes(normalizedFile) ||
-      options.channelTimedIsolatedFiles?.includes(normalizedFile) ||
       unitForkIsolatedFileSet.has(normalizedFile) ||
       extensionForkIsolatedFileSet.has(normalizedFile) ||
-      channelIsolatedFileSet.has(normalizedFile);
+      channelIsolatedFileSet.has(normalizedFile) ||
+      autoIsolatedMockFileSet.has(normalizedFile);
     if (options.unitMemoryIsolatedFiles?.includes(normalizedFile)) {
       reasons.push("unit-memory-isolated");
     }
     if (options.extensionTimedIsolatedFiles?.includes(normalizedFile)) {
       reasons.push("extensions-timed-heavy");
-    }
-    if (options.channelTimedIsolatedFiles?.includes(normalizedFile)) {
-      reasons.push("channels-timed-heavy");
     }
     if (unitForkIsolatedFileSet.has(normalizedFile)) {
       reasons.push("unit-isolated-manifest");
@@ -104,6 +112,9 @@ export function loadTestCatalog() {
     }
     if (channelIsolatedFileSet.has(normalizedFile)) {
       reasons.push("channels-isolated-rule");
+    }
+    if (autoIsolatedMockFileSet.has(normalizedFile)) {
+      reasons.push("auto-shared-module-mock");
     }
 
     let surface = "base";
@@ -117,7 +128,7 @@ export function loadTestCatalog() {
       surface = "e2e";
     } else if (channelTestPrefixes.some((prefix) => normalizedFile.startsWith(prefix))) {
       surface = "channels";
-    } else if (normalizedFile.startsWith(BUNDLED_PLUGIN_PATH_PREFIX)) {
+    } else if (normalizedFile.startsWith("extensions/")) {
       surface = "extensions";
     } else if (normalizedFile.startsWith("src/gateway/")) {
       surface = "gateway";
@@ -194,6 +205,7 @@ export function loadTestCatalog() {
     unitBehaviorOverrideSet,
     unitForkIsolatedFiles,
     unitThreadPinnedFiles,
+    autoIsolatedMockFiles,
     baseThreadPinnedFileSet,
     classifyTestFile,
     resolveFilterMatches,

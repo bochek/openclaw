@@ -15,10 +15,6 @@ let originalStateDir: string | undefined;
 let originalUpdateInProgress: string | undefined;
 let tempStateDir: string | undefined;
 
-function buildBundledPluginModuleId(pluginId: string, artifactBasename: string): string {
-  return ["..", "..", "extensions", pluginId, artifactBasename].join("/");
-}
-
 function setStdinTty(value: boolean | undefined) {
   try {
     Object.defineProperty(process.stdin, "isTTY", {
@@ -298,7 +294,7 @@ vi.mock("../pairing/pairing-store.js", () => ({
   upsertChannelPairingRequest: vi.fn().mockResolvedValue({ code: "000000", created: false }),
 }));
 
-vi.mock(buildBundledPluginModuleId("telegram", "api.js"), () => ({
+vi.mock("../../extensions/telegram/api.js", () => ({
   resolveTelegramToken: vi.fn(() => ({ token: "", source: "none" })),
 }));
 

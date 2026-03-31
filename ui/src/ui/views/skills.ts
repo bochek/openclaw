@@ -237,11 +237,34 @@ function renderSkillDetail(skill: SkillStatusEntry, props: SkillsProps) {
   const showBundledBadge = Boolean(skill.bundled && skill.source !== "openclaw-bundled");
   const missing = computeSkillMissing(skill);
   const reasons = computeSkillReasons(skill);
-  const ensureModalOpen = (el?: Element) => {
-    if (!(el instanceof HTMLDialogElement) || el.open) {
+  const asDialogElement = (value: Element | null | undefined) => {
+    if (!value || value.tagName.toLowerCase() !== "dialog") {
+      return null;
+    }
+    return value as HTMLDialogElement;
+  };
+  const closeDialog = (dialog: Element | null) => {
+    const resolvedDialog = asDialogElement(dialog);
+    if (!resolvedDialog) {
       return;
     }
-    el.showModal();
+    if (typeof resolvedDialog.close === "function") {
+      resolvedDialog.close();
+      return;
+    }
+    resolvedDialog.removeAttribute("open");
+    resolvedDialog.dispatchEvent(new Event("close"));
+  };
+  const ensureModalOpen = (el?: Element) => {
+    const dialog = asDialogElement(el);
+    if (!dialog || dialog.open) {
+      return;
+    }
+    if (typeof dialog.showModal === "function") {
+      dialog.showModal();
+      return;
+    }
+    dialog.setAttribute("open", "");
   };
 
   return html`
@@ -251,7 +274,7 @@ function renderSkillDetail(skill: SkillStatusEntry, props: SkillsProps) {
       @click=${(e: Event) => {
         const dialog = e.currentTarget as HTMLDialogElement;
         if (e.target === dialog) {
-          dialog.close();
+          closeDialog(dialog);
         }
       }}
       @close=${props.onDetailClose}
@@ -269,7 +292,7 @@ function renderSkillDetail(skill: SkillStatusEntry, props: SkillsProps) {
           <button
             class="btn btn--sm"
             @click=${(e: Event) => {
-              (e.currentTarget as HTMLElement).closest("dialog")?.close();
+              closeDialog((e.currentTarget as HTMLElement).closest("dialog"));
             }}
           >
             Close

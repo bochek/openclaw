@@ -4,17 +4,29 @@ const resolveIrcAccountMock = vi.hoisted(() => vi.fn());
 const buildIrcConnectOptionsMock = vi.hoisted(() => vi.fn());
 const connectIrcClientMock = vi.hoisted(() => vi.fn());
 
-vi.mock("./accounts.js", () => ({
-  resolveIrcAccount: resolveIrcAccountMock,
-}));
+vi.mock("./accounts.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./accounts.js")>();
+  return {
+    ...actual,
+    resolveIrcAccount: resolveIrcAccountMock,
+  };
+});
 
-vi.mock("./connect-options.js", () => ({
-  buildIrcConnectOptions: buildIrcConnectOptionsMock,
-}));
+vi.mock("./connect-options.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./connect-options.js")>();
+  return {
+    ...actual,
+    buildIrcConnectOptions: buildIrcConnectOptionsMock,
+  };
+});
 
-vi.mock("./client.js", () => ({
-  connectIrcClient: connectIrcClientMock,
-}));
+vi.mock("./client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./client.js")>();
+  return {
+    ...actual,
+    connectIrcClient: connectIrcClientMock,
+  };
+});
 
 let probeIrc: typeof import("./probe.js").probeIrc;
 

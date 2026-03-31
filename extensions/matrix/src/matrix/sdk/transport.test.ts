@@ -68,24 +68,23 @@ describe("performMatrixRequest", () => {
   });
 
   it("uses the matrix-specific idle-timeout error for stalled raw downloads", async () => {
-    vi.useFakeTimers();
-    try {
-      const stream = new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(new Uint8Array([1, 2, 3]));
-        },
-      });
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(
-          async () =>
-            new Response(stream, {
-              status: 200,
-            }),
-        ),
-      );
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]));
+      },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(stream, {
+            status: 200,
+          }),
+      ),
+    );
 
-      const requestPromise = performMatrixRequest({
+    await expect(
+      performMatrixRequest({
         homeserver: "http://127.0.0.1:8008",
         accessToken: "token",
         method: "GET",
@@ -95,15 +94,7 @@ describe("performMatrixRequest", () => {
         maxBytes: 1024,
         readIdleTimeoutMs: 50,
         ssrfPolicy: { allowPrivateNetwork: true },
-      });
-
-      const rejection = expect(requestPromise).rejects.toThrow(
-        "Matrix media download stalled: no data received for 50ms",
-      );
-      await vi.advanceTimersByTimeAsync(60);
-      await rejection;
-    } finally {
-      vi.useRealTimers();
-    }
+      }),
+    ).rejects.toThrow("Matrix media download stalled: no data received for 50ms");
   }, 5_000);
 });

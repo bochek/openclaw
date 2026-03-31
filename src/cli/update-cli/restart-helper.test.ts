@@ -1,15 +1,16 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { prepareRestartScript, runRestartScript } from "./restart-helper.js";
-
-vi.mock("node:child_process", () => ({
-  spawn: vi.fn(),
-}));
+import {
+  __testing as restartHelperTesting,
+  prepareRestartScript,
+  runRestartScript,
+} from "./restart-helper.js";
 
 describe("restart-helper", () => {
   const originalPlatform = process.platform;
   const originalGetUid = process.getuid;
+  let spawnMock: ReturnType<typeof vi.fn>;
 
   async function prepareAndReadScript(env: Record<string, string>, gatewayPort = 18789) {
     const scriptPath = await prepareRestartScript(env, gatewayPort);
@@ -57,9 +58,12 @@ describe("restart-helper", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    spawnMock = vi.fn();
+    restartHelperTesting.setDepsForTest({ spawn: spawnMock as typeof spawn });
   });
 
   afterEach(() => {
+    restartHelperTesting.resetDepsForTest();
     Object.defineProperty(process, "platform", { value: originalPlatform });
     process.getuid = originalGetUid;
   });
@@ -280,11 +284,11 @@ describe("restart-helper", () => {
       Object.defineProperty(process, "platform", { value: "linux" });
       const scriptPath = "/tmp/fake-script.sh";
       const mockChild = { unref: vi.fn() };
-      vi.mocked(spawn).mockReturnValue(mockChild as unknown as ChildProcess);
+      spawnMock.mockReturnValue(mockChild as unknown as ChildProcess);
 
       await runRestartScript(scriptPath);
 
-      expect(spawn).toHaveBeenCalledWith("/bin/sh", [scriptPath], {
+      expect(spawnMock).toHaveBeenCalledWith("/bin/sh", [scriptPath], {
         detached: true,
         stdio: "ignore",
         windowsHide: true,
@@ -296,11 +300,11 @@ describe("restart-helper", () => {
       Object.defineProperty(process, "platform", { value: "win32" });
       const scriptPath = "C:\\Temp\\fake-script.bat";
       const mockChild = { unref: vi.fn() };
-      vi.mocked(spawn).mockReturnValue(mockChild as unknown as ChildProcess);
+      spawnMock.mockReturnValue(mockChild as unknown as ChildProcess);
 
       await runRestartScript(scriptPath);
 
-      expect(spawn).toHaveBeenCalledWith("cmd.exe", ["/d", "/s", "/c", scriptPath], {
+      expect(spawnMock).toHaveBeenCalledWith("cmd.exe", ["/d", "/s", "/c", scriptPath], {
         detached: true,
         stdio: "ignore",
         windowsHide: true,
@@ -312,11 +316,11 @@ describe("restart-helper", () => {
       Object.defineProperty(process, "platform", { value: "win32" });
       const scriptPath = "C:\\Temp\\me&(ow)\\fake-script.bat";
       const mockChild = { unref: vi.fn() };
-      vi.mocked(spawn).mockReturnValue(mockChild as unknown as ChildProcess);
+      spawnMock.mockReturnValue(mockChild as unknown as ChildProcess);
 
       await runRestartScript(scriptPath);
 
-      expect(spawn).toHaveBeenCalledWith("cmd.exe", ["/d", "/s", "/c", `"${scriptPath}"`], {
+      expect(spawnMock).toHaveBeenCalledWith("cmd.exe", ["/d", "/s", "/c", `"${scriptPath}"`], {
         detached: true,
         stdio: "ignore",
         windowsHide: true,

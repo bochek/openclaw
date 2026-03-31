@@ -220,21 +220,20 @@ describe("memory plugin e2e", () => {
       })),
     }));
 
-    vi.resetModules();
-    vi.doMock("openclaw/plugin-sdk/runtime-env", () => ({
-      ensureGlobalUndiciEnvProxyDispatcher,
-    }));
-    vi.doMock("openai", () => ({
-      default: class MockOpenAI {
-        embeddings = { create: embeddingsCreate };
-      },
-    }));
-    vi.doMock("./lancedb-runtime.js", () => ({
-      loadLanceDbModule,
-    }));
-
     try {
-      const { default: memoryPlugin } = await import("./index.js");
+      const {
+        default: memoryPlugin,
+        __resetMemoryLanceDbDepsForTest,
+        __setMemoryLanceDbDepsForTest,
+      } = await import("./index.js");
+      __resetMemoryLanceDbDepsForTest();
+      __setMemoryLanceDbDepsForTest({
+        ensureGlobalUndiciEnvProxyDispatcher,
+        loadLanceDbModule,
+        OpenAI: class MockOpenAI {
+          embeddings = { create: embeddingsCreate };
+        } as typeof import("openai").default,
+      });
       // oxlint-disable-next-line typescript/no-explicit-any
       const registeredTools: any[] = [];
       const mockApi = {
@@ -291,10 +290,8 @@ describe("memory plugin e2e", () => {
         dimensions: 1024,
       });
     } finally {
-      vi.doUnmock("openclaw/plugin-sdk/runtime-env");
-      vi.doUnmock("openai");
-      vi.doUnmock("./lancedb-runtime.js");
-      vi.resetModules();
+      const { __resetMemoryLanceDbDepsForTest } = await import("./index.js");
+      __resetMemoryLanceDbDepsForTest();
     }
   });
 

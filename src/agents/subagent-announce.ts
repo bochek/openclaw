@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH } from "../config/agent-limits.js";
 import { loadConfig } from "../config/config.js";
@@ -47,6 +48,11 @@ const defaultSubagentAnnounceDeps: SubagentAnnounceDeps = {
 };
 
 let subagentAnnounceDeps: SubagentAnnounceDeps = defaultSubagentAnnounceDeps;
+const subagentAnnounceDepsStorage = new AsyncLocalStorage<SubagentAnnounceDeps>();
+
+function getSubagentAnnounceDeps(): SubagentAnnounceDeps {
+  return subagentAnnounceDepsStorage.getStore() ?? subagentAnnounceDeps;
+}
 
 let subagentRegistryRuntimePromise: Promise<
   typeof import("./subagent-registry-runtime.js")
@@ -248,7 +254,7 @@ async function wakeSubagentRunAfterDescendants(params: {
     return false;
   }
 
-  const cfg = subagentAnnounceDeps.loadConfig();
+  const cfg = getSubagentAnnounceDeps().loadConfig();
   const announceTimeoutMs = resolveSubagentAnnounceTimeoutMs(cfg);
   const wakeMessage = buildDescendantWakeMessage({
     findings: params.findings,
@@ -261,7 +267,7 @@ async function wakeSubagentRunAfterDescendants(params: {
       operation: "descendant wake agent call",
       signal: params.signal,
       run: async () =>
-        await subagentAnnounceDeps.callGateway({
+        await getSubagentAnnounceDeps().callGateway({
           method: "agent",
           params: {
             sessionKey: params.childSessionKey,
@@ -626,7 +632,7 @@ export async function runSubagentAnnounceFlow(params: {
     // Patch label after all writes complete
     if (params.label) {
       try {
-        await subagentAnnounceDeps.callGateway({
+        await getSubagentAnnounceDeps().callGateway({
           method: "sessions.patch",
           params: { key: params.childSessionKey, label: params.label },
           timeoutMs: 10_000,
@@ -637,7 +643,7 @@ export async function runSubagentAnnounceFlow(params: {
     }
     if (shouldDeleteChildSession) {
       try {
-        await subagentAnnounceDeps.callGateway({
+        await getSubagentAnnounceDeps().callGateway({
           method: "sessions.delete",
           params: {
             key: params.childSessionKey,
@@ -662,5 +668,14 @@ export const __testing = {
           ...overrides,
         }
       : defaultSubagentAnnounceDeps;
+  },
+  runWithDepsForTest<T>(overrides: Partial<SubagentAnnounceDeps> | undefined, fn: () => T): T {
+    const deps = overrides
+      ? {
+          ...defaultSubagentAnnounceDeps,
+          ...overrides,
+        }
+      : defaultSubagentAnnounceDeps;
+    return subagentAnnounceDepsStorage.run(deps, fn);
   },
 };

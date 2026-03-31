@@ -20,12 +20,16 @@ export async function withReplyDispatcher<T>(params: {
   onSettled?: () => void | Promise<void>;
 }): Promise<T> {
   try {
+    console.error("[with-reply-dispatcher] before run");
     return await params.run();
   } finally {
+    console.error("[with-reply-dispatcher] before markComplete");
     // Ensure dispatcher reservations are always released on every exit path.
     params.dispatcher.markComplete();
     try {
+      console.error("[with-reply-dispatcher] before waitForIdle");
       await params.dispatcher.waitForIdle();
+      console.error("[with-reply-dispatcher] after waitForIdle");
     } finally {
       await params.onSettled?.();
     }

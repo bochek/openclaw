@@ -19,15 +19,19 @@ vi.mock("./send.js", () => ({
   sendStructuredCardFeishu: sendStructuredCardFeishuMock,
 }));
 
-vi.mock("./runtime.js", () => ({
-  getFeishuRuntime: () => ({
-    channel: {
-      text: {
-        chunkMarkdownText: (text: string) => [text],
+vi.mock("./runtime.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./runtime.js")>();
+  return {
+    ...actual,
+    getFeishuRuntime: () => ({
+      channel: {
+        text: {
+          chunkMarkdownText: (text: string) => [text],
+        },
       },
-    },
-  }),
-}));
+    }),
+  };
+});
 
 import { feishuOutbound } from "./outbound.js";
 const sendText = feishuOutbound.sendText!;

@@ -25,7 +25,7 @@ openclaw plugins install @openclaw/mattermost
 Local checkout (when running from a git repo):
 
 ```bash
-openclaw plugins install ./path/to/local/mattermost-plugin
+openclaw plugins install ./extensions/mattermost
 ```
 
 If you choose Mattermost during setup and a git checkout is detected,

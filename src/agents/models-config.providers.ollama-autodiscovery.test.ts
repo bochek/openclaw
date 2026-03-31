@@ -4,58 +4,51 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { resolveImplicitProvidersForTest } from "./models-config.e2e-harness.js";
 
-describe("Ollama auto-discovery", () => {
-  let originalVitest: string | undefined;
-  let originalNodeEnv: string | undefined;
-  let originalFetch: typeof globalThis.fetch;
+const TEST_ENV = {
+  VITEST: "true",
+  NODE_ENV: "test",
+} as NodeJS.ProcessEnv;
 
+describe("Ollama auto-discovery", () => {
   afterEach(() => {
-    if (originalVitest !== undefined) {
-      process.env.VITEST = originalVitest;
-    } else {
-      delete process.env.VITEST;
-    }
-    if (originalNodeEnv !== undefined) {
-      process.env.NODE_ENV = originalNodeEnv;
-    } else {
-      delete process.env.NODE_ENV;
-    }
-    globalThis.fetch = originalFetch;
-    delete process.env.OLLAMA_API_KEY;
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
   });
 
-  function setupDiscoveryEnv() {
-    originalVitest = process.env.VITEST;
-    originalNodeEnv = process.env.NODE_ENV;
-    delete process.env.VITEST;
-    delete process.env.NODE_ENV;
-    originalFetch = globalThis.fetch;
-  }
-
   function mockOllamaUnreachable() {
-    globalThis.fetch = vi
-      .fn()
-      .mockRejectedValue(
-        new Error("connect ECONNREFUSED 127.0.0.1:11434"),
-      ) as unknown as typeof fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockRejectedValue(
+          new Error("connect ECONNREFUSED 127.0.0.1:11434"),
+        ) as unknown as typeof fetch,
+    );
   }
 
   it("auto-registers ollama provider when models are discovered locally", async () => {
-    setupDiscoveryEnv();
-    globalThis.fetch = vi.fn().mockImplementation(async (url: string | URL) => {
-      if (String(url).includes("/api/tags")) {
-        return {
-          ok: true,
-          json: async () => ({
-            models: [{ name: "deepseek-r1:latest" }, { name: "llama3.3:latest" }],
-          }),
-        };
-      }
-      throw new Error(`Unexpected fetch: ${url}`);
-    }) as unknown as typeof fetch;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async (url: string | URL) => {
+        if (String(url).includes("/api/tags")) {
+          return {
+            ok: true,
+            json: async () => ({
+              models: [{ name: "deepseek-r1:latest" }, { name: "llama3.3:latest" }],
+            }),
+          };
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }) as unknown as typeof fetch,
+    );
 
     const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
-    const providers = await resolveImplicitProvidersForTest({ agentDir });
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: {},
+      onlyPluginIds: ["ollama"],
+    });
 
     expect(providers?.ollama).toBeDefined();
     expect(providers?.ollama?.apiKey).toBe("ollama-local");
@@ -67,13 +60,16 @@ describe("Ollama auto-discovery", () => {
     expect(providers?.ollama?.models?.[1]?.reasoning).toBe(false);
   });
 
-  it("does not warn when Ollama is unreachable and not explicitly configured", async () => {
-    setupDiscoveryEnv();
+  it("skips ambient Ollama discovery in test mode when not explicitly configured", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     mockOllamaUnreachable();
 
     const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
-    const providers = await resolveImplicitProvidersForTest({ agentDir });
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: TEST_ENV,
+      onlyPluginIds: ["ollama"],
+    });
 
     expect(providers?.ollama).toBeUndefined();
     const ollamaWarnings = warnSpy.mock.calls.filter(
@@ -84,13 +80,14 @@ describe("Ollama auto-discovery", () => {
   });
 
   it("warns when Ollama is unreachable and explicitly configured", async () => {
-    setupDiscoveryEnv();
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     mockOllamaUnreachable();
 
     const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
     await resolveImplicitProvidersForTest({
       agentDir,
+      env: TEST_ENV,
+      onlyPluginIds: ["ollama"],
       explicitProviders: {
         ollama: {
           baseUrl: "http://127.0.0.1:11434/v1",

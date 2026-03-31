@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { registerBrowserGlobalsHooks } from "../test-helpers/browser-globals.ts";
 import { openExternalUrlSafe, resolveSafeExternalUrl } from "./open-external-url.ts";
+
+registerBrowserGlobalsHooks();
 
 afterEach(() => {
   vi.restoreAllMocks();

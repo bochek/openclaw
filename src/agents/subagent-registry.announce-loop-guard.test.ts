@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import * as registry from "./subagent-registry.js";
+
+const { mockedRunSubagentAnnounceFlow } = vi.hoisted(() => ({
+  mockedRunSubagentAnnounceFlow: vi.fn().mockResolvedValue(false),
+}));
 
 /**
  * Regression test for #18264: Gateway announcement delivery loop.
@@ -48,7 +53,7 @@ function createLoopGuardAgentEventsModuleMock() {
 
 function createLoopGuardSubagentAnnounceModuleMock() {
   return {
-    runSubagentAnnounceFlow: vi.fn().mockResolvedValue(false),
+    runSubagentAnnounceFlow: mockedRunSubagentAnnounceFlow,
   };
 }
 
@@ -87,33 +92,16 @@ vi.mock("./subagent-announce-queue.js", createLoopGuardAnnounceQueueModuleMock);
 vi.mock("./timeout.js", createLoopGuardTimeoutModuleMock);
 
 describe("announce loop guard (#18264)", () => {
-  let registry: typeof import("./subagent-registry.js");
-  let announceFn: ReturnType<typeof vi.fn>;
-
-  async function loadFreshSubagentRegistryLoopGuardModulesForTest() {
-    vi.resetModules();
-    vi.doMock("../config/config.js", createLoopGuardConfigModuleMock);
-    vi.doMock("../config/sessions.js", createLoopGuardSessionsModuleMock);
-    vi.doMock("../gateway/call.js", createLoopGuardGatewayCallModuleMock);
-    vi.doMock("../infra/agent-events.js", createLoopGuardAgentEventsModuleMock);
-    vi.doMock("./subagent-announce.js", createLoopGuardSubagentAnnounceModuleMock);
-    vi.doMock("./subagent-registry.store.js", () => ({
-      loadSubagentRegistryFromDisk,
-      saveSubagentRegistryToDisk,
-    }));
-    vi.doMock("./subagent-announce-queue.js", createLoopGuardAnnounceQueueModuleMock);
-    vi.doMock("./timeout.js", createLoopGuardTimeoutModuleMock);
-    registry = await import("./subagent-registry.js");
-    const subagentAnnounce = await import("./subagent-announce.js");
-    announceFn = vi.mocked(subagentAnnounce.runSubagentAnnounceFlow);
-  }
-
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.useFakeTimers();
-    await loadFreshSubagentRegistryLoopGuardModulesForTest();
+    mockedRunSubagentAnnounceFlow.mockReset();
+    mockedRunSubagentAnnounceFlow.mockResolvedValue(false);
+    registry.resetSubagentRegistryForTests({ persist: false });
   });
 
   afterEach(() => {
+    registry?.resetSubagentRegistryForTests?.({ persist: false });
+    vi.clearAllTimers();
     vi.useRealTimers();
     loadSubagentRegistryFromDisk.mockClear();
     loadSubagentRegistryFromDisk.mockReturnValue(new Map());
@@ -184,7 +172,7 @@ describe("announce loop guard (#18264)", () => {
       }),
     },
   ])("$name", async ({ createEntry }) => {
-    announceFn.mockClear();
+    mockedRunSubagentAnnounceFlow.mockClear();
     registry.resetSubagentRegistryForTests();
 
     const entry = createEntry(Date.now());
@@ -195,13 +183,13 @@ describe("announce loop guard (#18264)", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(announceFn).not.toHaveBeenCalled();
+    expect(mockedRunSubagentAnnounceFlow).not.toHaveBeenCalled();
     expect(entry.cleanupCompletedAt).toBeDefined();
   });
 
   test("expired completion-message entries are still resumed for announce", async () => {
-    announceFn.mockReset();
-    announceFn.mockResolvedValueOnce(true);
+    mockedRunSubagentAnnounceFlow.mockReset();
+    mockedRunSubagentAnnounceFlow.mockResolvedValueOnce(true);
     registry.resetSubagentRegistryForTests();
 
     const now = Date.now();
@@ -231,12 +219,12 @@ describe("announce loop guard (#18264)", () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    expect(announceFn).toHaveBeenCalledTimes(1);
+    expect(mockedRunSubagentAnnounceFlow).toHaveBeenCalledTimes(1);
   });
 
   test("announce rejection resets cleanupHandled so retries can resume", async () => {
-    announceFn.mockReset();
-    announceFn.mockRejectedValueOnce(new Error("announce failed"));
+    mockedRunSubagentAnnounceFlow.mockReset();
+    mockedRunSubagentAnnounceFlow.mockRejectedValueOnce(new Error("announce failed"));
     registry.resetSubagentRegistryForTests();
 
     const now = Date.now();

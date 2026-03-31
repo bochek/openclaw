@@ -5,7 +5,7 @@ import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import { setLoggerOverride } from "openclaw/plugin-sdk/runtime-env";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { escapeRegExp, formatEnvelopeTimestamp } from "../../../test/helpers/envelope-timestamp.js";
-import { withEnvAsync } from "../../../test/helpers/plugins/env.js";
+import { withEnvAsync } from "../../../test/helpers/extensions/env.js";
 import {
   createWebInboundDeliverySpies,
   createMockWebListener,

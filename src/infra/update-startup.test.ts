@@ -33,6 +33,8 @@ vi.mock("./update-check.js", async () => {
 
 vi.mock("../version.js", () => ({
   VERSION: "1.0.0",
+  resolveRuntimeServiceVersion: vi.fn(() => "1.0.0"),
+  resolveCompatibilityHostVersion: vi.fn(() => "1.0.0"),
 }));
 
 vi.mock("../process/exec.js", () => ({

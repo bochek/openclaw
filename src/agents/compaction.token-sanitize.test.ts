@@ -1,25 +1,30 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  chunkMessagesByMaxTokens,
+  setCompactionTestDeps,
+  splitMessagesByTokenShare,
+} from "./compaction.js";
 
-const piCodingAgentMocks = vi.hoisted(() => ({
-  estimateTokens: vi.fn((_message: unknown) => 1),
-  generateSummary: vi.fn(async () => "summary"),
-}));
-
-vi.mock("@mariozechner/pi-coding-agent", async () => {
-  const actual = await vi.importActual<typeof import("@mariozechner/pi-coding-agent")>(
-    "@mariozechner/pi-coding-agent",
-  );
-  return {
-    ...actual,
-    estimateTokens: piCodingAgentMocks.estimateTokens,
-    generateSummary: piCodingAgentMocks.generateSummary,
-  };
-});
-
-import { chunkMessagesByMaxTokens, splitMessagesByTokenShare } from "./compaction.js";
+const mockEstimateTokens = vi.fn((_message: unknown) => 1);
+const mockGenerateSummary = vi.fn(async () => "summary");
 
 describe("compaction token accounting sanitization", () => {
+  beforeEach(() => {
+    mockEstimateTokens.mockReset();
+    mockEstimateTokens.mockImplementation((_message: unknown) => 1);
+    mockGenerateSummary.mockReset();
+    mockGenerateSummary.mockResolvedValue("summary");
+    setCompactionTestDeps({
+      estimateTokens: mockEstimateTokens,
+      generateSummary: mockGenerateSummary,
+    });
+  });
+
+  afterEach(() => {
+    setCompactionTestDeps(undefined);
+  });
+
   it("does not pass toolResult.details into per-message token estimates", () => {
     const messages: AgentMessage[] = [
       {
@@ -42,7 +47,7 @@ describe("compaction token accounting sanitization", () => {
     splitMessagesByTokenShare(messages, 2);
     chunkMessagesByMaxTokens(messages, 16);
 
-    const calledWithDetails = piCodingAgentMocks.estimateTokens.mock.calls.some((call) => {
+    const calledWithDetails = mockEstimateTokens.mock.calls.some((call) => {
       const message = call[0] as { details?: unknown } | undefined;
       return Boolean(message?.details);
     });

@@ -15,6 +15,26 @@ import type {
 import { chunkTextForTwitch } from "./utils/markdown.js";
 import { missingTargetError, normalizeTwitchChannel } from "./utils/twitch.js";
 
+const outboundDeps = {
+  resolveTwitchAccountContext,
+  sendMessageTwitchInternal,
+};
+
+export const __testing = {
+  setDepsForTest(
+    overrides: Partial<{
+      resolveTwitchAccountContext: typeof resolveTwitchAccountContext;
+      sendMessageTwitchInternal: typeof sendMessageTwitchInternal;
+    }>,
+  ): void {
+    Object.assign(outboundDeps, overrides);
+  },
+  resetDepsForTest(): void {
+    outboundDeps.resolveTwitchAccountContext = resolveTwitchAccountContext;
+    outboundDeps.sendMessageTwitchInternal = sendMessageTwitchInternal;
+  },
+};
+
 /**
  * Twitch outbound adapter.
  *
@@ -114,7 +134,10 @@ export const twitchOutbound: ChannelOutboundAdapter = {
     }
 
     const resolvedAccountId = accountId ?? DEFAULT_ACCOUNT_ID;
-    const { account, availableAccountIds } = resolveTwitchAccountContext(cfg, resolvedAccountId);
+    const { account, availableAccountIds } = outboundDeps.resolveTwitchAccountContext(
+      cfg,
+      resolvedAccountId,
+    );
     if (!account) {
       throw new Error(
         `Twitch account not found: ${resolvedAccountId}. ` +
@@ -127,7 +150,7 @@ export const twitchOutbound: ChannelOutboundAdapter = {
       throw new Error("No channel specified and no default channel in account config");
     }
 
-    const result = await sendMessageTwitchInternal(
+    const result = await outboundDeps.sendMessageTwitchInternal(
       normalizeTwitchChannel(channel),
       text,
       cfg,

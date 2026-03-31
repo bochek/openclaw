@@ -1,7 +1,8 @@
 import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { computeSandboxConfigHash } from "./config-hash.js";
+import { __testing, ensureSandboxContainer } from "./docker.js";
 import { collectDockerFlagValues } from "./test-args.js";
 import { SANDBOX_MOUNT_FORMAT_VERSION } from "./workspace-mounts.js";
 import type { SandboxConfig } from "./types.js";
@@ -85,34 +86,6 @@ function spawnDockerProcess(command: string, args: string[]) {
   return child;
 }
 
-async function createChildProcessMock(
-  importOriginal: () => Promise<typeof import("node:child_process")>,
-) {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    spawn: spawnDockerProcess,
-  };
-}
-
-vi.mock("node:child_process", async (importOriginal) =>
-  createChildProcessMock(() => importOriginal<typeof import("node:child_process")>()),
-);
-
-let ensureSandboxContainer: typeof import("./docker.js").ensureSandboxContainer;
-
-async function loadFreshDockerModuleForTest() {
-  vi.resetModules();
-  vi.doMock("./registry.js", () => ({
-    readRegistry: registryMocks.readRegistry,
-    updateRegistry: registryMocks.updateRegistry,
-  }));
-  vi.doMock("node:child_process", async (importOriginal) =>
-    createChildProcessMock(() => importOriginal<typeof import("node:child_process")>()),
-  );
-  ({ ensureSandboxContainer } = await import("./docker.js"));
-}
-
 function createSandboxConfig(
   dns: string[],
   binds?: string[],
@@ -164,14 +137,20 @@ function createSandboxConfig(
 }
 
 describe("ensureSandboxContainer config-hash recreation", () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     spawnState.calls.length = 0;
     spawnState.inspectRunning = true;
     spawnState.labelHash = "";
     registryMocks.readRegistry.mockClear();
     registryMocks.updateRegistry.mockClear();
     registryMocks.updateRegistry.mockResolvedValue(undefined);
-    await loadFreshDockerModuleForTest();
+    __testing.setDepsForTest({
+      spawn: spawnDockerProcess as unknown as typeof import("node:child_process").spawn,
+    });
+  });
+
+  afterEach(() => {
+    __testing.setDepsForTest();
   });
 
   it("recreates shared container when array-order change alters hash", async () => {

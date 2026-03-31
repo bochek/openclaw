@@ -18,6 +18,18 @@ type SubCliEntry = SubCliDescriptor & {
   register: SubCliRegistrar;
 };
 
+type RegisterSubCliDeps = {
+  loadConfigModule: () => Promise<typeof import("../../config/config.js")>;
+  loadAcpCliModule: () => Promise<typeof import("../acp-cli.js")>;
+  loadNodesCliModule: () => Promise<typeof import("../nodes-cli.js")>;
+};
+
+const registerSubCliDeps: RegisterSubCliDeps = {
+  loadConfigModule: () => import("../../config/config.js"),
+  loadAcpCliModule: () => import("../acp-cli.js"),
+  loadNodesCliModule: () => import("../nodes-cli.js"),
+};
+
 const shouldRegisterPrimaryOnly = (argv: string[]) => {
   if (isTruthyEnvValue(process.env.OPENCLAW_DISABLE_LAZY_SUBCOMMANDS)) {
     return false;
@@ -34,7 +46,7 @@ const shouldEagerRegisterSubcommands = (_argv: string[]) => {
 
 export const loadValidatedConfigForPluginRegistration =
   async (): Promise<OpenClawConfig | null> => {
-    const mod = await import("../../config/config.js");
+    const mod = await registerSubCliDeps.loadConfigModule();
     const snapshot = await mod.readConfigFileSnapshot();
     if (!snapshot.valid) {
       return null;
@@ -51,7 +63,7 @@ const entries: SubCliEntry[] = [
     description: "Agent Control Protocol tools",
     hasSubcommands: true,
     register: async (program) => {
-      const mod = await import("../acp-cli.js");
+      const mod = await registerSubCliDeps.loadAcpCliModule();
       mod.registerAcpCli(program);
     },
   },
@@ -114,7 +126,7 @@ const entries: SubCliEntry[] = [
     description: "Manage gateway-owned node pairing and node commands",
     hasSubcommands: true,
     register: async (program) => {
-      const mod = await import("../nodes-cli.js");
+      const mod = await registerSubCliDeps.loadNodesCliModule();
       mod.registerNodesCli(program);
     },
   },
@@ -357,3 +369,14 @@ export function registerSubCliCommands(program: Command, argv: string[] = proces
     registerLazyCommand(program, candidate);
   }
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<RegisterSubCliDeps>) {
+    Object.assign(registerSubCliDeps, overrides);
+  },
+  resetDepsForTest() {
+    registerSubCliDeps.loadConfigModule = () => import("../../config/config.js");
+    registerSubCliDeps.loadAcpCliModule = () => import("../acp-cli.js");
+    registerSubCliDeps.loadNodesCliModule = () => import("../nodes-cli.js");
+  },
+};

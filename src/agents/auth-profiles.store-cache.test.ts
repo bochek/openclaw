@@ -2,25 +2,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  clearRuntimeAuthProfileStoreSnapshots,
+  ensureAuthProfileStore,
+} from "./auth-profiles.js";
 import { AUTH_STORE_VERSION, EXTERNAL_CLI_SYNC_TTL_MS } from "./auth-profiles/constants.js";
-import type { AuthProfileStore } from "./auth-profiles/types.js";
+import { __testing as externalCliSyncTesting } from "./auth-profiles/external-cli-sync.js";
+import type { OAuthCredential } from "./auth-profiles/types.js";
 
-const mocks = vi.hoisted(() => ({
-  syncExternalCliCredentials: vi.fn((_: AuthProfileStore) => false),
-}));
-
-vi.mock("./auth-profiles/external-cli-sync.js", () => ({
-  syncExternalCliCredentials: mocks.syncExternalCliCredentials,
-}));
-
-let clearRuntimeAuthProfileStoreSnapshots: typeof import("./auth-profiles.js").clearRuntimeAuthProfileStoreSnapshots;
-let ensureAuthProfileStore: typeof import("./auth-profiles.js").ensureAuthProfileStore;
-
-async function loadFreshAuthProfilesModuleForTest() {
-  vi.resetModules();
-  ({ clearRuntimeAuthProfileStoreSnapshots, ensureAuthProfileStore } =
-    await import("./auth-profiles.js"));
-}
+const readExternalCliCredentialMock = vi.fn<() => OAuthCredential | null>(() => null);
 
 function withAgentDirEnv(prefix: string, run: (agentDir: string) => void | Promise<void>) {
   const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -69,12 +59,21 @@ function writeAuthStore(agentDir: string, key: string) {
 }
 
 describe("auth profile store cache", () => {
-  beforeEach(async () => {
-    await loadFreshAuthProfilesModuleForTest();
+  beforeEach(() => {
+    clearRuntimeAuthProfileStoreSnapshots();
+    readExternalCliCredentialMock.mockReset().mockReturnValue(null);
+    externalCliSyncTesting.setExternalCliSyncProvidersForTests([
+      {
+        profileId: "openai-codex:default",
+        provider: "openai-codex",
+        readCredentials: () => readExternalCliCredentialMock(),
+      },
+    ]);
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    externalCliSyncTesting.setExternalCliSyncProvidersForTests(null);
     clearRuntimeAuthProfileStoreSnapshots();
     vi.clearAllMocks();
   });
@@ -86,7 +85,7 @@ describe("auth profile store cache", () => {
       ensureAuthProfileStore(agentDir);
       ensureAuthProfileStore(agentDir);
 
-      expect(mocks.syncExternalCliCredentials).toHaveBeenCalledTimes(1);
+      expect(readExternalCliCredentialMock).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -102,7 +101,7 @@ describe("auth profile store cache", () => {
 
       const reloaded = ensureAuthProfileStore(agentDir);
 
-      expect(mocks.syncExternalCliCredentials).toHaveBeenCalledTimes(2);
+      expect(readExternalCliCredentialMock).toHaveBeenCalledTimes(2);
       expect(reloaded.profiles["openai:default"]).toMatchObject({
         key: "sk-test-2",
       });
@@ -116,16 +115,15 @@ describe("auth profile store cache", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-21T15:00:00.000Z"));
     let syncCount = 0;
-    mocks.syncExternalCliCredentials.mockImplementation((store) => {
+    readExternalCliCredentialMock.mockImplementation(() => {
       syncCount += 1;
-      store.profiles["openai-codex:default"] = {
+      return {
         type: "oauth",
         provider: "openai-codex",
         access: `access-${syncCount}`,
         refresh: `refresh-${syncCount}`,
         expires: Date.now() + 60_000,
       };
-      return true;
     });
     try {
       process.env.OPENCLAW_AGENT_DIR = agentDir;
@@ -136,13 +134,13 @@ describe("auth profile store cache", () => {
 
       expect(first.profiles["openai-codex:default"]).toMatchObject({ access: "access-1" });
       expect(second.profiles["openai-codex:default"]).toMatchObject({ access: "access-1" });
-      expect(mocks.syncExternalCliCredentials).toHaveBeenCalledTimes(1);
+      expect(readExternalCliCredentialMock).toHaveBeenCalledTimes(1);
 
       vi.advanceTimersByTime(EXTERNAL_CLI_SYNC_TTL_MS + 1);
 
       const third = ensureAuthProfileStore(agentDir);
 
-      expect(mocks.syncExternalCliCredentials).toHaveBeenCalledTimes(2);
+      expect(readExternalCliCredentialMock).toHaveBeenCalledTimes(2);
       expect(third.profiles["openai-codex:default"]).toMatchObject({ access: "access-2" });
     } finally {
       if (previousAgentDir === undefined) {

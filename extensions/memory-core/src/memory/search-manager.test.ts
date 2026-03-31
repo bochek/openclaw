@@ -102,26 +102,14 @@ const checkQmdBinaryAvailability = vi.hoisted(() =>
   vi.fn<CheckQmdBinaryAvailability>(async () => ({ available: true })),
 );
 
-vi.mock("./qmd-manager.js", () => ({
-  QmdMemoryManager: {
-    create: vi.fn(async () => mockPrimary),
-  },
-}));
+const createQmdManagerMock = vi.hoisted(() => vi.fn(async () => mockPrimary));
 
-vi.mock("openclaw/plugin-sdk/memory-core-host-engine-qmd", () => ({
-  checkQmdBinaryAvailability,
-}));
-
-vi.mock("./manager-runtime.js", () => ({
-  MemoryIndexManager: {
-    get: mockMemoryIndexGet,
-  },
-  closeAllMemoryIndexManagers: mockCloseAllMemoryIndexManagers,
-}));
-
-import { QmdMemoryManager } from "./qmd-manager.js";
-import { closeAllMemorySearchManagers, getMemorySearchManager } from "./search-manager.js";
-const createQmdManagerMock = vi.mocked(QmdMemoryManager.create);
+import {
+  __resetMemorySearchManagerDepsForTest,
+  __setMemorySearchManagerDepsForTest,
+  closeAllMemorySearchManagers,
+  getMemorySearchManager,
+} from "./search-manager.js";
 
 type SearchManagerResult = Awaited<ReturnType<typeof getMemorySearchManager>>;
 type SearchManager = NonNullable<SearchManagerResult["manager"]>;
@@ -150,6 +138,7 @@ async function createFailedQmdSearchHarness(params: { agentId: string; errorMess
 
 beforeEach(async () => {
   await closeAllMemorySearchManagers();
+  __resetMemorySearchManagerDepsForTest();
   mockPrimary.search.mockClear();
   mockPrimary.readFile.mockClear();
   mockPrimary.status.mockClear();
@@ -170,6 +159,20 @@ beforeEach(async () => {
   checkQmdBinaryAvailability.mockClear();
   checkQmdBinaryAvailability.mockResolvedValue({ available: true });
   createQmdManagerMock.mockClear();
+  __setMemorySearchManagerDepsForTest({
+    checkQmdBinaryAvailability,
+    loadQmdManager: async () => ({
+      QmdMemoryManager: {
+        create: createQmdManagerMock,
+      },
+    }),
+    loadManagerRuntime: async () => ({
+      MemoryIndexManager: {
+        get: mockMemoryIndexGet,
+      },
+      closeAllMemoryIndexManagers: mockCloseAllMemoryIndexManagers,
+    }),
+  });
 });
 
 describe("getMemorySearchManager caching", () => {

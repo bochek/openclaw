@@ -1,10 +1,18 @@
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createTestPluginApi } from "../../test/helpers/plugins/plugin-api.js";
-import { getAccessTokenResultAsync } from "./cli.js";
+import {
+  __resetFoundryCliDepsForTest as resetFoundryCliDepsForTest,
+  __setFoundryCliDepsForTest as setFoundryCliDepsForTest,
+  getAccessTokenResultAsync,
+} from "./cli.js";
 import plugin from "./index.js";
 import { buildFoundryConnectionTest, isValidTenantIdentifier } from "./onboard.js";
-import { resetFoundryRuntimeAuthCaches } from "./runtime.js";
+import {
+  __resetFoundryRuntimeDepsForTest as resetFoundryRuntimeDepsForTest,
+  __setFoundryRuntimeDepsForTest as setFoundryRuntimeDepsForTest,
+  resetFoundryRuntimeAuthCaches,
+} from "./runtime.js";
 import {
   buildFoundryAuthResult,
   normalizeFoundryEndpoint,
@@ -19,25 +27,6 @@ const ensureAuthProfileStoreMock = vi.hoisted(() =>
     profiles: {},
   })),
 );
-
-vi.mock("node:child_process", async () => {
-  const actual = await vi.importActual<typeof import("node:child_process")>("node:child_process");
-  return {
-    ...actual,
-    execFile: execFileMock,
-    execFileSync: execFileSyncMock,
-  };
-});
-
-vi.mock("openclaw/plugin-sdk/provider-auth", async () => {
-  const actual = await vi.importActual<typeof import("openclaw/plugin-sdk/provider-auth")>(
-    "openclaw/plugin-sdk/provider-auth",
-  );
-  return {
-    ...actual,
-    ensureAuthProfileStore: ensureAuthProfileStoreMock,
-  };
-});
 
 function registerProvider() {
   const registerProviderMock = vi.fn();
@@ -224,10 +213,20 @@ function mockAzureCliLoginFailure(delayMs?: number) {
 describe("microsoft-foundry plugin", () => {
   beforeEach(() => {
     resetFoundryRuntimeAuthCaches();
+    resetFoundryCliDepsForTest();
+    resetFoundryRuntimeDepsForTest();
     execFileMock.mockReset();
     execFileSyncMock.mockReset();
     ensureAuthProfileStoreMock.mockReset();
     ensureAuthProfileStoreMock.mockReturnValue({ profiles: {} });
+    setFoundryCliDepsForTest({
+      execFile: execFileMock as typeof import("node:child_process").execFile,
+      execFileSync: execFileSyncMock as typeof import("node:child_process").execFileSync,
+    });
+    setFoundryRuntimeDepsForTest({
+      ensureAuthProfileStore: ensureAuthProfileStoreMock,
+      getAccessTokenResultAsync,
+    });
   });
 
   it("keeps the API key profile bound when multiple auth profiles exist without explicit order", async () => {

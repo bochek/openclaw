@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { TEST_STATE_DIR, SANDBOX_REGISTRY_PATH, SANDBOX_BROWSER_REGISTRY_PATH } = vi.hoisted(() => {
   const path = require("node:path");
@@ -32,7 +32,7 @@ type WriteDelayConfig = {
 };
 
 let activeWriteGate: WriteDelayConfig | null = null;
-const realFsWriteFile = fs.writeFile;
+const realFsRename = fs.rename;
 let readBrowserRegistry: typeof import("./registry.js").readBrowserRegistry;
 let readRegistry: typeof import("./registry.js").readRegistry;
 let removeBrowserRegistryEntry: typeof import("./registry.js").removeBrowserRegistryEntry;
@@ -40,41 +40,11 @@ let removeRegistryEntry: typeof import("./registry.js").removeRegistryEntry;
 let updateBrowserRegistry: typeof import("./registry.js").updateBrowserRegistry;
 let updateRegistry: typeof import("./registry.js").updateRegistry;
 
-async function loadFreshRegistryModuleForTest() {
-  vi.resetModules();
-  vi.doMock("./constants.js", () => ({
-    SANDBOX_STATE_DIR: TEST_STATE_DIR,
-    SANDBOX_REGISTRY_PATH,
-    SANDBOX_BROWSER_REGISTRY_PATH,
-  }));
-  ({
-    readBrowserRegistry,
-    readRegistry,
-    removeBrowserRegistryEntry,
-    removeRegistryEntry,
-    updateBrowserRegistry,
-    updateRegistry,
-  } = await import("./registry.js"));
-}
-
 function payloadMentionsContainer(payload: string, containerName: string): boolean {
   return (
     payload.includes(`"containerName":"${containerName}"`) ||
     payload.includes(`"containerName": "${containerName}"`)
   );
-}
-
-function writeText(content: Parameters<typeof fs.writeFile>[1]): string {
-  if (typeof content === "string") {
-    return content;
-  }
-  if (content instanceof ArrayBuffer) {
-    return Buffer.from(content).toString("utf-8");
-  }
-  if (ArrayBuffer.isView(content)) {
-    return Buffer.from(content.buffer, content.byteOffset, content.byteLength).toString("utf-8");
-  }
-  return "";
 }
 
 async function seedMalformedContainerRegistry(payload: string) {
@@ -113,30 +83,38 @@ function installWriteGate(
   };
 }
 
+beforeAll(async () => {
+  ({
+    readBrowserRegistry,
+    readRegistry,
+    removeBrowserRegistryEntry,
+    removeRegistryEntry,
+    updateBrowserRegistry,
+    updateRegistry,
+  } = await import("./registry.js"));
+});
+
 beforeEach(async () => {
   activeWriteGate = null;
-  vi.spyOn(fs, "writeFile").mockImplementation(async (...args) => {
-    const [target, content] = args;
-    if (typeof target !== "string") {
-      return realFsWriteFile(...args);
+  vi.spyOn(fs, "rename").mockImplementation(async (...args) => {
+    const [from, target] = args;
+    if (typeof from !== "string" || typeof target !== "string") {
+      return realFsRename(...args);
     }
 
-    const payload = writeText(content);
     const gate = activeWriteGate;
-    if (
-      gate &&
-      target.includes(gate.targetFile) &&
-      payloadMentionsContainer(payload, gate.containerName)
-    ) {
-      if (!gate.started) {
-        gate.started = true;
-        gate.markStarted();
+    if (gate && target.includes(gate.targetFile)) {
+      const payload = await fs.readFile(from, "utf-8").catch(() => "");
+      if (payloadMentionsContainer(payload, gate.containerName)) {
+        if (!gate.started) {
+          gate.started = true;
+          gate.markStarted();
+        }
+        await gate.waitForRelease;
       }
-      await gate.waitForRelease;
     }
-    return realFsWriteFile(...args);
+    return realFsRename(...args);
   });
-  await loadFreshRegistryModuleForTest();
 });
 
 afterEach(async () => {

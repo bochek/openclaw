@@ -1,50 +1,56 @@
-import { afterAll, afterEach, beforeAll, vi } from "vitest";
+import { afterAll, afterEach, beforeAll } from "vitest";
+import { getInstalledTestEnv } from "./setup-env.js";
 
-vi.mock("@mariozechner/pi-ai", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@mariozechner/pi-ai")>();
-  return {
-    ...original,
-    getOAuthApiKey: () => undefined,
-    getOAuthProviders: () => [],
-    loginOpenAICodex: vi.fn(),
-  };
-});
+const isBunRuntime = typeof Bun !== "undefined";
 
-vi.mock("@mariozechner/clipboard", () => ({
-  availableFormats: () => [],
-  getText: async () => "",
-  setText: async () => {},
-  hasText: () => false,
-  getImageBinary: async () => [],
-  getImageBase64: async () => "",
-  setImageBinary: async () => {},
-  setImageBase64: async () => {},
-  hasImage: () => false,
-  getHtml: async () => "",
-  setHtml: async () => {},
-  hasHtml: () => false,
-  getRtf: async () => "",
-  setRtf: async () => {},
-  hasRtf: () => false,
-  clear: async () => {},
-  watch: () => {},
-  callThreadsafeFunction: () => {},
-}));
+type RuntimeTestHelpers = {
+  cleanupSessionStateForTest?: () => Promise<void>;
+  resetContextWindowCacheForTest?: () => void;
+  resetModelsJsonReadyCacheForTest?: () => void;
+};
 
-// Ensure Vitest environment is properly set
-process.env.VITEST = "true";
-// Config validation walks plugin manifests; keep an aggressive cache in tests to avoid
-// repeated filesystem discovery across suites/workers.
-process.env.OPENCLAW_PLUGIN_MANIFEST_CACHE_MS ??= "60000";
-// Vitest vm forks can load transitive lockfile helpers many times per worker.
-// Raise listener budget to avoid noisy MaxListeners warnings and warning-stack overhead.
-const TEST_PROCESS_MAX_LISTENERS = 128;
-if (process.getMaxListeners() > 0 && process.getMaxListeners() < TEST_PROCESS_MAX_LISTENERS) {
-  process.setMaxListeners(TEST_PROCESS_MAX_LISTENERS);
+let runtimeTestHelpersPromise: Promise<RuntimeTestHelpers> | undefined;
+
+function getOptionalModuleFn<T extends (...args: never[]) => unknown>(
+  module: object,
+  key: string,
+): T | undefined {
+  try {
+    const candidate = Reflect.get(module, key);
+    return typeof candidate === "function" ? (candidate as T) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
-import { resetContextWindowCacheForTest } from "../src/agents/context.js";
-import { resetModelsJsonReadyCacheForTest } from "../src/agents/models-config.js";
+async function getRuntimeTestHelpers(): Promise<RuntimeTestHelpers> {
+  if (isBunRuntime) {
+    return {};
+  }
+  runtimeTestHelpersPromise ??= (async () => {
+    const [contextModule, modelsConfigModule, sessionStateModule] = await Promise.all([
+      import("../src/agents/context.js"),
+      import("../src/agents/models-config.js"),
+      import("../src/test-utils/session-state-cleanup.js"),
+    ]);
+    return {
+      cleanupSessionStateForTest: getOptionalModuleFn(
+        sessionStateModule,
+        "cleanupSessionStateForTest",
+      ),
+      resetContextWindowCacheForTest: getOptionalModuleFn(
+        contextModule,
+        "resetContextWindowCacheForTest",
+      ),
+      resetModelsJsonReadyCacheForTest: getOptionalModuleFn(
+        modelsConfigModule,
+        "resetModelsJsonReadyCacheForTest",
+      ),
+    };
+  })();
+  return runtimeTestHelpersPromise;
+}
+
 import {
   drainSessionWriteLockStateForTest,
   resetSessionWriteLockStateForTest,
@@ -59,23 +65,28 @@ import type { OpenClawConfig } from "../src/config/config.js";
 import type { OutboundSendDeps } from "../src/infra/outbound/deliver.js";
 import { installProcessWarningFilter } from "../src/infra/warning-filter.js";
 import type { PluginRegistry } from "../src/plugins/registry.js";
+import { resetPluginRuntimeStateForTest } from "../src/plugins/runtime.js";
 import { createTestRegistry } from "../src/test-utils/channel-plugins.js";
-import { cleanupSessionStateForTest } from "../src/test-utils/session-state-cleanup.js";
-import { withIsolatedTestHome } from "./test-env.js";
-
-// Set HOME/state isolation before importing any runtime OpenClaw modules.
-const testEnv = withIsolatedTestHome();
 
 installProcessWarningFilter();
+const testEnv = getInstalledTestEnv();
 
 const REGISTRY_STATE = Symbol.for("openclaw.pluginRegistryState");
 
 type RegistryState = {
-  registry: PluginRegistry | null;
-  httpRouteRegistry: PluginRegistry | null;
-  httpRouteRegistryPinned: boolean;
+  activeRegistry: PluginRegistry | null;
+  activeVersion: number;
+  channel: {
+    pinned: boolean;
+    registry: PluginRegistry | null;
+    version: number;
+  };
+  httpRoute: {
+    pinned: boolean;
+    registry: PluginRegistry | null;
+    version: number;
+  };
   key: string | null;
-  version: number;
 };
 
 const globalRegistryState = (() => {
@@ -84,11 +95,19 @@ const globalRegistryState = (() => {
   };
   if (!globalState[REGISTRY_STATE]) {
     globalState[REGISTRY_STATE] = {
-      registry: null,
-      httpRouteRegistry: null,
-      httpRouteRegistryPinned: false,
+      activeRegistry: null,
+      activeVersion: 0,
+      channel: {
+        pinned: false,
+        registry: null,
+        version: 0,
+      },
+      httpRoute: {
+        pinned: false,
+        registry: null,
+        version: 0,
+      },
       key: null,
-      version: 0,
     };
   }
   return globalState[REGISTRY_STATE];
@@ -312,9 +331,12 @@ const DEFAULT_PLUGIN_REGISTRY = new Proxy({} as PluginRegistry, {
 });
 
 function installDefaultPluginRegistry(): void {
-  globalRegistryState.registry = DEFAULT_PLUGIN_REGISTRY;
-  if (!globalRegistryState.httpRouteRegistryPinned) {
-    globalRegistryState.httpRouteRegistry = DEFAULT_PLUGIN_REGISTRY;
+  globalRegistryState.activeRegistry = DEFAULT_PLUGIN_REGISTRY;
+  if (!globalRegistryState.httpRoute.pinned) {
+    globalRegistryState.httpRoute.registry = DEFAULT_PLUGIN_REGISTRY;
+  }
+  if (!globalRegistryState.channel.pinned) {
+    globalRegistryState.channel.registry = DEFAULT_PLUGIN_REGISTRY;
   }
 }
 
@@ -323,19 +345,20 @@ beforeAll(() => {
 });
 
 afterEach(async () => {
-  await cleanupSessionStateForTest();
-  resetContextWindowCacheForTest();
-  resetModelsJsonReadyCacheForTest();
+  const runtimeTestHelpers = await getRuntimeTestHelpers();
+  await runtimeTestHelpers.cleanupSessionStateForTest?.();
+  runtimeTestHelpers.resetContextWindowCacheForTest?.();
+  runtimeTestHelpers.resetModelsJsonReadyCacheForTest?.();
   resetSessionWriteLockStateForTest();
-  if (globalRegistryState.registry !== DEFAULT_PLUGIN_REGISTRY) {
-    installDefaultPluginRegistry();
-    globalRegistryState.key = null;
-    globalRegistryState.version += 1;
-  }
+  resetPluginRuntimeStateForTest();
+  installDefaultPluginRegistry();
+  globalRegistryState.key = null;
+  globalRegistryState.activeVersion += 1;
 });
 
 afterAll(async () => {
-  await cleanupSessionStateForTest();
+  const runtimeTestHelpers = await getRuntimeTestHelpers();
+  await runtimeTestHelpers.cleanupSessionStateForTest?.();
   await drainSessionWriteLockStateForTest();
   testEnv.cleanup();
 });

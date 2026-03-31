@@ -5,8 +5,27 @@ import { buildFeishuCardButton, buildFeishuCardInteractionContext } from "./card
 import { sendCardFeishu } from "./send.js";
 
 export const FEISHU_QUICK_ACTION_CARD_TTL_MS = 10 * 60_000;
+type FeishuQuickActionLauncherDeps = {
+  sendCardFeishu: typeof sendCardFeishu;
+};
+const defaultFeishuQuickActionLauncherDeps: FeishuQuickActionLauncherDeps = {
+  sendCardFeishu,
+};
+let feishuQuickActionLauncherDeps: FeishuQuickActionLauncherDeps =
+  defaultFeishuQuickActionLauncherDeps;
 
 const QUICK_ACTION_MENU_KEYS = new Set(["quick-actions", "quick_actions", "launcher"]);
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<FeishuQuickActionLauncherDeps>): void {
+    feishuQuickActionLauncherDeps = overrides
+      ? { ...defaultFeishuQuickActionLauncherDeps, ...overrides }
+      : defaultFeishuQuickActionLauncherDeps;
+  },
+  resetDepsForTest(): void {
+    feishuQuickActionLauncherDeps = defaultFeishuQuickActionLauncherDeps;
+  },
+};
 
 export function isFeishuQuickActionMenuEventKey(eventKey: string): boolean {
   return QUICK_ACTION_MENU_KEYS.has(eventKey.trim().toLowerCase());
@@ -97,7 +116,7 @@ export async function maybeHandleFeishuQuickActionMenu(params: {
 
   const expiresAt = (params.now ?? Date.now()) + FEISHU_QUICK_ACTION_CARD_TTL_MS;
   try {
-    await sendCardFeishu({
+    await feishuQuickActionLauncherDeps.sendCardFeishu({
       cfg: params.cfg,
       to: `user:${params.operatorOpenId}`,
       card: createQuickActionLauncherCard({

@@ -12,6 +12,9 @@ import {
 } from "./api.js";
 
 const PROVIDER_ID = "vllm";
+const vllmDeps = {
+  buildVllmProvider,
+};
 
 async function loadProviderSetup() {
   return await import("openclaw/plugin-sdk/provider-setup");
@@ -65,7 +68,7 @@ export default definePluginEntry({
           return await providerSetup.discoverOpenAICompatibleSelfHostedProvider({
             ctx,
             providerId: PROVIDER_ID,
-            buildProvider: buildVllmProvider,
+            buildProvider: vllmDeps.buildVllmProvider,
           });
         },
       },
@@ -92,3 +95,12 @@ export default definePluginEntry({
     });
   },
 });
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof vllmDeps>) {
+    Object.assign(vllmDeps, overrides);
+  },
+  resetDepsForTest() {
+    vllmDeps.buildVllmProvider = buildVllmProvider;
+  },
+};

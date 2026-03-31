@@ -575,13 +575,7 @@ describe("plugin-sdk subpath exports", () => {
       "createTopLevelChannelReplyToModeResolver",
     ]);
 
-    expectSourceMentions("thread-bindings-runtime", [
-      "resolveThreadBindingFarewellText",
-      "resolveThreadBindingLifecycle",
-      "registerSessionBindingAdapter",
-      "unregisterSessionBindingAdapter",
-      "SessionBindingAdapter",
-    ]);
+    expectSourceMentions("thread-bindings-runtime", ["resolveThreadBindingLifecycle"]);
     expectSourceMentions("matrix-runtime-shared", ["formatZonedTimestamp"]);
     expectSourceMentions("ssrf-runtime", [
       "closeDispatcher",
@@ -595,25 +589,24 @@ describe("plugin-sdk subpath exports", () => {
     expectSourceContract("provider-setup", {
       mentions: [
         "applyProviderDefaultModel",
+        "buildOllamaProvider",
+        "buildSglangProvider",
+        "buildVllmProvider",
+        "configureOllamaNonInteractive",
         "discoverOpenAICompatibleLocalModels",
         "discoverOpenAICompatibleSelfHostedProvider",
-      ],
-      omits: [
-        "buildOllamaProvider",
-        "configureOllamaNonInteractive",
         "ensureOllamaModelPulled",
-        "promptAndConfigureOllama",
-        "promptAndConfigureVllm",
-        "buildVllmProvider",
-        "buildSglangProvider",
         "OLLAMA_DEFAULT_BASE_URL",
         "OLLAMA_DEFAULT_MODEL",
+        "promptAndConfigureOllama",
+        "promptAndConfigureVllm",
         "VLLM_DEFAULT_BASE_URL",
       ],
+      omits: [
+        "buildDeepSeekProvider",
+        "buildOpenAICodexProvider",
+      ],
     });
-    expectSourceOmitsSnippet("provider-setup", "./ollama-surface.js");
-    expectSourceOmitsImportPattern("provider-setup", "./vllm.js");
-    expectSourceOmitsImportPattern("provider-setup", "./sglang.js");
     expectSourceMentions("provider-auth", [
       "buildOauthProviderAuthResult",
       "generatePkceVerifierChallenge",
@@ -647,14 +640,14 @@ describe("plugin-sdk subpath exports", () => {
     expectSourceContract("self-hosted-provider-setup", {
       mentions: [
         "applyProviderDefaultModel",
+        "buildSglangProvider",
+        "buildVllmProvider",
         "discoverOpenAICompatibleLocalModels",
         "discoverOpenAICompatibleSelfHostedProvider",
         "configureOpenAICompatibleSelfHostedProviderNonInteractive",
       ],
-      omits: ["buildVllmProvider", "buildSglangProvider"],
+      omits: ["buildDeepSeekProvider", "buildOpenAICodexProvider"],
     });
-    expectSourceOmitsImportPattern("self-hosted-provider-setup", "./vllm.js");
-    expectSourceOmitsImportPattern("self-hosted-provider-setup", "./sglang.js");
     expectSourceOmitsSnippet("agent-runtime", "./sglang.js");
     expectSourceOmitsSnippet("agent-runtime", "./vllm.js");
     expectSourceOmitsSnippet("agent-runtime", "../../extensions/");

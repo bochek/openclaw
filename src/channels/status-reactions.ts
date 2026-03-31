@@ -282,7 +282,6 @@ export function createStatusReactionController(params: {
     } else {
       // Debounced execution for intermediate states
       debounceTimer = setTimeout(() => {
-        debounceTimer = null;
         void enqueue(async () => {
           await applyEmoji(emoji);
           pendingEmoji = "";
@@ -380,19 +379,10 @@ export function createStatusReactionController(params: {
       return;
     }
 
-    const alreadyInitial = currentEmoji === initialEmoji;
-    const pendingBeforeClear = pendingEmoji;
-    const hadDebouncedPending = debounceTimer !== null;
     clearAllTimers();
-    if (alreadyInitial && (!pendingBeforeClear || hadDebouncedPending)) {
-      pendingEmoji = "";
+    if (currentEmoji === initialEmoji && pendingEmoji === "") {
       return;
     }
-    if (pendingBeforeClear === initialEmoji && !hadDebouncedPending) {
-      await chainPromise;
-      return;
-    }
-
     await enqueue(async () => {
       await applyEmoji(initialEmoji);
       pendingEmoji = "";

@@ -21,6 +21,24 @@ import {
 } from "./pw-tools-core.shared.js";
 import { sanitizeUntrustedFileName } from "./safe-filename.js";
 
+type PwToolsCoreDownloadDeps = {
+  ensurePageState: typeof ensurePageState;
+  getPageForTargetId: typeof getPageForTargetId;
+  refLocator: typeof refLocator;
+  restoreRoleRefsForTarget: typeof restoreRoleRefsForTarget;
+};
+
+export type PwToolsCoreDownloadTestDeps = Partial<PwToolsCoreDownloadDeps>;
+
+const defaultDeps: PwToolsCoreDownloadDeps = {
+  ensurePageState,
+  getPageForTargetId,
+  refLocator,
+  restoreRoleRefsForTarget,
+};
+
+let deps: PwToolsCoreDownloadDeps = defaultDeps;
+
 function buildTempDownloadPath(fileName: string): string {
   const id = crypto.randomUUID();
   const safeName = sanitizeUntrustedFileName(fileName, "download.bin");
@@ -131,8 +149,8 @@ export async function armFileUploadViaPlaywright(opts: {
   paths?: string[];
   timeoutMs?: number;
 }): Promise<void> {
-  const page = await getPageForTargetId(opts);
-  const state = ensurePageState(page);
+  const page = await deps.getPageForTargetId(opts);
+  const state = deps.ensurePageState(page);
   const timeout = Math.max(500, Math.min(120_000, opts.timeoutMs ?? 120_000));
 
   state.armIdUpload = bumpUploadArmId();
@@ -194,8 +212,8 @@ export async function armDialogViaPlaywright(opts: {
   promptText?: string;
   timeoutMs?: number;
 }): Promise<void> {
-  const page = await getPageForTargetId(opts);
-  const state = ensurePageState(page);
+  const page = await deps.getPageForTargetId(opts);
+  const state = deps.ensurePageState(page);
   const timeout = normalizeTimeoutMs(opts.timeoutMs, 120_000);
 
   state.armIdDialog = bumpDialogArmId();
@@ -228,8 +246,8 @@ export async function waitForDownloadViaPlaywright(opts: {
   suggestedFilename: string;
   path: string;
 }> {
-  const page = await getPageForTargetId(opts);
-  const state = ensurePageState(page);
+  const page = await deps.getPageForTargetId(opts);
+  const state = deps.ensurePageState(page);
   const timeout = normalizeTimeoutMs(opts.timeoutMs, 120_000);
 
   state.armIdDownload = bumpDownloadArmId();
@@ -250,9 +268,9 @@ export async function downloadViaPlaywright(opts: {
   suggestedFilename: string;
   path: string;
 }> {
-  const page = await getPageForTargetId(opts);
-  const state = ensurePageState(page);
-  restoreRoleRefsForTarget({ cdpUrl: opts.cdpUrl, targetId: opts.targetId, page });
+  const page = await deps.getPageForTargetId(opts);
+  const state = deps.ensurePageState(page);
+  deps.restoreRoleRefsForTarget({ cdpUrl: opts.cdpUrl, targetId: opts.targetId, page });
   const timeout = normalizeTimeoutMs(opts.timeoutMs, 120_000);
 
   const ref = requireRef(opts.ref);
@@ -266,7 +284,7 @@ export async function downloadViaPlaywright(opts: {
 
   const waiter = createPageDownloadWaiter(page, timeout);
   try {
-    const locator = refLocator(page, ref);
+    const locator = deps.refLocator(page, ref);
     try {
       await locator.click({ timeout });
     } catch (err) {
@@ -278,3 +296,9 @@ export async function downloadViaPlaywright(opts: {
     throw err;
   }
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: PwToolsCoreDownloadTestDeps) {
+    deps = overrides ? { ...defaultDeps, ...overrides } : defaultDeps;
+  },
+};

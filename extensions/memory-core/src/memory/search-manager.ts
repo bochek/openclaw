@@ -32,8 +32,28 @@ const log = createSubsystemLogger("memory");
 const { qmdManagerCache: QMD_MANAGER_CACHE } = getMemorySearchManagerCacheStore();
 let managerRuntimePromise: Promise<typeof import("./manager-runtime.js")> | null = null;
 
+const memorySearchManagerDepsDefaults = {
+  checkQmdBinaryAvailability,
+  loadQmdManager: async () => await import("./qmd-manager.js"),
+  loadManagerRuntime: async () => await import("./manager-runtime.js"),
+} as const;
+
+const memorySearchManagerDeps = { ...memorySearchManagerDepsDefaults };
+
+export function __setMemorySearchManagerDepsForTest(
+  overrides: Partial<typeof memorySearchManagerDepsDefaults>,
+): void {
+  Object.assign(memorySearchManagerDeps, overrides);
+  managerRuntimePromise = null;
+}
+
+export function __resetMemorySearchManagerDepsForTest(): void {
+  Object.assign(memorySearchManagerDeps, memorySearchManagerDepsDefaults);
+  managerRuntimePromise = null;
+}
+
 function loadManagerRuntime() {
-  managerRuntimePromise ??= import("./manager-runtime.js");
+  managerRuntimePromise ??= memorySearchManagerDeps.loadManagerRuntime();
   return managerRuntimePromise;
 }
 
@@ -66,7 +86,7 @@ export async function getMemorySearchManager(params: {
       }
     }
 
-    const qmdBinary = await checkQmdBinaryAvailability({
+    const qmdBinary = await memorySearchManagerDeps.checkQmdBinaryAvailability({
       command: resolved.qmd.command,
       env: process.env,
       cwd: resolveAgentWorkspaceDir(params.cfg, params.agentId),
@@ -77,7 +97,7 @@ export async function getMemorySearchManager(params: {
       );
     } else {
       try {
-        const { QmdMemoryManager } = await import("./qmd-manager.js");
+        const { QmdMemoryManager } = await memorySearchManagerDeps.loadQmdManager();
         const primary = await QmdMemoryManager.create({
           cfg: params.cfg,
           agentId: params.agentId,
@@ -168,10 +188,8 @@ export async function closeAllMemorySearchManagers(): Promise<void> {
       log.warn(`failed to close qmd memory manager: ${String(err)}`);
     }
   }
-  if (managerRuntimePromise !== null) {
-    const { closeAllMemoryIndexManagers } = await loadManagerRuntime();
-    await closeAllMemoryIndexManagers();
-  }
+  const { closeAllMemoryIndexManagers } = await loadManagerRuntime();
+  await closeAllMemoryIndexManagers();
 }
 
 class FallbackMemoryManager implements MemorySearchManager {

@@ -5,7 +5,7 @@
   "type": "module",
   "dependencies": {
     "@lancedb/lancedb": "^0.27.1",
-    "@sinclair/typebox": "0.34.49",
+    "@sinclair/typebox": "0.34.48",
     "openai": "^6.33.0"
   },
   "openclaw": {
@@ -14,6 +14,7 @@
     ],
     "install": {
       "npmSpec": "@openclaw/memory-lancedb",
+      "localPath": "extensions/memory-lancedb",
       "defaultChoice": "npm",
       "minHostVersion": ">=2026.3.30"
     },

@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { buildProgram } from "./program.js";
+import { buildProgram, __testing as buildProgramTesting } from "./program/build-program.js";
 import {
-  configureCommand,
-  ensureConfigReady,
   installBaseProgramMocks,
-  installSmokeProgramMocks,
+  registerSmokeProgramCommands,
   runTui,
   runtime,
   setupCommand,
@@ -12,17 +10,6 @@ import {
 } from "./program.test-mocks.js";
 
 installBaseProgramMocks();
-installSmokeProgramMocks();
-
-vi.mock("./config-cli.js", () => ({
-  registerConfigCli: (program: {
-    command: (name: string) => { action: (fn: () => unknown) => void };
-  }) => {
-    program.command("config").action(() => configureCommand({}, runtime));
-  },
-  runConfigGet: vi.fn(),
-  runConfigUnset: vi.fn(),
-}));
 
 describe("cli program (smoke)", () => {
   let program = createProgram();
@@ -36,10 +23,19 @@ describe("cli program (smoke)", () => {
   }
 
   beforeEach(() => {
+    buildProgramTesting.resetDepsForTest();
+    buildProgramTesting.setDepsForTest({
+      registerProgramCommands: (nextProgram) => {
+        registerSmokeProgramCommands(nextProgram);
+      },
+      createProgramContext: () => ({ programVersion: "0.0.0-test" }) as never,
+      configureProgramHelp: () => undefined,
+      registerPreActionHooks: () => undefined,
+      setProgramContext: () => undefined,
+    });
     program = createProgram();
     vi.clearAllMocks();
     runTui.mockResolvedValue(undefined);
-    ensureConfigReady.mockResolvedValue(undefined);
   });
 
   it("registers message + status commands", () => {

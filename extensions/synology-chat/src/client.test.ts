@@ -1,38 +1,47 @@
 import { EventEmitter } from "node:events";
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  __testing,
+  fetchChatUsers,
+  resolveLegacyWebhookNameToChatUserId,
+  sendFileUrl,
+  sendMessage,
+} from "./client.js";
 
 // Mock http and https modules before importing the client
-vi.mock("node:https", () => {
+vi.mock("node:https", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:https")>();
   const mockRequest = vi.fn();
   const mockGet = vi.fn();
-  return { default: { request: mockRequest, get: mockGet }, request: mockRequest, get: mockGet };
+  return {
+    ...actual,
+    default: { ...actual, request: mockRequest, get: mockGet },
+    request: mockRequest,
+    get: mockGet,
+  };
 });
 
-vi.mock("node:http", () => {
+vi.mock("node:http", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:http")>();
   const mockRequest = vi.fn();
   const mockGet = vi.fn();
-  return { default: { request: mockRequest, get: mockGet }, request: mockRequest, get: mockGet };
+  return {
+    ...actual,
+    default: { ...actual, request: mockRequest, get: mockGet },
+    request: mockRequest,
+    get: mockGet,
+  };
 });
 
 const https = await import("node:https");
 let fakeNowMs = 1_700_000_000_000;
-let sendMessage: typeof import("./client.js").sendMessage;
-let sendFileUrl: typeof import("./client.js").sendFileUrl;
-let fetchChatUsers: typeof import("./client.js").fetchChatUsers;
-let resolveLegacyWebhookNameToChatUserId: typeof import("./client.js").resolveLegacyWebhookNameToChatUserId;
-
-async function settleTimers<T>(promise: Promise<T>): Promise<T> {
-  await Promise.resolve();
-  await vi.runAllTimersAsync();
-  return promise;
-}
 
 function mockResponse(statusCode: number, body: string) {
   const httpsRequest = vi.mocked(https.request);
   httpsRequest.mockImplementation((_url: any, _opts: any, callback: any) => {
     const res = new EventEmitter() as any;
     res.statusCode = statusCode;
-    process.nextTick(() => {
+    queueMicrotask(() => {
       callback(res);
       res.emit("data", Buffer.from(body));
       res.emit("end");
@@ -53,43 +62,34 @@ function mockFailureResponse(statusCode = 500) {
   mockResponse(statusCode, "error");
 }
 
-function installFakeTimerHarness() {
+function installTestHarness() {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.resetModules();
-    vi.useFakeTimers();
+    __testing.resetStateForTest();
     fakeNowMs += 10_000;
-    vi.setSystemTime(fakeNowMs);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  beforeEach(async () => {
-    ({ sendMessage, sendFileUrl, fetchChatUsers, resolveLegacyWebhookNameToChatUserId } =
-      await import("./client.js"));
+    __testing.setNowForTest(() => fakeNowMs);
+    __testing.setSleepForTest(async () => undefined);
   });
 }
 
 describe("sendMessage", () => {
-  installFakeTimerHarness();
+  installTestHarness();
 
   it("returns true on successful send", async () => {
     mockSuccessResponse();
-    const result = await settleTimers(sendMessage("https://nas.example.com/incoming", "Hello"));
+    const result = await sendMessage("https://nas.example.com/incoming", "Hello");
     expect(result).toBe(true);
   });
 
   it("returns false on server error after retries", async () => {
     mockFailureResponse(500);
-    const result = await settleTimers(sendMessage("https://nas.example.com/incoming", "Hello"));
+    const result = await sendMessage("https://nas.example.com/incoming", "Hello");
     expect(result).toBe(false);
   });
 
   it("includes user_ids when userId is numeric", async () => {
     mockSuccessResponse();
-    await settleTimers(sendMessage("https://nas.example.com/incoming", "Hello", 42));
+    await sendMessage("https://nas.example.com/incoming", "Hello", 42);
     const httpsRequest = vi.mocked(https.request);
     expect(httpsRequest).toHaveBeenCalled();
     const callArgs = httpsRequest.mock.calls[0];
@@ -98,20 +98,22 @@ describe("sendMessage", () => {
 });
 
 describe("sendFileUrl", () => {
-  installFakeTimerHarness();
+  installTestHarness();
 
   it("returns true on success", async () => {
     mockSuccessResponse();
-    const result = await settleTimers(
-      sendFileUrl("https://nas.example.com/incoming", "https://example.com/file.png"),
+    const result = await sendFileUrl(
+      "https://nas.example.com/incoming",
+      "https://example.com/file.png",
     );
     expect(result).toBe(true);
   });
 
   it("returns false on failure", async () => {
     mockFailureResponse(500);
-    const result = await settleTimers(
-      sendFileUrl("https://nas.example.com/incoming", "https://example.com/file.png"),
+    const result = await sendFileUrl(
+      "https://nas.example.com/incoming",
+      "https://example.com/file.png",
     );
     expect(result).toBe(false);
   });
@@ -138,7 +140,7 @@ function mockUserListResponseImpl(
   const impl = (_url: any, _opts: any, callback: any) => {
     const res = new EventEmitter() as any;
     res.statusCode = 200;
-    process.nextTick(() => {
+    queueMicrotask(() => {
       callback(res);
       res.emit("data", Buffer.from(JSON.stringify({ success: true, data: { users } })));
       res.emit("end");
@@ -162,14 +164,11 @@ describe("resolveLegacyWebhookNameToChatUserId", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.useFakeTimers();
+    __testing.resetStateForTest();
     // Advance time to invalidate any cached user list from previous tests
     fakeNowMs += 10 * 60 * 1000;
-    vi.setSystemTime(fakeNowMs);
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
+    __testing.setNowForTest(() => fakeNowMs);
+    __testing.setSleepForTest(async () => undefined);
   });
 
   it("resolves user by nickname (webhook username = Chat nickname)", async () => {
@@ -258,14 +257,14 @@ describe("resolveLegacyWebhookNameToChatUserId", () => {
 });
 
 describe("fetchChatUsers", () => {
-  installFakeTimerHarness();
+  installTestHarness();
 
   it("filters malformed user entries while keeping valid ones", async () => {
     const httpsGet = vi.mocked((https as any).get);
     httpsGet.mockImplementation((_url: any, _opts: any, callback: any) => {
       const res = new EventEmitter() as any;
       res.statusCode = 200;
-      process.nextTick(() => {
+      queueMicrotask(() => {
         callback(res);
         res.emit(
           "data",

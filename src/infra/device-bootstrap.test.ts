@@ -1,17 +1,15 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createTrackedTempDirs } from "../test-utils/tracked-temp-dirs.js";
-import {
-  clearDeviceBootstrapTokens,
-  DEVICE_BOOTSTRAP_TOKEN_TTL_MS,
-  issueDeviceBootstrapToken,
-  revokeDeviceBootstrapToken,
-  verifyDeviceBootstrapToken,
-} from "./device-bootstrap.js";
 
 const tempDirs = createTrackedTempDirs();
 const createTempDir = () => tempDirs.make("openclaw-device-bootstrap-test-");
+let clearDeviceBootstrapTokens: typeof import("./device-bootstrap.js").clearDeviceBootstrapTokens;
+let DEVICE_BOOTSTRAP_TOKEN_TTL_MS: typeof import("./device-bootstrap.js").DEVICE_BOOTSTRAP_TOKEN_TTL_MS;
+let issueDeviceBootstrapToken: typeof import("./device-bootstrap.js").issueDeviceBootstrapToken;
+let revokeDeviceBootstrapToken: typeof import("./device-bootstrap.js").revokeDeviceBootstrapToken;
+let verifyDeviceBootstrapToken: typeof import("./device-bootstrap.js").verifyDeviceBootstrapToken;
 
 function resolveBootstrapPath(baseDir: string): string {
   return path.join(baseDir, "devices", "bootstrap.json");
@@ -36,6 +34,19 @@ async function verifyBootstrapToken(
 afterEach(async () => {
   vi.useRealTimers();
   await tempDirs.cleanup();
+});
+
+beforeEach(async () => {
+  vi.resetModules();
+  const actualModule =
+    await vi.importActual<typeof import("./device-bootstrap.js")>("./device-bootstrap.js");
+  ({
+    clearDeviceBootstrapTokens,
+    DEVICE_BOOTSTRAP_TOKEN_TTL_MS,
+    issueDeviceBootstrapToken,
+    revokeDeviceBootstrapToken,
+    verifyDeviceBootstrapToken,
+  } = actualModule);
 });
 
 describe("device bootstrap tokens", () => {

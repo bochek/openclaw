@@ -28,7 +28,12 @@ export function createGatewayCloseHandler(params: {
   transcriptUnsub: (() => void) | null;
   lifecycleUnsub: (() => void) | null;
   chatRunState: { clear: () => void };
-  clients: Set<{ socket: { close: (code: number, reason: string) => void } }>;
+  clients: Set<{
+    socket: {
+      close: (code: number, reason: string) => void;
+      terminate?: () => void;
+    };
+  }>;
   configReloader: { stop: () => Promise<void> };
   wss: WebSocketServer;
   httpServer: HttpServer;
@@ -129,6 +134,11 @@ export function createGatewayCloseHandler(params: {
         } catch {
           /* ignore */
         }
+        try {
+          c.socket.terminate?.();
+        } catch {
+          /* ignore */
+        }
       }
       params.clients.clear();
       await params.configReloader.stop().catch(() => {});
@@ -140,13 +150,13 @@ export function createGatewayCloseHandler(params: {
       for (const server of servers) {
         const httpServer = server as HttpServer & {
           closeIdleConnections?: () => void;
+          closeAllConnections?: () => void;
         };
-        if (typeof httpServer.closeIdleConnections === "function") {
-          httpServer.closeIdleConnections();
-        }
-        await new Promise<void>((resolve, reject) =>
-          httpServer.close((err) => (err ? reject(err) : resolve())),
-        );
+        await new Promise<void>((resolve, reject) => {
+          httpServer.close((err) => (err ? reject(err) : resolve()));
+          httpServer.closeIdleConnections?.();
+          httpServer.closeAllConnections?.();
+        });
       }
     } finally {
       try {

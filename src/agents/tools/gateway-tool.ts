@@ -21,6 +21,18 @@ const log = createSubsystemLogger("gateway-tool");
 const DEFAULT_UPDATE_TIMEOUT_MS = 20 * 60_000;
 const PROTECTED_GATEWAY_CONFIG_PATHS = ["tools.exec.ask", "tools.exec.security"] as const;
 
+type GatewayToolDeps = {
+  callGatewayTool: typeof callGatewayTool;
+  readGatewayCallOptions: typeof readGatewayCallOptions;
+};
+
+const defaultGatewayToolDeps: GatewayToolDeps = {
+  callGatewayTool,
+  readGatewayCallOptions,
+};
+
+let gatewayToolDeps: GatewayToolDeps = defaultGatewayToolDeps;
+
 function resolveBaseHashFromSnapshot(snapshot: unknown): string | undefined {
   if (!snapshot || typeof snapshot !== "object") {
     return undefined;
@@ -199,7 +211,7 @@ export function createGatewayTool(opts?: {
         return jsonResult(scheduled);
       }
 
-      const gatewayOpts = readGatewayCallOptions(params);
+      const gatewayOpts = gatewayToolDeps.readGatewayCallOptions(params);
 
       const resolveGatewayWriteMeta = (): {
         sessionKey: string | undefined;
@@ -228,7 +240,7 @@ export function createGatewayTool(opts?: {
         restartDelayMs: number | undefined;
       }> => {
         const raw = readStringParam(params, "raw", { required: true });
-        const snapshot = await callGatewayTool("config.get", gatewayOpts, {});
+        const snapshot = await gatewayToolDeps.callGatewayTool("config.get", gatewayOpts, {});
         // Always fetch config.get so we can compare protected exec settings
         // against the current snapshot before forwarding any write RPC.
         const snapshotConfig = getSnapshotConfig(snapshot);
@@ -243,7 +255,7 @@ export function createGatewayTool(opts?: {
       };
 
       if (action === "config.get") {
-        const result = await callGatewayTool("config.get", gatewayOpts, {});
+        const result = await gatewayToolDeps.callGatewayTool("config.get", gatewayOpts, {});
         return jsonResult({ ok: true, result });
       }
       if (action === "config.schema.lookup") {
@@ -251,7 +263,9 @@ export function createGatewayTool(opts?: {
           required: true,
           label: "path",
         });
-        const result = await callGatewayTool("config.schema.lookup", gatewayOpts, { path });
+        const result = await gatewayToolDeps.callGatewayTool("config.schema.lookup", gatewayOpts, {
+          path,
+        });
         return jsonResult({ ok: true, result });
       }
       if (action === "config.apply") {
@@ -262,7 +276,7 @@ export function createGatewayTool(opts?: {
           currentConfig: snapshotConfig,
           raw,
         });
-        const result = await callGatewayTool("config.apply", gatewayOpts, {
+        const result = await gatewayToolDeps.callGatewayTool("config.apply", gatewayOpts, {
           raw,
           baseHash,
           sessionKey,
@@ -279,7 +293,7 @@ export function createGatewayTool(opts?: {
           currentConfig: snapshotConfig,
           raw,
         });
-        const result = await callGatewayTool("config.patch", gatewayOpts, {
+        const result = await gatewayToolDeps.callGatewayTool("config.patch", gatewayOpts, {
           raw,
           baseHash,
           sessionKey,
@@ -295,7 +309,7 @@ export function createGatewayTool(opts?: {
           ...gatewayOpts,
           timeoutMs: updateTimeoutMs,
         };
-        const result = await callGatewayTool("update.run", updateGatewayOpts, {
+        const result = await gatewayToolDeps.callGatewayTool("update.run", updateGatewayOpts, {
           sessionKey,
           note,
           restartDelayMs,
@@ -308,3 +322,14 @@ export function createGatewayTool(opts?: {
     },
   };
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<GatewayToolDeps>) {
+    gatewayToolDeps = overrides
+      ? {
+          ...defaultGatewayToolDeps,
+          ...overrides,
+        }
+      : defaultGatewayToolDeps;
+  },
+};

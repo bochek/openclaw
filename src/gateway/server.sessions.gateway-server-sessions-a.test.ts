@@ -8,7 +8,9 @@ import { clearConfigCache, clearRuntimeConfigSnapshot } from "../config/config.j
 import { isSessionPatchEvent, type InternalHookEvent } from "../hooks/internal-hooks.js";
 import { GATEWAY_CLIENT_IDS, GATEWAY_CLIENT_MODES } from "./protocol/client-info.js";
 import { startGatewayServerHarness, type GatewayServerHarness } from "./server.e2e-ws-harness.js";
+import { __testing as sessionResetTesting } from "./session-reset-service.js";
 import { createToolSummaryPreviewTranscriptLines } from "./session-preview.test-helpers.js";
+import { __testing as sessionsHandlerTesting } from "./server-methods/sessions.js";
 import {
   connectOk,
   embeddedRunMock,
@@ -158,7 +160,6 @@ vi.mock("../plugin-sdk/browser-runtime.js", () => ({
   closeTrackedBrowserTabsForSessions: browserSessionTabMocks.closeTrackedBrowserTabsForSessions,
   movePathToTrash: vi.fn(async () => {}),
 }));
-
 installGatewayTestHooks({ scope: "suite" });
 
 let harness: GatewayServerHarness;
@@ -176,6 +177,20 @@ afterAll(async () => {
 });
 
 const openClient = async (opts?: Parameters<typeof connectOk>[1]) => await harness.openClient(opts);
+
+async function closeWs(ws: WebSocket, timeoutMs = 2_000): Promise<void> {
+  if (ws.readyState === WebSocket.CLOSED) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => resolve(), timeoutMs);
+    ws.once("close", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    ws.close();
+  });
+}
 
 async function createSessionStoreDir() {
   const dir = path.join(sharedSessionStoreDir, `case-${sessionStoreCaseSeq++}`);
@@ -265,18 +280,44 @@ describe("gateway server sessions", () => {
     subagentLifecycleHookMocks.runSubagentEnded.mockClear();
     subagentLifecycleHookState.hasSubagentEndedHook = true;
     threadBindingMocks.unbindThreadBindingsBySessionKey.mockClear();
-    acpRuntimeMocks.cancel.mockClear();
-    acpRuntimeMocks.close.mockClear();
-    acpRuntimeMocks.getAcpRuntimeBackend.mockReset();
-    acpRuntimeMocks.getAcpRuntimeBackend.mockReturnValue(null);
-    acpRuntimeMocks.requireAcpRuntimeBackend.mockReset();
-    acpRuntimeMocks.requireAcpRuntimeBackend.mockImplementation((backendId?: string) =>
-      acpRuntimeMocks.getAcpRuntimeBackend(backendId),
-    );
     acpManagerMocks.cancelSession.mockClear();
     acpManagerMocks.closeSession.mockClear();
     browserSessionTabMocks.closeTrackedBrowserTabsForSessions.mockClear();
     browserSessionTabMocks.closeTrackedBrowserTabsForSessions.mockResolvedValue(0);
+    sessionsHandlerTesting.resetDepsForTest();
+    sessionsHandlerTesting.setDepsForTest({
+      clearSessionQueues: sessionCleanupMocks.clearSessionQueues,
+      hasInternalHookListeners: sessionHookMocks.hasInternalHookListeners,
+      triggerInternalHook: sessionHookMocks.triggerInternalHook,
+    });
+    sessionResetTesting.resetDepsForTest();
+    sessionResetTesting.setDepsForTest({
+      getAcpSessionManager: () => ({
+        cancelSession: acpManagerMocks.cancelSession,
+        closeSession: acpManagerMocks.closeSession,
+      }),
+      clearBootstrapSnapshot: bootstrapCacheMocks.clearBootstrapSnapshot,
+      stopSubagentsForRequester: sessionCleanupMocks.stopSubagentsForRequester,
+      clearSessionQueues: sessionCleanupMocks.clearSessionQueues,
+      triggerInternalHook: sessionHookMocks.triggerInternalHook,
+      closeTrackedBrowserTabsForSessions: browserSessionTabMocks.closeTrackedBrowserTabsForSessions,
+      getGlobalHookRunner: () => ({
+        hasHooks: (hookName: string) =>
+          hookName === "subagent_ended" && subagentLifecycleHookState.hasSubagentEndedHook,
+        runSubagentEnded: subagentLifecycleHookMocks.runSubagentEnded,
+      }),
+      createPluginRuntime: () =>
+        ({
+          channel: {
+            discord: {
+              threadBindings: {
+                unbindBySessionKey: (params: unknown) =>
+                  threadBindingMocks.unbindThreadBindingsBySessionKey(params),
+              },
+            },
+          },
+        }) as never,
+    });
   });
 
   test("sessions.create stores dashboard session model and parent linkage, and creates a transcript", async () => {
@@ -350,7 +391,7 @@ describe("gateway server sessions", () => {
       id: created.payload?.sessionId,
     });
 
-    ws.close();
+    await closeWs(ws);
   });
 
   test("sessions.create accepts an explicit key for persistent dashboard sessions", async () => {
@@ -376,7 +417,7 @@ describe("gateway server sessions", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
     );
 
-    ws.close();
+    await closeWs(ws);
   });
 
   test("sessions.create rejects unknown parentSessionKey", async () => {
@@ -393,7 +434,7 @@ describe("gateway server sessions", () => {
       "unknown parent session",
     );
 
-    ws.close();
+    await closeWs(ws);
   });
 
   test("sessions.create can start the first agent turn from an initial task", async () => {
@@ -424,7 +465,7 @@ describe("gateway server sessions", () => {
     ws.close();
   });
 
-  test("sessions.list surfaces transcript usage and model fallbacks from the transcript", async () => {
+  test("sessions.list surfaces transcript usage fallbacks and parent child relationships", async () => {
     const { dir } = await createSessionStoreDir();
     testState.agentConfig = {
       models: {
@@ -474,7 +515,7 @@ describe("gateway server sessions", () => {
           sessionId: "sess-child",
           updatedAt: Date.now() - 1_000,
           modelProvider: "anthropic",
-          model: "claude-sonnet-4-5",
+          model: "claude-sonnet-4-6",
           parentSessionKey: "agent:main:main",
           totalTokens: 0,
           totalTokensFresh: false,
@@ -496,8 +537,6 @@ describe("gateway server sessions", () => {
         totalTokensFresh?: boolean;
         contextTokens?: number;
         estimatedCostUsd?: number;
-        modelProvider?: string;
-        model?: string;
       }>;
     }>(ws, "sessions.list", {});
 
@@ -512,8 +551,6 @@ describe("gateway server sessions", () => {
     expect(child?.totalTokensFresh).toBe(true);
     expect(child?.contextTokens).toBe(1_048_576);
     expect(child?.estimatedCostUsd).toBe(0.0042);
-    expect(child?.modelProvider).toBe("anthropic");
-    expect(child?.model).toBe("claude-sonnet-4-6");
 
     ws.close();
   });

@@ -5,39 +5,13 @@ import type { Api, Model } from "@mariozechner/pi-ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { withEnvAsync } from "../test-utils/env.js";
 import { clearRuntimeAuthProfileStoreSnapshots, ensureAuthProfileStore } from "./auth-profiles.js";
+import { __testing as modelAuthTesting } from "./model-auth.js";
 import {
   getApiKeyForModel,
   hasAvailableAuthForProvider,
   resolveApiKeyForProvider,
   resolveEnvApiKey,
 } from "./model-auth.js";
-
-vi.mock("../plugins/provider-runtime.js", () => ({
-  buildProviderMissingAuthMessageWithPlugin: () => undefined,
-  formatProviderAuthProfileApiKeyWithPlugin: async () => undefined,
-  refreshProviderOAuthCredentialWithPlugin: async () => null,
-  resolveProviderSyntheticAuthWithPlugin: (params: {
-    provider: string;
-    context: { providerConfig?: { api?: string; baseUrl?: string; models?: unknown[] } };
-  }) => {
-    if (params.provider !== "ollama") {
-      return undefined;
-    }
-    const providerConfig = params.context.providerConfig;
-    const hasApiConfig =
-      Boolean(providerConfig?.api?.trim()) ||
-      Boolean(providerConfig?.baseUrl?.trim()) ||
-      (Array.isArray(providerConfig?.models) && providerConfig.models.length > 0);
-    if (!hasApiConfig) {
-      return undefined;
-    }
-    return {
-      apiKey: "ollama-local",
-      source: "models.providers.ollama (synthetic local key)",
-      mode: "api-key" as const,
-    };
-  },
-}));
 
 vi.mock("./cli-credentials.js", () => ({
   readCodexCliCredentialsCached: () => null,
@@ -46,10 +20,45 @@ vi.mock("./cli-credentials.js", () => ({
 
 beforeEach(() => {
   clearRuntimeAuthProfileStoreSnapshots();
+  modelAuthTesting.setDepsForTest({
+    buildProviderMissingAuthMessageWithPlugin: (params: {
+      provider: string;
+      context: { listProfileIds: (providerId: string) => string[] };
+    }) => {
+      if (params.provider !== "openai") {
+        return undefined;
+      }
+      return params.context.listProfileIds("openai-codex").length > 0
+        ? 'No API key found for provider "openai". Use openai-codex/gpt-5.4.'
+        : undefined;
+    },
+    resolveProviderSyntheticAuthWithPlugin: (params: {
+      provider: string;
+      context: { providerConfig?: { api?: string; baseUrl?: string; models?: unknown[] } };
+    }) => {
+      if (params.provider !== "ollama") {
+        return undefined;
+      }
+      const providerConfig = params.context.providerConfig;
+      const hasApiConfig =
+        Boolean(providerConfig?.api?.trim()) ||
+        Boolean(providerConfig?.baseUrl?.trim()) ||
+        (Array.isArray(providerConfig?.models) && providerConfig.models.length > 0);
+      if (!hasApiConfig) {
+        return undefined;
+      }
+      return {
+        apiKey: "ollama-local",
+        source: "models.providers.ollama (synthetic local key)",
+        mode: "api-key" as const,
+      };
+    },
+  });
 });
 
 afterEach(() => {
   clearRuntimeAuthProfileStoreSnapshots();
+  modelAuthTesting.setDepsForTest();
 });
 
 const envVar = (...parts: string[]) => parts.join("_");

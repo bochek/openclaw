@@ -25,39 +25,9 @@ vi.mock("../plugins/runtime/runtime-whatsapp-boundary.js", async (importOriginal
   return await importOriginal<typeof import("../plugins/runtime/runtime-whatsapp-boundary.js")>();
 });
 
-vi.mock("./send-runtime/whatsapp.js", () => {
-  moduleLoads.whatsapp();
-  return { runtimeSend: { sendMessage: sendFns.whatsapp } };
-});
-
-vi.mock("./send-runtime/telegram.js", () => {
-  moduleLoads.telegram();
-  return { runtimeSend: { sendMessage: sendFns.telegram } };
-});
-
-vi.mock("./send-runtime/discord.js", () => {
-  moduleLoads.discord();
-  return { runtimeSend: { sendMessage: sendFns.discord } };
-});
-
-vi.mock("./send-runtime/slack.js", () => {
-  moduleLoads.slack();
-  return { runtimeSend: { sendMessage: sendFns.slack } };
-});
-
-vi.mock("./send-runtime/signal.js", () => {
-  moduleLoads.signal();
-  return { runtimeSend: { sendMessage: sendFns.signal } };
-});
-
-vi.mock("./send-runtime/imessage.js", () => {
-  moduleLoads.imessage();
-  return { runtimeSend: { sendMessage: sendFns.imessage } };
-});
-
 describe("createDefaultDeps", () => {
-  async function loadCreateDefaultDeps() {
-    return (await import("./deps.js")).createDefaultDeps;
+  async function loadDepsModule() {
+    return await import("./deps.js");
   }
 
   function expectUnusedModulesNotLoaded(exclude: keyof typeof moduleLoads): void {
@@ -72,11 +42,35 @@ describe("createDefaultDeps", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.resetModules();
   });
 
   it("does not load provider modules until a dependency is used", async () => {
-    const createDefaultDeps = await loadCreateDefaultDeps();
+    const { createDefaultDeps, __testing } = await loadDepsModule();
+    __testing.resetRuntimeSendLoadersForTest();
+    __testing.setRuntimeSendLoaderForTest("whatsapp", async () => {
+      moduleLoads.whatsapp();
+      return { runtimeSend: { sendMessage: sendFns.whatsapp } };
+    });
+    __testing.setRuntimeSendLoaderForTest("telegram", async () => {
+      moduleLoads.telegram();
+      return { runtimeSend: { sendMessage: sendFns.telegram } };
+    });
+    __testing.setRuntimeSendLoaderForTest("discord", async () => {
+      moduleLoads.discord();
+      return { runtimeSend: { sendMessage: sendFns.discord } };
+    });
+    __testing.setRuntimeSendLoaderForTest("slack", async () => {
+      moduleLoads.slack();
+      return { runtimeSend: { sendMessage: sendFns.slack } };
+    });
+    __testing.setRuntimeSendLoaderForTest("signal", async () => {
+      moduleLoads.signal();
+      return { runtimeSend: { sendMessage: sendFns.signal } };
+    });
+    __testing.setRuntimeSendLoaderForTest("imessage", async () => {
+      moduleLoads.imessage();
+      return { runtimeSend: { sendMessage: sendFns.imessage } };
+    });
     const deps = createDefaultDeps();
 
     expect(moduleLoads.whatsapp).not.toHaveBeenCalled();
@@ -95,7 +89,12 @@ describe("createDefaultDeps", () => {
   });
 
   it("reuses module cache after first dynamic import", async () => {
-    const createDefaultDeps = await loadCreateDefaultDeps();
+    const { createDefaultDeps, __testing } = await loadDepsModule();
+    __testing.resetRuntimeSendLoadersForTest();
+    __testing.setRuntimeSendLoaderForTest("discord", async () => {
+      moduleLoads.discord();
+      return { runtimeSend: { sendMessage: sendFns.discord } };
+    });
     const deps = createDefaultDeps();
     const sendDiscord = deps["discord"] as (...args: unknown[]) => Promise<unknown>;
 
@@ -107,7 +106,8 @@ describe("createDefaultDeps", () => {
   });
 
   it("does not import the whatsapp runtime boundary on deps module load", async () => {
-    await import("./deps.js");
+    const { __testing } = await loadDepsModule();
+    __testing.resetRuntimeSendLoadersForTest();
 
     expect(whatsappBoundaryLoads).not.toHaveBeenCalled();
   });

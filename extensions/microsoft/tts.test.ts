@@ -2,8 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-let edgeTTS: typeof import("./tts.js").edgeTTS;
+import { edgeTTS } from "./tts.js";
 
 let mockTtsPromise = vi.fn<(text: string, filePath: string) => Promise<void>>();
 
@@ -25,16 +24,8 @@ const baseEdgeConfig = {
 describe("edgeTTS empty audio validation", () => {
   let tempDir: string | undefined;
 
-  beforeEach(async () => {
-    vi.resetModules();
-    vi.doMock("node-edge-tts", () => ({
-      EdgeTTS: class {
-        ttsPromise(text: string, filePath: string) {
-          return mockTtsPromise(text, filePath);
-        }
-      },
-    }));
-    ({ edgeTTS } = await import("./tts.js"));
+  beforeEach(() => {
+    mockTtsPromise = vi.fn();
   });
 
   afterEach(() => {

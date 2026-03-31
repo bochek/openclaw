@@ -1,32 +1,38 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { __testing as supervisorTesting } from "../process/supervisor/index.js";
 import { listRunningSessions, resetProcessRegistryForTests } from "./bash-process-registry.js";
 import { createExecTool } from "./bash-tools.exec.js";
 
-const { supervisorSpawnMock } = vi.hoisted(() => ({
-  supervisorSpawnMock: vi.fn(),
-}));
-
-const makeSupervisor = () => {
-  const noop = vi.fn();
-  return {
-    spawn: (...args: unknown[]) => supervisorSpawnMock(...args),
-    cancel: noop,
-    cancelScope: noop,
-    reconcileOrphans: noop,
-    getRecord: noop,
+const { supervisorSpawnMock, makeSupervisor } = vi.hoisted(() => {
+  const supervisorSpawnMock = vi.fn();
+  const makeSupervisor = () => {
+    const noop = vi.fn();
+    return {
+      spawn: (...args: unknown[]) => supervisorSpawnMock(...args),
+      cancel: noop,
+      cancelScope: noop,
+      reconcileOrphans: noop,
+      getRecord: noop,
+    };
   };
-};
+  return {
+    supervisorSpawnMock,
+    makeSupervisor,
+  };
+});
 
-vi.mock("../process/supervisor/index.js", () => ({
-  getProcessSupervisor: () => makeSupervisor(),
-}));
+beforeEach(() => {
+  supervisorTesting.setProcessSupervisorForTest(makeSupervisor());
+});
 
 afterEach(() => {
+  supervisorTesting.setProcessSupervisorForTest();
   resetProcessRegistryForTests();
   vi.clearAllMocks();
 });
 
 test("exec cleans session state when PTY fallback spawn also fails", async () => {
+  const baselineCount = listRunningSessions().length;
   supervisorSpawnMock
     .mockRejectedValueOnce(new Error("pty spawn failed"))
     .mockRejectedValueOnce(new Error("child fallback failed"));
@@ -45,5 +51,5 @@ test("exec cleans session state when PTY fallback spawn also fails", async () =>
     }),
   ).rejects.toThrow("child fallback failed");
 
-  expect(listRunningSessions()).toHaveLength(0);
+  expect(listRunningSessions()).toHaveLength(baselineCount);
 });

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createQuickReplyItems } from "./quick-replies.js";
 
 const {
   pushMessageMock,
@@ -43,39 +44,10 @@ const {
   };
 });
 
-vi.mock("@line/bot-sdk", () => ({
-  messagingApi: { MessagingApiClient: MessagingApiClientMock },
-}));
-
-vi.mock("openclaw/plugin-sdk/config-runtime", () => ({
-  loadConfig: loadConfigMock,
-}));
-
-vi.mock("./accounts.js", () => ({
-  resolveLineAccount: resolveLineAccountMock,
-}));
-
-vi.mock("./channel-access-token.js", () => ({
-  resolveLineChannelAccessToken: resolveLineChannelAccessTokenMock,
-}));
-
-vi.mock("openclaw/plugin-sdk/channel-runtime", () => ({
-  recordChannelActivity: recordChannelActivityMock,
-}));
-
-vi.mock("openclaw/plugin-sdk/runtime-env", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/runtime-env")>();
-  return {
-    ...actual,
-    logVerbose: logVerboseMock,
-  };
-});
-
-let sendModule: typeof import("./send.js");
+const sendModule = await import("./send.js");
 
 describe("LINE send helpers", () => {
-  beforeEach(async () => {
-    vi.resetModules();
+  beforeEach(() => {
     pushMessageMock.mockReset();
     replyMessageMock.mockReset();
     showLoadingAnimationMock.mockReset();
@@ -101,16 +73,28 @@ describe("LINE send helpers", () => {
     pushMessageMock.mockResolvedValue({});
     replyMessageMock.mockResolvedValue({});
     showLoadingAnimationMock.mockResolvedValue({});
-    sendModule = await import("./send.js");
+
+    sendModule.__resetLineSendRuntimeForTest();
+    sendModule.__setLineSendRuntimeForTest({
+      loadConfig: () => loadConfigMock(),
+      resolveLineAccount: (params) => resolveLineAccountMock(params),
+      resolveLineChannelAccessToken: (override, account) =>
+        resolveLineChannelAccessTokenMock(override, account),
+      recordChannelActivity: (params) => recordChannelActivityMock(params),
+      logVerbose: (message) => logVerboseMock(message),
+      createMessagingApiClient: (channelAccessToken) =>
+        new MessagingApiClientMock({ channelAccessToken } as never) as never,
+    });
   });
 
   afterEach(() => {
     vi.useRealTimers();
+    sendModule.__resetLineSendRuntimeForTest();
   });
 
   it("limits quick reply items to 13", () => {
     const labels = Array.from({ length: 20 }, (_, index) => `Option ${index + 1}`);
-    const quickReply = sendModule.createQuickReplyItems(labels);
+    const quickReply = createQuickReplyItems(labels);
 
     expect(quickReply.items).toHaveLength(13);
   });

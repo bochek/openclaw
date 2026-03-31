@@ -71,24 +71,30 @@ let cliLoadedConfig: Record<string, unknown> = {
   },
 };
 
-vi.mock("../../config/config.js", () => ({
-  createConfigIO: ({ configPath }: { configPath: string }) => {
-    const isDaemon = configPath.includes("/openclaw-daemon/");
-    return {
-      readConfigFileSnapshot: async () => ({
-        path: configPath,
-        exists: true,
-        valid: true,
-        issues: [],
-      }),
-      loadConfig: () => (isDaemon ? daemonLoadedConfig : cliLoadedConfig),
-    };
-  },
-  loadConfig: () => cliLoadedConfig,
-  resolveConfigPath: (env: NodeJS.ProcessEnv, stateDir: string) => resolveConfigPath(env, stateDir),
-  resolveGatewayPort: (cfg?: unknown, env?: unknown) => resolveGatewayPort(cfg, env),
-  resolveStateDir: (env: NodeJS.ProcessEnv) => resolveStateDir(env),
-}));
+vi.mock("../../config/config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../config/config.js")>();
+  return {
+    ...actual,
+    createConfigIO: ({ configPath }: { configPath: string }) => {
+      const isDaemon = configPath.includes("/openclaw-daemon/");
+      return {
+        readConfigFileSnapshot: async () => ({
+          path: configPath,
+          exists: true,
+          valid: true,
+          issues: [],
+        }),
+        loadConfig: () => (isDaemon ? daemonLoadedConfig : cliLoadedConfig),
+      };
+    },
+    loadConfig: () => cliLoadedConfig,
+    readBestEffortConfig: async () => cliLoadedConfig,
+    resolveConfigPath: (env: NodeJS.ProcessEnv, stateDir: string) =>
+      resolveConfigPath(env, stateDir),
+    resolveGatewayPort: (cfg?: unknown, env?: unknown) => resolveGatewayPort(cfg, env),
+    resolveStateDir: (env: NodeJS.ProcessEnv) => resolveStateDir(env),
+  };
+});
 
 vi.mock("../../daemon/diagnostics.js", () => ({
   readLastGatewayErrorLine: (env: NodeJS.ProcessEnv) => readLastGatewayErrorLine(env),

@@ -55,13 +55,22 @@ const SUBAGENT_REPLY_HISTORY_LIMIT = 50;
 const steerRateLimit = new Map<string, number>();
 
 type GatewayCaller = typeof callGateway;
+type LoadSessionStoreFn = typeof loadSessionStore;
+type ResolveStorePathFn = typeof resolveStorePath;
+type UpdateSessionStoreFn = typeof updateSessionStore;
 
 const defaultSubagentControlDeps = {
   callGateway,
+  loadSessionStore,
+  resolveStorePath,
+  updateSessionStore,
 };
 
 let subagentControlDeps: {
   callGateway: GatewayCaller;
+  loadSessionStore: LoadSessionStoreFn;
+  resolveStorePath: ResolveStorePathFn;
+  updateSessionStore: UpdateSessionStoreFn;
 } = defaultSubagentControlDeps;
 
 export type SessionEntryResolution = {
@@ -106,7 +115,7 @@ function resolveStorePathForKey(
   key: string,
   parsed?: ParsedAgentSessionKey | null,
 ) {
-  return resolveStorePath(cfg.session?.store, {
+  return subagentControlDeps.resolveStorePath(cfg.session?.store, {
     agentId: parsed?.agentId,
   });
 }
@@ -120,7 +129,7 @@ export function resolveSessionEntryForKey(params: {
   const storePath = resolveStorePathForKey(params.cfg, params.key, parsed);
   let store = params.cache.get(storePath);
   if (!store) {
-    store = loadSessionStore(storePath);
+    store = subagentControlDeps.loadSessionStore(storePath);
     params.cache.set(storePath, store);
   }
   return {
@@ -425,7 +434,7 @@ async function killSubagentRun(params: {
   }
   if (resolved.entry) {
     try {
-      await updateSessionStore(resolved.storePath, (store) => {
+      await subagentControlDeps.updateSessionStore(resolved.storePath, (store) => {
         const current = store[childSessionKey];
         if (!current) {
           return;
@@ -890,8 +899,10 @@ export async function sendControlledSubagentMessage(params: {
 
   const targetSessionKey = params.entry.childSessionKey;
   const parsed = parseAgentSessionKey(targetSessionKey);
-  const storePath = resolveStorePath(params.cfg.session?.store, { agentId: parsed?.agentId });
-  const store = loadSessionStore(storePath);
+  const storePath = subagentControlDeps.resolveStorePath(params.cfg.session?.store, {
+    agentId: parsed?.agentId,
+  });
+  const store = subagentControlDeps.loadSessionStore(storePath);
   const targetSessionEntry = store[targetSessionKey];
   const targetSessionId =
     typeof targetSessionEntry?.sessionId === "string" && targetSessionEntry.sessionId.trim()
@@ -984,7 +995,14 @@ export function resolveControlledSubagentTarget(
 }
 
 export const __testing = {
-  setDepsForTest(overrides?: Partial<{ callGateway: GatewayCaller }>) {
+  setDepsForTest(
+    overrides?: Partial<{
+      callGateway: GatewayCaller;
+      loadSessionStore: LoadSessionStoreFn;
+      resolveStorePath: ResolveStorePathFn;
+      updateSessionStore: UpdateSessionStoreFn;
+    }>,
+  ) {
     subagentControlDeps = overrides
       ? {
           ...defaultSubagentControlDeps,

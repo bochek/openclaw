@@ -37,6 +37,10 @@ import type {
   ProviderWrapStreamFnContext,
 } from "./types.js";
 
+let resolveOwningPluginIdsForProviderForRuntime = resolveOwningPluginIdsForProvider;
+let resolveCatalogHookProviderPluginIdsForRuntime = resolveCatalogHookProviderPluginIds;
+let resolvePluginProvidersForRuntime = resolvePluginProviders;
+
 function matchesProviderId(provider: ProviderPlugin, providerId: string): boolean {
   const normalized = normalizeProviderId(providerId);
   if (!normalized) {
@@ -113,6 +117,28 @@ export function resetProviderRuntimeHookCacheForTest(): void {
   clearProviderRuntimeHookCache();
 }
 
+export function __setProviderRuntimeResolversForTest(params: {
+  resolveOwningPluginIdsForProvider?: typeof resolveOwningPluginIdsForProvider;
+  resolveCatalogHookProviderPluginIds?: typeof resolveCatalogHookProviderPluginIds;
+  resolvePluginProviders?: typeof resolvePluginProviders;
+}): void {
+  if (params.resolveOwningPluginIdsForProvider) {
+    resolveOwningPluginIdsForProviderForRuntime = params.resolveOwningPluginIdsForProvider;
+  }
+  if (params.resolveCatalogHookProviderPluginIds) {
+    resolveCatalogHookProviderPluginIdsForRuntime = params.resolveCatalogHookProviderPluginIds;
+  }
+  if (params.resolvePluginProviders) {
+    resolvePluginProvidersForRuntime = params.resolvePluginProviders;
+  }
+}
+
+export function __resetProviderRuntimeResolversForTest(): void {
+  resolveOwningPluginIdsForProviderForRuntime = resolveOwningPluginIdsForProvider;
+  resolveCatalogHookProviderPluginIdsForRuntime = resolveCatalogHookProviderPluginIds;
+  resolvePluginProvidersForRuntime = resolvePluginProviders;
+}
+
 function resolveProviderPluginsForHooks(params: {
   config?: OpenClawConfig;
   workspaceDir?: string;
@@ -134,7 +160,7 @@ function resolveProviderPluginsForHooks(params: {
   if (cached) {
     return cached;
   }
-  const resolved = resolvePluginProviders({
+  const resolved = resolvePluginProvidersForRuntime({
     ...params,
     env,
     activate: false,
@@ -151,7 +177,7 @@ function resolveProviderPluginsForCatalogHooks(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
 }): ProviderPlugin[] {
-  const onlyPluginIds = resolveCatalogHookProviderPluginIds({
+  const onlyPluginIds = resolveCatalogHookProviderPluginIdsForRuntime({
     config: params.config,
     workspaceDir: params.workspaceDir,
     env: params.env,
@@ -171,7 +197,7 @@ export function resolveProviderRuntimePlugin(params: {
   workspaceDir?: string;
   env?: NodeJS.ProcessEnv;
 }): ProviderPlugin | undefined {
-  const owningPluginIds = resolveOwningPluginIdsForProvider({
+  const owningPluginIds = resolveOwningPluginIdsForProviderForRuntime({
     provider: params.provider,
     config: params.config,
     workspaceDir: params.workspaceDir,
@@ -298,41 +324,6 @@ export function applyProviderResolvedModelCompatWithPlugins(params: {
   return changed ? nextModel : undefined;
 }
 
-export function applyProviderResolvedTransportWithPlugin(params: {
-  provider: string;
-  config?: OpenClawConfig;
-  workspaceDir?: string;
-  env?: NodeJS.ProcessEnv;
-  context: ProviderNormalizeResolvedModelContext;
-}): ProviderRuntimeModel | undefined {
-  const normalized = normalizeProviderTransportWithPlugin({
-    provider: params.provider,
-    config: params.config,
-    workspaceDir: params.workspaceDir,
-    env: params.env,
-    context: {
-      provider: params.context.provider,
-      api: params.context.model.api,
-      baseUrl: params.context.model.baseUrl,
-    },
-  });
-  if (!normalized) {
-    return undefined;
-  }
-
-  const nextApi = normalized.api ?? params.context.model.api;
-  const nextBaseUrl = normalized.baseUrl ?? params.context.model.baseUrl;
-  if (nextApi === params.context.model.api && nextBaseUrl === params.context.model.baseUrl) {
-    return undefined;
-  }
-
-  return {
-    ...params.context.model,
-    api: nextApi as ProviderRuntimeModel["api"],
-    baseUrl: nextBaseUrl,
-  };
-}
-
 function resolveProviderHookPlugin(params: {
   provider: string;
   config?: OpenClawConfig;
@@ -369,12 +360,9 @@ export function normalizeProviderTransportWithPlugin(params: {
   env?: NodeJS.ProcessEnv;
   context: ProviderNormalizeTransportContext;
 }): { api?: string | null; baseUrl?: string } | undefined {
-  const hasTransportChange = (normalized: { api?: string | null; baseUrl?: string }) =>
-    (normalized.api ?? params.context.api) !== params.context.api ||
-    (normalized.baseUrl ?? params.context.baseUrl) !== params.context.baseUrl;
   const matchedPlugin = resolveProviderHookPlugin(params);
   const normalizedMatched = matchedPlugin?.normalizeTransport?.(params.context);
-  if (normalizedMatched && hasTransportChange(normalizedMatched)) {
+  if (normalizedMatched) {
     return normalizedMatched;
   }
 
@@ -383,7 +371,7 @@ export function normalizeProviderTransportWithPlugin(params: {
       continue;
     }
     const normalized = candidate.normalizeTransport(params.context);
-    if (normalized && hasTransportChange(normalized)) {
+    if (normalized) {
       return normalized;
     }
   }

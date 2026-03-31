@@ -19,6 +19,25 @@ let didRunDoctorConfigFlow = false;
 let configSnapshotPromise: Promise<Awaited<ReturnType<typeof readConfigFileSnapshot>>> | null =
   null;
 
+type ConfigGuardDeps = {
+  readConfigFileSnapshot: typeof readConfigFileSnapshot;
+  runDoctorConfigPreflight: (
+    params: {
+      migrateState: boolean;
+      migrateLegacyConfig: boolean;
+      invalidConfigNote: boolean;
+    },
+  ) => Promise<{ snapshot: Awaited<ReturnType<typeof readConfigFileSnapshot>> }>;
+};
+
+const defaultConfigGuardDeps: ConfigGuardDeps = {
+  readConfigFileSnapshot,
+  runDoctorConfigPreflight: async (params) =>
+    (await import("../../commands/doctor-config-preflight.js")).runDoctorConfigPreflight(params),
+};
+
+let configGuardDeps: ConfigGuardDeps = defaultConfigGuardDeps;
+
 function resetConfigGuardStateForTests() {
   didRunDoctorConfigFlow = false;
   configSnapshotPromise = null;
@@ -27,9 +46,9 @@ function resetConfigGuardStateForTests() {
 async function getConfigSnapshot() {
   // Tests often mutate config fixtures; caching can make those flaky.
   if (process.env.VITEST === "true") {
-    return readConfigFileSnapshot();
+    return configGuardDeps.readConfigFileSnapshot();
   }
-  configSnapshotPromise ??= readConfigFileSnapshot();
+  configSnapshotPromise ??= configGuardDeps.readConfigFileSnapshot();
   return configSnapshotPromise;
 }
 
@@ -44,7 +63,7 @@ export async function ensureConfigReady(params: {
   if (!didRunDoctorConfigFlow && shouldMigrateStateFromPath(commandPath)) {
     didRunDoctorConfigFlow = true;
     const runDoctorConfigPreflight = async () =>
-      (await import("../../commands/doctor-config-preflight.js")).runDoctorConfigPreflight({
+      configGuardDeps.runDoctorConfigPreflight({
         // Keep ordinary CLI startup on the lightweight validation path.
         migrateState: false,
         migrateLegacyConfig: false,
@@ -126,4 +145,10 @@ export async function ensureConfigReady(params: {
 
 export const __test__ = {
   resetConfigGuardStateForTests,
+  setDepsForTests(overrides: Partial<ConfigGuardDeps>) {
+    configGuardDeps = { ...defaultConfigGuardDeps, ...overrides };
+  },
+  resetDepsForTests() {
+    configGuardDeps = defaultConfigGuardDeps;
+  },
 };

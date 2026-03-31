@@ -2,6 +2,9 @@ import { vi } from "vitest";
 import type { ModelDefinitionConfig } from "../../config/types.js";
 
 type DiscoverModelsMock = typeof import("../pi-model-discovery.js").discoverModels;
+type DiscoverModelsMockFn = DiscoverModelsMock & {
+  mockReturnValue: (value: ReturnType<DiscoverModelsMock>) => unknown;
+};
 
 export const makeModel = (id: string): ModelDefinitionConfig => ({
   id,
@@ -67,10 +70,8 @@ export function buildOpenAICodexForwardCompatExpectation(
     input: isSpark ? ["text"] : ["text", "image"],
     cost: isSpark
       ? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }
-      : isGpt54
-        ? { input: 2.5, output: 15, cacheRead: 0.25, cacheWrite: 0 }
-        : OPENAI_CODEX_TEMPLATE_MODEL.cost,
-    contextWindow: isGpt54 ? 272_000 : isSpark ? 128_000 : 272000,
+      : OPENAI_CODEX_TEMPLATE_MODEL.cost,
+    contextWindow: isGpt54 ? 1_050_000 : isSpark ? 128_000 : 272000,
     maxTokens: 128000,
   };
 }
@@ -122,7 +123,7 @@ export function mockGoogleGeminiCliFlashTemplateModel(
 }
 
 export function resetMockDiscoverModels(discoverModelsMock: DiscoverModelsMock): void {
-  vi.mocked(discoverModelsMock).mockReturnValue({
+  (discoverModelsMock as DiscoverModelsMockFn).mockReturnValue({
     find: vi.fn(() => null),
   } as unknown as ReturnType<DiscoverModelsMock>);
 }
@@ -135,7 +136,7 @@ export function mockDiscoveredModel(
     templateModel: unknown;
   },
 ): void {
-  vi.mocked(discoverModelsMock).mockReturnValue({
+  (discoverModelsMock as DiscoverModelsMockFn).mockReturnValue({
     find: vi.fn((provider: string, modelId: string) => {
       if (provider === params.provider && modelId === params.modelId) {
         return params.templateModel;

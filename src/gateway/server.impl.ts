@@ -118,6 +118,25 @@ import {
 import { setFallbackGatewayContextResolver } from "./server-plugins.js";
 import { createGatewayReloadHandlers } from "./server-reload-handlers.js";
 import { resolveGatewayRuntimeConfig } from "./server-runtime-config.js";
+
+let gatewayConfigReloaderFactoryForTest:
+  | typeof startGatewayConfigReloader
+  | undefined;
+let gatewayChannelManagerFactoryForTest:
+  | typeof createChannelManager
+  | undefined;
+
+export function setGatewayConfigReloaderFactoryForTest(
+  factory?: typeof startGatewayConfigReloader,
+): void {
+  gatewayConfigReloaderFactoryForTest = factory;
+}
+
+export function setGatewayChannelManagerFactoryForTest(
+  factory?: typeof createChannelManager,
+): void {
+  gatewayChannelManagerFactoryForTest = factory;
+}
 import { createGatewayRuntimeState } from "./server-runtime-state.js";
 import { resolveSessionKeyForRun } from "./server-session-key.js";
 import { logGatewayStartup } from "./server-startup-log.js";
@@ -695,7 +714,7 @@ export async function startGatewayServer(
     throw new Error(gatewayTls.error ?? "gateway tls: failed to enable");
   }
   const serverStartedAt = Date.now();
-  const channelManager = createChannelManager({
+  const channelManager = (gatewayChannelManagerFactoryForTest ?? createChannelManager)({
     loadConfig: () =>
       applyPluginAutoEnable({
         config: loadConfig(),
@@ -1422,7 +1441,10 @@ export async function startGatewayServer(
               }),
           });
 
-          return startGatewayConfigReloader({
+          const startConfigReloader =
+            gatewayConfigReloaderFactoryForTest ?? startGatewayConfigReloader;
+
+          return startConfigReloader({
             initialConfig: cfgAtStart,
             readSnapshot: readConfigFileSnapshot,
             subscribeToWrites: registerConfigWriteListener,

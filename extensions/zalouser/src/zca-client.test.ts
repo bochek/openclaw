@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { __testing, createZalo } from "./zca-client.js";
 
 describe("zca-client runtime loading", () => {
   beforeEach(() => {
-    vi.resetModules();
     vi.clearAllMocks();
+    __testing.resetDepsForTest();
   });
 
   it("does not import zca-js until a session is created", async () => {
@@ -13,12 +14,12 @@ describe("zca-client runtime loading", () => {
       },
     }));
 
-    vi.doMock("zca-js", runtimeFactory);
-
-    const zcaClient = await import("./zca-client.js");
+    __testing.setDepsForTest({
+      loadRuntime: async () => runtimeFactory(),
+    });
     expect(runtimeFactory).not.toHaveBeenCalled();
 
-    const client = await zcaClient.createZalo({ logging: false, selfListen: true });
+    const client = await createZalo({ logging: false, selfListen: true });
 
     expect(runtimeFactory).toHaveBeenCalledTimes(1);
     expect(client).toMatchObject({

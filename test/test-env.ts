@@ -327,7 +327,9 @@ export function installTestEnv(): { cleanup: () => void; tempHome: string } {
   const realHome = process.env.HOME ?? os.homedir();
   const liveEnvSnapshot = { ...process.env };
 
-  loadProfileEnv(realHome);
+  if (live) {
+    loadProfileEnv(realHome);
+  }
 
   if (live && allowRealHome) {
     return { cleanup: () => {}, tempHome: realHome };

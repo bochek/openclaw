@@ -101,6 +101,48 @@ async function waitForPortOpen(
   );
 }
 
+async function waitForGatewayReady(params: {
+  port: number;
+  token: string;
+  name: string;
+  timeoutMs: number;
+  stdout: string[];
+  stderr: string[];
+}) {
+  const deadline = Date.now() + params.timeoutMs;
+  let lastError: unknown;
+  while (Date.now() < deadline) {
+    try {
+      const client = await connectGatewayClient({
+        url: `ws://127.0.0.1:${params.port}`,
+        token: params.token,
+        clientName: GATEWAY_CLIENT_NAMES.CLI,
+        clientDisplayName: `ready-${params.name}`,
+        clientVersion: "1.0.0",
+        platform: "test",
+        mode: GATEWAY_CLIENT_MODES.CLI,
+        timeoutMs: Math.min(2_000, Math.max(250, deadline - Date.now())),
+        timeoutMessage: `timeout waiting for gateway ${params.name} to accept RPC`,
+      });
+      client.stop();
+      return;
+    } catch (err) {
+      lastError = err;
+      await sleep(50);
+    }
+  }
+  const lastErrorText =
+    typeof lastError === "string"
+      ? lastError
+      : lastError instanceof Error
+        ? lastError.message
+        : JSON.stringify(lastError ?? "unknown");
+  throw new Error(
+    `timeout waiting for gateway RPC readiness (${params.name}): ${lastErrorText}\n` +
+      `--- stdout ---\n${params.stdout.join("")}\n--- stderr ---\n${params.stderr.join("")}`,
+  );
+}
+
 export async function spawnGatewayInstance(name: string): Promise<GatewayInstance> {
   const port = await getFreePort();
   const hookToken = `token-${name}-${randomUUID()}`;
@@ -126,9 +168,9 @@ export async function spawnGatewayInstance(name: string): Promise<GatewayInstanc
 
   try {
     child = spawn(
-      "node",
+      process.env.BUN_BINARY || "bun",
       [
-        "dist/index.js",
+        "src/entry.ts",
         "gateway",
         "--port",
         String(port),
@@ -164,6 +206,14 @@ export async function spawnGatewayInstance(name: string): Promise<GatewayInstanc
     child.stderr?.on("data", (d) => stderr.push(String(d)));
 
     await waitForPortOpen(child, stdout, stderr, port, GATEWAY_START_TIMEOUT_MS);
+    await waitForGatewayReady({
+      port,
+      token: gatewayToken,
+      name,
+      timeoutMs: GATEWAY_START_TIMEOUT_MS,
+      stdout,
+      stderr,
+    });
 
     return {
       name,
@@ -366,6 +416,8 @@ export async function waitForChatFinalEvent(params: {
   runId: string;
   sessionKey: string;
   timeoutMs?: number;
+  gateway?: GatewayInstance;
+  debugEvents?: string[];
 }): Promise<ChatEventPayload> {
   const deadline = Date.now() + (params.timeoutMs ?? 15_000);
   while (Date.now() < deadline) {
@@ -378,5 +430,19 @@ export async function waitForChatFinalEvent(params: {
     }
     await sleep(20);
   }
-  throw new Error(`timeout waiting for final chat event (runId=${params.runId})`);
+  const observed = params.events.map((evt) => ({
+    runId: evt.runId,
+    state: evt.state,
+    sessionKey: evt.sessionKey,
+    hasMessage: evt.message !== undefined,
+  }));
+  const gatewayLogs = params.gateway
+    ? `\n--- gateway stdout ---\n${params.gateway.stdout.join("")}\n--- gateway stderr ---\n${params.gateway.stderr.join("")}`
+    : "";
+  const debugEvents = params.debugEvents
+    ? `\n--- client events ---\n${params.debugEvents.join("\n")}`
+    : "";
+  throw new Error(
+    `timeout waiting for final chat event (runId=${params.runId}, sessionKey=${params.sessionKey}, observed=${JSON.stringify(observed)})${debugEvents}${gatewayLogs}`,
+  );
 }

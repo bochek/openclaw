@@ -52,7 +52,8 @@ vi.mock("../../infra/process-respawn.js", () => ({
   restartGatewayProcessWithFreshPid: () => restartGatewayProcessWithFreshPid(),
 }));
 
-vi.mock("../../process/command-queue.js", () => ({
+vi.mock("../../process/command-queue.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../process/command-queue.js")>()),
   getActiveTaskCount: () => getActiveTaskCount(),
   markGatewayDraining: () => markGatewayDraining(),
   waitForActiveTasks: (timeoutMs: number) => waitForActiveTasks(timeoutMs),
@@ -66,9 +67,16 @@ vi.mock("../../agents/pi-embedded-runner/runs.js", () => ({
   waitForActiveEmbeddedRuns: (timeoutMs: number) => waitForActiveEmbeddedRuns(timeoutMs),
 }));
 
-vi.mock("../../logging/subsystem.js", () => ({
-  createSubsystemLogger: () => gatewayLog,
-}));
+vi.mock("../../logging/subsystem.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../logging/subsystem.js")>();
+  return {
+    ...actual,
+    createSubsystemLogger: () => ({
+      ...gatewayLog,
+      child: () => gatewayLog,
+    }),
+  };
+});
 
 const LOOP_SIGNALS = ["SIGTERM", "SIGINT", "SIGUSR1"] as const;
 type LoopSignal = (typeof LOOP_SIGNALS)[number];

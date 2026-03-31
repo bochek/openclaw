@@ -54,22 +54,19 @@ vi.mock("./client.js", () => ({
   GatewayClient: MockGatewayClient,
 }));
 
-vi.mock("../infra/device-identity.js", () => ({
-  loadOrCreateDeviceIdentity: () => {
-    if (deviceIdentityState.throwOnLoad) {
-      throw new Error("read-only identity dir");
-    }
-    return deviceIdentityState.value;
-  },
-}));
-
-const { clampProbeTimeoutMs, probeGateway } = await import("./probe.js");
+const { __testing, clampProbeTimeoutMs, probeGateway } = await import("./probe.js");
 
 describe("probeGateway", () => {
   beforeEach(() => {
     deviceIdentityState.throwOnLoad = false;
     gatewayClientState.startMode = "hello";
     gatewayClientState.close = { code: 1008, reason: "pairing required" };
+    __testing.setLoadOrCreateDeviceIdentityForTest(async () => {
+      if (deviceIdentityState.throwOnLoad) {
+        throw new Error("read-only identity dir");
+      }
+      return deviceIdentityState.value;
+    });
   });
 
   it("clamps probe timeout to timer-safe bounds", () => {

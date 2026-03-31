@@ -25,6 +25,10 @@ export function resetSubagentsConfigOverride() {
   configOverride = defaultConfig;
 }
 
+export function getSubagentsConfigOverride() {
+  return configOverride;
+}
+
 function applySharedSubagentTestDeps() {
   subagentControlTesting.setDepsForTest({
     callGateway: (optsUnknown) => callGatewayMock(optsUnknown),
@@ -39,16 +43,3 @@ function applySharedSubagentTestDeps() {
 }
 
 applySharedSubagentTestDeps();
-
-vi.mock("../gateway/call.js", () => ({
-  callGateway: (opts: unknown) => callGatewayMock(opts),
-}));
-
-vi.mock("../config/config.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config/config.js")>();
-  return {
-    ...actual,
-    loadConfig: () => configOverride,
-    resolveGatewayPort: () => 18789,
-  };
-});

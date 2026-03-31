@@ -7,6 +7,11 @@ import {
 } from "../plugin-sdk/anthropic-vertex.js";
 
 type AnthropicVertexEffort = NonNullable<AnthropicOptions["effort"]>;
+type AnthropicVertexCtor = typeof AnthropicVertex;
+type StreamAnthropicFn = typeof streamAnthropic;
+
+let anthropicVertexCtor: AnthropicVertexCtor = AnthropicVertex;
+let streamAnthropicImpl: StreamAnthropicFn = streamAnthropic;
 
 function resolveAnthropicVertexMaxTokens(params: {
   modelMaxTokens: number | undefined;
@@ -42,7 +47,7 @@ export function createAnthropicVertexStreamFn(
   region: string,
   baseURL?: string,
 ): StreamFn {
-  const client = new AnthropicVertex({
+  const client = new anthropicVertexCtor({
     region,
     ...(baseURL ? { baseURL } : {}),
     ...(projectId ? { projectId } : {}),
@@ -95,7 +100,7 @@ export function createAnthropicVertexStreamFn(
       opts.thinkingEnabled = false;
     }
 
-    return streamAnthropic(model as Model<"anthropic-messages">, context, opts);
+    return streamAnthropicImpl(model as Model<"anthropic-messages">, context, opts);
   };
 }
 
@@ -135,3 +140,12 @@ export function createAnthropicVertexStreamFnForModel(
     resolveAnthropicVertexSdkBaseUrl(model.baseUrl),
   );
 }
+
+export const __testing = {
+  setAnthropicVertexCtorForTests(next: AnthropicVertexCtor | null): void {
+    anthropicVertexCtor = next ?? AnthropicVertex;
+  },
+  setStreamAnthropicForTests(next: StreamAnthropicFn | null): void {
+    streamAnthropicImpl = next ?? streamAnthropic;
+  },
+};

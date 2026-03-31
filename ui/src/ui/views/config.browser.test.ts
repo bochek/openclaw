@@ -1,7 +1,11 @@
+import "../../test-helpers/browser-globals-install.ts";
 import { render } from "lit";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { registerBrowserGlobalsHooks } from "../../test-helpers/browser-globals.ts";
 import type { ThemeMode, ThemeName } from "../theme.ts";
 import { renderConfig, type ConfigProps } from "./config.ts";
+
+registerBrowserGlobalsHooks();
 
 describe("config view", () => {
   const baseProps = () => ({

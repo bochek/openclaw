@@ -2,6 +2,7 @@ import "./lifecycle.test-support.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRuntimeEnv } from "../../../test/helpers/plugins/runtime-env.js";
 import type { ClawdbotConfig, RuntimeEnv } from "../runtime-api.js";
+import { __testing as botTesting } from "./bot.js";
 import { getFeishuLifecycleTestMocks } from "./lifecycle.test-support.js";
 import {
   createFeishuLifecycleFixture,
@@ -87,7 +88,7 @@ describe("Feishu ACP-init failure lifecycle", () => {
       mainSessionKey: "agent:main:main",
       matchedBy: "default",
     });
-    resolveConfiguredBindingRouteMock.mockReturnValue({
+    resolveConfiguredBindingRouteMock.mockImplementation(() => ({
       bindingResolution: {
         configuredBinding: {
           spec: {
@@ -136,17 +137,29 @@ describe("Feishu ACP-init failure lifecycle", () => {
         mainSessionKey: "agent:codex:main",
         matchedBy: "binding.channel",
       },
-    });
-    ensureConfiguredBindingRouteReadyMock.mockResolvedValue({
+    }));
+    ensureConfiguredBindingRouteReadyMock.mockImplementation(async () => ({
       ok: false,
       error: "runtime unavailable",
-    });
+    }));
 
     dispatchReplyFromConfigMock.mockResolvedValue({
       queuedFinal: false,
       counts: { final: 0 },
     });
     withReplyDispatcherMock.mockImplementation(async ({ run }) => await run());
+    botTesting.setDepsForTest({
+      resolveConfiguredBindingRoute:
+        resolveConfiguredBindingRouteMock as typeof import("openclaw/plugin-sdk/conversation-runtime").resolveConfiguredBindingRoute,
+      ensureConfiguredBindingRouteReady:
+        ensureConfiguredBindingRouteReadyMock as typeof import("openclaw/plugin-sdk/conversation-runtime").ensureConfiguredBindingRouteReady,
+      getSessionBindingService: (() => ({
+        resolveByConversation: resolveBoundConversationMock,
+        touch: vi.fn(),
+      })) as typeof import("openclaw/plugin-sdk/conversation-runtime").getSessionBindingService,
+      sendMessageFeishu:
+        sendMessageFeishuMock as typeof import("./send.js").sendMessageFeishu,
+    });
 
     installFeishuLifecycleReplyRuntime({
       resolveAgentRouteMock,

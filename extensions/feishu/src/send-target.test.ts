@@ -4,10 +4,14 @@ import type { ClawdbotConfig } from "../runtime-api.js";
 const resolveFeishuAccountMock = vi.hoisted(() => vi.fn());
 const createFeishuClientMock = vi.hoisted(() => vi.fn());
 
-vi.mock("./accounts.js", () => ({
-  resolveFeishuAccount: resolveFeishuAccountMock,
-  resolveFeishuRuntimeAccount: resolveFeishuAccountMock,
-}));
+vi.mock("./accounts.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./accounts.js")>();
+  return {
+    ...actual,
+    resolveFeishuAccount: resolveFeishuAccountMock,
+    resolveFeishuRuntimeAccount: resolveFeishuAccountMock,
+  };
+});
 
 vi.mock("./client.js", () => ({
   createFeishuClient: createFeishuClientMock,

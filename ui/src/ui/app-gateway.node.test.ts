@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GATEWAY_EVENT_UPDATE_AVAILABLE } from "../../../src/gateway/events.js";
 import { ConnectErrorDetailCodes } from "../../../src/gateway/protocol/connect-error-details.js";
+import { registerBrowserGlobalsHooks } from "../test-helpers/browser-globals.ts";
 import { connectGateway, resolveControlUiClientVersion } from "./app-gateway.ts";
 import type { GatewayHelloOk } from "./gateway.ts";
 
-const loadChatHistoryMock = vi.hoisted(() => vi.fn(async () => undefined));
+registerBrowserGlobalsHooks();
+
+const { loadChatHistoryMock, sendChatMessageMock } = vi.hoisted(() => ({
+  loadChatHistoryMock: vi.fn(async () => undefined),
+  sendChatMessageMock: vi.fn(async () => "run-resumed"),
+}));
 
 type GatewayClientMock = {
   start: ReturnType<typeof vi.fn>;
@@ -94,6 +100,7 @@ vi.mock("./controllers/chat.ts", async (importOriginal) => {
   return {
     ...actual,
     loadChatHistory: loadChatHistoryMock,
+    sendChatMessage: sendChatMessageMock,
   };
 });
 
@@ -186,6 +193,8 @@ describe("connectGateway", () => {
   beforeEach(() => {
     gatewayClientInstances.length = 0;
     loadChatHistoryMock.mockClear();
+    sendChatMessageMock.mockClear();
+    sendChatMessageMock.mockResolvedValue("run-resumed");
   });
 
   it("ignores stale client onGap callbacks after reconnect", () => {
@@ -208,7 +217,7 @@ describe("connectGateway", () => {
     expect(host.lastError).toBeNull();
   });
 
-  it("preserves approval prompts, clears stale run indicators, and resumes queued work after seq-gap reconnect", () => {
+  it("preserves approval prompts, clears stale run indicators, and resumes queued work after seq-gap reconnect", async () => {
     const host = createHost();
     const chatHost = host as typeof host & {
       chatRunId: string | null;
@@ -233,41 +242,53 @@ describe("connectGateway", () => {
         createdAt: 2,
       },
     ];
+    connectGateway(host);
+    const client = gatewayClientInstances[0];
+    expect(client).toBeDefined();
+
     host.execApprovalQueue = [
       {
         id: "approval-1",
         kind: "exec",
         request: { command: "rm -rf /tmp/demo" },
-        createdAtMs: Date.now(),
-        expiresAtMs: Date.now() + 60_000,
+        createdAtMs: 1,
+        expiresAtMs: Number.MAX_SAFE_INTEGER,
       },
     ];
-
-    connectGateway(host);
-    const client = gatewayClientInstances[0];
-    expect(client).toBeDefined();
-
     client.emitGap(20, 24);
 
-    expect(gatewayClientInstances).toHaveLength(2);
-    expect(host.execApprovalQueue).toHaveLength(1);
-    expect(host.execApprovalQueue[0]?.id).toBe("approval-1");
-    expect(chatHost.chatQueue).toHaveLength(1);
-    expect(chatHost.chatQueue[0]?.text).toBe("follow up");
+    if (gatewayClientInstances.length !== 2) {
+      throw new Error(`expected reconnect client, saw ${gatewayClientInstances.length}`);
+    }
+    if (host.execApprovalQueue.length !== 1 || host.execApprovalQueue[0]?.id !== "approval-1") {
+      throw new Error(
+        `unexpected approval queue after gap: ${JSON.stringify(host.execApprovalQueue)}`,
+      );
+    }
+    if (
+      chatHost.chatQueue.length !== 1 ||
+      chatHost.chatQueue[0]?.text !== "follow up"
+    ) {
+      throw new Error(`unexpected queue after gap: ${JSON.stringify(chatHost.chatQueue)}`);
+    }
 
     const reconnectClient = gatewayClientInstances[1];
     expect(reconnectClient).toBeDefined();
 
     reconnectClient.emitHello();
+    for (let i = 0; i < 10; i++) {
+      if (sendChatMessageMock.mock.calls.length > 0 && chatHost.chatQueue.length === 0) {
+        break;
+      }
+      await Promise.resolve();
+    }
 
-    expect(reconnectClient.request).toHaveBeenCalledWith("chat.send", {
-      sessionKey: "main",
-      message: "follow up",
-      deliver: false,
-      idempotencyKey: expect.any(String),
-      attachments: undefined,
-    });
-    expect(chatHost.chatQueue).toHaveLength(0);
+    expect(sendChatMessageMock.mock.calls.length).toBeGreaterThan(0);
+    expect(sendChatMessageMock.mock.calls[0]?.[1]).toBe("follow up");
+    expect(sendChatMessageMock.mock.calls[0]?.[2]).toBeUndefined();
+    if (chatHost.chatQueue.length !== 0) {
+      throw new Error(`queue not drained after reconnect: ${JSON.stringify(chatHost.chatQueue)}`);
+    }
   });
 
   it("ignores stale client onEvent callbacks after reconnect", () => {

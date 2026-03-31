@@ -3,7 +3,7 @@ import { getChannelPlugin } from "../../channels/plugins/index.js";
 import type { ChannelPlugin } from "../../channels/plugins/types.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { applyPluginAutoEnable } from "../../config/plugin-auto-enable.js";
-import { resolveRuntimePluginRegistry } from "../../plugins/loader.js";
+import { loadOpenClawPlugins } from "../../plugins/loader.js";
 import {
   getActivePluginRegistry,
   getActivePluginChannelRegistryVersion,
@@ -57,7 +57,7 @@ function maybeBootstrapChannelPlugin(params: {
   const defaultAgentId = resolveDefaultAgentId(autoEnabled);
   const workspaceDir = resolveAgentWorkspaceDir(autoEnabled, defaultAgentId);
   try {
-    resolveRuntimePluginRegistry({
+    loadOpenClawPlugins({
       config: autoEnabled,
       workspaceDir,
       runtimeOptions: {

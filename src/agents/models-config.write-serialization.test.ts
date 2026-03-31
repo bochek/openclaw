@@ -11,7 +11,7 @@ import { readGeneratedModelsJson } from "./models-config.test-utils.js";
 installModelsConfigTestHooks();
 
 describe("models-config write serialization", () => {
-  it("serializes concurrent models.json writes to avoid overlap", async () => {
+  it("serializes concurrent models.json writes to avoid overlap", { timeout: 20_000 }, async () => {
     await withModelsTempHome(async () => {
       const first = structuredClone(CUSTOM_PROXY_MODELS_CONFIG);
       const second = structuredClone(CUSTOM_PROXY_MODELS_CONFIG);
@@ -26,10 +26,24 @@ describe("models-config write serialization", () => {
       const originalWriteFile = fs.writeFile.bind(fs);
       let inFlightWrites = 0;
       let maxInFlightWrites = 0;
+      let firstWriteEntered = false;
+      let resolveFirstWriteStarted: (() => void) | undefined;
+      let releaseFirstWrite: (() => void) | undefined;
+      const firstWriteStarted = new Promise<void>((resolve) => {
+        resolveFirstWriteStarted = resolve;
+      });
+      const firstWriteGate = new Promise<void>((resolve) => {
+        releaseFirstWrite = resolve;
+      });
       const writeSpy = vi.spyOn(fs, "writeFile").mockImplementation(async (...args) => {
         inFlightWrites += 1;
         if (inFlightWrites > maxInFlightWrites) {
           maxInFlightWrites = inFlightWrites;
+        }
+        if (!firstWriteEntered) {
+          firstWriteEntered = true;
+          resolveFirstWriteStarted?.();
+          await firstWriteGate;
         }
         await new Promise((resolve) => setTimeout(resolve, 20));
         try {
@@ -40,7 +54,11 @@ describe("models-config write serialization", () => {
       });
 
       try {
-        await Promise.all([ensureOpenClawModelsJson(first), ensureOpenClawModelsJson(second)]);
+        const firstWrite = ensureOpenClawModelsJson(first);
+        await firstWriteStarted;
+        const secondWrite = ensureOpenClawModelsJson(second);
+        releaseFirstWrite?.();
+        await Promise.all([firstWrite, secondWrite]);
       } finally {
         writeSpy.mockRestore();
       }

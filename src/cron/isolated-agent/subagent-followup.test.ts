@@ -12,7 +12,8 @@ import {
   waitForDescendantSubagentSummary,
 } from "./subagent-followup.js";
 
-vi.mock("../../agents/subagent-registry.js", () => ({
+vi.mock("../../agents/subagent-registry.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../agents/subagent-registry.js")>()),
   listDescendantRunsForRequester: vi.fn().mockReturnValue([]),
 }));
 

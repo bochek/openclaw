@@ -16,6 +16,20 @@ export type GatewayCallOptions = {
   timeoutMs?: number;
 };
 
+type GatewayToolDeps = {
+  callGateway: typeof callGateway;
+  loadConfig: typeof loadConfig;
+  resolveGatewayPort: typeof resolveGatewayPort;
+};
+
+const defaultGatewayToolDeps: GatewayToolDeps = {
+  callGateway,
+  loadConfig,
+  resolveGatewayPort,
+};
+
+let gatewayToolDeps: GatewayToolDeps = defaultGatewayToolDeps;
+
 type GatewayOverrideTarget = "local" | "remote";
 
 export function readGatewayCallOptions(params: Record<string, unknown>): GatewayCallOptions {
@@ -61,7 +75,7 @@ function validateGatewayUrlOverrideForAgentTools(params: {
   urlOverride: string;
 }): { url: string; target: GatewayOverrideTarget } {
   const { cfg } = params;
-  const port = resolveGatewayPort(cfg);
+  const port = gatewayToolDeps.resolveGatewayPort(cfg);
   const localAllowed = new Set<string>([
     `ws://127.0.0.1:${port}`,
     `wss://127.0.0.1:${port}`,
@@ -117,7 +131,7 @@ function resolveGatewayOverrideToken(params: {
 }
 
 export function resolveGatewayOptions(opts?: GatewayCallOptions) {
-  const cfg = loadConfig();
+  const cfg = gatewayToolDeps.loadConfig();
   const validatedOverride =
     trimToUndefined(opts?.gatewayUrl) !== undefined
       ? validateGatewayUrlOverrideForAgentTools({
@@ -150,7 +164,7 @@ export async function callGatewayTool<T = Record<string, unknown>>(
   const scopes = Array.isArray(extra?.scopes)
     ? extra.scopes
     : resolveLeastPrivilegeOperatorScopesForMethod(method);
-  return await callGateway<T>({
+  return await gatewayToolDeps.callGateway<T>({
     url: gateway.url,
     token: gateway.token,
     method,
@@ -163,3 +177,14 @@ export async function callGatewayTool<T = Record<string, unknown>>(
     scopes,
   });
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<GatewayToolDeps>) {
+    gatewayToolDeps = overrides
+      ? {
+          ...defaultGatewayToolDeps,
+          ...overrides,
+        }
+      : defaultGatewayToolDeps;
+  },
+};

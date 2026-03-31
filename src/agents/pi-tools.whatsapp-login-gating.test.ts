@@ -1,23 +1,27 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import "./test-helpers/fast-coding-tools.js";
-import { createOpenClawCodingTools } from "./pi-tools.js";
+import { __testing as piToolsTesting, createOpenClawCodingTools } from "./pi-tools.js";
 
-vi.mock("./channel-tools.js", () => {
-  const passthrough = <T>(tool: T) => tool;
-  const stubTool = (name: string) => ({
+function stubTool(name: string) {
+  return {
     name,
     description: `${name} stub`,
     parameters: { type: "object", properties: {} },
     execute: vi.fn(),
-  });
-  return {
-    listChannelAgentTools: () => [stubTool("whatsapp_login")],
-    copyChannelAgentToolMeta: passthrough,
-    getChannelAgentToolMeta: () => undefined,
   };
-});
+}
 
 describe("owner-only tool gating", () => {
+  beforeEach(() => {
+    piToolsTesting.setDepsForTest({
+      listChannelAgentTools: () => [stubTool("whatsapp_login")],
+    });
+  });
+
+  afterEach(() => {
+    piToolsTesting.setDepsForTest();
+  });
+
   it("removes owner-only tools for unauthorized senders", () => {
     const tools = createOpenClawCodingTools({ senderIsOwner: false });
     const toolNames = tools.map((tool) => tool.name);

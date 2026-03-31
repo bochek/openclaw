@@ -1,11 +1,12 @@
-import { readJsonFileWithFallback, writeJsonFileAtomically } from "openclaw/plugin-sdk/json-store";
-import { resolveAgentIdFromSessionKey } from "openclaw/plugin-sdk/routing";
+import type { SessionBindingAdapter } from "openclaw/plugin-sdk/conversation-runtime";
 import {
+  readJsonFileWithFallback,
   registerSessionBindingAdapter,
+  resolveAgentIdFromSessionKey,
   resolveThreadBindingFarewellText,
-  type SessionBindingAdapter,
   unregisterSessionBindingAdapter,
-} from "openclaw/plugin-sdk/thread-bindings-runtime";
+  writeJsonFileAtomically,
+} from "../runtime-api.js";
 import { resolveMatrixStateFilePath } from "./client/storage.js";
 import type { MatrixAuth } from "./client/types.js";
 import type { MatrixClient } from "./sdk.js";
@@ -32,6 +33,26 @@ import {
 const STORE_VERSION = 1;
 const THREAD_BINDINGS_SWEEP_INTERVAL_MS = 60_000;
 const TOUCH_PERSIST_DELAY_MS = 30_000;
+
+const threadBindingRuntimeDefaults = {
+  sendMessageMatrix,
+};
+
+let threadBindingRuntime = { ...threadBindingRuntimeDefaults };
+
+export const __testing = {
+  setThreadBindingRuntimeForTest(
+    overrides: Partial<typeof threadBindingRuntimeDefaults>,
+  ) {
+    threadBindingRuntime = {
+      ...threadBindingRuntimeDefaults,
+      ...overrides,
+    };
+  },
+  resetThreadBindingRuntimeForTest() {
+    threadBindingRuntime = { ...threadBindingRuntimeDefaults };
+  },
+};
 
 type StoredMatrixThreadBindingState = {
   version: number;
@@ -160,7 +181,7 @@ async function sendBindingMessage(params: {
   if (!trimmed) {
     return null;
   }
-  const result = await sendMessageMatrix(`room:${params.roomId}`, trimmed, {
+  const result = await threadBindingRuntime.sendMessageMatrix(`room:${params.roomId}`, trimmed, {
     client: params.client,
     accountId: params.accountId,
     ...(params.threadId ? { threadId: params.threadId } : {}),

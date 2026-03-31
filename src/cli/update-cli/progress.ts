@@ -9,6 +9,16 @@ import { defaultRuntime } from "../../runtime.js";
 import { theme } from "../../terminal/theme.js";
 import type { UpdateCommandOptions } from "./shared.js";
 
+type UpdateProgressDeps = {
+  defaultRuntime: typeof defaultRuntime;
+};
+
+const defaultUpdateProgressDeps: UpdateProgressDeps = {
+  defaultRuntime,
+};
+
+let updateProgressDeps: UpdateProgressDeps = defaultUpdateProgressDeps;
+
 const STEP_LABELS: Record<string, string> = {
   "clean check": "Working directory is clean",
   "upstream check": "Upstream branch exists",
@@ -104,7 +114,7 @@ export function createUpdateProgress(enabled: boolean): ProgressController {
         const lines = step.stderrTail.split("\n").slice(-10);
         for (const line of lines) {
           if (line.trim()) {
-            defaultRuntime.log(`    ${theme.error(line)}`);
+            updateProgressDeps.defaultRuntime.log(`    ${theme.error(line)}`);
           }
         }
       }
@@ -138,46 +148,46 @@ type PrintResultOptions = UpdateCommandOptions & {
 
 export function printResult(result: UpdateRunResult, opts: PrintResultOptions): void {
   if (opts.json) {
-    defaultRuntime.writeJson(result);
+    updateProgressDeps.defaultRuntime.writeJson(result);
     return;
   }
 
   const statusColor =
     result.status === "ok" ? theme.success : result.status === "skipped" ? theme.warn : theme.error;
 
-  defaultRuntime.log("");
-  defaultRuntime.log(
+  updateProgressDeps.defaultRuntime.log("");
+  updateProgressDeps.defaultRuntime.log(
     `${theme.heading("Update Result:")} ${statusColor(result.status.toUpperCase())}`,
   );
   if (result.root) {
-    defaultRuntime.log(`  Root: ${theme.muted(result.root)}`);
+    updateProgressDeps.defaultRuntime.log(`  Root: ${theme.muted(result.root)}`);
   }
   if (result.reason) {
-    defaultRuntime.log(`  Reason: ${theme.muted(result.reason)}`);
+    updateProgressDeps.defaultRuntime.log(`  Reason: ${theme.muted(result.reason)}`);
   }
 
   if (result.before?.version || result.before?.sha) {
     const before = result.before.version ?? result.before.sha?.slice(0, 8) ?? "";
-    defaultRuntime.log(`  Before: ${theme.muted(before)}`);
+    updateProgressDeps.defaultRuntime.log(`  Before: ${theme.muted(before)}`);
   }
   if (result.after?.version || result.after?.sha) {
     const after = result.after.version ?? result.after.sha?.slice(0, 8) ?? "";
-    defaultRuntime.log(`  After: ${theme.muted(after)}`);
+    updateProgressDeps.defaultRuntime.log(`  After: ${theme.muted(after)}`);
   }
 
   if (!opts.hideSteps && result.steps.length > 0) {
-    defaultRuntime.log("");
-    defaultRuntime.log(theme.heading("Steps:"));
+    updateProgressDeps.defaultRuntime.log("");
+    updateProgressDeps.defaultRuntime.log(theme.heading("Steps:"));
     for (const step of result.steps) {
       const status = formatStepStatus(step.exitCode);
       const duration = theme.muted(`(${formatDurationPrecise(step.durationMs)})`);
-      defaultRuntime.log(`  ${status} ${step.name} ${duration}`);
+      updateProgressDeps.defaultRuntime.log(`  ${status} ${step.name} ${duration}`);
 
       if (step.exitCode !== 0 && step.stderrTail) {
         const lines = step.stderrTail.split("\n").slice(0, 5);
         for (const line of lines) {
           if (line.trim()) {
-            defaultRuntime.log(`      ${theme.error(line)}`);
+            updateProgressDeps.defaultRuntime.log(`      ${theme.error(line)}`);
           }
         }
       }
@@ -186,13 +196,24 @@ export function printResult(result: UpdateRunResult, opts: PrintResultOptions): 
 
   const hints = inferUpdateFailureHints(result);
   if (hints.length > 0) {
-    defaultRuntime.log("");
-    defaultRuntime.log(theme.heading("Recovery hints:"));
+    updateProgressDeps.defaultRuntime.log("");
+    updateProgressDeps.defaultRuntime.log(theme.heading("Recovery hints:"));
     for (const hint of hints) {
-      defaultRuntime.log(`  - ${theme.warn(hint)}`);
+      updateProgressDeps.defaultRuntime.log(`  - ${theme.warn(hint)}`);
     }
   }
 
-  defaultRuntime.log("");
-  defaultRuntime.log(`Total time: ${theme.muted(formatDurationPrecise(result.durationMs))}`);
+  updateProgressDeps.defaultRuntime.log("");
+  updateProgressDeps.defaultRuntime.log(
+    `Total time: ${theme.muted(formatDurationPrecise(result.durationMs))}`,
+  );
 }
+
+export const __testing = {
+  setDepsForTest(next: Partial<UpdateProgressDeps>) {
+    updateProgressDeps = { ...updateProgressDeps, ...next };
+  },
+  resetDepsForTest() {
+    updateProgressDeps = defaultUpdateProgressDeps;
+  },
+};

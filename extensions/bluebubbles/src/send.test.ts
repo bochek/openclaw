@@ -1,6 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import "./test-mocks.js";
-import { getCachedBlueBubblesPrivateApiStatus } from "./probe.js";
 import type { PluginRuntime } from "./runtime-api.js";
 import { clearBlueBubblesRuntime, setBlueBubblesRuntime } from "./runtime.js";
 import { sendMessageBlueBubbles, resolveChatGuidForTarget, createChatForHandle } from "./send.js";
@@ -12,8 +10,35 @@ import {
 } from "./test-harness.js";
 import { _setFetchGuardForTesting, type BlueBubblesSendTarget } from "./types.js";
 
+const accountsMocks = vi.hoisted(() => ({
+  listBlueBubblesAccountIds: vi.fn(() => ["default"]),
+  resolveDefaultBlueBubblesAccountId: vi.fn(() => "default"),
+  resolveBlueBubblesAccount: vi.fn(
+    (params: { cfg?: { channels?: { bluebubbles?: Record<string, unknown> } }; accountId?: string }) => {
+      const config = params.cfg?.channels?.bluebubbles ?? {};
+      return {
+        accountId: params.accountId ?? "default",
+        enabled: config.enabled !== false,
+        configured: Boolean(config.serverUrl && config.password),
+        config,
+      };
+    },
+  ),
+}));
+
+const probeMocks = vi.hoisted(() => ({
+  getCachedBlueBubblesPrivateApiStatus: vi
+    .fn()
+    .mockReturnValue(BLUE_BUBBLES_PRIVATE_API_STATUS.unknown),
+  isBlueBubblesPrivateApiStatusEnabled: vi.fn((status: boolean | null) => status === true),
+}));
+
+vi.mock("./accounts.js", () => accountsMocks);
+
+vi.mock("./probe.js", () => probeMocks);
+
 const mockFetch = vi.fn();
-const privateApiStatusMock = vi.mocked(getCachedBlueBubblesPrivateApiStatus);
+const privateApiStatusMock = probeMocks.getCachedBlueBubblesPrivateApiStatus;
 const setFetchGuardPassthrough = createBlueBubblesFetchGuardPassthroughInstaller();
 
 installBlueBubblesFetchTestHooks({

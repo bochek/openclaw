@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { openBoundaryFile } from "../../infra/boundary-file-read.js";
 import type { SandboxBackendCommandResult } from "./backend.js";
 import { runDockerSandboxShellCommand } from "./docker-backend.js";
 import {
@@ -15,6 +16,18 @@ import {
   type SandboxResolvedFsPath,
 } from "./fs-paths.js";
 import type { SandboxContext, SandboxWorkspaceAccess } from "./types.js";
+
+type SandboxFsBridgeDeps = {
+  openBoundaryFile: typeof openBoundaryFile;
+  runDockerSandboxShellCommand: typeof runDockerSandboxShellCommand;
+};
+
+const defaultSandboxFsBridgeDeps: SandboxFsBridgeDeps = {
+  openBoundaryFile,
+  runDockerSandboxShellCommand,
+};
+
+let sandboxFsBridgeDeps = defaultSandboxFsBridgeDeps;
 
 type RunCommandOptions = {
   args?: string[];
@@ -79,6 +92,7 @@ class SandboxFsBridgeImpl implements SandboxFsBridge {
     );
     this.pathGuard = new SandboxFsPathGuard({
       mountsByContainer,
+      openBoundaryFile: sandboxFsBridgeDeps.openBoundaryFile,
       runCommand: (script, options) => this.runCommand(script, options),
     });
   }
@@ -260,7 +274,7 @@ class SandboxFsBridgeImpl implements SandboxFsBridge {
         signal: options.signal,
       });
     }
-    return await runDockerSandboxShellCommand({
+    return await sandboxFsBridgeDeps.runDockerSandboxShellCommand({
       containerName: this.sandbox.containerName,
       script,
       args: options.args,
@@ -335,3 +349,12 @@ function coerceStatType(typeRaw?: string): "file" | "directory" | "other" {
   }
   return "other";
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<SandboxFsBridgeDeps>) {
+    sandboxFsBridgeDeps = {
+      ...defaultSandboxFsBridgeDeps,
+      ...overrides,
+    };
+  },
+};

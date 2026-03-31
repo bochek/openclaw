@@ -13,7 +13,8 @@ vi.mock("./paths.js", () => ({
   resolveStorePath: () => "/tmp/sessions.json",
 }));
 
-vi.mock("./store.js", () => ({
+vi.mock("./store.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./store.js")>()),
   loadSessionStore: () => storeState.store,
 }));
 
@@ -51,15 +52,6 @@ describe("extractDeliveryInfo", () => {
     ).toEqual({
       baseSessionKey: "agent:main:matrix:channel:!room:example.org",
       threadId: "$AbC123:example.org",
-    });
-    expect(
-      parseSessionThreadInfo(
-        "agent:main:feishu:group:oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
-      ),
-    ).toEqual({
-      baseSessionKey:
-        "agent:main:feishu:group:oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
-      threadId: undefined,
     });
     expect(parseSessionThreadInfo("agent:main:telegram:dm:user-1")).toEqual({
       baseSessionKey: "agent:main:telegram:dm:user-1",

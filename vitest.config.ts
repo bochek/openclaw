@@ -1,10 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
-import {
-  BUNDLED_PLUGIN_ROOT_DIR,
-  BUNDLED_PLUGIN_TEST_GLOB,
-} from "./scripts/lib/bundled-plugin-paths.mjs";
 import { pluginSdkSubpaths } from "./scripts/lib/plugin-sdk-entries.mjs";
 import { resolveLocalVitestMaxWorkers } from "./scripts/test-planner/runtime-profile.mjs";
 import {
@@ -21,6 +17,11 @@ const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const isWindows = process.platform === "win32";
 const localWorkers = resolveLocalVitestMaxWorkers();
 const ciWorkers = isWindows ? 2 : 3;
+
+function escapeRegexLiteral(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export default defineConfig({
   resolve: {
     // Keep this ordered: the base `openclaw/plugin-sdk` alias is a prefix match.
@@ -30,7 +31,10 @@ export default defineConfig({
         replacement: path.join(repoRoot, "src", "extensionAPI.ts"),
       },
       ...pluginSdkSubpaths.map((subpath) => ({
-        find: `openclaw/plugin-sdk/${subpath}`,
+        // Vitest/Vite string aliases are prefix matches. Use exact-match regexes so
+        // overlapping SDK subpaths like `image-generation` and
+        // `image-generation-core` do not resolve through the wrong facade.
+        find: new RegExp(`^openclaw/plugin-sdk/${escapeRegexLiteral(subpath)}$`),
         replacement: path.join(repoRoot, "src", "plugin-sdk", `${subpath}.ts`),
       })),
       {
@@ -52,6 +56,7 @@ export default defineConfig({
     forceRerunTriggers: [
       "package.json",
       "pnpm-lock.yaml",
+      "test/setup-env.ts",
       "test/setup.ts",
       "scripts/test-parallel.mjs",
       "scripts/test-planner/catalog.mjs",
@@ -77,7 +82,7 @@ export default defineConfig({
     ],
     include: [
       "src/**/*.test.ts",
-      BUNDLED_PLUGIN_TEST_GLOB,
+      "extensions/**/*.test.ts",
       "packages/**/*.test.ts",
       "test/**/*.test.ts",
       "ui/src/ui/app-chat.test.ts",
@@ -94,7 +99,7 @@ export default defineConfig({
       "ui/src/ui/app-gateway.sessions.node.test.ts",
       "ui/src/ui/chat/slash-command-executor.node.test.ts",
     ],
-    setupFiles: ["test/setup.ts"],
+    setupFiles: ["test/setup-env.ts", "test/setup.ts"],
     exclude: [
       "dist/**",
       "test/fixtures/**",
@@ -123,7 +128,7 @@ export default defineConfig({
       include: ["./src/**/*.ts"],
       exclude: [
         // Never count workspace packages/apps toward core coverage thresholds.
-        `${BUNDLED_PLUGIN_ROOT_DIR}/**`,
+        "extensions/**",
         "apps/**",
         "ui/**",
         "test/**",

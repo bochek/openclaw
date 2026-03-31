@@ -31,6 +31,20 @@ import type { ExecToolDetails } from "./bash-tools.exec-types.js";
 import { callGatewayTool } from "./tools/gateway.js";
 import { listNodes, resolveNodeIdFromList } from "./tools/nodes-utils.js";
 
+type ExecuteNodeHostCommandDeps = {
+  detectCommandObfuscation: typeof detectCommandObfuscation;
+  listNodes: typeof listNodes;
+  resolveNodeIdFromList: typeof resolveNodeIdFromList;
+};
+
+const defaultExecuteNodeHostCommandDeps: ExecuteNodeHostCommandDeps = {
+  detectCommandObfuscation,
+  listNodes,
+  resolveNodeIdFromList,
+};
+
+let executeNodeHostCommandDeps: ExecuteNodeHostCommandDeps = defaultExecuteNodeHostCommandDeps;
+
 export type ExecuteNodeHostCommandParams = {
   command: string;
   workdir: string;
@@ -68,7 +82,7 @@ export async function executeNodeHostCommand(
     throw new Error(`exec node not allowed (bound to ${params.boundNode})`);
   }
   const nodeQuery = params.boundNode || params.requestedNode;
-  const nodes = await listNodes({});
+  const nodes = await executeNodeHostCommandDeps.listNodes({});
   if (nodes.length === 0) {
     throw new Error(
       "exec host=node requires a paired node (none available). This requires a companion app or node host.",
@@ -76,7 +90,7 @@ export async function executeNodeHostCommand(
   }
   let nodeId: string;
   try {
-    nodeId = resolveNodeIdFromList(nodes, nodeQuery, !nodeQuery);
+    nodeId = executeNodeHostCommandDeps.resolveNodeIdFromList(nodes, nodeQuery, !nodeQuery);
   } catch (err) {
     if (!nodeQuery && String(err).includes("node required")) {
       throw new Error(
@@ -183,7 +197,7 @@ export async function executeNodeHostCommand(
       // Fall back to requiring approval if node approvals cannot be fetched.
     }
   }
-  const obfuscation = detectCommandObfuscation(params.command);
+  const obfuscation = executeNodeHostCommandDeps.detectCommandObfuscation(params.command);
   if (obfuscation.detected) {
     logInfo(
       `exec: obfuscation detected (node=${nodeQuery ?? "default"}): ${obfuscation.reasons.join(", ")}`,
@@ -408,3 +422,14 @@ export async function executeNodeHostCommand(
     } satisfies ExecToolDetails,
   };
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<ExecuteNodeHostCommandDeps>) {
+    executeNodeHostCommandDeps = overrides
+      ? {
+          ...defaultExecuteNodeHostCommandDeps,
+          ...overrides,
+        }
+      : defaultExecuteNodeHostCommandDeps;
+  },
+};

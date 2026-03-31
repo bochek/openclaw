@@ -12,6 +12,26 @@ import {
 } from "./plugins-command-helpers.js";
 import { promptYesNo } from "./prompt.js";
 
+type PluginUpdateDeps = {
+  updateNpmInstalledPlugins: typeof import("../plugins/update.js").updateNpmInstalledPlugins;
+  updateNpmInstalledHookPacks: typeof import("../hooks/update.js").updateNpmInstalledHookPacks;
+  loadConfig: typeof import("../config/config.js").loadConfig;
+  readConfigFileSnapshot: typeof import("../config/config.js").readConfigFileSnapshot;
+  replaceConfigFile: typeof import("../config/config.js").replaceConfigFile;
+  runtime: typeof import("../runtime.js").defaultRuntime;
+};
+
+const defaultPluginUpdateDeps: PluginUpdateDeps = {
+  updateNpmInstalledPlugins,
+  updateNpmInstalledHookPacks,
+  loadConfig,
+  readConfigFileSnapshot,
+  replaceConfigFile,
+  runtime: defaultRuntime,
+};
+
+let pluginUpdateDeps: PluginUpdateDeps = defaultPluginUpdateDeps;
+
 function resolvePluginUpdateSelection(params: {
   installs: Record<string, PluginInstallRecord>;
   rawId?: string;
@@ -56,14 +76,18 @@ function resolveHookPackUpdateSelection(params: {
   if (params.all) {
     return { hookIds: Object.keys(params.installs) };
   }
-  if (!params.rawId) {
+  const rawId = params.rawId?.trim();
+  if (!rawId) {
     return { hookIds: [] };
   }
-  if (params.rawId in params.installs) {
-    return { hookIds: [params.rawId] };
+
+  for (const [hookId, install] of Object.entries(params.installs)) {
+    if (hookId === rawId || install.spec === rawId || install.resolvedName === rawId) {
+      return { hookIds: [hookId] };
+    }
   }
 
-  const parsedSpec = parseRegistryNpmSpec(params.rawId);
+  const parsedSpec = parseRegistryNpmSpec(rawId);
   if (!parsedSpec || parsedSpec.selectorKind === "none") {
     return { hookIds: [] };
   }
@@ -91,11 +115,12 @@ export async function runPluginUpdateCommand(params: {
   id?: string;
   opts: { all?: boolean; dryRun?: boolean };
 }) {
-  const sourceSnapshotPromise = readConfigFileSnapshot().catch(() => null);
-  const cfg = loadConfig();
+  const runtime = pluginUpdateDeps.runtime;
+  const sourceSnapshotPromise = pluginUpdateDeps.readConfigFileSnapshot().catch(() => null);
+  const cfg = pluginUpdateDeps.loadConfig();
   const logger = {
-    info: (msg: string) => defaultRuntime.log(msg),
-    warn: (msg: string) => defaultRuntime.log(theme.warn(msg)),
+    info: (msg: string) => runtime.log(msg),
+    warn: (msg: string) => runtime.log(theme.warn(msg)),
   };
   const pluginSelection = resolvePluginUpdateSelection({
     installs: cfg.plugins?.installs ?? {},
@@ -107,17 +132,27 @@ export async function runPluginUpdateCommand(params: {
     rawId: params.id,
     all: params.opts.all,
   });
+  const explicitHookId = params.id?.trim();
+  const hasTrackedPluginInstall =
+    explicitHookId !== undefined &&
+    Object.prototype.hasOwnProperty.call(cfg.plugins?.installs ?? {}, explicitHookId);
+  const fallbackHookIds =
+    hookSelection.hookIds.length === 0 && explicitHookId && !hasTrackedPluginInstall
+      ? [explicitHookId]
+      : [];
+  const resolvedHookSelection =
+    fallbackHookIds.length > 0 ? { ...hookSelection, hookIds: fallbackHookIds } : hookSelection;
 
-  if (pluginSelection.pluginIds.length === 0 && hookSelection.hookIds.length === 0) {
+  if (pluginSelection.pluginIds.length === 0 && resolvedHookSelection.hookIds.length === 0) {
     if (params.opts.all) {
-      defaultRuntime.log("No tracked plugins or hook packs to update.");
+      runtime.log("No tracked plugins or hook packs to update.");
       return;
     }
-    defaultRuntime.error("Provide a plugin or hook-pack id, or use --all.");
-    return defaultRuntime.exit(1);
+    runtime.error("Provide a plugin or hook-pack id, or use --all.");
+    return runtime.exit(1);
   }
 
-  const pluginResult = await updateNpmInstalledPlugins({
+  const pluginResult = await pluginUpdateDeps.updateNpmInstalledPlugins({
     config: cfg,
     pluginIds: pluginSelection.pluginIds,
     specOverrides: pluginSelection.specOverrides,
@@ -125,7 +160,7 @@ export async function runPluginUpdateCommand(params: {
     logger,
     onIntegrityDrift: async (drift) => {
       const specLabel = drift.resolvedSpec ?? drift.spec;
-      defaultRuntime.log(
+      runtime.log(
         theme.warn(
           `Integrity drift detected for "${drift.pluginId}" (${specLabel})` +
             `\nExpected: ${drift.expectedIntegrity}` +
@@ -138,15 +173,15 @@ export async function runPluginUpdateCommand(params: {
       return await promptYesNo(`Continue updating "${drift.pluginId}" with this artifact?`);
     },
   });
-  const hookResult = await updateNpmInstalledHookPacks({
+  const hookResult = await pluginUpdateDeps.updateNpmInstalledHookPacks({
     config: pluginResult.config,
-    hookIds: hookSelection.hookIds,
-    specOverrides: hookSelection.specOverrides,
+    hookIds: resolvedHookSelection.hookIds,
+    specOverrides: resolvedHookSelection.specOverrides,
     dryRun: params.opts.dryRun,
     logger,
     onIntegrityDrift: async (drift) => {
       const specLabel = drift.resolvedSpec ?? drift.spec;
-      defaultRuntime.log(
+      runtime.log(
         theme.warn(
           `Integrity drift detected for hook pack "${drift.hookId}" (${specLabel})` +
             `\nExpected: ${drift.expectedIntegrity}` +
@@ -162,33 +197,42 @@ export async function runPluginUpdateCommand(params: {
 
   for (const outcome of pluginResult.outcomes) {
     if (outcome.status === "error") {
-      defaultRuntime.log(theme.error(outcome.message));
+      runtime.log(theme.error(outcome.message));
       continue;
     }
     if (outcome.status === "skipped") {
-      defaultRuntime.log(theme.warn(outcome.message));
+      runtime.log(theme.warn(outcome.message));
       continue;
     }
-    defaultRuntime.log(outcome.message);
+    runtime.log(outcome.message);
   }
 
   for (const outcome of hookResult.outcomes) {
     if (outcome.status === "error") {
-      defaultRuntime.log(theme.error(outcome.message));
+      runtime.log(theme.error(outcome.message));
       continue;
     }
     if (outcome.status === "skipped") {
-      defaultRuntime.log(theme.warn(outcome.message));
+      runtime.log(theme.warn(outcome.message));
       continue;
     }
-    defaultRuntime.log(outcome.message);
+    runtime.log(outcome.message);
   }
 
   if (!params.opts.dryRun && (pluginResult.changed || hookResult.changed)) {
-    await replaceConfigFile({
+    await pluginUpdateDeps.replaceConfigFile({
       nextConfig: hookResult.config,
       baseHash: (await sourceSnapshotPromise)?.hash,
     });
-    defaultRuntime.log("Restart the gateway to load plugins and hooks.");
+    runtime.log("Restart the gateway to load plugins and hooks.");
   }
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<PluginUpdateDeps>): void {
+    pluginUpdateDeps = { ...defaultPluginUpdateDeps, ...overrides };
+  },
+  resetDepsForTest(): void {
+    pluginUpdateDeps = defaultPluginUpdateDeps;
+  },
+};

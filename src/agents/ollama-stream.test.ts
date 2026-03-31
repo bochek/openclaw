@@ -568,7 +568,13 @@ describe("createOllamaStreamFn streaming events", () => {
         done: false,
       });
 
-      const nextBeforeDone = await nextEventWithin(iterator, 25);
+      const pendingDoneEvent = iterator.next();
+      const nextBeforeDone = await Promise.race([
+        pendingDoneEvent,
+        new Promise<"timeout">((resolve) => {
+          setTimeout(() => resolve("timeout"), 25);
+        }),
+      ]);
       expect(nextBeforeDone).toBe("timeout");
 
       controlledFetch.pushLine(
@@ -576,7 +582,7 @@ describe("createOllamaStreamFn streaming events", () => {
       );
       controlledFetch.close();
 
-      const doneEvent = await nextEventWithin(iterator);
+      const doneEvent = await pendingDoneEvent;
       expect(doneEvent).not.toBe("timeout");
       expect(doneEvent).toMatchObject({
         value: { type: "done", reason: "toolUse" },

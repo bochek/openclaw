@@ -1,5 +1,10 @@
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { __testing, createOpenClawTools } from "./openclaw-tools.js";
+import { __testing as beforeToolCallTesting } from "./pi-tools.before-tool-call.js";
+import { __testing as piToolsTesting, createOpenClawCodingTools } from "./pi-tools.js";
+import { __testing as piToolsSchemaTesting } from "./pi-tools.schema.js";
+import { stubTool } from "./test-helpers/fast-tool-stubs.js";
 import type { AnyAgentTool } from "./tools/common.js";
 
 const { resolvePluginToolsMock } = vi.hoisted(() => ({
@@ -9,21 +14,27 @@ const { resolvePluginToolsMock } = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("../plugins/tools.js", () => ({
-  resolvePluginTools: resolvePluginToolsMock,
-  copyPluginToolMeta: vi.fn(),
-  getPluginToolMeta: vi.fn(() => undefined),
-}));
-
-let createOpenClawTools: typeof import("./openclaw-tools.js").createOpenClawTools;
-let createOpenClawCodingTools: typeof import("./pi-tools.js").createOpenClawCodingTools;
-
 describe("createOpenClawTools plugin context", () => {
-  beforeEach(async () => {
-    resolvePluginToolsMock.mockClear();
-    vi.resetModules();
-    ({ createOpenClawTools } = await import("./openclaw-tools.js"));
-    ({ createOpenClawCodingTools } = await import("./pi-tools.js"));
+  beforeEach(() => {
+    resolvePluginToolsMock.mockReset();
+    resolvePluginToolsMock.mockImplementation((params?: unknown) => {
+      void params;
+      return [];
+    });
+    __testing.setDepsForTest({
+      createCanvasTool: () => stubTool("canvas"),
+      resolvePluginTools:
+        resolvePluginToolsMock as typeof import("../plugins/tools.js").resolvePluginTools,
+    });
+    piToolsTesting.setDepsForTest({
+      getPluginToolMeta: () => undefined,
+    });
+    piToolsSchemaTesting.setDepsForTest({
+      copyPluginToolMeta: () => {},
+    });
+    beforeToolCallTesting.setDepsForTest({
+      copyPluginToolMeta: () => {},
+    });
   });
 
   it("forwards trusted requester sender identity to plugin tool context", () => {

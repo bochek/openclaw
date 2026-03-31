@@ -85,6 +85,7 @@ describe("gateway multi-instance e2e", () => {
       instances.push(gw);
 
       const chatEvents: ChatEventPayload[] = [];
+      const debugEvents: string[] = [];
       const chatClient = await connectGatewayClient({
         url: `ws://127.0.0.1:${gw.port}`,
         token: gw.gatewayToken,
@@ -93,7 +94,24 @@ describe("gateway multi-instance e2e", () => {
         clientVersion: "1.0.0",
         platform: "test",
         mode: GATEWAY_CLIENT_MODES.CLI,
+        onConnectError: (err) => {
+          debugEvents.push(`connect-error:${err.message}`);
+        },
+        onClose: (code, reason) => {
+          debugEvents.push(`close:${code}:${reason}`);
+        },
         onEvent: (evt) => {
+          const state =
+            evt.payload && typeof evt.payload === "object" && "state" in evt.payload
+              ? (() => {
+                  const value = (evt.payload as { state?: unknown }).state;
+                  if (typeof value === "string") {
+                    return value;
+                  }
+                  return JSON.stringify(value ?? "");
+                })()
+              : "";
+          debugEvents.push(`${String(evt.event ?? "unknown")}:${state}`);
           if (evt.event === "chat" && evt.payload && typeof evt.payload === "object") {
             chatEvents.push(evt.payload as ChatEventPayload);
           }
@@ -116,6 +134,8 @@ describe("gateway multi-instance e2e", () => {
         events: chatEvents,
         runId: String(runId),
         sessionKey,
+        gateway: gw,
+        debugEvents,
       });
       const finalText = extractFirstTextBlock(finalEvent.message);
       expect(typeof finalText).toBe("string");

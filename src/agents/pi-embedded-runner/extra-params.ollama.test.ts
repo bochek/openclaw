@@ -1,18 +1,10 @@
 import type { Model } from "@mariozechner/pi-ai";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { __testing as extraParamsTesting } from "./extra-params.js";
+import { createPiAiStreamSimpleMock } from "./extra-params.pi-ai-mock.js";
 import { runExtraParamsCase } from "./extra-params.test-support.js";
 
-vi.mock("@mariozechner/pi-ai", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@mariozechner/pi-ai")>();
-  return {
-    ...original,
-    streamSimple: vi.fn(() => ({
-      push: vi.fn(),
-      result: vi.fn(),
-    })),
-  };
-});
+vi.mock("@mariozechner/pi-ai", () => createPiAiStreamSimpleMock());
 
 beforeEach(() => {
   extraParamsTesting.setProviderRuntimeDepsForTest({

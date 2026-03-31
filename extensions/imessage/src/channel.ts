@@ -1,21 +1,21 @@
 import { buildDmGroupAccountAllowlistAdapter } from "openclaw/plugin-sdk/allowlist-config-edit";
 import { createChatChannelPlugin } from "openclaw/plugin-sdk/core";
 import { buildPassiveProbedChannelStatusSummary } from "openclaw/plugin-sdk/extension-shared";
-import { createLazyRuntimeModule } from "openclaw/plugin-sdk/lazy-runtime";
-import { resolveOutboundSendDep } from "openclaw/plugin-sdk/outbound-runtime";
-import { buildOutboundBaseSessionKey, type RoutePeer } from "openclaw/plugin-sdk/routing";
 import {
-  createComputedAccountStatusAdapter,
-  createDefaultChannelRuntimeState,
-} from "openclaw/plugin-sdk/status-helpers";
-import {
-  chunkTextForOutbound,
-  collectStatusIssuesFromLastError,
   DEFAULT_ACCOUNT_ID,
   formatTrimmedAllowFromEntries,
   normalizeIMessageMessagingTarget,
   type ChannelPlugin,
-} from "../runtime-api.js";
+} from "openclaw/plugin-sdk/imessage-core";
+import { createLazyRuntimeModule } from "openclaw/plugin-sdk/lazy-runtime";
+import { resolveOutboundSendDep } from "openclaw/plugin-sdk/outbound-runtime";
+import { buildOutboundBaseSessionKey, type RoutePeer } from "openclaw/plugin-sdk/routing";
+import {
+  collectStatusIssuesFromLastError,
+  createComputedAccountStatusAdapter,
+  createDefaultChannelRuntimeState,
+} from "openclaw/plugin-sdk/status-helpers";
+import { chunkTextForOutbound } from "openclaw/plugin-sdk/text-chunking";
 import { resolveIMessageAccount, type ResolvedIMessageAccount } from "./accounts.js";
 import { createIMessageConversationBindingManager } from "./conversation-bindings.js";
 import {

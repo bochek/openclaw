@@ -3,6 +3,27 @@ import os from "node:os";
 import path from "node:path";
 import { createTempHomeEnv } from "../test-utils/temp-home.js";
 
+let tempWorkspaceTail: Promise<void> = Promise.resolve();
+
+async function acquireTempWorkspaceLock(): Promise<() => void> {
+  let releaseCurrent!: () => void;
+  const current = new Promise<void>((resolve) => {
+    releaseCurrent = resolve;
+  });
+  const previous = tempWorkspaceTail;
+  tempWorkspaceTail = previous.then(() => current);
+  await previous;
+
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    releaseCurrent();
+  };
+}
+
 export function setTempStateDir(workspaceDir: string): string {
   const stateDir = path.join(workspaceDir, "state");
   process.env.OPENCLAW_STATE_DIR = stateDir;
@@ -12,14 +33,19 @@ export function setTempStateDir(workspaceDir: string): string {
 export async function withTempWorkspace(
   run: (params: { workspaceDir: string; stateDir: string }) => Promise<void>,
 ) {
+  const releaseLock = await acquireTempWorkspaceLock();
   const tempHome = await createTempHomeEnv("openclaw-skills-install-home-");
   const workspaceDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-skills-install-"));
   try {
     const stateDir = setTempStateDir(workspaceDir);
     await run({ workspaceDir, stateDir });
   } finally {
-    await fs.rm(workspaceDir, { recursive: true, force: true }).catch(() => undefined);
-    await tempHome.restore();
+    try {
+      await fs.rm(workspaceDir, { recursive: true, force: true }).catch(() => undefined);
+      await tempHome.restore();
+    } finally {
+      releaseLock();
+    }
   }
 }
 

@@ -18,29 +18,87 @@ type RegistryState = {
   runtimeSubagentMode: "default" | "explicit" | "gateway-bindable";
 };
 
-const state: RegistryState = (() => {
-  const globalState = globalThis as typeof globalThis & {
-    [REGISTRY_STATE]?: RegistryState;
-  };
-  if (!globalState[REGISTRY_STATE]) {
-    globalState[REGISTRY_STATE] = {
-      activeRegistry: null,
-      activeVersion: 0,
-      httpRoute: {
-        registry: null,
-        pinned: false,
-        version: 0,
-      },
-      channel: {
-        registry: null,
-        pinned: false,
-        version: 0,
-      },
-      key: null,
-      runtimeSubagentMode: "default",
+type LegacyRegistryState = Partial<
+  RegistryState & {
+    httpRouteRegistry: PluginRegistry | null;
+    httpRouteRegistryPinned: boolean;
+    registry: PluginRegistry | null;
+    version: number;
+  }
+>;
+
+function normalizeSurfaceState(
+  candidate: unknown,
+  fallbackRegistry: PluginRegistry | null,
+  fallbackPinned: boolean,
+  fallbackVersion: number,
+): RegistrySurfaceState {
+  if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+    const surface = candidate as Partial<RegistrySurfaceState>;
+    return {
+      registry:
+        "registry" in surface && (surface.registry === null || typeof surface.registry === "object")
+          ? (surface.registry ?? null)
+          : fallbackRegistry,
+      pinned: typeof surface.pinned === "boolean" ? surface.pinned : fallbackPinned,
+      version: typeof surface.version === "number" ? surface.version : fallbackVersion,
     };
   }
-  return globalState[REGISTRY_STATE];
+  return {
+    registry: fallbackRegistry,
+    pinned: fallbackPinned,
+    version: fallbackVersion,
+  };
+}
+
+function normalizeRegistryState(candidate: unknown): RegistryState {
+  const legacyState =
+    candidate && typeof candidate === "object" && !Array.isArray(candidate)
+      ? (candidate as LegacyRegistryState)
+      : {};
+  const activeRegistry =
+    "activeRegistry" in legacyState
+      ? (legacyState.activeRegistry ?? null)
+      : (legacyState.registry ?? null);
+  const activeVersion =
+    typeof legacyState.activeVersion === "number"
+      ? legacyState.activeVersion
+      : typeof legacyState.version === "number"
+        ? legacyState.version
+        : 0;
+  return {
+    activeRegistry,
+    activeVersion,
+    httpRoute: normalizeSurfaceState(
+      legacyState.httpRoute,
+      legacyState.httpRouteRegistry ?? activeRegistry,
+      legacyState.httpRouteRegistryPinned ?? false,
+      activeVersion,
+    ),
+    channel: normalizeSurfaceState(legacyState.channel, activeRegistry, false, activeVersion),
+    key: typeof legacyState.key === "string" ? legacyState.key : null,
+    runtimeSubagentMode:
+      legacyState.runtimeSubagentMode === "explicit" ||
+      legacyState.runtimeSubagentMode === "gateway-bindable"
+        ? legacyState.runtimeSubagentMode
+        : "default",
+  };
+}
+
+const state: RegistryState = (() => {
+  const globalState = globalThis as typeof globalThis & {
+    [REGISTRY_STATE]?: unknown;
+  };
+  const existingState = globalState[REGISTRY_STATE];
+  if (existingState && typeof existingState === "object" && !Array.isArray(existingState)) {
+    const normalizedState = normalizeRegistryState(existingState);
+    Object.assign(existingState, normalizedState);
+    globalState[REGISTRY_STATE] = existingState;
+    return existingState as RegistryState;
+  }
+  const normalizedState = normalizeRegistryState(existingState);
+  globalState[REGISTRY_STATE] = normalizedState;
+  return normalizedState;
 })();
 
 function installSurfaceRegistry(

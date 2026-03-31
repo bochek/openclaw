@@ -11,6 +11,12 @@ export function getProcessSupervisor(): ProcessSupervisor {
   return singleton;
 }
 
+export const __testing = {
+  setProcessSupervisorForTest(supervisor?: ProcessSupervisor | null) {
+    singleton = supervisor ?? null;
+  },
+};
+
 export { createProcessSupervisor } from "./supervisor.js";
 export type {
   ManagedRun,

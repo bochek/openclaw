@@ -10,6 +10,8 @@ const roomCache = new Map<
   string,
   { kind?: "direct" | "group"; fetchedAt: number; error?: string }
 >();
+let readApiPasswordFileForRoomInfo: typeof readFileSync = readFileSync;
+let fetchRoomInfoWithGuard: typeof fetchWithSsrFGuard = fetchWithSsrFGuard;
 
 function resolveRoomCacheKey(params: { accountId: string; roomToken: string }) {
   return `${params.accountId}:${params.roomToken}`;
@@ -30,7 +32,7 @@ function readApiPassword(params: {
     return undefined;
   }
   try {
-    const value = readFileSync(params.apiPasswordFile, "utf-8").trim();
+    const value = readApiPasswordFileForRoomInfo(params.apiPasswordFile, "utf-8").trim();
     return value || undefined;
   } catch {
     return undefined;
@@ -94,7 +96,7 @@ export async function resolveNextcloudTalkRoomKind(params: {
   const auth = Buffer.from(`${apiUser}:${apiPassword}`, "utf-8").toString("base64");
 
   try {
-    const { response, release } = await fetchWithSsrFGuard({
+    const { response, release } = await fetchRoomInfoWithGuard({
       url,
       init: {
         method: "GET",
@@ -138,3 +140,16 @@ export async function resolveNextcloudTalkRoomKind(params: {
     return undefined;
   }
 }
+
+export const __testing = {
+  setFetchWithGuardForTest(fetcher: typeof fetchWithSsrFGuard) {
+    fetchRoomInfoWithGuard = fetcher;
+  },
+  setReadFileSyncForTest(reader: typeof readFileSync) {
+    readApiPasswordFileForRoomInfo = reader;
+  },
+  resetRoomInfoDepsForTest() {
+    fetchRoomInfoWithGuard = fetchWithSsrFGuard;
+    readApiPasswordFileForRoomInfo = readFileSync;
+  },
+};

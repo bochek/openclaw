@@ -181,7 +181,7 @@ export async function runDaemonRestart(opts: DaemonLifecycleOptions = {}): Promi
           return;
         }
 
-        const diagnostics = renderGatewayPortHealthDiagnostics(health);
+        const diagnostics = renderGatewayPortHealthDiagnostics(health) ?? [];
         const timeoutLine = `Timed out after ${restartWaitSeconds}s waiting for gateway port ${restartPort} to become healthy.`;
         if (!json) {
           defaultRuntime.log(theme.warn(timeoutLine));
@@ -233,7 +233,7 @@ export async function runDaemonRestart(opts: DaemonLifecycleOptions = {}): Promi
         return;
       }
 
-      const diagnostics = renderRestartDiagnostics(health);
+      const diagnostics = renderRestartDiagnostics(health) ?? [];
       const timeoutLine = `Timed out after ${restartWaitSeconds}s waiting for gateway port ${restartPort} to become healthy.`;
       const runningNoPortLine =
         health.runtime.status === "running" && health.portUsage.status === "free"

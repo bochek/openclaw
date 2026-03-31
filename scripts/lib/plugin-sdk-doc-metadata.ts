@@ -38,6 +38,9 @@ export const pluginSdkDocMetadata = {
   "channel-reply-pipeline": {
     category: "channel",
   },
+  "inbound-reply-dispatch": {
+    category: "channel",
+  },
   "channel-setup": {
     category: "channel",
   },
@@ -60,6 +63,9 @@ export const pluginSdkDocMetadata = {
     category: "utilities",
   },
   "reply-payload": {
+    category: "utilities",
+  },
+  "text-chunking": {
     category: "utilities",
   },
   testing: {

@@ -19,6 +19,12 @@ type ConfigModelEntry = { id?: string; contextWindow?: number };
 type ProviderConfigEntry = { models?: ConfigModelEntry[] };
 type ModelsConfig = { providers?: Record<string, ProviderConfigEntry | undefined> };
 type AgentModelEntry = { params?: Record<string, unknown> };
+type ContextDeps = {
+  loadConfig: typeof loadConfig;
+  ensureOpenClawModelsJson: (cfg: OpenClawConfig) => Promise<void>;
+  loadDiscoveredModels: (agentDir: string) => Promise<ModelEntry[]>;
+  resolveOpenClawAgentDir: typeof resolveOpenClawAgentDir;
+};
 
 const ANTHROPIC_1M_MODEL_PREFIXES = ["claude-opus-4", "claude-sonnet-4"] as const;
 export const ANTHROPIC_CONTEXT_1M_TOKENS = 1_048_576;
@@ -89,6 +95,28 @@ function loadModelsConfigRuntime() {
   modelsConfigRuntimePromise ??= import("./models-config.runtime.js");
   return modelsConfigRuntimePromise;
 }
+
+async function defaultEnsureOpenClawModelsJson(cfg: OpenClawConfig): Promise<void> {
+  await (await loadModelsConfigRuntime()).ensureOpenClawModelsJson(cfg);
+}
+
+async function defaultLoadDiscoveredModels(agentDir: string): Promise<ModelEntry[]> {
+  const { discoverAuthStorage, discoverModels } = await import("./pi-model-discovery-runtime.js");
+  const authStorage = discoverAuthStorage(agentDir);
+  const modelRegistry = discoverModels(authStorage, agentDir) as unknown as ModelRegistryLike;
+  return typeof modelRegistry.getAvailable === "function"
+    ? modelRegistry.getAvailable()
+    : modelRegistry.getAll();
+}
+
+const defaultContextDeps: ContextDeps = {
+  loadConfig,
+  ensureOpenClawModelsJson: defaultEnsureOpenClawModelsJson,
+  loadDiscoveredModels: defaultLoadDiscoveredModels,
+  resolveOpenClawAgentDir,
+};
+
+let contextDeps: ContextDeps = defaultContextDeps;
 
 function isLikelyOpenClawCliProcess(argv: string[] = process.argv): boolean {
   const entryBasename = path
@@ -167,7 +195,7 @@ function primeConfiguredContextWindows(): OpenClawConfig | undefined {
     return undefined;
   }
   try {
-    const cfg = loadConfig();
+    const cfg = contextDeps.loadConfig();
     applyConfiguredContextWindows({
       cache: MODEL_CONTEXT_TOKEN_CACHE,
       modelsConfig: cfg.models as ModelsConfig | undefined,
@@ -197,21 +225,14 @@ function ensureContextWindowCacheLoaded(): Promise<void> {
 
   loadPromise = (async () => {
     try {
-      await (await loadModelsConfigRuntime()).ensureOpenClawModelsJson(cfg);
+      await contextDeps.ensureOpenClawModelsJson(cfg);
     } catch {
       // Continue with best-effort discovery/overrides.
     }
 
     try {
-      const { discoverAuthStorage, discoverModels } =
-        await import("./pi-model-discovery-runtime.js");
-      const agentDir = resolveOpenClawAgentDir();
-      const authStorage = discoverAuthStorage(agentDir);
-      const modelRegistry = discoverModels(authStorage, agentDir) as unknown as ModelRegistryLike;
-      const models =
-        typeof modelRegistry.getAvailable === "function"
-          ? modelRegistry.getAvailable()
-          : modelRegistry.getAll();
+      const agentDir = contextDeps.resolveOpenClawAgentDir();
+      const models = await contextDeps.loadDiscoveredModels(agentDir);
       applyDiscoveredContextWindows({
         cache: MODEL_CONTEXT_TOKEN_CACHE,
         models,
@@ -262,6 +283,22 @@ if (shouldEagerWarmContextWindowCache()) {
   // when this module is pulled in through library/plugin-sdk surfaces.
   void ensureContextWindowCacheLoaded();
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<ContextDeps>) {
+    contextDeps = overrides
+      ? {
+          ...defaultContextDeps,
+          ...overrides,
+        }
+      : defaultContextDeps;
+  },
+  runEagerWarmupForTest(argv: string[] = process.argv) {
+    if (shouldEagerWarmContextWindowCache(argv)) {
+      void ensureContextWindowCacheLoaded();
+    }
+  },
+};
 
 function resolveConfiguredModelParams(
   cfg: OpenClawConfig | undefined,
@@ -403,7 +440,7 @@ export function resolveContextTokensForModel(params: {
     if (params.provider) {
       const configuredWindow = resolveConfiguredProviderContextWindow(
         params.cfg,
-        ref.provider,
+        params.provider.trim(),
         ref.model,
       );
       if (configuredWindow !== undefined) {

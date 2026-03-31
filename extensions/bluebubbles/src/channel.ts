@@ -58,10 +58,19 @@ import {
   parseBlueBubblesTarget,
 } from "./targets.js";
 
-const loadBlueBubblesChannelRuntime = createLazyRuntimeNamedExport(
+const defaultLoadBlueBubblesChannelRuntime = createLazyRuntimeNamedExport(
   () => import("./channel.runtime.js"),
   "blueBubblesChannelRuntime",
 );
+let loadBlueBubblesChannelRuntime = defaultLoadBlueBubblesChannelRuntime;
+
+export const __testing = {
+  setLoadBlueBubblesChannelRuntimeForTest(
+    loader?: typeof defaultLoadBlueBubblesChannelRuntime,
+  ): void {
+    loadBlueBubblesChannelRuntime = loader ?? defaultLoadBlueBubblesChannelRuntime;
+  },
+};
 
 const resolveBlueBubblesDmPolicy = createScopedDmSecurityResolver<ResolvedBlueBubblesAccount>({
   channelKey: "bluebubbles",

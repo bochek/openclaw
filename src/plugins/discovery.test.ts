@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { bundledDistPluginFile } from "../../test/helpers/bundled-plugin-paths.js";
 import { clearPluginDiscoveryCache, discoverOpenClawPlugins } from "./discovery.js";
 import {
   cleanupTrackedTempDirs,
@@ -372,7 +371,7 @@ describe("discoverOpenClawPlugins", () => {
     writePluginPackageManifest({
       packageDir: path.join(pluginDir, "node_modules", "openclaw"),
       packageName: "openclaw",
-      extensions: [`./${bundledDistPluginFile("diffs", "index.js")}`],
+      extensions: ["./dist/extensions/diffs/index.js"],
     });
     writePluginManifest({ pluginDir: nestedDiffsDir, id: "diffs" });
     fs.writeFileSync(

@@ -45,7 +45,7 @@ import {
 import { createFeishuReplyDispatcher } from "./reply-dispatcher.js";
 import { getFeishuRuntime } from "./runtime.js";
 import { getMessageFeishu, listFeishuThreadMessages, sendMessageFeishu } from "./send.js";
-import type { FeishuMessageContext, FeishuMessageInfo } from "./types.js";
+import type { FeishuMessageContext } from "./types.js";
 import type { DynamicAgentCreationConfig } from "./types.js";
 
 export { toMessageResourceType } from "./bot-content.js";
@@ -54,6 +54,25 @@ export { toMessageResourceType } from "./bot-content.js";
 // Key: appId or "default", Value: timestamp of last notification
 const permissionErrorNotifiedAt = new Map<string, number>();
 const PERMISSION_ERROR_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes
+type BotDeps = {
+  resolveConfiguredBindingRoute: typeof resolveConfiguredBindingRoute;
+  ensureConfiguredBindingRouteReady: typeof ensureConfiguredBindingRouteReady;
+  getSessionBindingService: typeof getSessionBindingService;
+  createFeishuReplyDispatcher: typeof createFeishuReplyDispatcher;
+  getMessageFeishu: typeof getMessageFeishu;
+  listFeishuThreadMessages: typeof listFeishuThreadMessages;
+  sendMessageFeishu: typeof sendMessageFeishu;
+};
+const defaultBotDeps: BotDeps = {
+  resolveConfiguredBindingRoute,
+  ensureConfiguredBindingRouteReady,
+  getSessionBindingService,
+  createFeishuReplyDispatcher,
+  getMessageFeishu,
+  listFeishuThreadMessages,
+  sendMessageFeishu,
+};
+let botDeps: BotDeps = defaultBotDeps;
 export type FeishuMessageEvent = {
   sender: {
     sender_id: {
@@ -96,6 +115,17 @@ export type FeishuBotAddedEvent = {
   };
   external: boolean;
   operator_tenant_key?: string;
+};
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<BotDeps>): void {
+    botDeps = overrides ? { ...defaultBotDeps, ...overrides } : defaultBotDeps;
+    permissionErrorNotifiedAt.clear();
+  },
+  resetDepsForTest(): void {
+    botDeps = defaultBotDeps;
+    permissionErrorNotifiedAt.clear();
+  },
 };
 
 // --- Broadcast support ---
@@ -218,49 +248,6 @@ export function buildFeishuAgentBody(params: {
   return messageBody;
 }
 
-function shouldIncludeFetchedGroupContextMessage(params: {
-  isGroup: boolean;
-  allowFrom: Array<string | number>;
-  senderId?: string;
-  senderType?: string;
-}): boolean {
-  if (!params.isGroup || params.allowFrom.length === 0) {
-    return true;
-  }
-  if (params.senderType === "app") {
-    return true;
-  }
-  const senderId = params.senderId?.trim();
-  if (!senderId) {
-    return false;
-  }
-  return isFeishuGroupAllowed({
-    groupPolicy: "allowlist",
-    allowFrom: params.allowFrom,
-    senderId,
-    senderName: undefined,
-  });
-}
-
-function filterFetchedGroupContextMessages<
-  T extends Pick<FeishuMessageInfo, "senderId" | "senderType">,
->(
-  messages: readonly T[],
-  params: {
-    isGroup: boolean;
-    allowFrom: Array<string | number>;
-  },
-): T[] {
-  return messages.filter((message) =>
-    shouldIncludeFetchedGroupContextMessage({
-      isGroup: params.isGroup,
-      allowFrom: params.allowFrom,
-      senderId: message.senderId,
-      senderType: message.senderType,
-    }),
-  );
-}
-
 export async function handleFeishuMessage(params: {
   cfg: ClawdbotConfig;
   event: FeishuMessageEvent;
@@ -380,11 +367,6 @@ export async function handleFeishuMessage(params: {
   const groupConfig = isGroup
     ? resolveFeishuGroupConfig({ cfg: feishuCfg, groupId: ctx.chatId })
     : undefined;
-  const effectiveGroupSenderAllowFrom = isGroup
-    ? (groupConfig?.allowFrom?.length ?? 0) > 0
-      ? (groupConfig?.allowFrom ?? [])
-      : (feishuCfg?.groupSenderAllowFrom ?? [])
-    : [];
   const groupSession = isGroup
     ? resolveFeishuGroupSession({
         chatId: ctx.chatId,
@@ -450,10 +432,14 @@ export async function handleFeishuMessage(params: {
     }
 
     // Sender-level allowlist: per-group allowFrom takes precedence, then global groupSenderAllowFrom
-    if (effectiveGroupSenderAllowFrom.length > 0) {
+    const perGroupSenderAllowFrom = groupConfig?.allowFrom ?? [];
+    const globalSenderAllowFrom = feishuCfg?.groupSenderAllowFrom ?? [];
+    const effectiveSenderAllowFrom =
+      perGroupSenderAllowFrom.length > 0 ? perGroupSenderAllowFrom : globalSenderAllowFrom;
+    if (effectiveSenderAllowFrom.length > 0) {
       const senderAllowed = isFeishuGroupAllowed({
         groupPolicy: "allowlist",
-        allowFrom: effectiveGroupSenderAllowFrom,
+        allowFrom: effectiveSenderAllowFrom,
         senderId: ctx.senderOpenId,
         senderIds: [senderUserId],
         senderName: ctx.senderName,
@@ -532,7 +518,7 @@ export async function handleFeishuMessage(params: {
             log(`feishu[${account.accountId}]: pairing request sender=${ctx.senderOpenId}`);
           },
           sendPairingReply: async (text) => {
-            await sendMessageFeishu({
+            await botDeps.sendMessageFeishu({
               cfg,
               to: `chat:${ctx.chatId}`,
               text,
@@ -634,7 +620,7 @@ export async function handleFeishuMessage(params: {
     const parentConversationId = isGroup ? (parentPeer?.id ?? ctx.chatId) : undefined;
     let configuredBinding = null;
     if (feishuAcpConversationSupported) {
-      const configuredRoute = resolveConfiguredBindingRoute({
+      const configuredRoute = botDeps.resolveConfiguredBindingRoute({
         cfg: effectiveCfg,
         route,
         conversation: {
@@ -650,7 +636,7 @@ export async function handleFeishuMessage(params: {
       // Bound Feishu conversations intentionally require an exact live conversation-id match.
       // Sender-scoped topic sessions therefore bind on `chat:topic:root:sender:user`, while
       // configured ACP bindings may still inherit the shared `chat:topic:root` topic session.
-      const threadBinding = getSessionBindingService().resolveByConversation({
+      const threadBinding = botDeps.getSessionBindingService().resolveByConversation({
         channel: "feishu",
         accountId: account.accountId,
         conversationId: currentConversationId,
@@ -669,7 +655,7 @@ export async function handleFeishuMessage(params: {
           matchedBy: "binding.channel",
         };
         configuredBinding = null;
-        getSessionBindingService().touch(threadBinding.bindingId);
+        botDeps.getSessionBindingService().touch(threadBinding.bindingId);
         log(
           `feishu[${account.accountId}]: routed via bound conversation ${currentConversationId} -> ${boundSessionKey}`,
         );
@@ -677,7 +663,7 @@ export async function handleFeishuMessage(params: {
     }
 
     if (configuredBinding) {
-      const ensured = await ensureConfiguredBindingRouteReady({
+      const ensured = await botDeps.ensureConfiguredBindingRouteReady({
         cfg: effectiveCfg,
         bindingResolution: configuredBinding,
       });
@@ -688,7 +674,7 @@ export async function handleFeishuMessage(params: {
             groupSession?.groupSessionScope === "group_topic_sender")
             ? (ctx.rootId ?? ctx.messageId)
             : ctx.messageId;
-        await sendMessageFeishu({
+        await botDeps.sendMessageFeishu({
           cfg: effectiveCfg,
           to: `chat:${ctx.chatId}`,
           text: `⚠️ Failed to initialize the configured ACP session for this Feishu conversation: ${ensured.error}`,
@@ -730,27 +716,15 @@ export async function handleFeishuMessage(params: {
     let quotedContent: string | undefined;
     if (ctx.parentId) {
       try {
-        quotedMessageInfo = await getMessageFeishu({
+        quotedMessageInfo = await botDeps.getMessageFeishu({
           cfg,
           messageId: ctx.parentId,
           accountId: account.accountId,
         });
-        if (
-          quotedMessageInfo &&
-          shouldIncludeFetchedGroupContextMessage({
-            isGroup,
-            allowFrom: effectiveGroupSenderAllowFrom,
-            senderId: quotedMessageInfo.senderId,
-            senderType: quotedMessageInfo.senderType,
-          })
-        ) {
+        if (quotedMessageInfo) {
           quotedContent = quotedMessageInfo.content;
           log(
             `feishu[${account.accountId}]: fetched quoted message: ${quotedContent?.slice(0, 100)}`,
-          );
-        } else if (quotedMessageInfo) {
-          log(
-            `feishu[${account.accountId}]: skipped quoted message from sender ${quotedMessageInfo.senderId ?? "unknown"} due to group sender allowlist`,
           );
         }
       } catch (err) {
@@ -823,7 +797,6 @@ export async function handleFeishuMessage(params: {
       }
     >();
     let rootMessageInfo: Awaited<ReturnType<typeof getMessageFeishu>> | undefined;
-    let rootMessageThreadId: string | undefined;
     let rootMessageFetched = false;
     const getRootMessageInfo = async () => {
       if (!ctx.rootId) {
@@ -835,7 +808,7 @@ export async function handleFeishuMessage(params: {
           rootMessageInfo = quotedMessageInfo;
         } else {
           try {
-            rootMessageInfo = await getMessageFeishu({
+            rootMessageInfo = await botDeps.getMessageFeishu({
               cfg,
               messageId: ctx.rootId,
               accountId: account.accountId,
@@ -844,21 +817,6 @@ export async function handleFeishuMessage(params: {
             log(`feishu[${account.accountId}]: failed to fetch root message: ${String(err)}`);
             rootMessageInfo = null;
           }
-        }
-        rootMessageThreadId = rootMessageInfo?.threadId;
-        if (
-          rootMessageInfo &&
-          !shouldIncludeFetchedGroupContextMessage({
-            isGroup,
-            allowFrom: effectiveGroupSenderAllowFrom,
-            senderId: rootMessageInfo.senderId,
-            senderType: rootMessageInfo.senderType,
-          })
-        ) {
-          log(
-            `feishu[${account.accountId}]: skipped thread starter from sender ${rootMessageInfo.senderId ?? "unknown"} due to group sender allowlist`,
-          );
-          rootMessageInfo = null;
         }
       }
       return rootMessageInfo ?? null;
@@ -899,7 +857,7 @@ export async function handleFeishuMessage(params: {
       }
 
       const rootMsg = await getRootMessageInfo();
-      let feishuThreadId = ctx.threadId ?? rootMessageThreadId ?? rootMsg?.threadId;
+      let feishuThreadId = ctx.threadId ?? rootMsg?.threadId;
       if (feishuThreadId) {
         log(`feishu[${account.accountId}]: resolved thread ID: ${feishuThreadId}`);
       }
@@ -912,7 +870,7 @@ export async function handleFeishuMessage(params: {
       }
 
       try {
-        const threadMessages = await listFeishuThreadMessages({
+        const threadMessages = await botDeps.listFeishuThreadMessages({
           cfg,
           threadId: feishuThreadId,
           currentMessageId: ctx.messageId,
@@ -926,18 +884,14 @@ export async function handleFeishuMessage(params: {
             .map((id) => id?.trim())
             .filter((id): id is string => id !== undefined && id.length > 0),
         );
-        const allowlistedMessages = filterFetchedGroupContextMessages(threadMessages, {
-          isGroup,
-          allowFrom: effectiveGroupSenderAllowFrom,
-        });
         const relevantMessages =
           (senderScoped
-            ? allowlistedMessages.filter(
+            ? threadMessages.filter(
                 (msg) =>
                   msg.senderType === "app" ||
                   (msg.senderId !== undefined && senderIds.has(msg.senderId.trim())),
               )
-            : allowlistedMessages) ?? [];
+            : threadMessages) ?? [];
 
         const threadStarterBody = rootMsg?.content ?? relevantMessages[0]?.content;
         const includeStarterInHistory = Boolean(rootMsg?.content || ctx.rootId);
@@ -1077,7 +1031,8 @@ export async function handleFeishuMessage(params: {
         if (agentId === activeAgentId) {
           // Active agent: real Feishu dispatcher (responds on Feishu)
           const identity = resolveAgentOutboundIdentity(cfg, agentId);
-          const { dispatcher, replyOptions, markDispatchIdle } = createFeishuReplyDispatcher({
+          const { dispatcher, replyOptions, markDispatchIdle } =
+            botDeps.createFeishuReplyDispatcher({
             cfg,
             agentId,
             runtime: runtime as RuntimeEnv,
@@ -1179,7 +1134,8 @@ export async function handleFeishuMessage(params: {
       );
 
       const identity = resolveAgentOutboundIdentity(cfg, route.agentId);
-      const { dispatcher, replyOptions, markDispatchIdle } = createFeishuReplyDispatcher({
+      const { dispatcher, replyOptions, markDispatchIdle } =
+        botDeps.createFeishuReplyDispatcher({
         cfg,
         agentId: route.agentId,
         runtime: runtime as RuntimeEnv,

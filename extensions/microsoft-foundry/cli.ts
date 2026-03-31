@@ -2,6 +2,23 @@ import { execFile, execFileSync, spawn } from "node:child_process";
 import type { AzAccessToken, AzAccount } from "./shared.js";
 import { COGNITIVE_SERVICES_RESOURCE } from "./shared.js";
 
+const foundryCliDepsDefaults = {
+  execFile,
+  execFileSync,
+} as const;
+
+const foundryCliDeps = { ...foundryCliDepsDefaults };
+
+export function __setFoundryCliDepsForTest(
+  overrides: Partial<typeof foundryCliDepsDefaults>,
+): void {
+  Object.assign(foundryCliDeps, overrides);
+}
+
+export function __resetFoundryCliDepsForTest(): void {
+  Object.assign(foundryCliDeps, foundryCliDepsDefaults);
+}
+
 function summarizeAzErrorMessage(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) {
@@ -38,7 +55,7 @@ function buildAzCommandError(error: Error, stderr: string, stdout: string): Erro
 }
 
 export function execAz(args: string[]): string {
-  return execFileSync("az", args, {
+  return foundryCliDeps.execFileSync("az", args, {
     encoding: "utf-8",
     timeout: 30_000,
     shell: process.platform === "win32",
@@ -47,7 +64,7 @@ export function execAz(args: string[]): string {
 
 export async function execAzAsync(args: string[]): Promise<string> {
   return await new Promise<string>((resolve, reject) => {
-    execFile(
+    foundryCliDeps.execFile(
       "az",
       args,
       {

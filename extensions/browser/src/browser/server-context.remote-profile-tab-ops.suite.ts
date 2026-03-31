@@ -1,32 +1,35 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { InvalidBrowserNavigationUrlError } from "./navigation-guard.js";
+import * as pwAiModule from "./pw-ai-module.js";
+import { closePlaywrightBrowserConnection } from "./pw-session.js";
+import { createBrowserRouteContext } from "./server-context.js";
+import "./server-context.chrome-test-harness.js";
+import { __testing as availabilityTesting } from "./server-context.availability.js";
+import {
+  createJsonListFetchMock,
+  createRemoteRouteHarness,
+  createSequentialPageLister,
+  makeState,
+} from "./server-context.remote-tab-ops.harness.js";
 
 const originalFetch = globalThis.fetch;
 
-let chromeModule: typeof import("./chrome.js");
-let InvalidBrowserNavigationUrlError: typeof import("./navigation-guard.js").InvalidBrowserNavigationUrlError;
-let pwAiModule: typeof import("./pw-ai-module.js");
-let closePlaywrightBrowserConnection: typeof import("./pw-session.js").closePlaywrightBrowserConnection;
-let createBrowserRouteContext: typeof import("./server-context.js").createBrowserRouteContext;
-let createJsonListFetchMock: typeof import("./server-context.remote-tab-ops.harness.js").createJsonListFetchMock;
-let createRemoteRouteHarness: typeof import("./server-context.remote-tab-ops.harness.js").createRemoteRouteHarness;
-let createSequentialPageLister: typeof import("./server-context.remote-tab-ops.harness.js").createSequentialPageLister;
-let makeState: typeof import("./server-context.remote-tab-ops.harness.js").makeState;
-
-beforeAll(async () => {
-  vi.resetModules();
-  await import("./server-context.chrome-test-harness.js");
-  chromeModule = await import("./chrome.js");
-  ({ InvalidBrowserNavigationUrlError } = await import("./navigation-guard.js"));
-  pwAiModule = await import("./pw-ai-module.js");
-  ({ closePlaywrightBrowserConnection } = await import("./pw-session.js"));
-  ({ createBrowserRouteContext } = await import("./server-context.js"));
-  ({ createJsonListFetchMock, createRemoteRouteHarness, createSequentialPageLister, makeState } =
-    await import("./server-context.remote-tab-ops.harness.js"));
-});
+const availabilityMocks = vi.hoisted(() => ({
+  closeChromeMcpSession: vi.fn(async () => false),
+  ensureChromeMcpAvailable: vi.fn(async () => {}),
+  isChromeCdpReady: vi.fn(async () => true),
+  isChromeReachable: vi.fn(async () => true),
+  launchOpenClawChrome: vi.fn(async () => {
+    throw new Error("unexpected launch");
+  }),
+  listChromeMcpTabs: vi.fn(async () => []),
+  stopOpenClawChrome: vi.fn(async () => {}),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
   globalThis.fetch = originalFetch;
+  availabilityTesting.setDepsForTest(availabilityMocks);
 });
 
 afterEach(async () => {
@@ -45,8 +48,8 @@ describe("browser server-context remote profile tab operations", () => {
       color: "#FF4500",
     };
 
-    const reachableMock = vi.mocked(chromeModule.isChromeReachable).mockResolvedValueOnce(false);
-    const launchMock = vi.mocked(chromeModule.launchOpenClawChrome);
+    const reachableMock = availabilityMocks.isChromeReachable.mockResolvedValueOnce(false);
+    const launchMock = availabilityMocks.launchOpenClawChrome;
     const ctx = createBrowserRouteContext({ getState: () => state });
 
     await expect(ctx.forProfile("openclaw").ensureBrowserAvailable()).rejects.toThrow(
@@ -65,9 +68,9 @@ describe("browser server-context remote profile tab operations", () => {
       color: "#FF4500",
     };
 
-    const httpReachableMock = vi.mocked(chromeModule.isChromeReachable).mockResolvedValueOnce(true);
-    const wsReachableMock = vi.mocked(chromeModule.isChromeCdpReady).mockResolvedValueOnce(false);
-    const launchMock = vi.mocked(chromeModule.launchOpenClawChrome);
+    const httpReachableMock = availabilityMocks.isChromeReachable.mockResolvedValueOnce(true);
+    const wsReachableMock = availabilityMocks.isChromeCdpReady.mockResolvedValueOnce(false);
+    const launchMock = availabilityMocks.launchOpenClawChrome;
     const ctx = createBrowserRouteContext({ getState: () => state });
 
     await expect(ctx.forProfile("openclaw").ensureBrowserAvailable()).rejects.toThrow(

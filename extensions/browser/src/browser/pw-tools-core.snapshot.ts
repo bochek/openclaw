@@ -22,17 +22,36 @@ import {
 } from "./pw-session.js";
 import { withPageScopedCdpClient } from "./pw-session.page-cdp.js";
 
+const deps = {
+  ensurePageState,
+  forceDisconnectPlaywrightForTarget,
+  getPageForTargetId,
+  storeRoleRefsForTarget,
+};
+
+export type PwToolsCoreSnapshotDeps = typeof deps;
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<PwToolsCoreSnapshotDeps>) {
+    deps.ensurePageState = overrides?.ensurePageState ?? ensurePageState;
+    deps.forceDisconnectPlaywrightForTarget =
+      overrides?.forceDisconnectPlaywrightForTarget ?? forceDisconnectPlaywrightForTarget;
+    deps.getPageForTargetId = overrides?.getPageForTargetId ?? getPageForTargetId;
+    deps.storeRoleRefsForTarget = overrides?.storeRoleRefsForTarget ?? storeRoleRefsForTarget;
+  },
+};
+
 export async function snapshotAriaViaPlaywright(opts: {
   cdpUrl: string;
   targetId?: string;
   limit?: number;
 }): Promise<{ nodes: AriaSnapshotNode[] }> {
   const limit = Math.max(1, Math.min(2000, Math.floor(opts.limit ?? 500)));
-  const page = await getPageForTargetId({
+  const page = await deps.getPageForTargetId({
     cdpUrl: opts.cdpUrl,
     targetId: opts.targetId,
   });
-  ensurePageState(page);
+  deps.ensurePageState(page);
   const res = (await withPageScopedCdpClient({
     cdpUrl: opts.cdpUrl,
     page,
@@ -56,11 +75,11 @@ export async function snapshotAiViaPlaywright(opts: {
   timeoutMs?: number;
   maxChars?: number;
 }): Promise<{ snapshot: string; truncated?: boolean; refs: RoleRefMap }> {
-  const page = await getPageForTargetId({
+  const page = await deps.getPageForTargetId({
     cdpUrl: opts.cdpUrl,
     targetId: opts.targetId,
   });
-  ensurePageState(page);
+  deps.ensurePageState(page);
 
   const maybe = page as unknown as WithSnapshotForAI;
   if (!maybe._snapshotForAI) {
@@ -84,7 +103,7 @@ export async function snapshotAiViaPlaywright(opts: {
   }
 
   const built = buildRoleSnapshotFromAiSnapshot(snapshot);
-  storeRoleRefsForTarget({
+  deps.storeRoleRefsForTarget({
     page,
     cdpUrl: opts.cdpUrl,
     targetId: opts.targetId,
@@ -106,11 +125,11 @@ export async function snapshotRoleViaPlaywright(opts: {
   refs: Record<string, { role: string; name?: string; nth?: number }>;
   stats: { lines: number; chars: number; refs: number; interactive: number };
 }> {
-  const page = await getPageForTargetId({
+  const page = await deps.getPageForTargetId({
     cdpUrl: opts.cdpUrl,
     targetId: opts.targetId,
   });
-  ensurePageState(page);
+  deps.ensurePageState(page);
 
   if (opts.refsMode === "aria") {
     if (opts.selector?.trim() || opts.frameSelector?.trim()) {
@@ -125,7 +144,7 @@ export async function snapshotRoleViaPlaywright(opts: {
       track: "response",
     });
     const built = buildRoleSnapshotFromAiSnapshot(String(result?.full ?? ""), opts.options);
-    storeRoleRefsForTarget({
+    deps.storeRoleRefsForTarget({
       page,
       cdpUrl: opts.cdpUrl,
       targetId: opts.targetId,
@@ -151,7 +170,7 @@ export async function snapshotRoleViaPlaywright(opts: {
 
   const ariaSnapshot = await locator.ariaSnapshot();
   const built = buildRoleSnapshotFromAriaSnapshot(String(ariaSnapshot ?? ""), opts.options);
-  storeRoleRefsForTarget({
+  deps.storeRoleRefsForTarget({
     page,
     cdpUrl: opts.cdpUrl,
     targetId: opts.targetId,
@@ -195,8 +214,8 @@ export async function navigateViaPlaywright(opts: {
     ...withBrowserNavigationPolicy(opts.ssrfPolicy),
   });
   const timeout = Math.max(1000, Math.min(120_000, opts.timeoutMs ?? 20_000));
-  let page = await getPageForTargetId(opts);
-  ensurePageState(page);
+  let page = await deps.getPageForTargetId(opts);
+  deps.ensurePageState(page);
   const navigate = async () => await page.goto(url, { timeout });
   let response;
   try {
@@ -207,13 +226,13 @@ export async function navigateViaPlaywright(opts: {
     }
     // Extension relays can briefly drop CDP during renderer swaps/navigation.
     // Force a clean reconnect, then retry once on the refreshed page handle.
-    await forceDisconnectPlaywrightForTarget({
+    await deps.forceDisconnectPlaywrightForTarget({
       cdpUrl: opts.cdpUrl,
       targetId: opts.targetId,
       reason: "retry navigate after detached frame",
     }).catch(() => {});
-    page = await getPageForTargetId(opts);
-    ensurePageState(page);
+    page = await deps.getPageForTargetId(opts);
+    deps.ensurePageState(page);
     response = await navigate();
   }
   await assertBrowserNavigationRedirectChainAllowed({
@@ -234,8 +253,8 @@ export async function resizeViewportViaPlaywright(opts: {
   width: number;
   height: number;
 }): Promise<void> {
-  const page = await getPageForTargetId(opts);
-  ensurePageState(page);
+  const page = await deps.getPageForTargetId(opts);
+  deps.ensurePageState(page);
   await page.setViewportSize({
     width: Math.max(1, Math.floor(opts.width)),
     height: Math.max(1, Math.floor(opts.height)),
@@ -246,8 +265,8 @@ export async function closePageViaPlaywright(opts: {
   cdpUrl: string;
   targetId?: string;
 }): Promise<void> {
-  const page = await getPageForTargetId(opts);
-  ensurePageState(page);
+  const page = await deps.getPageForTargetId(opts);
+  deps.ensurePageState(page);
   await page.close();
 }
 
@@ -255,8 +274,8 @@ export async function pdfViaPlaywright(opts: {
   cdpUrl: string;
   targetId?: string;
 }): Promise<{ buffer: Buffer }> {
-  const page = await getPageForTargetId(opts);
-  ensurePageState(page);
+  const page = await deps.getPageForTargetId(opts);
+  deps.ensurePageState(page);
   const buffer = await page.pdf({ printBackground: true });
   return { buffer };
 }

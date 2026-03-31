@@ -4,6 +4,7 @@ import path from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   callGatewayMock,
+  getSubagentsConfigOverride,
   resetSubagentsConfigOverride,
   setSubagentsConfigOverride,
 } from "./openclaw-tools.subagents.test-harness.js";
@@ -50,7 +51,10 @@ function seedLeafOwnedChildSession(storePath: string, leafKey = "agent:main:suba
 
   return {
     childKey,
-    tool: createSubagentsTool({ agentSessionKey: leafKey }),
+    tool: createSubagentsTool({
+      agentSessionKey: leafKey,
+      config: getSubagentsConfigOverride(),
+    }),
   };
 }
 
@@ -129,7 +133,10 @@ describe("openclaw-tools: subagents scope isolation", () => {
       startedAt: Date.now() - 20_000,
     });
 
-    const tool = createSubagentsTool({ agentSessionKey: leafKey });
+    const tool = createSubagentsTool({
+      agentSessionKey: leafKey,
+      config: getSubagentsConfigOverride(),
+    });
     const result = await tool.execute("call-leaf-list", { action: "list" });
 
     expect(result.details).toMatchObject({
@@ -188,7 +195,10 @@ describe("openclaw-tools: subagents scope isolation", () => {
       startedAt: Date.now() - 20_000,
     });
 
-    const tool = createSubagentsTool({ agentSessionKey: orchestratorKey });
+    const tool = createSubagentsTool({
+      agentSessionKey: orchestratorKey,
+      config: getSubagentsConfigOverride(),
+    });
     const result = await tool.execute("call-orchestrator-list", { action: "list" });
     const details = result.details as {
       status?: string;

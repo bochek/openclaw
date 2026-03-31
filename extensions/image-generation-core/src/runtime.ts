@@ -1,5 +1,5 @@
+import { createSubsystemLogger } from "openclaw/plugin-sdk/logging-core";
 import {
-  createSubsystemLogger,
   describeFailoverError,
   getImageGenerationProvider,
   getProviderEnvVars,
@@ -17,7 +17,12 @@ import {
   type OpenClawConfig,
 } from "../api.js";
 
-const log = createSubsystemLogger("image-generation");
+let log: ReturnType<typeof createSubsystemLogger> | null = null;
+
+function getLog(): ReturnType<typeof createSubsystemLogger> {
+  log ??= createSubsystemLogger("image-generation");
+  return log;
+}
 
 export type GenerateImageParams = {
   cfg: OpenClawConfig;
@@ -175,7 +180,7 @@ export async function generateImage(
         status: described?.status,
         code: described?.code,
       });
-      log.debug(`image-generation candidate failed: ${candidate.provider}/${candidate.model}`);
+      getLog().debug(`image-generation candidate failed: ${candidate.provider}/${candidate.model}`);
     }
   }
 

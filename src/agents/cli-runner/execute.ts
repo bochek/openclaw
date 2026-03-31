@@ -1,9 +1,9 @@
 import { shouldLogVerbose } from "../../globals.js";
 import { isTruthyEnvValue } from "../../infra/env.js";
-import { requestHeartbeatNow as requestHeartbeatNowImpl } from "../../infra/heartbeat-wake.js";
+import { requestHeartbeatNow } from "../../infra/heartbeat-wake.js";
 import { sanitizeHostExecEnv } from "../../infra/host-env-security.js";
-import { enqueueSystemEvent as enqueueSystemEventImpl } from "../../infra/system-events.js";
-import { getProcessSupervisor as getProcessSupervisorImpl } from "../../process/supervisor/index.js";
+import { enqueueSystemEvent } from "../../infra/system-events.js";
+import { getProcessSupervisor } from "../../process/supervisor/index.js";
 import { scopedHeartbeatWakeOptions } from "../../routing/session-key.js";
 import { prependBootstrapPromptWarning } from "../bootstrap-budget.js";
 import { parseCliOutput, type CliOutput } from "../cli-output.js";
@@ -28,14 +28,26 @@ import {
 } from "./log.js";
 import type { PreparedCliRunContext } from "./types.js";
 
-const executeDeps = {
-  getProcessSupervisor: getProcessSupervisorImpl,
-  enqueueSystemEvent: enqueueSystemEventImpl,
-  requestHeartbeatNow: requestHeartbeatNowImpl,
+const baseExecuteDeps = {
+  requestHeartbeatNow,
+  enqueueSystemEvent,
+  getProcessSupervisor,
 };
 
-export function setCliRunnerExecuteTestDeps(overrides: Partial<typeof executeDeps>): void {
-  Object.assign(executeDeps, overrides);
+let executeTestDeps: Partial<typeof baseExecuteDeps> | undefined;
+
+function getExecuteDeps() {
+  return {
+    requestHeartbeatNow:
+      executeTestDeps?.requestHeartbeatNow ?? baseExecuteDeps.requestHeartbeatNow,
+    enqueueSystemEvent: executeTestDeps?.enqueueSystemEvent ?? baseExecuteDeps.enqueueSystemEvent,
+    getProcessSupervisor:
+      executeTestDeps?.getProcessSupervisor ?? baseExecuteDeps.getProcessSupervisor,
+  };
+}
+
+export function setCliRunnerExecuteTestDeps(overrides?: Partial<typeof baseExecuteDeps>): void {
+  executeTestDeps = overrides ? { ...overrides } : undefined;
 }
 
 function buildCliLogArgs(params: {
@@ -179,7 +191,7 @@ export async function executePreparedCliRun(
         timeoutMs: params.timeoutMs,
         useResume,
       });
-      const supervisor = executeDeps.getProcessSupervisor();
+      const supervisor = getExecuteDeps().getProcessSupervisor();
       const scopeKey = buildCliSupervisorScopeKey({
         backend,
         backendId: context.backendResolved.id,
@@ -232,8 +244,8 @@ export async function executePreparedCliRun(
               "It may have been waiting for interactive input or an approval prompt.",
               "For Claude Code, prefer --permission-mode bypassPermissions --print.",
             ].join(" ");
-            executeDeps.enqueueSystemEvent(stallNotice, { sessionKey: params.sessionKey });
-            executeDeps.requestHeartbeatNow(
+            getExecuteDeps().enqueueSystemEvent(stallNotice, { sessionKey: params.sessionKey });
+            getExecuteDeps().requestHeartbeatNow(
               scopedHeartbeatWakeOptions(params.sessionKey, { reason: "cli:watchdog:stall" }),
             );
           }

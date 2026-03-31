@@ -39,10 +39,16 @@ type MatrixCredentialsReadDeps = {
   credentialsMatchConfig: typeof import("../credentials-read.js").credentialsMatchConfig;
 };
 
+type MatrixCredentialsWriteDeps = {
+  saveMatrixCredentials: typeof import("../credentials-write.runtime.js").saveMatrixCredentials;
+  touchMatrixCredentials: typeof import("../credentials-write.runtime.js").touchMatrixCredentials;
+};
+
 let matrixAuthClientDepsPromise: Promise<MatrixAuthClientDeps> | undefined;
 let matrixCredentialsReadDepsPromise: Promise<MatrixCredentialsReadDeps> | undefined;
+let matrixCredentialsWriteDepsPromise: Promise<MatrixCredentialsWriteDeps> | undefined;
 
-async function loadMatrixAuthClientDeps(): Promise<MatrixAuthClientDeps> {
+async function loadMatrixAuthClientDepsDefault(): Promise<MatrixAuthClientDeps> {
   matrixAuthClientDepsPromise ??= Promise.all([import("../sdk.js"), import("./logging.js")]).then(
     ([sdkModule, loggingModule]) => ({
       MatrixClient: sdkModule.MatrixClient,
@@ -52,7 +58,7 @@ async function loadMatrixAuthClientDeps(): Promise<MatrixAuthClientDeps> {
   return await matrixAuthClientDepsPromise;
 }
 
-async function loadMatrixCredentialsReadDeps(): Promise<MatrixCredentialsReadDeps> {
+async function loadMatrixCredentialsReadDepsDefault(): Promise<MatrixCredentialsReadDeps> {
   matrixCredentialsReadDepsPromise ??= import("../credentials-read.js").then(
     (credentialsReadModule) => ({
       loadMatrixCredentials: credentialsReadModule.loadMatrixCredentials,
@@ -61,6 +67,40 @@ async function loadMatrixCredentialsReadDeps(): Promise<MatrixCredentialsReadDep
   );
   return await matrixCredentialsReadDepsPromise;
 }
+
+async function loadMatrixCredentialsWriteDepsDefault(): Promise<MatrixCredentialsWriteDeps> {
+  matrixCredentialsWriteDepsPromise ??= import("../credentials-write.runtime.js").then(
+    (credentialsWriteModule) => ({
+      saveMatrixCredentials: credentialsWriteModule.saveMatrixCredentials,
+      touchMatrixCredentials: credentialsWriteModule.touchMatrixCredentials,
+    }),
+  );
+  return await matrixCredentialsWriteDepsPromise;
+}
+
+let loadMatrixAuthClientDeps = loadMatrixAuthClientDepsDefault;
+let loadMatrixCredentialsReadDeps = loadMatrixCredentialsReadDepsDefault;
+let loadMatrixCredentialsWriteDeps = loadMatrixCredentialsWriteDepsDefault;
+
+export const __testing = {
+  setMatrixAuthClientDepsForTest(deps: MatrixAuthClientDeps) {
+    loadMatrixAuthClientDeps = async () => deps;
+  },
+  setMatrixCredentialsReadDepsForTest(deps: MatrixCredentialsReadDeps) {
+    loadMatrixCredentialsReadDeps = async () => deps;
+  },
+  setMatrixCredentialsWriteDepsForTest(deps: MatrixCredentialsWriteDeps) {
+    loadMatrixCredentialsWriteDeps = async () => deps;
+  },
+  resetDepsForTest() {
+    matrixAuthClientDepsPromise = undefined;
+    matrixCredentialsReadDepsPromise = undefined;
+    matrixCredentialsWriteDepsPromise = undefined;
+    loadMatrixAuthClientDeps = loadMatrixAuthClientDepsDefault;
+    loadMatrixCredentialsReadDeps = loadMatrixCredentialsReadDepsDefault;
+    loadMatrixCredentialsWriteDeps = loadMatrixCredentialsWriteDepsDefault;
+  },
+};
 
 function readEnvSecretRefFallback(params: {
   value: unknown;
@@ -673,11 +713,6 @@ export async function resolveMatrixAuth(params?: {
   const homeserver = await resolveValidatedMatrixHomeserverUrl(resolved.homeserver, {
     allowPrivateNetwork: resolved.allowPrivateNetwork,
   });
-  let credentialsWriter: typeof import("../credentials-write.runtime.js") | undefined;
-  const loadCredentialsWriter = async () => {
-    credentialsWriter ??= await import("../credentials-write.runtime.js");
-    return credentialsWriter;
-  };
 
   const { loadMatrixCredentials, credentialsMatchConfig } = await loadMatrixCredentialsReadDeps();
   const cached = loadMatrixCredentials(env, accountId);
@@ -729,7 +764,7 @@ export async function resolveMatrixAuth(params?: {
       cachedCredentials.userId !== userId ||
       (cachedCredentials.deviceId || undefined) !== knownDeviceId;
     if (shouldRefreshCachedCredentials) {
-      const { saveMatrixCredentials } = await loadCredentialsWriter();
+      const { saveMatrixCredentials } = await loadMatrixCredentialsWriteDeps();
       await saveMatrixCredentials(
         {
           homeserver,
@@ -741,7 +776,7 @@ export async function resolveMatrixAuth(params?: {
         accountId,
       );
     } else if (hasMatchingCachedToken) {
-      const { touchMatrixCredentials } = await loadCredentialsWriter();
+      const { touchMatrixCredentials } = await loadMatrixCredentialsWriteDeps();
       await touchMatrixCredentials(env, accountId);
     }
     return {
@@ -762,7 +797,7 @@ export async function resolveMatrixAuth(params?: {
   }
 
   if (cachedCredentials) {
-    const { touchMatrixCredentials } = await loadCredentialsWriter();
+    const { touchMatrixCredentials } = await loadMatrixCredentialsWriteDeps();
     await touchMatrixCredentials(env, accountId);
     return {
       accountId,
@@ -838,7 +873,7 @@ export async function resolveMatrixAuth(params?: {
     }),
   };
 
-  const { saveMatrixCredentials } = await loadCredentialsWriter();
+  const { saveMatrixCredentials } = await loadMatrixCredentialsWriteDeps();
   await saveMatrixCredentials(
     {
       homeserver: auth.homeserver,

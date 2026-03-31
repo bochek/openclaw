@@ -61,6 +61,21 @@ import { resolveSandboxRuntimeStatus } from "./sandbox/runtime-status.js";
 import { resolveInternalSessionKey, resolveMainSessionAlias } from "./tools/sessions-helpers.js";
 
 const log = createSubsystemLogger("agents/acp-spawn");
+type GetAcpSessionManagerFn = typeof getAcpSessionManager;
+type ResolveSessionTranscriptFileFn = typeof resolveSessionTranscriptFile;
+type ResolveStorePathFn = typeof resolveStorePath;
+type LoadSessionStoreFn = typeof loadSessionStore;
+type CallGatewayFn = typeof callGateway;
+type ResolveAcpSpawnStreamLogPathFn = typeof resolveAcpSpawnStreamLogPath;
+type StartAcpSpawnParentStreamRelayFn = typeof startAcpSpawnParentStreamRelay;
+
+let getAcpSessionManagerImpl: GetAcpSessionManagerFn = getAcpSessionManager;
+let resolveSessionTranscriptFileImpl: ResolveSessionTranscriptFileFn = resolveSessionTranscriptFile;
+let resolveStorePathImpl: ResolveStorePathFn = resolveStorePath;
+let loadSessionStoreImpl: LoadSessionStoreFn = loadSessionStore;
+let callGatewayImpl: CallGatewayFn = callGateway;
+let resolveAcpSpawnStreamLogPathImpl: ResolveAcpSpawnStreamLogPathFn = resolveAcpSpawnStreamLogPath;
+let startAcpSpawnParentStreamRelayImpl: StartAcpSpawnParentStreamRelayFn = startAcpSpawnParentStreamRelay;
 
 export const ACP_SPAWN_MODES = ["run", "session"] as const;
 export type SpawnAcpMode = (typeof ACP_SPAWN_MODES)[number];
@@ -266,10 +281,10 @@ function hasSessionLocalHeartbeatRelayRoute(params: {
     return false;
   }
 
-  const storePath = resolveStorePath(params.cfg.session?.store, {
+  const storePath = resolveStorePathImpl(params.cfg.session?.store, {
     agentId: params.requesterAgentId,
   });
-  const sessionStore = loadSessionStore(storePath);
+  const sessionStore = loadSessionStoreImpl(storePath);
   const parentEntry = sessionStore[params.parentSessionKey];
   const parentDeliveryContext = deliveryContextFromSession(parentEntry);
   return Boolean(parentDeliveryContext?.channel && parentDeliveryContext.to);
@@ -340,7 +355,7 @@ async function persistAcpSpawnSessionFileBestEffort(params: {
   stage: "spawn" | "thread-bind";
 }): Promise<SessionEntry | undefined> {
   try {
-    const resolvedSessionFile = await resolveSessionTranscriptFile({
+    const resolvedSessionFile = await resolveSessionTranscriptFileImpl({
       sessionId: params.sessionId,
       sessionKey: params.sessionKey,
       sessionEntry: params.sessionEntry,
@@ -591,8 +606,10 @@ async function initializeAcpSpawnRuntime(params: {
   resumeSessionId?: string;
   cwd?: string;
 }): Promise<AcpSpawnInitializedRuntime> {
-  const storePath = resolveStorePath(params.cfg.session?.store, { agentId: params.targetAgentId });
-  const sessionStore = loadSessionStore(storePath);
+  const storePath = resolveStorePathImpl(params.cfg.session?.store, {
+    agentId: params.targetAgentId,
+  });
+  const sessionStore = loadSessionStoreImpl(storePath);
   let sessionEntry: SessionEntry | undefined = sessionStore[params.sessionKey];
   const sessionId = sessionEntry?.sessionId;
   if (sessionId) {
@@ -607,7 +624,7 @@ async function initializeAcpSpawnRuntime(params: {
     });
   }
 
-  const initialized = await getAcpSessionManager().initializeSession({
+  const initialized = await getAcpSessionManagerImpl().initializeSession({
     cfg: params.cfg,
     sessionKey: params.sessionKey,
     agent: params.targetAgentId,
@@ -874,7 +891,7 @@ export async function spawnAcpDirect(
   let sessionCreated = false;
   let initializedRuntime: AcpSpawnRuntimeCloseHandle | undefined;
   try {
-    await callGateway({
+    await callGatewayImpl({
       method: "sessions.patch",
       params: {
         key: sessionKey,
@@ -929,14 +946,14 @@ export async function spawnAcpDirect(
   let childRunId: string = childIdem;
   const streamLogPath =
     effectiveStreamToParent && parentSessionKey
-      ? resolveAcpSpawnStreamLogPath({
+      ? resolveAcpSpawnStreamLogPathImpl({
           childSessionKey: sessionKey,
         })
       : undefined;
   let parentRelay: AcpSpawnParentRelayHandle | undefined;
   if (effectiveStreamToParent && parentSessionKey) {
     // Register relay before dispatch so fast lifecycle failures are not missed.
-    parentRelay = startAcpSpawnParentStreamRelay({
+    parentRelay = startAcpSpawnParentStreamRelayImpl({
       runId: childIdem,
       parentSessionKey,
       childSessionKey: sessionKey,
@@ -946,7 +963,7 @@ export async function spawnAcpDirect(
     });
   }
   try {
-    const response = await callGateway<{ runId?: string }>({
+    const response = await callGatewayImpl<{ runId?: string }>({
       method: "agent",
       params: {
         message: params.task,
@@ -983,7 +1000,7 @@ export async function spawnAcpDirect(
     if (parentRelay && childRunId !== childIdem) {
       parentRelay.dispose();
       // Defensive fallback if gateway returns a runId that differs from idempotency key.
-      parentRelay = startAcpSpawnParentStreamRelay({
+      parentRelay = startAcpSpawnParentStreamRelayImpl({
         runId: childRunId,
         parentSessionKey,
         childSessionKey: sessionKey,
@@ -1054,3 +1071,29 @@ export async function spawnAcpDirect(
     note: spawnMode === "session" ? ACP_SPAWN_SESSION_ACCEPTED_NOTE : ACP_SPAWN_ACCEPTED_NOTE,
   };
 }
+
+export const __testing = {
+  setGetAcpSessionManagerForTests(next: GetAcpSessionManagerFn | null): void {
+    getAcpSessionManagerImpl = next ?? getAcpSessionManager;
+  },
+  setResolveSessionTranscriptFileForTests(next: ResolveSessionTranscriptFileFn | null): void {
+    resolveSessionTranscriptFileImpl = next ?? resolveSessionTranscriptFile;
+  },
+  setResolveStorePathForTests(next: ResolveStorePathFn | null): void {
+    resolveStorePathImpl = next ?? resolveStorePath;
+  },
+  setLoadSessionStoreForTests(next: LoadSessionStoreFn | null): void {
+    loadSessionStoreImpl = next ?? loadSessionStore;
+  },
+  setCallGatewayForTests(next: CallGatewayFn | null): void {
+    callGatewayImpl = next ?? callGateway;
+  },
+  setResolveAcpSpawnStreamLogPathForTests(next: ResolveAcpSpawnStreamLogPathFn | null): void {
+    resolveAcpSpawnStreamLogPathImpl = next ?? resolveAcpSpawnStreamLogPath;
+  },
+  setStartAcpSpawnParentStreamRelayForTests(
+    next: StartAcpSpawnParentStreamRelayFn | null,
+  ): void {
+    startAcpSpawnParentStreamRelayImpl = next ?? startAcpSpawnParentStreamRelay;
+  },
+};

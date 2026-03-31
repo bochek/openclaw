@@ -6,14 +6,33 @@ import { zh_TW } from "../locales/zh-TW.ts";
 
 type TranslateModule = typeof import("../lib/translate.ts");
 
+async function loadFreshTranslateModule(): Promise<TranslateModule> {
+  return (await import(`../lib/translate.ts?t=${Date.now()}`)) as TranslateModule;
+}
+
+function installBrowserGlobals(params?: { locale?: string; withStorage?: boolean }) {
+  Object.defineProperty(globalThis, "navigator", {
+    configurable: true,
+    value: { language: params?.locale ?? "en-US" } satisfies Partial<Navigator>,
+    writable: true,
+  });
+  if (params?.withStorage !== false) {
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: createStorageMock(),
+      writable: true,
+    });
+  } else {
+    delete (globalThis as Record<string, unknown>).localStorage;
+  }
+}
+
 describe("i18n", () => {
   let translate: TranslateModule;
 
   beforeEach(async () => {
-    vi.resetModules();
-    vi.stubGlobal("localStorage", createStorageMock());
-    vi.stubGlobal("navigator", { language: "en-US" } as Navigator);
-    translate = await import("../lib/translate.ts");
+    installBrowserGlobals();
+    translate = await loadFreshTranslateModule();
     localStorage.clear();
     // Reset to English
     await translate.i18n.setLocale("en");
@@ -57,25 +76,23 @@ describe("i18n", () => {
   });
 
   it("loads saved non-English locale on startup", async () => {
-    vi.resetModules();
-    vi.stubGlobal("localStorage", createStorageMock());
-    vi.stubGlobal("navigator", { language: "en-US" } as Navigator);
+    installBrowserGlobals();
     localStorage.setItem("openclaw.i18n.locale", "zh-CN");
-    const fresh = await import("../lib/translate.ts");
+    const fresh = await loadFreshTranslateModule();
+    const manager = fresh.__testing.createManagerForTest();
     await vi.waitFor(() => {
-      expect(fresh.i18n.getLocale()).toBe("zh-CN");
+      expect(manager.getLocale()).toBe("zh-CN");
     });
-    expect(fresh.i18n.getLocale()).toBe("zh-CN");
-    expect(fresh.t("common.health")).toBe("健康状况");
+    expect(manager.getLocale()).toBe("zh-CN");
+    expect(manager.t("common.health")).toBe("健康状况");
   });
 
   it("skips node localStorage accessors that warn without a storage file", async () => {
-    vi.resetModules();
     vi.unstubAllGlobals();
-    vi.stubGlobal("navigator", { language: "en-US" } as Navigator);
+    installBrowserGlobals({ withStorage: false });
     const warningSpy = vi.spyOn(process, "emitWarning").mockImplementation(() => {});
 
-    const fresh = await import("../lib/translate.ts");
+    const fresh = await loadFreshTranslateModule();
 
     expect(fresh.i18n.getLocale()).toBe("en");
     expect(warningSpy).not.toHaveBeenCalledWith(

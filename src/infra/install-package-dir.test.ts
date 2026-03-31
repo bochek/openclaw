@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runCommandWithTimeout } from "../process/exec.js";
+import * as execModule from "../process/exec.js";
 import { installPackageDir } from "./install-package-dir.js";
 
 vi.mock("../process/exec.js", async () => {
@@ -295,7 +295,7 @@ describe("installPackageDir", () => {
       "utf-8",
     );
 
-    vi.mocked(runCommandWithTimeout).mockResolvedValue({
+    vi.mocked(execModule.runCommandWithTimeout).mockResolvedValue({
       stdout: "",
       stderr: "",
       code: 0,
@@ -315,7 +315,7 @@ describe("installPackageDir", () => {
     });
 
     expect(result).toEqual({ ok: true });
-    expect(vi.mocked(runCommandWithTimeout)).toHaveBeenCalledWith(
+    expect(vi.mocked(execModule.runCommandWithTimeout)).toHaveBeenCalledWith(
       ["npm", "install", "--omit=dev", "--silent", "--ignore-scripts"],
       expect.objectContaining({
         cwd: expect.stringContaining(".openclaw-install-stage-"),
@@ -342,24 +342,26 @@ describe("installPackageDir", () => {
     );
     await fs.writeFile(path.join(sourceDir, ".npmrc"), npmrcContent, "utf-8");
 
-    vi.mocked(runCommandWithTimeout).mockImplementation(async (_argv, optionsOrTimeout) => {
-      const cwd = typeof optionsOrTimeout === "number" ? undefined : optionsOrTimeout.cwd;
-      expect(cwd).toBeTruthy();
-      await expect(fs.stat(path.join(cwd ?? "", ".npmrc"))).rejects.toMatchObject({
-        code: "ENOENT",
-      });
-      await expect(
-        listMatchingEntries(cwd ?? "", ".openclaw-install-hidden-npmrc-"),
-      ).resolves.toHaveLength(1);
-      return {
-        stdout: "",
-        stderr: "",
-        code: 0,
-        signal: null,
-        killed: false,
-        termination: "exit",
-      };
-    });
+    vi.mocked(execModule.runCommandWithTimeout).mockImplementation(
+      async (_argv, optionsOrTimeout) => {
+        const cwd = typeof optionsOrTimeout === "number" ? undefined : optionsOrTimeout.cwd;
+        expect(cwd).toBeTruthy();
+        await expect(fs.stat(path.join(cwd ?? "", ".npmrc"))).rejects.toMatchObject({
+          code: "ENOENT",
+        });
+        await expect(
+          listMatchingEntries(cwd ?? "", ".openclaw-install-hidden-npmrc-"),
+        ).resolves.toHaveLength(1);
+        return {
+          stdout: "",
+          stderr: "",
+          code: 0,
+          signal: null,
+          killed: false,
+          termination: "exit",
+        };
+      },
+    );
 
     const result = await installPackageDir({
       sourceDir,

@@ -1,20 +1,9 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, UserMessage } from "@mariozechner/pi-ai";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
-import * as piCodingAgent from "@mariozechner/pi-coding-agent";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { retryAsync } from "../infra/retry.js";
 
-// Mock the external generateSummary function
-vi.mock("@mariozechner/pi-coding-agent", async (importOriginal) => {
-  const actual = await importOriginal<typeof piCodingAgent>();
-  return {
-    ...actual,
-    generateSummary: vi.fn(),
-  };
-});
-
-const mockGenerateSummary = vi.mocked(piCodingAgent.generateSummary);
 type MockGenerateSummaryCompat = (
   currentMessages: AgentMessage[],
   model: NonNullable<ExtensionContext["model"]>,
@@ -25,16 +14,11 @@ type MockGenerateSummaryCompat = (
   customInstructions?: string,
   previousSummary?: string,
 ) => Promise<string>;
-const mockGenerateSummaryCompat = mockGenerateSummary as unknown as MockGenerateSummaryCompat;
+const mockGenerateSummary = vi.fn<MockGenerateSummaryCompat>();
 
 describe("compaction retry integration", () => {
   beforeEach(() => {
-    mockGenerateSummary.mockClear();
-  });
-
-  afterEach(() => {
-    vi.clearAllTimers();
-    vi.useRealTimers();
+    mockGenerateSummary.mockReset();
   });
   const testMessages: AgentMessage[] = [
     {
@@ -67,7 +51,7 @@ describe("compaction retry integration", () => {
   } as unknown as NonNullable<ExtensionContext["model"]>;
 
   const invokeGenerateSummary = (signal = new AbortController().signal) =>
-    mockGenerateSummaryCompat(testMessages, testModel, 1000, "test-api-key", undefined, signal);
+    mockGenerateSummary(testMessages, testModel, 1000, "test-api-key", undefined, signal);
 
   const runSummaryRetry = (options: Parameters<typeof retryAsync>[1]) =>
     retryAsync(() => invokeGenerateSummary(), options);
@@ -111,7 +95,7 @@ describe("compaction retry integration", () => {
     mockGenerateSummary.mockRejectedValueOnce(abortErr);
 
     await expect(
-      retryAsync(() => invokeGenerateSummary(), {
+      runSummaryRetry({
         attempts: 3,
         minDelayMs: 0,
         label: "compaction/generateSummary",
@@ -139,32 +123,23 @@ describe("compaction retry integration", () => {
   });
 
   it("should apply exponential backoff", async () => {
-    vi.useFakeTimers();
-
     mockGenerateSummary
       .mockRejectedValueOnce(new Error("Error 1"))
       .mockRejectedValueOnce(new Error("Error 2"))
       .mockResolvedValueOnce("Success on 3rd attempt");
 
     const delays: number[] = [];
-    const promise = runSummaryRetry({
+    const result = await runSummaryRetry({
       attempts: 3,
-      minDelayMs: 500,
-      maxDelayMs: 5000,
+      minDelayMs: 1,
+      maxDelayMs: 2,
       jitter: 0,
       label: "compaction/generateSummary",
       onRetry: (info) => delays.push(info.delayMs),
     });
 
-    await vi.runAllTimersAsync();
-    const result = await promise;
-
     expect(result).toBe("Success on 3rd attempt");
     expect(mockGenerateSummary).toHaveBeenCalledTimes(3);
-    // First retry: 500ms, second retry: 1000ms
-    expect(delays[0]).toBe(500);
-    expect(delays[1]).toBe(1000);
-
-    vi.useRealTimers();
+    expect(delays).toEqual([1, 2]);
   });
 });

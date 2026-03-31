@@ -15,14 +15,10 @@ vi.mock("./runtime-api.js", () => ({
   parseStrictPositiveInteger,
 }));
 
-vi.mock("./client.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./client.js")>();
-  return {
-    ...actual,
-    fetchMattermostUserTeams,
-    normalizeMattermostBaseUrl,
-  };
-});
+vi.mock("./client.js", () => ({
+  fetchMattermostUserTeams,
+  normalizeMattermostBaseUrl,
+}));
 
 vi.mock("./slash-commands.js", () => ({
   DEFAULT_COMMAND_SPECS: [

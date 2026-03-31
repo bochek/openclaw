@@ -1,24 +1,31 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
 
+const {
+  clearBootstrapSnapshotMock,
+  evaluateSessionFreshnessMock,
+  loadSessionStoreMock,
+} = vi.hoisted(() => ({
+  clearBootstrapSnapshotMock: vi.fn(),
+  evaluateSessionFreshnessMock: vi.fn().mockReturnValue({ fresh: true }),
+  loadSessionStoreMock: vi.fn(),
+}));
+
 vi.mock("../../config/sessions.js", () => ({
-  loadSessionStore: vi.fn(),
+  loadSessionStore: loadSessionStoreMock,
   resolveStorePath: vi.fn().mockReturnValue("/tmp/test-store.json"),
-  evaluateSessionFreshness: vi.fn().mockReturnValue({ fresh: true }),
+  evaluateSessionFreshness: evaluateSessionFreshnessMock,
   resolveSessionResetPolicy: vi.fn().mockReturnValue({ mode: "idle", idleMinutes: 60 }),
 }));
 
 vi.mock("../../agents/bootstrap-cache.js", () => ({
-  clearBootstrapSnapshot: vi.fn(),
+  clearBootstrapSnapshot: clearBootstrapSnapshotMock,
   clearBootstrapSnapshotOnSessionRollover: vi.fn(({ sessionKey, previousSessionId }) => {
     if (sessionKey && previousSessionId) {
-      clearBootstrapSnapshot(sessionKey);
+      clearBootstrapSnapshotMock(sessionKey);
     }
   }),
 }));
-
-import { clearBootstrapSnapshot } from "../../agents/bootstrap-cache.js";
-import { loadSessionStore, evaluateSessionFreshness } from "../../config/sessions.js";
 import { resolveCronSession } from "./session.js";
 
 const NOW_MS = 1_737_600_000_000;
@@ -37,8 +44,8 @@ function resolveWithStoredEntry(params?: {
   const store: SessionStore = params?.entry
     ? ({ [sessionKey]: params.entry as SessionStoreEntry } as SessionStore)
     : {};
-  vi.mocked(loadSessionStore).mockReturnValue(store);
-  vi.mocked(evaluateSessionFreshness).mockReturnValue({ fresh: params?.fresh ?? true });
+  loadSessionStoreMock.mockReturnValue(store);
+  evaluateSessionFreshnessMock.mockReturnValue({ fresh: params?.fresh ?? true });
 
   return resolveCronSession({
     cfg: {} as OpenClawConfig,
@@ -51,7 +58,10 @@ function resolveWithStoredEntry(params?: {
 
 describe("resolveCronSession", () => {
   beforeEach(() => {
-    vi.mocked(clearBootstrapSnapshot).mockReset();
+    clearBootstrapSnapshotMock.mockReset();
+    loadSessionStoreMock.mockReset();
+    evaluateSessionFreshnessMock.mockReset();
+    evaluateSessionFreshnessMock.mockReturnValue({ fresh: true });
   });
 
   it("preserves modelOverride and providerOverride from existing session entry", () => {
@@ -114,7 +124,7 @@ describe("resolveCronSession", () => {
       expect(result.sessionEntry.sessionId).toBe("existing-session-id-123");
       expect(result.isNewSession).toBe(false);
       expect(result.systemSent).toBe(true);
-      expect(clearBootstrapSnapshot).not.toHaveBeenCalled();
+      expect(clearBootstrapSnapshotMock).not.toHaveBeenCalled();
     });
 
     it("creates new sessionId when session is stale", () => {
@@ -136,7 +146,7 @@ describe("resolveCronSession", () => {
       expect(result.sessionEntry.modelOverride).toBe("gpt-4.1-mini");
       expect(result.sessionEntry.providerOverride).toBe("openai");
       expect(result.sessionEntry.sendPolicy).toBe("allow");
-      expect(clearBootstrapSnapshot).toHaveBeenCalledWith("webhook:stable-key");
+      expect(clearBootstrapSnapshotMock).toHaveBeenCalledWith("webhook:stable-key");
     });
 
     it("creates new sessionId when forceNew is true", () => {
@@ -157,7 +167,7 @@ describe("resolveCronSession", () => {
       expect(result.systemSent).toBe(false);
       expect(result.sessionEntry.modelOverride).toBe("sonnet-4");
       expect(result.sessionEntry.providerOverride).toBe("anthropic");
-      expect(clearBootstrapSnapshot).toHaveBeenCalledWith("webhook:stable-key");
+      expect(clearBootstrapSnapshotMock).toHaveBeenCalledWith("webhook:stable-key");
     });
 
     it("clears delivery routing metadata and deliveryContext when forceNew is true", () => {

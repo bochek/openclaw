@@ -1,0 +1,16 @@
+import { afterAll, afterEach, vi } from "vitest";
+const isBunRuntime = typeof Bun !== "undefined";
+vi.mock("@mariozechner/pi-ai", async (importOriginal) => { const original = await importOriginal<typeof import("@mariozechner/pi-ai")>(); if (isBunRuntime) return original; return { ...original, getOAuthApiKey: () => undefined, getOAuthProviders: () => [], loginOpenAICodex: vi.fn() }; });
+vi.mock("@mariozechner/clipboard", () => ({ availableFormats: () => [], getText: async () => "", setText: async () => {}, hasText: () => false, getImageBinary: async () => [], getImageBase64: async () => "", setImageBinary: async () => {}, setImageBase64: async () => {}, hasImage: () => false, getHtml: async () => "", setHtml: async () => {}, hasHtml: () => false, getRtf: async () => "", setRtf: async () => {}, hasRtf: () => false, clear: async () => {}, watch: () => {}, callThreadsafeFunction: () => {} }));
+process.env.VITEST = "true";
+process.env.OPENCLAW_PLUGIN_MANIFEST_CACHE_MS ??= "60000";
+const TEST_PROCESS_MAX_LISTENERS = 128;
+if (process.getMaxListeners() > 0 && process.getMaxListeners() < TEST_PROCESS_MAX_LISTENERS) process.setMaxListeners(TEST_PROCESS_MAX_LISTENERS);
+import { drainSessionWriteLockStateForTest, resetSessionWriteLockStateForTest } from "./src/agents/session-write-lock.js";
+import { installProcessWarningFilter } from "./src/infra/warning-filter.js";
+import { withIsolatedTestHome } from "./test/test-env.js";
+const testEnv = withIsolatedTestHome();
+installProcessWarningFilter();
+const { resetContextWindowCacheForTest } = await import("./src/agents/context.js"); void resetContextWindowCacheForTest;
+afterEach(async () => { resetSessionWriteLockStateForTest(); });
+afterAll(async () => { await drainSessionWriteLockStateForTest(); testEnv.cleanup(); });

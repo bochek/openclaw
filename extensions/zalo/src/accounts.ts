@@ -9,9 +9,15 @@ import type { ResolvedZaloAccount, ZaloAccountConfig, ZaloConfig } from "./types
 
 export type { ResolvedZaloAccount };
 
-const { listAccountIds: listZaloAccountIds, resolveDefaultAccountId: resolveDefaultZaloAccountId } =
-  createAccountListHelpers("zalo");
-export { listZaloAccountIds, resolveDefaultZaloAccountId };
+const zaloAccountHelpers = createAccountListHelpers("zalo");
+
+export function listZaloAccountIds(cfg: OpenClawConfig): string[] {
+  return zaloAccountHelpers.listAccountIds(cfg);
+}
+
+export function resolveDefaultZaloAccountId(cfg: OpenClawConfig): string {
+  return zaloAccountHelpers.resolveDefaultAccountId(cfg);
+}
 
 function mergeZaloAccountConfig(cfg: OpenClawConfig, accountId: string): ZaloAccountConfig {
   return resolveMergedAccountConfig<ZaloAccountConfig>({

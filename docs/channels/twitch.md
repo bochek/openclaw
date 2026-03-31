@@ -22,7 +22,7 @@ openclaw plugins install @openclaw/twitch
 Local checkout (when running from a git repo):
 
 ```bash
-openclaw plugins install ./path/to/local/twitch-plugin
+openclaw plugins install ./extensions/twitch
 ```
 
 Details: [Plugins](/tools/plugin)

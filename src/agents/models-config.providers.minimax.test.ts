@@ -34,7 +34,11 @@ describe("minimax provider catalog", () => {
       "utf8",
     );
 
-    const providers = await resolveImplicitProvidersForTest({ agentDir });
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: {},
+      onlyPluginIds: ["minimax"],
+    });
     expect(providers?.minimax?.models?.map((model) => model.id)).toEqual([
       "MiniMax-M2.7",
       "MiniMax-M2.7-highspeed",

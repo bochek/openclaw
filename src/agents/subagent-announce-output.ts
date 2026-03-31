@@ -1,4 +1,5 @@
 import { isSilentReplyText, SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { loadConfig } from "../config/config.js";
 import {
   loadSessionStore,
@@ -24,6 +25,11 @@ const defaultSubagentAnnounceOutputDeps: SubagentAnnounceOutputDeps = {
 };
 
 let subagentAnnounceOutputDeps: SubagentAnnounceOutputDeps = defaultSubagentAnnounceOutputDeps;
+const subagentAnnounceOutputDepsStorage = new AsyncLocalStorage<SubagentAnnounceOutputDeps>();
+
+function getSubagentAnnounceOutputDeps(): SubagentAnnounceOutputDeps {
+  return subagentAnnounceOutputDepsStorage.getStore() ?? subagentAnnounceOutputDeps;
+}
 
 function isFastTestMode() {
   return process.env.OPENCLAW_TEST_FAST === "1";
@@ -245,7 +251,7 @@ export async function readSubagentOutput(
   sessionKey: string,
   outcome?: SubagentRunOutcome,
 ): Promise<string | undefined> {
-  const history = await subagentAnnounceOutputDeps.callGateway<{ messages?: Array<unknown> }>({
+  const history = await getSubagentAnnounceOutputDeps().callGateway<{ messages?: Array<unknown> }>({
     method: "chat.history",
     params: { sessionKey, limit: 100 },
   });
@@ -288,7 +294,7 @@ export async function waitForSubagentRunOutcome(
   timeoutMs: number,
 ): Promise<AgentWaitResult> {
   const waitMs = Math.max(0, Math.floor(timeoutMs));
-  return await subagentAnnounceOutputDeps.callGateway<AgentWaitResult>({
+  return await getSubagentAnnounceOutputDeps().callGateway<AgentWaitResult>({
     method: "agent.wait",
     params: {
       runId,
@@ -500,7 +506,7 @@ export async function buildCompactAnnounceStatsLine(params: {
   startedAt?: number;
   endedAt?: number;
 }) {
-  const cfg = subagentAnnounceOutputDeps.loadConfig();
+  const cfg = getSubagentAnnounceOutputDeps().loadConfig();
   const agentId = resolveAgentIdFromSessionKey(params.sessionKey);
   const storePath = resolveStorePath(cfg.session?.store, { agentId });
   let entry = loadSessionStore(storePath)[params.sessionKey];
@@ -546,5 +552,17 @@ export const __testing = {
           ...overrides,
         }
       : defaultSubagentAnnounceOutputDeps;
+  },
+  runWithDepsForTest<T>(
+    overrides: Partial<SubagentAnnounceOutputDeps> | undefined,
+    fn: () => T,
+  ): T {
+    const deps = overrides
+      ? {
+          ...defaultSubagentAnnounceOutputDeps,
+          ...overrides,
+        }
+      : defaultSubagentAnnounceOutputDeps;
+    return subagentAnnounceOutputDepsStorage.run(deps, fn);
   },
 };

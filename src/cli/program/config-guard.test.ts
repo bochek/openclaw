@@ -4,14 +4,6 @@ import { ensureConfigReady, __test__ } from "./config-guard.js";
 const loadAndMaybeMigrateDoctorConfigMock = vi.hoisted(() => vi.fn());
 const readConfigFileSnapshotMock = vi.hoisted(() => vi.fn());
 
-vi.mock("../../commands/doctor-config-preflight.js", () => ({
-  runDoctorConfigPreflight: loadAndMaybeMigrateDoctorConfigMock,
-}));
-
-vi.mock("../../config/config.js", () => ({
-  readConfigFileSnapshot: readConfigFileSnapshotMock,
-}));
-
 function makeSnapshot() {
   return {
     exists: false,
@@ -69,7 +61,20 @@ describe("ensureConfigReady", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    __test__.resetDepsForTests();
     resetConfigGuardStateForTests();
+    __test__.setDepsForTests({
+      readConfigFileSnapshot:
+        readConfigFileSnapshotMock as typeof import("../../config/config.js").readConfigFileSnapshot,
+      runDoctorConfigPreflight:
+        loadAndMaybeMigrateDoctorConfigMock as (typeof __test__)["setDepsForTests"] extends (
+          overrides: infer T,
+        ) => void
+          ? T extends { runDoctorConfigPreflight: infer F }
+            ? F
+            : never
+          : never,
+    });
     readConfigFileSnapshotMock.mockResolvedValue(makeSnapshot());
     loadAndMaybeMigrateDoctorConfigMock.mockImplementation(async () => ({
       snapshot: makeSnapshot(),

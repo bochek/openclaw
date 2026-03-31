@@ -34,6 +34,16 @@ const loadBeforeToolCallRuntime = createLazyRuntimeSurface(
   ({ beforeToolCallRuntime }) => beforeToolCallRuntime,
 );
 
+type BeforeToolCallDeps = {
+  copyPluginToolMeta: typeof copyPluginToolMeta;
+};
+
+const defaultBeforeToolCallDeps: BeforeToolCallDeps = {
+  copyPluginToolMeta,
+};
+
+let beforeToolCallDeps: BeforeToolCallDeps = defaultBeforeToolCallDeps;
+
 function buildAdjustedParamsKey(params: { runId?: string; toolCallId: string }): string {
   if (params.runId && params.runId.trim()) {
     return `${params.runId}:${params.toolCallId}`;
@@ -418,7 +428,7 @@ export function wrapToolWithBeforeToolCallHook(
       }
     },
   };
-  copyPluginToolMeta(tool, wrappedTool);
+  beforeToolCallDeps.copyPluginToolMeta(tool, wrappedTool);
   copyChannelAgentToolMeta(tool as never, wrappedTool as never);
   Object.defineProperty(wrappedTool, BEFORE_TOOL_CALL_WRAPPED, {
     value: true,
@@ -446,4 +456,12 @@ export const __testing = {
   runBeforeToolCallHook,
   mergeParamsWithApprovalOverrides,
   isPlainObject,
+  setDepsForTest(overrides?: Partial<BeforeToolCallDeps>) {
+    beforeToolCallDeps = overrides
+      ? {
+          ...defaultBeforeToolCallDeps,
+          ...overrides,
+        }
+      : defaultBeforeToolCallDeps;
+  },
 };

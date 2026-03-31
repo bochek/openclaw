@@ -1,6 +1,7 @@
 import { getChatChannelMeta } from "../channels/chat-meta.js";
 import { buildAccountScopedDmSecurityPolicy } from "../channels/plugins/helpers.js";
 import {
+  createStaticReplyToModeResolver,
   createScopedAccountReplyToModeResolver,
   createTopLevelChannelReplyToModeResolver,
 } from "../channels/plugins/threading-helpers.js";
@@ -110,6 +111,7 @@ export { generateSecureToken, generateSecureUuid } from "../infra/secure-random.
 export { delegateCompactionToRuntime } from "../context-engine/delegate.js";
 export { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
 export { buildChannelConfigSchema } from "../channels/plugins/config-schema.js";
+export { createStaticReplyToModeResolver } from "../channels/plugins/threading-helpers.js";
 export {
   applyAccountNameToChannelSection,
   migrateBaseNameToDefaultAccount,
@@ -123,6 +125,7 @@ export {
   formatPairingApproveHint,
   parseOptionalDelimitedEntries,
 } from "../channels/plugins/helpers.js";
+export { PAIRING_APPROVED_MESSAGE } from "../channels/plugins/pairing-message.js";
 export { getChatChannelMeta } from "../channels/chat-meta.js";
 export {
   channelTargetSchema,

@@ -24,6 +24,18 @@ export type ProcessToolDefaults = {
   scopeKey?: string;
 };
 
+type ProcessToolDeps = {
+  killProcessTree: typeof killProcessTree;
+  getProcessSupervisor: typeof getProcessSupervisor;
+};
+
+const defaultProcessToolDeps: ProcessToolDeps = {
+  killProcessTree,
+  getProcessSupervisor,
+};
+
+let processToolDeps: ProcessToolDeps = defaultProcessToolDeps;
+
 type WritableStdin = {
   write: (data: string, cb?: (err?: Error | null) => void) => void;
   end: () => void;
@@ -124,7 +136,7 @@ export function createProcessTool(
     setJobTtlMs(defaults.cleanupMs);
   }
   const scopeKey = defaults?.scopeKey;
-  const supervisor = getProcessSupervisor();
+  const supervisor = processToolDeps.getProcessSupervisor();
   const isInScope = (session?: { scopeKey?: string } | null) =>
     !scopeKey || session?.scopeKey === scopeKey;
 
@@ -142,7 +154,7 @@ export function createProcessTool(
     if (typeof pid !== "number" || !Number.isFinite(pid) || pid <= 0) {
       return false;
     }
-    killProcessTree(pid);
+    processToolDeps.killProcessTree(pid);
     return true;
   };
 
@@ -663,3 +675,14 @@ export function createProcessTool(
 }
 
 export const processTool = createProcessTool();
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<ProcessToolDeps>) {
+    processToolDeps = overrides
+      ? {
+          ...defaultProcessToolDeps,
+          ...overrides,
+        }
+      : defaultProcessToolDeps;
+  },
+};

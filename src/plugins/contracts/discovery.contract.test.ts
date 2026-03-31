@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthProfileStore } from "../../agents/auth-profiles/types.js";
 import type { ModelDefinitionConfig } from "../../config/types.models.js";
 import { registerProviders, requireProvider } from "./testkit.js";
@@ -19,6 +19,74 @@ let minimaxProvider: Awaited<ReturnType<typeof requireProvider>>;
 let minimaxPortalProvider: Awaited<ReturnType<typeof requireProvider>>;
 let modelStudioProvider: Awaited<ReturnType<typeof requireProvider>>;
 let cloudflareAiGatewayProvider: Awaited<ReturnType<typeof requireProvider>>;
+
+vi.mock("openclaw/plugin-sdk/provider-auth", () => ({
+  MINIMAX_OAUTH_MARKER: "minimax-oauth",
+  ensureAuthProfileStore: ensureAuthProfileStoreMock,
+  listProfilesForProvider: listProfilesForProviderMock,
+  coerceSecretRef: (value: unknown) =>
+    value && typeof value === "object" ? (value as Record<string, unknown>) : undefined,
+  normalizeOptionalSecretInput: (value: unknown) =>
+    typeof value === "string" ? (value.trim() || undefined) : undefined,
+  resolveNonEnvSecretRefApiKeyMarker: (source: string) => `__secret_ref__:${source}`,
+  buildOauthProviderAuthResult: (params: unknown) => params,
+  applyAuthProfileConfig: vi.fn(),
+  buildApiKeyCredential: vi.fn(),
+  ensureApiKeyFromOptionEnvOrPrompt: vi.fn(),
+  normalizeApiKeyInput: (value: unknown) => (typeof value === "string" ? value.trim() : ""),
+  upsertAuthProfile: vi.fn(),
+  validateApiKeyInput: vi.fn(),
+  isNonSecretApiKeyMarker: (value: unknown) =>
+    typeof value === "string" && value.startsWith("__secret_ref__:"),
+}));
+
+vi.mock("../../../extensions/github-copilot/token.js", () => ({
+  DEFAULT_COPILOT_API_BASE_URL: "https://api.individual.githubcopilot.com",
+  resolveCopilotApiToken: resolveCopilotApiTokenMock,
+}));
+
+vi.mock("openclaw/plugin-sdk/provider-setup", () => ({
+  discoverOpenAICompatibleLocalModels: vi.fn(),
+  discoverOpenAICompatibleSelfHostedProvider: vi.fn(async ({ ctx, providerId, buildProvider }) => {
+    const resolvedAuth = ctx.resolveProviderAuth(providerId);
+    const discoveryApiKey = resolvedAuth.discoveryApiKey ?? resolvedAuth.apiKey;
+    if (!discoveryApiKey) {
+      return null;
+    }
+    const provider = await buildProvider({ apiKey: discoveryApiKey });
+    return {
+      provider: {
+        ...provider,
+        apiKey: resolvedAuth.apiKey,
+      },
+    };
+  }),
+  promptAndConfigureOpenAICompatibleSelfHostedProviderAuth: vi.fn(),
+  configureOpenAICompatibleSelfHostedProviderNonInteractive: vi.fn(),
+}));
+
+vi.mock("../../../extensions/ollama/api.js", () => ({
+  buildOllamaProvider: (...args: unknown[]) => buildOllamaProviderMock(...args),
+  configureOllamaNonInteractive: vi.fn(),
+  ensureOllamaModelPulled: vi.fn(),
+  promptAndConfigureOllama: vi.fn(),
+}));
+
+vi.mock("../../../extensions/vllm/api.js", () => ({
+  VLLM_DEFAULT_API_KEY_ENV_VAR: "VLLM_API_KEY",
+  VLLM_DEFAULT_BASE_URL: "http://127.0.0.1:8000/v1",
+  VLLM_MODEL_PLACEHOLDER: "meta-llama/Meta-Llama-3-8B-Instruct",
+  VLLM_PROVIDER_LABEL: "vLLM",
+  buildVllmProvider: (...args: unknown[]) => buildVllmProviderMock(...args),
+}));
+
+vi.mock("../../../extensions/sglang/api.js", () => ({
+  SGLANG_DEFAULT_API_KEY_ENV_VAR: "SGLANG_API_KEY",
+  SGLANG_DEFAULT_BASE_URL: "http://127.0.0.1:30000/v1",
+  SGLANG_MODEL_PLACEHOLDER: "Qwen/Qwen3-8B",
+  SGLANG_PROVIDER_LABEL: "SGLang",
+  buildSglangProvider: (...args: unknown[]) => buildSglangProviderMock(...args),
+}));
 
 function createModelConfig(id: string, name = id): ModelDefinitionConfig {
   return {
@@ -134,63 +202,8 @@ function runCatalog(params: {
   });
 }
 
-function buildBundledPluginModuleId(pluginId: string, artifactBasename: string): string {
-  return `../../../extensions/${pluginId}/${artifactBasename}`;
-}
-
 describe("provider discovery contract", () => {
-  beforeEach(async () => {
-    const githubCopilotTokenModuleId = buildBundledPluginModuleId("github-copilot", "token.js");
-    const ollamaApiModuleId = buildBundledPluginModuleId("ollama", "api.js");
-    const vllmApiModuleId = buildBundledPluginModuleId("vllm", "api.js");
-    const sglangApiModuleId = buildBundledPluginModuleId("sglang", "api.js");
-    vi.resetModules();
-    vi.doMock("openclaw/plugin-sdk/agent-runtime", async () => {
-      // Import the direct source module, not the mocked subpath, so bundled
-      // provider helpers still see the full agent-runtime surface.
-      const actual = await import("../../plugin-sdk/agent-runtime.ts");
-      return {
-        ...actual,
-        ensureAuthProfileStore: ensureAuthProfileStoreMock,
-        listProfilesForProvider: listProfilesForProviderMock,
-      };
-    });
-    vi.doMock("openclaw/plugin-sdk/provider-auth", async () => {
-      const actual = await vi.importActual<object>("openclaw/plugin-sdk/provider-auth");
-      return {
-        ...actual,
-        ensureAuthProfileStore: ensureAuthProfileStoreMock,
-        listProfilesForProvider: listProfilesForProviderMock,
-      };
-    });
-    vi.doMock(githubCopilotTokenModuleId, async () => {
-      const actual = await vi.importActual<object>(githubCopilotTokenModuleId);
-      return {
-        ...actual,
-        resolveCopilotApiToken: resolveCopilotApiTokenMock,
-      };
-    });
-    vi.doMock(ollamaApiModuleId, async () => {
-      const actual = await vi.importActual<object>(ollamaApiModuleId);
-      return {
-        ...actual,
-        buildOllamaProvider: (...args: unknown[]) => buildOllamaProviderMock(...args),
-      };
-    });
-    vi.doMock(vllmApiModuleId, async () => {
-      const actual = await vi.importActual<object>(vllmApiModuleId);
-      return {
-        ...actual,
-        buildVllmProvider: (...args: unknown[]) => buildVllmProviderMock(...args),
-      };
-    });
-    vi.doMock(sglangApiModuleId, async () => {
-      const actual = await vi.importActual<object>(sglangApiModuleId);
-      return {
-        ...actual,
-        buildSglangProvider: (...args: unknown[]) => buildSglangProviderMock(...args),
-      };
-    });
+  beforeAll(async () => {
     ({ runProviderCatalog } = await import("../provider-discovery.js"));
     const [
       { default: githubCopilotPlugin },
@@ -201,27 +214,13 @@ describe("provider discovery contract", () => {
       { default: modelStudioPlugin },
       { default: cloudflareAiGatewayPlugin },
     ] = await Promise.all([
-      import(buildBundledPluginModuleId("github-copilot", "index.js")) as Promise<{
-        default: Parameters<typeof registerProviders>[0];
-      }>,
-      import(buildBundledPluginModuleId("ollama", "index.js")) as Promise<{
-        default: Parameters<typeof registerProviders>[0];
-      }>,
-      import(buildBundledPluginModuleId("vllm", "index.js")) as Promise<{
-        default: Parameters<typeof registerProviders>[0];
-      }>,
-      import(buildBundledPluginModuleId("sglang", "index.js")) as Promise<{
-        default: Parameters<typeof registerProviders>[0];
-      }>,
-      import(buildBundledPluginModuleId("minimax", "index.js")) as Promise<{
-        default: Parameters<typeof registerProviders>[0];
-      }>,
-      import(buildBundledPluginModuleId("modelstudio", "index.js")) as Promise<{
-        default: Parameters<typeof registerProviders>[0];
-      }>,
-      import(buildBundledPluginModuleId("cloudflare-ai-gateway", "index.js")) as Promise<{
-        default: Parameters<typeof registerProviders>[0];
-      }>,
+      import("../../../extensions/github-copilot/index.js"),
+      import("../../../extensions/ollama/index.js"),
+      import("../../../extensions/vllm/index.js"),
+      import("../../../extensions/sglang/index.js"),
+      import("../../../extensions/minimax/index.js"),
+      import("../../../extensions/modelstudio/index.js"),
+      import("../../../extensions/cloudflare-ai-gateway/index.js"),
     ]);
     githubCopilotProvider = requireProvider(
       registerProviders(githubCopilotPlugin),
@@ -237,6 +236,9 @@ describe("provider discovery contract", () => {
       registerProviders(cloudflareAiGatewayPlugin),
       "cloudflare-ai-gateway",
     );
+  });
+
+  beforeEach(() => {
     setRuntimeAuthStore();
   });
 

@@ -3,7 +3,6 @@ import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { captureEnv } from "../test-utils/env.js";
 import { MINIMAX_OAUTH_MARKER, NON_ENV_SECRETREF_MARKER } from "./model-auth-markers.js";
 import { resolveImplicitProvidersForTest } from "./models-config.e2e-harness.js";
 import { createProviderAuthResolver } from "./models-config.providers.secrets.js";
@@ -11,9 +10,6 @@ import { createProviderAuthResolver } from "./models-config.providers.secrets.js
 describe("models-config provider auth provenance", () => {
   it("persists env keyRef and tokenRef auth profiles as env var markers", async () => {
     const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
-    const envSnapshot = captureEnv(["VOLCANO_ENGINE_API_KEY", "TOGETHER_API_KEY"]);
-    delete process.env.VOLCANO_ENGINE_API_KEY;
-    delete process.env.TOGETHER_API_KEY;
     await writeFile(
       join(agentDir, "auth-profiles.json"),
       JSON.stringify(
@@ -37,14 +33,14 @@ describe("models-config provider auth provenance", () => {
       ),
       "utf8",
     );
-    try {
-      const providers = await resolveImplicitProvidersForTest({ agentDir, env: {} });
-      expect(providers?.volcengine?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
-      expect(providers?.["volcengine-plan"]?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
-      expect(providers?.together?.apiKey).toBe("TOGETHER_API_KEY");
-    } finally {
-      envSnapshot.restore();
-    }
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: {},
+      onlyPluginIds: ["volcengine", "together"],
+    });
+    expect(providers?.volcengine?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
+    expect(providers?.["volcengine-plan"]?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
+    expect(providers?.together?.apiKey).toBe("TOGETHER_API_KEY");
   });
 
   it("uses non-env marker for ref-managed profiles even when runtime plaintext is present", async () => {
@@ -75,7 +71,11 @@ describe("models-config provider auth provenance", () => {
       "utf8",
     );
 
-    const providers = await resolveImplicitProvidersForTest({ agentDir, env: {} });
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: {},
+      onlyPluginIds: ["byteplus", "together"],
+    });
     expect(providers?.byteplus?.apiKey).toBe(NON_ENV_SECRETREF_MARKER);
     expect(providers?.["byteplus-plan"]?.apiKey).toBe(NON_ENV_SECRETREF_MARKER);
     expect(providers?.together?.apiKey).toBe(NON_ENV_SECRETREF_MARKER);
@@ -104,7 +104,11 @@ describe("models-config provider auth provenance", () => {
       "utf8",
     );
 
-    const providers = await resolveImplicitProvidersForTest({ agentDir, env: {} });
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: {},
+      onlyPluginIds: ["minimax"],
+    });
     expect(providers?.["minimax-portal"]?.apiKey).toBe(MINIMAX_OAUTH_MARKER);
   });
 

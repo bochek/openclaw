@@ -1,4 +1,4 @@
-import { resolveNormalizedAccountEntry } from "openclaw/plugin-sdk/account-core";
+import { resolveNormalizedAccountEntry } from "openclaw/plugin-sdk/account-resolution";
 import { formatAllowFromLowercase } from "openclaw/plugin-sdk/allow-from";
 import {
   adaptScopedAccountAccessor,

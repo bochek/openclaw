@@ -18,6 +18,7 @@ describe("buildApiErrorObservationFields", () => {
     const observed = buildApiErrorObservationFields(
       '{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_overload"}',
     );
+    const rawErrorPreview = String(observed.rawErrorPreview ?? "");
 
     expect(observed).toMatchObject({
       rawErrorPreview: expect.stringContaining('"request_id":"sha256:'),
@@ -27,7 +28,7 @@ describe("buildApiErrorObservationFields", () => {
       providerErrorMessagePreview: "Overloaded",
       requestIdHash: expect.stringMatching(/^sha256:/),
     });
-    expect(observed.rawErrorPreview).not.toContain("req_overload");
+    expect(rawErrorPreview.includes("req_overload")).toBe(false);
   });
 
   it("forces token redaction for observation previews", () => {
@@ -64,6 +65,7 @@ describe("buildApiErrorObservationFields", () => {
     const observed = buildTextObservationFields(
       '{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"},"request_id":"req_prev"}',
     );
+    const textPreview = String(observed.textPreview ?? "");
 
     expect(observed).toMatchObject({
       textPreview: expect.stringContaining('"request_id":"sha256:'),
@@ -73,20 +75,21 @@ describe("buildApiErrorObservationFields", () => {
       providerErrorMessagePreview: "Overloaded",
       requestIdHash: expect.stringMatching(/^sha256:/),
     });
-    expect(observed.textPreview).not.toContain("req_prev");
+    expect(textPreview.includes("req_prev")).toBe(false);
   });
 
   it("redacts request ids in formatted plain-text errors", () => {
     const observed = buildApiErrorObservationFields(
       "LLM error overloaded_error: Overloaded (request_id: req_plaintext_123)",
     );
+    const rawErrorPreview = String(observed.rawErrorPreview ?? "");
 
     expect(observed).toMatchObject({
       rawErrorPreview: expect.stringContaining("request_id: sha256:"),
       rawErrorFingerprint: expect.stringMatching(/^sha256:/),
       requestIdHash: expect.stringMatching(/^sha256:/),
     });
-    expect(observed.rawErrorPreview).not.toContain("req_plaintext_123");
+    expect(rawErrorPreview.includes("req_plaintext_123")).toBe(false);
   });
 
   it("keeps fingerprints stable across request ids for equivalent errors", () => {

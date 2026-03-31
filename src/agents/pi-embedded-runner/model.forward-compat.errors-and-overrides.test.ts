@@ -1,11 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ModelProviderConfig } from "../../config/config.js";
-import { discoverModels } from "../pi-model-discovery.js";
 import { createProviderRuntimeTestMock } from "./model.provider-runtime.test-support.js";
+
+const discoverModelsMock = vi.hoisted(() => vi.fn(() => ({ find: vi.fn(() => null) })));
 
 vi.mock("../pi-model-discovery.js", () => ({
   discoverAuthStorage: vi.fn(() => ({ mocked: true })),
-  discoverModels: vi.fn(() => ({ find: vi.fn(() => null) })),
+  discoverModels: discoverModelsMock,
 }));
 
 import type { OpenClawConfig } from "../../config/config.js";
@@ -22,12 +23,12 @@ import {
 } from "./model.test-harness.js";
 
 beforeEach(() => {
-  resetMockDiscoverModels(discoverModels);
+  resetMockDiscoverModels(discoverModelsMock);
 });
 
 function createRuntimeHooks() {
   return createProviderRuntimeTestMock({
-    handledDynamicProviders: ["anthropic", "zai", "openai-codex"],
+    handledDynamicProviders: ["anthropic", "zai", "openai-codex", "google-antigravity"],
   });
 }
 
@@ -58,7 +59,7 @@ function createAnthropicTemplateModel() {
 }
 
 function resolveAnthropicModelWithProviderOverrides(overrides: Partial<ModelProviderConfig>) {
-  mockDiscoveredModel(discoverModels, {
+  mockDiscoveredModel(discoverModelsMock, {
     provider: "anthropic",
     modelId: "claude-sonnet-4-5",
     templateModel: createAnthropicTemplateModel(),
@@ -167,7 +168,7 @@ describe("resolveModel forward-compat errors and overrides", () => {
   });
 
   it("uses codex fallback when inline model omits api (#39682)", () => {
-    mockOpenAICodexTemplateModel(discoverModels);
+    mockOpenAICodexTemplateModel(discoverModelsMock);
 
     const cfg: OpenClawConfig = {
       models: {
@@ -193,7 +194,7 @@ describe("resolveModel forward-compat errors and overrides", () => {
   });
 
   it("normalizes openai-codex gpt-5.4 overrides away from /v1/responses", () => {
-    mockOpenAICodexTemplateModel(discoverModels);
+    mockOpenAICodexTemplateModel(discoverModelsMock);
 
     const cfg: OpenClawConfig = {
       models: {
@@ -218,7 +219,7 @@ describe("resolveModel forward-compat errors and overrides", () => {
   });
 
   it("does not rewrite openai baseUrl when openai-codex api stays non-codex", () => {
-    mockOpenAICodexTemplateModel(discoverModels);
+    mockOpenAICodexTemplateModel(discoverModelsMock);
 
     const cfg: OpenClawConfig = {
       models: {
@@ -285,7 +286,7 @@ describe("resolveModel forward-compat errors and overrides", () => {
   });
 
   it("lets provider config override registry-found kimi user agent headers", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "kimi",
       modelId: "kimi-code",
       templateModel: {
@@ -326,7 +327,7 @@ describe("resolveModel forward-compat errors and overrides", () => {
   });
 
   it("does not override when no provider config exists", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "anthropic",
       modelId: "claude-sonnet-4-5",
       templateModel: {

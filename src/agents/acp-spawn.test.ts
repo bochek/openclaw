@@ -6,11 +6,6 @@ import {
   setRuntimeConfigSnapshot,
   type OpenClawConfig,
 } from "../config/config.js";
-import * as sessionPaths from "../config/sessions/paths.js";
-import * as sessionStore from "../config/sessions/store.js";
-import * as sessionTranscript from "../config/sessions/transcript.js";
-import * as gatewayCall from "../gateway/call.js";
-import * as heartbeatWake from "../infra/heartbeat-wake.js";
 import {
   __testing as sessionBindingServiceTesting,
   registerSessionBindingAdapter,
@@ -18,8 +13,7 @@ import {
   type SessionBindingPlacement,
   type SessionBindingRecord,
 } from "../infra/outbound/session-binding-service.js";
-import { resetTaskRegistryForTests } from "../tasks/task-registry.js";
-import * as acpSpawnParentStream from "./acp-spawn-parent-stream.js";
+import { __testing as acpSpawnTesting, spawnAcpDirect } from "./acp-spawn.js";
 
 function createDefaultSpawnConfig(): OpenClawConfig {
   return {
@@ -78,22 +72,14 @@ const hoisted = vi.hoisted(() => {
   };
 });
 
-const callGatewaySpy = vi.spyOn(gatewayCall, "callGateway");
-const getAcpSessionManagerSpy = vi.spyOn(acpSessionManager, "getAcpSessionManager");
-const loadSessionStoreSpy = vi.spyOn(sessionStore, "loadSessionStore");
-const resolveStorePathSpy = vi.spyOn(sessionPaths, "resolveStorePath");
-const resolveSessionTranscriptFileSpy = vi.spyOn(sessionTranscript, "resolveSessionTranscriptFile");
-const areHeartbeatsEnabledSpy = vi.spyOn(heartbeatWake, "areHeartbeatsEnabled");
-const startAcpSpawnParentStreamRelaySpy = vi.spyOn(
-  acpSpawnParentStream,
-  "startAcpSpawnParentStreamRelay",
-);
-const resolveAcpSpawnStreamLogPathSpy = vi.spyOn(
-  acpSpawnParentStream,
-  "resolveAcpSpawnStreamLogPath",
-);
+vi.mock("../infra/heartbeat-wake.js", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    areHeartbeatsEnabled: (...args: unknown[]) => hoisted.areHeartbeatsEnabledMock(...args),
+  };
+});
 
-const { spawnAcpDirect } = await import("./acp-spawn.js");
 type SpawnRequest = Parameters<typeof spawnAcpDirect>[0];
 type SpawnContext = Parameters<typeof spawnAcpDirect>[1];
 type AgentCallParams = {
@@ -252,7 +238,6 @@ function enableLineCurrentConversationBindings(): void {
 describe("spawnAcpDirect", () => {
   beforeEach(() => {
     replaceSpawnConfig(createDefaultSpawnConfig());
-    resetTaskRegistryForTests();
     hoisted.areHeartbeatsEnabledMock.mockReset().mockReturnValue(true);
 
     hoisted.callGatewayMock.mockReset();
@@ -269,7 +254,7 @@ describe("spawnAcpDirect", () => {
       }
       return {};
     });
-    callGatewaySpy.mockReset().mockImplementation(async (argsUnknown: unknown) => {
+    acpSpawnTesting.setCallGatewayForTests(async (argsUnknown: unknown) => {
       return await hoisted.callGatewayMock(argsUnknown);
     });
 
@@ -277,7 +262,7 @@ describe("spawnAcpDirect", () => {
       runtimeClosed: true,
       metaCleared: false,
     });
-    getAcpSessionManagerSpy.mockReset().mockReturnValue({
+    acpSpawnTesting.setGetAcpSessionManagerForTests(() => ({
       initializeSession: async (
         params: Parameters<
           ReturnType<typeof acpSessionManager.getAcpSessionManager>["initializeSession"]
@@ -288,7 +273,7 @@ describe("spawnAcpDirect", () => {
           ReturnType<typeof acpSessionManager.getAcpSessionManager>["closeSession"]
         >[0],
       ) => await hoisted.closeSessionMock(params),
-    } as unknown as ReturnType<typeof acpSessionManager.getAcpSessionManager>);
+    }) as unknown as ReturnType<typeof acpSessionManager.getAcpSessionManager>);
     hoisted.initializeSessionMock.mockReset().mockImplementation(async (argsUnknown: unknown) => {
       const args = argsUnknown as AcpInitializeSessionInput;
       const runtimeSessionName = `${args.sessionKey}:runtime`;
@@ -365,19 +350,19 @@ describe("spawnAcpDirect", () => {
     hoisted.startAcpSpawnParentStreamRelayMock
       .mockReset()
       .mockImplementation(() => createRelayHandle());
-    startAcpSpawnParentStreamRelaySpy
-      .mockReset()
-      .mockImplementation((...args) => hoisted.startAcpSpawnParentStreamRelayMock(...args));
+    acpSpawnTesting.setStartAcpSpawnParentStreamRelayForTests(
+      (...args) => hoisted.startAcpSpawnParentStreamRelayMock(...args),
+    );
     hoisted.resolveAcpSpawnStreamLogPathMock
       .mockReset()
       .mockReturnValue("/tmp/sess-main.acp-stream.jsonl");
-    resolveAcpSpawnStreamLogPathSpy
-      .mockReset()
-      .mockImplementation((...args) => hoisted.resolveAcpSpawnStreamLogPathMock(...args));
+    acpSpawnTesting.setResolveAcpSpawnStreamLogPathForTests(
+      (...args) => hoisted.resolveAcpSpawnStreamLogPathMock(...args),
+    );
     hoisted.resolveStorePathMock.mockReset().mockReturnValue("/tmp/codex-sessions.json");
-    resolveStorePathSpy
-      .mockReset()
-      .mockImplementation((store, opts) => hoisted.resolveStorePathMock(store, opts));
+    acpSpawnTesting.setResolveStorePathForTests(
+      (store, opts) => hoisted.resolveStorePathMock(store, opts),
+    );
     hoisted.loadSessionStoreMock.mockReset().mockImplementation(() => {
       const store: Record<string, { sessionId: string; updatedAt: number }> = {};
       return new Proxy(store, {
@@ -389,9 +374,9 @@ describe("spawnAcpDirect", () => {
         },
       });
     });
-    loadSessionStoreSpy
-      .mockReset()
-      .mockImplementation((storePath) => hoisted.loadSessionStoreMock(storePath));
+    acpSpawnTesting.setLoadSessionStoreForTests(
+      (storePath) => hoisted.loadSessionStoreMock(storePath),
+    );
     hoisted.resolveSessionTranscriptFileMock
       .mockReset()
       .mockImplementation(async (params: unknown) => {
@@ -408,18 +393,21 @@ describe("spawnAcpDirect", () => {
           },
         };
       });
-    resolveSessionTranscriptFileSpy
-      .mockReset()
-      .mockImplementation(async (params) => await hoisted.resolveSessionTranscriptFileMock(params));
-    areHeartbeatsEnabledSpy
-      .mockReset()
-      .mockImplementation(() => hoisted.areHeartbeatsEnabledMock());
+    acpSpawnTesting.setResolveSessionTranscriptFileForTests(
+      async (params) => await hoisted.resolveSessionTranscriptFileMock(params),
+    );
   });
 
   afterEach(() => {
-    resetTaskRegistryForTests();
     sessionBindingServiceTesting.resetSessionBindingAdaptersForTests();
     clearRuntimeConfigSnapshot();
+    acpSpawnTesting.setCallGatewayForTests(null);
+    acpSpawnTesting.setGetAcpSessionManagerForTests(null);
+    acpSpawnTesting.setResolveStorePathForTests(null);
+    acpSpawnTesting.setLoadSessionStoreForTests(null);
+    acpSpawnTesting.setResolveSessionTranscriptFileForTests(null);
+    acpSpawnTesting.setResolveAcpSpawnStreamLogPathForTests(null);
+    acpSpawnTesting.setStartAcpSpawnParentStreamRelayForTests(null);
   });
 
   it("spawns ACP session, binds a new thread, and dispatches initial task", async () => {
@@ -685,7 +673,7 @@ describe("spawnAcpDirect", () => {
         to: undefined,
         threadId: undefined,
       } satisfies AgentCallParams,
-      expectTranscriptPersistence: false,
+      expectTranscriptPersistence: true,
     },
     {
       name: "does not inline delivery for run-mode spawns from subagent requester sessions",

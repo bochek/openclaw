@@ -1,6 +1,6 @@
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createSandboxBrowserConfig,
   createSandboxPruneConfig,
@@ -32,21 +32,9 @@ vi.mock("./ssh.js", async (importOriginal) => {
 let createSshSandboxBackend: typeof import("./ssh-backend.js").createSshSandboxBackend;
 let sshSandboxBackendManager: typeof import("./ssh-backend.js").sshSandboxBackendManager;
 
-async function loadFreshSshBackendModuleForTest() {
-  vi.resetModules();
-  vi.doMock("./ssh.js", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("./ssh.js")>();
-    return {
-      ...actual,
-      createSshSandboxSessionFromSettings: sshMocks.createSshSandboxSessionFromSettings,
-      disposeSshSandboxSession: sshMocks.disposeSshSandboxSession,
-      runSshSandboxCommand: sshMocks.runSshSandboxCommand,
-      uploadDirectoryToSshTarget: sshMocks.uploadDirectoryToSshTarget,
-      buildSshSandboxArgv: sshMocks.buildSshSandboxArgv,
-    };
-  });
+beforeAll(async () => {
   ({ createSshSandboxBackend, sshSandboxBackendManager } = await import("./ssh-backend.js"));
-}
+});
 
 function createConfig(): OpenClawConfig {
   return {
@@ -155,7 +143,6 @@ describe("ssh sandbox backend", () => {
       session.host,
       remoteCommand,
     ]);
-    await loadFreshSshBackendModuleForTest();
   });
 
   afterEach(() => {

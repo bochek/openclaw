@@ -5,12 +5,12 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createDirectoryTestRuntime,
   expectDirectorySurface,
-} from "../../../test/helpers/plugins/directory.ts";
+} from "../../../test/helpers/extensions/directory.ts";
 import {
   createPluginSetupWizardConfigure,
   createQueuedWizardPrompter,
   runSetupWizardConfigure,
-} from "../../../test/helpers/plugins/setup-wizard.js";
+} from "../../../test/helpers/extensions/setup-wizard.js";
 import { whatsappPlugin } from "./channel.js";
 import {
   resolveWhatsAppGroupRequireMention,

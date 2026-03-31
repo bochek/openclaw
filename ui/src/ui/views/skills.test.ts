@@ -1,9 +1,16 @@
+import "../../test-helpers/browser-globals-install.ts";
 import { render } from "lit";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SkillStatusEntry, SkillStatusReport } from "../types.ts";
 import { renderSkills, type SkillsProps } from "./skills.ts";
 
 const dialogRestores: Array<() => void> = [];
+
+function flushUi() {
+  return new Promise<void>((resolve) => {
+    requestAnimationFrame(() => resolve());
+  });
+}
 
 function createSkill(overrides: Partial<SkillStatusEntry> = {}): SkillStatusEntry {
   return {
@@ -80,10 +87,6 @@ describe("renderSkills", () => {
 
   it("opens the skill detail dialog as a modal", async () => {
     const container = document.createElement("div");
-    const showModal = vi.fn(function (this: HTMLDialogElement) {
-      this.setAttribute("open", "");
-    });
-    installDialogMethod("showModal", showModal);
 
     render(
       renderSkills(
@@ -93,9 +96,8 @@ describe("renderSkills", () => {
       ),
       container,
     );
-    await Promise.resolve();
+    await flushUi();
 
-    expect(showModal).toHaveBeenCalledTimes(1);
     expect(container.querySelector("dialog")?.hasAttribute("open")).toBe(true);
   });
 
@@ -120,9 +122,10 @@ describe("renderSkills", () => {
       ),
       container,
     );
-    await Promise.resolve();
+    await flushUi();
 
     container.querySelector<HTMLButtonElement>(".md-preview-dialog__header .btn")?.click();
+    await flushUi();
 
     expect(onDetailClose).toHaveBeenCalledTimes(1);
   });

@@ -68,13 +68,18 @@ function resolveApiCatalog(ctx: ProviderCatalogContext) {
 function resolvePortalCatalog(ctx: ProviderCatalogContext) {
   const explicitProvider = ctx.config.models?.providers?.[PORTAL_PROVIDER_ID];
   const envApiKey = ctx.resolveProviderApiKey(PORTAL_PROVIDER_ID).apiKey;
+  const resolvedAuth = ctx.resolveProviderAuth(PORTAL_PROVIDER_ID);
   const authStore = ensureAuthProfileStore(ctx.agentDir, {
     allowKeychainPrompt: false,
   });
   const hasProfiles = listProfilesForProvider(authStore, PORTAL_PROVIDER_ID).length > 0;
   const explicitApiKey =
     typeof explicitProvider?.apiKey === "string" ? explicitProvider.apiKey.trim() : undefined;
-  const apiKey = envApiKey ?? explicitApiKey ?? (hasProfiles ? MINIMAX_OAUTH_MARKER : undefined);
+  const apiKey =
+    resolvedAuth.apiKey ??
+    envApiKey ??
+    explicitApiKey ??
+    (hasProfiles ? MINIMAX_OAUTH_MARKER : undefined);
   if (!apiKey) {
     return null;
   }

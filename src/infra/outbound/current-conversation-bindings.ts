@@ -127,8 +127,6 @@ function resolveChannelSupportsCurrentConversationBinding(channel: string): bool
   const matchesPluginId = (plugin: { id: string; meta?: { aliases?: readonly string[] } }) =>
     plugin.id === normalized ||
     (plugin.meta?.aliases ?? []).some((alias) => alias.trim().toLowerCase() === normalized);
-  // Keep this resolver on the active runtime registry only. Importing bundled
-  // channel loaders here creates a module cycle through plugin-sdk surfaces.
   const plugin = getActivePluginChannelRegistry()?.channels.find((entry) =>
     matchesPluginId(entry.plugin),
   )?.plugin;

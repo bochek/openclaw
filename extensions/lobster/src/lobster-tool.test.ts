@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawPluginApi, OpenClawPluginToolContext } from "../runtime-api.js";
 import {
   createWindowsCmdShimFixture,
@@ -11,22 +11,13 @@ import {
   setProcessPlatform,
   snapshotPlatformPathEnv,
 } from "./test-helpers.js";
+import { __testing as lobsterTesting, createLobsterTool } from "./lobster-tool.js";
 import { resolveWindowsLobsterSpawn } from "./windows-spawn.js";
 
 const spawnState = vi.hoisted(() => ({
   queue: [] as Array<{ stdout: string; stderr?: string; exitCode?: number }>,
   spawn: vi.fn(),
 }));
-
-vi.mock("node:child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:child_process")>();
-  return {
-    ...actual,
-    spawn: (...args: unknown[]) => spawnState.spawn(...args),
-  };
-});
-
-let createLobsterTool: typeof import("./lobster-tool.js").createLobsterTool;
 
 function fakeApi(overrides: Partial<OpenClawPluginApi> = {}): OpenClawPluginApi {
   return {
@@ -97,13 +88,8 @@ describe("lobster plugin tool", () => {
   let tempDir = "";
   const originalProcessState = snapshotPlatformPathEnv();
 
-  beforeAll(async () => {
-    ({ createLobsterTool } = await import("./lobster-tool.js"));
-
-    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-lobster-plugin-"));
-  });
-
   afterEach(() => {
+    lobsterTesting.resetSpawnForTest();
     restorePlatformPathEnv(originalProcessState);
   });
 
@@ -118,7 +104,11 @@ describe("lobster plugin tool", () => {
     }
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    if (!tempDir) {
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-lobster-plugin-"));
+    }
+    lobsterTesting.setSpawnForTest(spawnState.spawn as typeof import("node:child_process").spawn);
     spawnState.queue.length = 0;
     spawnState.spawn.mockReset();
     spawnState.spawn.mockImplementation(() => {

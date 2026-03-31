@@ -1,12 +1,9 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
-import {
-  estimateTokens,
-  generateSummary as piGenerateSummary,
-} from "@mariozechner/pi-coding-agent";
 import type { AgentCompactionIdentifierPolicy } from "../config/types.agent-defaults.js";
 import { retryAsync } from "../infra/retry.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
+import { estimateTokens, generateSummary as piGenerateSummary } from "./compaction-runtime.js";
 import { DEFAULT_CONTEXT_TOKENS } from "./defaults.js";
 import { repairToolUseResultPairing, stripToolResultDetails } from "./session-transcript-repair.js";
 
@@ -63,6 +60,27 @@ type GenerateSummaryCompat = {
 };
 
 const generateSummaryCompat = piGenerateSummary as unknown as GenerateSummaryCompat;
+const baseCompactionDeps = {
+  estimateTokens,
+  generateSummary: generateSummaryCompat,
+};
+let compactionTestDeps: Partial<typeof baseCompactionDeps> | undefined;
+
+function getCompactionDeps() {
+  return {
+    estimateTokens: compactionTestDeps?.estimateTokens ?? baseCompactionDeps.estimateTokens,
+    generateSummary: compactionTestDeps?.generateSummary ?? baseCompactionDeps.generateSummary,
+  };
+}
+
+export function setCompactionTestDeps(
+  overrides?: Partial<{
+    estimateTokens: typeof estimateTokens;
+    generateSummary: GenerateSummaryCompat;
+  }>,
+): void {
+  compactionTestDeps = overrides ? { ...overrides } : undefined;
+}
 
 function resolveIdentifierPreservationInstructions(
   instructions?: CompactionSummarizationInstructions,
@@ -99,7 +117,7 @@ export function buildCompactionSummarizationInstructions(
 export function estimateMessagesTokens(messages: AgentMessage[]): number {
   // SECURITY: toolResult.details can contain untrusted/verbose payloads; never include in LLM-facing compaction.
   const safe = stripToolResultDetails(messages);
-  return safe.reduce((sum, message) => sum + estimateTokens(message), 0);
+  return safe.reduce((sum, message) => sum + getCompactionDeps().estimateTokens(message), 0);
 }
 
 function estimateCompactionMessageTokens(message: AgentMessage): number {
@@ -296,8 +314,9 @@ function generateSummary(
   customInstructions?: string,
   previousSummary?: string,
 ): Promise<string> {
-  if (piGenerateSummary.length >= 8) {
-    return generateSummaryCompat(
+  const generateSummaryFn = getCompactionDeps().generateSummary;
+  if (generateSummaryFn.length >= 8) {
+    return generateSummaryFn(
       currentMessages,
       model,
       reserveTokens,
@@ -308,7 +327,7 @@ function generateSummary(
       previousSummary,
     );
   }
-  return generateSummaryCompat(
+  return generateSummaryFn(
     currentMessages,
     model,
     reserveTokens,

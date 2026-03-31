@@ -27,11 +27,45 @@ import { getMatrixRuntime } from "./runtime.js";
 import { matrixSetupAdapter } from "./setup-core.js";
 import type { CoreConfig } from "./types.js";
 
+type MatrixCliDeps = {
+  setExitCode: (code: number | undefined) => void;
+  getExitCode: () => number | undefined;
+  scheduleExit: (callback: () => void) => ReturnType<typeof setTimeout>;
+  clearScheduledExit: (timer: ReturnType<typeof setTimeout>) => void;
+};
+
+const defaultMatrixCliDeps: MatrixCliDeps = {
+  setExitCode: (code) => {
+    process.exitCode = code;
+  },
+  getExitCode: () => process.exitCode,
+  scheduleExit: (callback) => setTimeout(callback, 0),
+  clearScheduledExit: (timer) => clearTimeout(timer),
+};
+
+let matrixCliDeps: MatrixCliDeps = defaultMatrixCliDeps;
 let matrixCliExitScheduled = false;
+let matrixCliExitTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function resetMatrixCliStateForTests(): void {
   matrixCliExitScheduled = false;
+  if (matrixCliExitTimer) {
+    matrixCliDeps.clearScheduledExit(matrixCliExitTimer);
+    matrixCliExitTimer = null;
+  }
 }
+
+export const __testing = {
+  setDepsForTest(deps: Partial<MatrixCliDeps>): void {
+    matrixCliDeps = {
+      ...defaultMatrixCliDeps,
+      ...deps,
+    };
+  },
+  resetDepsForTest(): void {
+    matrixCliDeps = defaultMatrixCliDeps;
+  },
+};
 
 function scheduleMatrixCliExit(): void {
   if (matrixCliExitScheduled || process.env.VITEST) {
@@ -39,13 +73,14 @@ function scheduleMatrixCliExit(): void {
   }
   matrixCliExitScheduled = true;
   // matrix-js-sdk rust crypto can leave background async work alive after command completion.
-  setTimeout(() => {
-    process.exit(process.exitCode ?? 0);
-  }, 0);
+  matrixCliExitTimer = matrixCliDeps.scheduleExit(() => {
+    matrixCliExitTimer = null;
+    process.exit(matrixCliDeps.getExitCode() ?? 0);
+  });
 }
 
 function markCliFailure(): void {
-  process.exitCode = 1;
+  matrixCliDeps.setExitCode(1);
 }
 
 function toErrorMessage(err: unknown): string {
@@ -412,6 +447,8 @@ async function runMatrixCliCommand<TResult>(
   config: MatrixCliCommandConfig<TResult>,
 ): Promise<void> {
   configureCliLogMode(config.verbose);
+  const previousExitCode = matrixCliDeps.getExitCode();
+  matrixCliDeps.setExitCode(undefined);
   try {
     const result = await config.run();
     if (config.json) {
@@ -421,6 +458,8 @@ async function runMatrixCliCommand<TResult>(
     }
     if (config.shouldFail?.(result)) {
       markCliFailure();
+    } else {
+      matrixCliDeps.setExitCode(previousExitCode === 0 ? 0 : undefined);
     }
   } catch (err) {
     const message = toErrorMessage(err);

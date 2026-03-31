@@ -1,1 +1,5 @@
-export { type RunCronAgentTurnResult, runCronIsolatedAgentTurn } from "./isolated-agent/run.js";
+export {
+  __testing,
+  type RunCronAgentTurnResult,
+  runCronIsolatedAgentTurn,
+} from "./isolated-agent/run.js";

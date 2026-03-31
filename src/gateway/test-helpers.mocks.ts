@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Mock, vi } from "vitest";
+import { buildElevenLabsSpeechProvider } from "../../extensions/elevenlabs/test-api.ts";
+import { buildOpenAISpeechProvider } from "../../extensions/openai/test-api.ts";
 import type { MsgContext } from "../auto-reply/templating.js";
 import type { GetReplyOptions, ReplyPayload } from "../auto-reply/types.js";
 import type { ChannelPlugin, ChannelOutboundAdapter } from "../channels/plugins/types.js";
@@ -13,22 +15,10 @@ import type { AgentBinding } from "../config/types.agents.js";
 import type { HooksConfig } from "../config/types.hooks.js";
 import type { TailscaleWhoisIdentity } from "../infra/tailscale.js";
 import type { PluginRegistry } from "../plugins/registry.js";
+import type { WebSearchProviderPlugin } from "../plugins/types.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
-import type { SpeechProviderPlugin } from "../plugins/types.js";
 import { DEFAULT_ACCOUNT_ID } from "../routing/session-key.js";
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
-import { loadBundledPluginTestApiSync } from "../test-utils/bundled-plugin-public-surface.js";
-
-const { buildElevenLabsSpeechProvider } = loadBundledPluginTestApiSync<{
-  buildElevenLabsSpeechProvider: () => SpeechProviderPlugin;
-}>("elevenlabs");
-const { buildOpenAISpeechProvider } = loadBundledPluginTestApiSync<{
-  buildOpenAISpeechProvider: () => SpeechProviderPlugin;
-}>("openai");
-
-function buildBundledPluginModuleId(pluginId: string, artifactBasename: string): string {
-  return ["..", "..", "extensions", pluginId, artifactBasename].join("/");
-}
 
 type StubChannelOptions = {
   id: ChannelPlugin["id"];
@@ -87,6 +77,56 @@ const createStubChannelPlugin = (params: StubChannelOptions): ChannelPlugin => (
     }),
   },
 });
+
+function createStubWebSearchProvider(params: {
+  id: WebSearchProviderPlugin["id"];
+  pluginId: string;
+  envVars: string[];
+  requiresCredential?: boolean;
+}) {
+  const { id, pluginId, envVars } = params;
+  return {
+    pluginId,
+    source: "test" as const,
+    provider: {
+      id,
+      label: id,
+      hint: `${id} web search`,
+      envVars,
+      placeholder: `${id}-key`,
+      signupUrl: `https://example.com/${id}`,
+      ...(params.requiresCredential === false ? { requiresCredential: false } : {}),
+      credentialPath: `tools.web.search.${id}.apiKey`,
+      getCredentialValue: (searchConfig?: Record<string, unknown>) => {
+        const providerConfig = searchConfig?.[id];
+        if (
+          typeof providerConfig === "object" &&
+          providerConfig !== null &&
+          !Array.isArray(providerConfig) &&
+          "apiKey" in providerConfig
+        ) {
+          return (providerConfig as { apiKey?: unknown }).apiKey;
+        }
+        return undefined;
+      },
+      setCredentialValue: (searchConfigTarget: Record<string, unknown>, value: unknown) => {
+        const providerConfig =
+          typeof searchConfigTarget[id] === "object" &&
+          searchConfigTarget[id] !== null &&
+          !Array.isArray(searchConfigTarget[id])
+            ? (searchConfigTarget[id] as Record<string, unknown>)
+            : {};
+        providerConfig.apiKey = value;
+        searchConfigTarget[id] = providerConfig;
+      },
+      createTool: () => ({
+        description: `${id} test web search`,
+        parameters: {},
+        execute: async () => ({}),
+      }),
+    } satisfies WebSearchProviderPlugin,
+  };
+}
 
 const createStubPluginRegistry = (): PluginRegistry => ({
   plugins: [],
@@ -174,7 +214,33 @@ const createStubPluginRegistry = (): PluginRegistry => ({
   ],
   mediaUnderstandingProviders: [],
   imageGenerationProviders: [],
-  webSearchProviders: [],
+  webSearchProviders: [
+    createStubWebSearchProvider({
+      id: "gemini",
+      pluginId: "google",
+      envVars: ["GEMINI_API_KEY", "WEB_SEARCH_GEMINI_API_KEY"],
+    }),
+    createStubWebSearchProvider({
+      id: "brave",
+      pluginId: "brave",
+      envVars: ["BRAVE_API_KEY", "WEB_SEARCH_BRAVE_API_KEY"],
+    }),
+    createStubWebSearchProvider({
+      id: "grok",
+      pluginId: "xai",
+      envVars: ["XAI_API_KEY", "WEB_SEARCH_GROK_API_KEY"],
+    }),
+    createStubWebSearchProvider({
+      id: "kimi",
+      pluginId: "moonshot",
+      envVars: ["MOONSHOT_API_KEY", "KIMI_API_KEY", "WEB_SEARCH_KIMI_API_KEY"],
+    }),
+    createStubWebSearchProvider({
+      id: "perplexity",
+      pluginId: "perplexity",
+      envVars: ["PERPLEXITY_API_KEY", "WEB_SEARCH_PERPLEXITY_API_KEY"],
+    }),
+  ],
   gatewayHandlers: {},
   httpRoutes: [],
   cliRegistrars: [],
@@ -184,10 +250,20 @@ const createStubPluginRegistry = (): PluginRegistry => ({
   diagnostics: [],
 });
 
-const GATEWAY_TEST_PLUGIN_REGISTRY_STATE_KEY = Symbol.for(
-  "openclaw.gatewayTestHelpers.pluginRegistryState",
-);
-const GATEWAY_TEST_CONFIG_ROOT_KEY = Symbol.for("openclaw.gatewayTestHelpers.configRoot");
+function getPluginRegistryState() {
+  return resolveGlobalSingleton(
+    Symbol.for("openclaw.gatewayTestHelpers.pluginRegistryState"),
+    () => ({
+      registry: createStubPluginRegistry(),
+    }),
+  );
+}
+
+function getTestConfigRootState() {
+  return resolveGlobalSingleton(Symbol.for("openclaw.gatewayTestHelpers.configRoot"), () => ({
+    value: path.join(os.tmpdir(), `openclaw-gateway-test-${process.pid}-${crypto.randomUUID()}`),
+  }));
+}
 
 const hoisted = vi.hoisted(() => {
   const key = Symbol.for("openclaw.gatewayTestHelpers.hoisted");
@@ -292,9 +368,7 @@ const hoisted = vi.hoisted(() => {
   return created;
 });
 
-const pluginRegistryState = resolveGlobalSingleton(GATEWAY_TEST_PLUGIN_REGISTRY_STATE_KEY, () => ({
-  registry: createStubPluginRegistry(),
-}));
+const pluginRegistryState = getPluginRegistryState();
 setActivePluginRegistry(pluginRegistryState.registry);
 
 export const setTestPluginRegistry = (registry: PluginRegistry) => {
@@ -307,9 +381,7 @@ export const resetTestPluginRegistry = () => {
   setActivePluginRegistry(pluginRegistryState.registry);
 };
 
-const testConfigRoot = resolveGlobalSingleton(GATEWAY_TEST_CONFIG_ROOT_KEY, () => ({
-  value: path.join(os.tmpdir(), `openclaw-gateway-test-${process.pid}-${crypto.randomUUID()}`),
-}));
+const testConfigRoot = getTestConfigRootState();
 
 export const setTestConfigRoot = (root: string) => {
   testConfigRoot.value = root;
@@ -366,67 +438,14 @@ vi.mock("../agents/pi-model-discovery.js", async () => {
     "../agents/pi-model-discovery.js",
   );
 
-  const createActualRegistry = (...args: Parameters<typeof actual.discoverModels>) => {
-    const modelsFile = path.join(args[1], "models.json");
-    const Registry = actual.ModelRegistry as unknown as {
-      create?: (
-        authStorage: unknown,
-        modelsFile: string,
-      ) => {
-        getAll: () => Array<{ provider?: string; id?: string }>;
-        getAvailable: () => Array<{ provider?: string; id?: string }>;
-        find: (provider: string, modelId: string) => unknown;
-      };
-      new (
-        authStorage: unknown,
-        modelsFile: string,
-      ): {
-        getAll: () => Array<{ provider?: string; id?: string }>;
-        getAvailable: () => Array<{ provider?: string; id?: string }>;
-        find: (provider: string, modelId: string) => unknown;
-      };
-    };
-    if (typeof Registry.create === "function") {
-      return Registry.create(args[0], modelsFile);
-    }
-    return new Registry(args[0], modelsFile);
-  };
-
-  class MockModelRegistry {
-    private readonly actualRegistry?: ReturnType<typeof createActualRegistry>;
-
-    constructor(authStorage: unknown, modelsFile: string) {
+  class MockModelRegistry extends actual.ModelRegistry {
+    override getAll(): ReturnType<typeof actual.ModelRegistry.prototype.getAll> {
       if (!piSdkMock.enabled) {
-        this.actualRegistry = createActualRegistry(authStorage as never, path.dirname(modelsFile));
-      }
-    }
-
-    static create(authStorage: unknown, modelsFile: string) {
-      return new MockModelRegistry(authStorage, modelsFile);
-    }
-
-    getAll() {
-      if (!piSdkMock.enabled) {
-        return this.actualRegistry?.getAll() ?? [];
+        return super.getAll();
       }
       piSdkMock.discoverCalls += 1;
-      return piSdkMock.models as Array<{ provider?: string; id?: string }>;
-    }
-
-    getAvailable() {
-      if (!piSdkMock.enabled) {
-        return this.actualRegistry?.getAvailable() ?? [];
-      }
-      return piSdkMock.models as Array<{ provider?: string; id?: string }>;
-    }
-
-    find(provider: string, modelId: string) {
-      if (!piSdkMock.enabled) {
-        return this.actualRegistry?.find(provider, modelId);
-      }
-      return (piSdkMock.models as Array<{ provider?: string; id?: string }>).find(
-        (model) => model.provider === provider && model.id === modelId,
-      );
+      // Cast to expected type for testing purposes
+      return piSdkMock.models as ReturnType<typeof actual.ModelRegistry.prototype.getAll>;
     }
   }
 
@@ -472,7 +491,7 @@ vi.mock("../config/sessions.js", async () => {
 
 vi.mock("../config/config.js", async () => {
   const actual = await vi.importActual<typeof import("../config/config.js")>("../config/config.js");
-  const resolveConfigPath = () => path.join(testConfigRoot.value, "openclaw.json");
+  const resolveConfigPath = () => path.join(getTestConfigRootState().value, "openclaw.json");
   const hashConfigRaw = (raw: string | null) =>
     crypto
       .createHash("sha256")
@@ -756,7 +775,7 @@ vi.mock("../commands/health.js", () => ({
 vi.mock("../commands/status.js", () => ({
   getStatusSummary: vi.fn().mockResolvedValue({ ok: true }),
 }));
-vi.mock(buildBundledPluginModuleId("whatsapp", "runtime-api.js"), () => ({
+vi.mock("../../extensions/whatsapp/runtime-api.js", () => ({
   sendMessageWhatsApp: (...args: unknown[]) =>
     (hoisted.sendWhatsAppMock as (...args: unknown[]) => unknown)(...args),
   sendPollWhatsApp: (...args: unknown[]) =>
@@ -821,7 +840,7 @@ vi.mock("../plugins/loader.js", async () => {
     await vi.importActual<typeof import("../plugins/loader.js")>("../plugins/loader.js");
   return {
     ...actual,
-    loadOpenClawPlugins: () => pluginRegistryState.registry,
+    loadOpenClawPlugins: () => getPluginRegistryState().registry,
   };
 });
 vi.mock("../plugins/runtime/runtime-whatsapp-boundary.js", () => ({

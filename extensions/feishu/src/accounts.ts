@@ -15,15 +15,13 @@ import type {
   ResolvedFeishuAccount,
 } from "./types.js";
 
-const {
-  listConfiguredAccountIds,
-  listAccountIds: listFeishuAccountIds,
-  resolveDefaultAccountId,
-} = createAccountListHelpers("feishu", {
+const feishuAccountHelpers = createAccountListHelpers("feishu", {
   allowUnlistedDefaultAccount: true,
 });
 
-export { listFeishuAccountIds };
+export function listFeishuAccountIds(cfg: ClawdbotConfig): string[] {
+  return feishuAccountHelpers.listAccountIds(cfg);
+}
 
 type FeishuCredentialResolutionMode = "inspect" | "strict";
 type FeishuResolvedSecretRef = NonNullable<ReturnType<typeof coerceSecretRef>>;
@@ -179,7 +177,7 @@ export function resolveDefaultFeishuAccountSelection(cfg: ClawdbotConfig): {
  * Resolve the default account ID.
  */
 export function resolveDefaultFeishuAccountId(cfg: ClawdbotConfig): string {
-  return resolveDefaultAccountId(cfg);
+  return feishuAccountHelpers.resolveDefaultAccountId(cfg);
 }
 
 /**

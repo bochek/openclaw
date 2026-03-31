@@ -51,10 +51,19 @@ import {
 // Import lazily after test env/home setup so config/session paths resolve to test dirs.
 // Keep one cached module per worker for speed.
 let serverModulePromise: Promise<typeof import("./server.js")> | undefined;
+let serverModuleForTest: typeof import("./server.js") | undefined;
 
 async function getServerModule() {
+  if (serverModuleForTest) {
+    return serverModuleForTest;
+  }
   serverModulePromise ??= import("./server.js");
   return await serverModulePromise;
+}
+
+export function setGatewayServerModuleForTest(mod?: typeof import("./server.js")): void {
+  serverModulePromise = undefined;
+  serverModuleForTest = mod;
 }
 
 const GATEWAY_TEST_ENV_KEYS = [

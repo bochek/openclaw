@@ -1,12 +1,45 @@
 import type { OpenClawConfig } from "../config/config.js";
 import type { SessionEntry } from "../config/sessions.js";
+import { normalizeOptionalSecretInput } from "../utils/normalize-secret-input.js";
 import {
   ensureAuthProfileStore,
   resolveAuthProfileDisplayLabel,
   resolveAuthProfileOrder,
 } from "./auth-profiles.js";
-import { resolveEnvApiKey, resolveUsableCustomProviderApiKey } from "./model-auth.js";
+import { resolveEnvApiKey } from "./model-auth-env.js";
+import { isKnownEnvApiKeyMarker, isNonSecretApiKeyMarker } from "./model-auth-markers.js";
+import type { EnvApiKeyResult } from "./model-auth-env.js";
 import { normalizeProviderId } from "./model-selection.js";
+import { findNormalizedProviderValue } from "./provider-id.js";
+
+function resolveUsableCustomProviderApiKey(params: {
+  cfg?: OpenClawConfig;
+  provider: string;
+  env?: NodeJS.ProcessEnv;
+}): EnvApiKeyResult | null {
+  const providerConfig = findNormalizedProviderValue(params.cfg?.models?.providers, params.provider);
+  const customKey = normalizeOptionalSecretInput(providerConfig?.apiKey);
+  if (!customKey) {
+    return null;
+  }
+  if (!isNonSecretApiKeyMarker(customKey)) {
+    return { apiKey: customKey, source: "models.json" };
+  }
+  if (!isKnownEnvApiKeyMarker(customKey)) {
+    return null;
+  }
+  const envValue = normalizeOptionalSecretInput((params.env ?? process.env)[customKey]);
+  return envValue ? { apiKey: envValue, source: `env: ${customKey}` } : null;
+}
+
+const defaultModelAuthLabelDeps = {
+  ensureAuthProfileStore,
+  resolveAuthProfileDisplayLabel,
+  resolveAuthProfileOrder,
+  resolveEnvApiKey,
+  resolveUsableCustomProviderApiKey,
+};
+let modelAuthLabelDeps = defaultModelAuthLabelDeps;
 
 export function resolveModelAuthLabel(params: {
   provider?: string;
@@ -20,11 +53,11 @@ export function resolveModelAuthLabel(params: {
   }
 
   const providerKey = normalizeProviderId(resolvedProvider);
-  const store = ensureAuthProfileStore(params.agentDir, {
+  const store = modelAuthLabelDeps.ensureAuthProfileStore(params.agentDir, {
     allowKeychainPrompt: false,
   });
   const profileOverride = params.sessionEntry?.authProfileOverride?.trim();
-  const order = resolveAuthProfileOrder({
+  const order = modelAuthLabelDeps.resolveAuthProfileOrder({
     cfg: params.cfg,
     store,
     provider: providerKey,
@@ -37,7 +70,7 @@ export function resolveModelAuthLabel(params: {
     if (!profile || normalizeProviderId(profile.provider) !== providerKey) {
       continue;
     }
-    const label = resolveAuthProfileDisplayLabel({
+    const label = modelAuthLabelDeps.resolveAuthProfileDisplayLabel({
       cfg: params.cfg,
       store,
       profileId,
@@ -51,7 +84,7 @@ export function resolveModelAuthLabel(params: {
     return `api-key${label ? ` (${label})` : ""}`;
   }
 
-  const envKey = resolveEnvApiKey(providerKey);
+  const envKey = modelAuthLabelDeps.resolveEnvApiKey(providerKey);
   if (envKey?.apiKey) {
     if (envKey.source.includes("OAUTH_TOKEN")) {
       return `oauth (${envKey.source})`;
@@ -59,7 +92,7 @@ export function resolveModelAuthLabel(params: {
     return `api-key (${envKey.source})`;
   }
 
-  const customKey = resolveUsableCustomProviderApiKey({
+  const customKey = modelAuthLabelDeps.resolveUsableCustomProviderApiKey({
     cfg: params.cfg,
     provider: providerKey,
   });
@@ -69,3 +102,11 @@ export function resolveModelAuthLabel(params: {
 
   return "unknown";
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<typeof defaultModelAuthLabelDeps>) {
+    modelAuthLabelDeps = overrides
+      ? { ...defaultModelAuthLabelDeps, ...overrides }
+      : defaultModelAuthLabelDeps;
+  },
+};

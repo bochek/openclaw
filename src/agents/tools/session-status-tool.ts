@@ -53,6 +53,42 @@ const SessionStatusToolSchema = Type.Object({
   model: Type.Optional(Type.String()),
 });
 
+type SessionStatusToolDeps = {
+  normalizeGroupActivation: typeof normalizeGroupActivation;
+  getFollowupQueueDepth: typeof getFollowupQueueDepth;
+  resolveQueueSettings: typeof resolveQueueSettings;
+  buildStatusMessage: typeof buildStatusMessage;
+  loadConfig: typeof loadConfig;
+  loadSessionStore: typeof loadSessionStore;
+  resolveStorePath: typeof resolveStorePath;
+  updateSessionStore: typeof updateSessionStore;
+  resolveSessionModelIdentityRef: typeof resolveSessionModelIdentityRef;
+  loadProviderUsageSummary: typeof loadProviderUsageSummary;
+  resolveUsageProviderId: typeof resolveUsageProviderId;
+  resolveModelAuthLabel: typeof resolveModelAuthLabel;
+  loadModelCatalog: typeof loadModelCatalog;
+  listTasksForSessionKey: typeof listTasksForSessionKey;
+};
+
+const defaultSessionStatusToolDeps: SessionStatusToolDeps = {
+  normalizeGroupActivation,
+  getFollowupQueueDepth,
+  resolveQueueSettings,
+  buildStatusMessage,
+  loadConfig,
+  loadSessionStore,
+  resolveStorePath,
+  updateSessionStore,
+  resolveSessionModelIdentityRef,
+  loadProviderUsageSummary,
+  resolveUsageProviderId,
+  resolveModelAuthLabel,
+  loadModelCatalog,
+  listTasksForSessionKey,
+};
+
+let sessionStatusToolDeps: SessionStatusToolDeps = defaultSessionStatusToolDeps;
+
 function resolveSessionEntry(params: {
   store: Record<string, SessionEntry>;
   keyRaw: string;
@@ -120,7 +156,7 @@ function resolveStoreScopedRequesterKey(params: {
 }
 
 function formatSessionTaskLine(sessionKey: string): string | undefined {
-  const tasks = listTasksForSessionKey(sessionKey);
+  const tasks = sessionStatusToolDeps.listTasksForSessionKey(sessionKey);
   if (tasks.length === 0) {
     return undefined;
   }
@@ -179,7 +215,7 @@ async function resolveModelOverride(params: {
     cfg: params.cfg,
     defaultProvider: currentProvider,
   });
-  const catalog = await loadModelCatalog({ config: params.cfg });
+  const catalog = await sessionStatusToolDeps.loadModelCatalog({ config: params.cfg });
   const allowed = buildAllowedModelSet({
     cfg: params.cfg,
     catalog,
@@ -223,7 +259,7 @@ export function createSessionStatusTool(opts?: {
     parameters: SessionStatusToolSchema,
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;
-      const cfg = opts?.config ?? loadConfig();
+      const cfg = opts?.config ?? sessionStatusToolDeps.loadConfig();
       const { mainKey, alias, effectiveRequesterKey } = resolveSandboxedSessionToolContext({
         cfg,
         agentSessionKey: opts?.agentSessionKey,
@@ -317,8 +353,8 @@ export function createSessionStatusTool(opts?: {
       let agentId = isExplicitAgentKey
         ? resolveAgentIdFromSessionKey(requestedKeyRaw)
         : requesterAgentId;
-      let storePath = resolveStorePath(cfg.session?.store, { agentId });
-      let store = loadSessionStore(storePath);
+      let storePath = sessionStatusToolDeps.resolveStorePath(cfg.session?.store, { agentId });
+      let store = sessionStatusToolDeps.loadSessionStore(storePath);
       let storeScopedRequesterKey = resolveStoreScopedRequesterKey({
         requesterKey: effectiveRequesterKey,
         agentId,
@@ -361,8 +397,8 @@ export function createSessionStatusTool(opts?: {
           resolvedViaSessionId = true;
           requestedKeyRaw = visibleSession.key;
           agentId = resolveAgentIdFromSessionKey(visibleSession.key);
-          storePath = resolveStorePath(cfg.session?.store, { agentId });
-          store = loadSessionStore(storePath);
+          storePath = sessionStatusToolDeps.resolveStorePath(cfg.session?.store, { agentId });
+          store = sessionStatusToolDeps.loadSessionStore(storePath);
           storeScopedRequesterKey = resolveStoreScopedRequesterKey({
             requesterKey: effectiveRequesterKey,
             agentId,
@@ -435,7 +471,7 @@ export function createSessionStatusTool(opts?: {
         });
         if (applied.updated) {
           store[resolved.key] = nextEntry;
-          await updateSessionStore(storePath, (nextStore) => {
+          await sessionStatusToolDeps.updateSessionStore(storePath, (nextStore) => {
             nextStore[resolved.key] = nextEntry;
           });
           resolved.entry = nextEntry;
@@ -444,7 +480,7 @@ export function createSessionStatusTool(opts?: {
       }
 
       const agentDir = resolveAgentDir(cfg, agentId);
-      const runtimeModelIdentity = resolveSessionModelIdentityRef(
+      const runtimeModelIdentity = sessionStatusToolDeps.resolveSessionModelIdentityRef(
         cfg,
         resolved.entry,
         agentId,
@@ -469,11 +505,11 @@ export function createSessionStatusTool(opts?: {
           : resolved.entry;
       const providerOverrideForCard = statusSessionEntry.providerOverride?.trim();
       const providerForCard = providerOverrideForCard ?? defaultProviderForCard;
-      const usageProvider = resolveUsageProviderId(providerForCard);
+      const usageProvider = sessionStatusToolDeps.resolveUsageProviderId(providerForCard);
       let usageLine: string | undefined;
       if (usageProvider) {
         try {
-          const usageSummary = await loadProviderUsageSummary({
+          const usageSummary = await sessionStatusToolDeps.loadProviderUsageSummary({
             timeoutMs: 3500,
             providers: [usageProvider],
             agentDir,
@@ -500,10 +536,11 @@ export function createSessionStatusTool(opts?: {
         resolved.key.includes(":group:") ||
         resolved.key.includes(":channel:");
       const groupActivation = isGroup
-        ? (normalizeGroupActivation(resolved.entry.groupActivation) ?? "mention")
+        ? (sessionStatusToolDeps.normalizeGroupActivation(resolved.entry.groupActivation) ??
+          "mention")
         : undefined;
 
-      const queueSettings = resolveQueueSettings({
+      const queueSettings = sessionStatusToolDeps.resolveQueueSettings({
         cfg,
         channel:
           resolved.entry.channel ??
@@ -513,7 +550,7 @@ export function createSessionStatusTool(opts?: {
         sessionEntry: resolved.entry,
       });
       const queueKey = resolved.key ?? resolved.entry.sessionId;
-      const queueDepth = queueKey ? getFollowupQueueDepth(queueKey) : 0;
+      const queueDepth = queueKey ? sessionStatusToolDeps.getFollowupQueueDepth(queueKey) : 0;
       const queueOverrides = Boolean(
         resolved.entry.queueDebounceMs ?? resolved.entry.queueCap ?? resolved.entry.queueDrop,
       );
@@ -534,7 +571,7 @@ export function createSessionStatusTool(opts?: {
         typeof agentDefaults.model === "object" && agentDefaults.model
           ? { ...agentDefaults.model, primary: defaultLabel }
           : { primary: defaultLabel };
-      const statusText = buildStatusMessage({
+      const statusText = sessionStatusToolDeps.buildStatusMessage({
         config: cfg,
         agent: {
           ...agentDefaults,
@@ -550,7 +587,7 @@ export function createSessionStatusTool(opts?: {
         sessionKey: resolved.key,
         sessionStorePath: storePath,
         groupActivation,
-        modelAuth: resolveModelAuthLabel({
+        modelAuth: sessionStatusToolDeps.resolveModelAuthLabel({
           provider: providerForCard,
           cfg,
           sessionEntry: statusSessionEntry,
@@ -583,3 +620,14 @@ export function createSessionStatusTool(opts?: {
     },
   };
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<SessionStatusToolDeps>) {
+    sessionStatusToolDeps = overrides
+      ? { ...defaultSessionStatusToolDeps, ...overrides }
+      : defaultSessionStatusToolDeps;
+  },
+  resetDepsForTest() {
+    sessionStatusToolDeps = defaultSessionStatusToolDeps;
+  },
+};

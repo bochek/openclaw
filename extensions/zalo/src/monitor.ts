@@ -68,6 +68,41 @@ const DEFAULT_MEDIA_MAX_MB = 5;
 const WEBHOOK_CLEANUP_TIMEOUT_MS = 5_000;
 const ZALO_TYPING_TIMEOUT_MS = 5_000;
 
+let resolveZaloRuntimeForMonitor = () => getZaloRuntime();
+let resolveZaloApiForMonitor = () => ({
+  deleteWebhook,
+  getWebhookInfo,
+  getUpdates,
+  sendChatAction,
+  sendMessage,
+  sendPhoto,
+  setWebhook,
+});
+
+export function __setResolveZaloRuntimeForTest(loader: typeof resolveZaloRuntimeForMonitor): void {
+  resolveZaloRuntimeForMonitor = loader;
+}
+
+export function __resetResolveZaloRuntimeForTest(): void {
+  resolveZaloRuntimeForMonitor = () => getZaloRuntime();
+}
+
+export function __setResolveZaloApiForTest(loader: typeof resolveZaloApiForMonitor): void {
+  resolveZaloApiForMonitor = loader;
+}
+
+export function __resetResolveZaloApiForTest(): void {
+  resolveZaloApiForMonitor = () => ({
+    deleteWebhook,
+    getWebhookInfo,
+    getUpdates,
+    sendChatAction,
+    sendMessage,
+    sendPhoto,
+    setWebhook,
+  });
+}
+
 type ZaloCoreRuntime = ReturnType<typeof getZaloRuntime>;
 type ZaloStatusSink = (patch: { lastInboundAt?: number; lastOutboundAt?: number }) => void;
 type ZaloProcessingContext = {
@@ -214,7 +249,11 @@ function startPollingLoop(params: ZaloPollingLoopParams) {
     }
 
     try {
-      const response = await getUpdates(token, { timeout: pollTimeout }, fetcher);
+      const response = await resolveZaloApiForMonitor().getUpdates(
+        token,
+        { timeout: pollTimeout },
+        fetcher,
+      );
       if (response.ok && response.result) {
         statusSink?.({ lastInboundAt: Date.now() });
         await processUpdate({
@@ -423,7 +462,7 @@ async function authorizeZaloMessage(
           logVerbose(core, runtime, `zalo pairing request sender=${senderId}`);
         },
         sendPairingReply: async (text) => {
-          await sendMessage(
+          await resolveZaloApiForMonitor().sendMessage(
             token,
             {
               chat_id: chatId,
@@ -559,7 +598,7 @@ async function processMessageWithPipeline(params: ZaloMessagePipelineParams): Pr
     accountId: account.accountId,
     typing: {
       start: async () => {
-        await sendChatAction(
+        await resolveZaloApiForMonitor().sendChatAction(
           token,
           {
             chat_id: chatId,
@@ -635,14 +674,22 @@ async function deliverZaloReply(params: {
       core.channel.text.chunkMarkdownTextWithMode(value, ZALO_TEXT_LIMIT, chunkMode),
     sendText: async (chunk) => {
       try {
-        await sendMessage(token, { chat_id: chatId, text: chunk }, fetcher);
+        await resolveZaloApiForMonitor().sendMessage(
+          token,
+          { chat_id: chatId, text: chunk },
+          fetcher,
+        );
         statusSink?.({ lastOutboundAt: Date.now() });
       } catch (err) {
         runtime.error?.(`Zalo message send failed: ${String(err)}`);
       }
     },
     sendMedia: async ({ mediaUrl, caption }) => {
-      await sendPhoto(token, { chat_id: chatId, photo: mediaUrl, caption }, fetcher);
+      await resolveZaloApiForMonitor().sendPhoto(
+        token,
+        { chat_id: chatId, photo: mediaUrl, caption },
+        fetcher,
+      );
       statusSink?.({ lastOutboundAt: Date.now() });
     },
     onMediaError: (error) => {
@@ -666,7 +713,7 @@ export async function monitorZaloProvider(options: ZaloMonitorOptions): Promise<
     fetcher: fetcherOverride,
   } = options;
 
-  const core = getZaloRuntime();
+  const core = resolveZaloRuntimeForMonitor();
   const effectiveMediaMaxMb = account.config.mediaMaxMb ?? DEFAULT_MEDIA_MAX_MB;
   const fetcher = fetcherOverride ?? resolveZaloProxyFetch(account.config.proxy);
   const mode = useWebhook ? "webhook" : "polling";
@@ -709,14 +756,22 @@ export async function monitorZaloProvider(options: ZaloMonitorOptions): Promise<
       runtime.log?.(
         `[${account.accountId}] Zalo configuring webhook path=${path} target=${describeWebhookTarget(webhookUrl)}`,
       );
-      await setWebhook(token, { url: webhookUrl, secret_token: webhookSecret }, fetcher);
+      await resolveZaloApiForMonitor().setWebhook(
+        token,
+        { url: webhookUrl, secret_token: webhookSecret },
+        fetcher,
+      );
       let webhookCleanupPromise: Promise<void> | undefined;
       cleanupWebhook = async () => {
         if (!webhookCleanupPromise) {
           webhookCleanupPromise = (async () => {
             runtime.log?.(`[${account.accountId}] Zalo stopping; deleting webhook`);
             try {
-              await deleteWebhook(token, fetcher, WEBHOOK_CLEANUP_TIMEOUT_MS);
+              await resolveZaloApiForMonitor().deleteWebhook(
+                token,
+                fetcher,
+                WEBHOOK_CLEANUP_TIMEOUT_MS,
+              );
               runtime.log?.(`[${account.accountId}] Zalo webhook deleted`);
             } catch (err) {
               const detail =
@@ -752,7 +807,7 @@ export async function monitorZaloProvider(options: ZaloMonitorOptions): Promise<
     try {
       try {
         const currentWebhookUrl = normalizeWebhookUrl(
-          (await getWebhookInfo(token, fetcher)).result?.url,
+          (await resolveZaloApiForMonitor().getWebhookInfo(token, fetcher)).result?.url,
         );
         if (!currentWebhookUrl) {
           runtime.log?.(`[${account.accountId}] Zalo polling mode ready (no webhook configured)`);
@@ -760,7 +815,7 @@ export async function monitorZaloProvider(options: ZaloMonitorOptions): Promise<
           runtime.log?.(
             `[${account.accountId}] Zalo polling mode disabling existing webhook ${describeWebhookTarget(currentWebhookUrl)}`,
           );
-          await deleteWebhook(token, fetcher);
+          await resolveZaloApiForMonitor().deleteWebhook(token, fetcher);
           runtime.log?.(`[${account.accountId}] Zalo polling mode ready (webhook disabled)`);
         }
       } catch (err) {

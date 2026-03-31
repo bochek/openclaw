@@ -1,6 +1,6 @@
 import process from "node:process";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { runCli } from "./run-main.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { runCli, __testing as runMainTesting } from "./run-main.js";
 
 const tryRouteCliMock = vi.hoisted(() => vi.fn());
 const loadDotEnvMock = vi.hoisted(() => vi.fn());
@@ -26,10 +26,6 @@ vi.mock("./route.js", () => ({
 vi.mock("./container-target.js", () => ({
   maybeRunCliInContainer: maybeRunCliInContainerMock,
   parseCliContainerArgs: (argv: string[]) => ({ ok: true, container: null, argv }),
-}));
-
-vi.mock("./dotenv.js", () => ({
-  loadCliDotEnv: loadDotEnvMock,
 }));
 
 vi.mock("../infra/env.js", () => ({
@@ -69,9 +65,36 @@ vi.mock("./program.js", () => ({
 }));
 
 describe("runCli exit behavior", () => {
+  let originalExitCode: number | undefined;
+
   beforeEach(() => {
+    originalExitCode = process.exitCode;
+    process.exitCode = undefined;
     vi.clearAllMocks();
     hasMemoryRuntimeMock.mockReturnValue(false);
+    maybeRunCliInContainerMock.mockReturnValue({ handled: false, argv: ["node", "openclaw"] });
+    tryRouteCliMock.mockResolvedValue(false);
+    runMainTesting.resetDepsForTest();
+    runMainTesting.setDepsForTest({
+      shouldLoadCliDotEnv: () => false,
+      loadCliDotEnv: (params) => loadDotEnvMock(params),
+      outputRootHelp: async () => outputRootHelpMock(),
+      buildProgram: () => buildProgramMock(),
+      installUnhandledRejectionHandler: () => undefined,
+      getProgramContext: () => null,
+      registerCoreCliByName: async () => undefined,
+      registerSubCliByName: async () => undefined,
+      loadValidatedConfigForPluginRegistration: async () => null,
+      registerPluginCliCommands: () => undefined,
+      closeActiveMemorySearchManagers: async () => closeActiveMemorySearchManagersMock(),
+    });
+  });
+
+  afterEach(() => {
+    process.exitCode = 0;
+    if (originalExitCode !== undefined) {
+      process.exitCode = originalExitCode;
+    }
   });
 
   it("does not force process.exit after successful routed command", async () => {

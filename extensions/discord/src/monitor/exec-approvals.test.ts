@@ -789,6 +789,11 @@ describe("DiscordExecApprovalHandler target config", () => {
 });
 
 describe("DiscordExecApprovalHandler gateway auth", () => {
+  beforeEach(() => {
+    delete process.env.OPENCLAW_GATEWAY_TOKEN;
+    delete process.env.OPENCLAW_GATEWAY_PASSWORD;
+  });
+
   it("passes the shared gateway token from config into GatewayClient", async () => {
     const handler = new DiscordExecApprovalHandler({
       token: "discord-bot-token",

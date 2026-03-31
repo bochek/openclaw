@@ -42,6 +42,10 @@ vi.mock("./runtime-lifecycle.js", () => ({
   stopBrowserRuntime: vi.fn(async () => {}),
 }));
 
+vi.mock("../plugin-enabled.js", () => ({
+  isDefaultBrowserPluginEnabled: vi.fn(() => false),
+}));
+
 let startBrowserControlServiceFromConfig: typeof import("../control-service.js").startBrowserControlServiceFromConfig;
 
 describe("startBrowserControlServiceFromConfig", () => {

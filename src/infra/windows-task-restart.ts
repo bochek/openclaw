@@ -10,6 +10,13 @@ import { resolvePreferredOpenClawTmpDir } from "./tmp-openclaw-dir.js";
 const TASK_RESTART_RETRY_LIMIT = 12;
 const TASK_RESTART_RETRY_DELAY_SEC = 1;
 
+const defaultWindowsTaskRestartDeps = {
+  resolvePreferredOpenClawTmpDir,
+  spawn,
+};
+
+let windowsTaskRestartDeps = defaultWindowsTaskRestartDeps;
+
 function resolveWindowsTaskName(env: NodeJS.ProcessEnv): string {
   const override = env.OPENCLAW_WINDOWS_TASK_NAME?.trim();
   if (override) {
@@ -39,13 +46,13 @@ function buildScheduledTaskRestartScript(taskName: string): string {
 export function relaunchGatewayScheduledTask(env: NodeJS.ProcessEnv = process.env): RestartAttempt {
   const taskName = resolveWindowsTaskName(env);
   const scriptPath = path.join(
-    resolvePreferredOpenClawTmpDir(),
+    windowsTaskRestartDeps.resolvePreferredOpenClawTmpDir(),
     `openclaw-schtasks-restart-${randomUUID()}.cmd`,
   );
   const quotedScriptPath = quoteCmdScriptArg(scriptPath);
   try {
     fs.writeFileSync(scriptPath, `${buildScheduledTaskRestartScript(taskName)}\r\n`, "utf8");
-    const child = spawn("cmd.exe", ["/d", "/s", "/c", quotedScriptPath], {
+    const child = windowsTaskRestartDeps.spawn("cmd.exe", ["/d", "/s", "/c", quotedScriptPath], {
       detached: true,
       stdio: "ignore",
       windowsHide: true,
@@ -70,3 +77,17 @@ export function relaunchGatewayScheduledTask(env: NodeJS.ProcessEnv = process.en
     };
   }
 }
+
+export const __testing = {
+  setDepsForTest(
+    overrides?: Partial<{
+      resolvePreferredOpenClawTmpDir: typeof resolvePreferredOpenClawTmpDir;
+      spawn: typeof spawn;
+    }>,
+  ) {
+    windowsTaskRestartDeps = {
+      ...defaultWindowsTaskRestartDeps,
+      ...overrides,
+    };
+  },
+};

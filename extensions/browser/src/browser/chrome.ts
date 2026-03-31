@@ -126,15 +126,28 @@ export function buildOpenClawChromeLaunchArgs(params: {
 async function canOpenWebSocket(url: string, timeoutMs: number): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     const ws = openCdpWebSocket(url, { handshakeTimeoutMs: timeoutMs });
-    ws.once("open", () => {
+    let settled = false;
+    const finish = (value: boolean) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      ws.off("open", onOpen);
+      ws.off("error", onError);
+      ws.off("close", onClose);
       try {
         ws.close();
       } catch {
         // ignore
       }
-      resolve(true);
-    });
-    ws.once("error", () => resolve(false));
+      resolve(value);
+    };
+    const onOpen = () => finish(true);
+    const onError = () => finish(false);
+    const onClose = () => finish(false);
+    ws.on("open", onOpen);
+    ws.on("error", onError);
+    ws.on("close", onClose);
   });
 }
 

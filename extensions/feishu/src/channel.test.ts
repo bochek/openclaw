@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../runtime-api.js";
 import { createFeishuCardInteractionEnvelope } from "./card-interaction.js";
+import { __testing as channelTesting, feishuPlugin } from "./channel.js";
 import { looksLikeFeishuId, normalizeFeishuTarget, resolveReceiveIdType } from "./targets.js";
 
 const probeFeishuMock = vi.hoisted(() => vi.fn());
@@ -30,37 +31,33 @@ vi.mock("./client.js", () => ({
   createFeishuClient: createFeishuClientMock,
 }));
 
-vi.mock("./channel.runtime.js", () => ({
-  feishuChannelRuntime: {
-    addReactionFeishu: addReactionFeishuMock,
-    createPinFeishu: createPinFeishuMock,
-    editMessageFeishu: editMessageFeishuMock,
-    getChatInfo: getChatInfoMock,
-    getChatMembers: getChatMembersMock,
-    getFeishuMemberInfo: getFeishuMemberInfoMock,
-    getMessageFeishu: getMessageFeishuMock,
-    listFeishuDirectoryGroupsLive: listFeishuDirectoryGroupsLiveMock,
-    listFeishuDirectoryPeersLive: listFeishuDirectoryPeersLiveMock,
-    listPinsFeishu: listPinsFeishuMock,
-    listReactionsFeishu: listReactionsFeishuMock,
-    probeFeishu: probeFeishuMock,
-    removePinFeishu: removePinFeishuMock,
-    removeReactionFeishu: removeReactionFeishuMock,
-    sendCardFeishu: sendCardFeishuMock,
-    sendMessageFeishu: sendMessageFeishuMock,
-    feishuOutbound: {
-      sendText: vi.fn(),
-      sendMedia: feishuOutboundSendMediaMock,
-    },
-  },
-}));
-
 vi.mock("../../../src/channels/plugins/bundled.js", () => ({
   bundledChannelPlugins: [],
   bundledChannelSetupPlugins: [],
 }));
 
-let feishuPlugin: typeof import("./channel.js").feishuPlugin;
+const feishuChannelRuntimeMock = {
+  addReactionFeishu: addReactionFeishuMock,
+  createPinFeishu: createPinFeishuMock,
+  editMessageFeishu: editMessageFeishuMock,
+  getChatInfo: getChatInfoMock,
+  getChatMembers: getChatMembersMock,
+  getFeishuMemberInfo: getFeishuMemberInfoMock,
+  getMessageFeishu: getMessageFeishuMock,
+  listFeishuDirectoryGroupsLive: listFeishuDirectoryGroupsLiveMock,
+  listFeishuDirectoryPeersLive: listFeishuDirectoryPeersLiveMock,
+  listPinsFeishu: listPinsFeishuMock,
+  listReactionsFeishu: listReactionsFeishuMock,
+  probeFeishu: probeFeishuMock,
+  removePinFeishu: removePinFeishuMock,
+  removeReactionFeishu: removeReactionFeishuMock,
+  sendCardFeishu: sendCardFeishuMock,
+  sendMessageFeishu: sendMessageFeishuMock,
+  feishuOutbound: {
+    sendText: vi.fn(),
+    sendMedia: feishuOutboundSendMediaMock,
+  },
+};
 
 function getDescribedActions(cfg: OpenClawConfig): string[] {
   return [...(feishuPlugin.actions?.describeMessageTool?.({ cfg })?.actions ?? [])];
@@ -102,9 +99,8 @@ async function expectLegacyFeishuCardPayloadRejected(cfg: OpenClawConfig, card: 
 }
 
 describe("feishuPlugin.status.probeAccount", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-    ({ feishuPlugin } = await import("./channel.js"));
+  beforeEach(() => {
+    channelTesting.setLoadFeishuChannelRuntimeForTest(async () => feishuChannelRuntimeMock as never);
   });
 
   it("uses current account credentials for multi-account config", async () => {
@@ -145,9 +141,8 @@ describe("feishuPlugin.status.probeAccount", () => {
 });
 
 describe("feishuPlugin.pairing.notifyApproval", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-    ({ feishuPlugin } = await import("./channel.js"));
+  beforeEach(() => {
+    channelTesting.setLoadFeishuChannelRuntimeForTest(async () => feishuChannelRuntimeMock as never);
     sendMessageFeishuMock.mockReset();
     sendMessageFeishuMock.mockResolvedValue({ messageId: "pairing-msg", chatId: "ou_user" });
   });
@@ -199,6 +194,7 @@ describe("feishuPlugin actions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    channelTesting.setLoadFeishuChannelRuntimeForTest(async () => feishuChannelRuntimeMock as never);
     createFeishuClientMock.mockReturnValue({ tag: "client" });
   });
 

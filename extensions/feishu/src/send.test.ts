@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClawdbotConfig } from "../runtime-api.js";
+import {
+  __testing,
+  buildStructuredCard,
+  editMessageFeishu,
+  getMessageFeishu,
+  listFeishuThreadMessages,
+  resolveFeishuCardTemplate,
+  sendMessageFeishu,
+} from "./send.js";
 
 const {
   mockConvertMarkdownTables,
@@ -23,53 +32,24 @@ const {
   mockRuntimeResolveMarkdownTableMode: vi.fn(() => "preserve"),
 }));
 
-vi.mock("openclaw/plugin-sdk/config-runtime", () => ({
-  resolveMarkdownTableMode: mockResolveMarkdownTableMode,
-}));
-
-vi.mock("openclaw/plugin-sdk/text-runtime", () => ({
-  convertMarkdownTables: mockConvertMarkdownTables,
-}));
-
-vi.mock("./client.js", () => ({
-  createFeishuClient: mockCreateFeishuClient,
-}));
-
-vi.mock("./accounts.js", () => ({
-  resolveFeishuAccount: mockResolveFeishuAccount,
-  resolveFeishuRuntimeAccount: mockResolveFeishuAccount,
-}));
-
-vi.mock("./runtime.js", () => ({
-  getFeishuRuntime: () => ({
-    channel: {
-      text: {
-        resolveMarkdownTableMode: mockRuntimeResolveMarkdownTableMode,
-        convertMarkdownTables: mockRuntimeConvertMarkdownTables,
-      },
-    },
-  }),
-}));
-
-let buildStructuredCard: typeof import("./send.js").buildStructuredCard;
-let editMessageFeishu: typeof import("./send.js").editMessageFeishu;
-let getMessageFeishu: typeof import("./send.js").getMessageFeishu;
-let listFeishuThreadMessages: typeof import("./send.js").listFeishuThreadMessages;
-let resolveFeishuCardTemplate: typeof import("./send.js").resolveFeishuCardTemplate;
-let sendMessageFeishu: typeof import("./send.js").sendMessageFeishu;
-
 describe("getMessageFeishu", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-    ({
-      buildStructuredCard,
-      editMessageFeishu,
-      getMessageFeishu,
-      listFeishuThreadMessages,
-      resolveFeishuCardTemplate,
-      sendMessageFeishu,
-    } = await import("./send.js"));
+  beforeEach(() => {
     vi.clearAllMocks();
+    __testing.setDepsForTest({
+      resolveMarkdownTableMode: mockResolveMarkdownTableMode,
+      convertMarkdownTables: mockConvertMarkdownTables,
+      resolveFeishuRuntimeAccount:
+        mockResolveFeishuAccount as typeof import("./accounts.js").resolveFeishuRuntimeAccount,
+      createFeishuClient:
+        mockCreateFeishuClient as typeof import("./client.js").createFeishuClient,
+      resolveFeishuSendTarget: ((params) => ({
+        client: mockCreateFeishuClient(
+          mockResolveFeishuAccount({ cfg: params.cfg, accountId: params.accountId }),
+        ),
+        receiveId: params.to,
+        receiveIdType: "chat_id",
+      })) as typeof import("./send-target.js").resolveFeishuSendTarget,
+    });
     mockResolveMarkdownTableMode.mockReturnValue("preserve");
     mockConvertMarkdownTables.mockImplementation((text: string) => text);
     mockRuntimeResolveMarkdownTableMode.mockReturnValue("preserve");

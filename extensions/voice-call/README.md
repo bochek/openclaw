@@ -25,10 +25,9 @@ Restart the Gateway afterwards.
 ### Option B: copy into your global extensions folder (dev)
 
 ```bash
-PLUGIN_HOME=~/.openclaw/extensions
-mkdir -p "$PLUGIN_HOME"
-cp -R <local-plugin-checkout> "$PLUGIN_HOME/voice-call"
-cd "$PLUGIN_HOME/voice-call" && pnpm install
+mkdir -p ~/.openclaw/extensions
+cp -R extensions/voice-call ~/.openclaw/extensions/voice-call
+cd ~/.openclaw/extensions/voice-call && pnpm install
 ```
 
 ## Config

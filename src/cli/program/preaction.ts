@@ -41,6 +41,11 @@ const CONFIG_GUARD_BYPASS_COMMANDS = new Set(["backup", "doctor", "completion", 
 let configGuardModulePromise: Promise<typeof import("./config-guard.js")> | undefined;
 let pluginRegistryModulePromise: Promise<typeof import("../plugin-registry.js")> | undefined;
 
+type PreActionDeps = {
+  loadConfigGuardModule: () => Promise<typeof import("./config-guard.js")>;
+  loadPluginRegistryModule: () => Promise<typeof import("../plugin-registry.js")>;
+};
+
 function shouldBypassConfigGuard(commandPath: string[]): boolean {
   const [primary, secondary] = commandPath;
   if (!primary) {
@@ -64,6 +69,13 @@ function loadPluginRegistryModule() {
   pluginRegistryModulePromise ??= import("../plugin-registry.js");
   return pluginRegistryModulePromise;
 }
+
+const defaultPreActionDeps: PreActionDeps = {
+  loadConfigGuardModule,
+  loadPluginRegistryModule,
+};
+
+let preActionDeps: PreActionDeps = defaultPreActionDeps;
 
 function resolvePluginRegistryScope(commandPath: string[]): "channels" | "all" {
   return commandPath[0] === "status" || commandPath[0] === "health" ? "channels" : "all";
@@ -148,7 +160,7 @@ export function registerPreActionHooks(program: Command, programVersion: string)
       return;
     }
     const allowInvalid = shouldAllowInvalidConfigForAction(actionCommand, commandPath);
-    const { ensureConfigReady } = await loadConfigGuardModule();
+    const { ensureConfigReady } = await preActionDeps.loadConfigGuardModule();
     await ensureConfigReady({
       runtime: defaultRuntime,
       commandPath,
@@ -159,7 +171,7 @@ export function registerPreActionHooks(program: Command, programVersion: string)
     // When --json output is active, temporarily route logs to stderr so plugin
     // registration messages don't corrupt the JSON payload on stdout.
     if (shouldLoadPluginsForCommand(commandPath, jsonOutputMode)) {
-      const { ensurePluginRegistryLoaded } = await loadPluginRegistryModule();
+      const { ensurePluginRegistryLoaded } = await preActionDeps.loadPluginRegistryModule();
       const prev = loggingState.forceConsoleToStderr;
       if (jsonOutputMode) {
         loggingState.forceConsoleToStderr = true;
@@ -172,3 +184,14 @@ export function registerPreActionHooks(program: Command, programVersion: string)
     }
   });
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<PreActionDeps>): void {
+    preActionDeps = { ...defaultPreActionDeps, ...overrides };
+  },
+  resetDepsForTest(): void {
+    preActionDeps = defaultPreActionDeps;
+    configGuardModulePromise = undefined;
+    pluginRegistryModulePromise = undefined;
+  },
+};

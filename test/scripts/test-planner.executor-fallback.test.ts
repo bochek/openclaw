@@ -1,7 +1,7 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createExecutionArtifacts, executePlan } from "../../scripts/test-planner/executor.mjs";
+import { importFreshModule } from "../helpers/import-fresh.js";
 
 beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
@@ -13,6 +13,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  vi.resetModules();
 });
 
 describe("test planner executor", () => {
@@ -32,6 +33,17 @@ describe("test planner executor", () => {
       }, 0);
       return fakeChild;
     });
+    vi.doMock("node:child_process", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("node:child_process")>();
+      return {
+        ...actual,
+        spawn: spawnMock,
+      };
+    });
+
+    const { executePlan, createExecutionArtifacts } = await importFreshModule<
+      typeof import("../../scripts/test-planner/executor.mjs")
+    >(import.meta.url, "../../scripts/test-planner/executor.mjs?scope=exit-fallback");
     const artifacts = createExecutionArtifacts({ OPENCLAW_TEST_CLOSE_GRACE_MS: "10" });
     const executePromise = executePlan(
       {
@@ -43,7 +55,6 @@ describe("test planner executor", () => {
       {
         env: { OPENCLAW_TEST_CLOSE_GRACE_MS: "10" },
         artifacts,
-        spawn: spawnMock,
       },
     );
 
@@ -86,6 +97,17 @@ describe("test planner executor", () => {
       }, 0);
       return child;
     });
+    vi.doMock("node:child_process", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("node:child_process")>();
+      return {
+        ...actual,
+        spawn: spawnMock,
+      };
+    });
+
+    const { executePlan, createExecutionArtifacts } = await importFreshModule<
+      typeof import("../../scripts/test-planner/executor.mjs")
+    >(import.meta.url, "../../scripts/test-planner/executor.mjs?scope=collect-all");
     const artifacts = createExecutionArtifacts({});
     const report = await executePlan(
       {
@@ -111,7 +133,6 @@ describe("test planner executor", () => {
       {
         env: {},
         artifacts,
-        spawn: spawnMock,
       },
     );
 
@@ -146,6 +167,13 @@ describe("test planner executor", () => {
       }, 0);
       return fakeChild;
     });
+    vi.doMock("node:child_process", () => ({
+      spawn: spawnMock,
+    }));
+
+    const { executePlan, createExecutionArtifacts } = await importFreshModule<
+      typeof import("../../scripts/test-planner/executor.mjs")
+    >(import.meta.url, "../../scripts/test-planner/executor.mjs?scope=localstorage-file");
     const artifacts = createExecutionArtifacts({
       NODE_OPTIONS: "--max_old_space_size=4096 --localstorage-file",
     });
@@ -173,7 +201,6 @@ describe("test planner executor", () => {
             NODE_OPTIONS: "--max_old_space_size=4096 --localstorage-file",
           },
           artifacts,
-          spawn: spawnMock,
         },
       ),
     ).resolves.toMatchObject({

@@ -4,7 +4,7 @@ import { type FetchMock, withFetchPreconnect } from "../../test-utils/fetch-mock
 import { makeFetchHeaders } from "./web-fetch.test-harness.js";
 
 const lookupMock = vi.fn();
-const resolvePinnedHostname = ssrf.resolvePinnedHostname;
+const resolvePinnedHostnameWithPolicy = ssrf.resolvePinnedHostnameWithPolicy;
 
 function redirectResponse(location: string): Response {
   return {
@@ -62,8 +62,15 @@ describe("web_fetch SSRF protection", () => {
   const priorFetch = global.fetch;
 
   beforeEach(() => {
-    vi.spyOn(ssrf, "resolvePinnedHostname").mockImplementation((hostname) =>
-      resolvePinnedHostname(hostname, lookupMock),
+    vi.spyOn(ssrf, "resolvePinnedHostnameWithPolicy").mockImplementation((hostname, params) =>
+      resolvePinnedHostnameWithPolicy(hostname, {
+        ...params,
+        lookupFn: lookupMock as typeof ssrf.resolvePinnedHostnameWithPolicy extends (
+          ...args: infer _
+        ) => infer __
+          ? typeof lookupMock
+          : never,
+      }),
     );
   });
 

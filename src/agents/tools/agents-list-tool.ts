@@ -1,4 +1,5 @@
 import { Type } from "@sinclair/typebox";
+import type { OpenClawConfig } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
 import {
   DEFAULT_AGENT_ID,
@@ -22,6 +23,7 @@ export function createAgentsListTool(opts?: {
   agentSessionKey?: string;
   /** Explicit agent ID override for cron/hook sessions. */
   requesterAgentIdOverride?: string;
+  config?: OpenClawConfig;
 }): AnyAgentTool {
   return {
     label: "Agents",
@@ -30,7 +32,7 @@ export function createAgentsListTool(opts?: {
       'List OpenClaw agent ids you can target with `sessions_spawn` when `runtime="subagent"` (based on subagent allowlists).',
     parameters: AgentsListToolSchema,
     execute: async () => {
-      const cfg = loadConfig();
+      const cfg = opts?.config ?? loadConfig();
       const { mainKey, alias } = resolveMainSessionAlias(cfg);
       const requesterInternalKey =
         typeof opts?.agentSessionKey === "string" && opts.agentSessionKey.trim()

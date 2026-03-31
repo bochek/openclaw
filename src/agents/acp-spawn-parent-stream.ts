@@ -8,6 +8,12 @@ import { enqueueSystemEvent } from "../infra/system-events.js";
 import { scopedHeartbeatWakeOptions } from "../routing/session-key.js";
 import { recordTaskRunProgressByRunId } from "../tasks/task-executor.js";
 
+const defaultAcpSpawnParentStreamDeps = {
+  recordTaskRunProgressByRunId,
+  requestHeartbeatNow,
+};
+let acpSpawnParentStreamDeps = defaultAcpSpawnParentStreamDeps;
+
 const DEFAULT_STREAM_FLUSH_MS = 2_500;
 const DEFAULT_NO_OUTPUT_NOTICE_MS = 60_000;
 const DEFAULT_NO_OUTPUT_POLL_MS = 15_000;
@@ -185,7 +191,7 @@ export function startAcpSpawnParentStreamRelay(params: {
     if (!shouldSurfaceUpdates) {
       return;
     }
-    requestHeartbeatNow(
+    acpSpawnParentStreamDeps.requestHeartbeatNow(
       scopedHeartbeatWakeOptions(parentSessionKey, {
         reason: "acp:spawn:stream",
       }),
@@ -204,7 +210,7 @@ export function startAcpSpawnParentStreamRelay(params: {
     wake();
   };
   const emitStartNotice = () => {
-    recordTaskRunProgressByRunId({
+    acpSpawnParentStreamDeps.recordTaskRunProgressByRunId({
       runId,
       lastEventAt: Date.now(),
       eventSummary: "Started.",
@@ -271,7 +277,7 @@ export function startAcpSpawnParentStreamRelay(params: {
       return;
     }
     stallNotified = true;
-    recordTaskRunProgressByRunId({
+    acpSpawnParentStreamDeps.recordTaskRunProgressByRunId({
       runId,
       lastEventAt: Date.now(),
       eventSummary: `No output for ${Math.round(noOutputNoticeMs / 1000)}s. It may be waiting for input.`,
@@ -317,7 +323,7 @@ export function startAcpSpawnParentStreamRelay(params: {
 
       if (stallNotified) {
         stallNotified = false;
-        recordTaskRunProgressByRunId({
+        acpSpawnParentStreamDeps.recordTaskRunProgressByRunId({
           runId,
           lastEventAt: Date.now(),
           eventSummary: "Resumed output.",
@@ -399,4 +405,14 @@ export function startAcpSpawnParentStreamRelay(params: {
 export type AcpSpawnParentRelayHandle = {
   dispose: () => void;
   notifyStarted: () => void;
+};
+
+export const __testing = {
+  setDepsForTest(
+    overrides?: Partial<typeof defaultAcpSpawnParentStreamDeps>,
+  ) {
+    acpSpawnParentStreamDeps = overrides
+      ? { ...defaultAcpSpawnParentStreamDeps, ...overrides }
+      : defaultAcpSpawnParentStreamDeps;
+  },
 };

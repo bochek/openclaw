@@ -8,12 +8,12 @@ import {
   telegramOutbound,
   whatsappOutbound,
 } from "../../test/channel-outbounds.js";
-import { runSubagentAnnounceFlow } from "../agents/subagent-announce.js";
 import type { CliDeps } from "../cli/deps.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createOutboundTestPlugin, createTestRegistry } from "../test-utils/channel-plugins.js";
 import { createCliDeps, mockAgentPayloads } from "./isolated-agent.delivery.test-helpers.js";
 import { runCronIsolatedAgentTurn } from "./isolated-agent.js";
+import { runSubagentAnnounceFlowMock } from "./isolated-agent.mocks.js";
 import {
   makeCfg,
   makeJob,
@@ -145,7 +145,7 @@ describe("runCronIsolatedAgentTurn core-channel direct delivery", () => {
         expect(res.status).toBe("ok");
         expect(res.delivered).toBe(true);
         expect(res.deliveryAttempted).toBe(true);
-        expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+        expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
 
         const sendFn = deps[testCase.sendKey];
         expect(sendFn).toHaveBeenCalledTimes(1);

@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
+import { __testing as openClawToolsTesting } from "./openclaw-tools.js";
+import { __testing as piToolsTesting } from "./pi-tools.js";
 import { createOpenClawCodingTools } from "./pi-tools.js";
 import { resolveSandboxConfigForAgent } from "./sandbox/config.js";
+import { stubTool } from "./test-helpers/fast-tool-stubs.js";
 import { createHostSandboxFsBridge } from "./test-helpers/host-sandbox-fs-bridge.js";
 import { createPiToolsSandboxContext } from "./test-helpers/pi-tools-sandbox-context.js";
 
@@ -32,6 +35,20 @@ function listToolNames(params: {
 }
 
 describe("pi-tools sandbox policy", () => {
+  beforeEach(() => {
+    openClawToolsTesting.setDepsForTest({
+      resolvePluginTools: () => [stubTool("browser")],
+    });
+    piToolsTesting.setDepsForTest({
+      getPluginToolMeta: () => undefined,
+    });
+  });
+
+  afterEach(() => {
+    openClawToolsTesting.setDepsForTest();
+    piToolsTesting.setDepsForTest();
+  });
+
   it("re-exposes omitted sandbox tools via sandbox alsoAllow", () => {
     const names = listToolNames({
       cfg: {

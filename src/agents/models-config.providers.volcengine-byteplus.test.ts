@@ -2,49 +2,38 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { captureEnv } from "../test-utils/env.js";
 import { upsertAuthProfile } from "./auth-profiles.js";
 import { resolveImplicitProvidersForTest } from "./models-config.e2e-harness.js";
 
 describe("Volcengine and BytePlus providers", () => {
   it("includes volcengine and volcengine-plan when VOLCANO_ENGINE_API_KEY is configured", async () => {
     const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
-    const envSnapshot = captureEnv(["VOLCANO_ENGINE_API_KEY"]);
-    process.env.VOLCANO_ENGINE_API_KEY = "test-key"; // pragma: allowlist secret
-
-    try {
-      const providers = await resolveImplicitProvidersForTest({ agentDir });
-      expect(providers?.volcengine).toBeDefined();
-      expect(providers?.["volcengine-plan"]).toBeDefined();
-      expect(providers?.volcengine?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
-      expect(providers?.["volcengine-plan"]?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
-    } finally {
-      envSnapshot.restore();
-    }
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: { VOLCANO_ENGINE_API_KEY: "test-key" }, // pragma: allowlist secret
+      onlyPluginIds: ["volcengine"],
+    });
+    expect(providers?.volcengine).toBeDefined();
+    expect(providers?.["volcengine-plan"]).toBeDefined();
+    expect(providers?.volcengine?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
+    expect(providers?.["volcengine-plan"]?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
   });
 
   it("includes byteplus and byteplus-plan when BYTEPLUS_API_KEY is configured", async () => {
     const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
-    const envSnapshot = captureEnv(["BYTEPLUS_API_KEY"]);
-    process.env.BYTEPLUS_API_KEY = "test-key"; // pragma: allowlist secret
-
-    try {
-      const providers = await resolveImplicitProvidersForTest({ agentDir });
-      expect(providers?.byteplus).toBeDefined();
-      expect(providers?.["byteplus-plan"]).toBeDefined();
-      expect(providers?.byteplus?.apiKey).toBe("BYTEPLUS_API_KEY");
-      expect(providers?.["byteplus-plan"]?.apiKey).toBe("BYTEPLUS_API_KEY");
-    } finally {
-      envSnapshot.restore();
-    }
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: { BYTEPLUS_API_KEY: "test-key" }, // pragma: allowlist secret
+      onlyPluginIds: ["byteplus"],
+    });
+    expect(providers?.byteplus).toBeDefined();
+    expect(providers?.["byteplus-plan"]).toBeDefined();
+    expect(providers?.byteplus?.apiKey).toBe("BYTEPLUS_API_KEY");
+    expect(providers?.["byteplus-plan"]?.apiKey).toBe("BYTEPLUS_API_KEY");
   });
 
   it("includes providers when auth profiles are env keyRef-only", async () => {
     const agentDir = mkdtempSync(join(tmpdir(), "openclaw-test-"));
-    const envSnapshot = captureEnv(["VOLCANO_ENGINE_API_KEY", "BYTEPLUS_API_KEY"]);
-    delete process.env.VOLCANO_ENGINE_API_KEY;
-    delete process.env.BYTEPLUS_API_KEY;
-
     upsertAuthProfile({
       profileId: "volcengine:default",
       credential: {
@@ -64,14 +53,14 @@ describe("Volcengine and BytePlus providers", () => {
       agentDir,
     });
 
-    try {
-      const providers = await resolveImplicitProvidersForTest({ agentDir });
-      expect(providers?.volcengine?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
-      expect(providers?.["volcengine-plan"]?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
-      expect(providers?.byteplus?.apiKey).toBe("BYTEPLUS_API_KEY");
-      expect(providers?.["byteplus-plan"]?.apiKey).toBe("BYTEPLUS_API_KEY");
-    } finally {
-      envSnapshot.restore();
-    }
+    const providers = await resolveImplicitProvidersForTest({
+      agentDir,
+      env: {},
+      onlyPluginIds: ["volcengine", "byteplus"],
+    });
+    expect(providers?.volcengine?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
+    expect(providers?.["volcengine-plan"]?.apiKey).toBe("VOLCANO_ENGINE_API_KEY");
+    expect(providers?.byteplus?.apiKey).toBe("BYTEPLUS_API_KEY");
+    expect(providers?.["byteplus-plan"]?.apiKey).toBe("BYTEPLUS_API_KEY");
   });
 });

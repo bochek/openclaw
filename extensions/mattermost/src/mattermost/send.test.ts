@@ -2,15 +2,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   expectProvidedCfgSkipsRuntimeLoad,
   expectRuntimeCfgFallback,
-} from "../../../../test/helpers/plugins/send-config.js";
+} from "../../../../test/helpers/extensions/send-config.js";
+import {
+  __resetMattermostSendCachesForTest as resetMattermostSendCachesForTest,
+  __resetMattermostSendDepsForTest as resetMattermostSendDepsForTest,
+  __setMattermostSendDepsForTest as setMattermostSendDepsForTest,
+  parseMattermostTarget,
+  sendMessageMattermost,
+  type MattermostSendOpts,
+} from "./send.js";
+import {
+  __resetMattermostTargetResolutionDepsForTest as resetMattermostTargetResolutionDepsForTest,
+  __setMattermostTargetResolutionDepsForTest as setMattermostTargetResolutionDepsForTest,
+  resetMattermostOpaqueTargetCacheForTests,
+} from "./target-resolution.js";
 
-let parseMattermostTarget: typeof import("./send.js").parseMattermostTarget;
-let sendMessageMattermost: typeof import("./send.js").sendMessageMattermost;
-let resetMattermostOpaqueTargetCacheForTests: typeof import("./target-resolution.js").resetMattermostOpaqueTargetCacheForTests;
-
-type SendMessageMattermostOptions = NonNullable<
-  Parameters<typeof import("./send.js").sendMessageMattermost>[2]
->;
+type SendMessageMattermostOptions = NonNullable<MattermostSendOpts>;
 
 const mockState = vi.hoisted(() => ({
   loadConfig: vi.fn(() => ({})),
@@ -35,60 +42,8 @@ const mockState = vi.hoisted(() => ({
   uploadMattermostFile: vi.fn(),
 }));
 
-vi.mock("../../runtime-api.js", () => ({
-  loadOutboundMediaFromUrl: mockState.loadOutboundMediaFromUrl,
-}));
-
-vi.mock("openclaw/plugin-sdk/config-runtime", () => ({
-  resolveMarkdownTableMode: vi.fn(() => "off"),
-}));
-
-vi.mock("openclaw/plugin-sdk/text-runtime", () => ({
-  convertMarkdownTables: vi.fn((text: string) => text),
-}));
-
-vi.mock("./accounts.js", () => ({
-  resolveMattermostAccount: mockState.resolveMattermostAccount,
-}));
-
-vi.mock("./client.js", () => ({
-  createMattermostClient: mockState.createMattermostClient,
-  createMattermostDirectChannel: mockState.createMattermostDirectChannel,
-  createMattermostDirectChannelWithRetry: mockState.createMattermostDirectChannelWithRetry,
-  createMattermostPost: mockState.createMattermostPost,
-  fetchMattermostChannelByName: mockState.fetchMattermostChannelByName,
-  fetchMattermostMe: mockState.fetchMattermostMe,
-  fetchMattermostUser: mockState.fetchMattermostUser,
-  fetchMattermostUserTeams: mockState.fetchMattermostUserTeams,
-  fetchMattermostUserByUsername: mockState.fetchMattermostUserByUsername,
-  normalizeMattermostBaseUrl: mockState.normalizeMattermostBaseUrl,
-  uploadMattermostFile: mockState.uploadMattermostFile,
-}));
-
-vi.mock("../runtime.js", () => ({
-  getMattermostRuntime: () => ({
-    config: {
-      loadConfig: mockState.loadConfig,
-    },
-    logging: {
-      shouldLogVerbose: () => false,
-      getChildLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
-    },
-    channel: {
-      text: {
-        resolveMarkdownTableMode: () => "off",
-        convertMarkdownTables: (text: string) => text,
-      },
-      activity: {
-        record: mockState.recordActivity,
-      },
-    },
-  }),
-}));
-
 describe("sendMessageMattermost", () => {
-  beforeEach(async () => {
-    vi.resetModules();
+  beforeEach(() => {
     mockState.loadConfig.mockReset();
     mockState.loadConfig.mockReturnValue({});
     mockState.recordActivity.mockReset();
@@ -114,11 +69,57 @@ describe("sendMessageMattermost", () => {
     mockState.createMattermostPost.mockResolvedValue({ id: "post-1" });
     mockState.createMattermostDirectChannelWithRetry.mockResolvedValue({ id: "dm-channel-1" });
     mockState.fetchMattermostMe.mockResolvedValue({ id: "bot-user" });
+    mockState.fetchMattermostUser.mockReset();
     mockState.fetchMattermostUserTeams.mockResolvedValue([{ id: "team-1" }]);
     mockState.fetchMattermostChannelByName.mockResolvedValue({ id: "town-square" });
     mockState.uploadMattermostFile.mockResolvedValue({ id: "file-1" });
-    ({ parseMattermostTarget, sendMessageMattermost } = await import("./send.js"));
-    ({ resetMattermostOpaqueTargetCacheForTests } = await import("./target-resolution.js"));
+    resetMattermostSendDepsForTest();
+    resetMattermostTargetResolutionDepsForTest();
+    setMattermostSendDepsForTest({
+      resolveMarkdownTableMode: () => "off",
+      convertMarkdownTables: (text: string) => text,
+      getMattermostRuntime: () => ({
+        config: {
+          loadConfig: mockState.loadConfig,
+        },
+        logging: {
+          shouldLogVerbose: () => false,
+          getChildLogger: () => ({
+            debug: vi.fn(),
+            info: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+          }),
+        },
+        channel: {
+          text: {
+            resolveMarkdownTableMode: () => "off",
+            convertMarkdownTables: (text: string) => text,
+          },
+          activity: {
+            record: mockState.recordActivity,
+          },
+        },
+      }),
+      resolveMattermostAccount: mockState.resolveMattermostAccount,
+      createMattermostClient: mockState.createMattermostClient,
+      createMattermostDirectChannelWithRetry: mockState.createMattermostDirectChannelWithRetry,
+      createMattermostPost: mockState.createMattermostPost,
+      fetchMattermostChannelByName: mockState.fetchMattermostChannelByName,
+      fetchMattermostMe: mockState.fetchMattermostMe,
+      fetchMattermostUserByUsername: mockState.fetchMattermostUserByUsername,
+      fetchMattermostUserTeams: mockState.fetchMattermostUserTeams,
+      normalizeMattermostBaseUrl: mockState.normalizeMattermostBaseUrl,
+      uploadMattermostFile: mockState.uploadMattermostFile,
+      loadOutboundMediaFromUrl: mockState.loadOutboundMediaFromUrl,
+    });
+    setMattermostTargetResolutionDepsForTest({
+      resolveMattermostAccount: mockState.resolveMattermostAccount,
+      createMattermostClient: mockState.createMattermostClient,
+      fetchMattermostUser: mockState.fetchMattermostUser,
+      normalizeMattermostBaseUrl: mockState.normalizeMattermostBaseUrl,
+    });
+    resetMattermostSendCachesForTest();
     resetMattermostOpaqueTargetCacheForTests();
   });
 

@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getRequiredHookHandler,
   registerHookHandlersForTest,
-} from "../../../test/helpers/plugins/subagent-hooks.js";
+} from "../../../test/helpers/extensions/subagent-hooks.js";
 
 type ThreadBindingRecord = {
   accountId: string;
@@ -40,7 +40,8 @@ const hookMocks = vi.hoisted(() => ({
 
 let registerDiscordSubagentHooks: typeof import("./subagent-hooks.js").registerDiscordSubagentHooks;
 
-vi.mock("./accounts.js", () => ({
+vi.mock("./accounts.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./accounts.js")>()),
   resolveDiscordAccount: hookMocks.resolveDiscordAccount,
 }));
 vi.mock("./monitor/thread-bindings.js", () => ({

@@ -77,12 +77,14 @@ const {
 });
 
 // Unit test: don't import Carbon just to check the prototype chain.
-vi.mock("@buape/carbon/gateway", () => ({
+vi.mock("@buape/carbon/gateway", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@buape/carbon/gateway")>()),
   GatewayIntents,
   GatewayPlugin,
 }));
 
-vi.mock("@buape/carbon/dist/src/plugins/gateway/index.js", () => ({
+vi.mock("@buape/carbon/dist/src/plugins/gateway/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@buape/carbon/dist/src/plugins/gateway/index.js")>()),
   GatewayIntents,
   GatewayPlugin,
 }));

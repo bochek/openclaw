@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import "./test-mocks.js";
 import { downloadBlueBubblesAttachment, sendBlueBubblesAttachment } from "./attachments.js";
 import { getCachedBlueBubblesPrivateApiStatus } from "./probe.js";
 import type { PluginRuntime } from "./runtime-api.js";
@@ -11,6 +10,16 @@ import {
   mockBlueBubblesPrivateApiStatusOnce,
 } from "./test-harness.js";
 import type { BlueBubblesAttachment } from "./types.js";
+
+vi.mock("./accounts.js", async () => {
+  const { createBlueBubblesAccountsMockModule } = await import("./test-harness.js");
+  return createBlueBubblesAccountsMockModule();
+});
+
+vi.mock("./probe.js", async () => {
+  const { createBlueBubblesProbeMockModule } = await import("./test-harness.js");
+  return createBlueBubblesProbeMockModule();
+});
 
 const mockFetch = vi.fn();
 const fetchRemoteMediaMock = vi.fn(

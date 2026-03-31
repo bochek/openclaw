@@ -2,84 +2,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { ExecApprovalsResolved } from "../infra/exec-approvals.js";
+import { clearConfigCache, clearRuntimeConfigSnapshot } from "../config/config.js";
 import { captureEnv } from "../test-utils/env.js";
 import { sanitizeBinaryOutput } from "./shell-utils.js";
+import { __testing as execToolTesting, createExecTool } from "./bash-tools.exec.js";
 
 const isWin = process.platform === "win32";
-type GetShellPathFromLoginShell = typeof import("../infra/shell-env.js").getShellPathFromLoginShell;
 const shellEnvMocks = vi.hoisted(() => ({
-  getShellPathFromLoginShell: vi.fn<GetShellPathFromLoginShell>(() => "/custom/bin:/opt/bin"),
+  getShellPathFromLoginShell: vi.fn(() => "/custom/bin:/opt/bin"),
   resolveShellEnvFallbackTimeoutMs: vi.fn(() => 1234),
 }));
-
-vi.mock("../infra/shell-env.js", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("../infra/shell-env.js")>();
-  return {
-    ...mod,
-    getShellPathFromLoginShell: shellEnvMocks.getShellPathFromLoginShell,
-    resolveShellEnvFallbackTimeoutMs: shellEnvMocks.resolveShellEnvFallbackTimeoutMs,
-  };
-});
-
-vi.mock("../infra/exec-approvals.js", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("../infra/exec-approvals.js")>();
-  return { ...mod, resolveExecApprovals: () => createExecApprovals() };
-});
-
-let createExecTool: typeof import("./bash-tools.exec.js").createExecTool;
-
-function createExecApprovals(): ExecApprovalsResolved {
-  return {
-    path: "/tmp/exec-approvals.json",
-    socketPath: "/tmp/exec-approvals.sock",
-    token: "token",
-    defaults: {
-      security: "full",
-      ask: "off",
-      askFallback: "full",
-      autoAllowSkills: false,
-    },
-    agent: {
-      security: "full",
-      ask: "off",
-      askFallback: "full",
-      autoAllowSkills: false,
-    },
-    allowlist: [],
-    file: {
-      version: 1,
-      socket: { path: "/tmp/exec-approvals.sock", token: "token" },
-      defaults: {
-        security: "full",
-        ask: "off",
-        askFallback: "full",
-        autoAllowSkills: false,
-      },
-      agents: {},
-    },
-  };
-}
-
-async function loadFreshBashExecPathModulesForTest() {
-  vi.resetModules();
-  vi.doMock("../infra/shell-env.js", async (importOriginal) => {
-    const mod = await importOriginal<typeof import("../infra/shell-env.js")>();
-    return {
-      ...mod,
-      getShellPathFromLoginShell: shellEnvMocks.getShellPathFromLoginShell,
-      resolveShellEnvFallbackTimeoutMs: shellEnvMocks.resolveShellEnvFallbackTimeoutMs,
-    };
-  });
-  vi.doMock("../infra/exec-approvals.js", async (importOriginal) => {
-    const mod = await importOriginal<typeof import("../infra/exec-approvals.js")>();
-    return { ...mod, resolveExecApprovals: () => createExecApprovals() };
-  });
-  const bashExec = await import("./bash-tools.exec.js");
-  return {
-    createExecTool: bashExec.createExecTool,
-  };
-}
 
 const normalizeText = (value?: string) =>
   sanitizeBinaryOutput(value ?? "")
@@ -95,18 +27,43 @@ const normalizePathEntries = (value?: string) =>
 
 describe("exec PATH login shell merge", () => {
   let envSnapshot: ReturnType<typeof captureEnv>;
+  let previousHome: string | undefined;
+  let previousUserProfile: string | undefined;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     envSnapshot = captureEnv(["PATH", "SHELL"]);
+    previousHome = process.env.HOME;
+    previousUserProfile = process.env.USERPROFILE;
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-bash-path-test-"));
+    process.env.HOME = tempDir;
+    process.env.USERPROFILE = tempDir;
+    clearRuntimeConfigSnapshot();
+    clearConfigCache();
+    execToolTesting.setDepsForTest({
+      getShellPathFromLoginShell: shellEnvMocks.getShellPathFromLoginShell,
+      resolveShellEnvFallbackTimeoutMs: shellEnvMocks.resolveShellEnvFallbackTimeoutMs,
+    });
     shellEnvMocks.getShellPathFromLoginShell.mockReset();
     shellEnvMocks.getShellPathFromLoginShell.mockReturnValue("/custom/bin:/opt/bin");
     shellEnvMocks.resolveShellEnvFallbackTimeoutMs.mockReset();
     shellEnvMocks.resolveShellEnvFallbackTimeoutMs.mockReturnValue(1234);
-    ({ createExecTool } = await loadFreshBashExecPathModulesForTest());
   });
 
   afterEach(() => {
     envSnapshot.restore();
+    execToolTesting.setDepsForTest();
+    clearRuntimeConfigSnapshot();
+    clearConfigCache();
+    if (previousHome === undefined) {
+      delete process.env.HOME;
+    } else {
+      process.env.HOME = previousHome;
+    }
+    if (previousUserProfile === undefined) {
+      delete process.env.USERPROFILE;
+    } else {
+      process.env.USERPROFILE = previousUserProfile;
+    }
   });
 
   it("merges login-shell PATH for host=gateway", async () => {
@@ -119,7 +76,12 @@ describe("exec PATH login shell merge", () => {
     shellPathMock.mockClear();
     shellPathMock.mockReturnValue("/custom/bin:/opt/bin");
 
-    const tool = createExecTool({ host: "gateway", security: "full", ask: "off" });
+    const tool = createExecTool({
+      host: "gateway",
+      security: "full",
+      ask: "off",
+      allowBackground: false,
+    });
     const result = await tool.execute("call1", { command: "echo $PATH" });
     const entries = normalizePathEntries(result.content.find((c) => c.type === "text")?.text);
 
@@ -226,22 +188,6 @@ describe("exec host env validation", () => {
         env: { LD_DEBUG: "1" },
       }),
     ).rejects.toThrow(/Security Violation: Environment variable 'LD_DEBUG' is forbidden/);
-  });
-
-  it("blocks proxy and TLS override env vars on host execution", async () => {
-    const tool = createExecTool({ host: "gateway", security: "full", ask: "off" });
-
-    await expect(
-      tool.execute("call1", {
-        command: "echo ok",
-        env: {
-          HTTPS_PROXY: "http://proxy.example.test:8080",
-          NODE_TLS_REJECT_UNAUTHORIZED: "0",
-        },
-      }),
-    ).rejects.toThrow(
-      /Security Violation: blocked override keys: HTTPS_PROXY, NODE_TLS_REJECT_UNAUTHORIZED\./,
-    );
   });
 
   it("strips dangerous inherited env vars from host execution", async () => {

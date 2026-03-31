@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanupBrowserGlobals, installBrowserGlobals } from "../test-helpers/browser-globals.ts";
 import { handleDisconnected } from "./app-lifecycle.ts";
 
 function createHost() {
@@ -26,6 +27,15 @@ function createHost() {
 }
 
 describe("handleDisconnected", () => {
+  beforeEach(() => {
+    installBrowserGlobals();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    cleanupBrowserGlobals();
+  });
+
   it("stops and clears gateway client on teardown", () => {
     const removeSpy = vi.spyOn(window, "removeEventListener").mockImplementation(() => undefined);
     const host = createHost();

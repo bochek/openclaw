@@ -67,6 +67,16 @@ export type ZalouserMonitorResult = {
 };
 
 const ZALOUSER_TEXT_LIMIT = 2000;
+const monitorDeps = {
+  sendDeliveredZalouser,
+  sendMessageZalouser,
+  sendSeenZalouser,
+  sendTypingZalouser,
+  listZaloFriends,
+  listZaloGroups,
+  resolveZaloGroupContext,
+  startZaloListener,
+};
 
 function normalizeZalouserEntry(entry: string): string {
   return entry.replace(/^(zalouser|zlu):/i, "").trim();
@@ -228,13 +238,13 @@ async function sendZalouserDeliveryAcks(params: {
   isGroup: boolean;
   message: NonNullable<ZaloInboundMessage["eventMessage"]>;
 }): Promise<void> {
-  await sendDeliveredZalouser({
+  await monitorDeps.sendDeliveredZalouser({
     profile: params.profile,
     isGroup: params.isGroup,
     message: params.message,
     isSeen: true,
   });
-  await sendSeenZalouser({
+  await monitorDeps.sendSeenZalouser({
     profile: params.profile,
     isGroup: params.isGroup,
     message: params.message,
@@ -273,7 +283,7 @@ async function processMessage(
   const configuredGroupName = message.groupName?.trim() || "";
   const groupContext =
     isGroup && !configuredGroupName
-      ? await resolveZaloGroupContext(account.profile, chatId).catch((err) => {
+      ? await monitorDeps.resolveZaloGroupContext(account.profile, chatId).catch((err) => {
           logVerbose(
             core,
             runtime,
@@ -399,7 +409,7 @@ async function processMessage(
           logVerbose(core, runtime, `zalouser pairing request sender=${senderId}`);
         },
         sendPairingReply: async (text) => {
-          await sendMessageZalouser(chatId, text, { profile: account.profile });
+          await monitorDeps.sendMessageZalouser(chatId, text, { profile: account.profile });
           statusSink?.({ lastOutboundAt: Date.now() });
         },
         onReplyError: (err) => {
@@ -637,7 +647,7 @@ async function processMessage(
     accountId: account.accountId,
     typing: {
       start: async () => {
-        await sendTypingZalouser(chatId, {
+        await monitorDeps.sendTypingZalouser(chatId, {
           profile: account.profile,
           isGroup,
         });
@@ -718,7 +728,7 @@ async function deliverZalouserReply(params: {
     text: reply.text,
     sendText: async (chunk) => {
       try {
-        await sendMessageZalouser(chatId, chunk, {
+        await monitorDeps.sendMessageZalouser(chatId, chunk, {
           profile,
           isGroup,
           textMode: "markdown",
@@ -732,7 +742,7 @@ async function deliverZalouserReply(params: {
     },
     sendMedia: async ({ mediaUrl, caption }) => {
       logVerbose(core, runtime, `Sending media to ${chatId}`);
-      await sendMessageZalouser(chatId, caption ?? "", {
+      await monitorDeps.sendMessageZalouser(chatId, caption ?? "", {
         profile,
         mediaUrl,
         isGroup,
@@ -774,7 +784,7 @@ export async function monitorZalouserProvider(
       .filter((entry) => entry && entry !== "*");
 
     if (allowFromEntries.length > 0 || groupAllowFromEntries.length > 0) {
-      const friends = await listZaloFriends(profile);
+      const friends = await monitorDeps.listZaloFriends(profile);
       const byName = buildNameIndex(friends, (friend) => friend.displayName);
       if (allowFromEntries.length > 0) {
         const { additions, mapping, unresolved } = resolveUserAllowlistEntries(
@@ -814,7 +824,7 @@ export async function monitorZalouserProvider(
     const groupsConfig = account.config.groups ?? {};
     const groupKeys = Object.keys(groupsConfig).filter((key) => key !== "*");
     if (groupKeys.length > 0) {
-      const groups = await listZaloGroups(profile);
+      const groups = await monitorDeps.listZaloGroups(profile);
       const byName = buildNameIndex(groups, (group) => group.name);
       const mapping: string[] = [];
       const unresolved: string[] = [];
@@ -893,7 +903,7 @@ export async function monitorZalouserProvider(
 
   let listener: Awaited<ReturnType<typeof startZaloListener>>;
   try {
-    listener = await startZaloListener({
+    listener = await monitorDeps.startZaloListener({
       accountId: account.accountId,
       profile: account.profile,
       abortSignal,
@@ -956,6 +966,19 @@ export async function monitorZalouserProvider(
 }
 
 export const __testing = {
+  setDepsForTest(overrides: Partial<typeof monitorDeps>) {
+    Object.assign(monitorDeps, overrides);
+  },
+  resetDepsForTest() {
+    monitorDeps.sendDeliveredZalouser = sendDeliveredZalouser;
+    monitorDeps.sendMessageZalouser = sendMessageZalouser;
+    monitorDeps.sendSeenZalouser = sendSeenZalouser;
+    monitorDeps.sendTypingZalouser = sendTypingZalouser;
+    monitorDeps.listZaloFriends = listZaloFriends;
+    monitorDeps.listZaloGroups = listZaloGroups;
+    monitorDeps.resolveZaloGroupContext = resolveZaloGroupContext;
+    monitorDeps.startZaloListener = startZaloListener;
+  },
   processMessage: async (params: {
     message: ZaloInboundMessage;
     account: ResolvedZalouserAccount;

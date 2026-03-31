@@ -1,37 +1,55 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { __testing as supervisorTesting } from "../process/supervisor/index.js";
 import { resetProcessRegistryForTests } from "./bash-process-registry.js";
 import { createExecTool } from "./bash-tools.exec.js";
 
-const { ptySpawnMock } = vi.hoisted(() => ({
-  ptySpawnMock: vi.fn(),
-}));
+const { spawnMock, makeSupervisor } = vi.hoisted(() => {
+  const spawnMock = vi.fn();
+  const makeSupervisor = () => {
+    const noop = vi.fn();
+    return {
+      spawn: (...args: unknown[]) => spawnMock(...args),
+      cancel: noop,
+      cancelScope: noop,
+      reconcileOrphans: noop,
+      getRecord: noop,
+    };
+  };
+  return { spawnMock, makeSupervisor };
+});
 
-vi.mock("@lydell/node-pty", () => ({
-  spawn: (...args: unknown[]) => ptySpawnMock(...args),
-}));
+beforeEach(() => {
+  supervisorTesting.setProcessSupervisorForTest(makeSupervisor());
+});
 
 afterEach(() => {
+  supervisorTesting.setProcessSupervisorForTest();
   resetProcessRegistryForTests();
   vi.clearAllMocks();
 });
 
-test("exec disposes PTY listeners after normal exit", async () => {
-  const disposeData = vi.fn();
-  const disposeExit = vi.fn();
+test("exec disposes PTY stdin after normal exit", async () => {
+  const stdinDestroy = vi.fn();
 
-  ptySpawnMock.mockImplementation(() => ({
-    pid: 0,
-    write: vi.fn(),
-    onData: (listener: (value: string) => void) => {
-      listener("ok");
-      return { dispose: disposeData };
+  spawnMock.mockResolvedValue({
+    pid: 123,
+    stdin: {
+      write: vi.fn(),
+      end: vi.fn(),
+      destroy: stdinDestroy,
+      destroyed: false,
     },
-    onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => {
-      listener({ exitCode: 0 });
-      return { dispose: disposeExit };
-    },
-    kill: vi.fn(),
-  }));
+    wait: async () => ({
+      reason: "exit",
+      exitCode: 0,
+      exitSignal: null,
+      durationMs: 1,
+      stdout: "",
+      stderr: "",
+      timedOut: false,
+      noOutputTimedOut: false,
+    }),
+  });
 
   const tool = createExecTool({
     allowBackground: false,
@@ -45,29 +63,37 @@ test("exec disposes PTY listeners after normal exit", async () => {
   });
 
   expect(result.details.status).toBe("completed");
-  expect(disposeData).toHaveBeenCalledTimes(1);
-  expect(disposeExit).toHaveBeenCalledTimes(1);
+  expect(spawnMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mode: "pty",
+      ptyCommand: "echo ok",
+    }),
+  );
+  expect(stdinDestroy).toHaveBeenCalledTimes(1);
 });
 
-test("exec tears down PTY resources on timeout", async () => {
-  const disposeData = vi.fn();
-  const disposeExit = vi.fn();
-  let exitListener: ((event: { exitCode: number; signal?: number }) => void) | undefined;
-  const kill = vi.fn(() => {
-    // Mirror real PTY behavior: process exits shortly after force-kill.
-    exitListener?.({ exitCode: 137, signal: 9 });
-  });
+test("exec disposes PTY stdin after timeout failure", async () => {
+  const stdinDestroy = vi.fn();
 
-  ptySpawnMock.mockImplementation(() => ({
-    pid: 0,
-    write: vi.fn(),
-    onData: () => ({ dispose: disposeData }),
-    onExit: (listener: (event: { exitCode: number; signal?: number }) => void) => {
-      exitListener = listener;
-      return { dispose: disposeExit };
+  spawnMock.mockResolvedValue({
+    pid: 456,
+    stdin: {
+      write: vi.fn(),
+      end: vi.fn(),
+      destroy: stdinDestroy,
+      destroyed: false,
     },
-    kill,
-  }));
+    wait: async () => ({
+      reason: "overall-timeout",
+      exitCode: 137,
+      exitSignal: null,
+      durationMs: 10,
+      stdout: "",
+      stderr: "",
+      timedOut: true,
+      noOutputTimedOut: false,
+    }),
+  });
 
   const tool = createExecTool({
     allowBackground: false,
@@ -75,14 +101,27 @@ test("exec tears down PTY resources on timeout", async () => {
     security: "full",
     ask: "off",
   });
-  await expect(
-    tool.execute("toolcall", {
-      command: "sleep 5",
-      pty: true,
-      timeout: 0.01,
+  const result = await tool.execute("toolcall", {
+    command: "sleep 5",
+    pty: true,
+    timeout: 0.01,
+  });
+
+  expect(result.details.status).toBe("failed");
+  expect(result.content).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        type: "text",
+        text: expect.stringContaining("Command timed out"),
+      }),
+    ]),
+  );
+  expect(spawnMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      mode: "pty",
+      ptyCommand: "sleep 5",
+      timeoutMs: 10,
     }),
-  ).rejects.toThrow("Command timed out");
-  expect(kill).toHaveBeenCalledTimes(1);
-  expect(disposeData).toHaveBeenCalledTimes(1);
-  expect(disposeExit).toHaveBeenCalledTimes(1);
+  );
+  expect(stdinDestroy).toHaveBeenCalledTimes(1);
 });

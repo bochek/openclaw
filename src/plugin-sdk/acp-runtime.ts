@@ -27,6 +27,11 @@ export { readAcpSessionEntry } from "../acp/runtime/session-meta.js";
 export type { AcpSessionStoreEntry } from "../acp/runtime/session-meta.js";
 
 export const __testing = {
-  ...managerTesting,
   ...registryTesting,
+  resetAcpSessionManagerForTests(...args: Parameters<typeof managerTesting.resetAcpSessionManagerForTests>) {
+    return managerTesting.resetAcpSessionManagerForTests(...args);
+  },
+  setAcpSessionManagerForTests(...args: Parameters<typeof managerTesting.setAcpSessionManagerForTests>) {
+    return managerTesting.setAcpSessionManagerForTests(...args);
+  },
 };

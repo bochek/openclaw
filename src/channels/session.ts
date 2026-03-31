@@ -1,14 +1,22 @@
 import type { MsgContext } from "../auto-reply/templating.js";
 import type { GroupKeyResolution, SessionEntry } from "../config/sessions/types.js";
 
+type InboundSessionRuntime = typeof import("../config/sessions/inbound.runtime.js");
+
 let inboundSessionRuntimePromise: Promise<
-  typeof import("../config/sessions/inbound.runtime.js")
+  InboundSessionRuntime
 > | null = null;
 
 function loadInboundSessionRuntime() {
   inboundSessionRuntimePromise ??= import("../config/sessions/inbound.runtime.js");
   return inboundSessionRuntimePromise;
 }
+
+const defaultInboundSessionDeps = {
+  loadInboundSessionRuntime,
+};
+
+let inboundSessionDeps = defaultInboundSessionDeps;
 
 function normalizeSessionStoreKey(sessionKey: string): string {
   return sessionKey.trim().toLowerCase();
@@ -53,7 +61,7 @@ export async function recordInboundSession(params: {
 }): Promise<void> {
   const { storePath, sessionKey, ctx, groupResolution, createIfMissing } = params;
   const canonicalSessionKey = normalizeSessionStoreKey(sessionKey);
-  const runtime = await loadInboundSessionRuntime();
+  const runtime = await inboundSessionDeps.loadInboundSessionRuntime();
   void runtime
     .recordSessionMetaFromInbound({
       storePath,
@@ -86,3 +94,16 @@ export async function recordInboundSession(params: {
     groupResolution,
   });
 }
+
+export const __testing = {
+  setDepsForTest(
+    overrides?: Partial<{
+      loadInboundSessionRuntime: typeof loadInboundSessionRuntime;
+    }>,
+  ) {
+    inboundSessionDeps = {
+      ...defaultInboundSessionDeps,
+      ...overrides,
+    };
+  },
+};

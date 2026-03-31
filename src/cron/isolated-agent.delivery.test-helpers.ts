@@ -1,7 +1,7 @@
 import { expect, vi } from "vitest";
-import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
 import type { CliDeps } from "../cli/deps.js";
 import { runCronIsolatedAgentTurn } from "./isolated-agent.js";
+import { runEmbeddedPiAgentMock } from "./isolated-agent.mocks.js";
 import { makeCfg, makeJob } from "./isolated-agent.test-harness.js";
 
 export function createCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
@@ -20,9 +20,9 @@ export function createCliDeps(overrides: Partial<CliDeps> = {}): CliDeps {
 
 export function mockAgentPayloads(
   payloads: Array<Record<string, unknown>>,
-  extra: Partial<Awaited<ReturnType<typeof runEmbeddedPiAgent>>> = {},
+  extra: Partial<Awaited<ReturnType<typeof runEmbeddedPiAgentMock>>> = {},
 ): void {
-  vi.mocked(runEmbeddedPiAgent).mockResolvedValue({
+  runEmbeddedPiAgentMock.mockResolvedValue({
     payloads,
     meta: {
       durationMs: 5,

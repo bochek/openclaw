@@ -1,5 +1,5 @@
-import DOMPurify from "dompurify";
 import { marked } from "marked";
+import { getDOMPurify } from "./dompurify.ts";
 import { truncateText } from "./format.ts";
 
 const allowedTags = [
@@ -91,6 +91,7 @@ function installHooks() {
     return;
   }
   hooksInstalled = true;
+  const DOMPurify = getDOMPurify();
 
   DOMPurify.addHook("afterSanitizeAttributes", (node) => {
     if (!(node instanceof HTMLAnchorElement)) {
@@ -187,7 +188,7 @@ export function toSanitizedMarkdownHtml(markdown: string): string {
     // capped code-block chrome, while still preserving whitespace for logs
     // and other structured text that commonly trips the parse guard.
     const html = renderEscapedPlainTextHtml(`${truncated.text}${suffix}`);
-    const sanitized = DOMPurify.sanitize(html, sanitizeOptions);
+    const sanitized = getDOMPurify().sanitize(html, sanitizeOptions);
     if (input.length <= MARKDOWN_CACHE_MAX_CHARS) {
       setCachedMarkdown(input, sanitized);
     }
@@ -207,7 +208,7 @@ export function toSanitizedMarkdownHtml(markdown: string): string {
     const escaped = escapeHtml(`${truncated.text}${suffix}`);
     rendered = `<pre class="code-block">${escaped}</pre>`;
   }
-  const sanitized = DOMPurify.sanitize(rendered, sanitizeOptions);
+  const sanitized = getDOMPurify().sanitize(rendered, sanitizeOptions);
   if (input.length <= MARKDOWN_CACHE_MAX_CHARS) {
     setCachedMarkdown(input, sanitized);
   }

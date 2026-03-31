@@ -4,10 +4,14 @@ import { createEmptyInstallChecks } from "./requirements-test-fixtures.js";
 import { formatSkillInfo, formatSkillsCheck, formatSkillsList } from "./skills-cli.format.js";
 
 // Unit tests: don't pay the runtime cost of loading/parsing the real skills loader.
-vi.mock("@mariozechner/pi-coding-agent", () => ({
-  loadSkillsFromDir: () => ({ skills: [] }),
-  formatSkillsForPrompt: () => "",
-}));
+vi.mock("@mariozechner/pi-coding-agent", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@mariozechner/pi-coding-agent")>();
+  return {
+    ...actual,
+    loadSkillsFromDir: () => ({ skills: [] }),
+    formatSkillsForPrompt: () => "",
+  };
+});
 
 function createMockSkill(overrides: Partial<SkillStatusEntry> = {}): SkillStatusEntry {
   return {

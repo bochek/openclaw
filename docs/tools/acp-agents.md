@@ -624,7 +624,7 @@ openclaw config set plugins.entries.acpx.enabled true
 Local workspace install during development:
 
 ```bash
-openclaw plugins install ./path/to/local/acpx-plugin
+openclaw plugins install ./extensions/acpx
 ```
 
 Then verify backend health:
@@ -637,7 +637,7 @@ Then verify backend health:
 
 By default, the bundled acpx backend plugin (`acpx`) uses the plugin-local pinned binary:
 
-1. Command defaults to the plugin-local `node_modules/.bin/acpx` inside the ACPX plugin package.
+1. Command defaults to `extensions/acpx/node_modules/.bin/acpx`.
 2. Expected version defaults to the extension pin.
 3. Startup registers ACP backend immediately as not-ready.
 4. A background ensure job verifies `acpx --version`.
@@ -713,8 +713,6 @@ additional opt-in convenience, not a replacement for generic MCP server config.
 ## Permission configuration
 
 ACP sessions run non-interactively — there is no TTY to approve or deny file-write and shell-exec permission prompts. The acpx plugin provides two config keys that control how permissions are handled:
-
-These ACPX harness permissions are separate from OpenClaw exec approvals and separate from CLI-backend vendor bypass flags such as Claude CLI `--permission-mode bypassPermissions`. ACPX `approve-all` is the harness-level break-glass switch for ACP sessions.
 
 ### `permissionMode`
 

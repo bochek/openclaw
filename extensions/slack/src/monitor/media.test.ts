@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type FetchMock,
   withFetchPreconnect,
-} from "../../../../test/helpers/plugins/fetch-mock.js";
+} from "../../../../test/helpers/extensions/fetch-mock.js";
 import {
   fetchWithSlackAuth,
   resolveSlackAttachmentContent,

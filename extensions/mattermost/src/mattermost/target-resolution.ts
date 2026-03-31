@@ -14,6 +14,25 @@ export type MattermostOpaqueTargetResolution = {
 
 const mattermostOpaqueTargetCache = new Map<string, boolean>();
 
+const mattermostTargetResolutionDepsDefaults = {
+  resolveMattermostAccount,
+  createMattermostClient,
+  fetchMattermostUser,
+  normalizeMattermostBaseUrl,
+} as const;
+
+const mattermostTargetResolutionDeps = { ...mattermostTargetResolutionDepsDefaults };
+
+export function __setMattermostTargetResolutionDepsForTest(
+  overrides: Partial<typeof mattermostTargetResolutionDepsDefaults>,
+): void {
+  Object.assign(mattermostTargetResolutionDeps, overrides);
+}
+
+export function __resetMattermostTargetResolutionDepsForTest(): void {
+  Object.assign(mattermostTargetResolutionDeps, mattermostTargetResolutionDepsDefaults);
+}
+
 function cacheKey(baseUrl: string, token: string, id: string): string {
   return `${baseUrl}::${token}::${id}`;
 }
@@ -62,10 +81,15 @@ export async function resolveMattermostOpaqueTarget(params: {
 
   const account =
     params.cfg && (!params.token || !params.baseUrl)
-      ? resolveMattermostAccount({ cfg: params.cfg, accountId: params.accountId })
+      ? mattermostTargetResolutionDeps.resolveMattermostAccount({
+          cfg: params.cfg,
+          accountId: params.accountId,
+        })
       : null;
   const token = params.token?.trim() || account?.botToken?.trim();
-  const baseUrl = normalizeMattermostBaseUrl(params.baseUrl ?? account?.baseUrl);
+  const baseUrl = mattermostTargetResolutionDeps.normalizeMattermostBaseUrl(
+    params.baseUrl ?? account?.baseUrl,
+  );
   if (!token || !baseUrl) {
     return null;
   }
@@ -79,13 +103,13 @@ export async function resolveMattermostOpaqueTarget(params: {
     return { kind: "channel", id: input, to: `channel:${input}` };
   }
 
-  const client = createMattermostClient({
+  const client = mattermostTargetResolutionDeps.createMattermostClient({
     baseUrl,
     botToken: token,
     allowPrivateNetwork: account?.config?.allowPrivateNetwork === true,
   });
   try {
-    await fetchMattermostUser(client, input);
+    await mattermostTargetResolutionDeps.fetchMattermostUser(client, input);
     mattermostOpaqueTargetCache.set(key, true);
     return { kind: "user", id: input, to: `user:${input}` };
   } catch (err) {

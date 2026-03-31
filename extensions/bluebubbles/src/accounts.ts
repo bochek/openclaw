@@ -16,11 +16,15 @@ export type ResolvedBlueBubblesAccount = {
   baseUrl?: string;
 };
 
-const {
-  listAccountIds: listBlueBubblesAccountIds,
-  resolveDefaultAccountId: resolveDefaultBlueBubblesAccountId,
-} = createAccountListHelpers("bluebubbles");
-export { listBlueBubblesAccountIds, resolveDefaultBlueBubblesAccountId };
+const blueBubblesAccountHelpers = createAccountListHelpers("bluebubbles");
+
+export function listBlueBubblesAccountIds(cfg: OpenClawConfig) {
+  return blueBubblesAccountHelpers.listAccountIds(cfg);
+}
+
+export function resolveDefaultBlueBubblesAccountId(cfg: OpenClawConfig) {
+  return blueBubblesAccountHelpers.resolveDefaultAccountId(cfg);
+}
 
 function mergeBlueBubblesAccountConfig(
   cfg: OpenClawConfig,

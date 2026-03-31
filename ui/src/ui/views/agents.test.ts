@@ -1,6 +1,10 @@
+import "../../test-helpers/browser-globals-install.ts";
 import { render } from "lit";
 import { describe, expect, it } from "vitest";
-import { renderAgents, type AgentsProps } from "./agents.ts";
+import { registerBrowserGlobalsHooks } from "../../test-helpers/browser-globals.ts";
+import type { AgentsProps } from "./agents.ts";
+
+registerBrowserGlobalsHooks();
 
 function createSkill() {
   return {
@@ -123,6 +127,7 @@ function createProps(overrides: Partial<AgentsProps> = {}): AgentsProps {
 
 describe("renderAgents", () => {
   it("shows the skills count only for the selected agent's report", async () => {
+    const { renderAgents } = await import("./agents.ts");
     const container = document.createElement("div");
     render(
       renderAgents(
@@ -152,6 +157,7 @@ describe("renderAgents", () => {
   });
 
   it("shows the selected agent's skills count when the report matches", async () => {
+    const { renderAgents } = await import("./agents.ts");
     const container = document.createElement("div");
     render(
       renderAgents(

@@ -45,6 +45,24 @@ type MemorySearchResult = {
 
 const TABLE_NAME = "memories";
 
+const memoryLanceDbDepsDefaults = {
+  OpenAI,
+  ensureGlobalUndiciEnvProxyDispatcher,
+  loadLanceDbModule,
+} as const;
+
+const memoryLanceDbDeps = { ...memoryLanceDbDepsDefaults };
+
+export function __setMemoryLanceDbDepsForTest(
+  overrides: Partial<typeof memoryLanceDbDepsDefaults>,
+): void {
+  Object.assign(memoryLanceDbDeps, overrides);
+}
+
+export function __resetMemoryLanceDbDepsForTest(): void {
+  Object.assign(memoryLanceDbDeps, memoryLanceDbDepsDefaults);
+}
+
 class MemoryDB {
   private db: LanceDB.Connection | null = null;
   private table: LanceDB.Table | null = null;
@@ -68,7 +86,7 @@ class MemoryDB {
   }
 
   private async doInitialize(): Promise<void> {
-    const lancedb = await loadLanceDbModule();
+    const lancedb = await memoryLanceDbDeps.loadLanceDbModule();
     this.db = await lancedb.connect(this.dbPath);
     const tables = await this.db.tableNames();
 
@@ -158,7 +176,7 @@ class Embeddings {
     baseUrl?: string,
     private dimensions?: number,
   ) {
-    this.client = new OpenAI({ apiKey, baseURL: baseUrl });
+    this.client = new memoryLanceDbDeps.OpenAI({ apiKey, baseURL: baseUrl });
   }
 
   async embed(text: string): Promise<number[]> {
@@ -169,7 +187,7 @@ class Embeddings {
     if (this.dimensions) {
       params.dimensions = this.dimensions;
     }
-    ensureGlobalUndiciEnvProxyDispatcher();
+    memoryLanceDbDeps.ensureGlobalUndiciEnvProxyDispatcher();
     const response = await this.client.embeddings.create(params);
     return response.data[0].embedding;
   }

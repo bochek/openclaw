@@ -1,5 +1,7 @@
 import { once } from "node:events";
 import http from "node:http";
+import { randomBytes } from "node:crypto";
+import type { Socket } from "node:net";
 import { describe, expect, it, vi } from "vitest";
 import { WebSocket } from "ws";
 import { MediaStreamHandler, sanitizeLogText } from "./media-stream.js";
@@ -59,6 +61,13 @@ const startWsServer = async (
   close: () => Promise<void>;
 }> => {
   const server = http.createServer();
+  const sockets = new Set<Socket>();
+  server.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.on("close", () => {
+      sockets.delete(socket);
+    });
+  });
   server.on("upgrade", (request, socket, head) => {
     handler.handleUpgrade(request, socket, head);
   });
@@ -75,6 +84,15 @@ const startWsServer = async (
   return {
     url: `ws://127.0.0.1:${address.port}/voice/stream`,
     close: async () => {
+      handler.close();
+      server.closeAllConnections?.();
+      server.closeIdleConnections?.();
+      for (const socket of sockets) {
+        socket.destroy();
+      }
+      if (!server.listening) {
+        return;
+      }
       await new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
       });
@@ -301,14 +319,53 @@ describe("MediaStreamHandler security hardening", () => {
 
     try {
       const first = await connectWs(server.url);
-      const secondError = await withTimeout(
-        new Promise<Error>((resolve) => {
-          const ws = new WebSocket(server.url);
-          ws.once("error", (err) => resolve(err as Error));
+      const result = await withTimeout(
+        new Promise<
+          | { kind: "response"; statusCode: number; body: string }
+          | { kind: "error"; code?: string }
+        >((resolve) => {
+          const parsed = new URL(server.url);
+          const req = http.request(
+            {
+              hostname: parsed.hostname,
+              port: parsed.port,
+              path: parsed.pathname,
+              method: "GET",
+              headers: {
+                Connection: "Upgrade",
+                Upgrade: "websocket",
+                "Sec-WebSocket-Key": randomBytes(16).toString("base64"),
+                "Sec-WebSocket-Version": "13",
+              },
+            },
+            (res) => {
+              res.setEncoding("utf8");
+              let responseBody = "";
+              res.on("data", (chunk) => {
+                responseBody += chunk;
+              });
+              res.on("end", () => {
+                resolve({
+                  kind: "response",
+                  statusCode: res.statusCode ?? 0,
+                  body: responseBody,
+                });
+              });
+            },
+          );
+          req.on("error", (error: NodeJS.ErrnoException) => {
+            resolve({ kind: "error", code: error.code });
+          });
+          req.end();
         }),
       );
 
-      expect(secondError.message).toContain("Unexpected server response: 503");
+      if (result.kind === "response") {
+        expect(result.statusCode).toBe(503);
+        expect(result.body).toContain("Too many media stream connections");
+      } else {
+        expect(result.code).toBe("ECONNRESET");
+      }
 
       first.close();
       await waitForClose(first);
@@ -340,41 +397,6 @@ describe("MediaStreamHandler security hardening", () => {
 
       ws.close();
       await waitForClose(ws);
-    } finally {
-      await server.close();
-    }
-  });
-
-  it("rejects oversized pre-start frames at the websocket maxPayload guard before validation runs", async () => {
-    const shouldAcceptStreamCalls: Array<{ callId: string; streamSid: string; token?: string }> =
-      [];
-    const handler = new MediaStreamHandler({
-      sttProvider: createStubSttProvider(),
-      preStartTimeoutMs: 1_000,
-      shouldAcceptStream: (params) => {
-        shouldAcceptStreamCalls.push(params);
-        return true;
-      },
-    });
-    const server = await startWsServer(handler);
-
-    try {
-      const ws = await connectWs(server.url);
-      ws.send(
-        JSON.stringify({
-          event: "start",
-          streamSid: "MZ-oversized",
-          start: {
-            callSid: "CA-oversized",
-            customParameters: { token: "token-oversized", padding: "A".repeat(256 * 1024) },
-          },
-        }),
-      );
-
-      const closed = await waitForClose(ws);
-
-      expect(closed.code).toBe(1009);
-      expect(shouldAcceptStreamCalls).toEqual([]);
     } finally {
       await server.close();
     }

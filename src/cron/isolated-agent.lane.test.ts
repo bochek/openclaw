@@ -1,11 +1,12 @@
 import "./isolated-agent.mocks.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearAllBootstrapSnapshots } from "../agents/bootstrap-cache.js";
-import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
 import { clearSessionStoreCacheForTest } from "../config/sessions/store.js";
 import { resetAgentRunContextForTest } from "../infra/agent-events.js";
 import { createCliDeps, mockAgentPayloads } from "./isolated-agent.delivery.test-helpers.js";
 import { runCronIsolatedAgentTurn } from "./isolated-agent.js";
+import { runEmbeddedPiAgentMock } from "./isolated-agent.mocks.js";
+import { setupIsolatedAgentTurnMocks } from "./isolated-agent.test-setup.js";
 import {
   makeCfg,
   makeJob,
@@ -14,7 +15,7 @@ import {
 } from "./isolated-agent.test-harness.js";
 
 function lastEmbeddedLane(): string | undefined {
-  const calls = vi.mocked(runEmbeddedPiAgent).mock.calls;
+  const calls = runEmbeddedPiAgentMock.mock.calls;
   expect(calls.length).toBeGreaterThan(0);
   return (calls.at(-1)?.[0] as { lane?: string } | undefined)?.lane;
 }
@@ -63,23 +64,18 @@ function restoreSnapshotEnv() {
 
 describe("runCronIsolatedAgentTurn lane selection", () => {
   beforeEach(() => {
-    vi.mocked(runEmbeddedPiAgent).mockClear();
+    setupIsolatedAgentTurnMocks({ fast: true });
+    runEmbeddedPiAgentMock.mockClear();
   });
 
   afterEach(() => {
     // Shared-worker runs can start collecting the next file before the generic
     // runner cleanup resets env and session-store globals.
     restoreSnapshotEnv();
-    vi.doUnmock("../agents/pi-embedded.js");
-    vi.doUnmock("../agents/model-catalog.js");
-    vi.doUnmock("../agents/model-selection.js");
-    vi.doUnmock("../agents/subagent-announce.js");
-    vi.doUnmock("../gateway/call.js");
     clearSessionStoreCacheForTest();
     resetAgentRunContextForTest();
     clearAllBootstrapSnapshots();
     vi.restoreAllMocks();
-    vi.resetModules();
   });
 
   it("moves the cron lane to nested for embedded runs", async () => {

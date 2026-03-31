@@ -51,6 +51,28 @@ function loadStatusScanDepsRuntimeModule() {
   return statusScanDepsRuntimeModulePromise;
 }
 
+function createDefaultStatusScanFastJsonDeps() {
+  return {
+    readStatusSourceConfig,
+    resolveStatusConfig,
+    hasPotentialConfiguredChannels,
+    resolveOsSummary,
+    resolveMemoryStatusSnapshot,
+    scanStatusJsonCore,
+  };
+}
+
+let statusScanFastJsonDeps = createDefaultStatusScanFastJsonDeps();
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof statusScanFastJsonDeps>) {
+    statusScanFastJsonDeps = { ...statusScanFastJsonDeps, ...overrides };
+  },
+  resetDepsForTest() {
+    statusScanFastJsonDeps = createDefaultStatusScanFastJsonDeps();
+  },
+};
+
 function shouldSkipMissingConfigFastPath(): boolean {
   return (
     process.env.VITEST === "true" ||
@@ -117,21 +139,24 @@ export async function scanStatusJsonFast(
   runtime: RuntimeEnv,
 ): Promise<StatusScanResult> {
   const coldStart = isMissingConfigColdStart();
-  const loadedRaw = await readStatusSourceConfig();
-  const { resolvedConfig: cfg, diagnostics: secretDiagnostics } = await resolveStatusConfig({
-    sourceConfig: loadedRaw,
-    commandName: "status --json",
-  });
-  return await scanStatusJsonCore({
+  const loadedRaw = await statusScanFastJsonDeps.readStatusSourceConfig();
+  const { resolvedConfig: cfg, diagnostics: secretDiagnostics } =
+    await statusScanFastJsonDeps.resolveStatusConfig({
+      sourceConfig: loadedRaw,
+      commandName: "status --json",
+    });
+  return await statusScanFastJsonDeps.scanStatusJsonCore({
     coldStart,
     cfg,
     sourceConfig: loadedRaw,
     secretDiagnostics,
-    hasConfiguredChannels: hasPotentialConfiguredChannels(cfg),
+    hasConfiguredChannels: statusScanFastJsonDeps.hasPotentialConfiguredChannels(cfg),
     opts,
-    resolveOsSummary,
+    resolveOsSummary: statusScanFastJsonDeps.resolveOsSummary,
     resolveMemory: async ({ cfg, agentStatus, memoryPlugin }) =>
-      opts.all ? await resolveMemoryStatusSnapshot({ cfg, agentStatus, memoryPlugin }) : null,
+      opts.all
+        ? await statusScanFastJsonDeps.resolveMemoryStatusSnapshot({ cfg, agentStatus, memoryPlugin })
+        : null,
     runtime,
   });
 }

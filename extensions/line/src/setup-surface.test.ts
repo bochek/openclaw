@@ -269,6 +269,15 @@ describe("line runtime api", () => {
           "probeLineBot",
           "pushMessageLine",
         ],
+        additionalAliases: {
+          "@line/bot-sdk": path.join(
+            process.cwd(),
+            "test",
+            "helpers",
+            "plugins",
+            "line-bot-sdk-stub.cjs",
+          ),
+        },
         realPluginSdkSpecifiers: ["openclaw/plugin-sdk/line-runtime"],
       }),
     ).toEqual({

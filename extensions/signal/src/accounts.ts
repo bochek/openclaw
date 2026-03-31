@@ -15,9 +15,15 @@ export type ResolvedSignalAccount = {
   config: SignalAccountConfig;
 };
 
-const { listAccountIds, resolveDefaultAccountId } = createAccountListHelpers("signal");
-export const listSignalAccountIds = listAccountIds;
-export const resolveDefaultSignalAccountId = resolveDefaultAccountId;
+const signalAccountHelpers = createAccountListHelpers("signal");
+
+export function listSignalAccountIds(cfg: OpenClawConfig): string[] {
+  return signalAccountHelpers.listAccountIds(cfg);
+}
+
+export function resolveDefaultSignalAccountId(cfg: OpenClawConfig): string {
+  return signalAccountHelpers.resolveDefaultAccountId(cfg);
+}
 
 function mergeSignalAccountConfig(cfg: OpenClawConfig, accountId: string): SignalAccountConfig {
   return resolveMergedAccountConfig<SignalAccountConfig>({

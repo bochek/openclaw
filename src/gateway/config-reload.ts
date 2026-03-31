@@ -1,5 +1,5 @@
 import { isDeepStrictEqual } from "node:util";
-import chokidar from "chokidar";
+import * as chokidar from "chokidar";
 import type {
   OpenClawConfig,
   ConfigFileSnapshot,

@@ -11,7 +11,6 @@ import {
   GROUP_POLICY_BLOCKED_LABEL,
   createChannelPairingController,
   deliverFormattedTextWithAttachments,
-  dispatchInboundReplyWithBase,
   logInboundDrop,
   isDangerousNameMatchingEnabled,
   readStoreAllowFromForDmPolicy,
@@ -324,6 +323,8 @@ export async function handleIrcInbound(params: {
     OriginatingTo: `irc:${peerId}`,
     CommandAuthorized: commandAuthorized,
   });
+
+  const { dispatchInboundReplyWithBase } = await import("./inbound-dispatch.runtime.js");
 
   await dispatchInboundReplyWithBase({
     cfg: config as OpenClawConfig,

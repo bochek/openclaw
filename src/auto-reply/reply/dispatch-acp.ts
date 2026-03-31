@@ -12,7 +12,6 @@ import { readAcpSessionEntry } from "../../acp/runtime/session-meta.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import type { TtsAutoMode } from "../../config/types.tts.js";
 import { logVerbose } from "../../globals.js";
-import { emitAgentEvent } from "../../infra/agent-events.js";
 import { getSessionBindingService } from "../../infra/outbound/session-binding-service.js";
 import { generateSecureUuid } from "../../infra/secure-random.js";
 import { prefixSystemMessage } from "../../infra/system-message.js";
@@ -321,13 +320,11 @@ export async function tryDispatchAcpReply(params: {
   ctx: FinalizedMsgContext;
   cfg: OpenClawConfig;
   dispatcher: ReplyDispatcher;
-  runId?: string;
   sessionKey?: string;
   abortSignal?: AbortSignal;
   inboundAudio: boolean;
   sessionTtsAuto?: TtsAutoMode;
   ttsChannel?: string;
-  suppressUserDelivery?: boolean;
   shouldRouteToOriginating: boolean;
   originatingChannel?: string;
   originatingTo?: string;
@@ -360,7 +357,6 @@ export async function tryDispatchAcpReply(params: {
     inboundAudio: params.inboundAudio,
     sessionTtsAuto: params.sessionTtsAuto,
     ttsChannel: params.ttsChannel,
-    suppressUserDelivery: params.suppressUserDelivery,
     shouldRouteToOriginating: params.shouldRouteToOriginating,
     originatingChannel: params.originatingChannel,
     originatingTo: params.originatingTo,
@@ -371,7 +367,6 @@ export async function tryDispatchAcpReply(params: {
     resolveSessionIdentityFromMeta(acpResolution.kind === "ready" ? acpResolution.meta : undefined),
   );
   const shouldEmitResolvedIdentityNotice =
-    !params.suppressUserDelivery &&
     identityPendingBeforeTurn &&
     (Boolean(params.ctx.MessageThreadId != null && String(params.ctx.MessageThreadId).trim()) ||
       hasBoundConversationForSession({
@@ -484,18 +479,6 @@ export async function tryDispatchAcpReply(params: {
     const counts = params.dispatcher.getQueuedCounts();
     delivery.applyRoutedCounts(counts);
     const acpStats = acpManager.getObservabilitySnapshot(params.cfg);
-    if (params.runId?.trim()) {
-      emitAgentEvent({
-        runId: params.runId.trim(),
-        sessionKey,
-        stream: "lifecycle",
-        data: {
-          phase: "end",
-          startedAt: acpDispatchStartedAt,
-          endedAt: Date.now(),
-        },
-      });
-    }
     logVerbose(
       `acp-dispatch: session=${sessionKey} outcome=ok latencyMs=${Date.now() - acpDispatchStartedAt} queueDepth=${acpStats.turns.queueDepth} activeRuntimes=${acpStats.runtimeCache.activeSessions}`,
     );
@@ -521,19 +504,6 @@ export async function tryDispatchAcpReply(params: {
     const counts = params.dispatcher.getQueuedCounts();
     delivery.applyRoutedCounts(counts);
     const acpStats = acpManager.getObservabilitySnapshot(params.cfg);
-    if (params.runId?.trim()) {
-      emitAgentEvent({
-        runId: params.runId.trim(),
-        sessionKey,
-        stream: "lifecycle",
-        data: {
-          phase: "error",
-          startedAt: acpDispatchStartedAt,
-          endedAt: Date.now(),
-          error: acpError.message,
-        },
-      });
-    }
     logVerbose(
       `acp-dispatch: session=${sessionKey} outcome=error code=${acpError.code} latencyMs=${Date.now() - acpDispatchStartedAt} queueDepth=${acpStats.turns.queueDepth} activeRuntimes=${acpStats.runtimeCache.activeSessions}`,
     );

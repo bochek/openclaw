@@ -1,0 +1,13 @@
+[test]
+preload = ["./test/bun.setup.ts"]
+timeout = 120000
+pathIgnorePatterns = [
+  "dist/**",
+  "apps/macos/**",
+  "apps/macos/.build/**",
+  "**/node_modules/**",
+  "**/vendor/**",
+  "dist/OpenClaw.app/**",
+  "**/*.live.test.ts",
+  "**/*.e2e.test.ts",
+]

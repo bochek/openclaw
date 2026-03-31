@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { findRoutedCommand } from "./routes.js";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { __testing, findRoutedCommand } from "./routes.js";
 
 const runConfigGetMock = vi.hoisted(() => vi.fn(async () => {}));
 const runConfigUnsetMock = vi.hoisted(() => vi.fn(async () => {}));
@@ -8,25 +8,30 @@ const modelsStatusCommandMock = vi.hoisted(() => vi.fn(async () => {}));
 const runDaemonStatusMock = vi.hoisted(() => vi.fn(async () => {}));
 const statusJsonCommandMock = vi.hoisted(() => vi.fn(async () => {}));
 
-vi.mock("../config-cli.js", () => ({
-  runConfigGet: runConfigGetMock,
-  runConfigUnset: runConfigUnsetMock,
-}));
-
-vi.mock("../../commands/models.js", () => ({
-  modelsListCommand: modelsListCommandMock,
-  modelsStatusCommand: modelsStatusCommandMock,
-}));
-
-vi.mock("../daemon-cli/status.js", () => ({
-  runDaemonStatus: runDaemonStatusMock,
-}));
-
-vi.mock("../../commands/status-json.js", () => ({
-  statusJsonCommand: statusJsonCommandMock,
-}));
-
 describe("program routes", () => {
+  beforeAll(() => {
+    __testing.setDepsForTest({
+      loadConfigCliModule: async () => ({
+        runConfigGet: runConfigGetMock,
+        runConfigUnset: runConfigUnsetMock,
+      }),
+      loadModelsModule: async () => ({
+        modelsListCommand: modelsListCommandMock,
+        modelsStatusCommand: modelsStatusCommandMock,
+      }),
+      loadDaemonStatusModule: async () => ({
+        runDaemonStatus: runDaemonStatusMock,
+      }),
+      loadStatusJsonModule: async () => ({
+        statusJsonCommand: statusJsonCommandMock,
+      }),
+    });
+  });
+
+  afterAll(() => {
+    __testing.resetDepsForTest();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

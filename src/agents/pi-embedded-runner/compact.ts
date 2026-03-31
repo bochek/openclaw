@@ -61,7 +61,7 @@ import {
 import {
   consumeCompactionSafeguardCancelReason,
   setCompactionSafeguardCancelReason,
-} from "../pi-hooks/compaction-safeguard-runtime.js";
+} from "../pi-extensions/compaction-safeguard-runtime.js";
 import { createPreparedEmbeddedPiSettingsManager } from "../pi-project-settings.js";
 import { createOpenClawCodingTools } from "../pi-tools.js";
 import { registerProviderStreamForModel } from "../provider-stream.js";
@@ -90,6 +90,7 @@ import {
   runAfterCompactionHooks,
   runBeforeCompactionHooks,
   runPostCompactionSideEffects,
+  setCompactionHooksDepsForTest,
 } from "./compaction-hooks.js";
 import {
   compactWithSafetyTimeout,
@@ -1092,6 +1093,7 @@ export const __testing = {
   runBeforeCompactionHooks,
   runAfterCompactionHooks,
   runPostCompactionSideEffects,
+  setCompactionHooksDepsForTest,
 } as const;
 
 export { runPostCompactionSideEffects } from "./compaction-hooks.js";

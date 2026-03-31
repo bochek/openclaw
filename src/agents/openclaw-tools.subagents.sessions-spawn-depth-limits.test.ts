@@ -3,28 +3,20 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPerSenderSessionConfig } from "./test-helpers/session-config.js";
+import {
+  __testing as subagentRegistryTesting,
+  addSubagentRunForTests,
+  resetSubagentRegistryForTests,
+} from "./subagent-registry.js";
+import { __testing as subagentSpawnTesting } from "./subagent-spawn.js";
+import { createSessionsSpawnTool } from "./tools/sessions-spawn-tool.js";
 
 const callGatewayMock = vi.fn();
-
-vi.mock("../gateway/call.js", () => ({
-  callGateway: (opts: unknown) => callGatewayMock(opts),
-}));
 
 let storeTemplatePath = "";
 let configOverride: Record<string, unknown> = {
   session: createPerSenderSessionConfig(),
 };
-let addSubagentRunForTests: typeof import("./subagent-registry.js").addSubagentRunForTests;
-let resetSubagentRegistryForTests: typeof import("./subagent-registry.js").resetSubagentRegistryForTests;
-let createSessionsSpawnTool: typeof import("./tools/sessions-spawn-tool.js").createSessionsSpawnTool;
-
-vi.mock("../config/config.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config/config.js")>();
-  return {
-    ...actual,
-    loadConfig: () => configOverride,
-  };
-});
 
 function writeStore(agentId: string, store: Record<string, unknown>) {
   const storePath = storeTemplatePath.replaceAll("{agentId}", agentId);
@@ -61,26 +53,16 @@ function seedDepthTwoAncestryStore(params?: { sessionIds?: boolean }) {
   return { depth1, callerKey };
 }
 
-async function loadFreshSessionsSpawnModulesForTest() {
-  vi.resetModules();
-  vi.doMock("../gateway/call.js", () => ({
-    callGateway: (opts: unknown) => callGatewayMock(opts),
-  }));
-  vi.doMock("../config/config.js", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../config/config.js")>();
-    return {
-      ...actual,
-      loadConfig: () => configOverride,
-    };
-  });
-  ({ addSubagentRunForTests, resetSubagentRegistryForTests } =
-    await import("./subagent-registry.js"));
-  ({ createSessionsSpawnTool } = await import("./tools/sessions-spawn-tool.js"));
-}
-
 describe("sessions_spawn depth + child limits", () => {
-  beforeEach(async () => {
-    await loadFreshSessionsSpawnModulesForTest();
+  beforeEach(() => {
+    subagentRegistryTesting.setDepsForTest({
+      callGateway: (opts: unknown) => callGatewayMock(opts),
+      loadConfig: () => configOverride as never,
+    });
+    subagentSpawnTesting.setDepsForTest({
+      callGateway: (opts: unknown) => callGatewayMock(opts),
+      loadConfig: () => configOverride as never,
+    });
     resetSubagentRegistryForTests();
     callGatewayMock.mockClear();
     storeTemplatePath = path.join(

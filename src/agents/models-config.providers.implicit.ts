@@ -1,6 +1,10 @@
 import type { OpenClawConfig } from "../config/config.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import {
+  mergeImplicitAnthropicVertexProvider,
+  resolveImplicitAnthropicVertexProvider,
+} from "../plugin-sdk/anthropic-vertex.js";
+import {
   groupPluginDiscoveryProvidersByOrder,
   normalizePluginDiscoveryResult,
   resolvePluginDiscoveryProviders,
@@ -11,6 +15,7 @@ import {
   isNonSecretApiKeyMarker,
   resolveNonEnvSecretRefApiKeyMarker,
 } from "./model-auth-markers.js";
+import { mergeProviderModels } from "./models-config.merge.js";
 import type {
   ProviderApiKeyResolver,
   ProviderAuthResolver,
@@ -30,8 +35,19 @@ const PROVIDER_IMPLICIT_MERGERS: Partial<
     (params: { existing: ProviderConfig | undefined; implicit: ProviderConfig }) => ProviderConfig
   >
 > = {
+  "anthropic-vertex": mergeImplicitAnthropicVertexProvider,
   ollama: ({ implicit }) => implicit,
 };
+
+const CORE_IMPLICIT_PROVIDER_RESOLVERS = [
+  {
+    id: "anthropic-vertex",
+    resolve: async (params: { config?: OpenClawConfig; env: NodeJS.ProcessEnv }) =>
+      resolveImplicitAnthropicVertexProvider({
+        env: params.env,
+      }),
+  },
+] as const;
 
 const PLUGIN_DISCOVERY_ORDERS = ["simple", "profile", "paired", "late"] as const;
 
@@ -39,6 +55,7 @@ type ImplicitProviderParams = {
   agentDir: string;
   config?: OpenClawConfig;
   env?: NodeJS.ProcessEnv;
+  onlyPluginIds?: string[];
   workspaceDir?: string;
   explicitProviders?: Record<string, ProviderConfig> | null;
 };
@@ -106,14 +123,7 @@ function mergeImplicitProviderConfig(params: {
   if (merge) {
     return merge({ existing, implicit });
   }
-  return {
-    ...implicit,
-    ...existing,
-    models:
-      Array.isArray(existing.models) && existing.models.length > 0
-        ? existing.models
-        : implicit.models,
-  };
+  return mergeProviderModels(implicit, existing);
 }
 
 function resolveConfiguredImplicitProvider(params: {
@@ -152,7 +162,12 @@ async function resolvePluginImplicitProviders(
   ctx: ImplicitProviderContext,
   order: import("../plugins/types.js").ProviderDiscoveryOrder,
 ): Promise<Record<string, ProviderConfig> | undefined> {
-  const onlyPluginIds = resolveLiveProviderDiscoveryFilter(ctx.env);
+  const explicitOnlyPluginIds =
+    ctx.onlyPluginIds !== undefined ? [...new Set(ctx.onlyPluginIds)] : undefined;
+  if (explicitOnlyPluginIds && explicitOnlyPluginIds.length === 0) {
+    return undefined;
+  }
+  const onlyPluginIds = explicitOnlyPluginIds ?? resolveLiveProviderDiscoveryFilter(ctx.env);
   const providers = await resolvePluginDiscoveryProviders({
     config: ctx.config,
     workspaceDir: ctx.workspaceDir,
@@ -294,6 +309,31 @@ async function runProviderCatalogWithTimeout(
   }
 }
 
+async function mergeCoreImplicitProviders(params: {
+  config?: OpenClawConfig;
+  explicitProviders?: Record<string, ProviderConfig> | null;
+  env: NodeJS.ProcessEnv;
+  providers: Record<string, ProviderConfig>;
+}): Promise<void> {
+  for (const provider of CORE_IMPLICIT_PROVIDER_RESOLVERS) {
+    const implicit = await provider.resolve({ config: params.config, env: params.env });
+    if (!implicit) {
+      continue;
+    }
+    const merge = PROVIDER_IMPLICIT_MERGERS[provider.id];
+    params.providers[provider.id] = (merge ?? mergeImplicitProviderConfig)({
+      providerId: provider.id,
+      existing:
+        params.providers[provider.id] ??
+        resolveConfiguredImplicitProvider({
+          configuredProviders: params.explicitProviders ?? params.config?.models?.providers,
+          providerIds: [provider.id],
+        }),
+      implicit,
+    });
+  }
+}
+
 export async function resolveImplicitProviders(
   params: ImplicitProviderParams,
 ): Promise<NonNullable<OpenClawConfig["models"]>["providers"]> {
@@ -313,6 +353,13 @@ export async function resolveImplicitProviders(
   for (const order of PLUGIN_DISCOVERY_ORDERS) {
     mergeImplicitProviderSet(providers, await resolvePluginImplicitProviders(context, order));
   }
+
+  await mergeCoreImplicitProviders({
+    config: params.config,
+    explicitProviders: params.explicitProviders,
+    env,
+    providers,
+  });
 
   return providers;
 }

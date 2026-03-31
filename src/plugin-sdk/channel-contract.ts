@@ -5,6 +5,7 @@ export type {
   ChannelAgentTool,
   ChannelAccountSnapshot,
   ChannelCommandConversationContext,
+  ChannelGatewayContext,
   ChannelGroupContext,
   ChannelMessageActionAdapter,
   ChannelMessageActionContext,

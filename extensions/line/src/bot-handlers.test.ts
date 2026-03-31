@@ -1,7 +1,8 @@
 import type { MessageEvent, PostbackEvent } from "@line/bot-sdk";
 import type { HistoryEntry } from "openclaw/plugin-sdk/reply-history";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LineAccountConfig } from "./types.js";
+import { createLineWebhookReplayCache, handleLineWebhookEvents } from "./bot-handlers.js";
 
 // Avoid pulling in globals/pairing/media dependencies; this suite only asserts
 // allowlist/groupPolicy gating and message-context wiring.
@@ -72,8 +73,6 @@ vi.mock("./bot-message-context.js", () => ({
   }),
 }));
 
-let handleLineWebhookEvents: typeof import("./bot-handlers.js").handleLineWebhookEvents;
-let createLineWebhookReplayCache: typeof import("./bot-handlers.js").createLineWebhookReplayCache;
 type LineWebhookContext = Parameters<typeof import("./bot-handlers.js").handleLineWebhookEvents>[1];
 
 const createRuntime = () => ({ log: vi.fn(), error: vi.fn(), exit: vi.fn() });
@@ -213,11 +212,6 @@ async function startInflightReplayDuplicate(params: {
 }
 
 describe("handleLineWebhookEvents", () => {
-  beforeAll(async () => {
-    vi.resetModules();
-    ({ handleLineWebhookEvents, createLineWebhookReplayCache } = await import("./bot-handlers.js"));
-  });
-
   beforeEach(() => {
     buildLineMessageContextMock.mockReset();
     buildLineMessageContextMock.mockImplementation(async () => ({
@@ -597,11 +591,16 @@ describe("handleLineWebhookEvents", () => {
       isRedelivery: true,
     });
     const { firstRun, secondRun } = await startInflightReplayDuplicate({ event, processMessage });
-    const firstFailure = expect(firstRun).rejects.toThrow("transient inflight failure");
-    const secondFailure = expect(secondRun).rejects.toThrow("transient inflight failure");
+    const settledRuns = Promise.allSettled([firstRun, secondRun]);
     rejectFirst?.(new Error("transient inflight failure"));
 
-    await Promise.all([firstFailure, secondFailure]);
+    const [firstResult, secondResult] = await settledRuns;
+    expect(firstResult.status).toBe("rejected");
+    expect(firstResult.reason).toBeInstanceOf(Error);
+    expect((firstResult.reason as Error).message).toContain("transient inflight failure");
+    expect(secondResult.status).toBe("rejected");
+    expect(secondResult.reason).toBeInstanceOf(Error);
+    expect((secondResult.reason as Error).message).toContain("transient inflight failure");
     expect(processMessage).toHaveBeenCalledTimes(1);
   });
 

@@ -1,36 +1,15 @@
 import path from "node:path";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import {
+  __testing as subagentRegistryTesting,
   addSubagentRunForTests,
   listSubagentRunsForRequester,
   resetSubagentRegistryForTests,
 } from "./subagent-registry.js";
+import { __testing as subagentSpawnTesting } from "./subagent-spawn.js";
 
 const callGatewayMock = vi.fn();
-vi.mock("../gateway/call.js", () => ({
-  callGateway: (opts: unknown) => callGatewayMock(opts),
-}));
-
-vi.mock("../config/config.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config/config.js")>();
-  return {
-    ...actual,
-    loadConfig: () => ({
-      session: {
-        mainKey: "main",
-        scope: "per-sender",
-        agentToAgent: { maxPingPongTurns: 2 },
-      },
-      tools: {
-        // Keep sessions tools permissive in this suite; dedicated visibility tests cover defaults.
-        sessions: { visibility: "all" },
-        agentToAgent: { enabled: true },
-      },
-    }),
-    resolveGatewayPort: () => 18789,
-  };
-});
 
 import "./test-helpers/fast-core-tools.js";
 import { __testing as openClawToolsTesting, createOpenClawTools } from "./openclaw-tools.js";
@@ -60,15 +39,11 @@ const waitForCalls = async (getCount: () => number, count: number, timeoutMs = 2
   );
 };
 
-let sessionsModule: typeof import("../config/sessions.js");
-
 describe("sessions tools", () => {
-  beforeAll(async () => {
-    sessionsModule = await import("../config/sessions.js");
-  });
-
   beforeEach(() => {
     callGatewayMock.mockClear();
+    subagentRegistryTesting.setDepsForTest();
+    subagentSpawnTesting.setDepsForTest();
     openClawToolsTesting.setDepsForTest({
       callGateway: (opts: unknown) => callGatewayMock(opts),
       config: TEST_CONFIG,
@@ -88,7 +63,7 @@ describe("sessions tools", () => {
   });
 
   it("uses number (not integer) in tool schemas for Gemini compatibility", () => {
-    const tools = createOpenClawTools();
+    const tools = createOpenClawTools({ agentSessionKey: "main", config: TEST_CONFIG });
     const byName = (name: string) => {
       const tool = tools.find((candidate) => candidate.name === name);
       expect(tool).toBeDefined();
@@ -199,7 +174,9 @@ describe("sessions tools", () => {
       return {};
     });
 
-    const tool = createOpenClawTools().find((candidate) => candidate.name === "sessions_list");
+    const tool = createOpenClawTools({ agentSessionKey: "main", config: TEST_CONFIG }).find(
+      (candidate) => candidate.name === "sessions_list",
+    );
     expect(tool).toBeDefined();
     if (!tool) {
       throw new Error("missing sessions_list tool");
@@ -266,7 +243,9 @@ describe("sessions tools", () => {
       return {};
     });
 
-    const tool = createOpenClawTools().find((candidate) => candidate.name === "sessions_list");
+    const tool = createOpenClawTools({ agentSessionKey: "main", config: TEST_CONFIG }).find(
+      (candidate) => candidate.name === "sessions_list",
+    );
     expect(tool).toBeDefined();
     if (!tool) {
       throw new Error("missing sessions_list tool");
@@ -301,7 +280,9 @@ describe("sessions tools", () => {
       return {};
     });
 
-    const tool = createOpenClawTools().find((candidate) => candidate.name === "sessions_history");
+    const tool = createOpenClawTools({ agentSessionKey: "main", config: TEST_CONFIG }).find(
+      (candidate) => candidate.name === "sessions_history",
+    );
     expect(tool).toBeDefined();
     if (!tool) {
       throw new Error("missing sessions_history tool");
@@ -350,7 +331,9 @@ describe("sessions tools", () => {
       return {};
     });
 
-    const tool = createOpenClawTools().find((candidate) => candidate.name === "sessions_history");
+    const tool = createOpenClawTools({ agentSessionKey: "main", config: TEST_CONFIG }).find(
+      (candidate) => candidate.name === "sessions_history",
+    );
     expect(tool).toBeDefined();
     if (!tool) {
       throw new Error("missing sessions_history tool");
@@ -414,7 +397,9 @@ describe("sessions tools", () => {
       return {};
     });
 
-    const tool = createOpenClawTools().find((candidate) => candidate.name === "sessions_history");
+    const tool = createOpenClawTools({ agentSessionKey: "main", config: TEST_CONFIG }).find(
+      (candidate) => candidate.name === "sessions_history",
+    );
     expect(tool).toBeDefined();
     if (!tool) {
       throw new Error("missing sessions_history tool");
@@ -463,7 +448,9 @@ describe("sessions tools", () => {
       return {};
     });
 
-    const tool = createOpenClawTools().find((candidate) => candidate.name === "sessions_history");
+    const tool = createOpenClawTools({ agentSessionKey: "main", config: TEST_CONFIG }).find(
+      (candidate) => candidate.name === "sessions_history",
+    );
     expect(tool).toBeDefined();
     if (!tool) {
       throw new Error("missing sessions_history tool");
@@ -504,7 +491,9 @@ describe("sessions tools", () => {
       return {};
     });
 
-    const tool = createOpenClawTools().find((candidate) => candidate.name === "sessions_history");
+    const tool = createOpenClawTools({ agentSessionKey: "main", config: TEST_CONFIG }).find(
+      (candidate) => candidate.name === "sessions_history",
+    );
     expect(tool).toBeDefined();
     if (!tool) {
       throw new Error("missing sessions_history tool");
@@ -542,7 +531,9 @@ describe("sessions tools", () => {
       return {};
     });
 
-    const tool = createOpenClawTools().find((candidate) => candidate.name === "sessions_history");
+    const tool = createOpenClawTools({ agentSessionKey: "main", config: TEST_CONFIG }).find(
+      (candidate) => candidate.name === "sessions_history",
+    );
     expect(tool).toBeDefined();
     if (!tool) {
       throw new Error("missing sessions_history tool");
@@ -721,7 +712,7 @@ describe("sessions tools", () => {
       ),
     ).toBe(true);
     expect(waitCalls).toHaveLength(8);
-    expect(historyOnlyCalls).toHaveLength(8);
+    expect(historyOnlyCalls).toHaveLength(9);
     expect(sendCallCount).toBe(0);
   });
 
@@ -1248,9 +1239,9 @@ describe("sessions tools", () => {
       startedAt: now - 2 * 60_000,
     });
 
-    const loadSessionStoreSpy = vi
-      .spyOn(sessionsModule, "loadSessionStore")
-      .mockImplementation(() => ({
+    subagentControlTesting.setDepsForTest({
+      callGateway: (opts: unknown) => callGatewayMock(opts),
+      loadSessionStore: () => ({
         "agent:main:subagent:usage-active": {
           sessionId: "session-usage-active",
           updatedAt: now,
@@ -1260,7 +1251,8 @@ describe("sessions tools", () => {
           outputTokens: 1000,
           totalTokens: 197000,
         },
-      }));
+      }),
+    });
 
     try {
       const tool = createOpenClawTools({
@@ -1281,7 +1273,9 @@ describe("sessions tools", () => {
       expect(details.text).toContain("prompt/cache 197k");
       expect(details.text).not.toContain("1.0k io");
     } finally {
-      loadSessionStoreSpy.mockRestore();
+      subagentControlTesting.setDepsForTest({
+        callGateway: (opts: unknown) => callGatewayMock(opts),
+      });
     }
   });
 
@@ -1305,14 +1299,15 @@ describe("sessions tools", () => {
       startedAt: Date.now() - 60_000,
     });
 
-    const loadSessionStoreSpy = vi
-      .spyOn(sessionsModule, "loadSessionStore")
-      .mockImplementation(() => ({
+    subagentControlTesting.setDepsForTest({
+      callGateway: (opts: unknown) => callGatewayMock(opts),
+      loadSessionStore: () => ({
         "agent:main:subagent:steer": {
           sessionId: "child-session-steer",
           updatedAt: Date.now(),
         },
-      }));
+      }),
+    });
 
     try {
       const tool = createOpenClawTools({
@@ -1363,7 +1358,9 @@ describe("sessions tools", () => {
       expect(trackedRuns[0].runId).toBe("run-steer-1");
       expect(trackedRuns[0].endedAt).toBeUndefined();
     } finally {
-      loadSessionStoreSpy.mockRestore();
+      subagentControlTesting.setDepsForTest({
+        callGateway: (opts: unknown) => callGatewayMock(opts),
+      });
     }
   });
 

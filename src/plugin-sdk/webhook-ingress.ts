@@ -13,6 +13,7 @@ export {
   applyBasicWebhookRequestGuards,
   beginWebhookRequestPipelineOrReject,
   createWebhookInFlightLimiter,
+  installRequestBodyLimitGuard,
   isJsonContentType,
   isRequestBodyLimitError,
   readRequestBodyWithLimit,
@@ -24,6 +25,7 @@ export {
   type WebhookBodyReadProfile,
   type WebhookInFlightLimiter,
 } from "./webhook-request-guards.js";
+export { readJsonBodyWithLimit } from "../infra/http-body.js";
 export {
   registerPluginHttpRoute,
   registerWebhookTarget,

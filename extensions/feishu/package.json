@@ -5,7 +5,7 @@
   "type": "module",
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.60.0",
-    "@sinclair/typebox": "0.34.49",
+    "@sinclair/typebox": "0.34.48",
     "https-proxy-agent": "^8.0.0"
   },
   "devDependencies": {
@@ -39,6 +39,7 @@
     },
     "install": {
       "npmSpec": "@openclaw/feishu",
+      "localPath": "extensions/feishu",
       "defaultChoice": "npm",
       "minHostVersion": ">=2026.3.30"
     },

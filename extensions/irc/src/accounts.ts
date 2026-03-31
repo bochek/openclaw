@@ -42,9 +42,15 @@ function parseIntEnv(value?: string): number | undefined {
   return parsed;
 }
 
-const { listAccountIds: listIrcAccountIds, resolveDefaultAccountId: resolveDefaultIrcAccountId } =
-  createAccountListHelpers("irc", { normalizeAccountId });
-export { listIrcAccountIds, resolveDefaultIrcAccountId };
+const ircAccountHelpers = createAccountListHelpers("irc", { normalizeAccountId });
+
+export function listIrcAccountIds(cfg: CoreConfig): string[] {
+  return ircAccountHelpers.listAccountIds(cfg);
+}
+
+export function resolveDefaultIrcAccountId(cfg: CoreConfig): string {
+  return ircAccountHelpers.resolveDefaultAccountId(cfg);
+}
 
 function mergeIrcAccountConfig(cfg: CoreConfig, accountId: string): IrcAccountConfig {
   return resolveMergedAccountConfig<IrcAccountConfig>({

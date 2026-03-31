@@ -13,9 +13,18 @@ type RuntimeSend = {
 type RuntimeSendModule = {
   runtimeSend: RuntimeSend;
 };
+type RuntimeSendLoader = () => Promise<RuntimeSendModule>;
 
 // Per-channel module caches for lazy loading.
 const senderCache = new Map<string, Promise<RuntimeSend>>();
+const runtimeSendLoaders: Record<string, RuntimeSendLoader> = {
+  whatsapp: () => import("./send-runtime/whatsapp.js") as Promise<RuntimeSendModule>,
+  telegram: () => import("./send-runtime/telegram.js") as Promise<RuntimeSendModule>,
+  discord: () => import("./send-runtime/discord.js") as Promise<RuntimeSendModule>,
+  slack: () => import("./send-runtime/slack.js") as Promise<RuntimeSendModule>,
+  signal: () => import("./send-runtime/signal.js") as Promise<RuntimeSendModule>,
+  imessage: () => import("./send-runtime/imessage.js") as Promise<RuntimeSendModule>,
+};
 
 /**
  * Create a lazy-loading send function proxy for a channel.
@@ -41,33 +50,40 @@ export function createDefaultDeps(): CliDeps {
   // Keep the default dependency barrel limited to lazy senders so callers that
   // only need outbound deps do not pull channel runtime boundaries on import.
   return {
-    whatsapp: createLazySender(
-      "whatsapp",
-      () => import("./send-runtime/whatsapp.js") as Promise<RuntimeSendModule>,
-    ),
-    telegram: createLazySender(
-      "telegram",
-      () => import("./send-runtime/telegram.js") as Promise<RuntimeSendModule>,
-    ),
-    discord: createLazySender(
-      "discord",
-      () => import("./send-runtime/discord.js") as Promise<RuntimeSendModule>,
-    ),
-    slack: createLazySender(
-      "slack",
-      () => import("./send-runtime/slack.js") as Promise<RuntimeSendModule>,
-    ),
-    signal: createLazySender(
-      "signal",
-      () => import("./send-runtime/signal.js") as Promise<RuntimeSendModule>,
-    ),
-    imessage: createLazySender(
-      "imessage",
-      () => import("./send-runtime/imessage.js") as Promise<RuntimeSendModule>,
-    ),
+    whatsapp: createLazySender("whatsapp", runtimeSendLoaders.whatsapp),
+    telegram: createLazySender("telegram", runtimeSendLoaders.telegram),
+    discord: createLazySender("discord", runtimeSendLoaders.discord),
+    slack: createLazySender("slack", runtimeSendLoaders.slack),
+    signal: createLazySender("signal", runtimeSendLoaders.signal),
+    imessage: createLazySender("imessage", runtimeSendLoaders.imessage),
   };
 }
 
 export function createOutboundSendDeps(deps: CliDeps): OutboundSendDeps {
   return createOutboundSendDepsFromCliSource(deps);
 }
+
+export const __testing = {
+  resetSenderCacheForTest(): void {
+    senderCache.clear();
+  },
+  setRuntimeSendLoaderForTest(channelId: string, loader: RuntimeSendLoader): void {
+    runtimeSendLoaders[channelId] = loader;
+    senderCache.delete(channelId);
+  },
+  resetRuntimeSendLoadersForTest(): void {
+    runtimeSendLoaders.whatsapp = () =>
+      import("./send-runtime/whatsapp.js") as Promise<RuntimeSendModule>;
+    runtimeSendLoaders.telegram = () =>
+      import("./send-runtime/telegram.js") as Promise<RuntimeSendModule>;
+    runtimeSendLoaders.discord = () =>
+      import("./send-runtime/discord.js") as Promise<RuntimeSendModule>;
+    runtimeSendLoaders.slack = () =>
+      import("./send-runtime/slack.js") as Promise<RuntimeSendModule>;
+    runtimeSendLoaders.signal = () =>
+      import("./send-runtime/signal.js") as Promise<RuntimeSendModule>;
+    runtimeSendLoaders.imessage = () =>
+      import("./send-runtime/imessage.js") as Promise<RuntimeSendModule>;
+    senderCache.clear();
+  },
+};

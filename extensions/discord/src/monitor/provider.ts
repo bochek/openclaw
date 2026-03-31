@@ -124,6 +124,7 @@ let listNativeCommandSpecsForConfigForTesting: typeof listNativeCommandSpecsForC
 let listSkillCommandsForAgentsForTesting: typeof listSkillCommandsForAgents | undefined;
 let isVerboseForTesting: typeof isVerbose | undefined;
 let shouldLogVerboseForTesting: typeof shouldLogVerbose | undefined;
+let acpStatusProbeTimeoutMsForTesting: number | undefined;
 
 async function loadDiscordVoiceRuntime(): Promise<DiscordVoiceRuntimeModule> {
   if (loadDiscordVoiceRuntimeForTesting) {
@@ -200,6 +201,10 @@ function appendPluginCommandSpecs(params: {
 const DISCORD_ACP_STATUS_PROBE_TIMEOUT_MS = 8_000;
 const DISCORD_ACP_STALE_RUNNING_ACTIVITY_MS = 2 * 60 * 1000;
 
+function resolveAcpStatusProbeTimeoutMs(): number {
+  return acpStatusProbeTimeoutMsForTesting ?? DISCORD_ACP_STATUS_PROBE_TIMEOUT_MS;
+}
+
 function isLegacyMissingSessionError(message: string): boolean {
   return (
     message.includes("Session is not ACP-enabled") ||
@@ -249,10 +254,7 @@ async function probeDiscordAcpBindingHealth(params: {
 
   let timeoutTimer: ReturnType<typeof setTimeout> | null = null;
   const timeoutPromise = new Promise<{ kind: "timeout" }>((resolve) => {
-    timeoutTimer = setTimeout(
-      () => resolve({ kind: "timeout" }),
-      DISCORD_ACP_STATUS_PROBE_TIMEOUT_MS,
-    );
+    timeoutTimer = setTimeout(() => resolve({ kind: "timeout" }), resolveAcpStatusProbeTimeoutMs());
     timeoutTimer.unref?.();
   });
   const result = await Promise.race([statusPromise, timeoutPromise]);
@@ -1181,6 +1183,9 @@ export const __testing = {
   },
   setShouldLogVerbose(mock?: typeof shouldLogVerbose) {
     shouldLogVerboseForTesting = mock;
+  },
+  setAcpStatusProbeTimeoutMs(timeoutMs?: number) {
+    acpStatusProbeTimeoutMsForTesting = timeoutMs;
   },
 };
 

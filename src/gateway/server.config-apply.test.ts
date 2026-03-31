@@ -20,11 +20,14 @@ let port = 0;
 
 beforeAll(async () => {
   port = await getFreePort();
-  server = await startGatewayServer(port, { controlUiEnabled: true });
+  server = await startGatewayServer(port, {
+    controlUiEnabled: true,
+    auth: { mode: "none" },
+  });
 });
 
 afterAll(async () => {
-  await server.close();
+  await server?.close();
 });
 
 const openClient = async () => {

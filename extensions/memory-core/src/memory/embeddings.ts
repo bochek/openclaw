@@ -46,6 +46,10 @@ type CreateEmbeddingProviderOptions = MemoryEmbeddingProviderCreateOptions & {
   fallback: EmbeddingProviderFallback;
 };
 
+type CreateEmbeddingProviderOverride = (
+  options: CreateEmbeddingProviderOptions,
+) => Promise<EmbeddingProviderResult>;
+
 function formatErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -119,7 +123,19 @@ async function createWithAdapter(
   };
 }
 
-export async function createEmbeddingProvider(
+let createEmbeddingProviderOverride: CreateEmbeddingProviderOverride | null = null;
+
+export function __setCreateEmbeddingProviderForTest(
+  override: CreateEmbeddingProviderOverride,
+): void {
+  createEmbeddingProviderOverride = override;
+}
+
+export function __resetCreateEmbeddingProviderForTest(): void {
+  createEmbeddingProviderOverride = null;
+}
+
+async function createEmbeddingProviderInternal(
   options: CreateEmbeddingProviderOptions,
 ): Promise<EmbeddingProviderResult> {
   if (options.provider === "auto") {
@@ -184,4 +200,13 @@ export async function createEmbeddingProvider(
     wrapped.cause = primaryErr;
     throw wrapped;
   }
+}
+
+export async function createEmbeddingProvider(
+  options: CreateEmbeddingProviderOptions,
+): Promise<EmbeddingProviderResult> {
+  if (createEmbeddingProviderOverride) {
+    return await createEmbeddingProviderOverride(options);
+  }
+  return await createEmbeddingProviderInternal(options);
 }

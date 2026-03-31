@@ -1,6 +1,7 @@
 import os from "node:os";
 import path from "node:path";
-import chokidar, { type FSWatcher } from "chokidar";
+import * as chokidar from "chokidar";
+import type { FSWatcher } from "chokidar";
 import type { OpenClawConfig } from "../../config/config.js";
 import { createSubsystemLogger } from "../../logging/subsystem.js";
 import { CONFIG_DIR, resolveUserPath } from "../../utils.js";

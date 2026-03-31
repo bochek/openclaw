@@ -49,6 +49,16 @@ const ANTHROPIC_PDF_FALLBACK = "anthropic/claude-opus-4-5";
 const PDF_MIN_TEXT_CHARS = 200;
 const PDF_MAX_PIXELS = 4_000_000;
 
+const pdfToolDeps = {
+  complete,
+};
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<typeof pdfToolDeps>) {
+    pdfToolDeps.complete = overrides?.complete ?? complete;
+  },
+} as const;
+
 // ---------------------------------------------------------------------------
 // Model resolution (mirrors image tool pattern)
 // ---------------------------------------------------------------------------
@@ -257,7 +267,7 @@ async function runPdfPrompt(params: {
           images: [],
         }));
         const context = buildPdfExtractionContext(params.prompt, textOnlyExtractions);
-        const message = await complete(model, context, {
+        const message = await pdfToolDeps.complete(model, context, {
           apiKey,
           maxTokens: resolvePdfToolMaxTokens(model.maxTokens),
         });
@@ -266,7 +276,7 @@ async function runPdfPrompt(params: {
       }
 
       const context = buildPdfExtractionContext(params.prompt, extractions);
-      const message = await complete(model, context, {
+      const message = await pdfToolDeps.complete(model, context, {
         apiKey,
         maxTokens: resolvePdfToolMaxTokens(model.maxTokens),
       });

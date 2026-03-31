@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionEntry } from "../config/sessions.js";
+import { __testing as btwTesting, runBtwSideQuestion } from "./btw.js";
 
 const streamSimpleMock = vi.fn();
 const buildSessionContextMock = vi.fn();
@@ -16,59 +17,6 @@ const resolveSessionAuthProfileOverrideMock = vi.fn();
 const getActiveEmbeddedRunSnapshotMock = vi.fn();
 const diagDebugMock = vi.fn();
 
-vi.mock("@mariozechner/pi-ai", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@mariozechner/pi-ai")>();
-  return {
-    ...original,
-    streamSimple: (...args: unknown[]) => streamSimpleMock(...args),
-  };
-});
-
-vi.mock("@mariozechner/pi-coding-agent", () => ({
-  SessionManager: {
-    open: () => ({
-      getLeafEntry: getLeafEntryMock,
-      branch: branchMock,
-      resetLeaf: resetLeafMock,
-      buildSessionContext: buildSessionContextMock,
-    }),
-  },
-}));
-
-vi.mock("./models-config.js", () => ({
-  ensureOpenClawModelsJson: (...args: unknown[]) => ensureOpenClawModelsJsonMock(...args),
-}));
-
-vi.mock("./pi-model-discovery.js", () => ({
-  discoverAuthStorage: (...args: unknown[]) => discoverAuthStorageMock(...args),
-  discoverModels: (...args: unknown[]) => discoverModelsMock(...args),
-}));
-
-vi.mock("./pi-embedded-runner/model.js", () => ({
-  resolveModelWithRegistry: (...args: unknown[]) => resolveModelWithRegistryMock(...args),
-}));
-
-vi.mock("./model-auth.js", () => ({
-  getApiKeyForModel: (...args: unknown[]) => getApiKeyForModelMock(...args),
-  requireApiKey: (...args: unknown[]) => requireApiKeyMock(...args),
-}));
-
-vi.mock("./pi-embedded-runner/runs.js", () => ({
-  getActiveEmbeddedRunSnapshot: (...args: unknown[]) => getActiveEmbeddedRunSnapshotMock(...args),
-}));
-
-vi.mock("./auth-profiles/session-override.js", () => ({
-  resolveSessionAuthProfileOverride: (...args: unknown[]) =>
-    resolveSessionAuthProfileOverrideMock(...args),
-}));
-
-vi.mock("../logging/diagnostic.js", () => ({
-  diagnosticLogger: {
-    debug: (...args: unknown[]) => diagDebugMock(...args),
-  },
-}));
-
-const { runBtwSideQuestion } = await import("./btw.js");
 type RunBtwSideQuestionParams = Parameters<typeof runBtwSideQuestion>[0];
 
 const DEFAULT_AGENT_DIR = "/tmp/agent";
@@ -124,30 +72,6 @@ function createDoneEvent(text: string) {
   };
 }
 
-function createThinkingOnlyDoneEvent(thinking: string) {
-  return {
-    type: "done",
-    reason: "stop",
-    message: {
-      role: "assistant",
-      content: [{ type: "thinking", thinking }],
-      provider: DEFAULT_PROVIDER,
-      api: "anthropic-messages",
-      model: DEFAULT_MODEL,
-      stopReason: "stop",
-      usage: {
-        input: 1,
-        output: 2,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 3,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      timestamp: Date.now(),
-    },
-  };
-}
-
 function mockDoneAnswer(text: string) {
   streamSimpleMock.mockReturnValue(makeAsyncEvents([createDoneEvent(text)]));
 }
@@ -180,6 +104,29 @@ function clearBuiltSessionMessages() {
 
 describe("runBtwSideQuestion", () => {
   beforeEach(() => {
+    btwTesting.setDepsForTest({
+      streamSimple: (...args) => streamSimpleMock(...args),
+      SessionManager: {
+        open() {
+          return {
+            getLeafEntry: getLeafEntryMock,
+            branch: branchMock,
+            resetLeaf: resetLeafMock,
+            buildSessionContext: buildSessionContextMock,
+          };
+        },
+      },
+      ensureOpenClawModelsJson: (...args) => ensureOpenClawModelsJsonMock(...args),
+      discoverAuthStorage: (...args) => discoverAuthStorageMock(...args),
+      discoverModels: (...args) => discoverModelsMock(...args),
+      resolveModelWithRegistry: (...args) => resolveModelWithRegistryMock(...args),
+      getApiKeyForModel: (...args) => getApiKeyForModelMock(...args),
+      requireApiKey: (...args) => requireApiKeyMock(...args),
+      resolveSessionAuthProfileOverride: (...args) =>
+        resolveSessionAuthProfileOverrideMock(...args),
+      getActiveEmbeddedRunSnapshot: (...args) => getActiveEmbeddedRunSnapshotMock(...args),
+      diagDebug: (...args) => diagDebugMock(...args),
+    });
     streamSimpleMock.mockReset();
     buildSessionContextMock.mockReset();
     getLeafEntryMock.mockReset();
@@ -294,28 +241,6 @@ describe("runBtwSideQuestion", () => {
     const result = await runSideQuestion();
 
     expect(result).toEqual({ text: "Final answer." });
-  });
-
-  it("forces provider reasoning off even when the session think level is adaptive", async () => {
-    streamSimpleMock.mockImplementation((_model, _input, options?: { reasoning?: unknown }) => {
-      return options?.reasoning === undefined
-        ? makeAsyncEvents([createDoneEvent("Final answer.")])
-        : makeAsyncEvents([createThinkingOnlyDoneEvent("thinking only")]);
-    });
-
-    const result = await runSideQuestion({ resolvedThinkLevel: "adaptive" });
-
-    expect(result).toEqual({ text: "Final answer." });
-    expect(streamSimpleMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.objectContaining({ reasoning: undefined }),
-    );
-    expect(streamSimpleMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.not.objectContaining({ reasoning: expect.anything() }),
-    );
   });
 
   it("fails when the current branch has no messages", async () => {

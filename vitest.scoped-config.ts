@@ -45,6 +45,7 @@ export function createScopedVitestConfig(
     exclude?: string[];
     pool?: "threads" | "forks";
     passWithNoTests?: boolean;
+    setupFiles?: string[];
   },
 ) {
   const base = baseConfig as unknown as Record<string, unknown>;
@@ -75,6 +76,7 @@ export function createScopedVitestConfig(
       ...(scopedDir ? { dir: scopedDir } : {}),
       include: relativizeScopedPatterns(include, scopedDir),
       exclude,
+      setupFiles: [...(baseTest.setupFiles ?? []), ...(options?.setupFiles ?? [])],
       ...(options?.pool ? { pool: options.pool } : {}),
       ...(options?.passWithNoTests !== undefined
         ? { passWithNoTests: options.passWithNoTests }

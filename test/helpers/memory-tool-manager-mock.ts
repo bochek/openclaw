@@ -1,4 +1,8 @@
 import { vi } from "vitest";
+import {
+  __resetLoadMemoryToolRuntimeForTest,
+  __setLoadMemoryToolRuntimeForTest,
+} from "../../extensions/memory-core/src/tools.shared.js";
 
 export type SearchImpl = () => Promise<unknown[]>;
 export type MemoryReadParams = { relPath: string; from?: number; lines?: number };
@@ -38,20 +42,11 @@ const readAgentMemoryFileMock = vi.fn(
   async (params: MemoryReadParams) => await readFileImpl(params),
 );
 
-const { memoryIndexModuleId, memoryToolsRuntimeModuleId } = vi.hoisted(() => ({
-  memoryIndexModuleId: "../../extensions/memory-core/src/memory/index.js",
-  memoryToolsRuntimeModuleId: "../../extensions/memory-core/src/tools.runtime.js",
-}));
-
-vi.mock(memoryIndexModuleId, () => ({
-  getMemorySearchManager: getMemorySearchManagerMock,
-}));
-
 vi.mock("../../packages/memory-host-sdk/src/host/read-file.js", () => ({
   readAgentMemoryFile: readAgentMemoryFileMock,
 }));
 
-vi.mock(memoryToolsRuntimeModuleId, () => ({
+__setLoadMemoryToolRuntimeForTest(async () => ({
   resolveMemoryBackendConfig: ({
     cfg,
   }: {
@@ -89,6 +84,19 @@ export function resetMemoryToolMockState(overrides?: {
     overrides?.readFileImpl ??
     (async (params: MemoryReadParams) => ({ text: "", path: params.relPath }));
   vi.clearAllMocks();
+  __resetLoadMemoryToolRuntimeForTest();
+  __setLoadMemoryToolRuntimeForTest(async () => ({
+    resolveMemoryBackendConfig: ({
+      cfg,
+    }: {
+      cfg?: { memory?: { backend?: string; qmd?: unknown } };
+    }) => ({
+      backend,
+      qmd: cfg?.memory?.qmd,
+    }),
+    getMemorySearchManager: getMemorySearchManagerMock,
+    readAgentMemoryFile: readAgentMemoryFileMock,
+  }));
 }
 
 export function getMemorySearchManagerMockCalls(): number {

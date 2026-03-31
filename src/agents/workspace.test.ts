@@ -45,13 +45,13 @@ async function readWorkspaceState(dir: string): Promise<{
 }
 
 async function expectBootstrapSeeded(dir: string) {
-  await expect(fs.access(path.join(dir, DEFAULT_BOOTSTRAP_FILENAME))).resolves.toBeUndefined();
+  await fs.access(path.join(dir, DEFAULT_BOOTSTRAP_FILENAME));
   const state = await readWorkspaceState(dir);
   expect(state.bootstrapSeededAt).toMatch(/\d{4}-\d{2}-\d{2}T/);
 }
 
 async function expectCompletedWithoutBootstrap(dir: string) {
-  await expect(fs.access(path.join(dir, DEFAULT_IDENTITY_FILENAME))).resolves.toBeUndefined();
+  await fs.access(path.join(dir, DEFAULT_IDENTITY_FILENAME));
   await expect(fs.access(path.join(dir, DEFAULT_BOOTSTRAP_FILENAME))).rejects.toMatchObject({
     code: "ENOENT",
   });
@@ -103,7 +103,7 @@ describe("ensureAgentWorkspace", () => {
     await expect(fs.access(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME))).rejects.toMatchObject({
       code: "ENOENT",
     });
-    await expect(fs.access(path.join(tempDir, DEFAULT_TOOLS_FILENAME))).resolves.toBeUndefined();
+    await fs.access(path.join(tempDir, DEFAULT_TOOLS_FILENAME));
     const state = await readWorkspaceState(tempDir);
     expect(state.setupCompletedAt).toMatch(/\d{4}-\d{2}-\d{2}T/);
   });
@@ -131,7 +131,7 @@ describe("ensureAgentWorkspace", () => {
 
     await ensureAgentWorkspace({ dir: tempDir, ensureBootstrapFiles: true });
 
-    await expect(fs.access(path.join(tempDir, DEFAULT_IDENTITY_FILENAME))).resolves.toBeUndefined();
+    await fs.access(path.join(tempDir, DEFAULT_IDENTITY_FILENAME));
     await expect(fs.access(path.join(tempDir, DEFAULT_BOOTSTRAP_FILENAME))).rejects.toMatchObject({
       code: "ENOENT",
     });

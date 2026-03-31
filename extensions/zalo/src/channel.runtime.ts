@@ -9,6 +9,27 @@ import {
 import { normalizeSecretInputString } from "./secret-input.js";
 import { sendMessageZalo } from "./send.js";
 
+let resolveProbeZaloForRuntime = () => probeZalo;
+let loadMonitorZaloProviderForRuntime = async () => (await import("./monitor.js")).monitorZaloProvider;
+
+export function __setResolveProbeZaloForTest(loader: typeof resolveProbeZaloForRuntime): void {
+  resolveProbeZaloForRuntime = loader;
+}
+
+export function __resetResolveProbeZaloForTest(): void {
+  resolveProbeZaloForRuntime = () => probeZalo;
+}
+
+export function __setLoadMonitorZaloProviderForTest(
+  loader: typeof loadMonitorZaloProviderForRuntime,
+): void {
+  loadMonitorZaloProviderForRuntime = loader;
+}
+
+export function __resetLoadMonitorZaloProviderForTest(): void {
+  loadMonitorZaloProviderForRuntime = async () => (await import("./monitor.js")).monitorZaloProvider;
+}
+
 export async function notifyZaloPairingApproval(params: { cfg: OpenClawConfig; id: string }) {
   const { resolveZaloAccount } = await import("./accounts.js");
   const account = resolveZaloAccount({ cfg: params.cfg });
@@ -33,7 +54,7 @@ export async function probeZaloAccount(params: {
   account: import("./accounts.js").ResolvedZaloAccount;
   timeoutMs?: number;
 }) {
-  return await probeZalo(
+  return await resolveProbeZaloForRuntime()(
     params.account.token,
     params.timeoutMs,
     resolveZaloProxyFetch(params.account.config.proxy),
@@ -49,7 +70,7 @@ export async function startZaloGatewayAccount(
   let zaloBotLabel = "";
   const fetcher = resolveZaloProxyFetch(account.config.proxy);
   try {
-    const probe = await probeZalo(token, 2500, fetcher);
+    const probe = await resolveProbeZaloForRuntime()(token, 2500, fetcher);
     const name = probe.ok ? probe.bot?.name?.trim() : null;
     if (name) {
       zaloBotLabel = ` (${name})`;
@@ -73,7 +94,7 @@ export async function startZaloGatewayAccount(
     setStatus: ctx.setStatus,
   });
   ctx.log?.info(`[${account.accountId}] starting provider${zaloBotLabel} mode=${mode}`);
-  const { monitorZaloProvider } = await import("./monitor.js");
+  const monitorZaloProvider = await loadMonitorZaloProviderForRuntime();
   return monitorZaloProvider({
     token,
     account,

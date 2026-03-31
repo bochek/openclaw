@@ -32,11 +32,13 @@ import {
   tabFromPath,
   type Tab,
 } from "./navigation.ts";
+import { setLastActiveSessionKey } from "./last-active-session-key.ts";
 import { saveSettings, type UiSettings } from "./storage.ts";
 import { startThemeTransition, type ThemeTransitionContext } from "./theme-transition.ts";
 import { resolveTheme, type ResolvedTheme, type ThemeMode, type ThemeName } from "./theme.ts";
 import type { AgentsListResult, AttentionItem } from "./types.ts";
 import { resetChatViewState } from "./views/chat.ts";
+export { setLastActiveSessionKey } from "./last-active-session-key.ts";
 
 type SettingsHost = {
   settings: UiSettings;
@@ -75,17 +77,6 @@ export function applySettings(host: SettingsHost, next: UiSettings) {
   }
   applyBorderRadius(next.borderRadius);
   host.applySessionKey = host.settings.lastActiveSessionKey;
-}
-
-export function setLastActiveSessionKey(host: SettingsHost, next: string) {
-  const trimmed = next.trim();
-  if (!trimmed) {
-    return;
-  }
-  if (host.settings.lastActiveSessionKey === trimmed) {
-    return;
-  }
-  applySettings(host, { ...host.settings, lastActiveSessionKey: trimmed });
 }
 
 export function applySettingsFromUrl(host: SettingsHost) {

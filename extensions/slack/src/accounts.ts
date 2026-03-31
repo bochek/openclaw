@@ -25,9 +25,15 @@ export type ResolvedSlackAccount = {
   config: SlackAccountConfig;
 } & SlackAccountSurfaceFields;
 
-const { listAccountIds, resolveDefaultAccountId } = createAccountListHelpers("slack");
-export const listSlackAccountIds = listAccountIds;
-export const resolveDefaultSlackAccountId = resolveDefaultAccountId;
+const slackAccountHelpers = createAccountListHelpers("slack");
+
+export function listSlackAccountIds(cfg: OpenClawConfig): string[] {
+  return slackAccountHelpers.listAccountIds(cfg);
+}
+
+export function resolveDefaultSlackAccountId(cfg: OpenClawConfig): string {
+  return slackAccountHelpers.resolveDefaultAccountId(cfg);
+}
 
 export function mergeSlackAccountConfig(
   cfg: OpenClawConfig,

@@ -2,6 +2,16 @@ import { loadWorkspaceBootstrapFiles, type WorkspaceBootstrapFile } from "./work
 
 const cache = new Map<string, WorkspaceBootstrapFile[]>();
 
+type BootstrapCacheDeps = {
+  loadWorkspaceBootstrapFiles: typeof loadWorkspaceBootstrapFiles;
+};
+
+const defaultBootstrapCacheDeps: BootstrapCacheDeps = {
+  loadWorkspaceBootstrapFiles,
+};
+
+let bootstrapCacheDeps: BootstrapCacheDeps = defaultBootstrapCacheDeps;
+
 export async function getOrLoadBootstrapFiles(params: {
   workspaceDir: string;
   sessionKey: string;
@@ -11,7 +21,7 @@ export async function getOrLoadBootstrapFiles(params: {
     return existing;
   }
 
-  const files = await loadWorkspaceBootstrapFiles(params.workspaceDir);
+  const files = await bootstrapCacheDeps.loadWorkspaceBootstrapFiles(params.workspaceDir);
   cache.set(params.sessionKey, files);
   return files;
 }
@@ -34,3 +44,14 @@ export function clearBootstrapSnapshotOnSessionRollover(params: {
 export function clearAllBootstrapSnapshots(): void {
   cache.clear();
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<BootstrapCacheDeps>) {
+    bootstrapCacheDeps = overrides
+      ? {
+          ...defaultBootstrapCacheDeps,
+          ...overrides,
+        }
+      : defaultBootstrapCacheDeps;
+  },
+};

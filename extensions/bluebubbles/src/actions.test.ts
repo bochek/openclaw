@@ -1,27 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { sendBlueBubblesAttachment } from "./attachments.js";
-import { editBlueBubblesMessage, setGroupIconBlueBubbles } from "./chat.js";
-import { resolveBlueBubblesMessageId } from "./monitor.js";
-import { getCachedBlueBubblesPrivateApiStatus } from "./probe.js";
-import { sendBlueBubblesReaction } from "./reactions.js";
 import type { OpenClawConfig } from "./runtime-api.js";
-import { resolveChatGuidForTarget, sendMessageBlueBubbles } from "./send.js";
 
-vi.mock("./accounts.js", async () => {
-  const { createBlueBubblesAccountsMockModule } = await import("./test-harness.js");
-  return createBlueBubblesAccountsMockModule();
-});
-
-vi.mock("./reactions.js", () => ({
+const reactionsMocks = vi.hoisted(() => ({
   sendBlueBubblesReaction: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("./send.js", () => ({
+const sendMocks = vi.hoisted(() => ({
   resolveChatGuidForTarget: vi.fn().mockResolvedValue("iMessage;-;+15551234567"),
   sendMessageBlueBubbles: vi.fn().mockResolvedValue({ messageId: "msg-123" }),
 }));
 
-vi.mock("./chat.js", () => ({
+const chatMocks = vi.hoisted(() => ({
   editBlueBubblesMessage: vi.fn().mockResolvedValue(undefined),
   unsendBlueBubblesMessage: vi.fn().mockResolvedValue(undefined),
   renameBlueBubblesChat: vi.fn().mockResolvedValue(undefined),
@@ -31,21 +20,50 @@ vi.mock("./chat.js", () => ({
   leaveBlueBubblesChat: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("./attachments.js", () => ({
+const attachmentMocks = vi.hoisted(() => ({
   sendBlueBubblesAttachment: vi.fn().mockResolvedValue({ messageId: "att-msg-123" }),
 }));
 
-vi.mock("./monitor.js", () => ({
+const monitorMocks = vi.hoisted(() => ({
   resolveBlueBubblesMessageId: vi.fn((id: string) => id),
 }));
 
-vi.mock("./probe.js", () => ({
+const probeMocks = vi.hoisted(() => ({
   isMacOS26OrHigher: vi.fn().mockReturnValue(false),
   getCachedBlueBubblesPrivateApiStatus: vi.fn().mockReturnValue(null),
 }));
 
+vi.mock("./accounts.js", async () => {
+  const { createBlueBubblesAccountsMockModule } = await import("./test-harness.js");
+  return createBlueBubblesAccountsMockModule();
+});
+
+vi.mock("./reactions.js", () => ({
+  sendBlueBubblesReaction: reactionsMocks.sendBlueBubblesReaction,
+}));
+
+vi.mock("./send.js", () => ({
+  resolveChatGuidForTarget: sendMocks.resolveChatGuidForTarget,
+  sendMessageBlueBubbles: sendMocks.sendMessageBlueBubbles,
+}));
+
+vi.mock("./chat.js", () => chatMocks);
+
+vi.mock("./attachments.js", () => ({
+  sendBlueBubblesAttachment: attachmentMocks.sendBlueBubblesAttachment,
+}));
+
+vi.mock("./monitor.js", () => ({
+  resolveBlueBubblesMessageId: monitorMocks.resolveBlueBubblesMessageId,
+}));
+
+vi.mock("./probe.js", () => ({
+  isMacOS26OrHigher: probeMocks.isMacOS26OrHigher,
+  getCachedBlueBubblesPrivateApiStatus: probeMocks.getCachedBlueBubblesPrivateApiStatus,
+}));
+
 const freshActionsModulePath = "./actions.js?actions-test";
-const { bluebubblesMessageActions } = await import(freshActionsModulePath);
+const { bluebubblesMessageActions, __testing: actionsTesting } = await import(freshActionsModulePath);
 
 describe("bluebubblesMessageActions", () => {
   const describeMessageTool = bluebubblesMessageActions.describeMessageTool!;
@@ -73,7 +91,25 @@ describe("bluebubblesMessageActions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getCachedBlueBubblesPrivateApiStatus).mockReturnValue(null);
+    probeMocks.getCachedBlueBubblesPrivateApiStatus.mockReturnValue(null);
+    actionsTesting.setDepsForTest({
+      getCachedBlueBubblesPrivateApiStatus: probeMocks.getCachedBlueBubblesPrivateApiStatus,
+      isMacOS26OrHigher: probeMocks.isMacOS26OrHigher,
+      loadBlueBubblesActionsRuntime: async () => ({
+        addBlueBubblesParticipant: chatMocks.addBlueBubblesParticipant,
+        editBlueBubblesMessage: chatMocks.editBlueBubblesMessage,
+        leaveBlueBubblesChat: chatMocks.leaveBlueBubblesChat,
+        removeBlueBubblesParticipant: chatMocks.removeBlueBubblesParticipant,
+        renameBlueBubblesChat: chatMocks.renameBlueBubblesChat,
+        resolveBlueBubblesMessageId: monitorMocks.resolveBlueBubblesMessageId,
+        resolveChatGuidForTarget: sendMocks.resolveChatGuidForTarget,
+        sendBlueBubblesAttachment: attachmentMocks.sendBlueBubblesAttachment,
+        sendBlueBubblesReaction: reactionsMocks.sendBlueBubblesReaction,
+        sendMessageBlueBubbles: sendMocks.sendMessageBlueBubbles,
+        setGroupIconBlueBubbles: chatMocks.setGroupIconBlueBubbles,
+        unsendBlueBubblesMessage: chatMocks.unsendBlueBubblesMessage,
+      }),
+    });
   });
 
   describe("describeMessageTool", () => {
@@ -126,7 +162,7 @@ describe("bluebubblesMessageActions", () => {
     });
 
     it("hides private-api actions when private API is disabled", () => {
-      vi.mocked(getCachedBlueBubblesPrivateApiStatus).mockReturnValueOnce(false);
+      probeMocks.getCachedBlueBubblesPrivateApiStatus.mockReturnValueOnce(false);
       const cfg: OpenClawConfig = {
         channels: {
           bluebubbles: {
@@ -222,7 +258,7 @@ describe("bluebubblesMessageActions", () => {
         accountId: null,
       });
 
-      expect(sendBlueBubblesAttachment).toHaveBeenCalledWith(
+      expect(attachmentMocks.sendBlueBubblesAttachment).toHaveBeenCalledWith(
         expect.objectContaining({
           to: "+15551234567",
           filename: "photo.png",
@@ -277,7 +313,7 @@ describe("bluebubblesMessageActions", () => {
     });
 
     it("throws a private-api error for private-only actions when disabled", async () => {
-      vi.mocked(getCachedBlueBubblesPrivateApiStatus).mockReturnValueOnce(false);
+      probeMocks.getCachedBlueBubblesPrivateApiStatus.mockReturnValueOnce(false);
       const cfg: OpenClawConfig = {
         channels: {
           bluebubbles: {
@@ -316,7 +352,7 @@ describe("bluebubblesMessageActions", () => {
     });
 
     it("throws when chatGuid cannot be resolved", async () => {
-      vi.mocked(resolveChatGuidForTarget).mockResolvedValueOnce(null);
+      sendMocks.resolveChatGuidForTarget.mockResolvedValueOnce(null);
 
       const cfg: OpenClawConfig = {
         channels: {
@@ -343,7 +379,7 @@ describe("bluebubblesMessageActions", () => {
         chatGuid: "iMessage;-;+15551234567",
       });
 
-      expect(sendBlueBubblesReaction).toHaveBeenCalledWith(
+      expect(reactionsMocks.sendBlueBubblesReaction).toHaveBeenCalledWith(
         expect.objectContaining({
           chatGuid: "iMessage;-;+15551234567",
           messageGuid: "msg-123",
@@ -364,7 +400,7 @@ describe("bluebubblesMessageActions", () => {
         remove: true,
       });
 
-      expect(sendBlueBubblesReaction).toHaveBeenCalledWith(
+      expect(reactionsMocks.sendBlueBubblesReaction).toHaveBeenCalledWith(
         expect.objectContaining({
           remove: true,
         }),
@@ -376,7 +412,7 @@ describe("bluebubblesMessageActions", () => {
     });
 
     it("resolves chatGuid from to parameter", async () => {
-      vi.mocked(resolveChatGuidForTarget).mockResolvedValueOnce("iMessage;-;+15559876543");
+      sendMocks.resolveChatGuidForTarget.mockResolvedValueOnce("iMessage;-;+15559876543");
 
       const cfg: OpenClawConfig = {
         channels: {
@@ -397,8 +433,8 @@ describe("bluebubblesMessageActions", () => {
         accountId: null,
       });
 
-      expect(resolveChatGuidForTarget).toHaveBeenCalled();
-      expect(sendBlueBubblesReaction).toHaveBeenCalledWith(
+      expect(sendMocks.resolveChatGuidForTarget).toHaveBeenCalled();
+      expect(reactionsMocks.sendBlueBubblesReaction).toHaveBeenCalledWith(
         expect.objectContaining({
           chatGuid: "iMessage;-;+15559876543",
         }),
@@ -426,7 +462,7 @@ describe("bluebubblesMessageActions", () => {
         accountId: null,
       });
 
-      expect(sendBlueBubblesReaction).toHaveBeenCalledWith(
+      expect(reactionsMocks.sendBlueBubblesReaction).toHaveBeenCalledWith(
         expect.objectContaining({
           partIndex: 2,
         }),
@@ -434,7 +470,7 @@ describe("bluebubblesMessageActions", () => {
     });
 
     it("uses toolContext currentChannelId when no explicit target is provided", async () => {
-      vi.mocked(resolveChatGuidForTarget).mockResolvedValueOnce("iMessage;-;+15550001111");
+      sendMocks.resolveChatGuidForTarget.mockResolvedValueOnce("iMessage;-;+15550001111");
 
       const cfg: OpenClawConfig = {
         channels: {
@@ -457,12 +493,12 @@ describe("bluebubblesMessageActions", () => {
         },
       });
 
-      expect(resolveChatGuidForTarget).toHaveBeenCalledWith(
+      expect(sendMocks.resolveChatGuidForTarget).toHaveBeenCalledWith(
         expect.objectContaining({
           target: { kind: "chat_guid", chatGuid: "iMessage;-;+15550001111" },
         }),
       );
-      expect(sendBlueBubblesReaction).toHaveBeenCalledWith(
+      expect(reactionsMocks.sendBlueBubblesReaction).toHaveBeenCalledWith(
         expect.objectContaining({
           chatGuid: "iMessage;-;+15550001111",
         }),
@@ -470,7 +506,7 @@ describe("bluebubblesMessageActions", () => {
     });
 
     it("resolves short messageId before reacting", async () => {
-      vi.mocked(resolveBlueBubblesMessageId).mockReturnValueOnce("resolved-uuid");
+      monitorMocks.resolveBlueBubblesMessageId.mockReturnValueOnce("resolved-uuid");
 
       const cfg: OpenClawConfig = {
         channels: {
@@ -492,8 +528,10 @@ describe("bluebubblesMessageActions", () => {
         accountId: null,
       });
 
-      expect(resolveBlueBubblesMessageId).toHaveBeenCalledWith("1", { requireKnownShortId: true });
-      expect(sendBlueBubblesReaction).toHaveBeenCalledWith(
+      expect(monitorMocks.resolveBlueBubblesMessageId).toHaveBeenCalledWith("1", {
+        requireKnownShortId: true,
+      });
+      expect(reactionsMocks.sendBlueBubblesReaction).toHaveBeenCalledWith(
         expect.objectContaining({
           messageGuid: "resolved-uuid",
         }),
@@ -501,7 +539,7 @@ describe("bluebubblesMessageActions", () => {
     });
 
     it("propagates short-id errors from the resolver", async () => {
-      vi.mocked(resolveBlueBubblesMessageId).mockImplementationOnce(() => {
+      monitorMocks.resolveBlueBubblesMessageId.mockImplementationOnce(() => {
         throw new Error("short id expired");
       });
 
@@ -545,7 +583,7 @@ describe("bluebubblesMessageActions", () => {
         accountId: null,
       });
 
-      expect(editBlueBubblesMessage).toHaveBeenCalledWith(
+      expect(chatMocks.editBlueBubblesMessage).toHaveBeenCalledWith(
         "msg-123",
         "updated",
         expect.objectContaining({ cfg, accountId: undefined }),
@@ -573,7 +611,7 @@ describe("bluebubblesMessageActions", () => {
         accountId: null,
       });
 
-      expect(sendMessageBlueBubbles).toHaveBeenCalledWith(
+      expect(sendMocks.sendMessageBlueBubbles).toHaveBeenCalledWith(
         "+15551234567",
         "peekaboo",
         expect.objectContaining({ effectId: "invisible ink" }),
@@ -608,7 +646,7 @@ describe("bluebubblesMessageActions", () => {
         accountId: null,
       });
 
-      expect(sendBlueBubblesAttachment).toHaveBeenCalledWith(
+      expect(attachmentMocks.sendBlueBubblesAttachment).toHaveBeenCalledWith(
         expect.objectContaining({
           filename: "voice.mp3",
           contentType: "audio/mpeg",
@@ -663,7 +701,7 @@ describe("bluebubblesMessageActions", () => {
         accountId: null,
       });
 
-      expect(setGroupIconBlueBubbles).toHaveBeenCalledWith(
+      expect(chatMocks.setGroupIconBlueBubbles).toHaveBeenCalledWith(
         "iMessage;-;chat-guid",
         expect.any(Uint8Array),
         "group-icon.png",
@@ -696,7 +734,7 @@ describe("bluebubblesMessageActions", () => {
         accountId: null,
       });
 
-      expect(setGroupIconBlueBubbles).toHaveBeenCalledWith(
+      expect(chatMocks.setGroupIconBlueBubbles).toHaveBeenCalledWith(
         "iMessage;-;chat-guid",
         expect.any(Uint8Array),
         "icon.png",

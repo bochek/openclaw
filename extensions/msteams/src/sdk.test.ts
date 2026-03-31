@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createBotFrameworkJwtValidator,
   createMSTeamsAdapter,
+  setLoadMSTeamsJwtValidatorModuleForTest,
   type MSTeamsTeamsSdk,
 } from "./sdk.js";
 import type { MSTeamsCredentials } from "./token.js";
@@ -12,27 +13,6 @@ const jwtValidatorState = vi.hoisted(() => ({
   calls: [] as Array<{ jwksUri: string; token: string; overrideOptions?: unknown }>,
 }));
 
-vi.mock("@microsoft/teams.apps/dist/middleware/auth/jwt-validator.js", () => ({
-  JwtValidator: class JwtValidator {
-    private readonly config: Record<string, unknown>;
-
-    constructor(config: Record<string, unknown>) {
-      this.config = config;
-      jwtValidatorState.instances.push({ config });
-    }
-
-    async validateAccessToken(token: string, overrideOptions?: unknown): Promise<object | null> {
-      const jwksUri = String((this.config.jwksUriOptions as { uri?: string })?.uri ?? "");
-      jwtValidatorState.calls.push({ jwksUri, token, overrideOptions });
-      const behavior = jwtValidatorState.behaviorByJwks.get(jwksUri) ?? "null";
-      if (behavior === "throw") {
-        throw new Error("validator error");
-      }
-      return behavior === "success" ? { sub: "ok" } : null;
-    }
-  },
-}));
-
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
@@ -40,8 +20,34 @@ afterEach(() => {
   jwtValidatorState.instances.length = 0;
   jwtValidatorState.calls.length = 0;
   jwtValidatorState.behaviorByJwks.clear();
+  setLoadMSTeamsJwtValidatorModuleForTest(undefined);
   vi.restoreAllMocks();
 });
+
+function createJwtValidatorModule(): typeof import(
+  "@microsoft/teams.apps/dist/middleware/auth/jwt-validator.js"
+) {
+  return {
+    JwtValidator: class JwtValidator {
+      private readonly config: Record<string, unknown>;
+
+      constructor(config: Record<string, unknown>) {
+        this.config = config;
+        jwtValidatorState.instances.push({ config });
+      }
+
+      async validateAccessToken(token: string, overrideOptions?: unknown): Promise<object | null> {
+        const jwksUri = String((this.config.jwksUriOptions as { uri?: string })?.uri ?? "");
+        jwtValidatorState.calls.push({ jwksUri, token, overrideOptions });
+        const behavior = jwtValidatorState.behaviorByJwks.get(jwksUri) ?? "null";
+        if (behavior === "throw") {
+          throw new Error("validator error");
+        }
+        return behavior === "success" ? { sub: "ok" } : null;
+      }
+    },
+  } as typeof import("@microsoft/teams.apps/dist/middleware/auth/jwt-validator.js");
+}
 
 function createSdkStub(): MSTeamsTeamsSdk {
   class AppStub {
@@ -120,6 +126,7 @@ describe("createBotFrameworkJwtValidator", () => {
   } satisfies MSTeamsCredentials;
 
   it("validates with legacy Bot Framework JWKS and issuer first", async () => {
+    setLoadMSTeamsJwtValidatorModuleForTest(async () => createJwtValidatorModule());
     jwtValidatorState.behaviorByJwks.set(
       "https://login.botframework.com/v1/.well-known/keys",
       "success",
@@ -142,6 +149,7 @@ describe("createBotFrameworkJwtValidator", () => {
   });
 
   it("falls back to Entra JWKS when Bot Framework validation fails", async () => {
+    setLoadMSTeamsJwtValidatorModuleForTest(async () => createJwtValidatorModule());
     jwtValidatorState.behaviorByJwks.set(
       "https://login.botframework.com/v1/.well-known/keys",
       "null",
@@ -174,6 +182,7 @@ describe("createBotFrameworkJwtValidator", () => {
   });
 
   it("falls back to Entra JWKS when Bot Framework validation throws", async () => {
+    setLoadMSTeamsJwtValidatorModuleForTest(async () => createJwtValidatorModule());
     jwtValidatorState.behaviorByJwks.set(
       "https://login.botframework.com/v1/.well-known/keys",
       "throw",
@@ -206,6 +215,7 @@ describe("createBotFrameworkJwtValidator", () => {
   });
 
   it("returns false when all validator paths fail", async () => {
+    setLoadMSTeamsJwtValidatorModuleForTest(async () => createJwtValidatorModule());
     jwtValidatorState.behaviorByJwks.set(
       "https://login.botframework.com/v1/.well-known/keys",
       "throw",
@@ -217,6 +227,7 @@ describe("createBotFrameworkJwtValidator", () => {
   });
 
   it("returns false for empty bearer token", async () => {
+    setLoadMSTeamsJwtValidatorModuleForTest(async () => createJwtValidatorModule());
     const validator = await createBotFrameworkJwtValidator(creds);
     await expect(validator.validate("Bearer ")).resolves.toBe(false);
     expect(jwtValidatorState.calls).toHaveLength(0);

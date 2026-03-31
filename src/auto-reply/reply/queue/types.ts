@@ -81,7 +81,6 @@ export type FollowupRun = {
     inputProvenance?: InputProvenance;
     extraSystemPrompt?: string;
     enforceFinalTag?: boolean;
-    silentExpected?: boolean;
   };
 };
 

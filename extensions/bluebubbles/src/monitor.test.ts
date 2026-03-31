@@ -1,7 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ResolvedBlueBubblesAccount } from "./accounts.js";
-import { fetchBlueBubblesHistory } from "./history.js";
 import { createBlueBubblesDebounceRegistry } from "./monitor-debounce.js";
 import type { NormalizedWebhookMessage } from "./monitor-normalize.js";
 import { resetBlueBubblesSelfChatCache } from "./monitor-self-chat-cache.js";
@@ -31,6 +30,8 @@ import {
   type DispatchReplyParams,
 } from "./test-support/monitor-test-support.js";
 
+const mockFetchBlueBubblesHistory = vi.fn().mockResolvedValue({ entries: [], resolved: true });
+
 // Mock dependencies
 vi.mock("./send.js", () => ({
   resolveChatGuidForTarget: vi.fn().mockResolvedValue("iMessage;-;+15551234567"),
@@ -58,7 +59,7 @@ vi.mock("./reactions.js", async () => {
 });
 
 vi.mock("./history.js", () => ({
-  fetchBlueBubblesHistory: vi.fn().mockResolvedValue({ entries: [], resolved: true }),
+  fetchBlueBubblesHistory: (...args: unknown[]) => mockFetchBlueBubblesHistory(...args),
 }));
 
 // Mock runtime
@@ -109,7 +110,6 @@ const mockChunkByNewline = vi.fn((text: string) => (text ? [text] : []));
 const mockChunkTextWithMode = vi.fn((text: string) => (text ? [text] : []));
 const mockChunkMarkdownTextWithMode = vi.fn((text: string) => (text ? [text] : []));
 const mockResolveChunkMode = vi.fn(() => "length" as const);
-const mockFetchBlueBubblesHistory = vi.mocked(fetchBlueBubblesHistory);
 const mockFetch = vi.fn();
 
 function createMockRuntime(): PluginRuntime {

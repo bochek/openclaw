@@ -9,7 +9,7 @@
 
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
-import { type RawData, WebSocket, WebSocketServer } from "ws";
+import { WebSocket, WebSocketServer } from "ws";
 import type {
   OpenAIRealtimeSTTProvider,
   RealtimeSTTSession,
@@ -76,7 +76,6 @@ const DEFAULT_PRE_START_TIMEOUT_MS = 5000;
 const DEFAULT_MAX_PENDING_CONNECTIONS = 32;
 const DEFAULT_MAX_PENDING_CONNECTIONS_PER_IP = 4;
 const DEFAULT_MAX_CONNECTIONS = 128;
-const MAX_INBOUND_MESSAGE_BYTES = 64 * 1024;
 const MAX_WS_BUFFERED_BYTES = 1024 * 1024;
 const CLOSE_REASON_LOG_MAX_CHARS = 120;
 
@@ -89,16 +88,6 @@ export function sanitizeLogText(value: string, maxChars: number): string {
     return sanitized;
   }
   return `${sanitized.slice(0, maxChars)}...`;
-}
-
-function normalizeWsMessageData(data: RawData): Buffer {
-  if (Buffer.isBuffer(data)) {
-    return data;
-  }
-  if (Array.isArray(data)) {
-    return Buffer.concat(data);
-  }
-  return Buffer.from(data);
 }
 
 /**
@@ -137,11 +126,7 @@ export class MediaStreamHandler {
    */
   handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): void {
     if (!this.wss) {
-      this.wss = new WebSocketServer({
-        noServer: true,
-        // Reject oversized frames before app-level parsing runs on unauthenticated sockets.
-        maxPayload: MAX_INBOUND_MESSAGE_BYTES,
-      });
+      this.wss = new WebSocketServer({ noServer: true });
       this.wss.on("connection", (ws, req) => this.handleConnection(ws, req));
     }
 
@@ -169,10 +154,9 @@ export class MediaStreamHandler {
       return;
     }
 
-    ws.on("message", async (data: RawData) => {
+    ws.on("message", async (data: Buffer) => {
       try {
-        const raw = normalizeWsMessageData(data);
-        const message = JSON.parse(raw.toString("utf8")) as TwilioMediaMessage;
+        const message = JSON.parse(data.toString()) as TwilioMediaMessage;
 
         switch (message.event) {
           case "connected":
@@ -535,9 +519,42 @@ export class MediaStreamHandler {
     for (const session of this.sessions.values()) {
       this.clearTtsState(session.streamSid);
       session.sttSession.close();
-      session.ws.close();
+      try {
+        session.ws.terminate();
+      } catch {
+        // Best-effort hard shutdown for teardown paths.
+      }
     }
     this.sessions.clear();
+  }
+
+  /**
+   * Close all active and pending sockets and release the internal WebSocket server.
+   */
+  close(): void {
+    for (const [ws] of this.pendingConnections) {
+      this.clearPendingConnection(ws);
+      try {
+        ws.terminate();
+      } catch {
+        // Best-effort shutdown for test/runtime teardown.
+      }
+    }
+
+    this.closeAll();
+    const wss = this.wss;
+    if (wss) {
+      for (const client of wss.clients) {
+        try {
+          client.terminate();
+        } catch {
+          // Best-effort shutdown for teardown paths.
+        }
+      }
+      wss.close();
+      wss.removeAllListeners();
+    }
+    this.wss = null;
   }
 
   private getTtsQueue(streamSid: string): TtsQueueEntry[] {

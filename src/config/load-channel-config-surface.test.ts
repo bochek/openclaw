@@ -2,7 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { loadChannelConfigSurfaceModule } from "../../scripts/load-channel-config-surface.ts";
+import {
+  __testing as loadChannelConfigSurfaceTesting,
+  loadChannelConfigSurfaceModule,
+} from "../../scripts/load-channel-config-surface.ts";
 
 const tempDirs: string[] = [];
 
@@ -12,26 +15,8 @@ function makeTempRoot(prefix: string): string {
   return root;
 }
 
-async function importLoaderWithMissingBun() {
-  vi.resetModules();
-  const spawnSync = vi.fn(() => ({
-    error: Object.assign(new Error("bun not found"), { code: "ENOENT" }),
-    status: null,
-    stdout: "",
-    stderr: "",
-  }));
-  vi.doMock("node:child_process", () => ({ spawnSync }));
-
-  try {
-    const imported = await import("../../scripts/load-channel-config-surface.ts");
-    return { loadChannelConfigSurfaceModule: imported.loadChannelConfigSurfaceModule, spawnSync };
-  } finally {
-    vi.doUnmock("node:child_process");
-    vi.resetModules();
-  }
-}
-
 afterEach(() => {
+  loadChannelConfigSurfaceTesting.resetDepsForTest();
   for (const dir of tempDirs.splice(0, tempDirs.length)) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -39,6 +24,14 @@ afterEach(() => {
 
 describe("loadChannelConfigSurfaceModule", () => {
   it("falls back to Jiti when bun is unavailable", async () => {
+    const spawnSync = vi.fn(() => ({
+      error: Object.assign(new Error("bun not found"), { code: "ENOENT" }),
+      status: null,
+      stdout: "",
+      stderr: "",
+    }));
+    loadChannelConfigSurfaceTesting.setDepsForTest({ spawnSync });
+
     const repoRoot = makeTempRoot("openclaw-config-surface-");
     const packageRoot = path.join(repoRoot, "extensions", "demo");
     const modulePath = path.join(packageRoot, "src", "config-schema.js");
@@ -63,10 +56,7 @@ describe("loadChannelConfigSurfaceModule", () => {
       "utf8",
     );
 
-    const { loadChannelConfigSurfaceModule: loadWithMissingBun, spawnSync } =
-      await importLoaderWithMissingBun();
-
-    await expect(loadWithMissingBun(modulePath, { repoRoot })).resolves.toMatchObject({
+    await expect(loadChannelConfigSurfaceModule(modulePath, { repoRoot })).resolves.toMatchObject({
       schema: {
         type: "object",
         properties: {

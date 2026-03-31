@@ -1,31 +1,37 @@
-import { describe, expect, it, vi } from "vitest";
-import {
-  buildCliRespawnPlan,
-  EXPERIMENTAL_WARNING_FLAG,
-  OPENCLAW_NODE_EXTRA_CA_CERTS_READY,
-  OPENCLAW_NODE_OPTIONS_READY,
-} from "./entry.respawn.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const shouldSkipRespawnForArgvMock = vi.hoisted(() => vi.fn(() => false));
 const isTruthyEnvValueMock = vi.hoisted(() =>
   vi.fn((value: string | undefined) => value === "1" || value === "true"),
 );
-
-vi.mock("./cli/respawn-policy.js", () => ({
-  shouldSkipRespawnForArgv: shouldSkipRespawnForArgvMock,
-}));
+let respawnImportCounter = 0;
 
 vi.mock("./infra/env.js", () => ({
   isTruthyEnvValue: isTruthyEnvValueMock,
 }));
 
+async function importRespawnModule(): Promise<typeof import("./entry.respawn.js")> {
+  if (typeof process.versions.bun === "string") {
+    respawnImportCounter += 1;
+    return await import(`./entry.respawn.js?bun-respawn=${respawnImportCounter}`);
+  }
+  return await import("./entry.respawn.js");
+}
+
 describe("buildCliRespawnPlan", () => {
-  it("returns null when respawn policy skips the argv", () => {
-    shouldSkipRespawnForArgvMock.mockReturnValueOnce(true);
+  beforeEach(() => {
+    vi.resetModules();
+    isTruthyEnvValueMock.mockReset();
+    isTruthyEnvValueMock.mockImplementation(
+      (value: string | undefined) => value === "1" || value === "true",
+    );
+  });
+
+  it("returns null when respawn policy skips the argv", async () => {
+    const { buildCliRespawnPlan } = await importRespawnModule();
 
     expect(
       buildCliRespawnPlan({
-        argv: ["node", "openclaw", "status"],
+        argv: ["node", "openclaw", "--version"],
         env: {},
         execArgv: [],
         autoNodeExtraCaCerts: "/etc/ssl/certs/ca-certificates.crt",
@@ -33,7 +39,13 @@ describe("buildCliRespawnPlan", () => {
     ).toBeNull();
   });
 
-  it("adds NODE_EXTRA_CA_CERTS and warning suppression in one respawn", () => {
+  it("adds NODE_EXTRA_CA_CERTS and warning suppression in one respawn", async () => {
+    const {
+      buildCliRespawnPlan,
+      EXPERIMENTAL_WARNING_FLAG,
+      OPENCLAW_NODE_EXTRA_CA_CERTS_READY,
+      OPENCLAW_NODE_OPTIONS_READY,
+    } = await importRespawnModule();
     const plan = buildCliRespawnPlan({
       argv: ["node", "openclaw", "gateway", "run"],
       env: {},
@@ -48,7 +60,8 @@ describe("buildCliRespawnPlan", () => {
     expect(plan?.env[OPENCLAW_NODE_OPTIONS_READY]).toBe("1");
   });
 
-  it("does not overwrite an existing NODE_EXTRA_CA_CERTS value", () => {
+  it("does not overwrite an existing NODE_EXTRA_CA_CERTS value", async () => {
+    const { buildCliRespawnPlan } = await importRespawnModule();
     const plan = buildCliRespawnPlan({
       argv: ["node", "openclaw", "gateway", "run"],
       env: { NODE_EXTRA_CA_CERTS: "/custom/ca.pem" },
@@ -59,7 +72,13 @@ describe("buildCliRespawnPlan", () => {
     expect(plan?.env.NODE_EXTRA_CA_CERTS).toBe("/custom/ca.pem");
   });
 
-  it("returns null when both respawn guards are already satisfied", () => {
+  it("returns null when both respawn guards are already satisfied", async () => {
+    const {
+      buildCliRespawnPlan,
+      EXPERIMENTAL_WARNING_FLAG,
+      OPENCLAW_NODE_EXTRA_CA_CERTS_READY,
+      OPENCLAW_NODE_OPTIONS_READY,
+    } = await importRespawnModule();
     expect(
       buildCliRespawnPlan({
         argv: ["node", "openclaw", "gateway", "run"],

@@ -28,6 +28,18 @@ const MAX_IMAGE_DIMENSION_PX = DEFAULT_IMAGE_MAX_DIMENSION_PX;
 const MAX_IMAGE_BYTES = DEFAULT_IMAGE_MAX_BYTES;
 const log = createSubsystemLogger("agents/tool-images");
 
+type ToolImagesDeps = {
+  getImageMetadata: typeof getImageMetadata;
+  resizeToJpeg: typeof resizeToJpeg;
+};
+
+const defaultToolImagesDeps: ToolImagesDeps = {
+  getImageMetadata,
+  resizeToJpeg,
+};
+
+let toolImagesDeps: ToolImagesDeps = defaultToolImagesDeps;
+
 function isImageBlock(block: unknown): block is ImageContentBlock {
   if (!block || typeof block !== "object") {
     return false;
@@ -160,7 +172,7 @@ async function resizeImageBase64IfNeeded(params: {
   height?: number;
 }> {
   const buf = Buffer.from(params.base64, "base64");
-  const meta = await getImageMetadata(buf);
+  const meta = await toolImagesDeps.getImageMetadata(buf);
   const width = meta?.width;
   const height = meta?.height;
   const overBytes = buf.byteLength > params.maxBytes;
@@ -189,7 +201,7 @@ async function resizeImageBase64IfNeeded(params: {
   let smallest: { buffer: Buffer; size: number } | null = null;
   for (const side of sideGrid) {
     for (const quality of IMAGE_REDUCE_QUALITY_STEPS) {
-      const out = await resizeToJpeg({
+      const out = await toolImagesDeps.resizeToJpeg({
         buffer: buf,
         maxSide: side,
         quality,
@@ -360,3 +372,9 @@ export async function sanitizeToolResultImages(
   const next = await sanitizeContentBlocksImages(content, label, opts);
   return { ...result, content: next };
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<ToolImagesDeps>) {
+    toolImagesDeps = overrides ? { ...defaultToolImagesDeps, ...overrides } : defaultToolImagesDeps;
+  },
+};

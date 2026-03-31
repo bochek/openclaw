@@ -15511,7 +15511,7 @@ export const GENERATED_BASE_CONFIG_SCHEMA = {
     },
     "plugins.installs.*.installPath": {
       label: "Plugin Install Path",
-      help: "Resolved install directory for the installed plugin bundle.",
+      help: "Resolved install directory (usually ~/.openclaw/extensions/<id>).",
       tags: ["storage"],
     },
     "plugins.installs.*.version": {

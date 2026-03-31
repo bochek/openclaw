@@ -7,7 +7,10 @@ import type {
   WebSearchCredentialResolutionSource,
 } from "../plugins/types.js";
 import { resolveBundledPluginWebSearchProviders } from "../plugins/web-search-providers.js";
-import { resolvePluginWebSearchProviders } from "../plugins/web-search-providers.runtime.js";
+import {
+  resolvePluginWebSearchProviders,
+  resolveRuntimeWebSearchProviders,
+} from "../plugins/web-search-providers.runtime.js";
 import { sortWebSearchProvidersForAutoDetect } from "../plugins/web-search-providers.shared.js";
 import { normalizeSecretInput } from "../utils/normalize-secret-input.js";
 import { secretRefKey } from "./ref-contract.js";
@@ -307,6 +310,14 @@ export async function resolveRuntimeWebTools(params: {
   const rawProvider =
     typeof search?.provider === "string" ? search.provider.trim().toLowerCase() : "";
   const configuredBundledPluginId = resolveBundledWebSearchPluginId(rawProvider);
+  const configuredRuntimeProviders = configuredBundledPluginId
+    ? resolveRuntimeWebSearchProviders({
+        config: params.sourceConfig,
+        env: { ...process.env, ...params.context.env },
+        bundledAllowlistCompat: true,
+        onlyPluginIds: [configuredBundledPluginId],
+      })
+    : [];
 
   const searchMetadata: RuntimeWebSearchMetadata = {
     providerSource: "none",
@@ -317,7 +328,9 @@ export async function resolveRuntimeWebTools(params: {
   const searchEnabled = searchConfigured && search?.enabled !== false;
   const providers = sortWebSearchProvidersForAutoDetect(
     searchConfigured
-      ? configuredBundledPluginId
+      ? configuredRuntimeProviders.length > 0
+        ? configuredRuntimeProviders
+        : configuredBundledPluginId
         ? resolveBundledPluginWebSearchProviders({
             config: params.sourceConfig,
             env: { ...process.env, ...params.context.env },

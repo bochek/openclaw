@@ -33,6 +33,16 @@ import { getMemorySearchManager } from "./memory/index.js";
 
 type MemoryManager = NonNullable<Awaited<ReturnType<typeof getMemorySearchManager>>["manager"]>;
 type MemoryManagerPurpose = Parameters<typeof getMemorySearchManager>[0]["purpose"];
+type MemoryCliDeps = {
+  resolveCommandSecretRefsViaGateway: typeof resolveCommandSecretRefsViaGateway;
+  loadConfig: typeof loadConfig;
+  resolveDefaultAgentId: typeof resolveDefaultAgentId;
+  resolveSessionTranscriptsDirForAgent: typeof resolveSessionTranscriptsDirForAgent;
+  resolveStateDir: typeof resolveStateDir;
+  listMemoryFiles: typeof listMemoryFiles;
+  getMemorySearchManager: typeof getMemorySearchManager;
+  setExitCode: (code: number | undefined) => void;
+};
 
 type MemorySourceName = "memory" | "sessions";
 
@@ -53,6 +63,30 @@ type LoadedMemoryCommandConfig = {
   diagnostics: string[];
 };
 
+const defaultMemoryCliDeps: MemoryCliDeps = {
+  resolveCommandSecretRefsViaGateway,
+  loadConfig,
+  resolveDefaultAgentId,
+  resolveSessionTranscriptsDirForAgent,
+  resolveStateDir,
+  listMemoryFiles,
+  getMemorySearchManager,
+  setExitCode: (code) => {
+    process.exitCode = code;
+  },
+};
+
+let memoryCliDeps: MemoryCliDeps = defaultMemoryCliDeps;
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<MemoryCliDeps>) {
+    memoryCliDeps = { ...defaultMemoryCliDeps, ...overrides };
+  },
+  resetDepsForTest() {
+    memoryCliDeps = defaultMemoryCliDeps;
+  },
+};
+
 function getMemoryCommandSecretTargetIds(): Set<string> {
   return new Set([
     "agents.defaults.memorySearch.remote.apiKey",
@@ -61,8 +95,8 @@ function getMemoryCommandSecretTargetIds(): Set<string> {
 }
 
 async function loadMemoryCommandConfig(commandName: string): Promise<LoadedMemoryCommandConfig> {
-  const { resolvedConfig, diagnostics } = await resolveCommandSecretRefsViaGateway({
-    config: loadConfig(),
+  const { resolvedConfig, diagnostics } = await memoryCliDeps.resolveCommandSecretRefsViaGateway({
+    config: memoryCliDeps.loadConfig(),
     commandName,
     targetIds: getMemoryCommandSecretTargetIds(),
   });
@@ -97,7 +131,7 @@ function formatSourceLabel(source: string, workspaceDir: string, agentId: string
     );
   }
   if (source === "sessions") {
-    const stateDir = resolveStateDir(process.env, os.homedir);
+    const stateDir = memoryCliDeps.resolveStateDir(process.env, os.homedir);
     return shortenHomeInString(
       `sessions (${path.join(stateDir, "agents", agentId, "sessions")}${path.sep}*.jsonl)`,
     );
@@ -110,7 +144,7 @@ function resolveAgent(cfg: OpenClawConfig, agent?: string) {
   if (trimmed) {
     return trimmed;
   }
-  return resolveDefaultAgentId(cfg);
+  return memoryCliDeps.resolveDefaultAgentId(cfg);
 }
 
 function buildCliMemorySearchSessionKey(agentId: string): string {
@@ -131,7 +165,7 @@ function resolveAgentIds(cfg: OpenClawConfig, agent?: string): string[] {
   if (list.length > 0) {
     return list.map((entry) => entry.id).filter(Boolean);
   }
-  return [resolveDefaultAgentId(cfg)];
+  return [memoryCliDeps.resolveDefaultAgentId(cfg)];
 }
 
 function formatExtraPaths(workspaceDir: string, extraPaths: string[]): string[] {
@@ -152,7 +186,7 @@ async function withMemoryManagerForAgent(params: {
     managerParams.purpose = params.purpose;
   }
   await withManager<MemoryManager>({
-    getManager: () => getMemorySearchManager(managerParams),
+    getManager: () => memoryCliDeps.getMemorySearchManager(managerParams),
     onMissing: (error) => defaultRuntime.log(error ?? "Memory search disabled."),
     onCloseError: (err) =>
       defaultRuntime.error(`Memory manager close failed: ${formatErrorMessage(err)}`),
@@ -181,7 +215,7 @@ async function checkReadableFile(pathname: string): Promise<{ exists: boolean; i
 
 async function scanSessionFiles(agentId: string): Promise<SourceScan> {
   const issues: string[] = [];
-  const sessionsDir = resolveSessionTranscriptsDirForAgent(agentId);
+  const sessionsDir = memoryCliDeps.resolveSessionTranscriptsDirForAgent(agentId);
   try {
     const entries = await fs.readdir(sessionsDir, { withFileTypes: true });
     const totalFiles = entries.filter(
@@ -262,7 +296,7 @@ async function scanMemoryFiles(
   let listed: string[] = [];
   let listedOk = false;
   try {
-    listed = await listMemoryFiles(workspaceDir, resolvedExtraPaths);
+    listed = await memoryCliDeps.listMemoryFiles(workspaceDir, resolvedExtraPaths);
     listedOk = true;
   } catch (err) {
     const code = (err as NodeJS.ErrnoException).code;
@@ -411,7 +445,7 @@ export async function runMemoryStatus(opts: MemoryCommandOptions) {
                 } catch (err) {
                   indexError = formatErrorMessage(err);
                   defaultRuntime.error(`Memory index failed: ${indexError}`);
-                  process.exitCode = 1;
+                  memoryCliDeps.setExitCode(1);
                 }
               },
             );
@@ -712,7 +746,7 @@ export async function runMemoryIndex(opts: MemoryCommandOptions) {
         } catch (err) {
           const message = formatErrorMessage(err);
           defaultRuntime.error(`Memory index failed (${agentId}): ${message}`);
-          process.exitCode = 1;
+          memoryCliDeps.setExitCode(1);
         }
       },
     });
@@ -726,7 +760,7 @@ export async function runMemorySearch(
   const query = opts.query ?? queryArg;
   if (!query) {
     defaultRuntime.error("Missing search query. Provide a positional query or use --query <text>.");
-    process.exitCode = 1;
+    memoryCliDeps.setExitCode(1);
     return;
   }
   const { config: cfg, diagnostics } = await loadMemoryCommandConfig("memory search");
@@ -747,7 +781,7 @@ export async function runMemorySearch(
       } catch (err) {
         const message = formatErrorMessage(err);
         defaultRuntime.error(`Memory search failed: ${message}`);
-        process.exitCode = 1;
+        memoryCliDeps.setExitCode(1);
         return;
       }
       if (opts.json) {

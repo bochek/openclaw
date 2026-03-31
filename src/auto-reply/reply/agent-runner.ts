@@ -552,7 +552,6 @@ export async function runReplyAgent(params: {
       payloads: payloadArray,
       isHeartbeat,
       didLogHeartbeatStrip,
-      silentExpected: followupRun.run.silentExpected,
       blockStreamingEnabled,
       blockReplyPipeline,
       directlySentBlockKeys,

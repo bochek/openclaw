@@ -14,7 +14,6 @@ RUN --mount=type=cache,id=openclaw-sandbox-bookworm-apt-cache,target=/var/cache/
     chromium \
     curl \
     fonts-liberation \
-    fonts-noto-cjk \
     fonts-noto-color-emoji \
     git \
     jq \

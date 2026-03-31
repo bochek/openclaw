@@ -1,38 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __testing, matrixPlugin } from "./channel.js";
 
 const sendMessageMatrixMock = vi.hoisted(() => vi.fn());
 const probeMatrixMock = vi.hoisted(() => vi.fn());
 const resolveMatrixAuthMock = vi.hoisted(() => vi.fn());
 
-vi.mock("./matrix/send.js", async () => {
-  const actual = await vi.importActual<typeof import("./matrix/send.js")>("./matrix/send.js");
-  return {
-    ...actual,
-    sendMessageMatrix: (...args: unknown[]) => sendMessageMatrixMock(...args),
-  };
-});
-
-vi.mock("./matrix/probe.js", async () => {
-  const actual = await vi.importActual<typeof import("./matrix/probe.js")>("./matrix/probe.js");
-  return {
-    ...actual,
-    probeMatrix: (...args: unknown[]) => probeMatrixMock(...args),
-  };
-});
-
-vi.mock("./matrix/client.js", async () => {
-  const actual = await vi.importActual<typeof import("./matrix/client.js")>("./matrix/client.js");
-  return {
-    ...actual,
-    resolveMatrixAuth: (...args: unknown[]) => resolveMatrixAuthMock(...args),
-  };
-});
-
-const { matrixPlugin } = await import("./channel.js");
-
 describe("matrix account path propagation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __testing.setLoadMatrixChannelRuntimeForTest(async () => ({
+      probeMatrix: (...args: unknown[]) => probeMatrixMock(...args),
+      resolveMatrixAuth: (...args: unknown[]) => resolveMatrixAuthMock(...args),
+      sendMessageMatrix: (...args: unknown[]) => sendMessageMatrixMock(...args),
+    }));
     sendMessageMatrixMock.mockResolvedValue({
       messageId: "$sent",
       roomId: "!room:example.org",
@@ -50,6 +30,10 @@ describe("matrix account path propagation", () => {
       userId: "@poe:example.org",
       accessToken: "poe-token",
     });
+  });
+
+  afterEach(() => {
+    __testing.resetLoadMatrixChannelRuntimeForTest();
   });
 
   it("forwards accountId when notifying pairing approval", async () => {

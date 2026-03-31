@@ -3,6 +3,18 @@ import type { BrowserRouteContext } from "../server-context.js";
 import { registerBrowserRoutes } from "./index.js";
 import type { BrowserRequest, BrowserResponse, BrowserRouteRegistrar } from "./types.js";
 
+const deps = {
+  registerBrowserRoutes,
+};
+
+export const __testing = {
+  setRegisterBrowserRoutesForTest(
+    override?: typeof registerBrowserRoutes,
+  ) {
+    deps.registerBrowserRoutes = override ?? registerBrowserRoutes;
+  },
+};
+
 type BrowserDispatchRequest = {
   method: "GET" | "POST" | "DELETE";
   path: string;
@@ -61,7 +73,7 @@ function normalizePath(path: string) {
 
 export function createBrowserRouteDispatcher(ctx: BrowserRouteContext) {
   const registry = createRegistry();
-  registerBrowserRoutes(registry.router, ctx);
+  deps.registerBrowserRoutes(registry.router, ctx);
 
   return {
     dispatch: async (req: BrowserDispatchRequest): Promise<BrowserDispatchResponse> => {

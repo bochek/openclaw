@@ -1,11 +1,15 @@
 import { vi } from "vitest";
 import { signalOutbound, telegramOutbound } from "../../test/channel-outbounds.js";
-import { loadModelCatalog } from "../agents/model-catalog.js";
-import { runEmbeddedPiAgent } from "../agents/pi-embedded.js";
-import { runSubagentAnnounceFlow } from "../agents/subagent-announce.js";
-import { callGateway } from "../gateway/call.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createOutboundTestPlugin, createTestRegistry } from "../test-utils/channel-plugins.js";
+import { __testing as deliveryDispatchTesting } from "./isolated-agent/delivery-dispatch.js";
+import { __testing as isolatedAgentRunTesting } from "./isolated-agent.js";
+import {
+  callGatewayMock,
+  loadModelCatalogMock,
+  runEmbeddedPiAgentMock,
+  runSubagentAnnounceFlowMock,
+} from "./isolated-agent.mocks.js";
 
 function parseTelegramTargetForTest(raw: string): {
   chatId: string;
@@ -50,10 +54,20 @@ export function setupIsolatedAgentTurnMocks(params?: { fast?: boolean }): void {
   if (params?.fast) {
     vi.stubEnv("OPENCLAW_TEST_FAST", "1");
   }
-  vi.mocked(runEmbeddedPiAgent).mockReset();
-  vi.mocked(loadModelCatalog).mockResolvedValue([]);
-  vi.mocked(runSubagentAnnounceFlow).mockReset().mockResolvedValue(true);
-  vi.mocked(callGateway).mockReset().mockResolvedValue({ ok: true, deleted: true });
+  runEmbeddedPiAgentMock.mockReset();
+  loadModelCatalogMock.mockReset();
+  loadModelCatalogMock.mockResolvedValue([]);
+  runSubagentAnnounceFlowMock.mockReset();
+  runSubagentAnnounceFlowMock.mockResolvedValue(true);
+  callGatewayMock.mockReset();
+  callGatewayMock.mockResolvedValue({ ok: true, deleted: true });
+  isolatedAgentRunTesting.setDepsForTest({
+    loadModelCatalog: loadModelCatalogMock,
+    runEmbeddedPiAgent: runEmbeddedPiAgentMock,
+  });
+  deliveryDispatchTesting.setDepsForTest({
+    callGateway: callGatewayMock,
+  });
   setActivePluginRegistry(
     createTestRegistry([
       {

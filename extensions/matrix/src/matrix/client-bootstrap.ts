@@ -46,11 +46,11 @@ async function resolveRuntimeMatrixClient(opts: {
   accountId?: string | null;
   onResolved?: MatrixResolvedClientHook;
 }): Promise<ResolvedRuntimeMatrixClient> {
-  ensureMatrixNodeRuntime();
   if (opts.client) {
     await opts.onResolved?.(opts.client, { preparedByDefault: false });
     return { client: opts.client, stopOnDone: false };
   }
+  ensureMatrixNodeRuntime();
 
   const cfg = opts.cfg ?? (getMatrixRuntime().config.loadConfig() as CoreConfig);
   const authContext = resolveMatrixAuthContext({

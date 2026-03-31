@@ -271,12 +271,11 @@ describe("updateMattermostPost", () => {
       },
     });
     expect(body.message).toBe("Original message");
-    expect(body.props).toMatchObject({
-      attachments: [{ text: expect.stringContaining("✓") }],
-    });
-    expect(body.props).toMatchObject({
-      attachments: [{ text: expect.stringContaining("do_now") }],
-    });
+    const attachmentText = (
+      body.props as { attachments?: Array<{ text?: string }> } | undefined
+    )?.attachments?.[0]?.text;
+    expect(attachmentText).toContain("✓");
+    expect(attachmentText).toContain("do_now");
   });
 
   it("omits message when not provided", async () => {

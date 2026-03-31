@@ -1,11 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClawdbotConfig } from "../runtime-api.js";
-
-const createFeishuClientMock = vi.hoisted(() => vi.fn());
-
-vi.mock("./client.js", () => ({
-  createFeishuClient: createFeishuClientMock,
-}));
+import { clearClientCache, setFeishuClientRuntimeForTest } from "./client.js";
 
 const freshDirectoryModulePath = "./directory.js?directory-test";
 const {
@@ -46,7 +41,8 @@ function makeConfiguredCfg(): ClawdbotConfig {
 
 describe("feishu directory (config-backed)", () => {
   beforeEach(() => {
-    createFeishuClientMock.mockReset();
+    clearClientCache();
+    setFeishuClientRuntimeForTest();
   });
 
   it("merges allowFrom + dms into peer entries", async () => {
@@ -87,13 +83,20 @@ describe("feishu directory (config-backed)", () => {
   });
 
   it("falls back to static peers on live lookup failure by default", async () => {
-    createFeishuClientMock.mockReturnValueOnce({
-      contact: {
-        user: {
-          list: vi.fn(async () => {
-            throw new Error("token expired");
-          }),
-        },
+    setFeishuClientRuntimeForTest({
+      sdk: {
+        Client: vi.fn(
+          () =>
+            ({
+              contact: {
+                user: {
+                  list: vi.fn(async () => {
+                    throw new Error("token expired");
+                  }),
+                },
+              },
+            }) as never,
+        ),
       },
     });
 
@@ -105,13 +108,20 @@ describe("feishu directory (config-backed)", () => {
   });
 
   it("surfaces live peer lookup failures when fallback is disabled", async () => {
-    createFeishuClientMock.mockReturnValueOnce({
-      contact: {
-        user: {
-          list: vi.fn(async () => {
-            throw new Error("token expired");
-          }),
-        },
+    setFeishuClientRuntimeForTest({
+      sdk: {
+        Client: vi.fn(
+          () =>
+            ({
+              contact: {
+                user: {
+                  list: vi.fn(async () => {
+                    throw new Error("token expired");
+                  }),
+                },
+              },
+            }) as never,
+        ),
       },
     });
 
@@ -121,11 +131,18 @@ describe("feishu directory (config-backed)", () => {
   });
 
   it("surfaces live group lookup failures when fallback is disabled", async () => {
-    createFeishuClientMock.mockReturnValueOnce({
-      im: {
-        chat: {
-          list: vi.fn(async () => ({ code: 999, msg: "forbidden" })),
-        },
+    setFeishuClientRuntimeForTest({
+      sdk: {
+        Client: vi.fn(
+          () =>
+            ({
+              im: {
+                chat: {
+                  list: vi.fn(async () => ({ code: 999, msg: "forbidden" })),
+                },
+              },
+            }) as never,
+        ),
       },
     });
 

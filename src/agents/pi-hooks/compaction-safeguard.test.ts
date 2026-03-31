@@ -6,7 +6,7 @@ import type { Api, Model } from "@mariozechner/pi-ai";
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../../config/config.js";
-import * as compactionModule from "../compaction.js";
+import { getCompactionSafeguardRuntime as getEmbeddedCompactionSafeguardRuntime } from "../pi-extensions/compaction-safeguard-runtime.js";
 import { buildEmbeddedExtensionFactories } from "../pi-embedded-runner/extensions.js";
 import { castAgentMessage } from "../test-helpers/agent-message-fixtures.js";
 import {
@@ -17,15 +17,23 @@ import {
 } from "./compaction-safeguard-runtime.js";
 import compactionSafeguardExtension, { __testing } from "./compaction-safeguard.js";
 
+const { mockSummarizeInStages } = vi.hoisted(() => ({
+  mockSummarizeInStages: vi.fn(),
+}));
+
+let actualSummarizeInStages:
+  | ((...args: unknown[]) => unknown | Promise<unknown>)
+  | undefined;
+
 vi.mock("../compaction.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof compactionModule>();
+  const actual = await importOriginal<typeof import("../compaction.js")>();
+  actualSummarizeInStages = actual.summarizeInStages;
+  mockSummarizeInStages.mockImplementation(actual.summarizeInStages);
   return {
     ...actual,
-    summarizeInStages: vi.fn(actual.summarizeInStages),
+    summarizeInStages: mockSummarizeInStages,
   };
 });
-
-const mockSummarizeInStages = vi.mocked(compactionModule.summarizeInStages);
 
 const {
   collectToolFailures,
@@ -54,10 +62,15 @@ const {
 } = __testing;
 
 beforeEach(() => {
+  mockSummarizeInStages.mockReset();
+  if (actualSummarizeInStages) {
+    mockSummarizeInStages.mockImplementation(actualSummarizeInStages);
+  }
   __testing.setSummarizeInStagesForTest(mockSummarizeInStages);
 });
 
 afterEach(() => {
+  mockSummarizeInStages.mockReset();
   __testing.setSummarizeInStagesForTest();
 });
 
@@ -600,7 +613,7 @@ describe("compaction-safeguard runtime registry", () => {
       } as Parameters<typeof buildEmbeddedExtensionFactories>[0]["model"],
     });
 
-    const runtime = getCompactionSafeguardRuntime(sessionManager);
+    const runtime = getEmbeddedCompactionSafeguardRuntime(sessionManager);
     expect(runtime?.qualityGuardMaxRetries).toBe(99);
     expect(runtime?.recentTurnsPreserve).toBe(99);
     expect(resolveQualityGuardMaxRetries(runtime?.qualityGuardMaxRetries)).toBe(3);

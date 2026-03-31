@@ -1,22 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createPerSenderSessionConfig } from "./test-helpers/session-config.js";
 
-let configOverride: ReturnType<(typeof import("../config/config.js"))["loadConfig"]> = {
+type OpenClawConfig = typeof import("../config/config.js").OpenClawConfig;
+
+let configOverride: OpenClawConfig = {
   session: createPerSenderSessionConfig(),
 };
 
-vi.mock("../config/config.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config/config.js")>();
-  return {
-    ...actual,
-    loadConfig: () => configOverride,
-    resolveGatewayPort: () => 18789,
-  };
-});
-
 import "./test-helpers/fast-core-tools.js";
-
-let createOpenClawTools: typeof import("./openclaw-tools.js").createOpenClawTools;
+import { createOpenClawTools } from "./openclaw-tools.js";
 
 describe("agents_list", () => {
   type AgentConfig = NonNullable<NonNullable<typeof configOverride.agents>["list"]>[number];
@@ -33,6 +25,7 @@ describe("agents_list", () => {
   function requireAgentsListTool() {
     const tool = createOpenClawTools({
       agentSessionKey: "main",
+      config: configOverride,
     }).find((candidate) => candidate.name === "agents_list");
     if (!tool) {
       throw new Error("missing agents_list tool");
@@ -45,16 +38,10 @@ describe("agents_list", () => {
       .details?.agents;
   }
 
-  beforeEach(async () => {
-    vi.resetModules();
+  it("defaults to the requester agent only", async () => {
     configOverride = {
       session: createPerSenderSessionConfig(),
     };
-    await import("./test-helpers/fast-core-tools.js");
-    ({ createOpenClawTools } = await import("./openclaw-tools.js"));
-  });
-
-  it("defaults to the requester agent only", async () => {
     const tool = requireAgentsListTool();
     const result = await tool.execute("call1", {});
     expect(result.details).toMatchObject({
@@ -66,6 +53,9 @@ describe("agents_list", () => {
   });
 
   it("includes allowlisted targets plus requester", async () => {
+    configOverride = {
+      session: createPerSenderSessionConfig(),
+    };
     setConfigWithAgentList([
       {
         id: "main",
@@ -87,6 +77,9 @@ describe("agents_list", () => {
   });
 
   it("returns configured agents when allowlist is *", async () => {
+    configOverride = {
+      session: createPerSenderSessionConfig(),
+    };
     setConfigWithAgentList([
       {
         id: "main",
@@ -114,6 +107,9 @@ describe("agents_list", () => {
   });
 
   it("marks allowlisted-but-unconfigured agents", async () => {
+    configOverride = {
+      session: createPerSenderSessionConfig(),
+    };
     setConfigWithAgentList([
       {
         id: "main",

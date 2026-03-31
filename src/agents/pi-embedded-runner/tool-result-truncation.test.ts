@@ -1,7 +1,7 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { AssistantMessage, ToolResultMessage, UserMessage } from "@mariozechner/pi-ai";
 import { SessionManager } from "@mariozechner/pi-coding-agent";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeAgentAssistantMessage } from "../test-helpers/agent-message-fixtures.js";
 
 const acquireSessionWriteLockReleaseMock = vi.hoisted(() => vi.fn(async () => {}));
@@ -24,11 +24,10 @@ let sessionLikelyHasOversizedToolResults: typeof import("./tool-result-truncatio
 let HARD_MAX_TOOL_RESULT_CHARS: typeof import("./tool-result-truncation.js").HARD_MAX_TOOL_RESULT_CHARS;
 let onSessionTranscriptUpdate: typeof import("../../sessions/transcript-events.js").onSessionTranscriptUpdate;
 
-async function loadFreshToolResultTruncationModuleForTest() {
-  vi.resetModules();
-  vi.doMock("../session-write-lock.js", () => ({
-    acquireSessionWriteLock: (params: unknown) => acquireSessionWriteLockMock(params),
-  }));
+let testTimestamp = 1;
+const nextTimestamp = () => testTimestamp++;
+
+beforeAll(async () => {
   ({ onSessionTranscriptUpdate } = await import("../../sessions/transcript-events.js"));
   ({
     truncateToolResultText,
@@ -41,16 +40,12 @@ async function loadFreshToolResultTruncationModuleForTest() {
     sessionLikelyHasOversizedToolResults,
     HARD_MAX_TOOL_RESULT_CHARS,
   } = await import("./tool-result-truncation.js"));
-}
+});
 
-let testTimestamp = 1;
-const nextTimestamp = () => testTimestamp++;
-
-beforeEach(async () => {
+beforeEach(() => {
   testTimestamp = 1;
   acquireSessionWriteLockMock.mockClear();
   acquireSessionWriteLockReleaseMock.mockClear();
-  await loadFreshToolResultTruncationModuleForTest();
 });
 
 function makeToolResult(text: string, toolCallId = "call_1"): ToolResultMessage {

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanupBrowserGlobals, installBrowserGlobals } from "../test-helpers/browser-globals.ts";
 import { createStorageMock } from "../test-helpers/storage.ts";
 import {
   applyResolvedTheme,
@@ -68,46 +69,9 @@ type SettingsHost = {
 };
 
 function setTestWindowUrl(urlString: string) {
-  const current = new URL(urlString);
-  const history = {
-    replaceState: vi.fn((_state: unknown, _title: string, nextUrl: string | URL) => {
-      const next = new URL(String(nextUrl), current.toString());
-      current.href = next.toString();
-      current.protocol = next.protocol;
-      current.host = next.host;
-      current.pathname = next.pathname;
-      current.search = next.search;
-      current.hash = next.hash;
-    }),
-  };
-  const locationLike = {
-    get href() {
-      return current.toString();
-    },
-    get protocol() {
-      return current.protocol;
-    },
-    get host() {
-      return current.host;
-    },
-    get pathname() {
-      return current.pathname;
-    },
-    get search() {
-      return current.search;
-    },
-    get hash() {
-      return current.hash;
-    },
-  };
-  vi.stubGlobal("window", {
-    location: locationLike,
-    history,
-    setInterval,
-    clearInterval,
-  } as unknown as Window & typeof globalThis);
-  vi.stubGlobal("location", locationLike as Location);
-  return { history, location: locationLike };
+  window.history.replaceState({}, "", urlString);
+  const replaceState = vi.spyOn(window.history, "replaceState");
+  return { history: window.history, location: window.location, replaceState };
 }
 
 const createHost = (tab: Tab): SettingsHost => ({
@@ -149,12 +113,13 @@ const createHost = (tab: Tab): SettingsHost => ({
 
 describe("setTabFromRoute", () => {
   beforeEach(() => {
+    installBrowserGlobals();
     vi.stubGlobal("localStorage", createStorageMock());
     vi.stubGlobal("navigator", { language: "en-US" } as Navigator);
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    cleanupBrowserGlobals();
   });
 
   it("starts and stops log polling based on the tab", () => {
@@ -254,6 +219,7 @@ describe("setTabFromRoute", () => {
 
 describe("applySettingsFromUrl", () => {
   beforeEach(() => {
+    installBrowserGlobals();
     vi.stubGlobal("localStorage", createStorageMock());
     vi.stubGlobal("sessionStorage", createStorageMock());
     vi.stubGlobal("navigator", { language: "en-US" } as Navigator);
@@ -262,7 +228,7 @@ describe("applySettingsFromUrl", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    vi.unstubAllGlobals();
+    cleanupBrowserGlobals();
   });
 
   it("hydrates query token params and strips them from the URL", () => {

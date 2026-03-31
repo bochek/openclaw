@@ -1,27 +1,16 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
-import * as piCodingAgent from "@mariozechner/pi-coding-agent";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("@mariozechner/pi-coding-agent", async (importOriginal) => {
-  const actual = await importOriginal<typeof piCodingAgent>();
-  return {
-    ...actual,
-    generateSummary: vi.fn(),
-  };
-});
-
-const mockGenerateSummary = vi.mocked(piCodingAgent.generateSummary);
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 type SummarizeInStagesInput = Parameters<typeof import("./compaction.js").summarizeInStages>[0];
 
-let buildCompactionSummarizationInstructions: typeof import("./compaction.js").buildCompactionSummarizationInstructions;
-let summarizeInStages: typeof import("./compaction.js").summarizeInStages;
+import {
+  buildCompactionSummarizationInstructions,
+  setCompactionTestDeps,
+  summarizeInStages,
+} from "./compaction.js";
 
-async function loadFreshCompactionModuleForTest() {
-  vi.resetModules();
-  ({ buildCompactionSummarizationInstructions, summarizeInStages } =
-    await import("./compaction.js"));
-}
+const mockEstimateTokens = vi.fn((_message: unknown) => 1);
+const mockGenerateSummary = vi.fn();
 
 function makeMessage(index: number, size = 1200): AgentMessage {
   return {
@@ -29,6 +18,24 @@ function makeMessage(index: number, size = 1200): AgentMessage {
     content: `m${index}-${"x".repeat(size)}`,
     timestamp: index,
   };
+}
+
+function estimateMessageTokens(message: AgentMessage): number {
+  if (typeof message.content === "string") {
+    return Math.max(1, Math.ceil(message.content.length / 4));
+  }
+  let chars = 0;
+  for (const block of message.content) {
+    if (block.type === "text") {
+      chars += block.text.length;
+      continue;
+    }
+    if (block.type === "toolCall") {
+      chars += JSON.stringify(block.arguments ?? {}).length;
+      chars += block.name.length;
+    }
+  }
+  return Math.max(1, Math.ceil(chars / 4));
 }
 
 describe("compaction identifier-preservation instructions", () => {
@@ -46,10 +53,21 @@ describe("compaction identifier-preservation instructions", () => {
     signal: new AbortController().signal,
   };
 
-  beforeEach(async () => {
-    await loadFreshCompactionModuleForTest();
+  beforeEach(() => {
     mockGenerateSummary.mockReset();
     mockGenerateSummary.mockResolvedValue("summary");
+    mockEstimateTokens.mockReset();
+    mockEstimateTokens.mockImplementation((message: unknown) =>
+      estimateMessageTokens(message as AgentMessage),
+    );
+    setCompactionTestDeps({
+      estimateTokens: mockEstimateTokens,
+      generateSummary: mockGenerateSummary,
+    });
+  });
+
+  afterEach(() => {
+    setCompactionTestDeps(undefined);
   });
 
   async function runSummary(

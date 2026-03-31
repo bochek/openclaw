@@ -1,5 +1,5 @@
 // Private helper surface for the bundled twitch plugin.
-// Keep this list additive and scoped to the bundled Twitch surface.
+// Keep this list additive and scoped to symbols used under extensions/twitch.
 
 import { createOptionalChannelSetupSurface } from "./channel-setup.js";
 

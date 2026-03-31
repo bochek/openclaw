@@ -162,12 +162,16 @@ vi.mock("../commands/onboard-hooks.js", () => ({
   setupInternalHooks,
 }));
 
-vi.mock("../config/config.js", () => ({
-  DEFAULT_GATEWAY_PORT: 18789,
-  resolveGatewayPort,
-  readConfigFileSnapshot,
-  writeConfigFile,
-}));
+vi.mock("../config/config.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../config/config.js")>();
+  return {
+    ...actual,
+    DEFAULT_GATEWAY_PORT: 18789,
+    resolveGatewayPort,
+    readConfigFileSnapshot,
+    writeConfigFile,
+  };
+});
 
 vi.mock("../commands/onboard-helpers.js", () => ({
   DEFAULT_WORKSPACE: "/tmp/openclaw-workspace",

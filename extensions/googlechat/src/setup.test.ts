@@ -5,16 +5,16 @@ import {
   createTestWizardPrompter,
   runSetupWizardConfigure,
   type WizardPrompter,
-} from "../../../test/helpers/plugins/setup-wizard.js";
+} from "../../../test/helpers/extensions/setup-wizard.js";
 import {
   expectLifecyclePatch,
   expectPendingUntilAbort,
   startAccountAndTrackLifecycle,
   waitForStartedMocks,
-} from "../../../test/helpers/plugins/start-account-lifecycle.js";
+} from "../../../test/helpers/extensions/start-account-lifecycle.js";
 import type { OpenClawConfig } from "../runtime-api.js";
 import { resolveGoogleChatAccount, type ResolvedGoogleChatAccount } from "./accounts.js";
-import { googlechatPlugin } from "./channel.js";
+import { __testing, googlechatPlugin } from "./channel.js";
 import { googlechatSetupAdapter } from "./setup-core.js";
 
 const hoisted = vi.hoisted(() => ({
@@ -48,6 +48,7 @@ function buildAccount(): ResolvedGoogleChatAccount {
 
 describe("googlechat setup", () => {
   afterEach(() => {
+    __testing.resetStartAccountRuntimeForTest();
     vi.clearAllMocks();
     vi.unstubAllEnvs();
   });
@@ -163,7 +164,14 @@ describe("googlechat setup", () => {
 
   it("keeps startAccount pending until abort, then unregisters", async () => {
     const unregister = vi.fn();
+    const resolveGoogleChatWebhookPath = vi.fn(({ account }: { account: ResolvedGoogleChatAccount }) =>
+      account.config.webhookPath ?? "/googlechat",
+    );
     hoisted.startGoogleChatMonitor.mockResolvedValue(unregister);
+    __testing.setStartAccountRuntimeForTest(async () => ({
+      resolveGoogleChatWebhookPath,
+      startGoogleChatMonitor: hoisted.startGoogleChatMonitor,
+    }));
 
     const { abort, patches, task, isSettled } = startAccountAndTrackLifecycle({
       startAccount: googlechatPlugin.gateway!.startAccount!,
@@ -181,6 +189,7 @@ describe("googlechat setup", () => {
         expect(unregister).toHaveBeenCalledOnce();
       },
     });
+    expect(resolveGoogleChatWebhookPath).toHaveBeenCalled();
     expectLifecyclePatch(patches, { running: true });
     expectLifecyclePatch(patches, { running: false });
   });

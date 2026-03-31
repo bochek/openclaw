@@ -8,17 +8,21 @@ vi.mock("./send-target.js", () => ({
   resolveFeishuSendTarget: resolveFeishuSendTargetMock,
 }));
 
-vi.mock("./runtime.js", () => ({
-  setFeishuRuntime: vi.fn(),
-  getFeishuRuntime: () => ({
-    channel: {
-      text: {
-        resolveMarkdownTableMode: resolveMarkdownTableModeMock,
-        convertMarkdownTables: convertMarkdownTablesMock,
+vi.mock("./runtime.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./runtime.js")>();
+  return {
+    ...actual,
+    setFeishuRuntime: vi.fn(),
+    getFeishuRuntime: () => ({
+      channel: {
+        text: {
+          resolveMarkdownTableMode: resolveMarkdownTableModeMock,
+          convertMarkdownTables: convertMarkdownTablesMock,
+        },
       },
-    },
-  }),
-}));
+    }),
+  };
+});
 
 vi.mock("../../../src/channels/plugins/bundled.js", () => ({
   bundledChannelPlugins: [],

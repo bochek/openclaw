@@ -1,12 +1,10 @@
-import { bundledPluginRoot } from "./scripts/lib/bundled-plugin-paths.mjs";
-
 export const channelTestRoots = [
-  bundledPluginRoot("telegram"),
-  bundledPluginRoot("discord"),
-  bundledPluginRoot("whatsapp"),
-  bundledPluginRoot("slack"),
-  bundledPluginRoot("signal"),
-  bundledPluginRoot("imessage"),
+  "extensions/telegram",
+  "extensions/discord",
+  "extensions/whatsapp",
+  "extensions/slack",
+  "extensions/signal",
+  "extensions/imessage",
   "src/browser",
   "src/line",
 ];

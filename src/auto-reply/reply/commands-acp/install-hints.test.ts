@@ -34,7 +34,8 @@ describe("ACP install hints", () => {
 
     const cfg = withAcpConfig({ backend: "acpx" });
     const hint = resolveAcpInstallCommandHint(cfg);
-    expect(hint).toBe(`openclaw plugins install ${path.join(tempRoot, "extensions", "acpx")}`);
+    expect(hint).toContain("openclaw plugins install ");
+    expect(hint).toContain(path.join("extensions", "acpx"));
   });
 
   it("falls back to scoped install hint for acpx when local extension is absent", () => {

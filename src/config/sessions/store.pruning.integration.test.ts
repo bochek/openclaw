@@ -5,18 +5,11 @@ import path from "node:path";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionEntry } from "./types.js";
 
-// Keep integration tests deterministic: never read a real openclaw.json.
-vi.mock("../config.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../config.js")>()),
-  loadConfig: vi.fn().mockReturnValue({}),
-}));
-
-let loadConfig: typeof import("../config.js").loadConfig;
 let clearSessionStoreCacheForTest: typeof import("./store.js").clearSessionStoreCacheForTest;
 let loadSessionStore: typeof import("./store.js").loadSessionStore;
 let saveSessionStore: typeof import("./store.js").saveSessionStore;
-
-let mockLoadConfig: ReturnType<typeof vi.fn>;
+let storeMaintenanceTesting: typeof import("./store-maintenance.js").__testing;
+const mockLoadConfig = vi.fn(() => ({}));
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const ENFORCED_MAINTENANCE_OVERRIDE = {
@@ -84,24 +77,26 @@ describe("Integration: saveSessionStore with pruning", () => {
 
   beforeAll(async () => {
     fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-pruning-integ-"));
+    ({ clearSessionStoreCacheForTest, loadSessionStore, saveSessionStore } = await import("./store.js"));
+    ({ __testing: storeMaintenanceTesting } = await import("./store-maintenance.js"));
+    storeMaintenanceTesting.setDepsForTest({
+      loadConfig: mockLoadConfig,
+    });
   });
 
   afterAll(async () => {
+    storeMaintenanceTesting.resetDepsForTest();
     await fs.rm(fixtureRoot, { recursive: true, force: true });
   });
 
   beforeEach(async () => {
-    vi.resetModules();
-    ({ loadConfig } = await import("../config.js"));
-    ({ clearSessionStoreCacheForTest, loadSessionStore, saveSessionStore } =
-      await import("./store.js"));
-    mockLoadConfig = vi.mocked(loadConfig) as ReturnType<typeof vi.fn>;
     testDir = await createCaseDir("pruning-integ");
     storePath = path.join(testDir, "sessions.json");
     savedCacheTtl = process.env.OPENCLAW_SESSION_CACHE_TTL_MS;
     process.env.OPENCLAW_SESSION_CACHE_TTL_MS = "0";
     clearSessionStoreCacheForTest();
-    mockLoadConfig.mockClear();
+    mockLoadConfig.mockReset();
+    mockLoadConfig.mockReturnValue({});
   });
 
   afterEach(() => {

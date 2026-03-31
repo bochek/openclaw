@@ -1,34 +1,29 @@
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_APPROVAL_REQUEST_TIMEOUT_MS,
   DEFAULT_APPROVAL_TIMEOUT_MS,
 } from "./bash-tools.exec-runtime.js";
+import { __testing as gatewayToolTesting } from "./tools/gateway.js";
 
-vi.mock("./tools/gateway.js", () => ({
-  callGatewayTool: vi.fn(),
-}));
+const callGatewayToolMock = vi.hoisted(() => vi.fn());
 
-let callGatewayTool: typeof import("./tools/gateway.js").callGatewayTool;
-let requestExecApprovalDecision: typeof import("./bash-tools.exec-approval-request.js").requestExecApprovalDecision;
+import { requestExecApprovalDecision } from "./bash-tools.exec-approval-request.js";
 
 describe("requestExecApprovalDecision", () => {
-  async function loadFreshApprovalRequestModulesForTest() {
-    vi.resetModules();
-    ({ callGatewayTool } = await import("./tools/gateway.js"));
-    ({ requestExecApprovalDecision } = await import("./bash-tools.exec-approval-request.js"));
-  }
-
-  beforeAll(async () => {
-    await loadFreshApprovalRequestModulesForTest();
+  beforeEach(() => {
+    callGatewayToolMock.mockReset();
+    gatewayToolTesting.setDepsForTest({
+      callGateway: async ({ method, params, timeoutMs, expectFinal }) =>
+        await callGatewayToolMock(method, { timeoutMs }, params, { expectFinal }),
+    });
   });
 
-  beforeEach(async () => {
-    await loadFreshApprovalRequestModulesForTest();
-    vi.mocked(callGatewayTool).mockClear();
+  afterEach(() => {
+    gatewayToolTesting.setDepsForTest();
   });
 
   it("returns string decisions", async () => {
-    vi.mocked(callGatewayTool)
+    callGatewayToolMock
       .mockResolvedValueOnce({
         status: "accepted",
         id: "approval-id",
@@ -53,7 +48,7 @@ describe("requestExecApprovalDecision", () => {
     });
 
     expect(result).toBe("allow-once");
-    expect(callGatewayTool).toHaveBeenCalledWith(
+    expect(callGatewayToolMock).toHaveBeenCalledWith(
       "exec.approval.request",
       { timeoutMs: DEFAULT_APPROVAL_REQUEST_TIMEOUT_MS },
       {
@@ -76,16 +71,17 @@ describe("requestExecApprovalDecision", () => {
       },
       { expectFinal: false },
     );
-    expect(callGatewayTool).toHaveBeenNthCalledWith(
+    expect(callGatewayToolMock).toHaveBeenNthCalledWith(
       2,
       "exec.approval.waitDecision",
       { timeoutMs: DEFAULT_APPROVAL_REQUEST_TIMEOUT_MS },
       { id: "approval-id" },
+      { expectFinal: undefined },
     );
   });
 
   it("returns null for missing or non-string decisions", async () => {
-    vi.mocked(callGatewayTool)
+    callGatewayToolMock
       .mockResolvedValueOnce({ status: "accepted", id: "approval-id", expiresAtMs: 1234 })
       .mockResolvedValueOnce({});
     await expect(
@@ -100,7 +96,7 @@ describe("requestExecApprovalDecision", () => {
       }),
     ).resolves.toBeNull();
 
-    vi.mocked(callGatewayTool)
+    callGatewayToolMock
       .mockResolvedValueOnce({ status: "accepted", id: "approval-id-2", expiresAtMs: 1234 })
       .mockResolvedValueOnce({ decision: 123 });
     await expect(
@@ -117,7 +113,7 @@ describe("requestExecApprovalDecision", () => {
   });
 
   it("uses registration response id when waiting for decision", async () => {
-    vi.mocked(callGatewayTool)
+    callGatewayToolMock
       .mockResolvedValueOnce({
         status: "accepted",
         id: "server-assigned-id",
@@ -136,16 +132,17 @@ describe("requestExecApprovalDecision", () => {
       }),
     ).resolves.toBe("allow-once");
 
-    expect(callGatewayTool).toHaveBeenNthCalledWith(
+    expect(callGatewayToolMock).toHaveBeenNthCalledWith(
       2,
       "exec.approval.waitDecision",
       { timeoutMs: DEFAULT_APPROVAL_REQUEST_TIMEOUT_MS },
       { id: "server-assigned-id" },
+      { expectFinal: undefined },
     );
   });
 
   it("treats expired-or-missing waitDecision as null decision", async () => {
-    vi.mocked(callGatewayTool)
+    callGatewayToolMock
       .mockResolvedValueOnce({
         status: "accepted",
         id: "approval-id",
@@ -166,7 +163,7 @@ describe("requestExecApprovalDecision", () => {
   });
 
   it("returns final decision directly when gateway already replies with decision", async () => {
-    vi.mocked(callGatewayTool).mockResolvedValue({ decision: "deny", id: "approval-id" });
+    callGatewayToolMock.mockResolvedValue({ decision: "deny", id: "approval-id" });
 
     const result = await requestExecApprovalDecision({
       id: "approval-id",
@@ -178,6 +175,6 @@ describe("requestExecApprovalDecision", () => {
     });
 
     expect(result).toBe("deny");
-    expect(vi.mocked(callGatewayTool).mock.calls).toHaveLength(1);
+    expect(callGatewayToolMock.mock.calls).toHaveLength(1);
   });
 });

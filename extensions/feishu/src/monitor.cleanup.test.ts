@@ -3,12 +3,7 @@ import { botNames, botOpenIds, stopFeishuMonitorState, wsClients } from "./monit
 import type { ResolvedFeishuAccount } from "./types.js";
 
 const createFeishuWSClientMock = vi.hoisted(() => vi.fn());
-
-vi.mock("./client.js", () => ({
-  createFeishuWSClient: createFeishuWSClientMock,
-}));
-
-import { monitorWebSocket } from "./monitor.transport.js";
+import { __testing, monitorWebSocket } from "./monitor.transport.js";
 
 type MockWsClient = {
   start: ReturnType<typeof vi.fn>;
@@ -40,11 +35,15 @@ function createWsClient(): MockWsClient {
 afterEach(() => {
   stopFeishuMonitorState();
   vi.clearAllMocks();
+  __testing.setDepsForTest();
 });
 
 describe("feishu websocket cleanup", () => {
   it("closes the websocket client when the monitor aborts", async () => {
     const wsClient = createWsClient();
+    __testing.setDepsForTest({
+      createFeishuWSClient: createFeishuWSClientMock,
+    });
     createFeishuWSClientMock.mockReturnValue(wsClient);
 
     const abortController = new AbortController();

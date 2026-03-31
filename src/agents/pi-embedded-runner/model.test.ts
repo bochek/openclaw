@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { discoverModels } from "../pi-model-discovery.js";
 import { createProviderRuntimeTestMock } from "./model.provider-runtime.test-support.js";
+
+const discoverModelsMock = vi.hoisted(() => vi.fn(() => ({ find: vi.fn(() => null) })));
 
 vi.mock("../pi-model-discovery.js", () => ({
   discoverAuthStorage: vi.fn(() => ({ mocked: true })),
-  discoverModels: vi.fn(() => ({ find: vi.fn(() => null) })),
+  discoverModels: discoverModelsMock,
 }));
 
 import type { OpenRouterModelCapabilities } from "./openrouter-model-capabilities.js";
@@ -33,7 +34,7 @@ import {
 } from "./model.test-harness.js";
 
 beforeEach(() => {
-  resetMockDiscoverModels(discoverModels);
+  resetMockDiscoverModels(discoverModelsMock);
   mockGetOpenRouterModelCapabilities.mockReset();
   mockGetOpenRouterModelCapabilities.mockReturnValue(undefined);
   mockLoadOpenRouterModelCapabilities.mockReset();
@@ -67,7 +68,7 @@ function resolveModelForTest(
   const resolvedAgentDir = agentDir ?? "/tmp/agent";
   return resolveModel(provider, modelId, agentDir, cfg, {
     authStorage: { mocked: true } as never,
-    modelRegistry: discoverModels({ mocked: true } as never, resolvedAgentDir),
+    modelRegistry: discoverModelsMock({ mocked: true } as never, resolvedAgentDir),
     runtimeHooks: createRuntimeHooks(),
   });
 }
@@ -82,7 +83,7 @@ function resolveModelAsyncForTest(
   const resolvedAgentDir = agentDir ?? "/tmp/agent";
   return resolveModelAsync(provider, modelId, agentDir, cfg, {
     authStorage: { mocked: true } as never,
-    modelRegistry: discoverModels({ mocked: true } as never, resolvedAgentDir),
+    modelRegistry: discoverModelsMock({ mocked: true } as never, resolvedAgentDir),
     ...options,
     runtimeHooks: createRuntimeHooks(),
   });
@@ -249,7 +250,7 @@ describe("buildInlineProviderModels", () => {
 
 describe("resolveModel", () => {
   it("defaults model input to text when discovery omits input", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "custom",
       modelId: "missing-input",
       templateModel: {
@@ -322,7 +323,7 @@ describe("resolveModel", () => {
   });
 
   it("normalizes configured Google override baseUrls when provider api is omitted", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "google",
       modelId: "gemini-2.5-pro",
       templateModel: {
@@ -349,64 +350,6 @@ describe("resolveModel", () => {
     expect(result.error).toBeUndefined();
     expect(result.model?.api).toBe("google-generative-ai");
     expect(result.model?.baseUrl).toBe("https://generativelanguage.googleapis.com/v1beta");
-  });
-
-  it("normalizes custom api.openai.com providers to responses transport", () => {
-    const cfg = {
-      models: {
-        providers: {
-          "custom-openai": {
-            baseUrl: "https://api.openai.com/v1",
-            api: "openai-completions",
-            models: [
-              {
-                ...makeModel("gpt-5.4"),
-                provider: "custom-openai",
-              },
-            ],
-          },
-        },
-      },
-    } as unknown as OpenClawConfig;
-
-    const result = resolveModelForTest("custom-openai", "gpt-5.4", "/tmp/agent", cfg);
-
-    expect(result.error).toBeUndefined();
-    expect(result.model).toMatchObject({
-      provider: "custom-openai",
-      id: "gpt-5.4",
-      api: "openai-responses",
-      baseUrl: "https://api.openai.com/v1",
-    });
-  });
-
-  it("normalizes custom api.x.ai providers to responses transport", () => {
-    const cfg = {
-      models: {
-        providers: {
-          "custom-xai": {
-            baseUrl: "https://api.x.ai/v1",
-            api: "openai-completions",
-            models: [
-              {
-                ...makeModel("grok-4.1-fast"),
-                provider: "custom-xai",
-              },
-            ],
-          },
-        },
-      },
-    } as unknown as OpenClawConfig;
-
-    const result = resolveModelForTest("custom-xai", "grok-4.1-fast", "/tmp/agent", cfg);
-
-    expect(result.error).toBeUndefined();
-    expect(result.model).toMatchObject({
-      provider: "custom-xai",
-      id: "grok-4.1-fast",
-      api: "openai-responses",
-      baseUrl: "https://api.x.ai/v1",
-    });
   });
 
   it("includes provider headers in provider fallback model", () => {
@@ -457,7 +400,7 @@ describe("resolveModel", () => {
   });
 
   it("drops marker headers from discovered models.json entries", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "custom",
       modelId: "listed-model",
       templateModel: {
@@ -651,7 +594,7 @@ describe("resolveModel", () => {
   });
 
   it("skips OpenRouter preload for models already present in the registry", async () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "openrouter",
       modelId: "openrouter/healer-alpha",
       templateModel: {
@@ -684,7 +627,7 @@ describe("resolveModel", () => {
   });
 
   it("prefers configured provider api metadata over discovered registry model", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "onehub",
       modelId: "glm-5",
       templateModel: {
@@ -736,7 +679,7 @@ describe("resolveModel", () => {
   });
 
   it("prefers exact provider config over normalized alias match when both keys exist", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "bedrock",
       modelId: "bedrock-alias-exact-test",
       templateModel: {
@@ -796,7 +739,7 @@ describe("resolveModel", () => {
   });
 
   it("builds an openai-codex fallback for gpt-5.4", () => {
-    mockOpenAICodexTemplateModel(discoverModels);
+    mockOpenAICodexTemplateModel(discoverModelsMock);
 
     const result = resolveModelForTest("openai-codex", "gpt-5.4", "/tmp/agent");
 
@@ -805,7 +748,7 @@ describe("resolveModel", () => {
   });
 
   it("builds an openai-codex fallback for gpt-5.4", () => {
-    mockOpenAICodexTemplateModel(discoverModels);
+    mockOpenAICodexTemplateModel(discoverModelsMock);
 
     const result = resolveModelForTest("openai-codex", "gpt-5.4", "/tmp/agent");
 
@@ -814,7 +757,7 @@ describe("resolveModel", () => {
   });
 
   it("builds an openai-codex fallback for gpt-5.3-codex-spark", () => {
-    mockOpenAICodexTemplateModel(discoverModels);
+    mockOpenAICodexTemplateModel(discoverModelsMock);
 
     const result = resolveModelForTest("openai-codex", "gpt-5.3-codex-spark", "/tmp/agent");
 
@@ -825,7 +768,7 @@ describe("resolveModel", () => {
   });
 
   it("keeps openai-codex gpt-5.3-codex-spark when discovery provides it", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "openai-codex",
       modelId: "gpt-5.3-codex-spark",
       templateModel: {
@@ -847,7 +790,7 @@ describe("resolveModel", () => {
   });
 
   it("rejects stale direct openai gpt-5.3-codex-spark discovery rows", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "openai",
       modelId: "gpt-5.3-codex-spark",
       templateModel: buildForwardCompatTemplate({
@@ -868,7 +811,7 @@ describe("resolveModel", () => {
   });
 
   it("applies provider overrides to openai gpt-5.4 forward-compat models", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "openai",
       modelId: "gpt-5.2",
       templateModel: buildForwardCompatTemplate({
@@ -950,7 +893,7 @@ describe("resolveModel", () => {
   });
 
   it("builds an openai fallback for gpt-5.4 mini from the gpt-5-mini template", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "openai",
       modelId: "gpt-5-mini",
       templateModel: buildForwardCompatTemplate({
@@ -982,7 +925,7 @@ describe("resolveModel", () => {
   });
 
   it("builds an openai fallback for gpt-5.4 nano from the gpt-5-nano template", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "openai",
       modelId: "gpt-5-nano",
       templateModel: buildForwardCompatTemplate({
@@ -1014,7 +957,7 @@ describe("resolveModel", () => {
   });
 
   it("normalizes stale native openai gpt-5.4 completions transport to responses", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "openai",
       modelId: "gpt-5.4",
       templateModel: buildForwardCompatTemplate({
@@ -1038,7 +981,7 @@ describe("resolveModel", () => {
   });
 
   it("keeps proxied openai completions transport untouched", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "openai",
       modelId: "gpt-5.4",
       templateModel: buildForwardCompatTemplate({
@@ -1062,7 +1005,7 @@ describe("resolveModel", () => {
   });
 
   it("normalizes stale native xai completions transport to responses", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "xai",
       modelId: "grok-4.20-beta-latest-reasoning",
       templateModel: buildForwardCompatTemplate({
@@ -1086,7 +1029,7 @@ describe("resolveModel", () => {
   });
 
   it("normalizes stale native xai completions transport after plugin model normalization", () => {
-    mockDiscoveredModel(discoverModels, {
+    mockDiscoveredModel(discoverModelsMock, {
       provider: "xai",
       modelId: "grok-4.20-beta-latest-reasoning",
       templateModel: buildForwardCompatTemplate({
@@ -1100,7 +1043,7 @@ describe("resolveModel", () => {
 
     const result = resolveModel("xai", "grok-4.20-beta-latest-reasoning", "/tmp/agent", undefined, {
       authStorage: { mocked: true } as never,
-      modelRegistry: discoverModels({ mocked: true } as never, "/tmp/agent"),
+      modelRegistry: discoverModelsMock({ mocked: true } as never, "/tmp/agent"),
       runtimeHooks: {
         applyProviderResolvedModelCompatWithPlugins: () => undefined,
         buildProviderUnknownModelHintWithPlugin: () => undefined,

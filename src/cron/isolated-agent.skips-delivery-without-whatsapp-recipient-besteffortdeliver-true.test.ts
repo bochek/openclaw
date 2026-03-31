@@ -2,15 +2,14 @@ import "./isolated-agent.mocks.js";
 import fs from "node:fs/promises";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as modelSelection from "../agents/model-selection.js";
-import { runSubagentAnnounceFlow } from "../agents/subagent-announce.js";
 import type { CliDeps } from "../cli/deps.js";
-import { callGateway } from "../gateway/call.js";
 import {
   createCliDeps,
   expectDirectTelegramDelivery,
   mockAgentPayloads,
   runTelegramAnnounceTurn,
 } from "./isolated-agent.delivery.test-helpers.js";
+import { callGatewayMock, runSubagentAnnounceFlowMock } from "./isolated-agent.mocks.js";
 import { runCronIsolatedAgentTurn } from "./isolated-agent.js";
 import {
   makeCfg,
@@ -121,7 +120,7 @@ function expectFailedTelegramDeliveryResult(params: {
   if (params.expectedErrorFragment) {
     expect(params.res.error).toContain(params.expectedErrorFragment);
   }
-  expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+  expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
   expect(params.deps.sendMessageTelegram).toHaveBeenCalledTimes(1);
 }
 
@@ -148,7 +147,7 @@ function expectSuccessfulTelegramTextDelivery(params: {
   expect(params.res.status).toBe("ok");
   expect(params.res.delivered).toBe(true);
   expect(params.res.deliveryAttempted).toBe(true);
-  expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+  expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
 }
 
 async function withTelegramTextDelivery(
@@ -254,7 +253,7 @@ async function assertExplicitTelegramTargetDelivery(params: {
   });
 
   expectDeliveredOk(res);
-  expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+  expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
   if (params.expectedTexts.length === 1) {
     expectDirectTelegramDelivery(params.deps, {
       chatId: "123",
@@ -329,7 +328,7 @@ describe("runCronIsolatedAgentTurn", () => {
       });
 
       expectDeliveredOk(res);
-      expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+      expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
       expectDirectTelegramDelivery(deps, {
         chatId: "123",
         text: "hello from cron",
@@ -368,7 +367,7 @@ describe("runCronIsolatedAgentTurn", () => {
 
       expect(res.status).toBe("ok");
       expect(res.delivered).toBe(true);
-      expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+      expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
       expectDirectTelegramDelivery(deps, {
         chatId: "123",
         text: "Final weather summary",
@@ -392,7 +391,7 @@ describe("runCronIsolatedAgentTurn", () => {
       });
 
       expectDeliveredOk(res);
-      expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+      expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
       expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
     });
   });
@@ -415,7 +414,7 @@ describe("runCronIsolatedAgentTurn", () => {
       });
 
       expect(res.status).toBe("ok");
-      expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+      expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
       expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
     });
   });
@@ -432,7 +431,7 @@ describe("runCronIsolatedAgentTurn", () => {
 
       expect(res.status).toBe("ok");
       expect(res.delivered).toBe(false);
-      expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+      expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
       expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
     });
   });
@@ -440,7 +439,7 @@ describe("runCronIsolatedAgentTurn", () => {
   it("deletes the isolated cron session after NO_REPLY when deleteAfterRun is enabled", async () => {
     await withTelegramAnnounceFixture(async ({ home, storePath, deps }) => {
       mockAgentPayloads([{ text: "NO_REPLY" }]);
-      vi.mocked(callGateway).mockClear();
+      callGatewayMock.mockClear();
 
       const res = await runCronIsolatedAgentTurn({
         cfg: makeCfg(home, storePath, {
@@ -460,8 +459,8 @@ describe("runCronIsolatedAgentTurn", () => {
       expect(res.status).toBe("ok");
       expect(res.delivered).toBe(false);
       expect(deps.sendMessageTelegram).not.toHaveBeenCalled();
-      expect(callGateway).toHaveBeenCalledTimes(1);
-      expect(callGateway).toHaveBeenCalledWith(
+      expect(callGatewayMock).toHaveBeenCalledTimes(1);
+      expect(callGatewayMock).toHaveBeenCalledWith(
         expect.objectContaining({
           method: "sessions.delete",
           params: expect.objectContaining({
@@ -554,7 +553,7 @@ describe("runCronIsolatedAgentTurn", () => {
     expect(res.status).toBe("ok");
     expect(res.delivered).toBe(true);
     expect(res.deliveryAttempted).toBe(true);
-    expect(runSubagentAnnounceFlow).not.toHaveBeenCalled();
+    expect(runSubagentAnnounceFlowMock).not.toHaveBeenCalled();
     expect(deps.sendMessageSignal).toHaveBeenCalledTimes(1);
     expect(deps.sendMessageSignal).toHaveBeenCalledWith(
       "+15551234567",

@@ -37,11 +37,21 @@ type DockerSpawnRuntime = {
   execPath: string;
 };
 
+type DockerDeps = {
+  spawn: typeof spawn;
+};
+
 const DEFAULT_DOCKER_SPAWN_RUNTIME: DockerSpawnRuntime = {
   platform: process.platform,
   env: process.env,
   execPath: process.execPath,
 };
+
+const defaultDockerDeps: DockerDeps = {
+  spawn,
+};
+
+let dockerDeps = defaultDockerDeps;
 
 export function resolveDockerSpawnInvocation(
   args: string[],
@@ -70,7 +80,7 @@ export function execDockerRaw(
 ): Promise<ExecDockerRawResult> {
   return new Promise<ExecDockerRawResult>((resolve, reject) => {
     const spawnInvocation = resolveDockerSpawnInvocation(args);
-    const child = spawn(spawnInvocation.command, spawnInvocation.args, {
+    const child = dockerDeps.spawn(spawnInvocation.command, spawnInvocation.args, {
       stdio: ["pipe", "pipe", "pipe"],
       shell: spawnInvocation.shell,
       windowsHide: spawnInvocation.windowsHide,
@@ -570,3 +580,12 @@ export async function ensureSandboxContainer(params: {
   });
   return containerName;
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<DockerDeps>) {
+    dockerDeps = {
+      ...defaultDockerDeps,
+      ...overrides,
+    };
+  },
+};

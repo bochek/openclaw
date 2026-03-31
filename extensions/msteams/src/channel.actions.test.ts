@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   editMessageMSTeamsMock,
@@ -24,22 +24,11 @@ const {
   unpinMessageMSTeamsMock: vi.fn(),
 }));
 
-vi.mock("./channel.runtime.js", () => ({
-  msTeamsChannelRuntime: {
-    editMessageMSTeams: editMessageMSTeamsMock,
-    deleteMessageMSTeams: deleteMessageMSTeamsMock,
-    getMessageMSTeams: getMessageMSTeamsMock,
-    listReactionsMSTeams: listReactionsMSTeamsMock,
-    pinMessageMSTeams: pinMessageMSTeamsMock,
-    reactMessageMSTeams: reactMessageMSTeamsMock,
-    searchMessagesMSTeams: searchMessagesMSTeamsMock,
-    sendAdaptiveCardMSTeams: sendAdaptiveCardMSTeamsMock,
-    sendMessageMSTeams: sendMessageMSTeamsMock,
-    unpinMessageMSTeams: unpinMessageMSTeamsMock,
-  },
-}));
-
-import { msteamsPlugin } from "./channel.js";
+import {
+  __resetLoadMSTeamsChannelRuntimeForTest,
+  __setLoadMSTeamsChannelRuntimeForTest,
+  msteamsPlugin,
+} from "./channel.js";
 
 const actionMocks = [
   editMessageMSTeamsMock,
@@ -186,6 +175,22 @@ describe("msteamsPlugin message actions", () => {
     for (const mockFn of actionMocks) {
       mockFn.mockReset();
     }
+    __setLoadMSTeamsChannelRuntimeForTest(async () => ({
+      deleteMessageMSTeams: deleteMessageMSTeamsMock,
+      editMessageMSTeams: editMessageMSTeamsMock,
+      getMessageMSTeams: getMessageMSTeamsMock,
+      listReactionsMSTeams: listReactionsMSTeamsMock,
+      pinMessageMSTeams: pinMessageMSTeamsMock,
+      reactMessageMSTeams: reactMessageMSTeamsMock,
+      searchMessagesMSTeams: searchMessagesMSTeamsMock,
+      sendAdaptiveCardMSTeams: sendAdaptiveCardMSTeamsMock,
+      sendMessageMSTeams: sendMessageMSTeamsMock,
+      unpinMessageMSTeams: unpinMessageMSTeamsMock,
+    }));
+  });
+
+  afterEach(() => {
+    __resetLoadMSTeamsChannelRuntimeForTest();
   });
 
   it("falls back to toolContext.currentChannelId for read actions", async () => {

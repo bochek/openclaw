@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { SessionEntry } from "../config/sessions.js";
 import { resolvePreferredSessionKeyForSessionIdMatches } from "../sessions/session-id-resolution.js";
+import { __testing, createSessionStatusTool } from "./tools/session-status-tool.js";
 
 const loadSessionStoreMock = vi.fn();
 const updateSessionStoreMock = vi.fn();
@@ -12,18 +13,20 @@ const listTasksForSessionKeyMock = vi.hoisted(() =>
   vi.fn((_: string) => [] as Array<Record<string, unknown>>),
 );
 
-const createMockConfig = () => ({
-  session: { mainKey: "main", scope: "per-sender" },
-  agents: {
-    defaults: {
-      model: { primary: "openai/gpt-5.4" },
-      models: {},
+function createMockConfig() {
+  return {
+    session: { mainKey: "main", scope: "per-sender" },
+    agents: {
+      defaults: {
+        model: { primary: "openai/gpt-5.4" },
+        models: {},
+      },
     },
-  },
-  tools: {
-    agentToAgent: { enabled: false },
-  },
-});
+    tools: {
+      agentToAgent: { enabled: false },
+    },
+  };
+}
 
 let mockConfig: Record<string, unknown> = createMockConfig();
 
@@ -67,12 +70,8 @@ function installScopedSessionStores(syncUpdates = false) {
   return stores;
 }
 
-async function createSessionsModuleMock(
-  importOriginal: () => Promise<typeof import("../config/sessions.js")>,
-) {
-  const actual = await importOriginal();
+function createSessionsModuleMock() {
   return {
-    ...actual,
     loadSessionStore: (storePath: string) => loadSessionStoreMock(storePath),
     updateSessionStore: async (
       storePath: string,
@@ -94,23 +93,38 @@ function createGatewayCallModuleMock() {
   };
 }
 
-async function createGatewaySessionUtilsModuleMock(
-  importOriginal: () => Promise<typeof import("../gateway/session-utils.js")>,
-) {
-  const actual = await importOriginal();
+function createGatewaySessionUtilsModuleMock() {
   return {
-    ...actual,
-    loadCombinedSessionStoreForGateway: (cfg: unknown) =>
-      loadCombinedSessionStoreForGatewayMock(cfg),
+    resolveSessionModelIdentityRef: (
+      cfg: Record<string, unknown>,
+      entry?: Record<string, unknown>,
+      _agentId?: string,
+      fallbackModelRef?: string,
+    ) => {
+      const runtimeModel =
+        typeof entry?.model === "string" && entry.model.trim() ? entry.model.trim() : undefined;
+      const runtimeProvider =
+        typeof entry?.modelProvider === "string" && entry.modelProvider.trim()
+          ? entry.modelProvider.trim()
+          : undefined;
+      if (runtimeModel) {
+        return runtimeProvider ? { provider: runtimeProvider, model: runtimeModel } : { model: runtimeModel };
+      }
+      const primary =
+        fallbackModelRef ||
+        ((cfg.agents as { defaults?: { model?: { primary?: string } } } | undefined)?.defaults
+          ?.model?.primary ?? "openai/gpt-5.4");
+      if (typeof primary === "string" && primary.includes("/")) {
+        const [provider, ...rest] = primary.split("/");
+        return { provider, model: rest.join("/") };
+      }
+      return { model: String(primary) };
+    },
   };
 }
 
-async function createConfigModuleMock(
-  importOriginal: () => Promise<typeof import("../config/config.js")>,
-) {
-  const actual = await importOriginal();
+function createConfigModuleMock() {
   return {
-    ...actual,
     loadConfig: () => mockConfig,
   };
 }
@@ -134,22 +148,6 @@ function createModelCatalogModuleMock() {
   };
 }
 
-function createAuthProfilesModuleMock() {
-  return {
-    ensureAuthProfileStore: () => ({ profiles: {} }),
-    resolveAuthProfileDisplayLabel: () => undefined,
-    resolveAuthProfileOrder: () => [],
-  };
-}
-
-function createModelAuthModuleMock() {
-  return {
-    resolveEnvApiKey: () => null,
-    resolveUsableCustomProviderApiKey: () => null,
-    resolveModelAuthMode: () => "api-key",
-  };
-}
-
 function createProviderUsageModuleMock() {
   return {
     resolveUsageProviderId: () => undefined,
@@ -161,42 +159,7 @@ function createProviderUsageModuleMock() {
   };
 }
 
-vi.mock("../config/sessions.js", createSessionsModuleMock);
 vi.mock("../gateway/call.js", createGatewayCallModuleMock);
-vi.mock("../gateway/session-utils.js", createGatewaySessionUtilsModuleMock);
-vi.mock("../config/config.js", createConfigModuleMock);
-vi.mock("../agents/model-catalog.js", createModelCatalogModuleMock);
-vi.mock("../agents/auth-profiles.js", createAuthProfilesModuleMock);
-vi.mock("../agents/model-auth.js", createModelAuthModuleMock);
-vi.mock("../infra/provider-usage.js", createProviderUsageModuleMock);
-
-let createSessionStatusTool: typeof import("./tools/session-status-tool.js").createSessionStatusTool;
-
-async function loadFreshOpenClawToolsForSessionStatusTest() {
-  vi.resetModules();
-  vi.doMock("../config/sessions.js", createSessionsModuleMock);
-  vi.doMock("../gateway/call.js", createGatewayCallModuleMock);
-  vi.doMock("../gateway/session-utils.js", createGatewaySessionUtilsModuleMock);
-  vi.doMock("../config/config.js", createConfigModuleMock);
-  vi.doMock("../agents/model-catalog.js", createModelCatalogModuleMock);
-  vi.doMock("../agents/auth-profiles.js", createAuthProfilesModuleMock);
-  vi.doMock("../agents/model-auth.js", createModelAuthModuleMock);
-  vi.doMock("../infra/provider-usage.js", createProviderUsageModuleMock);
-  vi.doMock("../auto-reply/group-activation.js", () => ({
-    normalizeGroupActivation: (value: unknown) => value ?? "always",
-  }));
-  vi.doMock("../auto-reply/reply/queue.js", () => ({
-    getFollowupQueueDepth: () => 0,
-    resolveQueueSettings: resolveQueueSettingsMock,
-  }));
-  vi.doMock("../auto-reply/status.js", () => ({
-    buildStatusMessage: buildStatusMessageMock,
-  }));
-  vi.doMock("../tasks/task-registry.js", () => ({
-    listTasksForSessionKey: (sessionKey: string) => listTasksForSessionKeyMock(sessionKey),
-  }));
-  ({ createSessionStatusTool } = await import("./tools/session-status-tool.js"));
-}
 
 function resetSessionStore(store: Record<string, SessionEntry>) {
   buildStatusMessageMock.mockClear();
@@ -299,9 +262,21 @@ function getSessionStatusTool(agentSessionKey = "main", options?: { sandboxed?: 
 }
 
 describe("session_status tool", () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     buildStatusMessageMock.mockClear();
-    await loadFreshOpenClawToolsForSessionStatusTest();
+    __testing.setDepsForTest({
+      ...createSessionsModuleMock(),
+      ...createGatewaySessionUtilsModuleMock(),
+      ...createConfigModuleMock(),
+      ...createModelCatalogModuleMock(),
+      ...createProviderUsageModuleMock(),
+      normalizeGroupActivation: (value: unknown) => value ?? "always",
+      getFollowupQueueDepth: () => 0,
+      resolveQueueSettings: resolveQueueSettingsMock,
+      buildStatusMessage: buildStatusMessageMock,
+      resolveModelAuthLabel: () => undefined,
+      listTasksForSessionKey: (sessionKey: string) => listTasksForSessionKeyMock(sessionKey),
+    });
   });
 
   it("returns a status card for the current session", async () => {

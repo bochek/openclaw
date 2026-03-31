@@ -41,13 +41,25 @@ export type UpdateWizardOptions = {
   timeout?: string;
 };
 
+type UpdateCliSharedDeps = {
+  spawnSync: typeof spawnSync;
+  defaultRuntime: typeof defaultRuntime;
+};
+
+const defaultUpdateCliSharedDeps: UpdateCliSharedDeps = {
+  spawnSync,
+  defaultRuntime,
+};
+
+let updateCliSharedDeps: UpdateCliSharedDeps = defaultUpdateCliSharedDeps;
+
 const INVALID_TIMEOUT_ERROR = "--timeout must be a positive integer (seconds)";
 
 export function parseTimeoutMsOrExit(timeout?: string): number | undefined | null {
   const timeoutMs = timeout ? Number.parseInt(timeout, 10) * 1000 : undefined;
   if (timeoutMs !== undefined && (Number.isNaN(timeoutMs) || timeoutMs <= 0)) {
-    defaultRuntime.error(INVALID_TIMEOUT_ERROR);
-    defaultRuntime.exit(1);
+    updateCliSharedDeps.defaultRuntime.error(INVALID_TIMEOUT_ERROR);
+    updateCliSharedDeps.defaultRuntime.exit(1);
     return null;
   }
   return timeoutMs;
@@ -263,7 +275,7 @@ export async function tryWriteCompletionCache(root: string, jsonMode: boolean): 
     return;
   }
 
-  const result = spawnSync(resolveNodeRunner(), [binPath, "completion", "--write-state"], {
+  const result = updateCliSharedDeps.spawnSync(resolveNodeRunner(), [binPath, "completion", "--write-state"], {
     cwd: root,
     env: process.env,
     encoding: "utf-8",
@@ -271,7 +283,9 @@ export async function tryWriteCompletionCache(root: string, jsonMode: boolean): 
 
   if (result.error) {
     if (!jsonMode) {
-      defaultRuntime.log(theme.warn(`Completion cache update failed: ${String(result.error)}`));
+      updateCliSharedDeps.defaultRuntime.log(
+        theme.warn(`Completion cache update failed: ${String(result.error)}`),
+      );
     }
     return;
   }
@@ -279,7 +293,7 @@ export async function tryWriteCompletionCache(root: string, jsonMode: boolean): 
   if (result.status !== 0 && !jsonMode) {
     const stderr = (result.stderr ?? "").toString().trim();
     const detail = stderr ? ` (${stderr})` : "";
-    defaultRuntime.log(theme.warn(`Completion cache update failed${detail}.`));
+    updateCliSharedDeps.defaultRuntime.log(theme.warn(`Completion cache update failed${detail}.`));
   }
 }
 
@@ -289,3 +303,12 @@ export function createGlobalCommandRunner(): CommandRunner {
     return { stdout: res.stdout, stderr: res.stderr, code: res.code };
   };
 }
+
+export const __testing = {
+  setDepsForTest(next: Partial<UpdateCliSharedDeps>) {
+    updateCliSharedDeps = { ...updateCliSharedDeps, ...next };
+  },
+  resetDepsForTest() {
+    updateCliSharedDeps = defaultUpdateCliSharedDeps;
+  },
+};

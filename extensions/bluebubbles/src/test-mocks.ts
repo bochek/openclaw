@@ -1,11 +1,9 @@
 import { vi } from "vitest";
+import {
+  createBlueBubblesAccountsMockModule,
+  createBlueBubblesProbeMockModule,
+} from "./test-harness.js";
 
-vi.mock("./accounts.js", async () => {
-  const { createBlueBubblesAccountsMockModule } = await import("./test-harness.js");
-  return createBlueBubblesAccountsMockModule();
-});
+vi.mock("./accounts.js", () => createBlueBubblesAccountsMockModule());
 
-vi.mock("./probe.js", async () => {
-  const { createBlueBubblesProbeMockModule } = await import("./test-harness.js");
-  return createBlueBubblesProbeMockModule();
-});
+vi.mock("./probe.js", () => createBlueBubblesProbeMockModule());

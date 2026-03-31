@@ -424,7 +424,11 @@ function resolveConfigBackedProviderAuth(params: { provider: string; config?: Op
   // Providers own any provider-specific fallback auth logic via
   // resolveSyntheticAuth(...). Discovery/bootstrap callers may consume
   // non-secret markers from source config, but must never persist plaintext.
+  // The xAI bootstrap path is config-only and should not pay plugin-runtime
+  // load costs just to recover legacy Grok search credentials.
+  const configFallback = resolveXaiConfigFallbackAuth(params);
   const synthetic =
+    configFallback ??
     resolveProviderSyntheticAuthWithPlugin({
       provider: params.provider,
       config: params.config,
@@ -433,7 +437,7 @@ function resolveConfigBackedProviderAuth(params: { provider: string; config?: Op
         provider: params.provider,
         providerConfig: params.config?.models?.providers?.[params.provider],
       },
-    }) ?? resolveXaiConfigFallbackAuth(params);
+    });
   const apiKey = synthetic?.apiKey?.trim();
   if (!apiKey) {
     return undefined;

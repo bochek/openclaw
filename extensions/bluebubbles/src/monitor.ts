@@ -27,12 +27,26 @@ import {
 } from "./runtime-api.js";
 import { getBlueBubblesRuntime } from "./runtime.js";
 
+type BlueBubblesMonitorDeps = {
+  readWebhookBodyOrReject: typeof readWebhookBodyOrReject;
+};
+
+const defaultDeps: BlueBubblesMonitorDeps = {
+  readWebhookBodyOrReject,
+};
+
+let deps: BlueBubblesMonitorDeps = defaultDeps;
+
 const webhookTargets = new Map<string, WebhookTarget[]>();
-const webhookRateLimiter = createFixedWindowRateLimiter({
-  windowMs: WEBHOOK_RATE_LIMIT_DEFAULTS.windowMs,
-  maxRequests: WEBHOOK_RATE_LIMIT_DEFAULTS.maxRequests,
-  maxTrackedKeys: WEBHOOK_RATE_LIMIT_DEFAULTS.maxTrackedKeys,
-});
+function createBlueBubblesWebhookRateLimiter(overrides?: Partial<typeof WEBHOOK_RATE_LIMIT_DEFAULTS>) {
+  return createFixedWindowRateLimiter({
+    windowMs: overrides?.windowMs ?? WEBHOOK_RATE_LIMIT_DEFAULTS.windowMs,
+    maxRequests: overrides?.maxRequests ?? WEBHOOK_RATE_LIMIT_DEFAULTS.maxRequests,
+    maxTrackedKeys: overrides?.maxTrackedKeys ?? WEBHOOK_RATE_LIMIT_DEFAULTS.maxTrackedKeys,
+  });
+}
+
+let webhookRateLimiter = createBlueBubblesWebhookRateLimiter();
 const webhookInFlightLimiter = createWebhookInFlightLimiter();
 const debounceRegistry = createBlueBubblesDebounceRegistry({ processMessage });
 
@@ -40,6 +54,17 @@ export function clearBlueBubblesWebhookSecurityStateForTest(): void {
   webhookRateLimiter.clear();
   webhookInFlightLimiter.clear();
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<BlueBubblesMonitorDeps>): void {
+    deps = overrides ? { ...defaultDeps, ...overrides } : defaultDeps;
+  },
+  setRateLimitDefaultsForTest(
+    overrides?: Partial<typeof WEBHOOK_RATE_LIMIT_DEFAULTS>,
+  ): void {
+    webhookRateLimiter = createBlueBubblesWebhookRateLimiter(overrides);
+  },
+};
 
 export function registerBlueBubblesWebhookTarget(target: WebhookTarget): () => void {
   const registered = registerWebhookTargetWithPluginRoute({
@@ -207,7 +232,7 @@ export async function handleBlueBubblesWebhookRequest(
         );
         return true;
       }
-      const body = await readWebhookBodyOrReject({
+      const body = await deps.readWebhookBodyOrReject({
         req,
         res,
         profile: "post-auth",

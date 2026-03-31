@@ -2,12 +2,26 @@ import { vi } from "vitest";
 
 type PiAiMockModule = Record<string, unknown>;
 
-export async function createPiAiStreamSimpleMock(
-  importOriginal: () => Promise<PiAiMockModule>,
-): Promise<PiAiMockModule> {
-  const original = await importOriginal();
+class MockEventStream {
+  push = vi.fn((_event?: unknown) => {});
+  end = vi.fn(() => {});
+  constructor(
+    _isDone?: (event: unknown) => boolean,
+    _toResult?: (event: unknown) => unknown,
+  ) {}
+  async result(): Promise<unknown> {
+    return undefined;
+  }
+  async *[Symbol.asyncIterator](): AsyncGenerator<never, void, unknown> {
+    // Minimal async stream surface for wrappers that decorate iteration/result.
+  }
+}
+
+export function createPiAiStreamSimpleMock(): PiAiMockModule {
   return {
-    ...original,
+    EventStream: MockEventStream,
+    getModel: vi.fn(),
+    parseStreamingJson: vi.fn(),
     streamSimple: vi.fn(() => ({
       push: vi.fn(),
       result: vi.fn(async () => undefined),
@@ -15,5 +29,6 @@ export async function createPiAiStreamSimpleMock(
         // Minimal async stream shape for wrappers that patch iteration/result.
       }),
     })),
+    validateToolArguments: vi.fn(),
   };
 }

@@ -35,5 +35,9 @@ export function normalizeProviderModelIdWithRuntime(params: {
     modelId: string;
   };
 }): string | undefined {
-  return loadProviderRuntime()?.normalizeProviderModelIdWithPlugin(params);
+  const runtime = loadProviderRuntime();
+  if (!runtime || typeof runtime.normalizeProviderModelIdWithPlugin !== "function") {
+    return undefined;
+  }
+  return runtime.normalizeProviderModelIdWithPlugin(params);
 }

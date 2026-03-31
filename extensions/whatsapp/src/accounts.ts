@@ -38,17 +38,26 @@ export type ResolvedWhatsAppAccount = {
 
 export const DEFAULT_WHATSAPP_MEDIA_MAX_MB = 50;
 
-const { listConfiguredAccountIds, listAccountIds, resolveDefaultAccountId } =
-  createAccountListHelpers("whatsapp");
-export const listWhatsAppAccountIds = listAccountIds;
-export const resolveDefaultWhatsAppAccountId = resolveDefaultAccountId;
+const whatsAppAccountHelpers = createAccountListHelpers("whatsapp");
+
+export function listWhatsAppAccountIds(cfg: OpenClawConfig): string[] {
+  return whatsAppAccountHelpers.listAccountIds(cfg);
+}
+
+export function resolveDefaultWhatsAppAccountId(cfg: OpenClawConfig): string {
+  return whatsAppAccountHelpers.resolveDefaultAccountId(cfg);
+}
+
+function listConfiguredWhatsAppAccountIds(cfg: OpenClawConfig): string[] {
+  return whatsAppAccountHelpers.listConfiguredAccountIds(cfg);
+}
 
 export function listWhatsAppAuthDirs(cfg: OpenClawConfig): string[] {
   const oauthDir = resolveOAuthDir();
   const whatsappDir = path.join(oauthDir, "whatsapp");
   const authDirs = new Set<string>([oauthDir, path.join(whatsappDir, DEFAULT_ACCOUNT_ID)]);
 
-  const accountIds = listConfiguredAccountIds(cfg);
+  const accountIds = listConfiguredWhatsAppAccountIds(cfg);
   for (const accountId of accountIds) {
     authDirs.add(resolveWhatsAppAuthDir({ cfg, accountId }).authDir);
   }

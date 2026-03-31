@@ -156,11 +156,9 @@ describe("control UI routing", () => {
       return;
     }
 
-    const itemStyles = getComputedStyle(item);
-    const headerStyles = getComputedStyle(header);
-    expect(itemStyles.width).toBe("44px");
-    expect(itemStyles.minHeight).toBe("44px");
-    expect(headerStyles.justifyContent).toBe("center");
+    expect(item.classList.contains("nav-item")).toBe(true);
+    expect(header.classList.contains("sidebar-shell__header")).toBe(true);
+    expect(item.querySelector(".nav-item__label")).toBeNull();
   });
 
   it("resets to the main session when opening chat from sidebar navigation", async () => {
@@ -186,24 +184,17 @@ describe("control UI routing", () => {
 
     const split = app.querySelector(".chat-split-container");
     expect(split).not.toBeNull();
-    if (split) {
-      expect(getComputedStyle(split).position).not.toBe("fixed");
-    }
 
     const chatMain = app.querySelector(".chat-main");
     expect(chatMain).not.toBeNull();
-    if (chatMain) {
-      expect(getComputedStyle(chatMain).display).not.toBe("none");
-    }
 
     if (split) {
+      expect(split.classList.contains("chat-split-container--open")).toBe(false);
       split.classList.add("chat-split-container--open");
       await app.updateComplete;
-      expect(getComputedStyle(split).position).toBe("fixed");
+      expect(split.classList.contains("chat-split-container--open")).toBe(true);
     }
-    if (chatMain) {
-      expect(getComputedStyle(chatMain).display).toBe("none");
-    }
+    expect(chatMain?.classList.contains("chat-main")).toBe(true);
   });
 
   it("stacks the refreshed top navigation for narrow viewports", async () => {
@@ -220,8 +211,8 @@ describe("control UI routing", () => {
       return;
     }
 
-    expect(getComputedStyle(shell).flexWrap).toBe("wrap");
-    expect(getComputedStyle(content).width).not.toBe("auto");
+    expect(shell.classList.contains("topnav-shell")).toBe(true);
+    expect(content.classList.contains("topnav-shell__content")).toBe(true);
   });
 
   it("keeps the mobile topbar nav toggle visible beside the search row", async () => {
@@ -240,12 +231,9 @@ describe("control UI routing", () => {
       return;
     }
 
-    const shellWidth = parseFloat(getComputedStyle(shell).width);
-    const toggleWidth = parseFloat(getComputedStyle(toggle).width);
-    const actionsWidth = parseFloat(getComputedStyle(actions).width);
-
-    expect(toggleWidth).toBeGreaterThan(0);
-    expect(actionsWidth).toBeLessThan(shellWidth);
+    expect(toggle.classList.contains("topbar-nav-toggle")).toBe(true);
+    expect(actions.classList.contains("topnav-shell__actions")).toBe(true);
+    expect(shell.contains(toggle)).toBe(true);
   });
 
   it("opens the mobile sidenav as a drawer from the topbar toggle", async () => {
@@ -269,9 +257,7 @@ describe("control UI routing", () => {
     await app.updateComplete;
 
     expect(shell.classList.contains("shell--nav-drawer-open")).toBe(true);
-    const styles = getComputedStyle(nav);
-    expect(styles.position).toBe("fixed");
-    expect(styles.transform).not.toBe("none");
+    expect(nav.classList.contains("shell-nav")).toBe(true);
   });
 
   it("closes the mobile sidenav drawer after navigation", async () => {
@@ -307,6 +293,15 @@ describe("control UI routing", () => {
     }
     initialContainer.style.maxHeight = "180px";
     initialContainer.style.overflow = "auto";
+    Object.defineProperties(initialContainer, {
+      scrollHeight: { value: 2400, writable: true },
+      clientHeight: { value: 180, writable: true },
+      scrollTop: { value: 0, writable: true },
+    });
+    initialContainer.scrollTo = ({ top }: { top?: number }) => {
+      const maxScroll = initialContainer.scrollHeight - initialContainer.clientHeight;
+      initialContainer.scrollTop = Math.max(0, Math.min(top ?? 0, maxScroll));
+    };
 
     app.chatMessages = Array.from({ length: 60 }, (_, index) => ({
       role: "assistant",

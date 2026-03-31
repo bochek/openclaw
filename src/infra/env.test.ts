@@ -5,11 +5,17 @@ const loggerMocks = vi.hoisted(() => ({
   info: vi.fn(),
 }));
 
-vi.mock("../logging/subsystem.js", () => ({
-  createSubsystemLogger: () => ({
+vi.mock("../logging/subsystem.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../logging/subsystem.js")>();
+  const logger = {
     info: loggerMocks.info,
-  }),
-}));
+    child: () => logger,
+  };
+  return {
+    ...actual,
+    createSubsystemLogger: () => logger,
+  };
+});
 
 type EnvModule = typeof import("./env.js");
 

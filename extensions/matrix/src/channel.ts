@@ -83,10 +83,21 @@ function chunkTextForOutbound(text: string, limit: number): string[] {
   return chunks;
 }
 
-const loadMatrixChannelRuntime = createLazyRuntimeNamedExport(
+const loadMatrixChannelRuntimeDefault = createLazyRuntimeNamedExport(
   () => import("./channel.runtime.js"),
   "matrixChannelRuntime",
 );
+
+let loadMatrixChannelRuntime = loadMatrixChannelRuntimeDefault;
+
+export const __testing = {
+  setLoadMatrixChannelRuntimeForTest(loader: typeof loadMatrixChannelRuntimeDefault) {
+    loadMatrixChannelRuntime = loader;
+  },
+  resetLoadMatrixChannelRuntimeForTest() {
+    loadMatrixChannelRuntime = loadMatrixChannelRuntimeDefault;
+  },
+};
 
 const meta = {
   id: "matrix",

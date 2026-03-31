@@ -1046,21 +1046,7 @@ describe("createOpenAIWebSocketStreamFn", () => {
   });
 
   afterEach(() => {
-    // Clean up any sessions created in tests to avoid cross-test pollution
-    MockManager.instances.forEach((_, i) => {
-      // Session IDs used in tests follow a predictable pattern
-      releaseWsSession(`test-session-${i}`);
-    });
-    releaseWsSession("sess-1");
-    releaseWsSession("sess-2");
-    releaseWsSession("sess-fallback");
-    releaseWsSession("sess-incremental");
-    releaseWsSession("sess-full");
-    releaseWsSession("sess-phase");
-    releaseWsSession("sess-tools");
-    releaseWsSession("sess-store-default");
-    releaseWsSession("sess-store-compat");
-    releaseWsSession("sess-max-tokens-zero");
+    openAIWsStreamTesting.clearSessionsForTest();
     openAIWsStreamTesting.setDepsForTest();
   });
 
@@ -1859,7 +1845,7 @@ describe("releaseWsSession / hasWsSession", () => {
   });
 
   afterEach(() => {
-    releaseWsSession("registry-test");
+    openAIWsStreamTesting.clearSessionsForTest();
     openAIWsStreamTesting.setDepsForTest();
   });
 

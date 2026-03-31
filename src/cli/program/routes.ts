@@ -8,6 +8,20 @@ import {
   hasFlag,
 } from "../argv.js";
 
+type RouteModuleDeps = {
+  loadConfigCliModule: () => Promise<typeof import("../config-cli.js")>;
+  loadModelsModule: () => Promise<typeof import("../../commands/models.js")>;
+  loadDaemonStatusModule: () => Promise<typeof import("../daemon-cli/status.js")>;
+  loadStatusJsonModule: () => Promise<typeof import("../../commands/status-json.js")>;
+};
+
+const routeModuleDeps: RouteModuleDeps = {
+  loadConfigCliModule: () => import("../config-cli.js"),
+  loadModelsModule: () => import("../../commands/models.js"),
+  loadDaemonStatusModule: () => import("../daemon-cli/status.js"),
+  loadStatusJsonModule: () => import("../../commands/status-json.js"),
+};
+
 export type RouteSpec = {
   match: (path: string[]) => boolean;
   loadPlugins?: boolean | ((argv: string[]) => boolean);
@@ -48,7 +62,7 @@ const routeStatus: RouteSpec = {
       return false;
     }
     if (json) {
-      const { statusJsonCommand } = await import("../../commands/status-json.js");
+      const { statusJsonCommand } = await routeModuleDeps.loadStatusJsonModule();
       await statusJsonCommand({ deep, all, usage, timeoutMs }, defaultRuntime);
       return true;
     }
@@ -98,7 +112,7 @@ const routeGatewayStatus: RouteSpec = {
     const json = hasFlag(argv, "--json");
     const requireRpc = hasFlag(argv, "--require-rpc");
     const probe = !hasFlag(argv, "--no-probe");
-    const { runDaemonStatus } = await import("../daemon-cli/status.js");
+    const { runDaemonStatus } = await routeModuleDeps.loadDaemonStatusModule();
     await runDaemonStatus({
       rpc: {
         url: url ?? undefined,
@@ -194,7 +208,7 @@ const routeConfigGet: RouteSpec = {
       return false;
     }
     const json = hasFlag(argv, "--json");
-    const { runConfigGet } = await import("../config-cli.js");
+    const { runConfigGet } = await routeModuleDeps.loadConfigCliModule();
     await runConfigGet({ path: pathArg, json });
     return true;
   },
@@ -213,7 +227,7 @@ const routeConfigUnset: RouteSpec = {
     if (!pathArg) {
       return false;
     }
-    const { runConfigUnset } = await import("../config-cli.js");
+    const { runConfigUnset } = await routeModuleDeps.loadConfigCliModule();
     await runConfigUnset({ path: pathArg });
     return true;
   },
@@ -230,7 +244,7 @@ const routeModelsList: RouteSpec = {
     const local = hasFlag(argv, "--local");
     const json = hasFlag(argv, "--json");
     const plain = hasFlag(argv, "--plain");
-    const { modelsListCommand } = await import("../../commands/models.js");
+    const { modelsListCommand } = await routeModuleDeps.loadModelsModule();
     await modelsListCommand({ all, local, provider, json, plain }, defaultRuntime);
     return true;
   },
@@ -273,7 +287,7 @@ const routeModelsStatus: RouteSpec = {
     const plain = hasFlag(argv, "--plain");
     const check = hasFlag(argv, "--check");
     const probe = hasFlag(argv, "--probe");
-    const { modelsStatusCommand } = await import("../../commands/models.js");
+    const { modelsStatusCommand } = await routeModuleDeps.loadModelsModule();
     await modelsStatusCommand(
       {
         json,
@@ -313,3 +327,15 @@ export function findRoutedCommand(path: string[]): RouteSpec | null {
   }
   return null;
 }
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<RouteModuleDeps>) {
+    Object.assign(routeModuleDeps, overrides);
+  },
+  resetDepsForTest() {
+    routeModuleDeps.loadConfigCliModule = () => import("../config-cli.js");
+    routeModuleDeps.loadModelsModule = () => import("../../commands/models.js");
+    routeModuleDeps.loadDaemonStatusModule = () => import("../daemon-cli/status.js");
+    routeModuleDeps.loadStatusJsonModule = () => import("../../commands/status-json.js");
+  },
+};

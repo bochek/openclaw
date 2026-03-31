@@ -1,5 +1,5 @@
-// Narrow plugin-sdk surface for the bundled Matrix plugin.
-// Keep this list additive and scoped to the runtime contract only.
+// Narrow plugin-sdk surface for the bundled matrix plugin.
+// Keep this list additive and scoped to symbols used under extensions/matrix.
 
 import { createOptionalChannelSetupSurface } from "../../plugin-sdk/channel-setup.js";
 

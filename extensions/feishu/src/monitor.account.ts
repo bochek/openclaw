@@ -30,6 +30,21 @@ import { createFeishuThreadBindingManager } from "./thread-bindings.js";
 import type { FeishuChatType, ResolvedFeishuAccount } from "./types.js";
 
 const FEISHU_REACTION_VERIFY_TIMEOUT_MS = 1_500;
+type MonitorAccountDeps = {
+  createEventDispatcher: typeof createEventDispatcher;
+  monitorWebhook: typeof monitorWebhook;
+  monitorWebSocket: typeof monitorWebSocket;
+  getMessageFeishu: typeof getMessageFeishu;
+  createFeishuThreadBindingManager: typeof createFeishuThreadBindingManager;
+};
+const defaultMonitorAccountDeps: MonitorAccountDeps = {
+  createEventDispatcher,
+  monitorWebhook,
+  monitorWebSocket,
+  getMessageFeishu,
+  createFeishuThreadBindingManager,
+};
+let monitorAccountDeps: MonitorAccountDeps = defaultMonitorAccountDeps;
 
 export type FeishuReactionCreatedEvent = {
   message_id: string;
@@ -43,6 +58,17 @@ export type FeishuReactionCreatedEvent = {
 
 export type FeishuReactionDeletedEvent = FeishuReactionCreatedEvent & {
   reaction_id?: string;
+};
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<MonitorAccountDeps>): void {
+    monitorAccountDeps = overrides
+      ? { ...defaultMonitorAccountDeps, ...overrides }
+      : defaultMonitorAccountDeps;
+  },
+  resetDepsForTest(): void {
+    monitorAccountDeps = defaultMonitorAccountDeps;
+  },
 };
 
 type ResolveReactionSyntheticEventParams = {
@@ -65,7 +91,7 @@ export async function resolveReactionSyntheticEvent(
     accountId,
     event,
     botOpenId,
-    fetchMessage = getMessageFeishu,
+    fetchMessage = monitorAccountDeps.getMessageFeishu,
     verificationTimeoutMs = FEISHU_REACTION_VERIFY_TIMEOUT_MS,
     logger,
     uuid = () => crypto.randomUUID(),
@@ -810,9 +836,12 @@ export async function monitorSingleAccount(params: MonitorSingleAccountParams): 
 
   let threadBindingManager: ReturnType<typeof createFeishuThreadBindingManager> | null = null;
   try {
-    const eventDispatcher = createEventDispatcher(account);
+    const eventDispatcher = monitorAccountDeps.createEventDispatcher(account);
     const chatHistories = new Map<string, HistoryEntry[]>();
-    threadBindingManager = createFeishuThreadBindingManager({ accountId, cfg });
+    threadBindingManager = monitorAccountDeps.createFeishuThreadBindingManager({
+      accountId,
+      cfg,
+    });
 
     registerEventHandlers(eventDispatcher, {
       cfg,
@@ -823,9 +852,21 @@ export async function monitorSingleAccount(params: MonitorSingleAccountParams): 
     });
 
     if (connectionMode === "webhook") {
-      return await monitorWebhook({ account, accountId, runtime, abortSignal, eventDispatcher });
+      return await monitorAccountDeps.monitorWebhook({
+        account,
+        accountId,
+        runtime,
+        abortSignal,
+        eventDispatcher,
+      });
     }
-    return await monitorWebSocket({ account, accountId, runtime, abortSignal, eventDispatcher });
+    return await monitorAccountDeps.monitorWebSocket({
+      account,
+      accountId,
+      runtime,
+      abortSignal,
+      eventDispatcher,
+    });
   } finally {
     threadBindingManager?.stop();
   }

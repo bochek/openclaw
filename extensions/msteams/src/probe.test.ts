@@ -1,32 +1,32 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MSTeamsConfig } from "../runtime-api.js";
+import { setLoadMSTeamsSdkForTest, type MSTeamsTeamsSdk } from "./sdk.js";
 
 const hostMockState = vi.hoisted(() => ({
   tokenError: null as Error | null,
 }));
 
-vi.mock("@microsoft/teams.apps", () => ({
-  App: class {
-    protected async getBotToken() {
-      if (hostMockState.tokenError) {
-        throw hostMockState.tokenError;
-      }
-      return { value: "token" };
-    }
-    protected async getAppGraphToken() {
-      if (hostMockState.tokenError) {
-        throw hostMockState.tokenError;
-      }
-      return { value: "token" };
-    }
-  },
-}));
-
-vi.mock("@microsoft/teams.api", () => ({
-  Client: class {},
-}));
-
 import { probeMSTeams } from "./probe.js";
+
+function createMSTeamsSdkStub(): MSTeamsTeamsSdk {
+  return {
+    App: class {
+      protected async getBotToken() {
+        if (hostMockState.tokenError) {
+          throw hostMockState.tokenError;
+        }
+        return { toString: () => "token" };
+      }
+      protected async getAppGraphToken() {
+        if (hostMockState.tokenError) {
+          throw hostMockState.tokenError;
+        }
+        return { toString: () => "token" };
+      }
+    } as unknown as MSTeamsTeamsSdk["App"],
+    Client: class {} as unknown as MSTeamsTeamsSdk["Client"],
+  };
+}
 
 describe("msteams probe", () => {
   beforeEach(() => {
@@ -34,10 +34,12 @@ describe("msteams probe", () => {
     vi.stubEnv("MSTEAMS_APP_ID", "");
     vi.stubEnv("MSTEAMS_APP_PASSWORD", "");
     vi.stubEnv("MSTEAMS_TENANT_ID", "");
+    setLoadMSTeamsSdkForTest(async () => createMSTeamsSdkStub());
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    setLoadMSTeamsSdkForTest(undefined);
   });
 
   it("returns an error when credentials are missing", async () => {

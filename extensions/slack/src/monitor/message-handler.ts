@@ -133,6 +133,7 @@ export function createSlackMessageHandler(params: {
         ...last.message,
         text: combinedText,
       };
+      console.error("[slack-message-handler] before prepare");
       const prepared = await prepareSlackMessage({
         ctx,
         account,
@@ -142,6 +143,7 @@ export function createSlackMessageHandler(params: {
           wasMentioned: combinedMentioned || last.opts.wasMentioned,
         },
       });
+      console.error(`[slack-message-handler] after prepare:${prepared ? "prepared" : "empty"}`);
       const seenMessageKey = buildSeenMessageKey(last.message.channel, last.message.ts);
       if (!prepared) {
         return;
@@ -166,7 +168,9 @@ export function createSlackMessageHandler(params: {
           prepared.ctxPayload.MessageSidLast = ids[ids.length - 1];
         }
       }
+      console.error("[slack-message-handler] before dispatch");
       await dispatchPreparedSlackMessage(prepared);
+      console.error("[slack-message-handler] after dispatch");
     },
     onError: (err) => {
       ctx.runtime.error?.(`slack inbound debounce flush failed: ${String(err)}`);

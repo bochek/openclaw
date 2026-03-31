@@ -3,18 +3,13 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  __testing,
+  checkQmdBinaryAvailability,
+  resolveCliSpawnInvocation,
+} from "./qmd-process.js";
 
-const spawnMock = vi.hoisted(() => vi.fn());
-
-vi.mock("node:child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:child_process")>();
-  return {
-    ...actual,
-    spawn: spawnMock,
-  };
-});
-
-import { checkQmdBinaryAvailability, resolveCliSpawnInvocation } from "./qmd-process.js";
+const spawnMock = vi.fn();
 
 function createMockChild() {
   const child = new EventEmitter() as EventEmitter & {
@@ -32,6 +27,9 @@ const originalPathExt = process.env.PATHEXT;
 beforeEach(async () => {
   tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-qmd-win-spawn-"));
   platformSpy = vi.spyOn(process, "platform", "get").mockReturnValue("win32");
+  __testing.setDepsForTest({
+    spawn: spawnMock as unknown as typeof import("node:child_process").spawn,
+  });
 });
 
 afterEach(async () => {
@@ -39,6 +37,7 @@ afterEach(async () => {
   process.env.PATH = originalPath;
   process.env.PATHEXT = originalPathExt;
   spawnMock.mockReset();
+  __testing.setDepsForTest();
   if (tempDir) {
     await fs.rm(tempDir, { recursive: true, force: true });
     tempDir = "";

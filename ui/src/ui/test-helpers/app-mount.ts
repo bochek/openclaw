@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, vi } from "vitest";
 import { i18n } from "../../i18n/index.ts";
 import { getSafeLocalStorage, getSafeSessionStorage } from "../../local-storage.ts";
-import "../app.ts";
+import { cleanupBrowserGlobals, installBrowserGlobals } from "../../test-helpers/browser-globals.ts";
 import type { OpenClawApp } from "../app.ts";
 
 class MockWebSocket {
@@ -30,8 +30,19 @@ export function mountApp(pathname: string) {
   return app;
 }
 
+let appModulePromise: Promise<void> | null = null;
+
+async function ensureAppModuleLoaded() {
+  appModulePromise ??= import("../app.ts").then(() => undefined);
+  await appModulePromise;
+}
+
 export function registerAppMountHooks() {
   beforeEach(async () => {
+    if (typeof window === "undefined" || !window.customElements) {
+      installBrowserGlobals();
+    }
+    await ensureAppModuleLoaded();
     window.__OPENCLAW_CONTROL_UI_BASE_PATH__ = undefined;
     getSafeLocalStorage()?.clear();
     getSafeSessionStorage()?.clear();
@@ -50,6 +61,5 @@ export function registerAppMountHooks() {
     getSafeSessionStorage()?.clear();
     document.body.innerHTML = "";
     await i18n.setLocale("en");
-    vi.unstubAllGlobals();
   });
 }

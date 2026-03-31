@@ -1,9 +1,9 @@
 import { parseAgentSessionKey } from "../../../src/sessions/session-key-utils.js";
 import { scheduleChatScroll, resetChatScroll } from "./app-scroll.ts";
-import { setLastActiveSessionKey } from "./app-settings.ts";
+import { setLastActiveSessionKey } from "./last-active-session-key.ts";
 import { resetToolStream } from "./app-tool-stream.ts";
 import type { OpenClawApp } from "./app.ts";
-import { executeSlashCommand } from "./chat/slash-command-executor.ts";
+import { executeSlashCommand as executeSlashCommandImpl } from "./chat/slash-command-executor.ts";
 import { parseSlashCommand } from "./chat/slash-commands.ts";
 import { abortChatRun, loadChatHistory, sendChatMessage } from "./controllers/chat.ts";
 import { loadModels } from "./controllers/models.ts";
@@ -41,6 +41,14 @@ export type ChatHost = {
 };
 
 export const CHAT_SESSIONS_ACTIVE_MINUTES = 120;
+
+let executeSlashCommandForTest: typeof executeSlashCommandImpl | undefined;
+
+export function setChatSlashCommandExecutorForTest(
+  executor?: typeof executeSlashCommandImpl,
+): void {
+  executeSlashCommandForTest = executor;
+}
 
 export function isChatBusy(host: ChatHost) {
   return host.chatSending || Boolean(host.chatRunId);
@@ -331,10 +339,16 @@ async function dispatchSlashCommand(
   }
 
   const targetSessionKey = host.sessionKey;
-  const result = await executeSlashCommand(host.client, targetSessionKey, name, args, {
-    chatModelCatalog: host.chatModelCatalog,
-    sessionsResult: host.sessionsResult,
-  });
+  const result = await (executeSlashCommandForTest ?? executeSlashCommandImpl)(
+    host.client,
+    targetSessionKey,
+    name,
+    args,
+    {
+      chatModelCatalog: host.chatModelCatalog,
+      sessionsResult: host.sessionsResult,
+    },
+  );
 
   if (result.content) {
     injectCommandResult(host, result.content);

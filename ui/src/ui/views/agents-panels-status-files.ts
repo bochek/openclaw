@@ -1,5 +1,5 @@
 import { applyPreviewTheme } from "@create-markdown/preview";
-import DOMPurify from "dompurify";
+import { getDOMPurify } from "../dompurify.ts";
 import { html, nothing } from "lit";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import { marked } from "marked";
@@ -530,7 +530,7 @@ export function renderAgentFiles(params: {
                           ${unsafeHTML(
                             applyPreviewTheme(
                               marked.parse(draft, { gfm: true, breaks: true }) as string,
-                              { sanitize: (h: string) => DOMPurify.sanitize(h) },
+                              { sanitize: (h: string) => getDOMPurify().sanitize(h) },
                             ),
                           )}
                         </div>

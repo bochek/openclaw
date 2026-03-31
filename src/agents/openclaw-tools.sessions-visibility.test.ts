@@ -1,41 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { __testing as openClawToolsTesting, createOpenClawTools } from "./openclaw-tools.js";
+import { __testing as sessionsResolutionTesting } from "./tools/sessions-resolution.js";
 
 const callGatewayMock = vi.fn();
-vi.mock("../gateway/call.js", () => ({
-  callGateway: (opts: unknown) => callGatewayMock(opts),
-}));
-
-let mockConfig: Record<string, unknown> = {
+let mockConfig = {
   session: { mainKey: "main", scope: "per-sender" },
 };
-vi.mock("../config/config.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../config/config.js")>();
-  return {
-    ...actual,
-    loadConfig: () => mockConfig,
-    resolveGatewayPort: () => 18789,
-  };
-});
 
 import "./test-helpers/fast-core-tools.js";
-
-let createOpenClawTools: typeof import("./openclaw-tools.js").createOpenClawTools;
-
-async function loadFreshOpenClawToolsModuleForTest() {
-  vi.resetModules();
-  vi.doMock("../gateway/call.js", () => ({
-    callGateway: (opts: unknown) => callGatewayMock(opts),
-  }));
-  vi.doMock("../config/config.js", async (importOriginal) => {
-    const actual = await importOriginal<typeof import("../config/config.js")>();
-    return {
-      ...actual,
-      loadConfig: () => mockConfig,
-      resolveGatewayPort: () => 18789,
-    };
-  });
-  ({ createOpenClawTools } = await import("./openclaw-tools.js"));
-}
 
 function getSessionsHistoryTool(options?: { sandboxed?: boolean }) {
   const tool = createOpenClawTools({
@@ -67,8 +39,15 @@ function mockGatewayWithHistory(
 }
 
 describe("sessions tools visibility", () => {
-  beforeEach(async () => {
-    await loadFreshOpenClawToolsModuleForTest();
+  beforeEach(() => {
+    callGatewayMock.mockClear();
+    openClawToolsTesting.setDepsForTest({
+      callGateway: (opts: unknown) => callGatewayMock(opts),
+      config: mockConfig,
+    });
+    sessionsResolutionTesting.setDepsForTest({
+      callGateway: (opts: unknown) => callGatewayMock(opts),
+    });
   });
 
   it("defaults to tree visibility (self + spawned) for sessions_history", async () => {
@@ -76,9 +55,13 @@ describe("sessions tools visibility", () => {
       session: { mainKey: "main", scope: "per-sender" },
       tools: { agentToAgent: { enabled: false } },
     };
+    openClawToolsTesting.setDepsForTest({
+      callGateway: (opts: unknown) => callGatewayMock(opts),
+      config: mockConfig,
+    });
     mockGatewayWithHistory((req) => {
       if (req.method === "sessions.list" && req.params?.spawnedBy === "main") {
-        return { sessions: [{ key: "subagent:child-1" }] };
+        return { sessions: [{ key: "agent:main:subagent:child-1" }] };
       }
       if (req.method === "sessions.resolve") {
         const key = typeof req.params?.key === "string" ? String(req.params?.key) : "";
@@ -94,9 +77,9 @@ describe("sessions tools visibility", () => {
     });
     expect(denied.details).toMatchObject({ status: "forbidden" });
 
-    const allowed = await tool.execute("call2", { sessionKey: "subagent:child-1" });
+    const allowed = await tool.execute("call2", { sessionKey: "agent:main:subagent:child-1" });
     expect(allowed.details).toMatchObject({
-      sessionKey: "subagent:child-1",
+      sessionKey: "agent:main:subagent:child-1",
     });
   });
 
@@ -105,7 +88,17 @@ describe("sessions tools visibility", () => {
       session: { mainKey: "main", scope: "per-sender" },
       tools: { sessions: { visibility: "all" }, agentToAgent: { enabled: false } },
     };
-    mockGatewayWithHistory();
+    openClawToolsTesting.setDepsForTest({
+      callGateway: (opts: unknown) => callGatewayMock(opts),
+      config: mockConfig,
+    });
+    mockGatewayWithHistory((req) => {
+      if (req.method === "sessions.resolve") {
+        const key = typeof req.params?.key === "string" ? String(req.params?.key) : "";
+        return { key };
+      }
+      return undefined;
+    });
     const tool = getSessionsHistoryTool();
 
     const result = await tool.execute("call3", {
@@ -122,6 +115,10 @@ describe("sessions tools visibility", () => {
       tools: { sessions: { visibility: "all" }, agentToAgent: { enabled: true, allow: ["*"] } },
       agents: { defaults: { sandbox: { sessionToolsVisibility: "spawned" } } },
     };
+    openClawToolsTesting.setDepsForTest({
+      callGateway: (opts: unknown) => callGatewayMock(opts),
+      config: mockConfig,
+    });
     mockGatewayWithHistory((req) => {
       if (req.method === "sessions.list" && req.params?.spawnedBy === "main") {
         return { sessions: [] };

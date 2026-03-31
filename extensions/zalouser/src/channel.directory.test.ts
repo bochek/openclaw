@@ -1,13 +1,22 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import "./accounts.test-mocks.js";
 import "./zalo-js.test-mocks.js";
-import { zalouserPlugin } from "./channel.js";
+import { __testing, zalouserPlugin } from "./channel.js";
 import { createZalouserRuntimeEnv } from "./test-helpers.js";
 import { listZaloGroupMembersMock } from "./zalo-js.test-mocks.js";
 
 const runtimeStub = createZalouserRuntimeEnv();
 
 describe("zalouser directory group members", () => {
+  beforeEach(() => {
+    __testing.resetDepsForTest();
+    listZaloGroupMembersMock.mockReset();
+    listZaloGroupMembersMock.mockResolvedValue([]);
+    __testing.setDepsForTest({
+      listZaloGroupMembers: listZaloGroupMembersMock,
+    });
+  });
+
   it("accepts prefixed group ids from directory groups list output", async () => {
     await zalouserPlugin.directory!.listGroupMembers!({
       cfg: {},

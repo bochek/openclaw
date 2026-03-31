@@ -30,16 +30,16 @@ export type ResolvedNextcloudTalkAccount = {
   config: NextcloudTalkAccountConfig;
 };
 
-const {
-  listAccountIds: listNextcloudTalkAccountIdsInternal,
-  resolveDefaultAccountId: resolveDefaultNextcloudTalkAccountId,
-} = createAccountListHelpers("nextcloud-talk", {
+const nextcloudTalkAccountHelpers = createAccountListHelpers("nextcloud-talk", {
   normalizeAccountId,
 });
-export { resolveDefaultNextcloudTalkAccountId };
+
+export function resolveDefaultNextcloudTalkAccountId(cfg: CoreConfig): string {
+  return nextcloudTalkAccountHelpers.resolveDefaultAccountId(cfg);
+}
 
 export function listNextcloudTalkAccountIds(cfg: CoreConfig): string[] {
-  const ids = listNextcloudTalkAccountIdsInternal(cfg);
+  const ids = nextcloudTalkAccountHelpers.listAccountIds(cfg);
   debugAccounts("listNextcloudTalkAccountIds", ids);
   return ids;
 }

@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __testing as modelAuthLabelTesting, resolveModelAuthLabel } from "./model-auth-label.js";
 
 const mocks = vi.hoisted(() => ({
   ensureAuthProfileStore: vi.fn(),
@@ -8,24 +9,8 @@ const mocks = vi.hoisted(() => ({
   resolveEnvApiKey: vi.fn(() => null),
 }));
 
-vi.mock("./auth-profiles.js", () => ({
-  ensureAuthProfileStore: mocks.ensureAuthProfileStore,
-  resolveAuthProfileOrder: mocks.resolveAuthProfileOrder,
-  resolveAuthProfileDisplayLabel: mocks.resolveAuthProfileDisplayLabel,
-}));
-
-vi.mock("./model-auth.js", () => ({
-  resolveUsableCustomProviderApiKey: mocks.resolveUsableCustomProviderApiKey,
-  resolveEnvApiKey: mocks.resolveEnvApiKey,
-}));
-
-let resolveModelAuthLabel: typeof import("./model-auth-label.js").resolveModelAuthLabel;
-
 describe("resolveModelAuthLabel", () => {
-  beforeEach(async () => {
-    if (!resolveModelAuthLabel) {
-      ({ resolveModelAuthLabel } = await import("./model-auth-label.js"));
-    }
+  beforeEach(() => {
     mocks.ensureAuthProfileStore.mockReset();
     mocks.resolveAuthProfileOrder.mockReset();
     mocks.resolveAuthProfileDisplayLabel.mockReset();
@@ -33,6 +18,17 @@ describe("resolveModelAuthLabel", () => {
     mocks.resolveUsableCustomProviderApiKey.mockReturnValue(null);
     mocks.resolveEnvApiKey.mockReset();
     mocks.resolveEnvApiKey.mockReturnValue(null);
+    modelAuthLabelTesting.setDepsForTest({
+      ensureAuthProfileStore: mocks.ensureAuthProfileStore,
+      resolveAuthProfileOrder: mocks.resolveAuthProfileOrder,
+      resolveAuthProfileDisplayLabel: mocks.resolveAuthProfileDisplayLabel,
+      resolveUsableCustomProviderApiKey: mocks.resolveUsableCustomProviderApiKey,
+      resolveEnvApiKey: mocks.resolveEnvApiKey,
+    });
+  });
+
+  afterEach(() => {
+    modelAuthLabelTesting.setDepsForTest();
   });
 
   it("does not include token value in label for token profiles", () => {

@@ -1,4 +1,5 @@
 import { Type } from "@sinclair/typebox";
+import type { OpenClawConfig } from "../../config/config.js";
 import { loadConfig } from "../../config/config.js";
 import { optionalStringEnum } from "../schema/typebox.js";
 import {
@@ -28,7 +29,10 @@ const SubagentsToolSchema = Type.Object({
   recentMinutes: Type.Optional(Type.Number({ minimum: 1 })),
 });
 
-export function createSubagentsTool(opts?: { agentSessionKey?: string }): AnyAgentTool {
+export function createSubagentsTool(opts?: {
+  agentSessionKey?: string;
+  config?: OpenClawConfig;
+}): AnyAgentTool {
   return {
     label: "Subagents",
     name: "subagents",
@@ -38,7 +42,7 @@ export function createSubagentsTool(opts?: { agentSessionKey?: string }): AnyAge
     execute: async (_toolCallId, args) => {
       const params = args as Record<string, unknown>;
       const action = (readStringParam(params, "action") ?? "list") as SubagentAction;
-      const cfg = loadConfig();
+      const cfg = opts?.config ?? loadConfig();
       const controller = resolveSubagentController({
         cfg,
         agentSessionKey: opts?.agentSessionKey,

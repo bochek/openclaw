@@ -22,6 +22,7 @@ vi.mock("./github-copilot-token.js", () => ({
 }));
 
 let prepareSimpleCompletionModel: typeof import("./simple-completion-runtime.js").prepareSimpleCompletionModel;
+let runtimeTesting: typeof import("./simple-completion-runtime.js").__testing;
 
 beforeEach(async () => {
   vi.resetModules();
@@ -54,7 +55,10 @@ beforeEach(async () => {
     source: "cache:/tmp/copilot-token.json",
     baseUrl: "https://api.individual.githubcopilot.com",
   });
-  ({ prepareSimpleCompletionModel } = await import("./simple-completion-runtime.js"));
+  ({ prepareSimpleCompletionModel, __testing: runtimeTesting } = await import(
+    "./simple-completion-runtime.js"
+  ));
+  runtimeTesting.setResolveCopilotApiTokenForTest(hoisted.resolveCopilotApiTokenMock);
 });
 
 describe("prepareSimpleCompletionModel", () => {

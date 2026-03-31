@@ -27,6 +27,33 @@ const loadBlueBubblesActionsRuntime = createLazyRuntimeNamedExport(
   "blueBubblesActionsRuntime",
 );
 
+const blueBubblesActionDeps = {
+  getCachedBlueBubblesPrivateApiStatus,
+  isMacOS26OrHigher,
+  loadBlueBubblesActionsRuntime,
+  resolveBlueBubblesAccount,
+};
+
+export const __testing = {
+  setDepsForTest(
+    overrides: Partial<{
+      getCachedBlueBubblesPrivateApiStatus: typeof getCachedBlueBubblesPrivateApiStatus;
+      isMacOS26OrHigher: typeof isMacOS26OrHigher;
+      loadBlueBubblesActionsRuntime: typeof loadBlueBubblesActionsRuntime;
+      resolveBlueBubblesAccount: typeof resolveBlueBubblesAccount;
+    }> | null,
+  ) {
+    blueBubblesActionDeps.getCachedBlueBubblesPrivateApiStatus =
+      overrides?.getCachedBlueBubblesPrivateApiStatus ?? getCachedBlueBubblesPrivateApiStatus;
+    blueBubblesActionDeps.isMacOS26OrHigher =
+      overrides?.isMacOS26OrHigher ?? isMacOS26OrHigher;
+    blueBubblesActionDeps.loadBlueBubblesActionsRuntime =
+      overrides?.loadBlueBubblesActionsRuntime ?? loadBlueBubblesActionsRuntime;
+    blueBubblesActionDeps.resolveBlueBubblesAccount =
+      overrides?.resolveBlueBubblesAccount ?? resolveBlueBubblesAccount;
+  },
+};
+
 const providerId = "bluebubbles";
 
 function mapTarget(raw: string): BlueBubblesSendTarget {
@@ -52,10 +79,6 @@ function readMessageText(params: Record<string, unknown>): string | undefined {
 }
 
 /** Supported action names for BlueBubbles */
-const SUPPORTED_ACTIONS = new Set<ChannelMessageActionName>([
-  ...BLUEBUBBLES_ACTION_NAMES,
-  "upload-file",
-]);
 const PRIVATE_API_ACTIONS = new Set<ChannelMessageActionName>([
   "react",
   "edit",
@@ -69,16 +92,25 @@ const PRIVATE_API_ACTIONS = new Set<ChannelMessageActionName>([
   "leaveGroup",
 ]);
 
+function listSupportedBlueBubblesActions(): ChannelMessageActionName[] {
+  return [...BLUEBUBBLES_ACTION_NAMES, "upload-file"];
+}
+
+function createSupportedBlueBubblesActionSet(): Set<ChannelMessageActionName> {
+  return new Set<ChannelMessageActionName>(listSupportedBlueBubblesActions());
+}
+
 export const bluebubblesMessageActions: ChannelMessageActionAdapter = {
   describeMessageTool: ({ cfg, currentChannelId }) => {
-    const account = resolveBlueBubblesAccount({ cfg: cfg });
+    const account = blueBubblesActionDeps.resolveBlueBubblesAccount({ cfg: cfg });
     if (!account.enabled || !account.configured) {
       return null;
     }
     const gate = createActionGate(cfg.channels?.bluebubbles?.actions);
     const actions = new Set<ChannelMessageActionName>();
-    const macOS26 = isMacOS26OrHigher(account.accountId);
-    const privateApiStatus = getCachedBlueBubblesPrivateApiStatus(account.accountId);
+    const macOS26 = blueBubblesActionDeps.isMacOS26OrHigher(account.accountId);
+    const privateApiStatus =
+      blueBubblesActionDeps.getCachedBlueBubblesPrivateApiStatus(account.accountId);
     for (const action of BLUEBUBBLES_ACTION_NAMES) {
       const spec = BLUEBUBBLES_ACTIONS[action];
       if (!spec?.gate) {
@@ -115,11 +147,11 @@ export const bluebubblesMessageActions: ChannelMessageActionAdapter = {
     }
     return { actions: Array.from(actions) };
   },
-  supportsAction: ({ action }) => SUPPORTED_ACTIONS.has(action),
+  supportsAction: ({ action }) => createSupportedBlueBubblesActionSet().has(action),
   extractToolSend: ({ args }) => extractToolSend(args, "sendMessage"),
   handleAction: async ({ action, params, cfg, accountId, toolContext }) => {
-    const runtime = await loadBlueBubblesActionsRuntime();
-    const account = resolveBlueBubblesAccount({
+    const runtime = await blueBubblesActionDeps.loadBlueBubblesActionsRuntime();
+    const account = blueBubblesActionDeps.resolveBlueBubblesAccount({
       cfg: cfg,
       accountId: accountId ?? undefined,
     });
@@ -127,7 +159,7 @@ export const bluebubblesMessageActions: ChannelMessageActionAdapter = {
     const password = normalizeSecretInputString(account.config.password);
     const opts = { cfg: cfg, accountId: accountId ?? undefined };
     const assertPrivateApiEnabled = () => {
-      if (getCachedBlueBubblesPrivateApiStatus(account.accountId) === false) {
+      if (blueBubblesActionDeps.getCachedBlueBubblesPrivateApiStatus(account.accountId) === false) {
         throw new Error(
           `BlueBubbles ${action} requires Private API, but it is disabled on the BlueBubbles server.`,
         );
@@ -220,7 +252,7 @@ export const bluebubblesMessageActions: ChannelMessageActionAdapter = {
     if (action === "edit") {
       assertPrivateApiEnabled();
       // Edit is not supported on macOS 26+
-      if (isMacOS26OrHigher(accountId ?? undefined)) {
+      if (blueBubblesActionDeps.isMacOS26OrHigher(accountId ?? undefined)) {
         throw new Error(
           "BlueBubbles edit is not supported on macOS 26 or higher. " +
             "Apple removed the ability to edit iMessages in this version.",

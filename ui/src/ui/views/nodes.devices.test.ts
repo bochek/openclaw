@@ -1,4 +1,5 @@
 /* @vitest-environment jsdom */
+import "../../test-helpers/browser-globals-install.ts";
 import { render } from "lit";
 import { describe, expect, it } from "vitest";
 import { renderNodes, type NodesProps } from "./nodes.ts";

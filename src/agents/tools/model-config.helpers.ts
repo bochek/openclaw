@@ -4,9 +4,10 @@ import {
   resolveAgentModelPrimaryValue,
 } from "../../config/model-input.js";
 import type { AgentModelConfig } from "../../config/types.agents-shared.js";
-import { ensureAuthProfileStore, listProfilesForProvider } from "../auth-profiles.js";
+import { listProfilesForProvider } from "../auth-profiles/profiles.js";
+import { ensureAuthProfileStore } from "../auth-profiles/store.js";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "../defaults.js";
-import { resolveEnvApiKey } from "../model-auth.js";
+import { resolveEnvApiKey } from "../model-auth-env.js";
 import { resolveConfiguredModelRef } from "../model-selection.js";
 
 export type ToolModelConfig = { primary?: string; fallbacks?: string[] };

@@ -4,7 +4,7 @@ import type {
   ChannelConfigRuntimeSchema,
   ChannelConfigSchema,
 } from "../channels/plugins/types.plugin.js";
-import { listBundledPluginMetadata } from "../plugins/bundled-plugin-metadata.js";
+import { BUNDLED_PLUGIN_METADATA } from "../plugins/bundled-plugin-metadata.js";
 import { MSTeamsConfigSchema } from "./zod-schema.providers-core.js";
 import { WhatsAppConfigSchema } from "./zod-schema.providers-whatsapp.js";
 
@@ -18,12 +18,32 @@ type BundledChannelMaps = {
   runtimeMap: Map<string, ChannelConfigRuntimeSchema>;
   configSchemaMap: Map<string, ChannelConfigSchema>;
 };
+type BundledChannelRuntimeDeps = {
+  readBundledChannelPluginsExport: () => unknown;
+};
 
 const staticBundledChannelSchemas = new Map<string, ChannelConfigSchema>([
   ["msteams", buildChannelConfigSchema(MSTeamsConfigSchema)],
   ["whatsapp", buildChannelConfigSchema(WhatsAppConfigSchema)],
 ]);
+const defaultBundledChannelRuntimeDeps: BundledChannelRuntimeDeps = {
+  readBundledChannelPluginsExport: () => bundledChannelModule.bundledChannelPlugins,
+};
+const bundledChannelRuntimeDeps: BundledChannelRuntimeDeps = {
+  ...defaultBundledChannelRuntimeDeps,
+};
 let cachedBundledChannelMaps: BundledChannelMaps | undefined;
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<BundledChannelRuntimeDeps>) {
+    Object.assign(bundledChannelRuntimeDeps, overrides);
+    cachedBundledChannelMaps = undefined;
+  },
+  resetDepsForTest() {
+    Object.assign(bundledChannelRuntimeDeps, defaultBundledChannelRuntimeDeps);
+    cachedBundledChannelMaps = undefined;
+  },
+};
 
 function buildBundledChannelMaps(
   plugins: readonly BundledChannelPluginShape[],
@@ -42,7 +62,7 @@ function buildBundledChannelMaps(
     }
   }
 
-  for (const entry of listBundledPluginMetadata({ includeChannelConfigs: true })) {
+  for (const entry of BUNDLED_PLUGIN_METADATA) {
     const channelConfigs = entry.manifest.channelConfigs;
     if (!channelConfigs) {
       continue;
@@ -72,11 +92,10 @@ function buildBundledChannelMaps(
 
 function readBundledChannelPlugins(): readonly BundledChannelPluginShape[] | undefined {
   try {
-    if (typeof bundledChannelModule.listBundledChannelPlugins !== "function") {
-      return undefined;
-    }
-    const plugins = bundledChannelModule.listBundledChannelPlugins();
-    return Array.isArray(plugins) ? (plugins as readonly BundledChannelPluginShape[]) : undefined;
+    const plugins = bundledChannelRuntimeDeps.readBundledChannelPluginsExport();
+    return Array.isArray(plugins)
+      ? (plugins as readonly BundledChannelPluginShape[])
+      : undefined;
   } catch (error) {
     // Circular bundled channel imports can transiently hit TDZ during test/bootstrap
     // initialization. Fall back to metadata/static schemas until the registry is ready.

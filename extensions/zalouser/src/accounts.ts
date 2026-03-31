@@ -8,11 +8,15 @@ import type { OpenClawConfig } from "../runtime-api.js";
 import type { ResolvedZalouserAccount, ZalouserAccountConfig, ZalouserConfig } from "./types.js";
 import { checkZaloAuthenticated, getZaloUserInfo } from "./zalo-js.js";
 
-const {
-  listAccountIds: listZalouserAccountIds,
-  resolveDefaultAccountId: resolveDefaultZalouserAccountId,
-} = createAccountListHelpers("zalouser");
-export { listZalouserAccountIds, resolveDefaultZalouserAccountId };
+const zalouserAccountHelpers = createAccountListHelpers("zalouser");
+
+export function listZalouserAccountIds(cfg: OpenClawConfig): string[] {
+  return zalouserAccountHelpers.listAccountIds(cfg);
+}
+
+export function resolveDefaultZalouserAccountId(cfg: OpenClawConfig): string {
+  return zalouserAccountHelpers.resolveDefaultAccountId(cfg);
+}
 
 function mergeZalouserAccountConfig(cfg: OpenClawConfig, accountId: string): ZalouserAccountConfig {
   const merged = resolveMergedAccountConfig<ZalouserAccountConfig>({

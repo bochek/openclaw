@@ -1,7 +1,15 @@
+import fs from "node:fs";
 import { afterEach, beforeEach, vi } from "vitest";
 import { withTempHome as withTempHomeBase } from "../../test/helpers/temp-home.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type { MockFn } from "../test-utils/vitest-mock-fn.js";
+import { AUTH_STORE_VERSION } from "./auth-profiles/constants.js";
+import { resolveAuthStorePath } from "./auth-profiles/paths.js";
+import {
+  clearRuntimeAuthProfileStoreSnapshots,
+  replaceRuntimeAuthProfileStoreSnapshots,
+} from "./auth-profiles/store.js";
+import type { AuthProfileStore } from "./auth-profiles/types.js";
 import { resolveImplicitProviders } from "./models-config.providers.implicit.js";
 
 export function withModelsTempHome<T>(fn: (home: string) => Promise<T>): Promise<T> {
@@ -10,14 +18,32 @@ export function withModelsTempHome<T>(fn: (home: string) => Promise<T>): Promise
 
 export function installModelsConfigTestHooks(opts?: { restoreFetch?: boolean }) {
   let previousHome: string | undefined;
+  let previousImplicitEnv: Record<string, string | undefined> = {};
   const originalFetch = globalThis.fetch;
 
   beforeEach(() => {
     previousHome = process.env.HOME;
+    previousImplicitEnv = {};
+    for (const envVar of MODELS_CONFIG_IMPLICIT_ENV_VARS) {
+      previousImplicitEnv[envVar] = process.env[envVar];
+      delete process.env[envVar];
+    }
+    // Keep models-config tests deterministic and out of live/provider-discovery mode
+    // unless an individual test explicitly opts into a different env.
+    process.env.VITEST = previousImplicitEnv.VITEST ?? "true";
+    process.env.NODE_ENV = previousImplicitEnv.NODE_ENV ?? "test";
   });
 
   afterEach(() => {
     process.env.HOME = previousHome;
+    for (const envVar of MODELS_CONFIG_IMPLICIT_ENV_VARS) {
+      const value = previousImplicitEnv[envVar];
+      if (value === undefined) {
+        delete process.env[envVar];
+      } else {
+        process.env[envVar] = value;
+      }
+    }
     if (opts?.restoreFetch && originalFetch) {
       globalThis.fetch = originalFetch;
     }
@@ -108,6 +134,8 @@ export const MODELS_CONFIG_IMPLICIT_ENV_VARS = [
   "TOGETHER_API_KEY",
   "VOLCANO_ENGINE_API_KEY",
   "BYTEPLUS_API_KEY",
+  "CHUTES_API_KEY",
+  "CHUTES_OAUTH_TOKEN",
   "KILOCODE_API_KEY",
   "KIMI_API_KEY",
   "KIMICODE_API_KEY",
@@ -135,7 +163,9 @@ export const MODELS_CONFIG_IMPLICIT_ENV_VARS = [
 ];
 
 export function snapshotImplicitProviderEnv(env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
-  const source = env ?? process.env;
+  // Tests must opt into env inputs explicitly; ambient host env makes provider
+  // assertions machine-dependent and drags unrelated discovery into the run.
+  const source = env ?? {};
   const snapshot: NodeJS.ProcessEnv = {};
 
   for (const envVar of MODELS_CONFIG_IMPLICIT_ENV_VARS) {
@@ -148,12 +178,42 @@ export function snapshotImplicitProviderEnv(env?: NodeJS.ProcessEnv): NodeJS.Pro
   return snapshot;
 }
 
-export function resolveImplicitProvidersForTest(
+function loadIsolatedAuthProfileStore(agentDir: string): AuthProfileStore {
+  const authPath = resolveAuthStorePath(agentDir);
+  if (!fs.existsSync(authPath)) {
+    return { version: AUTH_STORE_VERSION, profiles: {} };
+  }
+  return JSON.parse(fs.readFileSync(authPath, "utf8")) as AuthProfileStore;
+}
+
+export async function resolveImplicitProvidersForTest(
   params: Parameters<typeof resolveImplicitProviders>[0],
 ) {
-  return resolveImplicitProviders({
+  replaceRuntimeAuthProfileStoreSnapshots([
+    {
+      store: { version: AUTH_STORE_VERSION, profiles: {} },
+    },
+    {
+      agentDir: params.agentDir,
+      store: loadIsolatedAuthProfileStore(params.agentDir),
+    },
+  ]);
+  try {
+    return await resolveImplicitProviders({
+      ...params,
+      env: snapshotImplicitProviderEnv(params.env),
+    });
+  } finally {
+    clearRuntimeAuthProfileStoreSnapshots();
+  }
+}
+
+export function resolveCoreImplicitProvidersForTest(
+  params: Omit<Parameters<typeof resolveImplicitProviders>[0], "onlyPluginIds">,
+) {
+  return resolveImplicitProvidersForTest({
     ...params,
-    env: snapshotImplicitProviderEnv(params.env),
+    onlyPluginIds: [],
   });
 }
 

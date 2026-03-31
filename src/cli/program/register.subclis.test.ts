@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  __testing,
   loadValidatedConfigForPluginRegistration,
   registerSubCliByName,
   registerSubCliCommands,
@@ -28,10 +29,6 @@ const configModule = vi.hoisted(() => ({
   readConfigFileSnapshot: vi.fn(),
 }));
 
-vi.mock("../acp-cli.js", () => ({ registerAcpCli }));
-vi.mock("../nodes-cli.js", () => ({ registerNodesCli }));
-vi.mock("../../config/config.js", () => configModule);
-
 describe("registerSubCliCommands", () => {
   const originalArgv = process.argv;
   const originalDisableLazySubcommands = process.env.OPENCLAW_DISABLE_LAZY_SUBCOMMANDS;
@@ -58,6 +55,12 @@ describe("registerSubCliCommands", () => {
     nodesAction.mockClear();
     configModule.loadConfig.mockReset();
     configModule.readConfigFileSnapshot.mockReset();
+    __testing.resetDepsForTest();
+    __testing.setDepsForTest({
+      loadAcpCliModule: async () => ({ registerAcpCli }) as never,
+      loadNodesCliModule: async () => ({ registerNodesCli }) as never,
+      loadConfigModule: async () => configModule as never,
+    });
   });
 
   afterEach(() => {
@@ -67,6 +70,7 @@ describe("registerSubCliCommands", () => {
     } else {
       process.env.OPENCLAW_DISABLE_LAZY_SUBCOMMANDS = originalDisableLazySubcommands;
     }
+    __testing.resetDepsForTest();
   });
 
   it("registers only the primary placeholder and dispatches", async () => {

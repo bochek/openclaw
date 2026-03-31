@@ -1,4 +1,5 @@
 import { resolveQueueSettings } from "../auto-reply/reply/queue.js";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { loadConfig } from "../config/config.js";
 import {
   loadSessionStore,
@@ -54,6 +55,12 @@ const defaultSubagentAnnounceDeliveryDeps: SubagentAnnounceDeliveryDeps = {
 
 let subagentAnnounceDeliveryDeps: SubagentAnnounceDeliveryDeps =
   defaultSubagentAnnounceDeliveryDeps;
+const subagentAnnounceDeliveryDepsStorage =
+  new AsyncLocalStorage<SubagentAnnounceDeliveryDeps>();
+
+function getSubagentAnnounceDeliveryDeps(): SubagentAnnounceDeliveryDeps {
+  return subagentAnnounceDeliveryDepsStorage.getStore() ?? subagentAnnounceDeliveryDeps;
+}
 
 function resolveDirectAnnounceTransientRetryDelaysMs() {
   return process.env.OPENCLAW_TEST_FAST === "1"
@@ -293,7 +300,7 @@ export async function resolveSubagentCompletionOrigin(params: {
 }
 
 async function sendAnnounce(item: AnnounceQueueItem) {
-  const cfg = subagentAnnounceDeliveryDeps.loadConfig();
+  const cfg = getSubagentAnnounceDeliveryDeps().loadConfig();
   const announceTimeoutMs = resolveSubagentAnnounceTimeoutMs(cfg);
   const requesterIsSubagent = isInternalAnnounceRequesterSession(item.sessionKey);
   const origin = item.origin;
@@ -306,7 +313,7 @@ async function sendAnnounce(item: AnnounceQueueItem) {
       enqueuedAt: item.enqueuedAt,
     }),
   );
-  await subagentAnnounceDeliveryDeps.callGateway({
+  await getSubagentAnnounceDeliveryDeps().callGateway({
     method: "agent",
     params: {
       sessionKey: item.sessionKey,
@@ -352,7 +359,7 @@ export function resolveRequesterStoreKey(
 }
 
 export function loadRequesterSessionEntry(requesterSessionKey: string) {
-  const cfg = subagentAnnounceDeliveryDeps.loadConfig();
+  const cfg = getSubagentAnnounceDeliveryDeps().loadConfig();
   const canonicalKey = resolveRequesterStoreKey(cfg, requesterSessionKey);
   const agentId = resolveAgentIdFromSessionKey(canonicalKey);
   const storePath = resolveStorePath(cfg.session?.store, { agentId });
@@ -362,7 +369,7 @@ export function loadRequesterSessionEntry(requesterSessionKey: string) {
 }
 
 export function loadSessionEntryByKey(sessionKey: string) {
-  const cfg = subagentAnnounceDeliveryDeps.loadConfig();
+  const cfg = getSubagentAnnounceDeliveryDeps().loadConfig();
   const agentId = resolveAgentIdFromSessionKey(sessionKey);
   const storePath = resolveStorePath(cfg.session?.store, { agentId });
   const store = loadSessionStore(storePath);
@@ -467,7 +474,7 @@ async function sendSubagentAnnounceDirectly(params: {
       path: "none",
     };
   }
-  const cfg = subagentAnnounceDeliveryDeps.loadConfig();
+  const cfg = getSubagentAnnounceDeliveryDeps().loadConfig();
   const announceTimeoutMs = resolveSubagentAnnounceTimeoutMs(cfg);
   const canonicalRequesterSessionKey = resolveRequesterStoreKey(
     cfg,
@@ -512,7 +519,7 @@ async function sendSubagentAnnounceDirectly(params: {
         : "direct announce agent call",
       signal: params.signal,
       run: async () =>
-        await subagentAnnounceDeliveryDeps.callGateway({
+        await getSubagentAnnounceDeliveryDeps().callGateway({
           method: "agent",
           params: {
             sessionKey: canonicalRequesterSessionKey,
@@ -628,5 +635,17 @@ export const __testing = {
           ...overrides,
         }
       : defaultSubagentAnnounceDeliveryDeps;
+  },
+  runWithDepsForTest<T>(
+    overrides: Partial<SubagentAnnounceDeliveryDeps> | undefined,
+    fn: () => T,
+  ): T {
+    const deps = overrides
+      ? {
+          ...defaultSubagentAnnounceDeliveryDeps,
+          ...overrides,
+        }
+      : defaultSubagentAnnounceDeliveryDeps;
+    return subagentAnnounceDeliveryDepsStorage.run(deps, fn);
   },
 };

@@ -4,8 +4,15 @@ import {
   expectPendingUntilAbort,
   startAccountAndTrackLifecycle,
   waitForStartedMocks,
-} from "../../../test/helpers/plugins/start-account-lifecycle.js";
+} from "../../../test/helpers/extensions/start-account-lifecycle.js";
 import type { ResolvedZaloAccount } from "./accounts.js";
+import {
+  __resetLoadMonitorZaloProviderForTest,
+  __resetResolveProbeZaloForTest,
+  __setLoadMonitorZaloProviderForTest,
+  __setResolveProbeZaloForTest,
+} from "./channel.runtime.js";
+import { zaloPlugin } from "./channel.js";
 
 const hoisted = vi.hoisted(() => ({
   monitorZaloProvider: vi.fn(),
@@ -15,24 +22,6 @@ const hoisted = vi.hoisted(() => ({
     elapsedMs: 1,
   })),
 }));
-
-vi.mock("./monitor.js", async () => {
-  const actual = await vi.importActual<typeof import("./monitor.js")>("./monitor.js");
-  return {
-    ...actual,
-    monitorZaloProvider: hoisted.monitorZaloProvider,
-  };
-});
-
-vi.mock("./probe.js", async () => {
-  const actual = await vi.importActual<typeof import("./probe.js")>("./probe.js");
-  return {
-    ...actual,
-    probeZalo: hoisted.probeZalo,
-  };
-});
-
-import { zaloPlugin } from "./channel.js";
 
 function buildAccount(): ResolvedZaloAccount {
   return {
@@ -47,9 +36,13 @@ function buildAccount(): ResolvedZaloAccount {
 describe("zaloPlugin gateway.startAccount", () => {
   afterEach(() => {
     vi.clearAllMocks();
+    __resetResolveProbeZaloForTest();
+    __resetLoadMonitorZaloProviderForTest();
   });
 
   it("keeps startAccount pending until abort", async () => {
+    __setResolveProbeZaloForTest(() => hoisted.probeZalo);
+    __setLoadMonitorZaloProviderForTest(async () => hoisted.monitorZaloProvider);
     hoisted.monitorZaloProvider.mockImplementationOnce(
       async ({ abortSignal }: { abortSignal: AbortSignal }) =>
         await new Promise<void>((resolve) => {

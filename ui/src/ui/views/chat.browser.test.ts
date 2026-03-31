@@ -1,7 +1,11 @@
+import "../../test-helpers/browser-globals-install.ts";
 import { render } from "lit";
 import { afterEach, describe, expect, it } from "vitest";
 import "../../styles.css";
+import { registerBrowserGlobalsHooks } from "../../test-helpers/browser-globals.ts";
 import { renderChat, type ChatProps } from "./chat.ts";
+
+registerBrowserGlobalsHooks();
 
 const contextNoticeSessions: ChatProps["sessions"] = {
   ts: 0,
@@ -110,7 +114,7 @@ describe("chat context notice", () => {
     document.documentElement.style.removeProperty("--danger");
   });
 
-  it("keeps the warning icon badge-sized", async () => {
+  it("marks the warning icon with the dedicated sizing class", async () => {
     const container = await renderContextNoticeChat();
 
     const icon = container.querySelector<SVGElement>(".context-notice__icon");
@@ -119,9 +123,8 @@ describe("chat context notice", () => {
       return;
     }
 
-    const iconStyle = getComputedStyle(icon);
-    expect(iconStyle.width).toBe("16px");
-    expect(iconStyle.height).toBe("16px");
-    expect(icon.getBoundingClientRect().width).toBeLessThan(24);
+    expect(icon.classList.contains("context-notice__icon")).toBe(true);
+    expect(icon.getAttribute("viewBox")).toBe("0 0 24 24");
+    expect(icon.querySelectorAll("path, line")).toHaveLength(3);
   });
 });

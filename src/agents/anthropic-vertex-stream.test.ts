@@ -1,59 +1,25 @@
 import type { Model } from "@mariozechner/pi-ai";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-
-const hoisted = vi.hoisted(() => {
-  const streamAnthropicMock = vi.fn<(model: unknown, context: unknown, options: unknown) => symbol>(
-    () => Symbol("anthropic-vertex-stream"),
-  );
-  const anthropicVertexCtorMock = vi.fn();
-
-  return {
-    streamAnthropicMock,
-    anthropicVertexCtorMock,
-  };
-});
-
-vi.mock("@mariozechner/pi-ai", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@mariozechner/pi-ai")>();
-  return {
-    ...original,
-    streamAnthropic: (model: unknown, context: unknown, options: unknown) =>
-      hoisted.streamAnthropicMock(model, context, options),
-  };
-});
-
-vi.mock("@anthropic-ai/vertex-sdk", () => ({
-  AnthropicVertex: vi.fn(function MockAnthropicVertex(options: unknown) {
-    hoisted.anthropicVertexCtorMock(options);
-    return { options };
-  }),
-}));
-
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   resolveAnthropicVertexRegion,
   resolveAnthropicVertexRegionFromBaseUrl,
 } from "../plugin-sdk/anthropic-vertex.js";
+import {
+  __testing as anthropicVertexStreamTesting,
+  createAnthropicVertexStreamFn,
+  createAnthropicVertexStreamFnForModel,
+} from "./anthropic-vertex-stream.js";
 
-let createAnthropicVertexStreamFn: typeof import("./anthropic-vertex-stream.js").createAnthropicVertexStreamFn;
-let createAnthropicVertexStreamFnForModel: typeof import("./anthropic-vertex-stream.js").createAnthropicVertexStreamFnForModel;
+const streamAnthropicMock = vi.fn<(model: unknown, context: unknown, options: unknown) => symbol>(
+  () => Symbol("anthropic-vertex-stream"),
+);
+const anthropicVertexCtorMock = vi.fn();
 
-async function loadFreshAnthropicVertexStreamModuleForTest() {
-  vi.resetModules();
-  vi.doMock("@mariozechner/pi-ai", async (importOriginal) => {
-    const original = await importOriginal<typeof import("@mariozechner/pi-ai")>();
-    return {
-      ...original,
-      streamAnthropic: (model: unknown, context: unknown, options: unknown) =>
-        hoisted.streamAnthropicMock(model, context, options),
-    };
-  });
-  vi.doMock("@anthropic-ai/vertex-sdk", () => ({
-    AnthropicVertex: vi.fn(function MockAnthropicVertex(options: unknown) {
-      hoisted.anthropicVertexCtorMock(options);
-      return { options };
-    }),
-  }));
-  return await import("./anthropic-vertex-stream.js");
+class MockAnthropicVertex {
+  constructor(options: unknown) {
+    anthropicVertexCtorMock(options);
+    return { options } as never;
+  }
 }
 
 function makeModel(params: { id: string; maxTokens?: number }): Model<"anthropic-messages"> {
@@ -67,13 +33,10 @@ function makeModel(params: { id: string; maxTokens?: number }): Model<"anthropic
 
 describe("createAnthropicVertexStreamFn", () => {
   beforeEach(() => {
-    hoisted.streamAnthropicMock.mockClear();
-    hoisted.anthropicVertexCtorMock.mockClear();
-  });
-
-  beforeEach(async () => {
-    ({ createAnthropicVertexStreamFn, createAnthropicVertexStreamFnForModel } =
-      await loadFreshAnthropicVertexStreamModuleForTest());
+    streamAnthropicMock.mockClear();
+    anthropicVertexCtorMock.mockClear();
+    anthropicVertexStreamTesting.setStreamAnthropicForTests(streamAnthropicMock as never);
+    anthropicVertexStreamTesting.setAnthropicVertexCtorForTests(MockAnthropicVertex as never);
   });
 
   it("omits projectId when ADC credentials are used without an explicit project", () => {
@@ -81,7 +44,7 @@ describe("createAnthropicVertexStreamFn", () => {
 
     void streamFn(makeModel({ id: "claude-sonnet-4-6", maxTokens: 128000 }), { messages: [] }, {});
 
-    expect(hoisted.anthropicVertexCtorMock).toHaveBeenCalledWith({
+    expect(anthropicVertexCtorMock).toHaveBeenCalledWith({
       region: "global",
     });
   });
@@ -95,7 +58,7 @@ describe("createAnthropicVertexStreamFn", () => {
 
     void streamFn(makeModel({ id: "claude-sonnet-4-6", maxTokens: 128000 }), { messages: [] }, {});
 
-    expect(hoisted.anthropicVertexCtorMock).toHaveBeenCalledWith({
+    expect(anthropicVertexCtorMock).toHaveBeenCalledWith({
       projectId: "vertex-project",
       region: "us-east5",
       baseURL: "https://proxy.example.test/vertex/v1",
@@ -108,7 +71,7 @@ describe("createAnthropicVertexStreamFn", () => {
 
     void streamFn(model, { messages: [] }, {});
 
-    expect(hoisted.streamAnthropicMock).toHaveBeenCalledWith(
+    expect(streamAnthropicMock).toHaveBeenCalledWith(
       model,
       { messages: [] },
       expect.objectContaining({
@@ -123,7 +86,7 @@ describe("createAnthropicVertexStreamFn", () => {
 
     void streamFn(model, { messages: [] }, { maxTokens: 999999 });
 
-    expect(hoisted.streamAnthropicMock).toHaveBeenCalledWith(
+    expect(streamAnthropicMock).toHaveBeenCalledWith(
       model,
       { messages: [] },
       expect.objectContaining({
@@ -138,7 +101,7 @@ describe("createAnthropicVertexStreamFn", () => {
 
     void streamFn(model, { messages: [] }, { reasoning: "xhigh" });
 
-    expect(hoisted.streamAnthropicMock).toHaveBeenCalledWith(
+    expect(streamAnthropicMock).toHaveBeenCalledWith(
       model,
       { messages: [] },
       expect.objectContaining({
@@ -154,7 +117,7 @@ describe("createAnthropicVertexStreamFn", () => {
 
     void streamFn(model, { messages: [] }, { maxTokens: Number.NaN });
 
-    expect(hoisted.streamAnthropicMock).toHaveBeenCalledWith(
+    expect(streamAnthropicMock).toHaveBeenCalledWith(
       model,
       { messages: [] },
       expect.not.objectContaining({
@@ -196,12 +159,8 @@ describe("resolveAnthropicVertexRegionFromBaseUrl", () => {
 
 describe("createAnthropicVertexStreamFnForModel", () => {
   beforeEach(() => {
-    hoisted.anthropicVertexCtorMock.mockClear();
-  });
-
-  beforeEach(async () => {
-    ({ createAnthropicVertexStreamFn, createAnthropicVertexStreamFnForModel } =
-      await loadFreshAnthropicVertexStreamModuleForTest());
+    anthropicVertexCtorMock.mockClear();
+    anthropicVertexStreamTesting.setAnthropicVertexCtorForTests(MockAnthropicVertex as never);
   });
 
   it("derives project and region from the model and env", () => {
@@ -212,7 +171,7 @@ describe("createAnthropicVertexStreamFnForModel", () => {
 
     void streamFn(makeModel({ id: "claude-sonnet-4-6", maxTokens: 64000 }), { messages: [] }, {});
 
-    expect(hoisted.anthropicVertexCtorMock).toHaveBeenCalledWith({
+    expect(anthropicVertexCtorMock).toHaveBeenCalledWith({
       projectId: "vertex-project",
       region: "europe-west4",
       baseURL: "https://europe-west4-aiplatform.googleapis.com/v1",
@@ -227,7 +186,7 @@ describe("createAnthropicVertexStreamFnForModel", () => {
 
     void streamFn(makeModel({ id: "claude-sonnet-4-6", maxTokens: 64000 }), { messages: [] }, {});
 
-    expect(hoisted.anthropicVertexCtorMock).toHaveBeenCalledWith({
+    expect(anthropicVertexCtorMock).toHaveBeenCalledWith({
       projectId: "vertex-project",
       region: "global",
       baseURL: "https://proxy.example.test/custom-root/v1",
@@ -242,10 +201,15 @@ describe("createAnthropicVertexStreamFnForModel", () => {
 
     void streamFn(makeModel({ id: "claude-sonnet-4-6", maxTokens: 64000 }), { messages: [] }, {});
 
-    expect(hoisted.anthropicVertexCtorMock).toHaveBeenCalledWith({
+    expect(anthropicVertexCtorMock).toHaveBeenCalledWith({
       projectId: "vertex-project",
       region: "global",
       baseURL: "https://proxy.example.test/custom-root/v1",
     });
   });
+});
+
+afterEach(() => {
+  anthropicVertexStreamTesting.setAnthropicVertexCtorForTests(null);
+  anthropicVertexStreamTesting.setStreamAnthropicForTests(null);
 });

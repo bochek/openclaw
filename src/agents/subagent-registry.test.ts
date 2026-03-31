@@ -42,13 +42,9 @@ vi.mock("../infra/agent-events.js", () => ({
   onAgentEvent: mocks.onAgentEvent,
 }));
 
-vi.mock("../config/config.js", async () => {
-  const actual = await vi.importActual<typeof import("../config/config.js")>("../config/config.js");
-  return {
-    ...actual,
-    loadConfig: mocks.loadConfig,
-  };
-});
+vi.mock("../config/config.js", () => ({
+  loadConfig: mocks.loadConfig,
+}));
 
 vi.mock("../config/sessions.js", () => ({
   loadSessionStore: mocks.loadSessionStore,
@@ -96,11 +92,31 @@ vi.mock("./timeout.js", () => ({
   resolveAgentTimeoutMs: mocks.resolveAgentTimeoutMs,
 }));
 
-describe("subagent registry seam flow", () => {
-  let mod: typeof import("./subagent-registry.js");
+import * as mod from "./subagent-registry.js";
 
-  beforeEach(async () => {
-    vi.resetModules();
+async function flushRegistryAsyncWork(passes = 3) {
+  for (let index = 0; index < passes; index += 1) {
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  await Promise.resolve();
+}
+
+async function expectPathRemoved(pathToCheck: string, attempts = 10) {
+  for (let index = 0; index < attempts; index += 1) {
+    try {
+      await fs.access(pathToCheck);
+    } catch (error) {
+      expect(error).toMatchObject({ code: "ENOENT" });
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+  throw new Error(`Expected path to be removed: ${pathToCheck}`);
+}
+
+describe("subagent registry seam flow", () => {
+  beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-24T12:00:00Z"));
@@ -133,13 +149,23 @@ describe("subagent registry seam flow", () => {
       }
       return {};
     });
-    mod = await import("./subagent-registry.js");
+    mod.__testing.setDepsForTest();
+    mod.__testing.setDepsForTest({
+      completeTaskRunByRunId: () => undefined,
+      failTaskRunByRunId: () => undefined,
+      setDetachedTaskDeliveryStatusByRunId: () => undefined,
+    });
     mod.resetSubagentRegistryForTests({ persist: false });
   });
 
   afterEach(() => {
     mod.resetSubagentRegistryForTests({ persist: false });
-    vi.useRealTimers();
+    try {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    } catch {
+      // Some cases switch back to real timers before teardown.
+    }
   });
 
   it("completes a registered run across timing persistence, lifecycle status, and announce cleanup", async () => {
@@ -153,9 +179,8 @@ describe("subagent registry seam flow", () => {
       cleanup: "delete",
     });
 
-    await vi.waitFor(() => {
-      expect(mocks.runSubagentAnnounceFlow).toHaveBeenCalledTimes(1);
-    });
+    await flushRegistryAsyncWork();
+    expect(mocks.runSubagentAnnounceFlow).toHaveBeenCalledTimes(1);
 
     expect(mocks.emitSessionLifecycleEvent).toHaveBeenCalledWith({
       sessionKey: "agent:main:subagent:child",
@@ -273,17 +298,14 @@ describe("subagent registry seam flow", () => {
     }) as never);
 
     mod.initSubagentRegistry();
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushRegistryAsyncWork();
 
     expect(mocks.runSubagentAnnounceFlow).not.toHaveBeenCalled();
     expect(mocks.runSubagentEnded).toHaveBeenCalledTimes(1);
-    await vi.waitFor(() => {
-      expect(mocks.onSubagentEnded).toHaveBeenCalledWith({
-        childSessionKey: "agent:main:subagent:child",
-        reason: "deleted",
-        workspaceDir: undefined,
-      });
+    expect(mocks.onSubagentEnded).toHaveBeenCalledWith({
+      childSessionKey: "agent:main:subagent:child",
+      reason: "deleted",
+      workspaceDir: undefined,
     });
     expect(
       mod
@@ -327,13 +349,12 @@ describe("subagent registry seam flow", () => {
       cleanup: "keep",
     });
 
-    await vi.waitFor(() => {
-      expect(
-        mod
-          .listSubagentRunsForRequester("agent:main:main")
-          .find((entry) => entry.runId === "run-parent-expired"),
-      ).toBeUndefined();
-    });
+    await flushRegistryAsyncWork();
+    expect(
+      mod
+        .listSubagentRunsForRequester("agent:main:main")
+        .find((entry) => entry.runId === "run-parent-expired"),
+    ).toBeUndefined();
 
     expect(mocks.runSubagentAnnounceFlow).toHaveBeenCalledTimes(1);
     expect(mocks.runSubagentAnnounceFlow).toHaveBeenCalledWith(
@@ -341,12 +362,10 @@ describe("subagent registry seam flow", () => {
         childRunId: "run-child-finished",
       }),
     );
-    await vi.waitFor(() => {
-      expect(mocks.onSubagentEnded).toHaveBeenCalledWith({
-        childSessionKey: "agent:main:subagent:parent",
-        reason: "deleted",
-        workspaceDir: undefined,
-      });
+    expect(mocks.onSubagentEnded).toHaveBeenCalledWith({
+      childSessionKey: "agent:main:subagent:parent",
+      reason: "deleted",
+      workspaceDir: undefined,
     });
   });
 
@@ -377,15 +396,14 @@ describe("subagent registry seam flow", () => {
     });
 
     expect(updated).toBe(1);
-    await vi.waitFor(() => {
-      expect(mocks.ensureRuntimePluginsLoaded).toHaveBeenCalledWith({
-        config: {
-          agents: { defaults: { subagents: { archiveAfterMinutes: 0 } } },
-          session: { mainKey: "main", scope: "per-sender" },
-        },
-        workspaceDir: "/tmp/killed-workspace",
-        allowGatewaySubagentBinding: true,
-      });
+    await flushRegistryAsyncWork();
+    expect(mocks.ensureRuntimePluginsLoaded).toHaveBeenCalledWith({
+      config: {
+        agents: { defaults: { subagents: { archiveAfterMinutes: 0 } } },
+        session: { mainKey: "main", scope: "per-sender" },
+      },
+      workspaceDir: "/tmp/killed-workspace",
+      allowGatewaySubagentBinding: true,
     });
     expect(mocks.runSubagentEnded).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -426,12 +444,11 @@ describe("subagent registry seam flow", () => {
         .listSubagentRunsForRequester("agent:main:main")
         .find((entry) => entry.runId === "run-killed-delete"),
     ).toBeUndefined();
-    await vi.waitFor(() => {
-      expect(mocks.onSubagentEnded).toHaveBeenCalledWith({
-        childSessionKey: "agent:main:subagent:killed-delete",
-        reason: "deleted",
-        workspaceDir: "/tmp/killed-delete-workspace",
-      });
+    await flushRegistryAsyncWork();
+    expect(mocks.onSubagentEnded).toHaveBeenCalledWith({
+      childSessionKey: "agent:main:subagent:killed-delete",
+      reason: "deleted",
+      workspaceDir: "/tmp/killed-delete-workspace",
     });
   });
 
@@ -460,9 +477,8 @@ describe("subagent registry seam flow", () => {
     });
 
     expect(updated).toBe(1);
-    await vi.waitFor(async () => {
-      await expect(fs.access(attachmentsDir)).rejects.toMatchObject({ code: "ENOENT" });
-    });
+    vi.useRealTimers();
+    await expectPathRemoved(attachmentsDir);
   });
 
   it("removes attachments for released delete-mode runs", async () => {
@@ -495,15 +511,12 @@ describe("subagent registry seam flow", () => {
 
     mod.releaseSubagentRun("run-release-delete");
 
-    await vi.waitFor(async () => {
-      await expect(fs.access(attachmentsDir)).rejects.toMatchObject({ code: "ENOENT" });
-    });
-    await vi.waitFor(() => {
-      expect(mocks.onSubagentEnded).toHaveBeenCalledWith({
-        childSessionKey: "agent:main:subagent:release-delete",
-        reason: "released",
-        workspaceDir: undefined,
-      });
+    vi.useRealTimers();
+    await expectPathRemoved(attachmentsDir);
+    expect(mocks.onSubagentEnded).toHaveBeenCalledWith({
+      childSessionKey: "agent:main:subagent:release-delete",
+      reason: "released",
+      workspaceDir: undefined,
     });
   });
 });

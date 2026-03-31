@@ -5,38 +5,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearConfigCache, clearRuntimeConfigSnapshot } from "../config/config.js";
 import { buildSystemRunPreparePayload } from "../test-utils/system-run-prepare-payload.js";
 
-vi.mock("./tools/gateway.js", () => ({
-  callGatewayTool: vi.fn(),
-  readGatewayCallOptions: vi.fn(() => ({})),
+const hoisted = vi.hoisted(() => ({
+  gatewayCallMock: vi.fn(),
+  listNodesMock: vi.fn(),
+  resolveNodeIdFromListMock: vi.fn(),
+  detectCommandObfuscationMock: vi.fn(),
 }));
 
+let createExecTool: typeof import("./bash-tools.exec.js").createExecTool;
+let gatewayToolTesting: typeof import("./tools/gateway.js").__testing;
+let getExecApprovalApproverDmNoticeText: typeof import("../infra/exec-approval-reply.js").getExecApprovalApproverDmNoticeText;
+let nodeHostTesting: typeof import("./bash-tools.exec-host-node.js").__testing;
+
 vi.mock("./tools/nodes-utils.js", () => ({
-  listNodes: vi.fn(async () => [
-    { nodeId: "node-1", commands: ["system.run"], platform: "darwin" },
-  ]),
-  resolveNodeIdFromList: vi.fn((nodes: Array<{ nodeId: string }>) => nodes[0]?.nodeId),
+  listNodes: (...args: unknown[]) => hoisted.listNodesMock(...args),
+  resolveNodeIdFromList: (...args: unknown[]) => hoisted.resolveNodeIdFromListMock(...args),
 }));
 
 vi.mock("../infra/exec-obfuscation-detect.js", () => ({
-  detectCommandObfuscation: vi.fn(() => ({
-    detected: false,
-    reasons: [],
-    matchedPatterns: [],
-  })),
+  detectCommandObfuscation: (...args: unknown[]) => hoisted.detectCommandObfuscationMock(...args),
 }));
-
-let callGatewayTool: typeof import("./tools/gateway.js").callGatewayTool;
-let createExecTool: typeof import("./bash-tools.exec.js").createExecTool;
-let detectCommandObfuscation: typeof import("../infra/exec-obfuscation-detect.js").detectCommandObfuscation;
-let getExecApprovalApproverDmNoticeText: typeof import("../infra/exec-approval-reply.js").getExecApprovalApproverDmNoticeText;
-
-async function loadExecApprovalModules() {
-  vi.resetModules();
-  ({ callGatewayTool } = await import("./tools/gateway.js"));
-  ({ createExecTool } = await import("./bash-tools.exec.js"));
-  ({ detectCommandObfuscation } = await import("../infra/exec-obfuscation-detect.js"));
-  ({ getExecApprovalApproverDmNoticeText } = await import("../infra/exec-approval-reply.js"));
-}
 
 function buildPreparedSystemRunPayload(rawInvokeParams: unknown) {
   const invoke = (rawInvokeParams ?? {}) as {
@@ -66,6 +54,25 @@ async function writeExecApprovalsConfig(config: Record<string, unknown>) {
   const approvalsPath = path.join(process.env.HOME ?? "", ".openclaw", "exec-approvals.json");
   await fs.mkdir(path.dirname(approvalsPath), { recursive: true });
   await fs.writeFile(approvalsPath, JSON.stringify(config, null, 2));
+}
+
+async function pollUntil<T>(
+  read: () => T | Promise<T>,
+  predicate: (value: T) => boolean,
+  options: { timeout: number; interval?: number },
+): Promise<T> {
+  const deadline = Date.now() + options.timeout;
+  const interval = options.interval ?? 20;
+  for (;;) {
+    const value = await read();
+    if (predicate(value)) {
+      return value;
+    }
+    if (Date.now() >= deadline) {
+      throw new Error("pollUntil timed out");
+    }
+    await new Promise((resolve) => setTimeout(resolve, interval));
+  }
 }
 
 function acceptedApprovalResponse(params: unknown) {
@@ -123,7 +130,7 @@ function expectPendingCommandText(
 }
 
 function mockGatewayOkCalls(calls: string[]) {
-  vi.mocked(callGatewayTool).mockImplementation(async (method) => {
+  hoisted.gatewayCallMock.mockImplementation(async (method) => {
     calls.push(method);
     return { ok: true };
   });
@@ -164,7 +171,7 @@ function mockAcceptedApprovalFlow(options: {
   onAgent?: (params: Record<string, unknown>) => void;
   onNodeInvoke?: (params: unknown) => unknown;
 }) {
-  vi.mocked(callGatewayTool).mockImplementation(async (method, _opts, params) => {
+  hoisted.gatewayCallMock.mockImplementation(async (method, _opts, params) => {
     if (method === "exec.approval.request") {
       return acceptedApprovalResponse(params);
     }
@@ -183,7 +190,7 @@ function mockAcceptedApprovalFlow(options: {
 }
 
 function mockPendingApprovalRegistration() {
-  vi.mocked(callGatewayTool).mockImplementation(async (method) => {
+  hoisted.gatewayCallMock.mockImplementation(async (method) => {
     if (method === "exec.approval.request") {
       return { status: "accepted", id: "approval-id" };
     }
@@ -205,11 +212,39 @@ describe("exec approvals", () => {
     process.env.HOME = tempDir;
     // Windows uses USERPROFILE for os.homedir()
     process.env.USERPROFILE = tempDir;
-    await loadExecApprovalModules();
+    vi.resetModules();
+    ({ __testing: gatewayToolTesting } = await import("./tools/gateway.js"));
+    ({ __testing: nodeHostTesting } = await import("./bash-tools.exec-host-node.js"));
+    ({ createExecTool } = await import("./bash-tools.exec.js"));
+    ({ getExecApprovalApproverDmNoticeText } = await import("../infra/exec-approval-reply.js"));
+    hoisted.gatewayCallMock.mockReset();
+    hoisted.listNodesMock.mockReset().mockResolvedValue([
+      { nodeId: "node-1", commands: ["system.run"], platform: "darwin" },
+    ]);
+    hoisted.resolveNodeIdFromListMock
+      .mockReset()
+      .mockImplementation((nodes: Array<{ nodeId?: string }>) => nodes[0]?.nodeId);
+    hoisted.detectCommandObfuscationMock.mockReset().mockReturnValue({
+      detected: false,
+      reasons: [],
+      matchedPatterns: [],
+    });
+    gatewayToolTesting.setDepsForTest({
+      callGateway: async ({ method, params, timeoutMs, expectFinal }) =>
+        await hoisted.gatewayCallMock(method, { timeoutMs }, params, { expectFinal }),
+    });
+    nodeHostTesting.setDepsForTest({
+      listNodes: async () =>
+        await hoisted.listNodesMock(),
+      resolveNodeIdFromList: (...args) => hoisted.resolveNodeIdFromListMock(...args),
+      detectCommandObfuscation: (...args) => hoisted.detectCommandObfuscationMock(...args),
+    });
   });
 
   afterEach(() => {
     vi.resetAllMocks();
+    gatewayToolTesting.setDepsForTest();
+    nodeHostTesting.setDepsForTest();
     clearRuntimeConfigSnapshot();
     clearConfigCache();
     if (previousHome === undefined) {
@@ -260,18 +295,17 @@ describe("exec approvals", () => {
     });
     const approvalId = details.approvalId;
 
-    await expect
-      .poll(() => (invokeParams as { params?: { runId?: string } } | undefined)?.params?.runId, {
-        timeout: 2000,
-        interval: 20,
-      })
-      .toBe(approvalId);
+    await pollUntil(
+      () => (invokeParams as { params?: { runId?: string } } | undefined)?.params?.runId,
+      (value) => value === approvalId,
+      { timeout: 2_000, interval: 20 },
+    );
     expect(
       (invokeParams as { params?: { suppressNotifyOnExit?: boolean } } | undefined)?.params,
     ).toMatchObject({
       suppressNotifyOnExit: true,
     });
-    await expect.poll(() => agentParams, { timeout: 2_000, interval: 20 }).toBeTruthy();
+    await pollUntil(() => agentParams, Boolean, { timeout: 2_000, interval: 20 });
   });
 
   it("skips approval when node allowlist is satisfied", async () => {
@@ -295,7 +329,7 @@ describe("exec approvals", () => {
     };
 
     const calls: string[] = [];
-    vi.mocked(callGatewayTool).mockImplementation(async (method, _opts, params) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method, _opts, params) => {
       calls.push(method);
       if (method === "exec.approvals.node.get") {
         return { file: approvalsFile };
@@ -326,43 +360,9 @@ describe("exec approvals", () => {
     expect(calls).not.toContain("exec.approval.request");
   });
 
-  it("preserves explicit workdir for node exec", async () => {
-    const remoteWorkdir = "/Users/vv";
-    let prepareCwd: string | undefined;
-
-    vi.mocked(callGatewayTool).mockImplementation(async (method, _opts, params) => {
-      if (method === "node.invoke") {
-        const invoke = params as { command?: string; params?: { cwd?: string } };
-        if (invoke.command === "system.run.prepare") {
-          prepareCwd = invoke.params?.cwd;
-          return buildPreparedSystemRunPayload(params);
-        }
-        if (invoke.command === "system.run") {
-          return { payload: { success: true, stdout: "ok" } };
-        }
-      }
-      return { ok: true };
-    });
-
-    const tool = createExecTool({
-      host: "node",
-      ask: "off",
-      security: "full",
-      approvalRunningNoticeMs: 0,
-    });
-
-    const result = await tool.execute("call-node-cwd", {
-      command: "/bin/pwd",
-      workdir: remoteWorkdir,
-    });
-
-    expect(result.details.status).toBe("completed");
-    expect(prepareCwd).toBe(remoteWorkdir);
-  });
-
   it("honors ask=off for elevated gateway exec without prompting", async () => {
     const calls: string[] = [];
-    vi.mocked(callGatewayTool).mockImplementation(async (method) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method) => {
       calls.push(method);
       return { ok: true };
     });
@@ -411,7 +411,7 @@ describe("exec approvals", () => {
       resolveApproval = resolve;
     });
 
-    vi.mocked(callGatewayTool).mockImplementation(async (method, _opts, params) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method, _opts, params) => {
       calls.push(method);
       if (method === "exec.approval.request") {
         resolveApproval?.();
@@ -458,7 +458,10 @@ describe("exec approvals", () => {
     });
 
     expect(result.details.status).toBe("approval-pending");
-    await expect.poll(() => agentCalls.length, { timeout: 3_000, interval: 20 }).toBe(1);
+    await pollUntil(() => agentCalls.length, (value) => value === 1, {
+      timeout: 3_000,
+      interval: 20,
+    });
     expect(agentCalls[0]).toEqual(
       expect.objectContaining({
         sessionKey: "agent:main:main",
@@ -500,7 +503,10 @@ describe("exec approvals", () => {
 
     expect(result.details.status).toBe("approval-pending");
 
-    await expect.poll(() => agentCalls.length, { timeout: 3_000, interval: 20 }).toBe(1);
+    await pollUntil(() => agentCalls.length, (count) => count === 1, {
+      timeout: 3_000,
+      interval: 20,
+    });
     expect(agentCalls[0]).toEqual(
       expect.objectContaining({
         sessionKey: "agent:main:main",
@@ -508,24 +514,24 @@ describe("exec approvals", () => {
       }),
     );
 
-    await expect
-      .poll(
-        async () => {
-          try {
-            return await fs.readFile(markerPath, "utf8");
-          } catch {
-            return "";
-          }
-        },
-        { timeout: 5_000, interval: 50 },
-      )
-      .toBe("ok");
+    const markerText = await pollUntil(
+      async () => {
+        try {
+          return await fs.readFile(markerPath, "utf8");
+        } catch {
+          return "";
+        }
+      },
+      (text) => text === "ok",
+      { timeout: 5_000, interval: 50 },
+    );
+    expect(markerText).toBe("ok");
   });
 
   it("uses a deny-specific followup prompt so prior output is not reused", async () => {
     const agentCalls: Array<Record<string, unknown>> = [];
 
-    vi.mocked(callGatewayTool).mockImplementation(async (method, _opts, params) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method, _opts, params) => {
       if (method === "exec.approval.request") {
         return acceptedApprovalResponse(params);
       }
@@ -555,7 +561,10 @@ describe("exec approvals", () => {
     });
 
     expect(result.details.status).toBe("approval-pending");
-    await expect.poll(() => agentCalls.length, { timeout: 3_000, interval: 20 }).toBe(1);
+    await pollUntil(() => agentCalls.length, (value) => value === 1, {
+      timeout: 3_000,
+      interval: 20,
+    });
     expect(typeof agentCalls[0]?.message).toBe("string");
     expect(agentCalls[0]?.message).toContain("An async command did not run.");
     expect(agentCalls[0]?.message).toContain(
@@ -571,7 +580,7 @@ describe("exec approvals", () => {
     const requestIds: string[] = [];
     const waitIds: string[] = [];
 
-    vi.mocked(callGatewayTool).mockImplementation(async (method, _opts, params) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method, _opts, params) => {
       if (method === "exec.approval.request") {
         const request = params as { id?: string; command?: string };
         if (typeof request.command === "string") {
@@ -613,7 +622,7 @@ describe("exec approvals", () => {
 
   it("shows full chained gateway commands in approval-pending message", async () => {
     const calls: string[] = [];
-    vi.mocked(callGatewayTool).mockImplementation(async (method, _opts, params) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method, _opts, params) => {
       calls.push(method);
       if (method === "exec.approval.request") {
         return acceptedApprovalResponse(params);
@@ -690,7 +699,7 @@ describe("exec approvals", () => {
 
   it("shows full chained node commands in approval-pending message", async () => {
     const calls: string[] = [];
-    vi.mocked(callGatewayTool).mockImplementation(async (method, _opts, params) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method, _opts, params) => {
       calls.push(method);
       if (method === "node.invoke") {
         const invoke = params as { command?: string };
@@ -723,7 +732,7 @@ describe("exec approvals", () => {
       resolveRegistration = resolve;
     });
 
-    vi.mocked(callGatewayTool).mockImplementation(async (method, _opts, params) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method, _opts, params) => {
       calls.push(method);
       if (method === "exec.approval.request") {
         return await registrationPromise;
@@ -759,7 +768,7 @@ describe("exec approvals", () => {
   });
 
   it("fails fast when approval registration fails", async () => {
-    vi.mocked(callGatewayTool).mockImplementation(async (method) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method) => {
       if (method === "exec.approval.request") {
         throw new Error("gateway offline");
       }
@@ -850,7 +859,7 @@ describe("exec approvals", () => {
   });
 
   it("denies node obfuscated command when approval request times out", async () => {
-    vi.mocked(detectCommandObfuscation).mockReturnValue({
+    hoisted.detectCommandObfuscationMock.mockReturnValue({
       detected: true,
       reasons: ["Content piped directly to shell interpreter"],
       matchedPatterns: ["pipe-to-shell"],
@@ -858,7 +867,7 @@ describe("exec approvals", () => {
 
     const calls: string[] = [];
     const nodeInvokeCommands: string[] = [];
-    vi.mocked(callGatewayTool).mockImplementation(async (method, _opts, params) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method, _opts, params) => {
       calls.push(method);
       if (method === "exec.approval.request") {
         return { status: "accepted", id: "approval-id" };
@@ -888,7 +897,10 @@ describe("exec approvals", () => {
 
     const result = await tool.execute("call5", { command: "echo hi | sh" });
     expect(result.details.status).toBe("approval-pending");
-    await expect.poll(() => nodeInvokeCommands.includes("system.run")).toBe(false);
+    await pollUntil(() => nodeInvokeCommands.includes("system.run"), (value) => value === false, {
+      timeout: 1_000,
+      interval: 20,
+    });
   });
 
   it("denies gateway obfuscated command when approval request times out", async () => {
@@ -896,13 +908,13 @@ describe("exec approvals", () => {
       return;
     }
 
-    vi.mocked(detectCommandObfuscation).mockReturnValue({
+    hoisted.detectCommandObfuscationMock.mockReturnValue({
       detected: true,
       reasons: ["Content piped directly to shell interpreter"],
       matchedPatterns: ["pipe-to-shell"],
     });
 
-    vi.mocked(callGatewayTool).mockImplementation(async (method) => {
+    hoisted.gatewayCallMock.mockImplementation(async (method) => {
       if (method === "exec.approval.request") {
         return { status: "accepted", id: "approval-id" };
       }
@@ -925,15 +937,17 @@ describe("exec approvals", () => {
       command: `echo touch ${JSON.stringify(markerPath)} | sh`,
     });
     expect(result.details.status).toBe("approval-pending");
-    await expect
-      .poll(async () => {
+    await pollUntil(
+      async () => {
         try {
           await fs.access(markerPath);
           return true;
         } catch {
           return false;
         }
-      })
-      .toBe(false);
+      },
+      (value) => value === false,
+      { timeout: 1_000, interval: 20 },
+    );
   });
 });

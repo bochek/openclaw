@@ -6,11 +6,11 @@ import {
   type ExecHost,
   type ExecTarget,
 } from "../infra/exec-approvals.js";
-import { requestHeartbeatNow } from "../infra/heartbeat-wake.js";
+import { requestHeartbeatNow as requestHeartbeatNowImpl } from "../infra/heartbeat-wake.js";
 import { isDangerousHostEnvVarName } from "../infra/host-env-security.js";
 import { findPathKey, mergePathPrepend } from "../infra/path-prepend.js";
-import { enqueueSystemEvent } from "../infra/system-events.js";
-import { scopedHeartbeatWakeOptions } from "../routing/session-key.js";
+import { enqueueSystemEvent as enqueueSystemEventImpl } from "../infra/system-events.js";
+import { scopedHeartbeatWakeOptions as scopedHeartbeatWakeOptionsImpl } from "../routing/session-key.js";
 import type { ProcessSession } from "./bash-process-registry.js";
 import type { ExecToolDetails } from "./bash-tools.exec-types.js";
 import type { BashSandboxConfig } from "./bash-tools.shared.js";
@@ -118,6 +118,35 @@ const DEFAULT_NOTIFY_SNIPPET_CHARS = 180;
 export const DEFAULT_APPROVAL_TIMEOUT_MS = DEFAULT_EXEC_APPROVAL_TIMEOUT_MS;
 export const DEFAULT_APPROVAL_REQUEST_TIMEOUT_MS = DEFAULT_APPROVAL_TIMEOUT_MS + 10_000;
 const DEFAULT_APPROVAL_RUNNING_NOTICE_MS = 10_000;
+
+let requestHeartbeatNowForTest: typeof requestHeartbeatNowImpl | undefined;
+let enqueueSystemEventForTest: typeof enqueueSystemEventImpl | undefined;
+let scopedHeartbeatWakeOptionsForTest: typeof scopedHeartbeatWakeOptionsImpl | undefined;
+
+export function setExecRuntimeSystemEventDepsForTest(params?: {
+  enqueueSystemEvent?: typeof enqueueSystemEventImpl;
+  requestHeartbeatNow?: typeof requestHeartbeatNowImpl;
+  scopedHeartbeatWakeOptions?: typeof scopedHeartbeatWakeOptionsImpl;
+}): void {
+  enqueueSystemEventForTest = params?.enqueueSystemEvent;
+  requestHeartbeatNowForTest = params?.requestHeartbeatNow;
+  scopedHeartbeatWakeOptionsForTest = params?.scopedHeartbeatWakeOptions;
+}
+
+function emitRuntimeSystemEvent(text: string, params: { contextKey?: string; sessionKey: string }): void {
+  const enqueueSystemEvent = enqueueSystemEventForTest ?? enqueueSystemEventImpl;
+  enqueueSystemEvent(text, params);
+}
+
+function wakeExecHeartbeat(
+  sessionKey: string,
+  options: { reason: string },
+): void {
+  const requestHeartbeatNow = requestHeartbeatNowForTest ?? requestHeartbeatNowImpl;
+  const scopedHeartbeatWakeOptions =
+    scopedHeartbeatWakeOptionsForTest ?? scopedHeartbeatWakeOptionsImpl;
+  requestHeartbeatNow(scopedHeartbeatWakeOptions(sessionKey, options));
+}
 const APPROVAL_SLUG_LENGTH = 8;
 
 export const execSchema = Type.Object({
@@ -322,10 +351,8 @@ function maybeNotifyOnExit(session: ProcessSession, status: "completed" | "faile
   const summary = output
     ? `Exec ${status} (${session.id.slice(0, 8)}, ${exitLabel}) :: ${output}`
     : `Exec ${status} (${session.id.slice(0, 8)}, ${exitLabel})`;
-  enqueueSystemEvent(summary, { sessionKey });
-  requestHeartbeatNow(
-    scopedHeartbeatWakeOptions(sessionKey, { reason: `exec:${session.id}:exit` }),
-  );
+  emitRuntimeSystemEvent(summary, { sessionKey });
+  wakeExecHeartbeat(sessionKey, { reason: `exec:${session.id}:exit` });
 }
 
 export function createApprovalSlug(id: string) {
@@ -384,8 +411,8 @@ export function emitExecSystemEvent(
   if (!sessionKey) {
     return;
   }
-  enqueueSystemEvent(text, { sessionKey, contextKey: opts.contextKey });
-  requestHeartbeatNow(scopedHeartbeatWakeOptions(sessionKey, { reason: "exec-event" }));
+  emitRuntimeSystemEvent(text, { sessionKey, contextKey: opts.contextKey });
+  wakeExecHeartbeat(sessionKey, { reason: "exec-event" });
 }
 
 function joinExecFailureOutput(aggregated: string, reason: string) {

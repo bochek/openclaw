@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { loadConfig } from "../config/config.js";
 import { ensureContextEnginesInitialized } from "../context-engine/init.js";
 import { resolveContextEngine } from "../context-engine/registry.js";
@@ -5,6 +6,11 @@ import type { SubagentEndReason } from "../context-engine/types.js";
 import { callGateway } from "../gateway/call.js";
 import { onAgentEvent } from "../infra/agent-events.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
+import {
+  completeTaskRunByRunId,
+  failTaskRunByRunId,
+  setDetachedTaskDeliveryStatusByRunId,
+} from "../tasks/task-executor.js";
 import { type DeliveryContext, normalizeDeliveryContext } from "../utils/delivery-context.js";
 import { ensureRuntimePluginsLoaded } from "./runtime-plugins.js";
 import { resetAnnounceQueuesForTests } from "./subagent-announce-queue.js";
@@ -74,6 +80,9 @@ type SubagentRegistryDeps = {
   resolveContextEngine: typeof resolveContextEngine;
   restoreSubagentRunsFromDisk: typeof restoreSubagentRunsFromDisk;
   runSubagentAnnounceFlow: typeof subagentAnnounceModule.runSubagentAnnounceFlow;
+  completeTaskRunByRunId: typeof completeTaskRunByRunId;
+  failTaskRunByRunId: typeof failTaskRunByRunId;
+  setDetachedTaskDeliveryStatusByRunId: typeof setDetachedTaskDeliveryStatusByRunId;
 };
 
 const defaultSubagentRegistryDeps: SubagentRegistryDeps = {
@@ -90,9 +99,17 @@ const defaultSubagentRegistryDeps: SubagentRegistryDeps = {
   resolveContextEngine,
   restoreSubagentRunsFromDisk,
   runSubagentAnnounceFlow: (params) => subagentAnnounceModule.runSubagentAnnounceFlow(params),
+  completeTaskRunByRunId,
+  failTaskRunByRunId,
+  setDetachedTaskDeliveryStatusByRunId,
 };
 
 let subagentRegistryDeps: SubagentRegistryDeps = defaultSubagentRegistryDeps;
+const subagentRegistryDepsStorage = new AsyncLocalStorage<SubagentRegistryDeps>();
+
+function getSubagentRegistryDeps(): SubagentRegistryDeps {
+  return subagentRegistryDepsStorage.getStore() ?? subagentRegistryDeps;
+}
 
 let sweeper: NodeJS.Timeout | null = null;
 let listenerStarted = false;
@@ -108,7 +125,7 @@ const SUBAGENT_ANNOUNCE_TIMEOUT_MS = 120_000;
 const LIFECYCLE_ERROR_RETRY_GRACE_MS = 15_000;
 
 function persistSubagentRuns() {
-  subagentRegistryDeps.persistSubagentRunsToDisk(subagentRuns);
+  getSubagentRegistryDeps().persistSubagentRunsToDisk(subagentRuns);
 }
 
 const resumedRuns = new Set<string>();
@@ -180,14 +197,15 @@ async function notifyContextEngineSubagentEnded(params: {
   workspaceDir?: string;
 }) {
   try {
-    const cfg = subagentRegistryDeps.loadConfig();
-    subagentRegistryDeps.ensureRuntimePluginsLoaded({
+    const deps = getSubagentRegistryDeps();
+    const cfg = deps.loadConfig();
+    deps.ensureRuntimePluginsLoaded({
       config: cfg,
       workspaceDir: params.workspaceDir,
       allowGatewaySubagentBinding: true,
     });
-    subagentRegistryDeps.ensureContextEnginesInitialized();
-    const engine = await subagentRegistryDeps.resolveContextEngine(cfg);
+    deps.ensureContextEnginesInitialized();
+    const engine = await deps.resolveContextEngine(cfg);
     if (!engine.onSubagentEnded) {
       return;
     }
@@ -224,8 +242,9 @@ async function emitSubagentEndedHookForRun(params: {
   sendFarewell?: boolean;
   accountId?: string;
 }) {
-  const cfg = subagentRegistryDeps.loadConfig();
-  subagentRegistryDeps.ensureRuntimePluginsLoaded({
+  const deps = getSubagentRegistryDeps();
+  const cfg = deps.loadConfig();
+  deps.ensureRuntimePluginsLoaded({
     config: cfg,
     workspaceDir: params.entry.workspaceDir,
     allowGatewaySubagentBinding: true,
@@ -258,8 +277,12 @@ const subagentLifecycleController = createSubagentRegistryLifecycleController({
   notifyContextEngineSubagentEnded,
   resumeSubagentRun,
   captureSubagentCompletionReply: (sessionKey) =>
-    subagentRegistryDeps.captureSubagentCompletionReply(sessionKey),
-  runSubagentAnnounceFlow: (params) => subagentRegistryDeps.runSubagentAnnounceFlow(params),
+    getSubagentRegistryDeps().captureSubagentCompletionReply(sessionKey),
+  runSubagentAnnounceFlow: (params) => getSubagentRegistryDeps().runSubagentAnnounceFlow(params),
+  completeTaskRunByRunId: (params) => getSubagentRegistryDeps().completeTaskRunByRunId(params),
+  failTaskRunByRunId: (params) => getSubagentRegistryDeps().failTaskRunByRunId(params),
+  setDetachedTaskDeliveryStatusByRunId: (params) =>
+    getSubagentRegistryDeps().setDetachedTaskDeliveryStatusByRunId(params),
   warn: (message, meta) => log.warn(message, meta),
 });
 
@@ -350,7 +373,7 @@ function resumeSubagentRun(runId: string) {
   }
 
   // Wait for completion again after restart.
-  const cfg = subagentRegistryDeps.loadConfig();
+  const cfg = getSubagentRegistryDeps().loadConfig();
   const waitTimeoutMs = resolveSubagentWaitTimeoutMs(cfg, entry.runTimeoutSeconds);
   void subagentRunManager.waitForSubagentCompletion(runId, waitTimeoutMs);
   resumedRuns.add(runId);
@@ -362,7 +385,7 @@ function restoreSubagentRunsOnce() {
   }
   restoreAttempted = true;
   try {
-    const restoredCount = subagentRegistryDeps.restoreSubagentRunsFromDisk({
+    const restoredCount = getSubagentRegistryDeps().restoreSubagentRunsFromDisk({
       runs: subagentRuns,
       mergeOnly: true,
     });
@@ -410,7 +433,7 @@ function resolveSubagentWaitTimeoutMs(
   cfg: ReturnType<typeof loadConfig>,
   runTimeoutSeconds?: number,
 ) {
-  return subagentRegistryDeps.resolveAgentTimeoutMs({
+  return getSubagentRegistryDeps().resolveAgentTimeoutMs({
     cfg,
     overrideSeconds: runTimeoutSeconds ?? 0,
   });
@@ -452,7 +475,7 @@ async function sweepSubagentRuns() {
     // Archive/purge is terminal for the run record; remove any retained attachments too.
     await safeRemoveAttachmentsDir(entry);
     try {
-      await subagentRegistryDeps.callGateway({
+      await getSubagentRegistryDeps().callGateway({
         method: "sessions.delete",
         params: {
           key: entry.childSessionKey,
@@ -478,7 +501,7 @@ function ensureListener() {
     return;
   }
   listenerStarted = true;
-  listenerStop = subagentRegistryDeps.onAgentEvent((evt) => {
+  listenerStop = getSubagentRegistryDeps().onAgentEvent((evt) => {
     void (async () => {
       if (!evt || evt.stream !== "lifecycle") {
         return;
@@ -538,8 +561,8 @@ const subagentRunManager = createSubagentRunManager({
   resumedRuns,
   endedHookInFlightRunIds,
   persist: persistSubagentRuns,
-  callGateway: (request) => subagentRegistryDeps.callGateway(request),
-  loadConfig: () => subagentRegistryDeps.loadConfig(),
+  callGateway: (request) => getSubagentRegistryDeps().callGateway(request),
+  loadConfig: () => getSubagentRegistryDeps().loadConfig(),
   ensureRuntimePluginsLoaded,
   ensureListener,
   startSweeper,
@@ -619,6 +642,15 @@ export const __testing = {
         }
       : defaultSubagentRegistryDeps;
   },
+  runWithDepsForTest<T>(overrides: Partial<SubagentRegistryDeps> | undefined, fn: () => T): T {
+    const deps = overrides
+      ? {
+          ...defaultSubagentRegistryDeps,
+          ...overrides,
+        }
+      : defaultSubagentRegistryDeps;
+    return subagentRegistryDepsStorage.run(deps, fn);
+  },
 } as const;
 
 export function addSubagentRunForTests(entry: SubagentRunRecord) {
@@ -638,7 +670,7 @@ export function resolveRequesterForChildSession(childSessionKey: string): {
   requesterOrigin?: DeliveryContext;
 } | null {
   const resolved = resolveRequesterForChildSessionFromRuns(
-    subagentRegistryDeps.getSubagentRunsSnapshotForRead(subagentRuns),
+    getSubagentRegistryDeps().getSubagentRunsSnapshotForRead(subagentRuns),
     childSessionKey,
   );
   if (!resolved) {
@@ -667,7 +699,7 @@ export function isSubagentSessionRunActive(childSessionKey: string): boolean {
 
 export function shouldIgnorePostCompletionAnnounceForSession(childSessionKey: string): boolean {
   return shouldIgnorePostCompletionAnnounceForSessionFromRuns(
-    subagentRegistryDeps.getSubagentRunsSnapshotForRead(subagentRuns),
+    getSubagentRegistryDeps().getSubagentRunsSnapshotForRead(subagentRuns),
     childSessionKey,
   );
 }
@@ -689,28 +721,28 @@ export function listSubagentRunsForRequester(
 
 export function listSubagentRunsForController(controllerSessionKey: string): SubagentRunRecord[] {
   return listRunsForControllerFromRuns(
-    subagentRegistryDeps.getSubagentRunsSnapshotForRead(subagentRuns),
+    getSubagentRegistryDeps().getSubagentRunsSnapshotForRead(subagentRuns),
     controllerSessionKey,
   );
 }
 
 export function countActiveRunsForSession(requesterSessionKey: string): number {
   return countActiveRunsForSessionFromRuns(
-    subagentRegistryDeps.getSubagentRunsSnapshotForRead(subagentRuns),
+    getSubagentRegistryDeps().getSubagentRunsSnapshotForRead(subagentRuns),
     requesterSessionKey,
   );
 }
 
 export function countActiveDescendantRuns(rootSessionKey: string): number {
   return countActiveDescendantRunsFromRuns(
-    subagentRegistryDeps.getSubagentRunsSnapshotForRead(subagentRuns),
+    getSubagentRegistryDeps().getSubagentRunsSnapshotForRead(subagentRuns),
     rootSessionKey,
   );
 }
 
 export function countPendingDescendantRuns(rootSessionKey: string): number {
   return countPendingDescendantRunsFromRuns(
-    subagentRegistryDeps.getSubagentRunsSnapshotForRead(subagentRuns),
+    getSubagentRegistryDeps().getSubagentRunsSnapshotForRead(subagentRuns),
     rootSessionKey,
   );
 }
@@ -720,7 +752,7 @@ export function countPendingDescendantRunsExcludingRun(
   excludeRunId: string,
 ): number {
   return countPendingDescendantRunsExcludingRunFromRuns(
-    subagentRegistryDeps.getSubagentRunsSnapshotForRead(subagentRuns),
+    getSubagentRegistryDeps().getSubagentRunsSnapshotForRead(subagentRuns),
     rootSessionKey,
     excludeRunId,
   );
@@ -728,7 +760,7 @@ export function countPendingDescendantRunsExcludingRun(
 
 export function listDescendantRunsForRequester(rootSessionKey: string): SubagentRunRecord[] {
   return listDescendantRunsForRequesterFromRuns(
-    subagentRegistryDeps.getSubagentRunsSnapshotForRead(subagentRuns),
+    getSubagentRegistryDeps().getSubagentRunsSnapshotForRead(subagentRuns),
     rootSessionKey,
   );
 }
@@ -741,7 +773,7 @@ export function getSubagentRunByChildSessionKey(childSessionKey: string): Subage
 
   let latestActive: SubagentRunRecord | null = null;
   let latestEnded: SubagentRunRecord | null = null;
-  for (const entry of subagentRegistryDeps.getSubagentRunsSnapshotForRead(subagentRuns).values()) {
+  for (const entry of getSubagentRegistryDeps().getSubagentRunsSnapshotForRead(subagentRuns).values()) {
     if (entry.childSessionKey !== key) {
       continue;
     }
@@ -768,7 +800,7 @@ export function getLatestSubagentRunByChildSessionKey(
   }
 
   let latest: SubagentRunRecord | null = null;
-  for (const entry of subagentRegistryDeps.getSubagentRunsSnapshotForRead(subagentRuns).values()) {
+  for (const entry of getSubagentRegistryDeps().getSubagentRunsSnapshotForRead(subagentRuns).values()) {
     if (entry.childSessionKey !== key) {
       continue;
     }

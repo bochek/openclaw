@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { handleMatrixAction } from "./tool-actions.js";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { __testing, handleMatrixAction } from "./tool-actions.js";
 import type { CoreConfig } from "./types.js";
 
 const mocks = vi.hoisted(() => ({
@@ -14,35 +14,20 @@ const mocks = vi.hoisted(() => ({
   applyMatrixProfileUpdate: vi.fn(),
 }));
 
-vi.mock("./matrix/actions.js", async () => {
-  const actual = await vi.importActual<typeof import("./matrix/actions.js")>("./matrix/actions.js");
-  return {
-    ...actual,
-    getMatrixMemberInfo: mocks.getMatrixMemberInfo,
-    getMatrixRoomInfo: mocks.getMatrixRoomInfo,
-    listMatrixReactions: mocks.listMatrixReactions,
-    listMatrixPins: mocks.listMatrixPins,
-    removeMatrixReactions: mocks.removeMatrixReactions,
-    sendMatrixMessage: mocks.sendMatrixMessage,
-    voteMatrixPoll: mocks.voteMatrixPoll,
-  };
-});
-
-vi.mock("./matrix/send.js", async () => {
-  const actual = await vi.importActual<typeof import("./matrix/send.js")>("./matrix/send.js");
-  return {
-    ...actual,
-    reactMatrixMessage: mocks.reactMatrixMessage,
-  };
-});
-
-vi.mock("./profile-update.js", () => ({
-  applyMatrixProfileUpdate: (...args: unknown[]) => mocks.applyMatrixProfileUpdate(...args),
-}));
-
 describe("handleMatrixAction pollVote", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __testing.setToolActionRuntimeForTest({
+      applyMatrixProfileUpdate: (...args: unknown[]) => mocks.applyMatrixProfileUpdate(...args),
+      getMatrixMemberInfo: (...args: unknown[]) => mocks.getMatrixMemberInfo(...args),
+      getMatrixRoomInfo: (...args: unknown[]) => mocks.getMatrixRoomInfo(...args),
+      listMatrixPins: (...args: unknown[]) => mocks.listMatrixPins(...args),
+      listMatrixReactions: (...args: unknown[]) => mocks.listMatrixReactions(...args),
+      reactMatrixMessage: (...args: unknown[]) => mocks.reactMatrixMessage(...args),
+      removeMatrixReactions: (...args: unknown[]) => mocks.removeMatrixReactions(...args),
+      sendMatrixMessage: (...args: unknown[]) => mocks.sendMatrixMessage(...args),
+      voteMatrixPoll: (...args: unknown[]) => mocks.voteMatrixPoll(...args),
+    });
     mocks.voteMatrixPoll.mockResolvedValue({
       eventId: "evt-poll-vote",
       roomId: "!room:example",
@@ -73,6 +58,10 @@ describe("handleMatrixAction pollVote", () => {
       },
       configPath: "channels.matrix.accounts.ops",
     });
+  });
+
+  afterEach(() => {
+    __testing.resetToolActionRuntimeForTest();
   });
 
   it("parses snake_case vote params and forwards normalized selectors", async () => {

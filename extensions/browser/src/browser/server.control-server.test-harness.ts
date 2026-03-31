@@ -91,6 +91,34 @@ const cdpMocks = vi.hoisted(() => ({
   })),
 }));
 
+const cdpModuleMocks = vi.hoisted(() => ({
+  appendCdpPath: vi.fn((cdpUrl: string, cdpPath: string) => {
+    const base = cdpUrl.replace(/\/$/, "");
+    const suffix = cdpPath.startsWith("/") ? cdpPath : `/${cdpPath}`;
+    return `${base}${suffix}`;
+  }),
+  createTargetViaCdp: cdpMocks.createTargetViaCdp,
+  fetchJson: vi.fn(async (url: string) => {
+    const res = await globalThis.fetch(url);
+    return await res.json();
+  }),
+  fetchOk: vi.fn(async (url: string) => {
+    const res = await globalThis.fetch(url);
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+  }),
+  getHeadersWithAuth: vi.fn(() => ({})),
+  isLoopbackHost: vi.fn(
+    (host: string) =>
+      host === "127.0.0.1" || host === "localhost" || host === "::1" || host === "[::1]",
+  ),
+  isWebSocketUrl: vi.fn((url: string) => /^wss?:/i.test(url)),
+  normalizeCdpHttpBaseForJsonEndpoints: vi.fn((cdpUrl: string) => cdpUrl.replace(/\/$/, "")),
+  normalizeCdpWsUrl: vi.fn((wsUrl: string) => wsUrl),
+  snapshotAria: cdpMocks.snapshotAria,
+}));
+
 export function getCdpMocks(): { createTargetViaCdp: MockFn; snapshotAria: MockFn } {
   return cdpMocks as unknown as { createTargetViaCdp: MockFn; snapshotAria: MockFn };
 }
@@ -102,6 +130,11 @@ const pwMocks = vi.hoisted(() => ({
   clickViaPlaywright: vi.fn(async () => {}),
   closePageViaPlaywright: vi.fn(async () => {}),
   closePlaywrightBrowserConnection: vi.fn(async () => {}),
+  cookiesClearViaPlaywright: vi.fn(async () => {}),
+  cookiesGetViaPlaywright: vi.fn(async () => ({
+    cookies: [{ name: "session", value: "abc123" }],
+  })),
+  cookiesSetViaPlaywright: vi.fn(async () => {}),
   downloadViaPlaywright: vi.fn(async () => ({
     url: "https://example.com/report.pdf",
     suggestedFilename: "report.pdf",
@@ -126,6 +159,9 @@ const pwMocks = vi.hoisted(() => ({
   selectOptionViaPlaywright: vi.fn(async () => {}),
   setInputFilesViaPlaywright: vi.fn(async () => {}),
   snapshotAiViaPlaywright: vi.fn(async () => ({ snapshot: "ok" })),
+  storageClearViaPlaywright: vi.fn(async () => {}),
+  storageGetViaPlaywright: vi.fn(async () => ({ values: { token: "value" } })),
+  storageSetViaPlaywright: vi.fn(async () => {}),
   traceStopViaPlaywright: vi.fn(async () => {}),
   takeScreenshotViaPlaywright: vi.fn(async () => ({
     buffer: Buffer.from("png"),
@@ -283,19 +319,15 @@ vi.mock("./chrome.js", () => ({
   }),
 }));
 
-vi.mock("./cdp.js", () => ({
-  createTargetViaCdp: cdpMocks.createTargetViaCdp,
-  normalizeCdpWsUrl: vi.fn((wsUrl: string) => wsUrl),
-  snapshotAria: cdpMocks.snapshotAria,
-  getHeadersWithAuth: vi.fn(() => ({})),
-  appendCdpPath: vi.fn((cdpUrl: string, cdpPath: string) => {
-    const base = cdpUrl.replace(/\/$/, "");
-    const suffix = cdpPath.startsWith("/") ? cdpPath : `/${cdpPath}`;
-    return `${base}${suffix}`;
-  }),
-}));
+vi.mock("./cdp.js", () => cdpModuleMocks);
+
+vi.mock("./cdp.helpers.js", () => cdpModuleMocks);
 
 vi.mock("./pw-ai.js", () => pwMocks);
+
+vi.mock("./pw-ai-module.js", () => ({
+  getPwAiModule: vi.fn(async () => pwMocks),
+}));
 
 vi.mock("./chrome-mcp.js", () => chromeMcpMocks);
 
@@ -360,6 +392,7 @@ export async function resetBrowserControlServerTestContext(): Promise<void> {
 
   mockClearAll(pwMocks);
   mockClearAll(cdpMocks);
+  mockClearAll(cdpModuleMocks);
   mockClearAll(chromeMcpMocks);
 
   state.testPort = await getFreePort();
@@ -438,6 +471,11 @@ export function installBrowserControlServerHooks() {
               type: "page",
             },
           ]);
+        }
+        if (u.includes("/json/version")) {
+          return makeResponse({
+            webSocketDebuggerUrl: "ws://127.0.0.1/devtools/browser/mock",
+          });
         }
         if (u.includes("/json/new?")) {
           if (init?.method === "PUT") {

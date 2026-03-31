@@ -8,6 +8,30 @@ import { resolveSessionAgentId } from "../agent-scope.js";
 import { resolveMemorySearchConfig } from "../memory-search.js";
 import { log } from "./logger.js";
 
+type CompactionHooksDeps = {
+  createInternalHookEvent: typeof createInternalHookEvent;
+  triggerInternalHook: typeof triggerInternalHook;
+  getActiveMemorySearchManager: typeof getActiveMemorySearchManager;
+  emitSessionTranscriptUpdate: typeof emitSessionTranscriptUpdate;
+  resolveSessionAgentId: typeof resolveSessionAgentId;
+  resolveMemorySearchConfig: typeof resolveMemorySearchConfig;
+};
+
+const defaultCompactionHooksDeps: CompactionHooksDeps = {
+  createInternalHookEvent,
+  triggerInternalHook,
+  getActiveMemorySearchManager,
+  emitSessionTranscriptUpdate,
+  resolveSessionAgentId,
+  resolveMemorySearchConfig,
+};
+
+let compactionHooksDeps: CompactionHooksDeps = defaultCompactionHooksDeps;
+
+export function setCompactionHooksDepsForTest(next?: Partial<CompactionHooksDeps> | null): void {
+  compactionHooksDeps = next ? { ...defaultCompactionHooksDeps, ...next } : defaultCompactionHooksDeps;
+}
+
 function resolvePostCompactionIndexSyncMode(config?: OpenClawConfig): "off" | "async" | "await" {
   const mode = config?.agents?.defaults?.compaction?.postIndexSync;
   if (mode === "off" || mode === "async" || mode === "await") {
@@ -29,18 +53,18 @@ async function runPostCompactionSessionMemorySync(params: {
     if (!sessionFile) {
       return;
     }
-    const agentId = resolveSessionAgentId({
+    const agentId = compactionHooksDeps.resolveSessionAgentId({
       sessionKey: params.sessionKey,
       config: params.config,
     });
-    const resolvedMemory = resolveMemorySearchConfig(params.config, agentId);
+    const resolvedMemory = compactionHooksDeps.resolveMemorySearchConfig(params.config, agentId);
     if (!resolvedMemory || !resolvedMemory.sources.includes("sessions")) {
       return;
     }
     if (!resolvedMemory.sync.sessions.postCompactionForce) {
       return;
     }
-    const { manager } = await getActiveMemorySearchManager({
+    const { manager } = await compactionHooksDeps.getActiveMemorySearchManager({
       cfg: params.config,
       agentId,
     });
@@ -87,7 +111,7 @@ export async function runPostCompactionSideEffects(params: {
   if (!sessionFile) {
     return;
   }
-  emitSessionTranscriptUpdate(sessionFile);
+  compactionHooksDeps.emitSessionTranscriptUpdate(sessionFile);
   await syncPostCompactionSessionMemory({
     config: params.config,
     sessionKey: params.sessionKey,
@@ -181,15 +205,20 @@ export async function runBeforeCompactionHooks(params: {
   const missingSessionKey = !params.sessionKey || !params.sessionKey.trim();
   const hookSessionKey = params.sessionKey?.trim() || params.sessionId;
   try {
-    const hookEvent = createInternalHookEvent("session", "compact:before", hookSessionKey, {
+    const hookEvent = compactionHooksDeps.createInternalHookEvent(
+      "session",
+      "compact:before",
+      hookSessionKey,
+      {
       sessionId: params.sessionId,
       missingSessionKey,
       messageCount: params.metrics.messageCountBefore,
       tokenCount: params.metrics.tokenCountBefore,
       messageCountOriginal: params.metrics.messageCountOriginal,
       tokenCountOriginal: params.metrics.tokenCountOriginal,
-    });
-    await triggerInternalHook(hookEvent);
+      },
+    );
+    await compactionHooksDeps.triggerInternalHook(hookEvent);
   } catch (err) {
     log.warn("session:compact:before hook failed", {
       errorMessage: err instanceof Error ? err.message : String(err),
@@ -262,7 +291,11 @@ export async function runAfterCompactionHooks(params: {
   firstKeptEntryId?: string;
 }) {
   try {
-    const hookEvent = createInternalHookEvent("session", "compact:after", params.hookSessionKey, {
+    const hookEvent = compactionHooksDeps.createInternalHookEvent(
+      "session",
+      "compact:after",
+      params.hookSessionKey,
+      {
       sessionId: params.sessionId,
       missingSessionKey: params.missingSessionKey,
       messageCount: params.messageCountAfter,
@@ -272,8 +305,9 @@ export async function runAfterCompactionHooks(params: {
       tokensBefore: params.tokensBefore,
       tokensAfter: params.tokensAfter,
       firstKeptEntryId: params.firstKeptEntryId,
-    });
-    await triggerInternalHook(hookEvent);
+      },
+    );
+    await compactionHooksDeps.triggerInternalHook(hookEvent);
   } catch (err) {
     log.warn("session:compact:after hook failed", {
       errorMessage: err instanceof Error ? err.message : String(err),

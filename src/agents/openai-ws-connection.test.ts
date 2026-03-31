@@ -19,138 +19,116 @@ import { OpenAIWebSocketManager } from "./openai-ws-connection.js";
 // Mock WebSocket (hoisted so vi.mock factory can reference it)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// vi.mock() factories are hoisted before ES module imports are resolved.
-// vi.hoisted() allows us to define values that are available to both the
-// factory AND the test body. We avoid importing EventEmitter here because
-// ESM imports aren't available yet in the hoisted zone — instead we
-// implement a minimal listener pattern inline.
-const { MockWebSocket } = vi.hoisted(() => {
-  type AnyFn = (...args: unknown[]) => void;
+type AnyFn = (...args: unknown[]) => void;
 
-  class MockWebSocket {
-    static CONNECTING = 0;
-    static OPEN = 1;
-    static CLOSING = 2;
-    static CLOSED = 3;
+class MockWebSocket {
+  static CONNECTING = 0;
+  static OPEN = 1;
+  static CLOSING = 2;
+  static CLOSED = 3;
 
-    readyState: number = MockWebSocket.CONNECTING;
-    url: string;
-    options: ClientOptions | undefined;
-    sentMessages: string[] = [];
+  readyState: number = MockWebSocket.CONNECTING;
+  url: string;
+  options: ClientOptions | undefined;
+  sentMessages: string[] = [];
 
-    private _listeners: Map<string, AnyFn[]> = new Map();
+  private _listeners: Map<string, AnyFn[]> = new Map();
 
-    constructor(url: string, options?: ClientOptions) {
-      this.url = url;
-      this.options = options ?? {};
-      MockWebSocket.lastInstance = this;
-      MockWebSocket.instances.push(this);
-    }
-
-    // Minimal EventEmitter-compatible interface
-    on(event: string, fn: AnyFn): this {
-      const list = this._listeners.get(event) ?? [];
-      list.push(fn);
-      this._listeners.set(event, list);
-      return this;
-    }
-
-    once(event: string, fn: AnyFn): this {
-      const wrapper = (...args: unknown[]) => {
-        this.off(event, wrapper);
-        fn(...args);
-      };
-      return this.on(event, wrapper);
-    }
-
-    off(event: string, fn: AnyFn): this {
-      const list = this._listeners.get(event) ?? [];
-      this._listeners.set(
-        event,
-        list.filter((l) => l !== fn),
-      );
-      return this;
-    }
-
-    removeAllListeners(event?: string): this {
-      if (event !== undefined) {
-        this._listeners.delete(event);
-      } else {
-        this._listeners.clear();
-      }
-      return this;
-    }
-
-    emit(event: string, ...args: unknown[]): boolean {
-      const list = this._listeners.get(event) ?? [];
-      for (const fn of list) {
-        fn(...args);
-      }
-      return list.length > 0;
-    }
-
-    // ws-compatible send
-    send(data: string): void {
-      this.sentMessages.push(data);
-    }
-
-    // ws-compatible close — triggers async close event
-    close(code = 1000, reason = ""): void {
-      this.readyState = MockWebSocket.CLOSING;
-      setImmediate(() => {
-        this.readyState = MockWebSocket.CLOSED;
-        this.emit("close", code, Buffer.from(reason));
-      });
-    }
-
-    // ── Test helpers ──────────────────────────────────────────────────────
-
-    simulateOpen(): void {
-      this.readyState = MockWebSocket.OPEN;
-      this.emit("open");
-    }
-
-    simulateMessage(event: unknown): void {
-      this.emit("message", Buffer.from(JSON.stringify(event)));
-    }
-
-    simulateError(err: Error): void {
-      this.readyState = MockWebSocket.CLOSED;
-      this.emit("error", err);
-    }
-
-    simulateClose(code = 1006, reason = "Connection lost"): void {
-      this.readyState = MockWebSocket.CLOSED;
-      this.emit("close", code, Buffer.from(reason));
-    }
-
-    static lastInstance: MockWebSocket | null = null;
-    static instances: MockWebSocket[] = [];
-
-    static reset(): void {
-      MockWebSocket.lastInstance = null;
-      MockWebSocket.instances = [];
-    }
+  constructor(url: string, options?: ClientOptions) {
+    this.url = url;
+    this.options = options ?? {};
+    MockWebSocket.lastInstance = this;
+    MockWebSocket.instances.push(this);
   }
 
-  return { MockWebSocket };
-});
+  on(event: string, fn: AnyFn): this {
+    const list = this._listeners.get(event) ?? [];
+    list.push(fn);
+    this._listeners.set(event, list);
+    return this;
+  }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Module Mock
-// ─────────────────────────────────────────────────────────────────────────────
+  once(event: string, fn: AnyFn): this {
+    const wrapper = (...args: unknown[]) => {
+      this.off(event, wrapper);
+      fn(...args);
+    };
+    return this.on(event, wrapper);
+  }
 
-vi.mock("ws", () => {
-  // ws exports WebSocket as the default export; static constants (OPEN, etc.)
-  // live on the class itself.
-  return { default: MockWebSocket };
-});
+  off(event: string, fn: AnyFn): this {
+    const list = this._listeners.get(event) ?? [];
+    this._listeners.set(
+      event,
+      list.filter((l) => l !== fn),
+    );
+    return this;
+  }
+
+  removeAllListeners(event?: string): this {
+    if (event !== undefined) {
+      this._listeners.delete(event);
+    } else {
+      this._listeners.clear();
+    }
+    return this;
+  }
+
+  emit(event: string, ...args: unknown[]): boolean {
+    const list = this._listeners.get(event) ?? [];
+    for (const fn of list) {
+      fn(...args);
+    }
+    return list.length > 0;
+  }
+
+  send(data: string): void {
+    this.sentMessages.push(data);
+  }
+
+  close(code = 1000, reason = ""): void {
+    this.readyState = MockWebSocket.CLOSING;
+    setImmediate(() => {
+      this.readyState = MockWebSocket.CLOSED;
+      this.emit("close", code, Buffer.from(reason));
+    });
+  }
+
+  simulateOpen(): void {
+    this.readyState = MockWebSocket.OPEN;
+    this.emit("open");
+  }
+
+  simulateMessage(event: unknown): void {
+    this.emit("message", Buffer.from(JSON.stringify(event)));
+  }
+
+  simulateError(err: Error): void {
+    this.readyState = MockWebSocket.CLOSED;
+    this.emit("error", err);
+  }
+
+  simulateClose(code = 1006, reason = "Connection lost"): void {
+    this.readyState = MockWebSocket.CLOSED;
+    this.emit("close", code, Buffer.from(reason));
+  }
+
+  static lastInstance: MockWebSocket | null = null;
+  static instances: MockWebSocket[] = [];
+
+  static reset(): void {
+    MockWebSocket.lastInstance = null;
+    MockWebSocket.instances = [];
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Type alias for the mock class (improves test readability)
 // ─────────────────────────────────────────────────────────────────────────────
 
 type MockWS = typeof MockWebSocket extends { new (...a: infer _): infer R } ? R : never;
+
+const activeManagers = new Set<OpenAIWebSocketManager>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -165,12 +143,14 @@ function lastSocket(): MockWS {
 }
 
 function buildManager(opts?: ConstructorParameters<typeof OpenAIWebSocketManager>[0]) {
-  return new OpenAIWebSocketManager({
+  const manager = new OpenAIWebSocketManager({
     // Use faster backoff in tests to avoid slow timer waits
     backoffDelaysMs: [10, 20, 40, 80, 160],
     socketFactory: (url, options) => new MockWebSocket(url, options) as never,
     ...opts,
   });
+  activeManagers.add(manager);
+  return manager;
 }
 
 function attachErrorCollector(manager: OpenAIWebSocketManager) {
@@ -208,10 +188,15 @@ function connectIgnoringFailure(manager: OpenAIWebSocketManager): Promise<void> 
 describe("OpenAIWebSocketManager", () => {
   beforeEach(() => {
     MockWebSocket.reset();
+    activeManagers.clear();
     vi.useFakeTimers();
   });
 
   afterEach(() => {
+    for (const manager of activeManagers) {
+      manager.close();
+    }
+    activeManagers.clear();
     vi.useRealTimers();
   });
 

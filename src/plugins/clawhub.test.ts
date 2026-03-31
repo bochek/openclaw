@@ -24,6 +24,8 @@ vi.mock("../infra/clawhub.js", async () => {
 });
 
 vi.mock("../version.js", () => ({
+  VERSION: "2026.3.22",
+  resolveRuntimeServiceVersion: vi.fn(() => "2026.3.22"),
   resolveCompatibilityHostVersion: (...args: unknown[]) =>
     resolveCompatibilityHostVersionMock(...args),
 }));

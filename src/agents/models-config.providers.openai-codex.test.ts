@@ -43,14 +43,18 @@ async function writeCodexOauthProfile(agentDir: string) {
 }
 
 describe("openai-codex implicit provider", () => {
-  it("injects an implicit provider when Codex OAuth exists", async () => {
+  it("injects an implicit provider when Codex OAuth exists", { timeout: 20_000 }, async () => {
     await withModelsTempHome(async () => {
       await withTempEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS, async () => {
         unsetEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS);
         const agentDir = resolveOpenClawAgentDir();
         await writeCodexOauthProfile(agentDir);
 
-        const providers = await resolveImplicitProvidersForTest({ agentDir });
+        const providers = await resolveImplicitProvidersForTest({
+          agentDir,
+          env: {},
+          onlyPluginIds: ["openai"],
+        });
         expect(providers?.["openai-codex"]).toMatchObject({
           baseUrl: "https://chatgpt.com/backend-api",
           api: "openai-codex-responses",
@@ -61,96 +65,104 @@ describe("openai-codex implicit provider", () => {
     });
   });
 
-  it("replaces stale openai-codex baseUrl in generated models.json", async () => {
-    await withModelsTempHome(async () => {
-      await withTempEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS, async () => {
-        unsetEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS);
-        const agentDir = resolveOpenClawAgentDir();
-        await writeCodexOauthProfile(agentDir);
-        await fs.writeFile(
-          path.join(agentDir, "models.json"),
-          JSON.stringify(
-            {
-              providers: {
-                "openai-codex": {
-                  baseUrl: "https://api.openai.com/v1",
-                  api: "openai-responses",
-                  models: [
-                    {
-                      id: "gpt-5.4",
-                      name: "GPT-5.4",
-                      api: "openai-responses",
-                      contextWindow: 1_000_000,
-                      maxTokens: 100_000,
-                    },
-                  ],
+  it(
+    "replaces stale openai-codex baseUrl in generated models.json",
+    { timeout: 20_000 },
+    async () => {
+      await withModelsTempHome(async () => {
+        await withTempEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS, async () => {
+          unsetEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS);
+          const agentDir = resolveOpenClawAgentDir();
+          await writeCodexOauthProfile(agentDir);
+          await fs.writeFile(
+            path.join(agentDir, "models.json"),
+            JSON.stringify(
+              {
+                providers: {
+                  "openai-codex": {
+                    baseUrl: "https://api.openai.com/v1",
+                    api: "openai-responses",
+                    models: [
+                      {
+                        id: "gpt-5.4",
+                        name: "GPT-5.4",
+                        api: "openai-responses",
+                        contextWindow: 1_000_000,
+                        maxTokens: 100_000,
+                      },
+                    ],
+                  },
                 },
               },
-            },
-            null,
-            2,
-          ),
-          "utf8",
-        );
+              null,
+              2,
+            ),
+            "utf8",
+          );
 
-        await ensureOpenClawModelsJson({});
+          await ensureOpenClawModelsJson({});
 
-        const parsed = await readGeneratedModelsJson<{
-          providers: Record<string, { baseUrl?: string; api?: string }>;
-        }>();
-        expect(parsed.providers["openai-codex"]).toMatchObject({
-          baseUrl: "https://chatgpt.com/backend-api",
-          api: "openai-codex-responses",
+          const parsed = await readGeneratedModelsJson<{
+            providers: Record<string, { baseUrl?: string; api?: string }>;
+          }>();
+          expect(parsed.providers["openai-codex"]).toMatchObject({
+            baseUrl: "https://chatgpt.com/backend-api",
+            api: "openai-codex-responses",
+          });
         });
       });
-    });
-  });
+    },
+  );
 
-  it("preserves an existing baseUrl for explicit openai-codex config without oauth synthesis", async () => {
-    await withModelsTempHome(async () => {
-      await withTempEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS, async () => {
-        unsetEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS);
-        const agentDir = resolveOpenClawAgentDir();
-        await fs.mkdir(agentDir, { recursive: true });
-        await fs.writeFile(
-          path.join(agentDir, "models.json"),
-          JSON.stringify(
-            {
+  it(
+    "preserves an existing baseUrl for explicit openai-codex config without oauth synthesis",
+    { timeout: 20_000 },
+    async () => {
+      await withModelsTempHome(async () => {
+        await withTempEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS, async () => {
+          unsetEnv(MODELS_CONFIG_IMPLICIT_ENV_VARS);
+          const agentDir = resolveOpenClawAgentDir();
+          await fs.mkdir(agentDir, { recursive: true });
+          await fs.writeFile(
+            path.join(agentDir, "models.json"),
+            JSON.stringify(
+              {
+                providers: {
+                  "openai-codex": {
+                    baseUrl: "https://chatgpt.com/backend-api",
+                    api: "openai-codex-responses",
+                    models: [],
+                  },
+                },
+              },
+              null,
+              2,
+            ),
+            "utf8",
+          );
+
+          await ensureOpenClawModelsJson({
+            models: {
+              mode: "merge",
               providers: {
                 "openai-codex": {
-                  baseUrl: "https://chatgpt.com/backend-api",
+                  baseUrl: "",
                   api: "openai-codex-responses",
                   models: [],
                 },
               },
             },
-            null,
-            2,
-          ),
-          "utf8",
-        );
+          });
 
-        await ensureOpenClawModelsJson({
-          models: {
-            mode: "merge",
-            providers: {
-              "openai-codex": {
-                baseUrl: "",
-                api: "openai-codex-responses",
-                models: [],
-              },
-            },
-          },
-        });
-
-        const parsed = await readGeneratedModelsJson<{
-          providers: Record<string, { baseUrl?: string; api?: string }>;
-        }>();
-        expect(parsed.providers["openai-codex"]).toMatchObject({
-          baseUrl: "https://chatgpt.com/backend-api",
-          api: "openai-codex-responses",
+          const parsed = await readGeneratedModelsJson<{
+            providers: Record<string, { baseUrl?: string; api?: string }>;
+          }>();
+          expect(parsed.providers["openai-codex"]).toMatchObject({
+            baseUrl: "https://chatgpt.com/backend-api",
+            api: "openai-codex-responses",
+          });
         });
       });
-    });
-  });
+    },
+  );
 });

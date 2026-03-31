@@ -1,4 +1,8 @@
-import { AcpSessionManager } from "./manager.core.js";
+import {
+  AcpSessionManager,
+  resetManagerTimerDepsForTests,
+  setManagerTimerDepsForTests,
+} from "./manager.core.js";
 
 export { AcpSessionManager } from "./manager.core.js";
 export type {
@@ -25,8 +29,15 @@ export function getAcpSessionManager(): AcpSessionManager {
 export const __testing = {
   resetAcpSessionManagerForTests() {
     ACP_SESSION_MANAGER_SINGLETON = null;
+    resetManagerTimerDepsForTests();
   },
   setAcpSessionManagerForTests(manager: unknown) {
     ACP_SESSION_MANAGER_SINGLETON = manager as AcpSessionManager | null;
+  },
+  setManagerTimerDepsForTests(overrides?: Parameters<typeof setManagerTimerDepsForTests>[0]) {
+    setManagerTimerDepsForTests(overrides);
+  },
+  resetManagerTimerDepsForTests() {
+    resetManagerTimerDepsForTests();
   },
 };

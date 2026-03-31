@@ -1,4 +1,12 @@
 import { vi } from "vitest";
+import {
+  ensureConfiguredBindingRouteReady,
+  resolveConfiguredBindingRoute,
+} from "openclaw/plugin-sdk/conversation-runtime";
+import { __testing as botTesting } from "./bot.js";
+import { __testing as cardUxLauncherTesting } from "./card-ux-launcher.js";
+import { __testing as cardActionTesting } from "./card-action.js";
+import { __testing as monitorAccountTesting } from "./monitor.account.js";
 
 type BoundConversation = {
   bindingId: string;
@@ -49,60 +57,61 @@ const {
   sendCardFeishuMock,
 } = feishuLifecycleTestMocks;
 
-vi.mock("./client.js", async () => {
-  const actual = await vi.importActual<typeof import("./client.js")>("./client.js");
-  return {
-    ...actual,
-    createEventDispatcher: createEventDispatcherMock,
-  };
-});
-
-vi.mock("./monitor.transport.js", () => ({
-  monitorWebSocket: monitorWebSocketMock,
-  monitorWebhook: monitorWebhookMock,
-}));
-
-vi.mock("./thread-bindings.js", () => ({
-  createFeishuThreadBindingManager: createFeishuThreadBindingManagerMock,
-}));
-
-vi.mock("./reply-dispatcher.js", () => ({
-  createFeishuReplyDispatcher: createFeishuReplyDispatcherMock,
-}));
-
-vi.mock("./send.js", () => ({
-  sendCardFeishu: sendCardFeishuMock,
-  getMessageFeishu: getMessageFeishuMock,
-  listFeishuThreadMessages: listFeishuThreadMessagesMock,
-  sendMessageFeishu: sendMessageFeishuMock,
-}));
-
-vi.mock("openclaw/plugin-sdk/conversation-runtime", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/conversation-runtime")>();
-  return {
-    ...actual,
-    resolveConfiguredBindingRoute: (
-      params: Parameters<typeof actual.resolveConfiguredBindingRoute>[0],
-    ) =>
+export function installFeishuLifecycleTestDeps(): void {
+  monitorAccountTesting.setDepsForTest({
+    createEventDispatcher: ((...args) =>
+      createEventDispatcherMock(...args)) as typeof import("./client.js").createEventDispatcher,
+    monitorWebSocket: ((...args) =>
+      monitorWebSocketMock(...args)) as typeof import("./monitor.transport.js").monitorWebSocket,
+    monitorWebhook: ((...args) =>
+      monitorWebhookMock(...args)) as typeof import("./monitor.transport.js").monitorWebhook,
+    getMessageFeishu: ((...args) =>
+      getMessageFeishuMock(...args)) as typeof import("./send.js").getMessageFeishu,
+    createFeishuThreadBindingManager: ((...args) =>
+      createFeishuThreadBindingManagerMock(
+        ...args
+      )) as typeof import("./thread-bindings.js").createFeishuThreadBindingManager,
+  });
+  botTesting.setDepsForTest({
+    createFeishuReplyDispatcher: ((...args) =>
+      createFeishuReplyDispatcherMock(
+        ...args
+      )) as typeof import("./reply-dispatcher.js").createFeishuReplyDispatcher,
+    getMessageFeishu: ((...args) =>
+      getMessageFeishuMock(...args)) as typeof import("./send.js").getMessageFeishu,
+    listFeishuThreadMessages: ((...args) =>
+      listFeishuThreadMessagesMock(
+        ...args
+      )) as typeof import("./send.js").listFeishuThreadMessages,
+    sendMessageFeishu: ((...args) =>
+      sendMessageFeishuMock(...args)) as typeof import("./send.js").sendMessageFeishu,
+    resolveConfiguredBindingRoute: ((...args) =>
       resolveConfiguredBindingRouteMock.getMockImplementation()
-        ? resolveConfiguredBindingRouteMock(params)
-        : actual.resolveConfiguredBindingRoute(params),
-    ensureConfiguredBindingRouteReady: (
-      params: Parameters<typeof actual.ensureConfiguredBindingRouteReady>[0],
-    ) =>
+        ? resolveConfiguredBindingRouteMock(...args)
+        : resolveConfiguredBindingRoute(
+            ...args
+          )) as typeof import("openclaw/plugin-sdk/conversation-runtime").resolveConfiguredBindingRoute,
+    ensureConfiguredBindingRouteReady: ((...args) =>
       ensureConfiguredBindingRouteReadyMock.getMockImplementation()
-        ? ensureConfiguredBindingRouteReadyMock(params)
-        : actual.ensureConfiguredBindingRouteReady(params),
-    getSessionBindingService: () => ({
+        ? ensureConfiguredBindingRouteReadyMock(...args)
+        : ensureConfiguredBindingRouteReady(
+            ...args
+          )) as typeof import("openclaw/plugin-sdk/conversation-runtime").ensureConfiguredBindingRouteReady,
+    getSessionBindingService: (() => ({
       resolveByConversation: resolveBoundConversationMock,
       touch: touchBindingMock,
-    }),
-  };
-});
+    })) as typeof import("openclaw/plugin-sdk/conversation-runtime").getSessionBindingService,
+  });
+  cardActionTesting.setDepsForTest({
+    sendMessageFeishu: ((...args) =>
+      sendMessageFeishuMock(...args)) as typeof import("./send.js").sendMessageFeishu,
+    sendCardFeishu: ((...args) =>
+      sendCardFeishuMock(...args)) as typeof import("./send.js").sendCardFeishu,
+  });
+  cardUxLauncherTesting.setDepsForTest({
+    sendCardFeishu: ((...args) =>
+      sendCardFeishuMock(...args)) as typeof import("./send.js").sendCardFeishu,
+  });
+}
 
-vi.mock("../../../src/infra/outbound/session-binding-service.js", () => ({
-  getSessionBindingService: () => ({
-    resolveByConversation: resolveBoundConversationMock,
-    touch: touchBindingMock,
-  }),
-}));
+installFeishuLifecycleTestDeps();

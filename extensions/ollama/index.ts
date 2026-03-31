@@ -25,6 +25,9 @@ import {
 
 const PROVIDER_ID = "ollama";
 const DEFAULT_API_KEY = "ollama-local";
+const ollamaDeps = {
+  buildOllamaProvider,
+};
 
 function shouldSkipAmbientOllamaDiscovery(env: NodeJS.ProcessEnv): boolean {
   return Boolean(env.VITEST) || env.NODE_ENV === "test";
@@ -103,7 +106,7 @@ export default definePluginEntry({
             return null;
           }
 
-          const provider = await buildOllamaProvider(explicit?.baseUrl, {
+          const provider = await ollamaDeps.buildOllamaProvider(explicit?.baseUrl, {
             quiet: !ollamaKey && !explicit,
           });
           if (provider.models.length === 0 && !ollamaKey && !explicit?.apiKey) {
@@ -184,3 +187,12 @@ export default definePluginEntry({
     });
   },
 });
+
+export const __testing = {
+  setDepsForTest(overrides: Partial<typeof ollamaDeps>) {
+    Object.assign(ollamaDeps, overrides);
+  },
+  resetDepsForTest() {
+    ollamaDeps.buildOllamaProvider = buildOllamaProvider;
+  },
+};

@@ -33,7 +33,6 @@ vi.mock("openclaw/plugin-sdk/web-media", () => ({
 
 let sendMessageSlack: typeof import("./send.js").sendMessageSlack;
 let clearSlackDmChannelCache: typeof import("./send.js").clearSlackDmChannelCache;
-({ sendMessageSlack, clearSlackDmChannelCache } = await import("./send.js"));
 
 type UploadTestClient = WebClient & {
   conversations: { open: ReturnType<typeof vi.fn> };
@@ -65,6 +64,11 @@ function createUploadTestClient(): UploadTestClient {
 
 describe("sendMessageSlack file upload with user IDs", () => {
   const originalFetch = globalThis.fetch;
+
+  beforeAll(async () => {
+    vi.resetModules();
+    ({ sendMessageSlack, clearSlackDmChannelCache } = await import("./send.js"));
+  });
 
   beforeEach(() => {
     globalThis.fetch = vi.fn(

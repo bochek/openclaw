@@ -39,6 +39,15 @@ import type { FailoverReason } from "./pi-embedded-helpers.js";
 import { isLikelyContextOverflowError } from "./pi-embedded-helpers.js";
 
 const log = createSubsystemLogger("model-fallback");
+const defaultModelFallbackDeps = {
+  ensureAuthProfileStore,
+  getSoonestCooldownExpiry,
+  isProfileInCooldown,
+  loadAuthProfileStoreForRuntime,
+  resolveProfilesUnavailableReason,
+  resolveAuthProfileOrder,
+};
+let modelFallbackDeps = defaultModelFallbackDeps;
 
 /**
  * Structured error thrown when all model fallback candidates have been
@@ -248,18 +257,18 @@ function resolveFallbackSoonestCooldownExpiry(params: {
 
   // Refresh from persisted state because embedded attempts can update auth
   // cooldowns through a separate store instance while the fallback loop runs.
-  const refreshedStore = loadAuthProfileStoreForRuntime(params.agentDir, {
+  const refreshedStore = modelFallbackDeps.loadAuthProfileStoreForRuntime(params.agentDir, {
     readOnly: true,
     allowKeychainPrompt: false,
   });
   let soonest: number | null = null;
   for (const candidate of params.candidates) {
-    const ids = resolveAuthProfileOrder({
+    const ids = modelFallbackDeps.resolveAuthProfileOrder({
       cfg: params.cfg,
       store: refreshedStore,
       provider: candidate.provider,
     });
-    const candidateSoonest = getSoonestCooldownExpiry(refreshedStore, ids, {
+    const candidateSoonest = modelFallbackDeps.getSoonestCooldownExpiry(refreshedStore, ids, {
       forModel: candidate.model,
     });
     if (
@@ -469,7 +478,7 @@ function shouldProbePrimaryDuringCooldown(params: {
     return false;
   }
 
-  const soonest = getSoonestCooldownExpiry(params.authStore, params.profileIds, {
+  const soonest = modelFallbackDeps.getSoonestCooldownExpiry(params.authStore, params.profileIds, {
     now: params.now,
     forModel: params.model,
   });
@@ -527,7 +536,7 @@ function resolveCooldownDecision(params: {
   });
 
   const inferredReason =
-    resolveProfilesUnavailableReason({
+    modelFallbackDeps.resolveProfilesUnavailableReason({
       store: params.authStore,
       profileIds: params.profileIds,
       now: params.now,
@@ -602,7 +611,7 @@ export async function runWithModelFallback<T>(params: {
     fallbacksOverride: params.fallbacksOverride,
   });
   const authStore = params.cfg
-    ? ensureAuthProfileStore(params.agentDir, { allowKeychainPrompt: false })
+    ? modelFallbackDeps.ensureAuthProfileStore(params.agentDir, { allowKeychainPrompt: false })
     : null;
   const attempts: FallbackAttempt[] = [];
   let lastError: unknown;
@@ -619,13 +628,13 @@ export async function runWithModelFallback<T>(params: {
     let attemptedDuringCooldown = false;
     let transientProbeProviderForAttempt: string | null = null;
     if (authStore) {
-      const profileIds = resolveAuthProfileOrder({
+      const profileIds = modelFallbackDeps.resolveAuthProfileOrder({
         cfg: params.cfg,
         store: authStore,
         provider: candidate.provider,
       });
       const isAnyProfileAvailable = profileIds.some(
-        (id) => !isProfileInCooldown(authStore, id, undefined, candidate.model),
+        (id) => !modelFallbackDeps.isProfileInCooldown(authStore, id, undefined, candidate.model),
       );
 
       if (profileIds.length > 0 && !isAnyProfileAvailable) {
@@ -896,3 +905,11 @@ export async function runWithImageModelFallback<T>(params: {
     formatAttempt: (attempt) => `${attempt.provider}/${attempt.model}: ${attempt.error}`,
   });
 }
+
+export const __testing = {
+  setDepsForTest(overrides?: Partial<typeof defaultModelFallbackDeps>) {
+    modelFallbackDeps = overrides
+      ? { ...defaultModelFallbackDeps, ...overrides }
+      : defaultModelFallbackDeps;
+  },
+};

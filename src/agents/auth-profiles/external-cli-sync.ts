@@ -20,6 +20,8 @@ type ExternalCliSyncProvider = {
   readCredentials: () => OAuthCredential | null;
 };
 
+let externalCliSyncProvidersOverride: ExternalCliSyncProvider[] | null = null;
+
 function areOAuthCredentialsEquivalent(
   a: OAuthCredential | undefined,
   b: OAuthCredential,
@@ -80,6 +82,16 @@ const EXTERNAL_CLI_SYNC_PROVIDERS: ExternalCliSyncProvider[] = [
   },
 ];
 
+function resolveExternalCliSyncProviders(): ExternalCliSyncProvider[] {
+  return externalCliSyncProvidersOverride ?? EXTERNAL_CLI_SYNC_PROVIDERS;
+}
+
+export const __testing = {
+  setExternalCliSyncProvidersForTests(providers: ExternalCliSyncProvider[] | null): void {
+    externalCliSyncProvidersOverride = providers ? [...providers] : null;
+  },
+};
+
 /** Sync external CLI credentials into the store for a given provider. */
 function syncExternalCliCredentialsForProvider(
   store: AuthProfileStore,
@@ -131,7 +143,7 @@ export function syncExternalCliCredentials(
 ): boolean {
   let mutated = false;
 
-  for (const provider of EXTERNAL_CLI_SYNC_PROVIDERS) {
+  for (const provider of resolveExternalCliSyncProviders()) {
     if (syncExternalCliCredentialsForProvider(store, provider, options)) {
       mutated = true;
     }

@@ -1,35 +1,12 @@
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
-
-// Mock fetchWithSsrFGuard from the local runtime seam.
-vi.mock("../../runtime-api.js", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../runtime-api.js")>();
-  return {
-    ...actual,
-    fetchWithSsrFGuard: vi.fn(),
-  };
-});
-
-// Mock the local Tlon upload seam.
-vi.mock("../tlon-api.js", () => ({
-  uploadFile: vi.fn(),
-}));
+import { __testing, uploadImageFromUrl } from "./upload.js";
 
 describe("uploadImageFromUrl", () => {
-  async function loadUploadMocks() {
-    const { fetchWithSsrFGuard } = await import("../../runtime-api.js");
-    const { uploadFile } = await import("../tlon-api.js");
-    const { uploadImageFromUrl } = await import("./upload.js");
-    return {
-      mockFetch: vi.mocked(fetchWithSsrFGuard),
-      mockUploadFile: vi.mocked(uploadFile),
-      uploadImageFromUrl,
-    };
-  }
-
-  type UploadMocks = Awaited<ReturnType<typeof loadUploadMocks>>;
+  const mockFetch = vi.fn();
+  const mockUploadFile = vi.fn();
 
   function mockSuccessfulFetch(params: {
-    mockFetch: UploadMocks["mockFetch"];
+    mockFetch: typeof mockFetch;
     blob: Blob;
     finalUrl: string;
     contentType: string;
@@ -50,7 +27,6 @@ describe("uploadImageFromUrl", () => {
     contentType?: string;
     uploadedUrl?: string;
   }) {
-    const { mockFetch, mockUploadFile, uploadImageFromUrl } = await loadUploadMocks();
     const sourceUrl = params?.sourceUrl ?? "https://example.com/image.png";
     const contentType = params?.contentType ?? "image/png";
     const mockBlob = new Blob(["fake-image"], { type: contentType });
@@ -68,10 +44,15 @@ describe("uploadImageFromUrl", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    __testing.setDepsForTest({
+      fetchWithSsrFGuard: mockFetch,
+      uploadFile: mockUploadFile,
+    });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    __testing.resetDepsForTest();
   });
 
   it("fetches image and calls uploadFile, returns uploaded URL", async () => {
@@ -92,8 +73,6 @@ describe("uploadImageFromUrl", () => {
   });
 
   it("returns original URL if fetch fails", async () => {
-    const { mockFetch, uploadImageFromUrl } = await loadUploadMocks();
-
     mockFetch.mockResolvedValue({
       response: {
         ok: false,
@@ -118,8 +97,6 @@ describe("uploadImageFromUrl", () => {
   });
 
   it("rejects non-http(s) URLs", async () => {
-    const { uploadImageFromUrl } = await import("./upload.js");
-
     // file:// URL should be rejected
     const result = await uploadImageFromUrl("file:///etc/passwd");
     expect(result).toBe("file:///etc/passwd");
@@ -130,16 +107,12 @@ describe("uploadImageFromUrl", () => {
   });
 
   it("handles invalid URLs gracefully", async () => {
-    const { uploadImageFromUrl } = await import("./upload.js");
-
     // Invalid URL should return original
     const result = await uploadImageFromUrl("not-a-valid-url");
     expect(result).toBe("not-a-valid-url");
   });
 
   it("extracts filename from URL path", async () => {
-    const { mockFetch, mockUploadFile, uploadImageFromUrl } = await loadUploadMocks();
-
     const mockBlob = new Blob(["fake-image"], { type: "image/jpeg" });
     mockSuccessfulFetch({
       mockFetch,
@@ -160,8 +133,6 @@ describe("uploadImageFromUrl", () => {
   });
 
   it("uses default filename when URL has no path", async () => {
-    const { mockFetch, mockUploadFile, uploadImageFromUrl } = await loadUploadMocks();
-
     const mockBlob = new Blob(["fake-image"], { type: "image/png" });
     mockSuccessfulFetch({
       mockFetch,

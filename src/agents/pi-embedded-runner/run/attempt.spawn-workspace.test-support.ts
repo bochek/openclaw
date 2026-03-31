@@ -26,6 +26,7 @@ const hoisted = vi.hoisted(() => {
   const resolveSandboxContextMock = vi.fn();
   const subscribeEmbeddedPiSessionMock = vi.fn();
   const acquireSessionWriteLockMock = vi.fn();
+  const createOpenClawCodingToolsMock = vi.fn();
   const resolveBootstrapContextForRunMock = vi.fn<() => Promise<BootstrapContext>>(async () => ({
     bootstrapFiles: [],
     contextFiles: [],
@@ -47,6 +48,7 @@ const hoisted = vi.hoisted(() => {
     resolveSandboxContextMock,
     subscribeEmbeddedPiSessionMock,
     acquireSessionWriteLockMock,
+    createOpenClawCodingToolsMock,
     resolveBootstrapContextForRunMock,
     getGlobalHookRunnerMock,
     initializeGlobalHookRunnerMock,
@@ -226,26 +228,32 @@ vi.mock("../../cache-trace.js", () => ({
 }));
 
 vi.mock("../../pi-tools.js", () => ({
-  createOpenClawCodingTools: (options?: { workspaceDir?: string; spawnWorkspaceDir?: string }) => [
-    {
-      name: "sessions_spawn",
-      execute: async (
-        _callId: string,
-        input: { task?: string },
-        _session?: unknown,
-        _abortSignal?: unknown,
-        _ctx?: unknown,
-      ) =>
-        await hoisted.spawnSubagentDirectMock(
-          {
-            task: input.task ?? "",
-          },
-          {
-            workspaceDir: options?.spawnWorkspaceDir ?? options?.workspaceDir,
-          },
-        ),
-    },
-  ],
+  createOpenClawCodingTools: (options?: { workspaceDir?: string; spawnWorkspaceDir?: string }) => {
+    const override = hoisted.createOpenClawCodingToolsMock.getMockImplementation();
+    if (override) {
+      return hoisted.createOpenClawCodingToolsMock(options);
+    }
+    return [
+      {
+        name: "sessions_spawn",
+        execute: async (
+          _callId: string,
+          input: { task?: string },
+          _session?: unknown,
+          _abortSignal?: unknown,
+          _ctx?: unknown,
+        ) =>
+          await hoisted.spawnSubagentDirectMock(
+            {
+              task: input.task ?? "",
+            },
+            {
+              workspaceDir: options?.spawnWorkspaceDir ?? options?.workspaceDir,
+            },
+          ),
+      },
+    ];
+  },
   resolveToolLoopDetectionConfig: () => undefined,
 }));
 
@@ -425,8 +433,11 @@ let runEmbeddedAttemptPromise:
   | Promise<typeof import("./attempt.js").runEmbeddedAttempt>
   | undefined;
 
-async function loadRunEmbeddedAttempt() {
-  runEmbeddedAttemptPromise ??= import("./attempt.js").then((mod) => mod.runEmbeddedAttempt);
+export async function loadRunEmbeddedAttempt() {
+  runEmbeddedAttemptPromise ??= (async () => {
+    const mod = await import("./attempt.js");
+    return mod.runEmbeddedAttempt;
+  })();
   return await runEmbeddedAttemptPromise;
 }
 
@@ -484,6 +495,7 @@ export function resetEmbeddedAttemptHarness(
   hoisted.acquireSessionWriteLockMock.mockReset().mockResolvedValue({
     release: async () => {},
   });
+  hoisted.createOpenClawCodingToolsMock.mockReset();
   hoisted.resolveBootstrapContextForRunMock.mockReset().mockResolvedValue({
     bootstrapFiles: [],
     contextFiles: [],
@@ -636,7 +648,6 @@ export async function createContextEngineAttemptRunner(params: {
     }) => Promise<CompactResult>;
     info?: Partial<ContextEngineInfo>;
   };
-  attemptOverrides?: Partial<Parameters<Awaited<ReturnType<typeof loadRunEmbeddedAttempt>>>[0]>;
   sessionKey: string;
   tempPaths: string[];
 }) {
@@ -713,6 +724,5 @@ export async function createContextEngineAttemptRunner(params: {
         version: infoVersion,
       },
     },
-    ...params.attemptOverrides,
   });
 }

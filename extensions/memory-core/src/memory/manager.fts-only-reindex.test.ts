@@ -1,11 +1,13 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/memory-core-host-engine-foundation";
+import { requireNodeSqlite } from "openclaw/plugin-sdk/memory-core-host-engine-storage";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { MemoryIndexManager } from "./manager.js";
-import "./test-runtime-mocks.js";
+vi.mock("./sqlite-vec.js", () => ({
+  loadSqliteVecExtension: async () => ({ ok: false, error: "sqlite-vec disabled in tests" }),
+}));
 
 vi.mock("./embeddings.js", () => ({
   createEmbeddingProvider: async () => ({
@@ -17,6 +19,7 @@ vi.mock("./embeddings.js", () => ({
 }));
 
 type MemoryIndexModule = typeof import("./index.js");
+const { DatabaseSync } = requireNodeSqlite();
 
 describe("memory manager FTS-only reindex", () => {
   let fixtureRoot = "";
@@ -29,11 +32,10 @@ describe("memory manager FTS-only reindex", () => {
 
   beforeAll(async () => {
     fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-mem-fts-only-"));
+    ({ getMemorySearchManager, closeAllMemorySearchManagers } = await import("./index.js"));
   });
 
   beforeEach(async () => {
-    vi.resetModules();
-    ({ getMemorySearchManager, closeAllMemorySearchManagers } = await import("./index.js"));
     workspaceDir = path.join(fixtureRoot, `case-${caseId++}`);
     await fs.mkdir(path.join(workspaceDir, "memory"), { recursive: true });
     await fs.writeFile(path.join(workspaceDir, "MEMORY.md"), "Alpha topic\n\nKeep this note.");

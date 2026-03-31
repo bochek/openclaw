@@ -38,17 +38,10 @@ vi.mock("../../logging/console.js", () => ({
 
 vi.mock("../cli-name.js", () => ({
   resolveCliName: () => "openclaw",
+  replaceCliName: (value: string) => value,
 }));
-
-vi.mock("./config-guard.js", () => ({
-  ensureConfigReady: ensureConfigReadyMock,
-}));
-
-vi.mock("../plugin-registry.js", () => ({
-  ensurePluginRegistryLoaded: ensurePluginRegistryLoadedMock,
-}));
-
 let registerPreActionHooks: typeof import("./preaction.js").registerPreActionHooks;
+let preActionTesting: typeof import("./preaction.js").__testing;
 let originalProcessArgv: string[];
 let originalProcessTitle: string;
 let originalProcessTitleDescriptor: PropertyDescriptor | undefined;
@@ -58,12 +51,18 @@ let originalHideBanner: string | undefined;
 let originalForceStderr: boolean;
 
 beforeAll(async () => {
-  ({ registerPreActionHooks } = await import("./preaction.js"));
+  ({ registerPreActionHooks, __testing: preActionTesting } = await import("./preaction.js"));
 });
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  originalProcessArgv = [...process.argv];
+  beforeEach(() => {
+    vi.clearAllMocks();
+    preActionTesting.resetDepsForTest();
+    preActionTesting.setDepsForTest({
+      loadConfigGuardModule: async () => ({ ensureConfigReady: ensureConfigReadyMock }) as never,
+      loadPluginRegistryModule: async () =>
+        ({ ensurePluginRegistryLoaded: ensurePluginRegistryLoadedMock }) as never,
+    });
+    originalProcessArgv = [...process.argv];
   originalProcessTitle = process.title;
   originalProcessTitleDescriptor = Object.getOwnPropertyDescriptor(process, "title");
   observedProcessTitle = originalProcessTitle;
@@ -192,7 +191,6 @@ describe("registerPreActionHooks", () => {
   }
 
   it("handles debug mode and plugin-required command preaction", async () => {
-    const processTitleSetSpy = vi.spyOn(process, "title", "set");
     await runPreAction({
       parseArgv: ["status"],
       processArgv: ["node", "openclaw", "status", "--debug"],
@@ -205,7 +203,7 @@ describe("registerPreActionHooks", () => {
       commandPath: ["status"],
     });
     expect(ensurePluginRegistryLoadedMock).toHaveBeenCalledWith({ scope: "channels" });
-    expect(processTitleSetSpy).toHaveBeenCalledWith("openclaw-status");
+    expect(observedProcessTitle).toBe("openclaw-status");
 
     vi.clearAllMocks();
     await runPreAction({
@@ -220,7 +218,6 @@ describe("registerPreActionHooks", () => {
       commandPath: ["message", "send"],
     });
     expect(ensurePluginRegistryLoadedMock).toHaveBeenCalledWith({ scope: "all" });
-    processTitleSetSpy.mockRestore();
   });
 
   it("keeps setup alias and channels add manifest-first", async () => {

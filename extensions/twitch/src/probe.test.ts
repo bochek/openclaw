@@ -32,7 +32,7 @@ const defaultConnectImpl = async () => {
   }
 };
 
-const mockConnect = vi.fn().mockImplementation(defaultConnectImpl);
+const mockConnect = vi.fn();
 
 const mockQuit = vi.fn().mockResolvedValue(undefined);
 
@@ -63,6 +63,7 @@ describe("probeTwitch", () => {
     // Reset handlers
     connectHandler = null;
     disconnectHandler = null;
+    mockConnect.mockImplementation(defaultConnectImpl);
   });
 
   it("returns error when username is missing", async () => {

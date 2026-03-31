@@ -2,15 +2,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from "./defaults.js";
 import "./test-helpers/fast-core-tools.js";
 import {
-  getCallGatewayMock,
-  getSessionsSpawnTool,
-  resetSessionsSpawnConfigOverride,
-  setSessionsSpawnConfigOverride,
+  createSessionsSpawnTestHarness,
 } from "./openclaw-tools.subagents.sessions-spawn.test-harness.js";
 import { resetSubagentRegistryForTests } from "./subagent-registry.js";
 import { SUBAGENT_SPAWN_ACCEPTED_NOTE } from "./subagent-spawn.js";
 
-const callGatewayMock = getCallGatewayMock();
+const harness = createSessionsSpawnTestHarness();
+const callGatewayMock = harness.getCallGatewayMock();
 type GatewayCall = { method?: string; params?: unknown };
 type SessionsSpawnConfigOverride = Parameters<typeof setSessionsSpawnConfigOverride>[0];
 
@@ -68,14 +66,14 @@ async function expectSpawnUsesConfiguredModel(params: {
   expectedModel: string;
 }) {
   if (params.config) {
-    setSessionsSpawnConfigOverride(params.config);
+    harness.setSessionsSpawnConfigOverride(params.config);
   } else {
-    resetSessionsSpawnConfigOverride();
+    harness.resetSessionsSpawnConfigOverride();
   }
   const calls: GatewayCall[] = [];
   mockPatchAndSingleAgentRun({ calls, runId: params.runId });
 
-  const tool = await getSessionsSpawnTool({
+  const tool = await harness.getSessionsSpawnTool({
     agentSessionKey: "agent:research:main",
     agentChannel: "discord",
   });
@@ -98,7 +96,7 @@ async function expectSpawnUsesConfiguredModel(params: {
 
 describe("openclaw-tools: subagents (sessions_spawn model + thinking)", () => {
   beforeEach(() => {
-    resetSessionsSpawnConfigOverride();
+    harness.resetSessionsSpawnConfigOverride();
     resetSubagentRegistryForTests();
     callGatewayMock.mockClear();
   });
@@ -107,7 +105,7 @@ describe("openclaw-tools: subagents (sessions_spawn model + thinking)", () => {
     const calls: GatewayCall[] = [];
     mockLongRunningSpawnFlow({ calls, acceptedAtBase: 3000 });
 
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "discord:group:req",
       agentChannel: "discord",
     });
@@ -149,7 +147,7 @@ describe("openclaw-tools: subagents (sessions_spawn model + thinking)", () => {
       return {};
     });
 
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "discord:group:req",
       agentChannel: "discord",
     });
@@ -177,7 +175,7 @@ describe("openclaw-tools: subagents (sessions_spawn model + thinking)", () => {
       return {};
     });
 
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "discord:group:req",
       agentChannel: "discord",
     });
@@ -258,7 +256,7 @@ describe("openclaw-tools: subagents (sessions_spawn model + thinking)", () => {
       },
     });
 
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "main",
       agentChannel: "whatsapp",
     });
@@ -288,7 +286,7 @@ describe("openclaw-tools: subagents (sessions_spawn model + thinking)", () => {
       return {};
     });
 
-    const tool = await getSessionsSpawnTool({
+    const tool = await harness.getSessionsSpawnTool({
       agentSessionKey: "main",
       agentChannel: "whatsapp",
     });

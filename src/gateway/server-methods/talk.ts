@@ -1,4 +1,4 @@
-import { readConfigFileSnapshot } from "../../config/config.js";
+import { parseConfigJson5, readConfigFileSnapshot } from "../../config/config.js";
 import { redactConfigObject } from "../../config/redact-snapshot.js";
 import { buildTalkConfigResponse, resolveActiveTalkProviderConfig } from "../../config/talk.js";
 import type { TalkProviderConfig } from "../../config/types.gateway.js";
@@ -36,6 +36,21 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : undefined;
+}
+
+function readAuthoredSessionMainKey(snapshot: {
+  raw: string | null;
+  config: { session?: { mainKey?: unknown } };
+}): string | undefined {
+  const parsed = snapshot.raw ? parseConfigJson5(snapshot.raw) : null;
+  if (parsed?.ok) {
+    const session = asRecord(parsed.parsed)?.session;
+    const authoredMainKey = trimString(asRecord(session)?.mainKey);
+    if (authoredMainKey) {
+      return authoredMainKey;
+    }
+  }
+  return trimString(snapshot.config.session?.mainKey);
 }
 
 function normalizeAliasKey(value: string): string {
@@ -208,8 +223,8 @@ export const talkHandlers: GatewayRequestHandlers = {
       configPayload.talk = talk;
     }
 
-    const sessionMainKey = snapshot.config.session?.mainKey;
-    if (typeof sessionMainKey === "string") {
+    const sessionMainKey = readAuthoredSessionMainKey(snapshot);
+    if (typeof sessionMainKey === "string" && sessionMainKey.trim().length > 0) {
       configPayload.session = { mainKey: sessionMainKey };
     }
 

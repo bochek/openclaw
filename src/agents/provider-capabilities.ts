@@ -36,6 +36,17 @@ const DEFAULT_PROVIDER_CAPABILITIES: ProviderCapabilities = {
   dropThinkingBlockModelHints: [],
 };
 
+const CORE_PROVIDER_CAPABILITIES: Record<string, Partial<ProviderCapabilities>> = {
+  "anthropic-vertex": {
+    providerFamily: "anthropic",
+    dropThinkingBlockModelHints: ["claude"],
+  },
+  "amazon-bedrock": {
+    providerFamily: "anthropic",
+    dropThinkingBlockModelHints: ["claude"],
+  },
+};
+
 const PLUGIN_CAPABILITIES_FALLBACKS: Record<string, Partial<ProviderCapabilities>> = {
   anthropic: {
     providerFamily: "anthropic",
@@ -107,6 +118,7 @@ export function resolveProviderCapabilities(
     : undefined;
   return {
     ...DEFAULT_PROVIDER_CAPABILITIES,
+    ...CORE_PROVIDER_CAPABILITIES[normalized],
     ...PLUGIN_CAPABILITIES_FALLBACKS[normalized],
     ...pluginCapabilities,
   };

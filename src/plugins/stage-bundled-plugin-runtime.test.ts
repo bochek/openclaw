@@ -4,7 +4,6 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { stageBundledPluginRuntime } from "../../scripts/stage-bundled-plugin-runtime.mjs";
-import { bundledDistPluginFile } from "../../test/helpers/bundled-plugin-paths.js";
 import { discoverOpenClawPlugins } from "./discovery.js";
 import { loadPluginManifestRegistry } from "./manifest-registry.js";
 
@@ -32,10 +31,6 @@ function setupRepoFiles(repoRoot: string, files: Readonly<Record<string, string>
   for (const [relativePath, value] of Object.entries(files)) {
     writeRepoFile(repoRoot, relativePath, value);
   }
-}
-
-function distRuntimeImportPath(pluginId: string, relativePath = "index.js"): string {
-  return `../../../${bundledDistPluginFile(pluginId, relativePath)}`;
 }
 
 function expectRuntimePluginWrapperContains(params: {
@@ -88,9 +83,8 @@ describe("stageBundledPluginRuntime", () => {
       recursive: true,
     });
     setupRepoFiles(repoRoot, {
-      [bundledDistPluginFile("diffs", "index.js")]: "export default {}\n",
-      [bundledDistPluginFile("diffs", "node_modules/@pierre/diffs/index.js")]:
-        "export default {}\n",
+      "dist/extensions/diffs/index.js": "export default {}\n",
+      "dist/extensions/diffs/node_modules/@pierre/diffs/index.js": "export default {}\n",
     });
 
     stageBundledPluginRuntime({ repoRoot });
@@ -99,7 +93,7 @@ describe("stageBundledPluginRuntime", () => {
     expectRuntimePluginWrapperContains({
       repoRoot,
       pluginId: "diffs",
-      expectedImport: distRuntimeImportPath("diffs"),
+      expectedImport: "../../../dist/extensions/diffs/index.js",
     });
     expect(fs.lstatSync(path.join(runtimePluginDir, "node_modules")).isSymbolicLink()).toBe(true);
     expect(fs.realpathSync(path.join(runtimePluginDir, "node_modules"))).toBe(
@@ -113,7 +107,7 @@ describe("stageBundledPluginRuntime", () => {
     createDistPluginDir(repoRoot, "diffs");
     setupRepoFiles(repoRoot, {
       "dist/chunk-abc.js": "export const value = 1;\n",
-      [bundledDistPluginFile("diffs", "index.js")]: "export { value } from '../../chunk-abc.js';\n",
+      "dist/extensions/diffs/index.js": "export { value } from '../../chunk-abc.js';\n",
     });
 
     stageBundledPluginRuntime({ repoRoot });
@@ -122,7 +116,7 @@ describe("stageBundledPluginRuntime", () => {
     expectRuntimePluginWrapperContains({
       repoRoot,
       pluginId: "diffs",
-      expectedImport: distRuntimeImportPath("diffs"),
+      expectedImport: "../../../dist/extensions/diffs/index.js",
     });
     expect(fs.existsSync(path.join(repoRoot, "dist-runtime", "chunk-abc.js"))).toBe(false);
 
@@ -134,9 +128,9 @@ describe("stageBundledPluginRuntime", () => {
     const repoRoot = makeRepoRoot("openclaw-stage-bundled-runtime-sidecars-");
     createDistPluginDir(repoRoot, "whatsapp");
     setupRepoFiles(repoRoot, {
-      [bundledDistPluginFile("whatsapp", "index.js")]: "export default {};\n",
-      [bundledDistPluginFile("whatsapp", "light-runtime-api.js")]: "export const light = true;\n",
-      [bundledDistPluginFile("whatsapp", "runtime-api.js")]: "export const heavy = true;\n",
+      "dist/extensions/whatsapp/index.js": "export default {};\n",
+      "dist/extensions/whatsapp/light-runtime-api.js": "export const light = true;\n",
+      "dist/extensions/whatsapp/runtime-api.js": "export const heavy = true;\n",
     });
 
     stageBundledPluginRuntime({ repoRoot });
@@ -145,13 +139,13 @@ describe("stageBundledPluginRuntime", () => {
       repoRoot,
       pluginId: "whatsapp",
       relativePath: "light-runtime-api.js",
-      expectedImport: distRuntimeImportPath("whatsapp", "light-runtime-api.js"),
+      expectedImport: "../../../dist/extensions/whatsapp/light-runtime-api.js",
     });
     expectRuntimePluginWrapperContains({
       repoRoot,
       pluginId: "whatsapp",
       relativePath: "runtime-api.js",
-      expectedImport: distRuntimeImportPath("whatsapp", "runtime-api.js"),
+      expectedImport: "../../../dist/extensions/whatsapp/runtime-api.js",
     });
   });
 
@@ -266,13 +260,13 @@ describe("stageBundledPluginRuntime", () => {
     const repoRoot = makeRepoRoot("openclaw-stage-bundled-runtime-assets-");
     createDistPluginDir(repoRoot, "diffs");
     setupRepoFiles(repoRoot, {
-      [bundledDistPluginFile("diffs", "package.json")]: JSON.stringify(
+      "dist/extensions/diffs/package.json": JSON.stringify(
         { name: "@openclaw/diffs", openclaw: { extensions: ["./index.js"] } },
         null,
         2,
       ),
-      [bundledDistPluginFile("diffs", "openclaw.plugin.json")]: "{}\n",
-      [bundledDistPluginFile("diffs", "assets/info.txt")]: "ok\n",
+      "dist/extensions/diffs/openclaw.plugin.json": "{}\n",
+      "dist/extensions/diffs/assets/info.txt": "ok\n",
     });
 
     stageBundledPluginRuntime({ repoRoot });
@@ -307,7 +301,7 @@ describe("stageBundledPluginRuntime", () => {
     const runtimeExtensionsDir = path.join(repoRoot, "dist-runtime", "extensions");
     createDistPluginDir(repoRoot, "demo");
     setupRepoFiles(repoRoot, {
-      [bundledDistPluginFile("demo", "package.json")]: JSON.stringify(
+      "dist/extensions/demo/package.json": JSON.stringify(
         {
           name: "@openclaw/demo",
           openclaw: {
@@ -321,7 +315,7 @@ describe("stageBundledPluginRuntime", () => {
         null,
         2,
       ),
-      [bundledDistPluginFile("demo", "openclaw.plugin.json")]: JSON.stringify(
+      "dist/extensions/demo/openclaw.plugin.json": JSON.stringify(
         {
           id: "demo",
           channels: ["demo"],
@@ -330,8 +324,8 @@ describe("stageBundledPluginRuntime", () => {
         null,
         2,
       ),
-      [bundledDistPluginFile("demo", "main.js")]: "export default {};\n",
-      [bundledDistPluginFile("demo", "setup.js")]: "export default {};\n",
+      "dist/extensions/demo/main.js": "export default {};\n",
+      "dist/extensions/demo/setup.js": "export default {};\n",
     });
 
     stageBundledPluginRuntime({ repoRoot });
@@ -396,8 +390,8 @@ describe("stageBundledPluginRuntime", () => {
     const repoRoot = makeRepoRoot("openclaw-stage-bundled-runtime-eexist-");
     createDistPluginDir(repoRoot, "feishu");
     setupRepoFiles(repoRoot, {
-      [bundledDistPluginFile("feishu", "index.js")]: "export default {}\n",
-      [bundledDistPluginFile("feishu", "skills/feishu-doc/SKILL.md")]: "# Feishu Doc\n",
+      "dist/extensions/feishu/index.js": "export default {}\n",
+      "dist/extensions/feishu/skills/feishu-doc/SKILL.md": "# Feishu Doc\n",
     });
 
     const realSymlinkSync = fs.symlinkSync.bind(fs);

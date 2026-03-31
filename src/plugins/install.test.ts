@@ -3,7 +3,6 @@ import path from "node:path";
 import * as tar from "tar";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { safePathSegmentHashed } from "../infra/install-safe-path.js";
-import { runCommandWithTimeout } from "../process/exec.js";
 import {
   expectSingleNpmInstallIgnoreScriptsCall,
   expectSingleNpmPackIgnoreScriptsCall,
@@ -17,6 +16,7 @@ import { initializeGlobalHookRunner, resetGlobalHookRunner } from "./hook-runner
 import { createMockPluginRegistry } from "./hooks.test-helpers.js";
 import * as installSecurityScan from "./install-security-scan.js";
 import {
+  __testing as installTesting,
   installPluginFromArchive,
   installPluginFromDir,
   installPluginFromFile,
@@ -26,30 +26,16 @@ import {
   resolvePluginInstallDir,
 } from "./install.js";
 
+const { runCommandWithTimeoutMock } = vi.hoisted(() => ({
+  runCommandWithTimeoutMock: vi.fn(),
+}));
+
 vi.mock("../process/exec.js", () => ({
-  runCommandWithTimeout: vi.fn(),
+  runCommandWithTimeout: runCommandWithTimeoutMock,
 }));
 
 const resolveCompatibilityHostVersionMock = vi.fn();
-
-vi.mock("./install.runtime.js", async () => {
-  const actual =
-    await vi.importActual<typeof import("./install.runtime.js")>("./install.runtime.js");
-  return {
-    ...actual,
-    resolveCompatibilityHostVersion: (...args: unknown[]) =>
-      resolveCompatibilityHostVersionMock(...args),
-    scanBundleInstallSource: (
-      ...args: Parameters<typeof installSecurityScan.scanBundleInstallSource>
-    ) => installSecurityScan.scanBundleInstallSource(...args),
-    scanPackageInstallSource: (
-      ...args: Parameters<typeof installSecurityScan.scanPackageInstallSource>
-    ) => installSecurityScan.scanPackageInstallSource(...args),
-    scanFileInstallSource: (
-      ...args: Parameters<typeof installSecurityScan.scanFileInstallSource>
-    ) => installSecurityScan.scanFileInstallSource(...args),
-  };
-});
+let installRuntimeModule: typeof import("./install.runtime.js");
 
 let suiteTempRoot = "";
 let suiteFixtureRoot = "";
@@ -321,7 +307,7 @@ function expectFailedInstallResult<
   return params.result;
 }
 
-function mockSuccessfulCommandRun(run: ReturnType<typeof vi.mocked<typeof runCommandWithTimeout>>) {
+function mockSuccessfulCommandRun(run: typeof runCommandWithTimeoutMock) {
   run.mockResolvedValue({
     code: 0,
     stdout: "",
@@ -541,6 +527,7 @@ afterAll(() => {
 });
 
 beforeAll(async () => {
+  installRuntimeModule = await import("./install.runtime.js");
   installPluginFromDirTemplateDir = path.join(
     ensureSuiteFixtureRoot(),
     "install-from-dir-template",
@@ -603,7 +590,31 @@ beforeEach(() => {
   resetGlobalHookRunner();
   vi.clearAllMocks();
   vi.unstubAllEnvs();
+  runCommandWithTimeoutMock.mockReset();
+  runCommandWithTimeoutMock.mockResolvedValue({
+    code: 0,
+    stdout: "",
+    stderr: "",
+    signal: null,
+    killed: false,
+    termination: "exit",
+  });
+  resolveCompatibilityHostVersionMock.mockReset();
   resolveCompatibilityHostVersionMock.mockReturnValue("2026.3.28-beta.1");
+  installTesting.setPluginInstallRuntimeForTest({
+    ...installRuntimeModule,
+    resolveCompatibilityHostVersion: (...args: unknown[]) =>
+      resolveCompatibilityHostVersionMock(...args),
+    scanBundleInstallSource: (
+      ...args: Parameters<typeof installSecurityScan.scanBundleInstallSource>
+    ) => installSecurityScan.scanBundleInstallSource(...args),
+    scanPackageInstallSource: (
+      ...args: Parameters<typeof installSecurityScan.scanPackageInstallSource>
+    ) => installSecurityScan.scanPackageInstallSource(...args),
+    scanFileInstallSource: (
+      ...args: Parameters<typeof installSecurityScan.scanFileInstallSource>
+    ) => installSecurityScan.scanFileInstallSource(...args),
+  });
 });
 
 describe("installPluginFromArchive", () => {
@@ -982,7 +993,7 @@ describe("installPluginFromDir", () => {
   it("uses --ignore-scripts for dependency install", async () => {
     const { pluginDir, extensionsDir } = setupInstallPluginFromDirFixture();
 
-    const run = vi.mocked(runCommandWithTimeout);
+    const run = runCommandWithTimeoutMock;
     await expectInstallUsesIgnoreScripts({
       run,
       install: async () =>
@@ -1001,7 +1012,7 @@ describe("installPluginFromDir", () => {
       },
     });
 
-    const run = vi.mocked(runCommandWithTimeout);
+    const run = runCommandWithTimeoutMock;
     mockSuccessfulCommandRun(run);
 
     const res = await installPluginFromDir({
@@ -1062,7 +1073,7 @@ describe("installPluginFromDir", () => {
         code: expectedCode,
         messageIncludes: expectedMessageIncludes,
       });
-      expect(vi.mocked(runCommandWithTimeout)).not.toHaveBeenCalled();
+      expect(runCommandWithTimeoutMock).not.toHaveBeenCalled();
     },
   );
 
@@ -1214,7 +1225,7 @@ describe("installPluginFromDir", () => {
       bundleFormat: "codex",
     });
 
-    const run = vi.mocked(runCommandWithTimeout);
+    const run = runCommandWithTimeoutMock;
     mockSuccessfulCommandRun(run);
 
     const res = await installPluginFromDir({
@@ -1378,7 +1389,7 @@ describe("installPluginFromPath", () => {
       outName: path.basename(archivePath),
     });
 
-    const run = vi.mocked(runCommandWithTimeout);
+    const run = runCommandWithTimeoutMock;
     mockSuccessfulCommandRun(run);
 
     const result = await installPluginFromPath({
@@ -1405,7 +1416,7 @@ describe("installPluginFromNpmSpec", () => {
     const extensionsDir = path.join(stateDir, "extensions");
     fs.mkdirSync(extensionsDir, { recursive: true });
 
-    const run = vi.mocked(runCommandWithTimeout);
+    const run = runCommandWithTimeoutMock;
     const voiceCallArchiveBuffer = VOICE_CALL_ARCHIVE_V1_BUFFER;
 
     let packTmpDir = "";
@@ -1466,7 +1477,7 @@ describe("installPluginFromNpmSpec", () => {
   });
 
   it("aborts when integrity drift callback rejects the fetched artifact", async () => {
-    const run = vi.mocked(runCommandWithTimeout);
+    const run = runCommandWithTimeoutMock;
     mockNpmPackMetadataResult(run, {
       id: "@openclaw/voice-call@0.0.1",
       name: "@openclaw/voice-call",
@@ -1491,7 +1502,7 @@ describe("installPluginFromNpmSpec", () => {
   });
 
   it("classifies npm package-not-found errors with a stable error code", async () => {
-    const run = vi.mocked(runCommandWithTimeout);
+    const run = runCommandWithTimeoutMock;
     run.mockResolvedValue({
       code: 1,
       stdout: "",
@@ -1522,7 +1533,7 @@ describe("installPluginFromNpmSpec", () => {
     };
 
     {
-      const run = vi.mocked(runCommandWithTimeout);
+      const run = runCommandWithTimeoutMock;
       mockNpmPackMetadataResult(run, prereleaseMetadata);
 
       const result = await installPluginFromNpmSpec({
@@ -1539,7 +1550,7 @@ describe("installPluginFromNpmSpec", () => {
     vi.clearAllMocks();
 
     {
-      const run = vi.mocked(runCommandWithTimeout);
+      const run = runCommandWithTimeoutMock;
       let packTmpDir = "";
       const packedName = "voice-call-0.0.2-beta.1.tgz";
       const voiceCallArchiveBuffer = VOICE_CALL_ARCHIVE_V1_BUFFER;

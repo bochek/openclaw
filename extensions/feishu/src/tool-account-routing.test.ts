@@ -1,19 +1,16 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import type { OpenClawPluginApi } from "../runtime-api.js";
 import { createToolFactoryHarness } from "./tool-factory-test-harness.js";
+import { clearClientCache } from "./client.js";
+import { registerFeishuBitableTools } from "./bitable.js";
+import { setFeishuClientRuntimeForTest } from "./client.js";
+import { registerFeishuDriveTools } from "./drive.js";
+import { registerFeishuPermTools } from "./perm.js";
+import { registerFeishuWikiTools } from "./wiki.js";
 
 const createFeishuClientMock = vi.fn((account: { appId?: string } | undefined) => ({
   __appId: account?.appId,
 }));
-
-vi.mock("./client.js", () => ({
-  createFeishuClient: (account: { appId?: string } | undefined) => createFeishuClientMock(account),
-}));
-
-let registerFeishuBitableTools: typeof import("./bitable.js").registerFeishuBitableTools;
-let registerFeishuDriveTools: typeof import("./drive.js").registerFeishuDriveTools;
-let registerFeishuPermTools: typeof import("./perm.js").registerFeishuPermTools;
-let registerFeishuWikiTools: typeof import("./wiki.js").registerFeishuWikiTools;
 
 function createConfig(params: {
   toolsA?: {
@@ -51,17 +48,16 @@ function createConfig(params: {
 }
 
 describe("feishu tool account routing", () => {
-  beforeEach(async () => {
-    vi.resetModules();
-    ({ registerFeishuBitableTools, registerFeishuDriveTools, registerFeishuPermTools } =
-      await import("./bitable.js").then(async ({ registerFeishuBitableTools }) => ({
-        registerFeishuBitableTools,
-        ...(await import("./drive.js")),
-        ...(await import("./perm.js")),
-        ...(await import("./wiki.js")),
-      })));
-    ({ registerFeishuWikiTools } = await import("./wiki.js"));
+  beforeEach(() => {
     vi.clearAllMocks();
+    clearClientCache();
+    setFeishuClientRuntimeForTest({
+      sdk: {
+        Client: vi.fn(
+          (params: { appId?: string } | undefined) => createFeishuClientMock(params),
+        ) as unknown as typeof import("@larksuiteoapi/node-sdk").Client,
+      },
+    });
   });
 
   test("wiki tool registers when first account disables it and routes to agentAccountId", async () => {

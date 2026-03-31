@@ -86,10 +86,23 @@ const collectMSTeamsSecurityWarnings = createAllowlistProviderGroupPolicyWarning
       : [],
 });
 
-const loadMSTeamsChannelRuntime = createLazyRuntimeNamedExport(
+let loadMSTeamsChannelRuntime = createLazyRuntimeNamedExport(
   () => import("./channel.runtime.js"),
   "msTeamsChannelRuntime",
 );
+
+export function __setLoadMSTeamsChannelRuntimeForTest(
+  loader: typeof loadMSTeamsChannelRuntime,
+): void {
+  loadMSTeamsChannelRuntime = loader;
+}
+
+export function __resetLoadMSTeamsChannelRuntimeForTest(): void {
+  loadMSTeamsChannelRuntime = createLazyRuntimeNamedExport(
+    () => import("./channel.runtime.js"),
+    "msTeamsChannelRuntime",
+  );
+}
 
 const resolveMSTeamsChannelConfig = (cfg: OpenClawConfig) => ({
   allowFrom: cfg.channels?.msteams?.allowFrom,

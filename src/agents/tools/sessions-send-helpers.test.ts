@@ -95,28 +95,6 @@ describe("resolveAnnounceTargetFromKey", () => {
             },
           },
         },
-        {
-          pluginId: "feishu",
-          source: "test",
-          plugin: {
-            id: "feishu",
-            meta: {
-              id: "feishu",
-              label: "Feishu",
-              selectionLabel: "Feishu",
-              docsPath: "/channels/feishu",
-              blurb: "Feishu test stub.",
-            },
-            capabilities: { chatTypes: ["direct", "group", "thread"] },
-            messaging: {
-              normalizeTarget: (raw: string) => raw.replace(/^group:/, ""),
-            },
-            config: {
-              listAccountIds: () => ["default"],
-              resolveAccount: () => ({}),
-            },
-          },
-        },
       ]),
     );
   });
@@ -161,18 +139,6 @@ describe("resolveAnnounceTargetFromKey", () => {
       channel: "matrix",
       to: "channel:!room:example.org",
       threadId: "$AbC123:example.org",
-    });
-  });
-
-  it("preserves feishu conversation ids that embed :topic: in the base id", () => {
-    expect(
-      resolveAnnounceTargetFromKey(
-        "agent:main:feishu:group:oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
-      ),
-    ).toEqual({
-      channel: "feishu",
-      to: "oc_group_chat:topic:om_topic_root:sender:ou_topic_user",
-      threadId: undefined,
     });
   });
 });

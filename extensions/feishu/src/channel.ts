@@ -108,10 +108,19 @@ const meta: ChannelMeta = {
   order: 70,
 };
 
-const loadFeishuChannelRuntime = createLazyRuntimeNamedExport(
+const defaultLoadFeishuChannelRuntime = createLazyRuntimeNamedExport(
   () => import("./channel.runtime.js"),
   "feishuChannelRuntime",
 );
+let loadFeishuChannelRuntime = defaultLoadFeishuChannelRuntime;
+
+export const __testing = {
+  setLoadFeishuChannelRuntimeForTest(
+    loader?: typeof defaultLoadFeishuChannelRuntime,
+  ): void {
+    loadFeishuChannelRuntime = loader ?? defaultLoadFeishuChannelRuntime;
+  },
+};
 
 const collectFeishuSecurityWarnings = createAllowlistProviderGroupPolicyWarningCollector<{
   cfg: ClawdbotConfig;

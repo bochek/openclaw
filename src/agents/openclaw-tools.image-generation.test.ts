@@ -1,13 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OpenClawConfig } from "../config/config.js";
 import * as imageGenerationRuntime from "../image-generation/runtime.js";
-import { createOpenClawTools } from "./openclaw-tools.js";
-
-vi.mock("../plugins/tools.js", () => ({
-  resolvePluginTools: () => [],
-  copyPluginToolMeta: () => undefined,
-  getPluginToolMeta: () => undefined,
-}));
+import { __testing, createOpenClawTools } from "./openclaw-tools.js";
+import { stubTool } from "./test-helpers/fast-tool-stubs.js";
 
 function asConfig(value: unknown): OpenClawConfig {
   return value as OpenClawConfig;
@@ -43,6 +38,10 @@ describe("openclaw tools image generation registration", () => {
     vi.stubEnv("OPENAI_API_KEYS", "");
     vi.stubEnv("GEMINI_API_KEY", "");
     vi.stubEnv("GEMINI_API_KEYS", "");
+    __testing.setDepsForTest({
+      createCanvasTool: () => stubTool("canvas"),
+      resolvePluginTools: () => [],
+    });
   });
 
   afterEach(() => {

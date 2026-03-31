@@ -20,11 +20,9 @@ type RuntimeManifest = {
   dependencies: Record<string, string>;
 };
 
-type PackageJsonWithDependencies = {
+type DependencyManifest = {
   dependencies?: Record<string, string>;
-};
-
-type ReadPackageJson = (manifestPath: string) => PackageJsonWithDependencies | null;
+} | null;
 
 type LanceDbRuntimeLoaderDeps = {
   env: NodeJS.ProcessEnv;
@@ -41,42 +39,40 @@ type LanceDbRuntimeLoaderDeps = {
   }) => Promise<string>;
 };
 
-function defaultReadPackageJson(manifestPath: string): PackageJsonWithDependencies | null {
+function readDependencyManifestFromDisk(manifestPath: string): DependencyManifest {
   try {
-    return JSON.parse(fs.readFileSync(manifestPath, "utf8")) as PackageJsonWithDependencies;
+    return JSON.parse(fs.readFileSync(manifestPath, "utf8")) as DependencyManifest;
   } catch {
     return null;
   }
 }
 
-function buildMemoryLanceDbManifestCandidates(modulePath: string): string[] {
-  const moduleDir = path.dirname(modulePath);
-  const candidates = new Set<string>();
-  candidates.add(path.join(moduleDir, "package.json"));
-
-  let cursor = moduleDir;
-  while (true) {
-    candidates.add(path.join(cursor, "extensions", "memory-lancedb", "package.json"));
-    const parent = path.dirname(cursor);
-    if (parent === cursor) {
-      break;
-    }
-    cursor = parent;
-  }
-
-  return [...candidates];
-}
-
 export function resolveLanceDbDependencySpec(
   modulePath: string,
-  readPackageJson: ReadPackageJson = defaultReadPackageJson,
+  readPackageJson: (manifestPath: string) => DependencyManifest = readDependencyManifestFromDisk,
 ): string {
-  for (const manifestPath of buildMemoryLanceDbManifestCandidates(modulePath)) {
+  const candidates = new Set<string>();
+  let current = path.dirname(path.resolve(modulePath));
+
+  while (true) {
+    candidates.add(path.join(current, "package.json"));
+    if (path.basename(current) === "dist") {
+      candidates.add(path.join(current, "extensions", "memory-lancedb", "package.json"));
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      break;
+    }
+    current = parent;
+  }
+
+  for (const manifestPath of candidates) {
     const lanceDbSpec = readPackageJson(manifestPath)?.dependencies?.["@lancedb/lancedb"];
     if (lanceDbSpec) {
       return lanceDbSpec;
     }
   }
+
   throw new Error('memory-lancedb package.json is missing "@lancedb/lancedb"');
 }
 

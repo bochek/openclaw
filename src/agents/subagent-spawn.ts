@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import crypto from "node:crypto";
 import { promises as fs } from "node:fs";
 import { formatThinkingLevels, normalizeThinkLevel } from "../auto-reply/thinking.js";
@@ -56,6 +57,19 @@ type SubagentSpawnDeps = {
   getGlobalHookRunner: () => SubagentLifecycleHookRunner | null;
   loadConfig: typeof loadConfig;
   updateSessionStore: typeof updateSessionStore;
+  resolveGatewaySessionStoreTarget: typeof resolveGatewaySessionStoreTarget;
+  pruneLegacyStoreKeys: typeof pruneLegacyStoreKeys;
+  resolveMainSessionAlias: typeof resolveMainSessionAlias;
+  resolveInternalSessionKey: typeof resolveInternalSessionKey;
+  resolveDisplaySessionKey: typeof resolveDisplaySessionKey;
+  getSubagentDepthFromSessionStore: typeof getSubagentDepthFromSessionStore;
+  resolveAgentConfig: typeof resolveAgentConfig;
+  resolveSandboxRuntimeStatus: typeof resolveSandboxRuntimeStatus;
+  resolveSubagentSpawnModelSelection: typeof resolveSubagentSpawnModelSelection;
+  resolveSpawnedWorkspaceInheritance: typeof resolveSpawnedWorkspaceInheritance;
+  buildSubagentSystemPrompt: typeof buildSubagentSystemPrompt;
+  registerSubagentRun: typeof registerSubagentRun;
+  emitSessionLifecycleEvent: typeof emitSessionLifecycleEvent;
 };
 
 const defaultSubagentSpawnDeps: SubagentSpawnDeps = {
@@ -63,9 +77,37 @@ const defaultSubagentSpawnDeps: SubagentSpawnDeps = {
   getGlobalHookRunner,
   loadConfig,
   updateSessionStore,
+  resolveGatewaySessionStoreTarget,
+  pruneLegacyStoreKeys,
+  resolveMainSessionAlias,
+  resolveInternalSessionKey,
+  resolveDisplaySessionKey,
+  getSubagentDepthFromSessionStore,
+  resolveAgentConfig,
+  resolveSandboxRuntimeStatus,
+  resolveSubagentSpawnModelSelection,
+  resolveSpawnedWorkspaceInheritance,
+  buildSubagentSystemPrompt,
+  registerSubagentRun,
+  emitSessionLifecycleEvent,
 };
 
 let subagentSpawnDeps: SubagentSpawnDeps = defaultSubagentSpawnDeps;
+const subagentSpawnDepsStorage = new AsyncLocalStorage<SubagentSpawnDeps>();
+
+function getSubagentSpawnDeps(): SubagentSpawnDeps {
+  return subagentSpawnDepsStorage.getStore() ?? subagentSpawnDeps;
+}
+
+function resolveSubagentSessionStoreTarget(params: Parameters<typeof resolveGatewaySessionStoreTarget>[0]) {
+  return getSubagentSpawnDeps().resolveGatewaySessionStoreTarget(params);
+}
+
+function pruneSubagentLegacyStoreKeys(
+  params: Parameters<typeof pruneLegacyStoreKeys>[0],
+): ReturnType<typeof pruneLegacyStoreKeys> {
+  return getSubagentSpawnDeps().pruneLegacyStoreKeys(params);
+}
 
 export type SpawnSubagentParams = {
   task: string;
@@ -142,13 +184,13 @@ async function updateSubagentSessionStore(
   storePath: string,
   mutator: Parameters<typeof updateSessionStore>[1],
 ) {
-  return await subagentSpawnDeps.updateSessionStore(storePath, mutator);
+  return await getSubagentSpawnDeps().updateSessionStore(storePath, mutator);
 }
 
 async function callSubagentGateway(
   params: Parameters<typeof callGateway>[0],
 ): Promise<Awaited<ReturnType<typeof callGateway>>> {
-  return await subagentSpawnDeps.callGateway(params);
+  return await getSubagentSpawnDeps().callGateway(params);
 }
 
 function readGatewayRunId(response: Awaited<ReturnType<typeof callGateway>>): string | undefined {
@@ -160,7 +202,7 @@ function readGatewayRunId(response: Awaited<ReturnType<typeof callGateway>>): st
 }
 
 function loadSubagentConfig() {
-  return subagentSpawnDeps.loadConfig();
+  return getSubagentSpawnDeps().loadConfig();
 }
 
 async function persistInitialChildSessionRuntimeModel(params: {
@@ -173,12 +215,12 @@ async function persistInitialChildSessionRuntimeModel(params: {
     return undefined;
   }
   try {
-    const target = resolveGatewaySessionStoreTarget({
+    const target = resolveSubagentSessionStoreTarget({
       cfg: params.cfg,
       key: params.childSessionKey,
     });
     await updateSubagentSessionStore(target.storePath, (store) => {
-      pruneLegacyStoreKeys({
+      pruneSubagentLegacyStoreKeys({
         store,
         canonicalKey: target.canonicalKey,
         candidates: target.storeKeys,
@@ -192,6 +234,70 @@ async function persistInitialChildSessionRuntimeModel(params: {
   } catch (err) {
     return err instanceof Error ? err.message : typeof err === "string" ? err : "error";
   }
+}
+
+function getResolvedMainSessionAlias(cfg: ReturnType<typeof loadConfig>) {
+  return getSubagentSpawnDeps().resolveMainSessionAlias(cfg);
+}
+
+function resolveSubagentInternalSessionKey(
+  params: Parameters<typeof resolveInternalSessionKey>[0],
+) {
+  return getSubagentSpawnDeps().resolveInternalSessionKey(params);
+}
+
+function resolveSubagentDisplaySessionKey(
+  params: Parameters<typeof resolveDisplaySessionKey>[0],
+) {
+  return getSubagentSpawnDeps().resolveDisplaySessionKey(params);
+}
+
+function getSubagentDepthFromStore(
+  sessionKey: string,
+  params: Parameters<typeof getSubagentDepthFromSessionStore>[1],
+) {
+  return getSubagentSpawnDeps().getSubagentDepthFromSessionStore(sessionKey, params);
+}
+
+function resolveSpawnAgentConfig(
+  cfg: ReturnType<typeof loadConfig>,
+  agentId: string,
+) {
+  return getSubagentSpawnDeps().resolveAgentConfig(cfg, agentId);
+}
+
+function resolveSpawnRuntimeStatus(
+  params: Parameters<typeof resolveSandboxRuntimeStatus>[0],
+) {
+  return getSubagentSpawnDeps().resolveSandboxRuntimeStatus(params);
+}
+
+function resolveSpawnModelSelection(
+  params: Parameters<typeof resolveSubagentSpawnModelSelection>[0],
+) {
+  return getSubagentSpawnDeps().resolveSubagentSpawnModelSelection(params);
+}
+
+function resolveSpawnedWorkspace(
+  params: Parameters<typeof resolveSpawnedWorkspaceInheritance>[0],
+) {
+  return getSubagentSpawnDeps().resolveSpawnedWorkspaceInheritance(params);
+}
+
+function buildSpawnSystemPrompt(
+  params: Parameters<typeof buildSubagentSystemPrompt>[0],
+) {
+  return getSubagentSpawnDeps().buildSubagentSystemPrompt(params);
+}
+
+function registerSpawnedRun(params: Parameters<typeof registerSubagentRun>[0]) {
+  return getSubagentSpawnDeps().registerSubagentRun(params);
+}
+
+function emitSpawnSessionLifecycleEvent(
+  params: Parameters<typeof emitSessionLifecycleEvent>[0],
+) {
+  return getSubagentSpawnDeps().emitSessionLifecycleEvent(params);
 }
 
 function sanitizeMountPathHint(value?: string): string | undefined {
@@ -378,7 +484,7 @@ export async function spawnSubagentDirect(
     to: ctx.agentTo,
     threadId: ctx.agentThreadId,
   });
-  const hookRunner = subagentSpawnDeps.getGlobalHookRunner();
+  const hookRunner = getSubagentSpawnDeps().getGlobalHookRunner();
   const cfg = loadSubagentConfig();
 
   // When agent omits runTimeoutSeconds, use the config default.
@@ -395,22 +501,22 @@ export async function spawnSubagentDirect(
       : cfgSubagentTimeout;
   let modelApplied = false;
   let threadBindingReady = false;
-  const { mainKey, alias } = resolveMainSessionAlias(cfg);
+  const { mainKey, alias } = getResolvedMainSessionAlias(cfg);
   const requesterSessionKey = ctx.agentSessionKey;
   const requesterInternalKey = requesterSessionKey
-    ? resolveInternalSessionKey({
+    ? resolveSubagentInternalSessionKey({
         key: requesterSessionKey,
         alias,
         mainKey,
       })
     : alias;
-  const requesterDisplayKey = resolveDisplaySessionKey({
+  const requesterDisplayKey = resolveSubagentDisplaySessionKey({
     key: requesterInternalKey,
     alias,
     mainKey,
   });
 
-  const callerDepth = getSubagentDepthFromSessionStore(requesterInternalKey, { cfg });
+  const callerDepth = getSubagentDepthFromStore(requesterInternalKey, { cfg });
   const maxSpawnDepth =
     cfg.agents?.defaults?.subagents?.maxSpawnDepth ?? DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH;
   if (callerDepth >= maxSpawnDepth) {
@@ -445,7 +551,7 @@ export async function spawnSubagentDirect(
   }
   const targetAgentId = requestedAgentId ? normalizeAgentId(requestedAgentId) : requesterAgentId;
   if (targetAgentId !== requesterAgentId) {
-    const allowAgents = resolveAgentConfig(cfg, requesterAgentId)?.subagents?.allowAgents ?? [];
+    const allowAgents = resolveSpawnAgentConfig(cfg, requesterAgentId)?.subagents?.allowAgents ?? [];
     const allowAny = allowAgents.some((value) => value.trim() === "*");
     const normalizedTargetId = targetAgentId.toLowerCase();
     const allowSet = new Set(
@@ -462,11 +568,11 @@ export async function spawnSubagentDirect(
     }
   }
   const childSessionKey = `agent:${targetAgentId}:subagent:${crypto.randomUUID()}`;
-  const requesterRuntime = resolveSandboxRuntimeStatus({
+  const requesterRuntime = resolveSpawnRuntimeStatus({
     cfg,
     sessionKey: requesterInternalKey,
   });
-  const childRuntime = resolveSandboxRuntimeStatus({
+  const childRuntime = resolveSpawnRuntimeStatus({
     cfg,
     sessionKey: childSessionKey,
   });
@@ -490,8 +596,8 @@ export async function spawnSubagentDirect(
     depth: childDepth,
     maxSpawnDepth,
   });
-  const targetAgentConfig = resolveAgentConfig(cfg, targetAgentId);
-  const resolvedModel = resolveSubagentSpawnModelSelection({
+  const targetAgentConfig = resolveSpawnAgentConfig(cfg, targetAgentId);
+  const resolvedModel = resolveSpawnModelSelection({
     cfg,
     agentId: targetAgentId,
     modelOverride,
@@ -607,7 +713,7 @@ export async function spawnSubagentDirect(
   }
   const mountPathHint = sanitizeMountPathHint(params.attachMountPath);
 
-  let childSystemPrompt = buildSubagentSystemPrompt({
+  let childSystemPrompt = buildSpawnSystemPrompt({
     requesterSessionKey,
     requesterOrigin,
     childSessionKey,
@@ -672,9 +778,9 @@ export async function spawnSubagentDirect(
   const spawnedMetadata = normalizeSpawnedRunMetadata({
     spawnedBy: spawnedByKey,
     ...toolSpawnMetadata,
-    workspaceDir: resolveSpawnedWorkspaceInheritance({
-      config: cfg,
-      targetAgentId,
+      workspaceDir: resolveSpawnedWorkspace({
+        config: cfg,
+        targetAgentId,
       // For cross-agent spawns, ignore the caller's inherited workspace;
       // let targetAgentId resolve the correct workspace instead.
       explicitWorkspaceDir:
@@ -794,7 +900,7 @@ export async function spawnSubagentDirect(
   }
 
   try {
-    registerSubagentRun({
+    registerSpawnedRun({
       runId: childRunId,
       childSessionKey,
       controllerSessionKey: requesterInternalKey,
@@ -871,7 +977,7 @@ export async function spawnSubagentDirect(
   }
 
   // Emit lifecycle event so the gateway can broadcast sessions.changed to SSE subscribers.
-  emitSessionLifecycleEvent({
+  emitSpawnSessionLifecycleEvent({
     sessionKey: childSessionKey,
     reason: "create",
     parentSessionKey: requesterInternalKey,
@@ -908,5 +1014,14 @@ export const __testing = {
           ...overrides,
         }
       : defaultSubagentSpawnDeps;
+  },
+  runWithDepsForTest<T>(overrides: Partial<SubagentSpawnDeps> | undefined, fn: () => T): T {
+    const deps = overrides
+      ? {
+          ...defaultSubagentSpawnDeps,
+          ...overrides,
+        }
+      : defaultSubagentSpawnDeps;
+    return subagentSpawnDepsStorage.run(deps, fn);
   },
 };
