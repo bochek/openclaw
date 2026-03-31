@@ -14,6 +14,8 @@ export {
   isQmdScopeAllowed,
 } from "./host/qmd-scope.js";
 export {
+  __resetQmdProcessDepsForTest,
+  __setQmdProcessDepsForTest,
   checkQmdBinaryAvailability,
   resolveCliSpawnInvocation,
   runCliCommand,

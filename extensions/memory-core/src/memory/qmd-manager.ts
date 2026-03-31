@@ -3,7 +3,8 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import readline from "node:readline";
-import chokidar, { type FSWatcher } from "chokidar";
+import * as chokidar from "chokidar";
+import type { FSWatcher } from "chokidar";
 import { withFileLock } from "openclaw/plugin-sdk/file-lock";
 import {
   createSubsystemLogger,
@@ -44,7 +45,7 @@ import {
 
 type SqliteDatabase = import("node:sqlite").DatabaseSync;
 
-const log = createSubsystemLogger("memory");
+type MemoryLogger = ReturnType<typeof createSubsystemLogger>;
 
 const SNIPPET_HEADER_RE = /@@\s*-([0-9]+),([0-9]+)/;
 const SEARCH_PENDING_UPDATE_WAIT_MS = 500;
@@ -72,6 +73,28 @@ const IGNORED_MEMORY_WATCH_DIR_NAMES = new Set([
   ".tox",
   "__pycache__",
 ]);
+
+const qmdManagerDepsDefaults = {
+  createLogger: (): MemoryLogger => createSubsystemLogger("memory"),
+  searchPendingUpdateWaitMs: SEARCH_PENDING_UPDATE_WAIT_MS,
+  watch: chokidar.watch,
+  withFileLock,
+} as const;
+
+const qmdManagerDeps = { ...qmdManagerDepsDefaults };
+let log = qmdManagerDeps.createLogger();
+
+export function __setQmdManagerDepsForTest(
+  overrides: Partial<typeof qmdManagerDepsDefaults>,
+): void {
+  Object.assign(qmdManagerDeps, overrides);
+  log = qmdManagerDeps.createLogger();
+}
+
+export function __resetQmdManagerDepsForTest(): void {
+  Object.assign(qmdManagerDeps, qmdManagerDepsDefaults);
+  log = qmdManagerDeps.createLogger();
+}
 
 type McporterState = {
   coldStartWarned: boolean;
@@ -1259,7 +1282,7 @@ export class QmdMemoryManager implements MemorySearchManager {
     if (watchPaths.size === 0) {
       return;
     }
-    this.watcher = chokidar.watch(Array.from(watchPaths), {
+    this.watcher = qmdManagerDeps.watch(Array.from(watchPaths), {
       ignoreInitial: true,
       ignored: (watchPath) => shouldIgnoreMemoryWatchPath(String(watchPath)),
       awaitWriteFinish: {
@@ -1423,7 +1446,7 @@ export class QmdMemoryManager implements MemorySearchManager {
     );
     await previous.catch(() => undefined);
     try {
-      return await withFileLock(
+      return await qmdManagerDeps.withFileLock(
         lockPath,
         resolveQmdEmbedLockOptions(this.qmd.update.embedTimeoutMs),
         task,
@@ -2549,7 +2572,9 @@ export class QmdMemoryManager implements MemorySearchManager {
     }
     await Promise.race([
       pending.catch(() => undefined),
-      new Promise<void>((resolve) => setTimeout(resolve, SEARCH_PENDING_UPDATE_WAIT_MS)),
+      new Promise<void>((resolve) =>
+        setTimeout(resolve, qmdManagerDeps.searchPendingUpdateWaitMs),
+      ),
     ]);
   }
 

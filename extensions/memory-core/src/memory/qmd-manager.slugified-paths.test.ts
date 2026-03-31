@@ -47,39 +47,26 @@ function emitAndClose(
     child.closeWith(code);
   });
 }
-
-vi.mock("openclaw/plugin-sdk/memory-core-host-engine-foundation", async () => {
-  const actual = await vi.importActual<
-    typeof import("openclaw/plugin-sdk/memory-core-host-engine-foundation")
-  >("openclaw/plugin-sdk/memory-core-host-engine-foundation");
-  return {
-    ...actual,
-    createSubsystemLogger: () => {
-      const logger = {
-        warn: logWarnMock,
-        debug: logDebugMock,
-        info: logInfoMock,
-        child: () => logger,
-      };
-      return logger;
-    },
-  };
-});
-
-vi.mock("node:child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:child_process")>();
-  return {
-    ...actual,
-    spawn: vi.fn(),
-  };
-});
-
-import { spawn as mockedSpawn } from "node:child_process";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/memory-core-host-engine-foundation";
+import { __resetQmdProcessDepsForTest, __setQmdProcessDepsForTest } from "openclaw/plugin-sdk/memory-core-host-engine-qmd";
 import { resolveMemoryBackendConfig } from "openclaw/plugin-sdk/memory-core-host-engine-storage";
-import { QmdMemoryManager } from "./qmd-manager.js";
+import {
+  __resetQmdManagerDepsForTest,
+  __setQmdManagerDepsForTest,
+  QmdMemoryManager,
+} from "./qmd-manager.js";
 
-const spawnMock = mockedSpawn as unknown as Mock;
+const spawnMock = vi.fn() as unknown as Mock;
+
+function createTestLogger() {
+  const logger = {
+    warn: logWarnMock,
+    debug: logDebugMock,
+    info: logInfoMock,
+    child: () => logger,
+  };
+  return logger;
+}
 
 describe("QmdMemoryManager slugified path resolution", () => {
   let tmpRoot: string;
@@ -153,6 +140,12 @@ describe("QmdMemoryManager slugified path resolution", () => {
     logWarnMock.mockClear();
     logDebugMock.mockClear();
     logInfoMock.mockClear();
+    __setQmdProcessDepsForTest({
+      spawn: ((...args: Parameters<typeof spawnMock>) => spawnMock(...args)) as unknown as typeof import("node:child_process").spawn,
+    });
+    __setQmdManagerDepsForTest({
+      createLogger: createTestLogger,
+    });
 
     tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-qmd-slugified-"));
     workspaceDir = path.join(tmpRoot, "workspace");
@@ -184,6 +177,8 @@ describe("QmdMemoryManager slugified path resolution", () => {
     openManagers.clear();
     await fs.rm(tmpRoot, { recursive: true, force: true });
     delete process.env.OPENCLAW_STATE_DIR;
+    __resetQmdManagerDepsForTest();
+    __resetQmdProcessDepsForTest();
   });
 
   it("maps slugified workspace qmd URIs back to the indexed filesystem path", async () => {

@@ -80,58 +80,36 @@ function isMcporterCommand(cmd: unknown): boolean {
   }
   return /(^|[\\/])mcporter(?:\.cmd)?$/i.test(cmd);
 }
-
-vi.mock("openclaw/plugin-sdk/memory-core-host-engine-foundation", async () => {
-  const actual = await vi.importActual<
-    typeof import("openclaw/plugin-sdk/memory-core-host-engine-foundation")
-  >("openclaw/plugin-sdk/memory-core-host-engine-foundation");
-  return {
-    ...actual,
-    createSubsystemLogger: () => {
-      const logger = {
-        warn: logWarnMock,
-        debug: logDebugMock,
-        info: logInfoMock,
-        child: () => logger,
-      };
-      return logger;
-    },
-  };
-});
-
-vi.mock("node:child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:child_process")>();
-  return {
-    ...actual,
-    spawn: vi.fn(),
-  };
-});
-
-vi.mock("chokidar", () => ({
-  default: { watch: watchMock },
-  watch: watchMock,
-}));
-
-vi.mock("openclaw/plugin-sdk/file-lock", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("openclaw/plugin-sdk/file-lock")>();
-  return {
-    ...actual,
-    withFileLock: withFileLockMock,
-  };
-});
-
-import { spawn as mockedSpawn } from "node:child_process";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/memory-core-host-engine-foundation";
+import { __resetQmdProcessDepsForTest, __setQmdProcessDepsForTest } from "openclaw/plugin-sdk/memory-core-host-engine-qmd";
 import {
   requireNodeSqlite,
   resolveMemoryBackendConfig,
 } from "openclaw/plugin-sdk/memory-core-host-engine-storage";
-import { QmdMemoryManager } from "./qmd-manager.js";
+import {
+  __resetQmdManagerDepsForTest,
+  __setQmdManagerDepsForTest,
+  QmdMemoryManager,
+} from "./qmd-manager.js";
 
-const spawnMock = mockedSpawn as unknown as Mock;
+const spawnMock = vi.fn() as unknown as Mock;
 const originalPath = process.env.PATH;
 const originalPathExt = process.env.PATHEXT;
 const originalWindowsPath = (process.env as NodeJS.ProcessEnv & { Path?: string }).Path;
+
+function createTestLogger() {
+  const logger = {
+    warn: logWarnMock,
+    debug: logDebugMock,
+    info: logInfoMock,
+    child: () => logger,
+  };
+  return logger;
+}
+
+async function waitForDelay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 describe("QmdMemoryManager", () => {
   let fixtureRoot: string;
@@ -185,6 +163,14 @@ describe("QmdMemoryManager", () => {
     logWarnMock.mockClear();
     logDebugMock.mockClear();
     logInfoMock.mockClear();
+    __setQmdProcessDepsForTest({
+      spawn: ((...args: Parameters<typeof spawnMock>) => spawnMock(...args)) as unknown as typeof import("node:child_process").spawn,
+    });
+    __setQmdManagerDepsForTest({
+      createLogger: createTestLogger,
+      watch: watchMock as unknown as typeof import("chokidar").watch,
+      withFileLock: withFileLockMock as typeof import("openclaw/plugin-sdk/file-lock").withFileLock,
+    });
     tmpRoot = path.join(fixtureRoot, `case-${fixtureCount++}`);
     workspaceDir = path.join(tmpRoot, "workspace");
     stateDir = path.join(tmpRoot, "state");
@@ -257,6 +243,8 @@ describe("QmdMemoryManager", () => {
     }
     delete (globalThis as Record<PropertyKey, unknown>)[MCPORTER_STATE_KEY];
     delete (globalThis as Record<PropertyKey, unknown>)[QMD_EMBED_QUEUE_KEY];
+    __resetQmdManagerDepsForTest();
+    __resetQmdProcessDepsForTest();
   });
 
   it("debounces back-to-back sync calls", async () => {
@@ -323,7 +311,6 @@ describe("QmdMemoryManager", () => {
   });
 
   it("does not block first search on session-start sync completion", async () => {
-    vi.useFakeTimers();
     cfg = {
       agents: {
         defaults: {
@@ -361,11 +348,16 @@ describe("QmdMemoryManager", () => {
       }
       return createMockChild();
     });
+    __setQmdManagerDepsForTest({
+      createLogger: createTestLogger,
+      searchPendingUpdateWaitMs: 1,
+      watch: watchMock as unknown as typeof import("chokidar").watch,
+      withFileLock: withFileLockMock as typeof import("openclaw/plugin-sdk/file-lock").withFileLock,
+    });
 
     const { manager } = await createManager({ mode: "full" });
     const searchPromise = manager.search("hello", { sessionKey: "session-b" });
 
-    await vi.advanceTimersByTimeAsync(500);
     await expect(searchPromise).resolves.toEqual([]);
 
     (
@@ -1034,7 +1026,6 @@ describe("QmdMemoryManager", () => {
   });
 
   it("times out qmd update during sync when configured", async () => {
-    vi.useFakeTimers();
     cfg = {
       ...cfg,
       memory: {
@@ -1046,7 +1037,7 @@ describe("QmdMemoryManager", () => {
             interval: "0s",
             debounceMs: 0,
             onBoot: false,
-            updateTimeoutMs: 20,
+            updateTimeoutMs: 1,
           },
           paths: [{ path: workspaceDir, pattern: "**/*.md", name: "workspace" }],
         },
@@ -1060,17 +1051,12 @@ describe("QmdMemoryManager", () => {
     });
 
     const resolved = resolveMemoryBackendConfig({ cfg, agentId });
-    const createPromise = QmdMemoryManager.create({ cfg, agentId, resolved, mode: "status" });
-    await vi.advanceTimersByTimeAsync(0);
-    const manager = trackManager(await createPromise);
+    const manager = trackManager(await QmdMemoryManager.create({ cfg, agentId, resolved, mode: "status" }));
     expect(manager).toBeTruthy();
     if (!manager) {
       throw new Error("manager missing");
     }
-    const syncPromise = manager.sync({ reason: "manual" });
-    const rejected = expect(syncPromise).rejects.toThrow("qmd update timed out after 20ms");
-    await vi.advanceTimersByTimeAsync(20);
-    await rejected;
+    await expect(manager.sync({ reason: "manual" })).rejects.toThrow("qmd update timed out after 1ms");
     await manager.close();
   });
 
@@ -2966,7 +2952,6 @@ describe("QmdMemoryManager", () => {
   });
 
   it("logs and continues when qmd embed times out", async () => {
-    vi.useFakeTimers();
     cfg = {
       ...cfg,
       memory: {
@@ -2977,7 +2962,7 @@ describe("QmdMemoryManager", () => {
             interval: "0s",
             debounceMs: 0,
             onBoot: false,
-            embedTimeoutMs: 20,
+            embedTimeoutMs: 1,
           },
           paths: [{ path: workspaceDir, pattern: "**/*.md", name: "workspace" }],
         },
@@ -2991,22 +2976,16 @@ describe("QmdMemoryManager", () => {
     });
 
     const resolved = resolveMemoryBackendConfig({ cfg, agentId });
-    const createPromise = QmdMemoryManager.create({ cfg, agentId, resolved, mode: "status" });
-    await vi.advanceTimersByTimeAsync(0);
-    const manager = trackManager(await createPromise);
+    const manager = trackManager(await QmdMemoryManager.create({ cfg, agentId, resolved, mode: "status" }));
     expect(manager).toBeTruthy();
     if (!manager) {
       throw new Error("manager missing");
     }
-    const syncPromise = manager.sync({ reason: "manual" });
-    const resolvedSync = expect(syncPromise).resolves.toBeUndefined();
-    await vi.advanceTimersByTimeAsync(20);
-    await resolvedSync;
+    await expect(manager.sync({ reason: "manual" })).resolves.toBeUndefined();
     await manager.close();
   });
 
   it("runs periodic embed maintenance even when regular update scheduling is disabled", async () => {
-    vi.useFakeTimers();
     cfg = {
       ...cfg,
       memory: {
@@ -3018,7 +2997,7 @@ describe("QmdMemoryManager", () => {
             interval: "0s",
             debounceMs: 0,
             onBoot: false,
-            embedInterval: "5m",
+            embedInterval: "20ms",
           },
           paths: [{ path: workspaceDir, pattern: "**/*.md", name: "workspace" }],
         },
@@ -3033,7 +3012,7 @@ describe("QmdMemoryManager", () => {
     });
     expect(commandCallsBefore).toHaveLength(0);
 
-    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    await waitForDelay(25);
 
     const commandCalls = spawnMock.mock.calls
       .map((call: unknown[]) => call[1] as string[])
@@ -3044,7 +3023,6 @@ describe("QmdMemoryManager", () => {
   });
 
   it("runs periodic embed maintenance when embed cadence is faster than update cadence", async () => {
-    vi.useFakeTimers();
     cfg = {
       ...cfg,
       memory: {
@@ -3053,10 +3031,10 @@ describe("QmdMemoryManager", () => {
           includeDefaultMemory: false,
           searchMode: "query",
           update: {
-            interval: "20m",
+            interval: "50ms",
             debounceMs: 0,
             onBoot: false,
-            embedInterval: "5m",
+            embedInterval: "20ms",
           },
           paths: [{ path: workspaceDir, pattern: "**/*.md", name: "workspace" }],
         },
@@ -3065,7 +3043,7 @@ describe("QmdMemoryManager", () => {
 
     const { manager } = await createManager({ mode: "full" });
 
-    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    await waitForDelay(25);
 
     const commandCalls = spawnMock.mock.calls
       .map((call: unknown[]) => call[1] as string[])
@@ -3076,7 +3054,6 @@ describe("QmdMemoryManager", () => {
   });
 
   it("does not schedule redundant embed maintenance when regular updates are already more frequent", async () => {
-    vi.useFakeTimers();
     cfg = {
       ...cfg,
       memory: {
@@ -3085,10 +3062,10 @@ describe("QmdMemoryManager", () => {
           includeDefaultMemory: false,
           searchMode: "query",
           update: {
-            interval: "5m",
+            interval: "20ms",
             debounceMs: 0,
             onBoot: false,
-            embedInterval: "20m",
+            embedInterval: "50ms",
           },
           paths: [{ path: workspaceDir, pattern: "**/*.md", name: "workspace" }],
         },
@@ -3097,7 +3074,7 @@ describe("QmdMemoryManager", () => {
 
     const { manager } = await createManager({ mode: "full" });
 
-    await vi.advanceTimersByTimeAsync(6 * 60_000);
+    await waitForDelay(25);
 
     const commandCalls = spawnMock.mock.calls
       .map((call: unknown[]) => call[1] as string[])
@@ -3108,7 +3085,6 @@ describe("QmdMemoryManager", () => {
   });
 
   it("arms periodic embed maintenance in search mode", async () => {
-    vi.useFakeTimers();
     cfg = {
       ...cfg,
       memory: {
@@ -3120,7 +3096,7 @@ describe("QmdMemoryManager", () => {
             interval: "0s",
             debounceMs: 0,
             onBoot: false,
-            embedInterval: "5m",
+            embedInterval: "20ms",
           },
           paths: [{ path: workspaceDir, pattern: "**/*.md", name: "workspace" }],
         },
@@ -3129,7 +3105,7 @@ describe("QmdMemoryManager", () => {
 
     const { manager } = await createManager({ mode: "full" });
 
-    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    await waitForDelay(25);
 
     const commandCalls = spawnMock.mock.calls
       .map((call: unknown[]) => call[1] as string[])
@@ -3140,7 +3116,6 @@ describe("QmdMemoryManager", () => {
   });
 
   it("delays the first periodic embed maintenance run by stable startup jitter", async () => {
-    vi.useFakeTimers();
     embedStartupJitterSpy?.mockRestore();
     embedStartupJitterSpy = vi
       .spyOn(
@@ -3149,7 +3124,7 @@ describe("QmdMemoryManager", () => {
         },
         "resolveEmbedStartupJitterMs",
       )
-      .mockReturnValue(60_000);
+      .mockReturnValue(10);
     cfg = {
       ...cfg,
       memory: {
@@ -3161,7 +3136,7 @@ describe("QmdMemoryManager", () => {
             interval: "0s",
             debounceMs: 0,
             onBoot: false,
-            embedInterval: "5m",
+            embedInterval: "50ms",
           },
           paths: [{ path: workspaceDir, pattern: "**/*.md", name: "workspace" }],
         },
@@ -3170,13 +3145,13 @@ describe("QmdMemoryManager", () => {
 
     const { manager } = await createManager({ mode: "full" });
 
-    await vi.advanceTimersByTimeAsync(59_999);
+    await waitForDelay(5);
     const beforeCalls = spawnMock.mock.calls
       .map((call: unknown[]) => call[1] as string[])
       .filter((args: string[]) => args[0] === "update" || args[0] === "embed");
     expect(beforeCalls).toHaveLength(0);
 
-    await vi.advanceTimersByTimeAsync(1);
+    await waitForDelay(15);
     const commandCalls = spawnMock.mock.calls
       .map((call: unknown[]) => call[1] as string[])
       .filter((args: string[]) => args[0] === "update" || args[0] === "embed");
@@ -3186,7 +3161,6 @@ describe("QmdMemoryManager", () => {
   });
 
   it("serializes qmd embeds within a process before taking the shared file lock", async () => {
-    vi.useFakeTimers();
     const embedChildren: MockChild[] = [];
     spawnMock.mockImplementation((_cmd: string, args: string[]) => {
       if (args[0] === "embed") {
@@ -3200,7 +3174,7 @@ describe("QmdMemoryManager", () => {
     const first = await createManager({ mode: "status" });
     const second = await createManager({ mode: "status" });
     const firstSync = first.manager.sync({ reason: "manual", force: true });
-    await vi.advanceTimersByTimeAsync(0);
+    await waitForDelay(0);
     expect(embedChildren).toHaveLength(1);
     expect(withFileLockMock).toHaveBeenCalledWith(
       expect.any(String),
@@ -3221,11 +3195,11 @@ describe("QmdMemoryManager", () => {
     expect(lockOptions.stale).toBeGreaterThanOrEqual(15 * 60 * 1000);
 
     const secondSync = second.manager.sync({ reason: "manual", force: true });
-    await vi.advanceTimersByTimeAsync(0);
+    await waitForDelay(0);
     expect(embedChildren).toHaveLength(1);
 
     embedChildren[0]?.closeWith(0);
-    await vi.advanceTimersByTimeAsync(0);
+    await waitForDelay(0);
     expect(embedChildren).toHaveLength(2);
 
     embedChildren[1]?.closeWith(0);

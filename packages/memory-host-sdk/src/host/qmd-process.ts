@@ -16,6 +16,27 @@ export type QmdBinaryAvailability = {
   error?: string;
 };
 
+const defaultQmdProcessDeps = {
+  spawn,
+};
+
+let qmdProcessDeps = defaultQmdProcessDeps;
+
+export function __setQmdProcessDepsForTest(
+  overrides?: Partial<{
+    spawn: typeof spawn;
+  }>,
+): void {
+  qmdProcessDeps = {
+    ...defaultQmdProcessDeps,
+    ...overrides,
+  };
+}
+
+export function __resetQmdProcessDepsForTest(): void {
+  qmdProcessDeps = defaultQmdProcessDeps;
+}
+
 export function resolveCliSpawnInvocation(params: {
   command: string;
   args: string[];
@@ -65,7 +86,7 @@ export async function checkQmdBinaryAvailability(params: {
       resolve(result);
     };
 
-    const child = spawn(spawnInvocation.command, spawnInvocation.argv, {
+    const child = qmdProcessDeps.spawn(spawnInvocation.command, spawnInvocation.argv, {
       env: params.env,
       cwd: params.cwd ?? process.cwd(),
       shell: spawnInvocation.shell,
@@ -107,7 +128,7 @@ export async function runCliCommand(params: {
   discardStdout?: boolean;
 }): Promise<{ stdout: string; stderr: string }> {
   return await new Promise((resolve, reject) => {
-    const child = spawn(params.spawnInvocation.command, params.spawnInvocation.argv, {
+    const child = qmdProcessDeps.spawn(params.spawnInvocation.command, params.spawnInvocation.argv, {
       env: params.env,
       cwd: params.cwd,
       shell: params.spawnInvocation.shell,
@@ -182,3 +203,13 @@ function formatQmdAvailabilityError(err: unknown): string {
   }
   return String(err);
 }
+
+export const __testing = {
+  setDepsForTest(
+    overrides?: Partial<{
+      spawn: typeof spawn;
+    }>,
+  ) {
+    __setQmdProcessDepsForTest(overrides);
+  },
+};
