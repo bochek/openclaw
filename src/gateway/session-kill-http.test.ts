@@ -8,9 +8,6 @@ let cfg: Record<string, unknown> = {};
 const authMock = vi.fn(async () => ({ ok: true }) as { ok: boolean; rateLimited?: boolean });
 const isLocalDirectRequestMock = vi.fn(() => true);
 const loadSessionEntryMock = vi.fn();
-const getLatestSubagentRunByChildSessionKeyMock = vi.fn();
-const resolveSubagentControllerMock = vi.fn();
-const killControlledSubagentRunMock = vi.fn();
 const killSubagentRunAdminMock = vi.fn();
 
 vi.mock("../config/config.js", () => ({
@@ -26,14 +23,8 @@ vi.mock("./session-utils.js", () => ({
   loadSessionEntry: loadSessionEntryMock,
 }));
 
-vi.mock("../agents/subagent-registry.js", () => ({
-  getLatestSubagentRunByChildSessionKey: getLatestSubagentRunByChildSessionKeyMock,
-}));
-
 vi.mock("../agents/subagent-control.js", () => ({
-  killControlledSubagentRun: killControlledSubagentRunMock,
   killSubagentRunAdmin: killSubagentRunAdminMock,
-  resolveSubagentController: resolveSubagentControllerMock,
 }));
 
 const { handleSessionKillHttpRequest } = await import("./session-kill-http.js");
@@ -80,10 +71,6 @@ beforeEach(() => {
   isLocalDirectRequestMock.mockReset();
   isLocalDirectRequestMock.mockReturnValue(true);
   loadSessionEntryMock.mockReset();
-  getLatestSubagentRunByChildSessionKeyMock.mockReset();
-  resolveSubagentControllerMock.mockReset();
-  resolveSubagentControllerMock.mockReturnValue({ controllerSessionKey: "agent:main:main" });
-  killControlledSubagentRunMock.mockReset();
   killSubagentRunAdminMock.mockReset();
 });
 
@@ -167,7 +154,7 @@ describe("POST /sessions/:sessionKey/kill", () => {
     expect(killSubagentRunAdminMock).not.toHaveBeenCalled();
   });
 
-  it("rejects remote kills without requester ownership or an authorized token", async () => {
+  it("rejects remote kills without a local admin request even when auth already passed", async () => {
     isLocalDirectRequestMock.mockReturnValue(false);
     authMock.mockResolvedValueOnce({ ok: true });
     loadSessionEntryMock.mockReturnValue({
@@ -182,93 +169,21 @@ describe("POST /sessions/:sessionKey/kill", () => {
     expect(killSubagentRunAdminMock).not.toHaveBeenCalled();
   });
 
-  it("uses requester ownership checks when a requester session header is provided without admin bypass", async () => {
+  it("rejects remote kills when a caller forges a requester session header", async () => {
     isLocalDirectRequestMock.mockReturnValue(false);
     authMock.mockResolvedValueOnce({ ok: true });
     loadSessionEntryMock.mockReturnValue({
       entry: { sessionId: "sess-worker", updatedAt: Date.now() },
       canonicalKey: "agent:main:subagent:worker",
     });
-    getLatestSubagentRunByChildSessionKeyMock.mockReturnValue({
-      runId: "run-1",
-      childSessionKey: "agent:main:subagent:worker",
-    });
-    killControlledSubagentRunMock.mockResolvedValue({ status: "ok" });
 
     const response = await post("/sessions/agent%3Amain%3Asubagent%3Aworker/kill", "", {
       "x-openclaw-requester-session-key": "agent:main:main",
     });
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, killed: true });
-    expect(resolveSubagentControllerMock).toHaveBeenCalledWith({
-      cfg,
-      agentSessionKey: "agent:main:main",
-    });
-    expect(getLatestSubagentRunByChildSessionKeyMock).toHaveBeenCalledWith(
-      "agent:main:subagent:worker",
-    );
-    expect(killSubagentRunAdminMock).not.toHaveBeenCalled();
-  });
-
-  it("uses the newest child-session row for requester-owned kills when stale rows still exist", async () => {
-    isLocalDirectRequestMock.mockReturnValue(false);
-    authMock.mockResolvedValueOnce({ ok: true });
-    loadSessionEntryMock.mockReturnValue({
-      entry: { sessionId: "sess-worker", updatedAt: Date.now() },
-      canonicalKey: "agent:main:subagent:worker",
-    });
-    getLatestSubagentRunByChildSessionKeyMock.mockReturnValue({
-      runId: "run-current-ended",
-      childSessionKey: "agent:main:subagent:worker",
-      endedAt: Date.now() - 1,
-    });
-    killControlledSubagentRunMock.mockResolvedValue({ status: "done" });
-
-    const response = await post("/sessions/agent%3Amain%3Asubagent%3Aworker/kill", "", {
-      "x-openclaw-requester-session-key": "agent:main:main",
-    });
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, killed: false });
-    expect(killControlledSubagentRunMock).toHaveBeenCalledWith({
-      cfg,
-      controller: { controllerSessionKey: "agent:main:main" },
-      entry: expect.objectContaining({
-        runId: "run-current-ended",
-        childSessionKey: "agent:main:subagent:worker",
-      }),
-    });
-  });
-
-  it("keeps bearer-auth requester kills on the requester-owned path", async () => {
-    isLocalDirectRequestMock.mockReturnValue(false);
-    loadSessionEntryMock.mockReturnValue({
-      entry: { sessionId: "sess-worker", updatedAt: Date.now() },
-      canonicalKey: "agent:main:subagent:worker",
-    });
-    getLatestSubagentRunByChildSessionKeyMock.mockReturnValue({
-      runId: "run-1",
-      childSessionKey: "agent:main:subagent:worker",
-    });
-    killControlledSubagentRunMock.mockResolvedValue({ status: "ok" });
-
-    const response = await post(
-      "/sessions/agent%3Amain%3Asubagent%3Aworker/kill",
-      TEST_GATEWAY_TOKEN,
-      { "x-openclaw-requester-session-key": "agent:other:main" },
-    );
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ ok: true, killed: true });
-    expect(resolveSubagentControllerMock).toHaveBeenCalledWith({
-      cfg,
-      agentSessionKey: "agent:other:main",
-    });
-    expect(killControlledSubagentRunMock).toHaveBeenCalledWith({
-      cfg,
-      controller: { controllerSessionKey: "agent:main:main" },
-      entry: expect.objectContaining({
-        runId: "run-1",
-        childSessionKey: "agent:main:subagent:worker",
-      }),
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({
+      ok: false,
+      error: { type: "forbidden" },
     });
     expect(killSubagentRunAdminMock).not.toHaveBeenCalled();
   });
