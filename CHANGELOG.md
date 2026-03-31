@@ -32,6 +32,7 @@ Docs: https://docs.openclaw.ai
 - Slack/exec approvals: add native Slack approval routing and approver authorization so exec approval prompts can stay in Slack instead of falling back to the Web UI or terminal. Thanks @vincentkoc.
 
 ### Fixes
+
 - Image generation/build: write stable runtime alias files into `dist/` and route provider-auth runtime lookups through those aliases so image-generation providers keep resolving auth/runtime modules after rebuilds instead of crashing on missing hashed chunk files.
 - Config/runtime: pin the first successful config load in memory for the running process and refresh that snapshot on successful writes/reloads, so hot paths stop reparsing `openclaw.json` between watcher-driven swaps.
 - Config/legacy cleanup: stop probing obsolete alternate legacy config names and service labels during local config/service detection, while keeping the active `~/.openclaw/openclaw.json` path canonical.
@@ -118,6 +119,7 @@ Docs: https://docs.openclaw.ai
 - Gateway/attachments: offload large inbound images without leaking `media://` markers into text-only runs, preserve mixed attachment order for model input/transcripts, and fail closed when model image capability cannot be resolved. (#55513) Thanks @Syysean.
 - Agents/subagents: fix interim subagent runtime display so `/subagents list` and `/subagents info` stop inflating short runtimes and show second-level durations correctly. (#57739) Thanks @samzong.
 - Diffs/config: preserve schema-shaped plugin config parsing from `diffsPluginConfigSchema.safeParse()`, so direct callers keep `defaults` and `security` sections instead of receiving flattened tool defaults. (#57904) Thanks @gumadeiras.
+- Feishu/groups: keep quoted replies and topic bootstrap context aligned with group sender allowlists so only allowlisted thread messages seed agent context. Thanks @AntAISecurityLab and @vincentkoc.
 - Diffs: fall back to plain text when `lang` hints are invalid during diff render and viewer hydration, so bad or stale language values no longer break the diff viewer. (#57902) Thanks @gumadeiras.
 - Doctor/plugins: skip false Matrix legacy-helper warnings when no migration plans exist, and keep bundled `enabledByDefault` plugins in the gateway startup set. (#57931) Thanks @dinakars777.
 - Matrix/CLI send: start one-off Matrix send clients before outbound delivery so `openclaw message send --channel matrix` restores E2EE in encrypted rooms instead of sending plain events. (#57936) Thanks @gumadeiras.
