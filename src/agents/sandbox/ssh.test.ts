@@ -136,6 +136,8 @@ describe("sandbox ssh helpers", () => {
     async () => {
       const localDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-ssh-upload-safe-"));
       tempDirs.push(localDir);
+      const fakeSsh = path.join(localDir, "fake-ssh.sh");
+      await fs.writeFile(fakeSsh, "#!/bin/sh\ncat >/dev/null\n", { mode: 0o755 });
       await fs.writeFile(path.join(localDir, "source.txt"), "hello");
       await fs.link(path.join(localDir, "source.txt"), path.join(localDir, "hardlinked.txt"));
       await fs.symlink("source.txt", path.join(localDir, "link.txt"));
@@ -143,7 +145,7 @@ describe("sandbox ssh helpers", () => {
       await expect(
         uploadDirectoryToSshTarget({
           session: {
-            command: "true",
+            command: fakeSsh,
             configPath: "/tmp/openclaw-test-ssh-config",
             host: "openclaw-sandbox",
           },
