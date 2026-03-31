@@ -13,8 +13,8 @@ fi
 package_version="$(node -p "require('./package.json').version")"
 current_beta_version="$(npm view openclaw dist-tags.beta 2>/dev/null || true)"
 mapfile -t publish_plan < <(
-  PACKAGE_VERSION="${package_version}" CURRENT_BETA_VERSION="${current_beta_version}" node --import tsx --input-type=module <<'EOF'
-import { resolveNpmPublishPlan } from "./scripts/openclaw-npm-release-check.ts";
+  PACKAGE_VERSION="${package_version}" CURRENT_BETA_VERSION="${current_beta_version}" node --input-type=module <<'EOF'
+import { resolveNpmPublishPlan } from "./scripts/lib/npm-publish-plan.mjs";
 
 const plan = resolveNpmPublishPlan(
   process.env.PACKAGE_VERSION ?? "",
