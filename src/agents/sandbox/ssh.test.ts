@@ -130,4 +130,27 @@ describe("sandbox ssh helpers", () => {
       ).rejects.toThrow(/refuses symlink escaping the workspace: escape/i);
     },
   );
+
+  it.runIf(process.platform !== "win32")(
+    "allows in-workspace symlinks that point to hardlinked files",
+    async () => {
+      const localDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-ssh-upload-safe-"));
+      tempDirs.push(localDir);
+      await fs.writeFile(path.join(localDir, "source.txt"), "hello");
+      await fs.link(path.join(localDir, "source.txt"), path.join(localDir, "hardlinked.txt"));
+      await fs.symlink("source.txt", path.join(localDir, "link.txt"));
+
+      await expect(
+        uploadDirectoryToSshTarget({
+          session: {
+            command: "true",
+            configPath: "/tmp/openclaw-test-ssh-config",
+            host: "openclaw-sandbox",
+          },
+          localDir,
+          remoteDir: "/remote/workspace",
+        }),
+      ).resolves.toBeUndefined();
+    },
+  );
 });
