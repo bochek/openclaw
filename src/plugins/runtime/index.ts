@@ -13,6 +13,7 @@ import { defineCachedValue } from "./runtime-cache.js";
 import { createRuntimeChannel } from "./runtime-channel.js";
 import { createRuntimeConfig } from "./runtime-config.js";
 import { createRuntimeEvents } from "./runtime-events.js";
+import { createRuntimeFlow } from "./runtime-flow.js";
 import { createRuntimeLogging } from "./runtime-logging.js";
 import { createRuntimeMedia } from "./runtime-media.js";
 import { createRuntimeSystem } from "./runtime-system.js";
@@ -203,6 +204,7 @@ export function createPluginRuntime(_options: CreatePluginRuntimeOptions = {}): 
     events: createRuntimeEvents(),
     logging: createRuntimeLogging(),
     state: { resolveStateDir },
+    flow: createRuntimeFlow(),
   } satisfies Omit<
     PluginRuntime,
     "tts" | "mediaUnderstanding" | "stt" | "modelAuth" | "imageGeneration"
