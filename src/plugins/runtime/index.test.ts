@@ -190,6 +190,15 @@ describe("plugin runtime command execution", () => {
       },
     },
     {
+      name: "exposes runtime.flow binding helpers",
+      assert: (runtime: ReturnType<typeof createPluginRuntime>) => {
+        expectFunctionKeys(runtime.flow as Record<string, unknown>, [
+          "bindSession",
+          "fromToolContext",
+        ]);
+      },
+    },
+    {
       name: "exposes runtime.agent host helpers",
       assert: (runtime: ReturnType<typeof createPluginRuntime>) => {
         expect(runtime.agent.defaults).toEqual({
