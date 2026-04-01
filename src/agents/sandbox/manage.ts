@@ -109,7 +109,7 @@ export async function removeSandboxBrowserContainer(containerName: string): Prom
         ...entry,
         backendId: "docker",
         runtimeLabel: entry.containerName,
-        configLabelKind: "Image",
+        configLabelKind: "BrowserImage",
       },
       config,
     });
