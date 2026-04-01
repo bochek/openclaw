@@ -11,6 +11,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function buildKimiReplayPolicy() {
+  return {
+    preserveSignatures: false,
+  };
+}
+
 export default definePluginEntry({
   id: PLUGIN_ID,
   name: "Kimi Provider",
@@ -86,6 +92,7 @@ export default definePluginEntry({
         openAiPayloadNormalizationMode: "moonshot-thinking",
         preserveAnthropicThinkingSignatures: false,
       },
+      buildReplayPolicy: () => buildKimiReplayPolicy(),
       wrapStreamFn: (ctx) => createKimiToolCallMarkupWrapper(ctx.streamFn),
     });
   },

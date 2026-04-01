@@ -565,6 +565,8 @@ export type ProviderReplayPolicy = {
   dropThinkingBlocks?: boolean;
   repairToolUseResultPairing?: boolean;
   applyAssistantFirstOrderingFix?: boolean;
+  validateGeminiTurns?: boolean;
+  validateAnthropicTurns?: boolean;
   allowSyntheticToolResults?: boolean;
 };
 
