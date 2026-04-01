@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let listSandboxBrowsers: typeof import("./manage.js").listSandboxBrowsers;
+let removeSandboxBrowserContainer: typeof import("./manage.js").removeSandboxBrowserContainer;
 
 const configMocks = vi.hoisted(() => ({
   loadConfig: vi.fn(),
@@ -39,7 +40,7 @@ vi.mock("./docker-backend.js", () => ({
 
 async function loadFreshModule() {
   vi.resetModules();
-  ({ listSandboxBrowsers } = await import("./manage.js"));
+  ({ listSandboxBrowsers, removeSandboxBrowserContainer } = await import("./manage.js"));
 }
 
 describe("listSandboxBrowsers", () => {
@@ -109,5 +110,21 @@ describe("listSandboxBrowsers", () => {
       running: true,
       imageMatch: true,
     });
+  });
+
+  it("removes browser runtimes with BrowserImage config label kind", async () => {
+    await removeSandboxBrowserContainer("browser-1");
+
+    expect(backendMocks.removeRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entry: expect.objectContaining({
+          containerName: "browser-1",
+          configLabelKind: "BrowserImage",
+          runtimeLabel: "browser-1",
+          backendId: "docker",
+        }),
+      }),
+    );
+    expect(registryMocks.removeBrowserRegistryEntry).toHaveBeenCalledWith("browser-1");
   });
 });

@@ -130,4 +130,32 @@ describe("docker sandbox backend manager", () => {
       configLabelMatch: true,
     });
   });
+
+  it("defaults docker-backed runtime matching to sandbox.docker.image when label kind is missing", async () => {
+    dockerMocks.execDocker.mockResolvedValueOnce({
+      code: 0,
+      stdout: "openclaw-sandbox:bookworm-slim\n",
+      stderr: "",
+    });
+
+    const result = await dockerSandboxBackendManager.describeRuntime({
+      entry: {
+        containerName: "sandbox-legacy",
+        backendId: "docker",
+        runtimeLabel: "sandbox-legacy",
+        sessionKey: "agent:coder:main",
+        createdAtMs: 1,
+        lastUsedAtMs: 1,
+        image: "stale-entry-image",
+      },
+      config: createConfig(),
+      agentId: "coder",
+    });
+
+    expect(result).toEqual({
+      running: true,
+      actualConfigLabel: "openclaw-sandbox:bookworm-slim",
+      configLabelMatch: true,
+    });
+  });
 });
