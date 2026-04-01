@@ -113,7 +113,9 @@ export const dockerSandboxBackendManager: SandboxBackendManager = {
         // ignore inspect failures
       }
     }
-    const configuredImage = resolveSandboxConfigForAgent(config, agentId).docker.image;
+    const sandboxCfg = resolveSandboxConfigForAgent(config, agentId);
+    const configuredImage =
+      entry.configLabelKind === "BrowserImage" ? sandboxCfg.browser.image : sandboxCfg.docker.image;
     return {
       running: state.running,
       actualConfigLabel,

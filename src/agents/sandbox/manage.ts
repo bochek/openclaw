@@ -2,7 +2,6 @@ import { loadConfig } from "../../config/config.js";
 import { stopBrowserBridgeServer } from "../../plugin-sdk/browser-runtime.js";
 import { getSandboxBackendManager } from "./backend.js";
 import { BROWSER_BRIDGES } from "./browser-bridges.js";
-import { resolveSandboxConfigForAgent } from "./config.js";
 import { dockerSandboxBackendManager } from "./docker-backend.js";
 import {
   readBrowserRegistry,
@@ -64,13 +63,12 @@ export async function listSandboxBrowsers(): Promise<SandboxBrowserInfo[]> {
 
   for (const entry of registry.entries) {
     const agentId = resolveSandboxAgentId(entry.sessionKey);
-    const sandboxCfg = resolveSandboxConfigForAgent(config, agentId);
     const runtime = await dockerSandboxBackendManager.describeRuntime({
       entry: {
         ...entry,
         backendId: "docker",
         runtimeLabel: entry.containerName,
-        configLabelKind: "Image",
+        configLabelKind: "BrowserImage",
       },
       config,
       agentId,
@@ -79,7 +77,7 @@ export async function listSandboxBrowsers(): Promise<SandboxBrowserInfo[]> {
       ...entry,
       image: runtime.actualConfigLabel ?? entry.image,
       running: runtime.running,
-      imageMatch: (runtime.actualConfigLabel ?? entry.image) === sandboxCfg.browser.image,
+      imageMatch: runtime.configLabelMatch,
     });
   }
 

@@ -86,7 +86,7 @@ describe("listSandboxBrowsers", () => {
     backendMocks.describeRuntime.mockResolvedValue({
       running: true,
       actualConfigLabel: "openclaw-sandbox-browser:bookworm-slim",
-      configLabelMatch: false,
+      configLabelMatch: true,
     });
 
     await loadFreshModule();
@@ -95,6 +95,14 @@ describe("listSandboxBrowsers", () => {
   it("compares browser runtimes against sandbox.browser.image", async () => {
     const results = await listSandboxBrowsers();
 
+    expect(backendMocks.describeRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: "coder",
+        entry: expect.objectContaining({
+          configLabelKind: "BrowserImage",
+        }),
+      }),
+    );
     expect(results).toHaveLength(1);
     expect(results[0]).toMatchObject({
       image: "openclaw-sandbox-browser:bookworm-slim",
