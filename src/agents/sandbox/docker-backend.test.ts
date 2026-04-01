@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { OpenClawConfig } from "../../config/config.js";
 
 const dockerMocks = vi.hoisted(() => ({
   dockerContainerState: vi.fn(),
@@ -19,6 +20,28 @@ vi.mock("./docker.js", async (importOriginal) => {
 });
 
 let dockerSandboxBackendManager: typeof import("./docker-backend.js").dockerSandboxBackendManager;
+
+function createConfig(): OpenClawConfig {
+  return {
+    agents: {
+      defaults: {
+        sandbox: {
+          mode: "all",
+          scope: "session",
+          workspaceAccess: "none",
+          docker: {
+            image: "openclaw-sandbox:bookworm-slim",
+          },
+          browser: {
+            enabled: true,
+            image: "openclaw-sandbox-browser:bookworm-slim",
+          },
+        },
+      },
+      list: [],
+    },
+  };
+}
 
 async function loadFreshDockerBackendModuleForTest() {
   vi.resetModules();
@@ -68,25 +91,7 @@ describe("docker sandbox backend manager", () => {
         image: "stale-entry-image",
         configLabelKind: "Image",
       },
-      config: {
-        agents: {
-          defaults: {
-            sandbox: {
-              mode: "all",
-              scope: "session",
-              workspaceAccess: "none",
-              docker: {
-                image: "openclaw-sandbox:bookworm-slim",
-              },
-              browser: {
-                enabled: true,
-                image: "openclaw-sandbox-browser:bookworm-slim",
-              },
-            },
-          },
-          list: [],
-        },
-      },
+      config: createConfig(),
       agentId: "coder",
     });
 
@@ -115,25 +120,7 @@ describe("docker sandbox backend manager", () => {
         image: "stale-entry-image",
         configLabelKind: "BrowserImage",
       },
-      config: {
-        agents: {
-          defaults: {
-            sandbox: {
-              mode: "all",
-              scope: "session",
-              workspaceAccess: "none",
-              docker: {
-                image: "openclaw-sandbox:bookworm-slim",
-              },
-              browser: {
-                enabled: true,
-                image: "openclaw-sandbox-browser:bookworm-slim",
-              },
-            },
-          },
-          list: [],
-        },
-      },
+      config: createConfig(),
       agentId: "coder",
     });
 
