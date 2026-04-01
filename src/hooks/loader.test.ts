@@ -144,17 +144,13 @@ describe("loader", () => {
       }
     });
 
-    it("should treat missing hooks.internal.enabled as enabled (default-on)", async () => {
-      // Empty config should NOT skip loading — it should attempt discovery.
-      // With no discoverable hooks in the temp dir (bundled dir is overridden
-      // to /nonexistent), this returns 0 but does NOT bail at the guard.
+    it("should treat missing hooks.internal.enabled as disabled (explicit opt-in)", async () => {
       for (const cfg of [
         {} satisfies OpenClawConfig,
         { hooks: {} } satisfies OpenClawConfig,
         { hooks: { internal: {} } } satisfies OpenClawConfig,
       ]) {
-        const count = await loadInternalHooks(cfg, tmpDir);
-        expect(count).toBe(0);
+        await expectNoCommandHookRegistration(cfg);
       }
     });
 
