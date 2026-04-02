@@ -379,6 +379,29 @@ describe("provider-runtime", () => {
     });
   });
 
+  it("resolves stream wrapper hooks through hook-only aliases without provider ownership", () => {
+    const wrappedStreamFn = vi.fn();
+    resolvePluginProvidersMock.mockReturnValue([
+      {
+        id: "openai",
+        label: "OpenAI",
+        hookAliases: ["azure-openai-responses"],
+        auth: [],
+        wrapStreamFn: ({ streamFn }) => streamFn ?? wrappedStreamFn,
+      },
+    ]);
+
+    expect(
+      wrapProviderStreamFn({
+        provider: "azure-openai-responses",
+        context: createDemoResolvedModelContext({
+          provider: "azure-openai-responses",
+          streamFn: wrappedStreamFn,
+        }),
+      }),
+    ).toBe(wrappedStreamFn);
+  });
+
   it("normalizes transport hooks without needing provider ownership", () => {
     resolvePluginProvidersMock.mockReturnValue([
       {

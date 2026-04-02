@@ -22,10 +22,7 @@ import {
   shouldApplyMoonshotPayloadCompat,
   shouldApplySiliconFlowThinkingOffCompat,
 } from "./moonshot-stream-wrappers.js";
-import {
-  createOpenAIReasoningCompatibilityWrapper,
-  createOpenAIResponsesContextManagementWrapper,
-} from "./openai-stream-wrappers.js";
+import { createOpenAIResponsesContextManagementWrapper } from "./openai-stream-wrappers.js";
 import { streamWithPayloadPatch } from "./stream-payload-utils.js";
 
 const defaultProviderRuntimeDeps = {
@@ -370,12 +367,6 @@ function applyPostPluginStreamWrappers(
     ctx.agent.streamFn,
     ctx.effectiveExtraParams,
   );
-
-  // Azure OpenAI does not yet have an owning provider plugin, so keep its
-  // Responses payload compatibility in core until that provider surface exists.
-  if (ctx.provider === "azure-openai" || ctx.provider === "azure-openai-responses") {
-    ctx.agent.streamFn = createOpenAIReasoningCompatibilityWrapper(ctx.agent.streamFn);
-  }
 
   const rawParallelToolCalls = resolveAliasedParamValue(
     [ctx.resolvedExtraParams, ctx.override],

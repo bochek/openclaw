@@ -147,6 +147,9 @@ beforeEach(() => {
       if (params.provider === "openai-codex") {
         return createTestOpenAIProviderWrapper(params, false);
       }
+      if (params.provider === "azure-openai" || params.provider === "azure-openai-responses") {
+        return createTestOpenAIProviderWrapper(params, false);
+      }
       if (params.provider === "ollama") {
         return createConfiguredOllamaCompatNumCtxWrapper(params.context);
       }

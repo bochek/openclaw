@@ -296,6 +296,28 @@ describe("buildOpenAIProvider", () => {
     expect(result.payload).not.toHaveProperty("reasoning");
   });
 
+  it("owns Azure OpenAI reasoning compatibility without forcing OpenAI transport defaults", () => {
+    const provider = buildOpenAIProvider();
+    const result = runWrappedPayloadCase({
+      wrap: provider.wrapStreamFn as NonNullable<typeof provider.wrapStreamFn>,
+      provider: "azure-openai-responses",
+      modelId: "gpt-5.4",
+      model: {
+        api: "azure-openai-responses",
+        provider: "azure-openai-responses",
+        id: "gpt-5.4",
+        baseUrl: "https://example.openai.azure.com/openai/v1",
+      } as Model<"azure-openai-responses">,
+      payload: {
+        reasoning: { effort: "none" },
+      },
+    });
+
+    expect(result.options?.transport).toBeUndefined();
+    expect(result.options?.openaiWsWarmup).toBeUndefined();
+    expect(result.payload).not.toHaveProperty("reasoning");
+  });
+
   it("owns Codex wrapper composition for responses payloads", () => {
     const provider = buildOpenAICodexProviderPlugin();
     const result = runWrappedPayloadCase({

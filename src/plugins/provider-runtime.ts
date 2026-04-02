@@ -530,7 +530,7 @@ export function wrapProviderStreamFn(params: {
   env?: NodeJS.ProcessEnv;
   context: ProviderWrapStreamFnContext;
 }) {
-  return resolveProviderRuntimePlugin(params)?.wrapStreamFn?.(params.context) ?? undefined;
+  return resolveProviderHookPlugin(params)?.wrapStreamFn?.(params.context) ?? undefined;
 }
 
 export async function createProviderEmbeddingProvider(params: {

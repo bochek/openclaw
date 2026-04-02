@@ -200,6 +200,7 @@ export function buildOpenAIProvider(): ProviderPlugin {
   return {
     id: PROVIDER_ID,
     label: "OpenAI",
+    hookAliases: ["azure-openai", "azure-openai-responses"],
     docsPath: "/providers/models",
     envVars: ["OPENAI_API_KEY"],
     auth: [

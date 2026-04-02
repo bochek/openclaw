@@ -43,6 +43,11 @@ export function wrapOpenAIProviderStream(ctx: ProviderWrapStreamFnContext) {
   return applySharedOpenAIWrappers(ctx.streamFn, ctx);
 }
 
+/** Compose the Azure OpenAI wrapper chain without direct OpenAI transport defaults. */
+export function wrapAzureOpenAIProviderStream(ctx: ProviderWrapStreamFnContext) {
+  return applySharedOpenAIWrappers(ctx.streamFn, ctx);
+}
+
 /** Compose the Codex-specific wrapper chain inside the owning provider plugin. */
 export function wrapOpenAICodexProviderStream(ctx: ProviderWrapStreamFnContext) {
   return applySharedOpenAIWrappers(ctx.streamFn, ctx);
