@@ -115,20 +115,20 @@ await api.runtime.subagent.deleteSession({
   Untrusted plugins can still run subagents, but override requests are rejected.
 </Warning>
 
-### `api.runtime.flow`
+### `api.runtime.taskFlow`
 
-Bind a flow runtime to an existing OpenClaw session key or trusted tool
-context, then create and manage flows without passing an owner on every call.
+Bind a TaskFlow runtime to an existing OpenClaw session key or trusted tool
+context, then create and manage TaskFlows without passing an owner on every call.
 
 ```typescript
-const flow = api.runtime.flow.fromToolContext(ctx);
+const taskFlow = api.runtime.taskFlow.fromToolContext(ctx);
 
-const created = flow.createManaged({
+const created = taskFlow.createManaged({
   controllerId: "my-plugin/review-batch",
   goal: "Review new pull requests",
 });
 
-const child = flow.runTask({
+const child = taskFlow.runTask({
   flowId: created.flowId,
   runtime: "acp",
   childSessionKey: "agent:main:subagent:reviewer",
@@ -137,7 +137,7 @@ const child = flow.runTask({
   startedAt: Date.now(),
 });
 
-const waiting = flow.setWaiting({
+const waiting = taskFlow.setWaiting({
   flowId: created.flowId,
   expectedRevision: created.revision,
   currentStep: "await-human-reply",
