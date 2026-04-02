@@ -139,6 +139,9 @@ describe("runtime TaskFlow", () => {
         runId: "runtime-taskflow-child",
       }),
     });
+    if (!child.created) {
+      throw new Error("expected child task creation to succeed");
+    }
     expect(getTaskById(child.task.taskId)).toMatchObject({
       parentFlowId: created.flowId,
       ownerKey: "agent:main:main",
