@@ -1,5 +1,8 @@
 import { hasApprovalTurnSourceRoute } from "../../infra/approval-turn-source.js";
-import { sanitizeExecApprovalDisplayText } from "../../infra/exec-approval-command-display.js";
+import {
+  resolveExecApprovalCommandDisplay,
+  sanitizeExecApprovalDisplayText,
+} from "../../infra/exec-approval-command-display.js";
 import type { ExecApprovalForwarder } from "../../infra/exec-approval-forwarder.js";
 import {
   DEFAULT_EXEC_APPROVAL_TIMEOUT_MS,
@@ -19,6 +22,7 @@ import {
   ErrorCodes,
   errorShape,
   formatValidationErrors,
+  validateExecApprovalGetParams,
   validateExecApprovalRequestParams,
   validateExecApprovalResolveParams,
 } from "../protocol/index.js";
@@ -34,11 +38,82 @@ type ExecApprovalIosPushDelivery = {
   handleExpired?: (request: ExecApprovalRequest) => Promise<void>;
 };
 
+function resolvePendingApprovalRecord(manager: ExecApprovalManager, inputId: string) {
+  const resolvedId = manager.lookupPendingId(inputId);
+  if (resolvedId.kind === "none") {
+    return { ok: false as const, response: "missing" as const };
+  }
+  if (resolvedId.kind === "ambiguous") {
+    const candidates = resolvedId.ids.slice(0, 3).join(", ");
+    const remainder = resolvedId.ids.length > 3 ? ` (+${resolvedId.ids.length - 3} more)` : "";
+    return {
+      ok: false as const,
+      response: {
+        code: ErrorCodes.INVALID_REQUEST,
+        message: `ambiguous approval id prefix; matches: ${candidates}${remainder}. Use the full id.`,
+      },
+    };
+  }
+  const snapshot = manager.getSnapshot(resolvedId.id);
+  if (!snapshot || snapshot.resolvedAtMs !== undefined) {
+    return { ok: false as const, response: "missing" as const };
+  }
+  return { ok: true as const, approvalId: resolvedId.id, snapshot };
+}
+
 export function createExecApprovalHandlers(
   manager: ExecApprovalManager,
   opts?: { forwarder?: ExecApprovalForwarder; iosPushDelivery?: ExecApprovalIosPushDelivery },
 ): GatewayRequestHandlers {
   return {
+    "exec.approval.get": async ({ params, respond }) => {
+      if (!validateExecApprovalGetParams(params)) {
+        respond(
+          false,
+          undefined,
+          errorShape(
+            ErrorCodes.INVALID_REQUEST,
+            `invalid exec.approval.get params: ${formatValidationErrors(
+              validateExecApprovalGetParams.errors,
+            )}`,
+          ),
+        );
+        return;
+      }
+      const p = params as { id: string };
+      const resolved = resolvePendingApprovalRecord(manager, p.id);
+      if (!resolved.ok) {
+        if (resolved.response === "missing") {
+          respond(
+            false,
+            undefined,
+            errorShape(ErrorCodes.INVALID_REQUEST, "unknown or expired approval id", {
+              details: APPROVAL_NOT_FOUND_DETAILS,
+            }),
+          );
+          return;
+        }
+        respond(false, undefined, errorShape(resolved.response.code, resolved.response.message));
+        return;
+      }
+      const { commandText, commandPreview } = resolveExecApprovalCommandDisplay(
+        resolved.snapshot.request,
+      );
+      respond(
+        true,
+        {
+          id: resolved.approvalId,
+          commandText,
+          commandPreview,
+          allowedDecisions: resolveExecApprovalRequestAllowedDecisions(resolved.snapshot.request),
+          host: resolved.snapshot.request.host ?? null,
+          nodeId: resolved.snapshot.request.nodeId ?? null,
+          agentId: resolved.snapshot.request.agentId ?? null,
+          expiresAtMs: resolved.snapshot.expiresAtMs,
+        },
+        undefined,
+      );
+    },
     "exec.approval.request": async ({ params, respond, context, client }) => {
       if (!validateExecApprovalRequestParams(params)) {
         respond(
@@ -317,32 +392,23 @@ export function createExecApprovalHandlers(
         respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "invalid decision"));
         return;
       }
-      const resolvedId = manager.lookupPendingId(p.id);
-      if (resolvedId.kind === "none") {
-        respond(
-          false,
-          undefined,
-          errorShape(ErrorCodes.INVALID_REQUEST, "unknown or expired approval id", {
-            details: APPROVAL_NOT_FOUND_DETAILS,
-          }),
-        );
+      const resolved = resolvePendingApprovalRecord(manager, p.id);
+      if (!resolved.ok) {
+        if (resolved.response === "missing") {
+          respond(
+            false,
+            undefined,
+            errorShape(ErrorCodes.INVALID_REQUEST, "unknown or expired approval id", {
+              details: APPROVAL_NOT_FOUND_DETAILS,
+            }),
+          );
+          return;
+        }
+        respond(false, undefined, errorShape(resolved.response.code, resolved.response.message));
         return;
       }
-      if (resolvedId.kind === "ambiguous") {
-        const candidates = resolvedId.ids.slice(0, 3).join(", ");
-        const remainder = resolvedId.ids.length > 3 ? ` (+${resolvedId.ids.length - 3} more)` : "";
-        respond(
-          false,
-          undefined,
-          errorShape(
-            ErrorCodes.INVALID_REQUEST,
-            `ambiguous approval id prefix; matches: ${candidates}${remainder}. Use the full id.`,
-          ),
-        );
-        return;
-      }
-      const approvalId = resolvedId.id;
-      const snapshot = manager.getSnapshot(approvalId);
+      const approvalId = resolved.approvalId;
+      const snapshot = resolved.snapshot;
       const allowedDecisions = resolveExecApprovalRequestAllowedDecisions(snapshot?.request);
       if (snapshot && !allowedDecisions.includes(decision)) {
         respond(

@@ -66,11 +66,7 @@ private final class MockNotificationCenter: NotificationCentering, @unchecked Se
                 "openclaw": [
                     "kind": ExecApprovalNotificationBridge.requestedKind,
                     "approvalId": "approval-123",
-                    "commandText": "echo hello",
                     "allowedDecisions": ["allow-once", "allow-always", "deny"],
-                    "host": "gateway",
-                    "nodeId": "node-1",
-                    "agentId": "main",
                     "expiresAtMs": 12345,
                 ],
             ])
@@ -78,11 +74,7 @@ private final class MockNotificationCenter: NotificationCentering, @unchecked Se
         #expect(
             prompt == ExecApprovalNotificationPrompt(
                 approvalId: "approval-123",
-                commandText: "echo hello",
                 allowedDecisions: ["allow-once", "allow-always", "deny"],
-                host: "gateway",
-                nodeId: "node-1",
-                agentId: "main",
                 expiresAtMs: 12345)
         )
     }

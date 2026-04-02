@@ -2,8 +2,10 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
+import { PAIRING_SETUP_BOOTSTRAP_PROFILE } from "../shared/device-bootstrap-profile.js";
 import { issueDeviceBootstrapToken, verifyDeviceBootstrapToken } from "./device-bootstrap.js";
 import {
+  approveBootstrapDevicePairing,
   approveDevicePairing,
   clearDevicePairing,
   ensureDeviceToken,
@@ -462,6 +464,39 @@ describe("device pairing tokens", () => {
     expect(paired?.scopes).toEqual([]);
     expect(paired?.approvedScopes).toEqual([]);
     expect(paired?.tokens?.node?.scopes).toEqual([]);
+  });
+
+  test("bootstrap pairing seeds node and operator device tokens explicitly", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "openclaw-device-pairing-"));
+    const request = await requestDevicePairing(
+      {
+        deviceId: "bootstrap-device-1",
+        publicKey: "bootstrap-public-key-1",
+        role: "node",
+        roles: ["node", "operator"],
+        scopes: [],
+        silent: true,
+      },
+      baseDir,
+    );
+
+    await expect(
+      approveBootstrapDevicePairing(
+        request.request.requestId,
+        PAIRING_SETUP_BOOTSTRAP_PROFILE,
+        baseDir,
+      ),
+    ).resolves.toEqual(expect.objectContaining({ status: "approved" }));
+
+    const paired = await getPairedDevice("bootstrap-device-1", baseDir);
+    expect(paired?.roles).toEqual(expect.arrayContaining(["node", "operator"]));
+    expect(paired?.approvedScopes).toEqual(
+      expect.arrayContaining(PAIRING_SETUP_BOOTSTRAP_PROFILE.scopes),
+    );
+    expect(paired?.tokens?.node?.scopes).toEqual([]);
+    expect(paired?.tokens?.operator?.scopes).toEqual(
+      expect.arrayContaining(PAIRING_SETUP_BOOTSTRAP_PROFILE.scopes),
+    );
   });
 
   test("verifies token and rejects mismatches", async () => {

@@ -193,7 +193,7 @@ describe("push APNs send semantics", () => {
       aps: {
         alert: {
           title: "Exec approval required",
-          body: "echo ok",
+          body: "Open OpenClaw to review this request.",
         },
         sound: "default",
         category: "openclaw.exec-approval.allow-always",
@@ -202,11 +202,15 @@ describe("push APNs send semantics", () => {
         kind: "exec.approval.requested",
         approvalId: "approval-123",
         allowedDecisions: ["allow-once", "allow-always", "deny"],
-        nodeId: "node-1",
-        host: "gateway",
-        agentId: "main",
         expiresAtMs: 123_456,
-        commandText: "echo ok",
+      },
+    });
+    expect(sent?.payload).not.toMatchObject({
+      openclaw: {
+        host: expect.anything(),
+        nodeId: expect.anything(),
+        agentId: expect.anything(),
+        commandText: expect.anything(),
       },
     });
     expect(result.ok).toBe(true);
@@ -461,12 +465,23 @@ describe("push APNs send semantics", () => {
     const sent = send.mock.calls[0]?.[0];
     expect(sent?.payload).toMatchObject({
       aps: {
+        alert: {
+          title: "Exec approval required",
+          body: "Open OpenClaw to review this request.",
+        },
         category: "openclaw.exec-approval.once-only",
       },
       openclaw: {
         kind: "exec.approval.requested",
         approvalId: "approval-relay-1",
         allowedDecisions: ["allow-once", "deny"],
+      },
+    });
+    expect(sent?.payload).not.toMatchObject({
+      openclaw: {
+        commandText: expect.anything(),
+        host: expect.anything(),
+        nodeId: expect.anything(),
       },
     });
     expect(result).toMatchObject({

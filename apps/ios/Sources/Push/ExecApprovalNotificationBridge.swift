@@ -8,11 +8,7 @@ struct ExecApprovalNotificationAction: Sendable, Equatable {
 
 struct ExecApprovalNotificationPrompt: Sendable, Equatable {
     let approvalId: String
-    let commandText: String
     let allowedDecisions: [String]
-    let host: String?
-    let nodeId: String?
-    let agentId: String?
     let expiresAtMs: Int?
 }
 
@@ -73,17 +69,9 @@ enum ExecApprovalNotificationBridge {
         guard let approvalId = self.approvalID(from: userInfo) else { return nil }
         guard let payload = self.openClawPayload(userInfo: userInfo) else { return nil }
 
-        let commandText =
-            (payload["commandText"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !commandText.isEmpty else { return nil }
-
         return ExecApprovalNotificationPrompt(
             approvalId: approvalId,
-            commandText: commandText,
             allowedDecisions: self.allowedDecisions(from: payload),
-            host: self.trimmedPayloadString(payload["host"]),
-            nodeId: self.trimmedPayloadString(payload["nodeId"]),
-            agentId: self.trimmedPayloadString(payload["agentId"]),
             expiresAtMs: self.payloadInt(payload["expiresAtMs"]))
     }
 
@@ -202,11 +190,6 @@ enum ExecApprovalNotificationBridge {
             let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
             return trimmed.isEmpty ? nil : trimmed
         }
-    }
-
-    private static func trimmedPayloadString(_ raw: Any?) -> String? {
-        let trimmed = (raw as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return trimmed.isEmpty ? nil : trimmed
     }
 
     private static func payloadInt(_ raw: Any?) -> Int? {

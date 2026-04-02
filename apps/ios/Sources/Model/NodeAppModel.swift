@@ -2779,29 +2779,100 @@ extension NodeAppModel {
         return "unknown"
     }
 
+    private struct ExecApprovalGetRequest: Encodable {
+        var id: String
+    }
+
     private struct ExecApprovalResolveRequest: Encodable {
         var id: String
         var decision: String
     }
 
-    func presentExecApprovalNotificationPrompt(_ prompt: ExecApprovalNotificationPrompt) {
-        let approvalId = prompt.approvalId.trimmingCharacters(in: .whitespacesAndNewlines)
-        let commandText = prompt.commandText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !approvalId.isEmpty, !commandText.isEmpty else { return }
+    private struct ExecApprovalGetResponse: Decodable {
+        var id: String
+        var commandText: String
+        var allowedDecisions: [String]
+        var host: String?
+        var nodeId: String?
+        var agentId: String?
+        var expiresAtMs: Int?
+    }
 
-        self.pendingExecApprovalPrompt = ExecApprovalPrompt(
+    func presentExecApprovalNotificationPrompt(_ prompt: ExecApprovalNotificationPrompt) async {
+        let approvalId = prompt.approvalId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !approvalId.isEmpty else { return }
+
+        self.pendingExecApprovalPromptResolving = true
+        self.pendingExecApprovalPromptErrorText = nil
+
+        let fetchedPrompt = await self.fetchExecApprovalPrompt(approvalId: approvalId)
+        self.pendingExecApprovalPromptResolving = false
+        switch fetchedPrompt {
+        case let .loaded(fetchedPrompt):
+            self.presentFetchedExecApprovalPrompt(fetchedPrompt)
+        case .stale:
+            await ExecApprovalNotificationBridge.removeNotifications(
+                forApprovalID: approvalId,
+                notificationCenter: self.notificationCenter)
+            self.dismissPendingExecApprovalPrompt()
+        case let .failed(message):
+            self.execApprovalNotificationLogger.error(
+                "Exec approval prompt fetch failed id=\(approvalId, privacy: .public) reason=\(message, privacy: .public)")
+        }
+    }
+
+    private enum ExecApprovalPromptFetchOutcome {
+        case loaded(ExecApprovalPrompt)
+        case stale
+        case failed(message: String)
+    }
+
+    private func presentFetchedExecApprovalPrompt(_ prompt: ExecApprovalPrompt) {
+        self.pendingExecApprovalPrompt = prompt
+        self.pendingExecApprovalPromptResolving = false
+        self.pendingExecApprovalPromptErrorText = nil
+    }
+
+    private static func makeExecApprovalPrompt(from details: ExecApprovalGetResponse) -> ExecApprovalPrompt? {
+        let approvalId = details.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let commandText = details.commandText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !approvalId.isEmpty, !commandText.isEmpty else { return nil }
+        return ExecApprovalPrompt(
             id: approvalId,
             commandText: commandText,
-            allowedDecisions: prompt.allowedDecisions.compactMap { decision in
+            allowedDecisions: details.allowedDecisions.compactMap { decision in
                 let trimmed = decision.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
             },
-            host: prompt.host?.trimmingCharacters(in: .whitespacesAndNewlines),
-            nodeId: prompt.nodeId?.trimmingCharacters(in: .whitespacesAndNewlines),
-            agentId: prompt.agentId?.trimmingCharacters(in: .whitespacesAndNewlines),
-            expiresAtMs: prompt.expiresAtMs)
-        self.pendingExecApprovalPromptResolving = false
-        self.pendingExecApprovalPromptErrorText = nil
+            host: details.host?.trimmingCharacters(in: .whitespacesAndNewlines),
+            nodeId: details.nodeId?.trimmingCharacters(in: .whitespacesAndNewlines),
+            agentId: details.agentId?.trimmingCharacters(in: .whitespacesAndNewlines),
+            expiresAtMs: details.expiresAtMs)
+    }
+
+    private func fetchExecApprovalPrompt(approvalId: String) async -> ExecApprovalPromptFetchOutcome {
+        let connected = await self.ensureOperatorApprovalConnection(timeoutMs: 12_000)
+        guard connected else {
+            return .failed(message: "operator_not_connected")
+        }
+
+        do {
+            let payloadJSON = try Self.encodePayload(ExecApprovalGetRequest(id: approvalId))
+            let response = try await self.operatorGateway.request(
+                method: "exec.approval.get",
+                paramsJSON: payloadJSON,
+                timeoutSeconds: 12)
+            let details = try JSONDecoder().decode(ExecApprovalGetResponse.self, from: response)
+            guard let prompt = Self.makeExecApprovalPrompt(from: details) else {
+                return .failed(message: "invalid_prompt_payload")
+            }
+            return .loaded(prompt)
+        } catch {
+            if Self.isApprovalNotificationStaleError(error) {
+                return .stale
+            }
+            return .failed(message: error.localizedDescription)
+        }
     }
 
     func dismissPendingExecApprovalPrompt() {
@@ -3367,8 +3438,8 @@ extension NodeAppModel {
         self.makeOperatorConnectOptions(clientId: clientId, displayName: displayName)
     }
 
-    func _test_presentExecApprovalNotificationPrompt(_ prompt: ExecApprovalNotificationPrompt) {
-        self.presentExecApprovalNotificationPrompt(prompt)
+    func _test_presentExecApprovalPrompt(_ prompt: ExecApprovalPrompt) {
+        self.presentFetchedExecApprovalPrompt(prompt)
     }
 
     func _test_dismissPendingExecApprovalPrompt() {
@@ -3377,6 +3448,26 @@ extension NodeAppModel {
 
     func _test_pendingExecApprovalPrompt() -> ExecApprovalPrompt? {
         self.pendingExecApprovalPrompt
+    }
+
+    static func _test_makeExecApprovalPrompt(
+        id: String,
+        commandText: String,
+        allowedDecisions: [String],
+        host: String?,
+        nodeId: String?,
+        agentId: String?,
+        expiresAtMs: Int?
+    ) -> ExecApprovalPrompt? {
+        self.makeExecApprovalPrompt(
+            from: ExecApprovalGetResponse(
+                id: id,
+                commandText: commandText,
+                allowedDecisions: allowedDecisions,
+                host: host,
+                nodeId: nodeId,
+                agentId: agentId,
+                expiresAtMs: expiresAtMs))
     }
 
     static func _test_currentDeepLinkKey() -> String {

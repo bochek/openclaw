@@ -12,6 +12,7 @@ import {
   normalizeDevicePublicKeyBase64Url,
 } from "../../../infra/device-identity.js";
 import {
+  approveBootstrapDevicePairing,
   approveDevicePairing,
   ensureDeviceToken,
   getPairedDevice,
@@ -855,10 +856,14 @@ export function attachGatewayWsMessageHandler(params: {
               return replacementPending?.requestId;
             };
             if (pairing.request.silent === true) {
-              approved = await approveDevicePairing(pairing.request.requestId, {
-                callerScopes: bootstrapProfileForSilentApproval?.scopes ?? scopes,
-                approvedScopesOverride: bootstrapProfileForSilentApproval?.scopes,
-              });
+              approved = bootstrapProfileForSilentApproval
+                ? await approveBootstrapDevicePairing(
+                    pairing.request.requestId,
+                    bootstrapProfileForSilentApproval,
+                  )
+                : await approveDevicePairing(pairing.request.requestId, {
+                    callerScopes: scopes,
+                  });
               if (approved?.status === "approved") {
                 if (allowSilentBootstrapPairing && bootstrapTokenCandidate) {
                   const revoked = await revokeDeviceBootstrapToken({

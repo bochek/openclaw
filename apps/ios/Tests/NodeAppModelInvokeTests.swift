@@ -129,30 +129,32 @@ private final class MockBootstrapNotificationCenter: NotificationCentering, @unc
 
     @Test @MainActor func execApprovalPromptPresentationTracksLatestNotificationTap() throws {
         let appModel = NodeAppModel()
-        appModel._test_presentExecApprovalNotificationPrompt(
-            ExecApprovalNotificationPrompt(
-                approvalId: "approval-1",
-                commandText: "echo first",
-                allowedDecisions: ["allow-once", "deny"],
-                host: "gateway",
-                nodeId: nil,
-                agentId: "main",
-                expiresAtMs: 1))
+        appModel._test_presentExecApprovalPrompt(
+            try #require(
+                NodeAppModel._test_makeExecApprovalPrompt(
+                    id: "approval-1",
+                    commandText: "echo first",
+                    allowedDecisions: ["allow-once", "deny"],
+                    host: "gateway",
+                    nodeId: nil,
+                    agentId: "main",
+                    expiresAtMs: 1)))
 
         let firstPrompt = try #require(appModel._test_pendingExecApprovalPrompt())
         #expect(firstPrompt.id == "approval-1")
         #expect(firstPrompt.commandText == "echo first")
         #expect(firstPrompt.allowsAllowAlways == false)
 
-        appModel._test_presentExecApprovalNotificationPrompt(
-            ExecApprovalNotificationPrompt(
-                approvalId: "approval-2",
-                commandText: "echo second",
-                allowedDecisions: ["allow-once", "allow-always", "deny"],
-                host: "gateway",
-                nodeId: "node-2",
-                agentId: nil,
-                expiresAtMs: 2))
+        appModel._test_presentExecApprovalPrompt(
+            try #require(
+                NodeAppModel._test_makeExecApprovalPrompt(
+                    id: "approval-2",
+                    commandText: "echo second",
+                    allowedDecisions: ["allow-once", "allow-always", "deny"],
+                    host: "gateway",
+                    nodeId: "node-2",
+                    agentId: nil,
+                    expiresAtMs: 2)))
 
         let secondPrompt = try #require(appModel._test_pendingExecApprovalPrompt())
         #expect(secondPrompt.id == "approval-2")

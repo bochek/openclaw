@@ -2,6 +2,7 @@ import { loadConfig } from "../config/config.js";
 import {
   hasEffectivePairedDeviceRole,
   listDevicePairing,
+  type DeviceAuthToken,
   type PairedDevice,
 } from "../infra/device-pairing.js";
 import type { ExecApprovalRequest, ExecApprovalResolved } from "../infra/exec-approvals.js";
@@ -44,22 +45,23 @@ function isIosPlatform(platform: string | undefined): boolean {
   return normalized.startsWith("ios") || normalized.startsWith("ipados");
 }
 
-function resolveApprovedScopes(device: PairedDevice): string[] {
-  if (Array.isArray(device.approvedScopes)) {
-    return device.approvedScopes;
+function resolveActiveOperatorToken(device: PairedDevice): DeviceAuthToken | null {
+  const operatorToken = device.tokens?.[OPERATOR_ROLE];
+  if (!operatorToken || operatorToken.revokedAtMs) {
+    return null;
   }
-  if (Array.isArray(device.scopes)) {
-    return device.scopes;
-  }
-  const operatorTokenScopes = device.tokens?.[OPERATOR_ROLE]?.scopes;
-  return Array.isArray(operatorTokenScopes) ? operatorTokenScopes : [];
+  return operatorToken;
 }
 
 function canApproveExecRequests(device: PairedDevice): boolean {
+  const operatorToken = resolveActiveOperatorToken(device);
+  if (!operatorToken) {
+    return false;
+  }
   return roleScopesAllow({
     role: OPERATOR_ROLE,
     requestedScopes: [APPROVALS_SCOPE],
-    allowedScopes: resolveApprovedScopes(device),
+    allowedScopes: operatorToken.scopes,
   });
 }
 
@@ -169,8 +171,8 @@ async function sendRequestedPushes(params: {
   request: ExecApprovalRequest;
   plan: DeliveryPlan;
   log: GatewayLikeLogger;
-}): Promise<void> {
-  await Promise.allSettled(
+}): Promise<{ attempted: number; delivered: number }> {
+  const results = await Promise.allSettled(
     params.plan.targets.map(async (target) => {
       const result =
         target.registration.transport === "direct"
@@ -200,8 +202,20 @@ async function sendRequestedPushes(params: {
           `exec approvals: iOS request push failed node=${target.nodeId} status=${result.status} reason=${result.reason ?? "unknown"}`,
         );
       }
+      return { nodeId: target.nodeId, ok: result.ok };
     }),
   );
+  for (const result of results) {
+    if (result.status === "rejected") {
+      const message =
+        result.reason instanceof Error ? result.reason.message : String(result.reason);
+      params.log.warn?.(`exec approvals: iOS request push threw error: ${message}`);
+    }
+  }
+  return {
+    attempted: params.plan.targets.length,
+    delivered: results.filter((result) => result.status === "fulfilled" && result.value.ok).length,
+  };
 }
 
 async function sendResolvedPushes(params: {
@@ -256,10 +270,18 @@ export function createExecApprovalIosPushDelivery(params: { log: GatewayLikeLogg
         request.id,
         plan.targets.map((target) => target.nodeId),
       );
-      void sendRequestedPushes({ request, plan, log: params.log }).catch((err) => {
-        const message = err instanceof Error ? err.message : String(err);
-        params.log.error?.(`exec approvals: iOS request push failed: ${message}`);
-      });
+      void sendRequestedPushes({ request, plan, log: params.log })
+        .then(({ attempted, delivered }) => {
+          if (attempted > 0 && delivered === 0) {
+            params.log.warn?.(
+              `exec approvals: iOS request push reached no devices approvalId=${request.id} attempted=${attempted}`,
+            );
+          }
+        })
+        .catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          params.log.error?.(`exec approvals: iOS request push failed: ${message}`);
+        });
       return true;
     },
 

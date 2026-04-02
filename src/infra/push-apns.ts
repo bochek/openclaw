@@ -68,7 +68,7 @@ export type ApnsPushWakeResult = ApnsPushResult;
 
 const EXEC_APPROVAL_ALLOW_ALWAYS_CATEGORY_ID = "openclaw.exec-approval.allow-always";
 const EXEC_APPROVAL_ONCE_ONLY_CATEGORY_ID = "openclaw.exec-approval.once-only";
-const MAX_EXEC_APPROVAL_ALERT_BODY_CHARS = 180;
+const EXEC_APPROVAL_GENERIC_ALERT_BODY = "Open OpenClaw to review this request.";
 
 type ApnsPushType = "alert" | "background";
 
@@ -899,19 +899,8 @@ function createBackgroundPayload(params: { nodeId: string; wakeReason?: string }
   };
 }
 
-function compactExecApprovalAlertBody(text: string): string {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  if (!normalized) {
-    return "Open OpenClaw to review this exec approval.";
-  }
-  if (normalized.length <= MAX_EXEC_APPROVAL_ALERT_BODY_CHARS) {
-    return normalized;
-  }
-  return `${normalized.slice(0, MAX_EXEC_APPROVAL_ALERT_BODY_CHARS - 1)}…`;
-}
-
-function resolveExecApprovalAlertBody(request: ExecApprovalRequestPayload): string {
-  return compactExecApprovalAlertBody(request.commandPreview ?? request.command);
+function resolveExecApprovalAlertBody(): string {
+  return EXEC_APPROVAL_GENERIC_ALERT_BODY;
 }
 
 function resolveExecApprovalCategory(
@@ -928,12 +917,11 @@ function createExecApprovalAlertPayload(params: {
   request: ExecApprovalRequestPayload;
   expiresAtMs: number;
 }): object {
-  const commandText = resolveExecApprovalAlertBody(params.request);
   return {
     aps: {
       alert: {
         title: "Exec approval required",
-        body: commandText,
+        body: resolveExecApprovalAlertBody(),
       },
       sound: "default",
       category: resolveExecApprovalCategory(params.request.allowedDecisions),
@@ -942,13 +930,8 @@ function createExecApprovalAlertPayload(params: {
       kind: "exec.approval.requested",
       approvalId: params.approvalId,
       allowedDecisions: params.request.allowedDecisions,
-      host: params.request.host,
-      nodeId: params.request.nodeId,
-      agentId: params.request.agentId,
       expiresAtMs: params.expiresAtMs,
-      commandText,
       ts: Date.now(),
-      targetNodeId: params.nodeId,
     },
   };
 }
@@ -962,7 +945,6 @@ function createExecApprovalResolvedPayload(params: { nodeId: string; approvalId:
       kind: "exec.approval.resolved",
       approvalId: params.approvalId,
       ts: Date.now(),
-      targetNodeId: params.nodeId,
     },
   };
 }

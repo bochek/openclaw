@@ -65,7 +65,7 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
                 self.pendingExecApprovalPrompts.removeAll()
                 Task { @MainActor in
                     for prompt in pending {
-                        model.presentExecApprovalNotificationPrompt(prompt)
+                        await model.presentExecApprovalNotificationPrompt(prompt)
                     }
                 }
             }
@@ -294,7 +294,9 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
             self.pendingExecApprovalPrompts.append(prompt)
             return
         }
-        appModel.presentExecApprovalNotificationPrompt(prompt)
+        Task { @MainActor in
+            await appModel.presentExecApprovalNotificationPrompt(prompt)
+        }
     }
 
     func userNotificationCenter(

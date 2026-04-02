@@ -331,6 +331,7 @@ describe("gateway chat transcript writes (guardrail)", () => {
 describe("exec approval handlers", () => {
   const execApprovalNoop = () => false;
   type ExecApprovalHandlers = ReturnType<typeof createExecApprovalHandlers>;
+  type ExecApprovalGetArgs = Parameters<ExecApprovalHandlers["exec.approval.get"]>[0];
   type ExecApprovalRequestArgs = Parameters<ExecApprovalHandlers["exec.approval.request"]>[0];
   type ExecApprovalResolveArgs = Parameters<ExecApprovalHandlers["exec.approval.resolve"]>[0];
 
@@ -361,6 +362,21 @@ describe("exec approval handlers", () => {
     broadcast: (event: string, payload: unknown) => void;
   }): ExecApprovalResolveArgs["context"] {
     return context as unknown as ExecApprovalResolveArgs["context"];
+  }
+
+  async function getExecApproval(params: {
+    handlers: ExecApprovalHandlers;
+    id: string;
+    respond: ReturnType<typeof vi.fn>;
+  }) {
+    return params.handlers["exec.approval.get"]({
+      params: { id: params.id } as ExecApprovalGetArgs["params"],
+      respond: params.respond as unknown as ExecApprovalGetArgs["respond"],
+      context: {} as ExecApprovalGetArgs["context"],
+      client: null,
+      req: { id: "req-get", type: "req", method: "exec.approval.get" },
+      isWebchatConnect: execApprovalNoop,
+    });
   }
 
   async function requestExecApproval(params: {
@@ -542,6 +558,86 @@ describe("exec approval handlers", () => {
       undefined,
       expect.objectContaining({
         message: "systemRunPlan is required for host=node",
+      }),
+    );
+  });
+
+  it("returns pending approval details for exec.approval.get", async () => {
+    const { handlers, broadcasts, respond, context } = createExecApprovalFixture();
+
+    const requestPromise = requestExecApproval({
+      handlers,
+      respond,
+      context,
+      params: {
+        twoPhase: true,
+        host: "gateway",
+        command: "echo ok",
+        commandArgv: ["echo", "ok"],
+        systemRunPlan: undefined,
+        nodeId: undefined,
+      },
+    });
+
+    const requested = broadcasts.find((entry) => entry.event === "exec.approval.requested");
+    const id = (requested?.payload as { id?: string })?.id ?? "";
+    expect(id).not.toBe("");
+
+    const getRespond = vi.fn();
+    await getExecApproval({ handlers, id, respond: getRespond });
+
+    expect(getRespond).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({
+        id,
+        commandText: "echo ok",
+        allowedDecisions: expect.arrayContaining(["allow-once", "allow-always", "deny"]),
+        host: "gateway",
+        nodeId: null,
+        agentId: null,
+      }),
+      undefined,
+    );
+
+    const resolveRespond = vi.fn();
+    await resolveExecApproval({
+      handlers,
+      id,
+      respond: resolveRespond,
+      context,
+    });
+    await requestPromise;
+  });
+
+  it("returns not found for stale exec.approval.get ids", async () => {
+    const { handlers, respond, context } = createExecApprovalFixture();
+
+    const requestPromise = requestExecApproval({
+      handlers,
+      respond,
+      context,
+      params: { twoPhase: true, host: "gateway", systemRunPlan: undefined, nodeId: undefined },
+    });
+    const acceptedId = respond.mock.calls.find((call) => call[1]?.status === "accepted")?.[1]?.id;
+    expect(typeof acceptedId).toBe("string");
+
+    const resolveRespond = vi.fn();
+    await resolveExecApproval({
+      handlers,
+      id: acceptedId as string,
+      respond: resolveRespond,
+      context,
+    });
+    await requestPromise;
+
+    const getRespond = vi.fn();
+    await getExecApproval({ handlers, id: acceptedId as string, respond: getRespond });
+    expect(getRespond).toHaveBeenCalledWith(
+      false,
+      undefined,
+      expect.objectContaining({
+        code: "INVALID_REQUEST",
+        message: "unknown or expired approval id",
       }),
     );
   });
