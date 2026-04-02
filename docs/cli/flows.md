@@ -1,36 +1,75 @@
 ---
-summary: "Compatibility note for the mistakenly documented `openclaw flows` command"
+summary: "CLI reference for `openclaw flows` (list, inspect, cancel)"
 read_when:
-  - You encounter openclaw flows in older release notes, issue threads, or search results
-  - You want to know what command replaced openclaw flows
+  - You want to inspect or cancel a TaskFlow
+  - You want to see how background tasks roll up into a higher-level job
 title: "flows"
 ---
 
 # `openclaw flows`
 
-`openclaw flows` is **not** a current OpenClaw CLI command.
-
-Some older release notes and docs mistakenly documented a `flows` command surface. The supported operator surface is [`openclaw tasks`](/automation/tasks).
+Inspect and manage [TaskFlow](/automation/taskflow) jobs.
 
 ```bash
-openclaw tasks list
-openclaw tasks show <lookup>
-openclaw tasks cancel <lookup>
+openclaw flows list
+openclaw flows show <lookup>
+openclaw flows cancel <lookup>
 ```
 
-## Use instead
+## Commands
 
-- `openclaw tasks list` — list tracked background tasks
-- `openclaw tasks show <lookup>` — inspect one task by task id, run id, or session key
-- `openclaw tasks cancel <lookup>` — cancel a running background task
-- `openclaw tasks notify <lookup> <policy>` — change task notification behavior
-- `openclaw tasks audit` — surface stale or broken task runs
+### `flows list`
 
-## Why this page exists
+List tracked flows and their task counts.
 
-This page stays in place so existing links from older changelog entries, issue threads, and search results have a clear correction instead of a dead end.
+```bash
+openclaw flows list
+openclaw flows list --status blocked
+openclaw flows list --json
+```
+
+Accepted `--status` values are:
+
+- `queued`
+- `running`
+- `waiting`
+- `blocked`
+- `succeeded`
+- `failed`
+- `cancelled`
+- `lost`
+
+### `flows show`
+
+Show one flow by flow id or owner session key.
+
+```bash
+openclaw flows show <lookup>
+openclaw flows show <lookup> --json
+```
+
+The output includes the flow status, current step, wait state, cancel-requested state, controller id, and linked tasks.
+
+### `flows cancel`
+
+Cancel a flow and any active child tasks.
+
+```bash
+openclaw flows cancel <lookup>
+```
+
+## Recovery tip
+
+If a flow looks stuck or orphaned, run:
+
+```bash
+openclaw doctor
+```
+
+The doctor note points you back at `openclaw flows show` and `openclaw flows cancel` for obvious broken linkage cases.
 
 ## Related
 
+- [TaskFlow](/automation/taskflow) — job-level orchestration above tasks
 - [Background Tasks](/automation/tasks) — detached work ledger
 - [CLI reference](/cli/index) — full command tree
