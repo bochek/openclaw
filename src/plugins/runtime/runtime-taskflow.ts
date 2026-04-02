@@ -5,12 +5,12 @@ import {
   listFlowsForOwner,
   resolveFlowForLookupTokenForOwner,
 } from "../../tasks/flow-owner-access.js";
-import type { FlowUpdateResult } from "../../tasks/flow-registry.js";
 import type { FlowRecord, JsonValue } from "../../tasks/flow-registry.types.js";
 import {
   createManagedFlow,
   failFlow,
   finishFlow,
+  type FlowUpdateResult,
   requestFlowCancel,
   resumeFlow,
   setFlowWaiting,

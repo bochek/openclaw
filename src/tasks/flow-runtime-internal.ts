@@ -17,3 +17,5 @@ export {
   syncFlowFromTask,
   updateFlowRecordByIdExpectedRevision,
 } from "./flow-registry.js";
+
+export type { FlowUpdateResult } from "./flow-registry.js";
