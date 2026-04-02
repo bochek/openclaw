@@ -711,8 +711,11 @@ export function registerControlUiAndPairingSuite(): void {
   });
 
   test("auto-approves fresh node bootstrap pairing from qr setup code", async () => {
-    const { issueDeviceBootstrapToken } = await import("../infra/device-bootstrap.js");
-    const { getPairedDevice, listDevicePairing } = await import("../infra/device-pairing.js");
+    const { issueDeviceBootstrapToken, verifyDeviceBootstrapToken } =
+      await import("../infra/device-bootstrap.js");
+    const { publicKeyRawBase64UrlFromPem } = await import("../infra/device-identity.js");
+    const { getPairedDevice, listDevicePairing, verifyDeviceToken } =
+      await import("../infra/device-pairing.js");
     const { server, ws, port, prevToken } = await startServerWithClient("secret");
     ws.close();
 
@@ -794,7 +797,33 @@ export function registerControlUiAndPairingSuite(): void {
         throw new Error("expected hello-ok auth.deviceTokens for bootstrap onboarding");
       }
 
-      wsBootstrap.close();
+      await new Promise<void>((resolve) => {
+        if (wsBootstrap.readyState === WebSocket.CLOSED) {
+          resolve();
+          return;
+        }
+        wsBootstrap.once("close", () => resolve());
+        wsBootstrap.close();
+      });
+
+      await expect(
+        verifyDeviceBootstrapToken({
+          token: issued.token,
+          deviceId: identity.deviceId,
+          publicKey: publicKeyRawBase64UrlFromPem(identity.publicKeyPem),
+          role: "node",
+          scopes: [],
+        }),
+      ).resolves.toEqual({ ok: false, reason: "bootstrap_token_invalid" });
+
+      await expect(
+        verifyDeviceToken({
+          deviceId: identity.deviceId,
+          token: issuedDeviceToken,
+          role: "node",
+          scopes: [],
+        }),
+      ).resolves.toEqual({ ok: true });
     } finally {
       await server.close();
       restoreGatewayToken(prevToken);

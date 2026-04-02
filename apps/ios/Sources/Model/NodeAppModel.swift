@@ -2916,10 +2916,17 @@ extension NodeAppModel {
         let pollIntervalNs = UInt64(max(50, pollMs)) * 1_000_000
         let deadline = Date().addingTimeInterval(Double(clampedTimeoutMs) / 1000.0)
         while Date() < deadline {
+            if Task.isCancelled {
+                return false
+            }
             if await self.isGatewayConnected() {
                 return true
             }
-            try? await Task.sleep(nanoseconds: pollIntervalNs)
+            do {
+                try await Task.sleep(nanoseconds: pollIntervalNs)
+            } catch {
+                return false
+            }
         }
         return await self.isGatewayConnected()
     }
@@ -2929,10 +2936,17 @@ extension NodeAppModel {
         let pollIntervalNs = UInt64(max(50, pollMs)) * 1_000_000
         let deadline = Date().addingTimeInterval(Double(clampedTimeoutMs) / 1000.0)
         while Date() < deadline {
+            if Task.isCancelled {
+                return false
+            }
             if await self.isOperatorConnected() {
                 return true
             }
-            try? await Task.sleep(nanoseconds: pollIntervalNs)
+            do {
+                try await Task.sleep(nanoseconds: pollIntervalNs)
+            } catch {
+                return false
+            }
         }
         return await self.isOperatorConnected()
     }

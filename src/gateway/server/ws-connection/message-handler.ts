@@ -32,6 +32,7 @@ import { upsertPresence } from "../../../infra/system-presence.js";
 import { loadVoiceWakeConfig } from "../../../infra/voicewake.js";
 import { rawDataToString } from "../../../infra/ws.js";
 import type { createSubsystemLogger } from "../../../logging/subsystem.js";
+import type { DeviceBootstrapProfile } from "../../../shared/device-bootstrap-profile.js";
 import { roleScopesAllow } from "../../../shared/operator-scope-compat.js";
 import {
   isBrowserOperatorUiClient,
@@ -698,17 +699,7 @@ export function attachGatewayWsMessageHandler(params: {
           return;
         }
 
-        const bootstrapProfile =
-          authMethod === "bootstrap-token" &&
-          bootstrapTokenCandidate &&
-          device?.id &&
-          devicePublicKey
-            ? await getBoundDeviceBootstrapProfile({
-                token: bootstrapTokenCandidate,
-                deviceId: device.id,
-                publicKey: devicePublicKey,
-              })
-            : null;
+        let bootstrapProfile: DeviceBootstrapProfile | null = null;
 
         const trustedProxyAuthOk = isTrustedProxyControlUiOperatorAuth({
           isControlUi,
@@ -797,6 +788,21 @@ export function attachGatewayWsMessageHandler(params: {
                 allowedScopes: pairedScopes,
               });
             };
+            if (
+              bootstrapProfile === null &&
+              authMethod === "bootstrap-token" &&
+              reason === "not-paired" &&
+              role === "node" &&
+              scopes.length === 0 &&
+              !existingPairedDevice &&
+              bootstrapTokenCandidate
+            ) {
+              bootstrapProfile = await getBoundDeviceBootstrapProfile({
+                token: bootstrapTokenCandidate,
+                deviceId: device.id,
+                publicKey: devicePublicKey,
+              });
+            }
             const allowSilentLocalPairing = shouldAllowSilentLocalPairing({
               isLocalClient,
               hasBrowserOriginHeader,
@@ -814,8 +820,11 @@ export function attachGatewayWsMessageHandler(params: {
               scopes.length === 0 &&
               !existingPairedDevice &&
               bootstrapProfile !== null;
-            const bootstrapPairingRoles = allowSilentBootstrapPairing
-              ? Array.from(new Set([role, ...bootstrapProfile.roles]))
+            const bootstrapProfileForSilentApproval = allowSilentBootstrapPairing
+              ? bootstrapProfile
+              : null;
+            const bootstrapPairingRoles = bootstrapProfileForSilentApproval
+              ? Array.from(new Set([role, ...bootstrapProfileForSilentApproval.roles]))
               : undefined;
             const pairing = await requestDevicePairing({
               deviceId: device.id,
@@ -847,10 +856,8 @@ export function attachGatewayWsMessageHandler(params: {
             };
             if (pairing.request.silent === true) {
               approved = await approveDevicePairing(pairing.request.requestId, {
-                callerScopes: allowSilentBootstrapPairing ? bootstrapProfile.scopes : scopes,
-                approvedScopesOverride: allowSilentBootstrapPairing
-                  ? bootstrapProfile.scopes
-                  : undefined,
+                callerScopes: bootstrapProfileForSilentApproval?.scopes ?? scopes,
+                approvedScopesOverride: bootstrapProfileForSilentApproval?.scopes,
               });
               if (approved?.status === "approved") {
                 if (allowSilentBootstrapPairing && bootstrapTokenCandidate) {
@@ -1026,12 +1033,18 @@ export function attachGatewayWsMessageHandler(params: {
             issuedAtMs: deviceToken.rotatedAtMs ?? deviceToken.createdAtMs,
           });
         }
-        if (device && authMethod === "bootstrap-token" && bootstrapProfile) {
-          for (const bootstrapRole of bootstrapProfile.roles) {
+        const bootstrapProfileForHello: DeviceBootstrapProfile | null = device
+          ? bootstrapProfile
+          : null;
+        if (device && bootstrapProfileForHello !== null) {
+          const bootstrapProfileForHelloResolved =
+            bootstrapProfileForHello as DeviceBootstrapProfile;
+          for (const bootstrapRole of bootstrapProfileForHelloResolved.roles) {
             if (bootstrapDeviceTokens.some((entry) => entry.role === bootstrapRole)) {
               continue;
             }
-            const bootstrapRoleScopes = bootstrapRole === "operator" ? bootstrapProfile.scopes : [];
+            const bootstrapRoleScopes =
+              bootstrapRole === "operator" ? bootstrapProfileForHelloResolved.scopes : [];
             const extraToken = await ensureDeviceToken({
               deviceId: device.id,
               role: bootstrapRole,

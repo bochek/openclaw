@@ -96,23 +96,27 @@ async function overwritePairedOperatorTokenScopes(baseDir: string, scopes: strin
   await writeFile(pairedPath, JSON.stringify(pairedByDeviceId, null, 2));
 }
 
-async function mutatePairedOperatorDevice(baseDir: string, mutate: (device: PairedDevice) => void) {
+async function mutatePairedDevice(
+  baseDir: string,
+  deviceId: string,
+  mutate: (device: PairedDevice) => void,
+) {
   const { pairedPath } = resolvePairingPaths(baseDir, "devices");
   const pairedByDeviceId = JSON.parse(await readFile(pairedPath, "utf8")) as Record<
     string,
     PairedDevice
   >;
-  const device = pairedByDeviceId["device-1"];
+  const device = pairedByDeviceId[deviceId];
   expect(device).toBeDefined();
   if (!device) {
-    throw new Error("expected paired operator device");
+    throw new Error(`expected paired device ${deviceId}`);
   }
   mutate(device);
   await writeFile(pairedPath, JSON.stringify(pairedByDeviceId, null, 2));
 }
 
 async function clearPairedOperatorApprovalBaseline(baseDir: string) {
-  await mutatePairedOperatorDevice(baseDir, (device) => {
+  await mutatePairedDevice(baseDir, "device-1", (device) => {
     delete device.approvedScopes;
     delete device.scopes;
   });
@@ -429,6 +433,35 @@ describe("device pairing tokens", () => {
         baseDir,
       }),
     ).resolves.toEqual({ ok: true });
+  });
+
+  test("normalizes legacy node token scopes back to [] on re-approval", async () => {
+    const baseDir = await mkdtemp(join(tmpdir(), "openclaw-device-pairing-"));
+    await setupPairedNodeDevice(baseDir);
+
+    await mutatePairedDevice(baseDir, "node-1", (device) => {
+      const nodeToken = device.tokens?.node;
+      expect(nodeToken).toBeDefined();
+      if (!nodeToken) {
+        throw new Error("expected paired node token");
+      }
+      nodeToken.scopes = ["operator.read"];
+    });
+
+    const repair = await requestDevicePairing(
+      {
+        deviceId: "node-1",
+        publicKey: "public-key-node-1",
+        role: "node",
+      },
+      baseDir,
+    );
+    await approveDevicePairing(repair.request.requestId, { callerScopes: [] }, baseDir);
+
+    const paired = await getPairedDevice("node-1", baseDir);
+    expect(paired?.scopes).toEqual([]);
+    expect(paired?.approvedScopes).toEqual([]);
+    expect(paired?.tokens?.node?.scopes).toEqual([]);
   });
 
   test("verifies token and rejects mismatches", async () => {

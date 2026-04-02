@@ -532,6 +532,8 @@ export async function approveDevicePairing(
     if (roleForToken) {
       const existingToken = tokens[roleForToken];
       const requestedScopes = normalizeDeviceAuthScopes(pending.scopes);
+      // Only operator device tokens carry scopes. Non-operator tokens should normalize
+      // back to [] here even if older persisted state still carries stray scopes.
       const nextScopes =
         requestedScopes.length > 0
           ? requestedScopes
