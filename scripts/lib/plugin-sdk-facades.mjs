@@ -162,9 +162,12 @@ export const GENERATED_PLUGIN_SDK_FACADES = [
     subpath: "discord-thread-bindings",
     source: pluginSource("discord", "runtime-api.js"),
     loadPolicy: "activated",
+<<<<<<< HEAD
     directExports: {
       unbindThreadBindingsBySessionKey: "./discord-maintenance.js",
     },
+=======
+>>>>>>> 7470d8b9d0 (refactor(plugin-sdk): localize facade load policy)
     exports: [
       "autoBindSpawnedDiscordSubagent",
       "createThreadBindingManager",
@@ -575,8 +578,12 @@ export const GENERATED_PLUGIN_SDK_FACADES = [
   {
     subpath: "line-surface",
     source: pluginSource("line", "runtime-api.js"),
+<<<<<<< HEAD
     // This surface is also used by passive reply normalization helpers.
     // Keep it loadable without requiring the LINE plugin to be activated.
+=======
+    loadPolicy: "activated",
+>>>>>>> 7470d8b9d0 (refactor(plugin-sdk): localize facade load policy)
     exports: [
       "CardAction",
       "createActionCard",
