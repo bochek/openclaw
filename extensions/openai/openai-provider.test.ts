@@ -262,8 +262,7 @@ describe("buildOpenAIProvider", () => {
 
   it("owns direct OpenAI wrapper composition for responses payloads", () => {
     const provider = buildOpenAIProvider();
-    const result = runWrappedPayloadCase({
-      wrap: provider.wrapStreamFn as NonNullable<typeof provider.wrapStreamFn>,
+    const extraParams = provider.prepareExtraParams?.({
       provider: "openai",
       modelId: "gpt-5.4",
       extraParams: {
@@ -271,6 +270,12 @@ describe("buildOpenAIProvider", () => {
         serviceTier: "priority",
         textVerbosity: "low",
       },
+    } as never);
+    const result = runWrappedPayloadCase({
+      wrap: provider.wrapStreamFn as NonNullable<typeof provider.wrapStreamFn>,
+      provider: "openai",
+      modelId: "gpt-5.4",
+      extraParams: extraParams ?? undefined,
       model: {
         api: "openai-responses",
         provider: "openai",
@@ -282,8 +287,10 @@ describe("buildOpenAIProvider", () => {
       },
     });
 
-    expect(result.options?.transport).toBe("auto");
-    expect(result.options?.openaiWsWarmup).toBe(false);
+    expect(extraParams).toMatchObject({
+      transport: "auto",
+      openaiWsWarmup: false,
+    });
     expect(result.payload.service_tier).toBe("priority");
     expect(result.payload.text).toEqual({ verbosity: "low" });
     expect(result.payload).not.toHaveProperty("reasoning");

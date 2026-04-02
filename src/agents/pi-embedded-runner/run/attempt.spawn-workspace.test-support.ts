@@ -13,7 +13,15 @@ import type {
   IngestResult,
 } from "../../../context-engine/types.js";
 import type { EmbeddedContextFile } from "../../pi-embedded-helpers.js";
+import type { MessagingToolSend } from "../../pi-embedded-messaging.js";
 import type { WorkspaceBootstrapFile } from "../../workspace.js";
+
+type SubscribeEmbeddedPiSessionFn =
+  typeof import("../../pi-embedded-subscribe.js").subscribeEmbeddedPiSession;
+type AcquireSessionWriteLockFn =
+  typeof import("../../session-write-lock.js").acquireSessionWriteLock;
+
+type SubscriptionMock = ReturnType<SubscribeEmbeddedPiSessionFn>;
 
 const hoisted = vi.hoisted(() => {
   type BootstrapContext = {
@@ -24,23 +32,27 @@ const hoisted = vi.hoisted(() => {
   const createAgentSessionMock = vi.fn();
   const sessionManagerOpenMock = vi.fn();
   const resolveSandboxContextMock = vi.fn();
-  const subscribeEmbeddedPiSessionMock = vi.fn(() => ({
-    assistantTexts: [] as string[],
-    toolMetas: [] as Array<{ toolName: string; meta?: string }>,
-    unsubscribe: () => {},
-    waitForCompactionRetry: async () => {},
-    getMessagingToolSentTexts: () => [] as string[],
-    getMessagingToolSentMediaUrls: () => [] as string[],
-    getMessagingToolSentTargets: () => [] as unknown[],
-    getSuccessfulCronAdds: () => 0,
-    didSendViaMessagingTool: () => false,
-    didSendDeterministicApprovalPrompt: () => false,
-    getLastToolError: () => undefined,
-    getUsageTotals: () => undefined,
-    getCompactionCount: () => 0,
-    isCompacting: () => false,
-  }));
-  const acquireSessionWriteLockMock = vi.fn(async () => ({
+  const subscribeEmbeddedPiSessionMock = vi.fn<SubscribeEmbeddedPiSessionFn>(
+    (_params) =>
+      ({
+        assistantTexts: [] as string[],
+        toolMetas: [] as Array<{ toolName: string; meta?: string }>,
+        unsubscribe: () => {},
+        waitForCompactionRetry: async () => {},
+        getMessagingToolSentTexts: () => [] as string[],
+        getMessagingToolSentMediaUrls: () => [] as string[],
+        getMessagingToolSentTargets: () => [] as MessagingToolSend[],
+        getSuccessfulCronAdds: () => 0,
+        didSendViaMessagingTool: () => false,
+        didSendDeterministicApprovalPrompt: () => false,
+        getLastToolError: () => undefined,
+        getUsageTotals: () => undefined,
+        getCompactionCount: () => 0,
+        isCompacting: () => false,
+        isCompactionInFlight: () => false,
+      }) satisfies SubscriptionMock,
+  );
+  const acquireSessionWriteLockMock = vi.fn<AcquireSessionWriteLockFn>(async (_params) => ({
     release: async () => {},
   }));
   const resolveBootstrapContextForRunMock = vi.fn<() => Promise<BootstrapContext>>(async () => ({
@@ -108,8 +120,8 @@ vi.mock("../../session-tool-result-guard-wrapper.js", () => ({
 }));
 
 vi.mock("../../pi-embedded-subscribe.js", () => ({
-  subscribeEmbeddedPiSession: (...args: unknown[]) =>
-    hoisted.subscribeEmbeddedPiSessionMock(...args),
+  subscribeEmbeddedPiSession: (params: Parameters<SubscribeEmbeddedPiSessionFn>[0]) =>
+    hoisted.subscribeEmbeddedPiSessionMock(params),
 }));
 
 vi.mock("../../../plugins/hook-runner-global.js", () => ({
@@ -188,7 +200,8 @@ vi.mock("../session-manager-init.js", () => ({
 }));
 
 vi.mock("../../session-write-lock.js", () => ({
-  acquireSessionWriteLock: (...args: unknown[]) => hoisted.acquireSessionWriteLockMock(...args),
+  acquireSessionWriteLock: (params: Parameters<AcquireSessionWriteLockFn>[0]) =>
+    hoisted.acquireSessionWriteLockMock(params),
   resolveSessionLockMaxHoldFromTimeout: () => 1,
 }));
 
@@ -473,7 +486,7 @@ export type MutableSession = {
   steer: (text: string) => Promise<void>;
 };
 
-export function createSubscriptionMock() {
+export function createSubscriptionMock(): SubscriptionMock {
   return {
     assistantTexts: [] as string[],
     toolMetas: [] as Array<{ toolName: string; meta?: string }>,
@@ -481,7 +494,7 @@ export function createSubscriptionMock() {
     waitForCompactionRetry: async () => {},
     getMessagingToolSentTexts: () => [] as string[],
     getMessagingToolSentMediaUrls: () => [] as string[],
-    getMessagingToolSentTargets: () => [] as unknown[],
+    getMessagingToolSentTargets: () => [] as MessagingToolSend[],
     getSuccessfulCronAdds: () => 0,
     didSendViaMessagingTool: () => false,
     didSendDeterministicApprovalPrompt: () => false,
@@ -489,13 +502,16 @@ export function createSubscriptionMock() {
     getUsageTotals: () => undefined,
     getCompactionCount: () => 0,
     isCompacting: () => false,
+    isCompactionInFlight: () => false,
   };
 }
 
 export function resetEmbeddedAttemptHarness(
   params: {
     includeSpawnSubagent?: boolean;
-    subscribeImpl?: () => ReturnType<typeof createSubscriptionMock>;
+    subscribeImpl?: Parameters<
+      (typeof hoisted.subscribeEmbeddedPiSessionMock)["mockImplementation"]
+    >[0];
     sessionMessages?: AgentMessage[];
   } = {},
 ) {

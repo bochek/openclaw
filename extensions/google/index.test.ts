@@ -1,15 +1,23 @@
+import type {
+  ProviderReplaySessionEntry,
+  ProviderSanitizeReplayHistoryContext,
+} from "openclaw/plugin-sdk/plugin-entry";
 import { describe, expect, it } from "vitest";
 import {
-  registerProviderPlugins,
+  registerProviderPlugin,
   requireRegisteredProvider,
-} from "../../src/test-utils/plugin-registration.js";
+} from "../../test/helpers/plugins/provider-registration.js";
 import googlePlugin from "./index.js";
 
 describe("google provider plugin hooks", () => {
-  it("owns replay policy and reasoning mode for the direct Gemini provider", () => {
-    const providers = registerProviderPlugins(googlePlugin);
+  it("owns replay policy and reasoning mode for the direct Gemini provider", async () => {
+    const { providers } = registerProviderPlugin({
+      plugin: googlePlugin,
+      id: "google",
+      name: "Google Provider",
+    });
     const provider = requireRegisteredProvider(providers, "google");
-    const customEntries: Array<{ customType: string; data?: unknown }> = [];
+    const customEntries: ProviderReplaySessionEntry[] = [];
 
     expect(
       provider.buildReplayPolicy?.({
@@ -40,35 +48,45 @@ describe("google provider plugin hooks", () => {
       } as never),
     ).toBe("tagged");
 
-    const sanitized = provider.sanitizeReplayHistory?.({
-      provider: "google",
-      modelApi: "google-generative-ai",
-      modelId: "gemini-3.1-pro-preview",
-      sessionId: "session-1",
-      messages: [
-        {
-          role: "assistant",
-          content: [{ type: "text", text: "hello" }],
+    const sanitized = await Promise.resolve(
+      provider.sanitizeReplayHistory?.({
+        provider: "google",
+        modelApi: "google-generative-ai",
+        modelId: "gemini-3.1-pro-preview",
+        sessionId: "session-1",
+        messages: [
+          {
+            role: "assistant",
+            content: [{ type: "text", text: "hello" }],
+          },
+        ],
+        sessionState: {
+          getCustomEntries: () => customEntries,
+          appendCustomEntry: (customType: string, data: unknown) => {
+            customEntries.push({ customType, data });
+          },
         },
-      ],
-      sessionState: {
-        getCustomEntries: () => customEntries,
-        appendCustomEntry: (customType, data) => {
-          customEntries.push({ customType, data });
-        },
-      },
-    } as never);
+      } as ProviderSanitizeReplayHistoryContext),
+    );
 
-    expect(sanitized?.[0]).toMatchObject({
-      role: "user",
-      content: "(session bootstrap)",
-    });
+    expect(sanitized).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "user",
+          content: "(session bootstrap)",
+        }),
+      ]),
+    );
     expect(customEntries).toHaveLength(1);
     expect(customEntries[0]?.customType).toBe("google-turn-ordering-bootstrap");
   });
 
   it("owns Gemini CLI tool schema normalization", () => {
-    const providers = registerProviderPlugins(googlePlugin);
+    const { providers } = registerProviderPlugin({
+      plugin: googlePlugin,
+      id: "google",
+      name: "Google Provider",
+    });
     const provider = requireRegisteredProvider(providers, "google-gemini-cli");
 
     const [tool] =

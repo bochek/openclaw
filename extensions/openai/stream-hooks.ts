@@ -2,7 +2,6 @@ import type { ProviderWrapStreamFnContext } from "openclaw/plugin-sdk/plugin-ent
 import {
   createCodexNativeWebSearchWrapper,
   createOpenAIAttributionHeadersWrapper,
-  createOpenAIDefaultTransportWrapper,
   createOpenAIFastModeWrapper,
   createOpenAIReasoningCompatibilityWrapper,
   createOpenAIServiceTierWrapper,
@@ -41,7 +40,7 @@ function applySharedOpenAIWrappers(
 
 /** Compose the direct OpenAI wrapper chain inside the owning provider plugin. */
 export function wrapOpenAIProviderStream(ctx: ProviderWrapStreamFnContext) {
-  return applySharedOpenAIWrappers(createOpenAIDefaultTransportWrapper(ctx.streamFn), ctx);
+  return applySharedOpenAIWrappers(ctx.streamFn, ctx);
 }
 
 /** Compose the Codex-specific wrapper chain inside the owning provider plugin. */

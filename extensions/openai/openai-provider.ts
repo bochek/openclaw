@@ -17,7 +17,7 @@ import {
   isOpenAIApiBaseUrl,
   matchesExactOrPrefix,
 } from "./shared.js";
-import { wrapOpenAIProviderStream } from "./stream-hooks.js";
+import { wrapAzureOpenAIProviderStream, wrapOpenAIProviderStream } from "./stream-hooks.js";
 
 const PROVIDER_ID = "openai";
 const OPENAI_GPT_54_MODEL_ID = "gpt-5.4";
@@ -239,7 +239,24 @@ export function buildOpenAIProvider(): ProviderPlugin {
       providerFamily: "openai",
     },
     buildReplayPolicy: (ctx) => buildOpenAIReplayPolicy(ctx),
-    wrapStreamFn: (ctx) => wrapOpenAIProviderStream(ctx),
+    prepareExtraParams: (ctx) => {
+      const transport = ctx.extraParams?.transport;
+      const hasSupportedTransport =
+        transport === "auto" || transport === "sse" || transport === "websocket";
+      const hasExplicitWarmup = typeof ctx.extraParams?.openaiWsWarmup === "boolean";
+      if (hasSupportedTransport && hasExplicitWarmup) {
+        return ctx.extraParams;
+      }
+      return {
+        ...ctx.extraParams,
+        ...(hasSupportedTransport ? {} : { transport: "auto" }),
+        ...(hasExplicitWarmup ? {} : { openaiWsWarmup: false }),
+      };
+    },
+    wrapStreamFn: (ctx) =>
+      normalizeProviderId(ctx.provider) === PROVIDER_ID
+        ? wrapOpenAIProviderStream(ctx)
+        : wrapAzureOpenAIProviderStream(ctx),
     supportsXHighThinking: ({ modelId }) => matchesExactOrPrefix(modelId, OPENAI_XHIGH_MODEL_IDS),
     isModernModelRef: ({ modelId }) => matchesExactOrPrefix(modelId, OPENAI_MODERN_MODEL_IDS),
     buildMissingAuthMessage: (ctx) => {

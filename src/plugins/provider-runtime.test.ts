@@ -860,7 +860,7 @@ describe("provider-runtime", () => {
         provider: DEMO_PROVIDER_ID,
         context: createDemoResolvedModelContext({
           modelApi: MODEL.api,
-          tools: [{ name: "demo-tool" }],
+          tools: [DEMO_TOOL],
         }),
       }),
     ).toEqual([]);

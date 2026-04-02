@@ -90,14 +90,12 @@ import {
   resolveOpenAITextVerbosity,
 } from "./pi-embedded-runner/openai-stream-wrappers.js";
 
+type WrapProviderStreamFnParams = Parameters<
+  typeof import("../plugins/provider-runtime.js").wrapProviderStreamFn
+>[0];
+
 function createTestOpenAIProviderWrapper(
-  params: Parameters<
-    NonNullable<typeof extraParamsTesting.setProviderRuntimeDepsForTest>
-  >[0] extends { wrapProviderStreamFn: infer T } | undefined
-    ? T extends (params: infer P) => unknown
-      ? P
-      : never
-    : never,
+  params: WrapProviderStreamFnParams,
   withDefaultTransport: boolean,
 ): StreamFn {
   let streamFn = params.context.streamFn;
