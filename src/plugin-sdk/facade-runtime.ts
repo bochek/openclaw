@@ -180,7 +180,6 @@ function resolveBundledPluginManifestRecordByDirName(dirName: string): PluginMan
 function resolveTrackedFacadePluginId(dirName: string): string {
   return resolveBundledPluginManifestRecordByDirName(dirName)?.id ?? dirName;
 }
-
 function resolveBundledPluginPublicSurfaceAccess(params: {
   dirName: string;
   artifactBasename: string;
