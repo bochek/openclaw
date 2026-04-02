@@ -11,6 +11,7 @@ import {
 } from "openclaw/plugin-sdk/provider-auth";
 import { buildOauthProviderAuthResult } from "openclaw/plugin-sdk/provider-auth";
 import { createProviderApiKeyAuthMethod } from "openclaw/plugin-sdk/provider-auth-api-key";
+import { createMinimaxFastModeWrapper } from "openclaw/plugin-sdk/provider-stream";
 import { fetchMinimaxUsage } from "openclaw/plugin-sdk/provider-usage";
 import { isMiniMaxModernModelId, MINIMAX_DEFAULT_MODEL_ID } from "./api.js";
 import {
@@ -232,6 +233,8 @@ export default definePluginEntry({
         });
         return apiKey ? { token: apiKey } : null;
       },
+      wrapStreamFn: (ctx) =>
+        createMinimaxFastModeWrapper(ctx.streamFn, ctx.extraParams?.fastMode === true),
       resolveReasoningOutputMode: () => resolveMinimaxReasoningOutputMode(),
       isModernModelRef: ({ modelId }) => isMiniMaxModernModelId(modelId),
       fetchUsageSnapshot: async (ctx) =>
@@ -282,6 +285,8 @@ export default definePluginEntry({
           run: createOAuthHandler("cn"),
         },
       ],
+      wrapStreamFn: (ctx) =>
+        createMinimaxFastModeWrapper(ctx.streamFn, ctx.extraParams?.fastMode === true),
       resolveReasoningOutputMode: () => resolveMinimaxReasoningOutputMode(),
       isModernModelRef: ({ modelId }) => isMiniMaxModernModelId(modelId),
     });

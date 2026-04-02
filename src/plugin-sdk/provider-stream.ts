@@ -8,6 +8,7 @@ export {
   createGoogleThinkingPayloadWrapper,
   sanitizeGoogleThinkingPayload,
 } from "../agents/pi-embedded-runner/google-stream-wrappers.js";
+export { createMinimaxFastModeWrapper } from "../agents/pi-embedded-runner/minimax-stream-wrappers.js";
 export {
   createKilocodeWrapper,
   createOpenRouterSystemCacheWrapper,
