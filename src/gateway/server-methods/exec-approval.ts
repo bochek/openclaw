@@ -6,6 +6,8 @@ import {
   resolveExecApprovalAllowedDecisions,
   resolveExecApprovalRequestAllowedDecisions,
   type ExecApprovalDecision,
+  type ExecApprovalRequest,
+  type ExecApprovalResolved,
 } from "../../infra/exec-approvals.js";
 import {
   buildSystemRunApprovalBinding,
@@ -26,9 +28,15 @@ const APPROVAL_NOT_FOUND_DETAILS = {
   reason: ErrorCodes.APPROVAL_NOT_FOUND,
 } as const;
 
+type ExecApprovalIosPushDelivery = {
+  handleRequested?: (request: ExecApprovalRequest) => Promise<boolean>;
+  handleResolved?: (resolved: ExecApprovalResolved) => Promise<void>;
+  handleExpired?: (request: ExecApprovalRequest) => Promise<void>;
+};
+
 export function createExecApprovalHandlers(
   manager: ExecApprovalManager,
-  opts?: { forwarder?: ExecApprovalForwarder },
+  opts?: { forwarder?: ExecApprovalForwarder; iosPushDelivery?: ExecApprovalIosPushDelivery },
 ): GatewayRequestHandlers {
   return {
     "exec.approval.request": async ({ params, respond, context, client }) => {
@@ -181,16 +189,13 @@ export function createExecApprovalHandlers(
         );
         return;
       }
-      context.broadcast(
-        "exec.approval.requested",
-        {
-          id: record.id,
-          request: record.request,
-          createdAtMs: record.createdAtMs,
-          expiresAtMs: record.expiresAtMs,
-        },
-        { dropIfSlow: true },
-      );
+      const requestEvent: ExecApprovalRequest = {
+        id: record.id,
+        request: record.request,
+        createdAtMs: record.createdAtMs,
+        expiresAtMs: record.expiresAtMs,
+      };
+      context.broadcast("exec.approval.requested", requestEvent, { dropIfSlow: true });
       const hasExecApprovalClients = context.hasExecApprovalClients?.(client?.connId) ?? false;
       const hasTurnSourceRoute = hasApprovalTurnSourceRoute({
         turnSourceChannel: record.request.turnSourceChannel,
@@ -199,18 +204,21 @@ export function createExecApprovalHandlers(
       let forwarded = false;
       if (opts?.forwarder) {
         try {
-          forwarded = await opts.forwarder.handleRequested({
-            id: record.id,
-            request: record.request,
-            createdAtMs: record.createdAtMs,
-            expiresAtMs: record.expiresAtMs,
-          });
+          forwarded = await opts.forwarder.handleRequested(requestEvent);
         } catch (err) {
           context.logGateway?.error?.(`exec approvals: forward request failed: ${String(err)}`);
         }
       }
+      let deliveredToIosPush = false;
+      if (opts?.iosPushDelivery?.handleRequested) {
+        try {
+          deliveredToIosPush = await opts.iosPushDelivery.handleRequested(requestEvent);
+        } catch (err) {
+          context.logGateway?.error?.(`exec approvals: iOS push request failed: ${String(err)}`);
+        }
+      }
 
-      if (!hasExecApprovalClients && !forwarded && !hasTurnSourceRoute) {
+      if (!hasExecApprovalClients && !forwarded && !hasTurnSourceRoute && !deliveredToIosPush) {
         manager.expire(record.id, "no-approval-route");
         respond(
           true,
@@ -241,6 +249,11 @@ export function createExecApprovalHandlers(
       }
 
       const decision = await decisionPromise;
+      if (decision === null) {
+        void opts?.iosPushDelivery?.handleExpired?.(requestEvent).catch((err) => {
+          context.logGateway?.error?.(`exec approvals: iOS push expire failed: ${String(err)}`);
+        });
+      }
       // Send final response with decision for callers using expectFinal:true.
       respond(
         true,
@@ -354,22 +367,20 @@ export function createExecApprovalHandlers(
         );
         return;
       }
-      context.broadcast(
-        "exec.approval.resolved",
-        { id: approvalId, decision, resolvedBy, ts: Date.now(), request: snapshot?.request },
-        { dropIfSlow: true },
-      );
-      void opts?.forwarder
-        ?.handleResolved({
-          id: approvalId,
-          decision,
-          resolvedBy,
-          ts: Date.now(),
-          request: snapshot?.request,
-        })
-        .catch((err) => {
-          context.logGateway?.error?.(`exec approvals: forward resolve failed: ${String(err)}`);
-        });
+      const resolvedEvent: ExecApprovalResolved = {
+        id: approvalId,
+        decision,
+        resolvedBy,
+        ts: Date.now(),
+        request: snapshot?.request,
+      };
+      context.broadcast("exec.approval.resolved", resolvedEvent, { dropIfSlow: true });
+      void opts?.forwarder?.handleResolved(resolvedEvent).catch((err) => {
+        context.logGateway?.error?.(`exec approvals: forward resolve failed: ${String(err)}`);
+      });
+      void opts?.iosPushDelivery?.handleResolved?.(resolvedEvent).catch((err) => {
+        context.logGateway?.error?.(`exec approvals: iOS push resolve failed: ${String(err)}`);
+      });
       respond(true, { ok: true }, undefined);
     },
   };

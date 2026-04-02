@@ -92,6 +92,7 @@ type DevicePairingStateFile = {
 };
 
 const PENDING_TTL_MS = 5 * 60 * 1000;
+const OPERATOR_ROLE = "operator";
 const OPERATOR_SCOPE_PREFIX = "operator.";
 
 const withLock = createAsyncLock();
@@ -473,12 +474,14 @@ export async function approveDevicePairing(
 ): Promise<ApproveDevicePairingResult>;
 export async function approveDevicePairing(
   requestId: string,
-  options: { callerScopes?: readonly string[] },
+  options: { callerScopes?: readonly string[]; approvedScopesOverride?: readonly string[] },
   baseDir?: string,
 ): Promise<ApproveDevicePairingResult>;
 export async function approveDevicePairing(
   requestId: string,
-  optionsOrBaseDir?: { callerScopes?: readonly string[] } | string,
+  optionsOrBaseDir?:
+    | { callerScopes?: readonly string[]; approvedScopesOverride?: readonly string[] }
+    | string,
   maybeBaseDir?: string,
 ): Promise<ApproveDevicePairingResult> {
   const options =
@@ -492,11 +495,15 @@ export async function approveDevicePairing(
     if (!pending) {
       return null;
     }
+    const approvedScopesOverride = normalizeDeviceAuthScopes(
+      options?.approvedScopesOverride ? [...options.approvedScopesOverride] : undefined,
+    );
     const approvalRole = resolvePendingApprovalRole(pending);
     if (approvalRole) {
-      const requestedOperatorScopes = normalizeDeviceAuthScopes(pending.scopes).filter((scope) =>
-        scope.startsWith(OPERATOR_SCOPE_PREFIX),
-      );
+      const requestedOperatorScopes = normalizeDeviceAuthScopes([
+        ...(pending.scopes ?? []),
+        ...approvedScopesOverride,
+      ]).filter((scope) => scope.startsWith(OPERATOR_SCOPE_PREFIX));
       if (!options?.callerScopes) {
         return {
           status: "forbidden",
@@ -518,6 +525,7 @@ export async function approveDevicePairing(
     const approvedScopes = mergeScopes(
       existing?.approvedScopes ?? existing?.scopes,
       pending.scopes,
+      approvedScopesOverride,
     );
     const tokens = existing?.tokens ? { ...existing.tokens } : {};
     const roleForToken = normalizeRole(pending.role);
@@ -527,12 +535,14 @@ export async function approveDevicePairing(
       const nextScopes =
         requestedScopes.length > 0
           ? requestedScopes
-          : normalizeDeviceAuthScopes(
-              existingToken?.scopes ??
-                approvedScopes ??
-                existing?.approvedScopes ??
-                existing?.scopes,
-            );
+          : roleForToken === OPERATOR_ROLE
+            ? normalizeDeviceAuthScopes(
+                existingToken?.scopes ??
+                  approvedScopes ??
+                  existing?.approvedScopes ??
+                  existing?.scopes,
+              )
+            : [];
       const now = Date.now();
       tokens[roleForToken] = {
         token: newToken(),

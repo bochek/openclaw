@@ -572,17 +572,33 @@ public actor GatewayChannelActor {
         } else if let tick = ok.policy["tickIntervalMs"]?.value as? Int {
             self.tickIntervalMs = Double(tick)
         }
-        if let auth = ok.auth,
-           let deviceToken = auth["deviceToken"]?.value as? String {
-            let authRole = auth["role"]?.value as? String ?? role
-            let scopes = (auth["scopes"]?.value as? [ProtoAnyCodable])?
-                .compactMap { $0.value as? String } ?? []
-            if let identity {
+        if let auth = ok.auth, let identity {
+            if let deviceToken = auth["deviceToken"]?.value as? String {
+                let authRole = auth["role"]?.value as? String ?? role
+                let scopes = (auth["scopes"]?.value as? [ProtoAnyCodable])?
+                    .compactMap { $0.value as? String } ?? []
                 _ = DeviceAuthStore.storeToken(
                     deviceId: identity.deviceId,
                     role: authRole,
                     token: deviceToken,
                     scopes: scopes)
+            }
+            if let tokenEntries = auth["deviceTokens"]?.value as? [ProtoAnyCodable] {
+                for entry in tokenEntries {
+                    guard let rawEntry = entry.value as? [String: ProtoAnyCodable],
+                          let deviceToken = rawEntry["deviceToken"]?.value as? String,
+                          let authRole = rawEntry["role"]?.value as? String
+                    else {
+                        continue
+                    }
+                    let scopes = (rawEntry["scopes"]?.value as? [ProtoAnyCodable])?
+                        .compactMap { $0.value as? String } ?? []
+                    _ = DeviceAuthStore.storeToken(
+                        deviceId: identity.deviceId,
+                        role: authRole,
+                        token: deviceToken,
+                        scopes: scopes)
+                }
             }
         }
         self.lastTick = Date()

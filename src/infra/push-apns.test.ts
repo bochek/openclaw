@@ -1,6 +1,11 @@
 import { generateKeyPairSync } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { sendApnsAlert, sendApnsBackgroundWake } from "./push-apns.js";
+import {
+  sendApnsAlert,
+  sendApnsBackgroundWake,
+  sendApnsExecApprovalAlert,
+  sendApnsExecApprovalResolvedWake,
+} from "./push-apns.js";
 
 const testAuthPrivateKey = generateKeyPairSync("ec", { namedCurve: "prime256v1" })
   .privateKey.export({ format: "pem", type: "pkcs8" })
@@ -150,6 +155,96 @@ describe("push APNs send semantics", () => {
     expect(aps?.sound).toBeUndefined();
     expect(result.ok).toBe(true);
     expect(result.environment).toBe("production");
+    expect(result.transport).toBe("direct");
+  });
+
+  it("sends exec approval alert pushes with native action metadata", async () => {
+    const { send, registration, auth } = createDirectApnsSendFixture({
+      nodeId: "ios-node-approval-alert",
+      environment: "sandbox",
+      sendResult: {
+        status: 200,
+        apnsId: "apns-approval-alert-id",
+        body: "",
+      },
+    });
+
+    const result = await sendApnsExecApprovalAlert({
+      registration,
+      nodeId: "ios-node-approval-alert",
+      approvalId: "approval-123",
+      request: {
+        command: "echo ok",
+        commandPreview: "echo ok",
+        host: "gateway",
+        nodeId: "node-1",
+        agentId: "main",
+        allowedDecisions: ["allow-once", "allow-always", "deny"],
+      },
+      expiresAtMs: 123_456,
+      auth,
+      requestSender: send,
+    });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const sent = send.mock.calls[0]?.[0];
+    expect(sent?.pushType).toBe("alert");
+    expect(sent?.payload).toMatchObject({
+      aps: {
+        alert: {
+          title: "Exec approval required",
+          body: "echo ok",
+        },
+        sound: "default",
+        category: "openclaw.exec-approval.allow-always",
+      },
+      openclaw: {
+        kind: "exec.approval.requested",
+        approvalId: "approval-123",
+        allowedDecisions: ["allow-once", "allow-always", "deny"],
+        nodeId: "node-1",
+        host: "gateway",
+        agentId: "main",
+        expiresAtMs: 123_456,
+        commandText: "echo ok",
+      },
+    });
+    expect(result.ok).toBe(true);
+    expect(result.transport).toBe("direct");
+  });
+
+  it("sends exec approval cleanup pushes as silent background notifications", async () => {
+    const { send, registration, auth } = createDirectApnsSendFixture({
+      nodeId: "ios-node-approval-cleanup",
+      environment: "sandbox",
+      sendResult: {
+        status: 200,
+        apnsId: "apns-approval-cleanup-id",
+        body: "",
+      },
+    });
+
+    const result = await sendApnsExecApprovalResolvedWake({
+      registration,
+      nodeId: "ios-node-approval-cleanup",
+      approvalId: "approval-123",
+      auth,
+      requestSender: send,
+    });
+
+    expect(send).toHaveBeenCalledTimes(1);
+    const sent = send.mock.calls[0]?.[0];
+    expect(sent?.pushType).toBe("background");
+    expect(sent?.payload).toMatchObject({
+      aps: {
+        "content-available": 1,
+      },
+      openclaw: {
+        kind: "exec.approval.resolved",
+        approvalId: "approval-123",
+      },
+    });
+    expect(result.ok).toBe(true);
     expect(result.transport).toBe("direct");
   });
 
@@ -331,6 +426,52 @@ describe("push APNs send semantics", () => {
       status: 429,
       reason: "TooManyRequests",
       tokenSuffix: "12345678",
+      environment: "production",
+      transport: "relay",
+    });
+  });
+
+  it("sends relay exec approval alerts with the once-only category when allow-always is unavailable", async () => {
+    const { send, registration, relayConfig, gatewayIdentity } = createRelayApnsSendFixture({
+      nodeId: "ios-node-relay-approval-alert",
+      sendResult: {
+        ok: true,
+        status: 202,
+        apnsId: "relay-approval-alert-id",
+        environment: "production",
+      },
+    });
+
+    const result = await sendApnsExecApprovalAlert({
+      registration,
+      nodeId: "ios-node-relay-approval-alert",
+      approvalId: "approval-relay-1",
+      request: {
+        command: "npm test",
+        host: "node",
+        nodeId: "node-2",
+        allowedDecisions: ["allow-once", "deny"],
+      },
+      expiresAtMs: 456_789,
+      relayConfig,
+      relayGatewayIdentity: gatewayIdentity,
+      relayRequestSender: send,
+    });
+
+    const sent = send.mock.calls[0]?.[0];
+    expect(sent?.payload).toMatchObject({
+      aps: {
+        category: "openclaw.exec-approval.once-only",
+      },
+      openclaw: {
+        kind: "exec.approval.requested",
+        approvalId: "approval-relay-1",
+        allowedDecisions: ["allow-once", "deny"],
+      },
+    });
+    expect(result).toMatchObject({
+      ok: true,
+      status: 202,
       environment: "production",
       transport: "relay",
     });

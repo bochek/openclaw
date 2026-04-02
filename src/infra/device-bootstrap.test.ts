@@ -65,7 +65,7 @@ describe("device bootstrap tokens", () => {
       issuedAtMs: Date.now(),
       profile: {
         roles: ["node", "operator"],
-        scopes: ["operator.read", "operator.talk.secrets", "operator.write"],
+        scopes: ["operator.approvals", "operator.read", "operator.talk.secrets", "operator.write"],
       },
     });
   });
@@ -144,7 +144,12 @@ describe("device bootstrap tokens", () => {
             issuedAtMs,
             profile: {
               roles: ["node", "operator"],
-              scopes: ["operator.read", "operator.talk.secrets", "operator.write"],
+              scopes: [
+                "operator.approvals",
+                "operator.read",
+                "operator.talk.secrets",
+                "operator.write",
+              ],
             },
           },
         },
