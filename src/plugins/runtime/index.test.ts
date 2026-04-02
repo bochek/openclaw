@@ -190,9 +190,9 @@ describe("plugin runtime command execution", () => {
       },
     },
     {
-      name: "exposes runtime.flow binding helpers",
+      name: "exposes runtime.taskFlow binding helpers",
       assert: (runtime: ReturnType<typeof createPluginRuntime>) => {
-        expectFunctionKeys(runtime.flow as Record<string, unknown>, [
+        expectFunctionKeys(runtime.taskFlow as Record<string, unknown>, [
           "bindSession",
           "fromToolContext",
         ]);
