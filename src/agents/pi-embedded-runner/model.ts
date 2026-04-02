@@ -12,7 +12,6 @@ import {
   runProviderDynamicModel,
   normalizeProviderResolvedModelWithPlugin,
 } from "../../plugins/provider-runtime.js";
-import { resolveOpenClawUserAgent } from "../../version.js";
 import { resolveOpenClawAgentDir } from "../agent-paths.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../defaults.js";
 import { buildModelAliasLines } from "../model-alias-lines.js";
@@ -214,27 +213,11 @@ function normalizeResolvedModel(params: {
       runtimeHooks,
       model: compatNormalized ?? pluginNormalized ?? normalizedInputModel,
     });
-  return applyDefaultOpenClawUserAgentHeader(
-    normalizeResolvedProviderModel({
-      provider: params.provider,
-      model:
-        fallbackTransportNormalized ?? compatNormalized ?? pluginNormalized ?? normalizedInputModel,
-    }),
-  );
-}
-
-function applyDefaultOpenClawUserAgentHeader<T extends Model<Api>>(model: T): T {
-  if (Object.keys(model.headers ?? {}).some((key) => key.toLowerCase() === "user-agent")) {
-    return model;
-  }
-
-  return {
-    ...model,
-    headers: {
-      ...model.headers,
-      "User-Agent": resolveOpenClawUserAgent(),
-    },
-  };
+  return normalizeResolvedProviderModel({
+    provider: params.provider,
+    model:
+      fallbackTransportNormalized ?? compatNormalized ?? pluginNormalized ?? normalizedInputModel,
+  });
 }
 
 function resolveProviderTransport(params: {

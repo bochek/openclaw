@@ -12,6 +12,7 @@ export const mistralMediaUnderstandingProvider: MediaUnderstandingProvider = {
   transcribeAudio: async (req) =>
     await transcribeOpenAiCompatibleAudio({
       ...req,
+      provider: "mistral",
       baseUrl: req.baseUrl ?? DEFAULT_MISTRAL_AUDIO_BASE_URL,
       defaultBaseUrl: DEFAULT_MISTRAL_AUDIO_BASE_URL,
       defaultModel: DEFAULT_MISTRAL_AUDIO_MODEL,

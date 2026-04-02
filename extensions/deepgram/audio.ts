@@ -60,6 +60,7 @@ export async function transcribeDeepgramAudio(
   const body = new Uint8Array(params.buffer);
   const { response: res, release } = await postTranscriptionRequest({
     url: url.toString(),
+    provider: "deepgram",
     headers,
     body,
     timeoutMs: params.timeoutMs,

@@ -153,6 +153,7 @@ export function buildGoogleImageGenerationProvider(): ImageGenerationProvider {
 
       const { response: res, release } = await postJsonRequest({
         url: `${baseUrl}/models/${model}:generateContent`,
+        provider: "google",
         headers,
         body: {
           contents: [

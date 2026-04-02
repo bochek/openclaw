@@ -134,10 +134,53 @@ export function resolveRuntimeServiceVersion(
   });
 }
 
+export function formatOpenClawUserAgent(version: string): string {
+  const normalized = version.trim() || RUNTIME_SERVICE_VERSION_FALLBACK;
+  return `openclaw/${normalized}`;
+}
+
 export function resolveOpenClawUserAgent(
   env: RuntimeVersionEnv = process.env as RuntimeVersionEnv,
 ): string {
-  return `openclaw/${resolveRuntimeServiceVersion(env)}`;
+  return formatOpenClawUserAgent(resolveRuntimeServiceVersion(env));
+}
+
+type DefaultOpenClawUserAgentOptions = {
+  env?: RuntimeVersionEnv;
+  userAgent?: string;
+};
+
+export function withDefaultOpenClawUserAgent(
+  headers: Headers,
+  options?: DefaultOpenClawUserAgentOptions,
+): Headers;
+export function withDefaultOpenClawUserAgent(
+  headers: Record<string, string> | undefined,
+  options?: DefaultOpenClawUserAgentOptions,
+): Record<string, string>;
+export function withDefaultOpenClawUserAgent(
+  headers: Headers | Record<string, string> | undefined,
+  options?: DefaultOpenClawUserAgentOptions,
+): Headers | Record<string, string> {
+  const userAgent = options?.userAgent?.trim() || resolveOpenClawUserAgent(options?.env);
+  if (headers instanceof Headers) {
+    if (headers.has("User-Agent")) {
+      return headers;
+    }
+    const next = new Headers(headers);
+    next.set("User-Agent", userAgent);
+    return next;
+  }
+  if (Object.keys(headers ?? {}).some((key) => key.toLowerCase() === "user-agent")) {
+    return headers ?? {};
+  }
+  if (!headers) {
+    return { "User-Agent": userAgent };
+  }
+  return {
+    ...headers,
+    "User-Agent": userAgent,
+  };
 }
 
 export function resolveCompatibilityHostVersion(

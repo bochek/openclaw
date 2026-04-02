@@ -8,6 +8,7 @@ import {
 import type { AudioTranscriptionRequest, AudioTranscriptionResult } from "./types.js";
 
 type OpenAiCompatibleAudioParams = AudioTranscriptionRequest & {
+  provider?: string;
   defaultBaseUrl: string;
   defaultModel: string;
 };
@@ -48,6 +49,7 @@ export async function transcribeOpenAiCompatibleAudio(
 
   const { response: res, release } = await postTranscriptionRequest({
     url,
+    provider: params.provider,
     headers,
     body: form,
     timeoutMs: params.timeoutMs,

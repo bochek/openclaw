@@ -1,5 +1,5 @@
 import type { RuntimeVersionEnv } from "../version.js";
-import { resolveOpenClawUserAgent, resolveRuntimeServiceVersion } from "../version.js";
+import { formatOpenClawUserAgent, resolveRuntimeServiceVersion } from "../version.js";
 import { normalizeProviderId } from "./provider-id.js";
 
 export type ProviderAttributionVerification =
@@ -75,7 +75,7 @@ function buildOpenAIAttributionPolicy(
     headers: {
       originator: OPENCLAW_ATTRIBUTION_ORIGINATOR,
       version: identity.version,
-      "User-Agent": resolveOpenClawUserAgent(env),
+      "User-Agent": formatOpenClawUserAgent(identity.version),
     },
   };
 }
@@ -95,7 +95,7 @@ function buildOpenAICodexAttributionPolicy(
     headers: {
       originator: OPENCLAW_ATTRIBUTION_ORIGINATOR,
       version: identity.version,
-      "User-Agent": resolveOpenClawUserAgent(env),
+      "User-Agent": formatOpenClawUserAgent(identity.version),
     },
   };
 }

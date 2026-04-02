@@ -96,6 +96,7 @@ export async function describeMoonshotVideo(
 
   const { response: res, release } = await postJsonRequest({
     url,
+    provider: "moonshot",
     headers,
     body,
     timeoutMs: params.timeoutMs,

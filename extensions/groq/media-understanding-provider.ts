@@ -12,6 +12,7 @@ export const groqMediaUnderstandingProvider: MediaUnderstandingProvider = {
   transcribeAudio: (req) =>
     transcribeOpenAiCompatibleAudio({
       ...req,
+      provider: "groq",
       baseUrl: req.baseUrl ?? DEFAULT_GROQ_AUDIO_BASE_URL,
       defaultBaseUrl: DEFAULT_GROQ_AUDIO_BASE_URL,
       defaultModel: DEFAULT_GROQ_AUDIO_MODEL,

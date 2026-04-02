@@ -90,6 +90,7 @@ async function generateGeminiInlineDataText(params: {
 
   const { response: res, release } = await postJsonRequest({
     url,
+    provider: "google",
     headers,
     body,
     timeoutMs: params.timeoutMs,

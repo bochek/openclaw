@@ -12,6 +12,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Providers/OpenAI attribution: centralize versioned attribution header formatting and reuse the shared provider-attribution policy in OpenAI-compatible transcription helpers without broadening attribution to unverified providers. Thanks @fanweixiao and @vincentkoc.
 - Slack/mrkdwn formatting: add built-in Slack mrkdwn guidance in inbound context so Slack replies stop falling back to generic Markdown patterns that render poorly in Slack. Thanks @jadewon and @vincentkoc.
 - Gateway/exec loopback: restore legacy-role fallback for empty paired-device token maps and allow silent local role upgrades so local exec and node clients stop failing with pairing-required errors after `2026.3.31`. (#59092) Thanks @openperf.
 
