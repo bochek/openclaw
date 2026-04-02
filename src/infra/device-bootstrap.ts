@@ -239,3 +239,34 @@ export async function verifyDeviceBootstrapToken(params: {
     return { ok: true };
   });
 }
+
+export async function getBoundDeviceBootstrapProfile(params: {
+  token: string;
+  deviceId: string;
+  publicKey: string;
+  baseDir?: string;
+}): Promise<DeviceBootstrapProfile | null> {
+  return await withLock(async () => {
+    const state = await loadState(params.baseDir);
+    const providedToken = params.token.trim();
+    if (!providedToken) {
+      return null;
+    }
+    const found = Object.entries(state).find(([, candidate]) =>
+      verifyPairingToken(providedToken, candidate.token),
+    );
+    if (!found) {
+      return null;
+    }
+    const [, record] = found;
+    const deviceId = params.deviceId.trim();
+    const publicKey = params.publicKey.trim();
+    if (!deviceId || !publicKey) {
+      return null;
+    }
+    if (record.deviceId?.trim() !== deviceId || record.publicKey?.trim() !== publicKey) {
+      return null;
+    }
+    return resolvePersistedBootstrapProfile(record);
+  });
+}

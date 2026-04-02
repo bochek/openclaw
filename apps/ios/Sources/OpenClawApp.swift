@@ -13,6 +13,9 @@ private struct PendingWatchPromptAction {
     var sessionKey: String?
 }
 
+private typealias PendingExecApprovalAction = ExecApprovalNotificationAction
+private typealias PendingExecApprovalPrompt = ExecApprovalNotificationPrompt
+
 @MainActor
 final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrency UNUserNotificationCenterDelegate {
     private let logger = Logger(subsystem: "ai.openclaw.ios", category: "Push")
@@ -21,6 +24,8 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
     private var backgroundWakeTask: Task<Bool, Never>?
     private var pendingAPNsDeviceToken: Data?
     private var pendingWatchPromptActions: [PendingWatchPromptAction] = []
+    private var pendingExecApprovalActions: [PendingExecApprovalAction] = []
+    private var pendingExecApprovalPrompts: [PendingExecApprovalPrompt] = []
 
     weak var appModel: NodeAppModel? {
         didSet {
@@ -44,6 +49,26 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
                     }
                 }
             }
+            if !self.pendingExecApprovalActions.isEmpty {
+                let pending = self.pendingExecApprovalActions
+                self.pendingExecApprovalActions.removeAll()
+                Task { @MainActor in
+                    for action in pending {
+                        await model.handleExecApprovalNotificationAction(
+                            approvalId: action.approvalId,
+                            decision: action.decision)
+                    }
+                }
+            }
+            if !self.pendingExecApprovalPrompts.isEmpty {
+                let pending = self.pendingExecApprovalPrompts
+                self.pendingExecApprovalPrompts.removeAll()
+                Task { @MainActor in
+                    for prompt in pending {
+                        model.presentExecApprovalNotificationPrompt(prompt)
+                    }
+                }
+            }
         }
     }
 
@@ -54,6 +79,7 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
     {
         self.registerBackgroundWakeRefreshTask()
         UNUserNotificationCenter.current().delegate = self
+        ExecApprovalNotificationBridge.registerNotificationCategories()
         application.registerForRemoteNotifications()
         return true
     }
@@ -80,6 +106,14 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
     {
         self.logger.info("APNs remote notification received keys=\(userInfo.keys.count, privacy: .public)")
         Task { @MainActor in
+            let notificationCenter = LiveNotificationCenter()
+            if await ExecApprovalNotificationBridge.handleResolvedPushIfNeeded(
+                userInfo: userInfo,
+                notificationCenter: notificationCenter)
+            {
+                completionHandler(.newData)
+                return
+            }
             guard let appModel = self.appModel else {
                 self.logger.info("APNs wake skipped: appModel unavailable")
                 self.scheduleBackgroundWakeRefresh(afterSeconds: 90, reason: "silent_push_no_model")
@@ -216,6 +250,22 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
             sessionKey: sessionKey)
     }
 
+    private static func parseExecApprovalAction(
+        from response: UNNotificationResponse) -> PendingExecApprovalAction?
+    {
+        ExecApprovalNotificationBridge.parseAction(
+            actionIdentifier: response.actionIdentifier,
+            userInfo: response.notification.request.content.userInfo)
+    }
+
+    private static func parseExecApprovalPrompt(
+        from response: UNNotificationResponse) -> PendingExecApprovalPrompt?
+    {
+        ExecApprovalNotificationBridge.parsePrompt(
+            actionIdentifier: response.actionIdentifier,
+            userInfo: response.notification.request.content.userInfo)
+    }
+
     private func routeWatchPromptAction(_ action: PendingWatchPromptAction) async {
         guard let appModel = self.appModel else {
             self.pendingWatchPromptActions.append(action)
@@ -229,13 +279,33 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
         _ = await appModel.handleBackgroundRefreshWake(trigger: "watch_prompt_action")
     }
 
+    private func routeExecApprovalAction(_ action: PendingExecApprovalAction) async {
+        guard let appModel = self.appModel else {
+            self.pendingExecApprovalActions.append(action)
+            return
+        }
+        await appModel.handleExecApprovalNotificationAction(
+            approvalId: action.approvalId,
+            decision: action.decision)
+    }
+
+    private func routeExecApprovalPrompt(_ prompt: PendingExecApprovalPrompt) {
+        guard let appModel = self.appModel else {
+            self.pendingExecApprovalPrompts.append(prompt)
+            return
+        }
+        appModel.presentExecApprovalNotificationPrompt(prompt)
+    }
+
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void)
     {
         let userInfo = notification.request.content.userInfo
-        if Self.isWatchPromptNotification(userInfo) {
+        if Self.isWatchPromptNotification(userInfo)
+            || ExecApprovalNotificationBridge.shouldPresentNotification(userInfo: userInfo)
+        {
             completionHandler([.banner, .list, .sound])
             return
         }
@@ -247,18 +317,40 @@ final class OpenClawAppDelegate: NSObject, UIApplicationDelegate, @preconcurrenc
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void)
     {
-        guard let action = Self.parseWatchPromptAction(from: response) else {
-            completionHandler()
+        if let action = Self.parseWatchPromptAction(from: response) {
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    completionHandler()
+                    return
+                }
+                await self.routeWatchPromptAction(action)
+                completionHandler()
+            }
             return
         }
-        Task { @MainActor [weak self] in
-            guard let self else {
+        if let action = Self.parseExecApprovalAction(from: response) {
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    completionHandler()
+                    return
+                }
+                await self.routeExecApprovalAction(action)
                 completionHandler()
-                return
             }
-            await self.routeWatchPromptAction(action)
-            completionHandler()
+            return
         }
+        if let prompt = Self.parseExecApprovalPrompt(from: response) {
+            Task { @MainActor [weak self] in
+                guard let self else {
+                    completionHandler()
+                    return
+                }
+                self.routeExecApprovalPrompt(prompt)
+                completionHandler()
+            }
+            return
+        }
+        completionHandler()
     }
 }
 

@@ -451,20 +451,36 @@ describe("exec approval handlers", () => {
     return { handlers, broadcasts, respond, context };
   }
 
-  function createForwardingExecApprovalFixture() {
+  function createForwardingExecApprovalFixture(opts?: {
+    iosPushDelivery?: {
+      handleRequested: ReturnType<typeof vi.fn>;
+      handleResolved: ReturnType<typeof vi.fn>;
+      handleExpired: ReturnType<typeof vi.fn>;
+    };
+  }) {
     const manager = new ExecApprovalManager();
     const forwarder = {
       handleRequested: vi.fn(async () => false),
       handleResolved: vi.fn(async () => {}),
       stop: vi.fn(),
     };
-    const handlers = createExecApprovalHandlers(manager, { forwarder });
+    const handlers = createExecApprovalHandlers(manager, {
+      forwarder,
+      iosPushDelivery: opts?.iosPushDelivery as never,
+    });
     const respond = vi.fn();
     const context = {
       broadcast: (_event: string, _payload: unknown) => {},
       hasExecApprovalClients: () => false,
     };
-    return { manager, handlers, forwarder, respond, context };
+    return {
+      manager,
+      handlers,
+      forwarder,
+      iosPushDelivery: opts?.iosPushDelivery,
+      respond,
+      context,
+    };
   }
 
   async function drainApprovalRequestTicks() {
@@ -1034,6 +1050,116 @@ describe("exec approval handlers", () => {
       expect.objectContaining({ id: "approval-no-approver", decision: null }),
       undefined,
     );
+  });
+
+  it("keeps approvals pending when iOS push delivery accepted the request", async () => {
+    const iosPushDelivery = {
+      handleRequested: vi.fn(async () => true),
+      handleResolved: vi.fn(async () => {}),
+      handleExpired: vi.fn(async () => {}),
+    };
+    const { manager, handlers, forwarder, respond, context } = createForwardingExecApprovalFixture({
+      iosPushDelivery,
+    });
+    const expireSpy = vi.spyOn(manager, "expire");
+
+    const requestPromise = requestExecApproval({
+      handlers,
+      respond,
+      context,
+      params: {
+        twoPhase: true,
+        timeoutMs: 60_000,
+        id: "approval-ios-push",
+        host: "gateway",
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(respond).toHaveBeenCalledWith(
+        true,
+        expect.objectContaining({ status: "accepted", id: "approval-ios-push" }),
+        undefined,
+      );
+    });
+
+    expect(forwarder.handleRequested).toHaveBeenCalledTimes(1);
+    expect(iosPushDelivery.handleRequested).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "approval-ios-push" }),
+    );
+    expect(expireSpy).not.toHaveBeenCalled();
+
+    manager.resolve("approval-ios-push", "allow-once");
+    await requestPromise;
+  });
+
+  it("sends iOS cleanup delivery on resolve", async () => {
+    const iosPushDelivery = {
+      handleRequested: vi.fn(async () => true),
+      handleResolved: vi.fn(async () => {}),
+      handleExpired: vi.fn(async () => {}),
+    };
+    const { handlers, respond, context } = createForwardingExecApprovalFixture({ iosPushDelivery });
+    const resolveRespond = vi.fn();
+
+    const requestPromise = requestExecApproval({
+      handlers,
+      respond,
+      context,
+      params: { timeoutMs: 60_000, id: "approval-ios-cleanup", host: "gateway" },
+    });
+    await drainApprovalRequestTicks();
+
+    await resolveExecApproval({
+      handlers,
+      id: "approval-ios-cleanup",
+      respond: resolveRespond,
+      context,
+    });
+    await requestPromise;
+
+    await vi.waitFor(() => {
+      expect(iosPushDelivery.handleResolved).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "approval-ios-cleanup", decision: "allow-once" }),
+      );
+    });
+  });
+
+  it("sends iOS cleanup delivery on expiration", async () => {
+    vi.useFakeTimers();
+    try {
+      const iosPushDelivery = {
+        handleRequested: vi.fn(async () => true),
+        handleResolved: vi.fn(async () => {}),
+        handleExpired: vi.fn(async () => {}),
+      };
+      const { handlers, respond, context } = createForwardingExecApprovalFixture({
+        iosPushDelivery,
+      });
+
+      const requestPromise = requestExecApproval({
+        handlers,
+        respond,
+        context,
+        params: {
+          twoPhase: true,
+          timeoutMs: 250,
+          id: "approval-ios-expire",
+          host: "gateway",
+        },
+      });
+      await drainApprovalRequestTicks();
+      await vi.advanceTimersByTimeAsync(250);
+      await requestPromise;
+
+      await vi.waitFor(() => {
+        expect(iosPushDelivery.handleExpired).toHaveBeenCalledWith(
+          expect.objectContaining({ id: "approval-ios-expire" }),
+        );
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps approvals pending when the originating chat can handle /approve directly", async () => {

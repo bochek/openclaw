@@ -4,6 +4,7 @@ import http2 from "node:http2";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
 import type { DeviceIdentity } from "./device-identity.js";
+import type { ExecApprovalDecision, ExecApprovalRequestPayload } from "./exec-approvals.js";
 import { createAsyncLock, readJsonFile, writeJsonAtomic } from "./json-files.js";
 import {
   type ApnsRelayConfig,
@@ -64,6 +65,10 @@ export type ApnsPushResult = {
 
 export type ApnsPushAlertResult = ApnsPushResult;
 export type ApnsPushWakeResult = ApnsPushResult;
+
+const EXEC_APPROVAL_ALLOW_ALWAYS_CATEGORY_ID = "openclaw.exec-approval.allow-always";
+const EXEC_APPROVAL_ONCE_ONLY_CATEGORY_ID = "openclaw.exec-approval.once-only";
+const MAX_EXEC_APPROVAL_ALERT_BODY_CHARS = 180;
 
 type ApnsPushType = "alert" | "background";
 
@@ -894,6 +899,74 @@ function createBackgroundPayload(params: { nodeId: string; wakeReason?: string }
   };
 }
 
+function compactExecApprovalAlertBody(text: string): string {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) {
+    return "Open OpenClaw to review this exec approval.";
+  }
+  if (normalized.length <= MAX_EXEC_APPROVAL_ALERT_BODY_CHARS) {
+    return normalized;
+  }
+  return `${normalized.slice(0, MAX_EXEC_APPROVAL_ALERT_BODY_CHARS - 1)}…`;
+}
+
+function resolveExecApprovalAlertBody(request: ExecApprovalRequestPayload): string {
+  return compactExecApprovalAlertBody(request.commandPreview ?? request.command);
+}
+
+function resolveExecApprovalCategory(
+  allowedDecisions: readonly ExecApprovalDecision[] | undefined,
+): string {
+  return allowedDecisions?.includes("allow-always")
+    ? EXEC_APPROVAL_ALLOW_ALWAYS_CATEGORY_ID
+    : EXEC_APPROVAL_ONCE_ONLY_CATEGORY_ID;
+}
+
+function createExecApprovalAlertPayload(params: {
+  nodeId: string;
+  approvalId: string;
+  request: ExecApprovalRequestPayload;
+  expiresAtMs: number;
+}): object {
+  const commandText = resolveExecApprovalAlertBody(params.request);
+  return {
+    aps: {
+      alert: {
+        title: "Exec approval required",
+        body: commandText,
+      },
+      sound: "default",
+      category: resolveExecApprovalCategory(params.request.allowedDecisions),
+    },
+    openclaw: {
+      kind: "exec.approval.requested",
+      approvalId: params.approvalId,
+      allowedDecisions: params.request.allowedDecisions,
+      host: params.request.host,
+      nodeId: params.request.nodeId,
+      agentId: params.request.agentId,
+      expiresAtMs: params.expiresAtMs,
+      commandText,
+      ts: Date.now(),
+      targetNodeId: params.nodeId,
+    },
+  };
+}
+
+function createExecApprovalResolvedPayload(params: { nodeId: string; approvalId: string }): object {
+  return {
+    aps: {
+      "content-available": 1,
+    },
+    openclaw: {
+      kind: "exec.approval.resolved",
+      approvalId: params.approvalId,
+      ts: Date.now(),
+      targetNodeId: params.nodeId,
+    },
+  };
+}
+
 type ApnsAlertCommonParams = {
   nodeId: string;
   title: string;
@@ -933,6 +1006,54 @@ type DirectApnsBackgroundWakeParams = ApnsBackgroundWakeCommonParams & {
 };
 
 type RelayApnsBackgroundWakeParams = ApnsBackgroundWakeCommonParams & {
+  registration: RelayApnsRegistration;
+  relayConfig: ApnsRelayConfig;
+  relayRequestSender?: ApnsRelayRequestSender;
+  relayGatewayIdentity?: Pick<DeviceIdentity, "deviceId" | "privateKeyPem">;
+  auth?: never;
+  requestSender?: never;
+};
+
+type ApnsExecApprovalAlertCommonParams = {
+  nodeId: string;
+  approvalId: string;
+  request: ExecApprovalRequestPayload;
+  expiresAtMs: number;
+  timeoutMs?: number;
+};
+
+type DirectApnsExecApprovalAlertParams = ApnsExecApprovalAlertCommonParams & {
+  registration: DirectApnsRegistration;
+  auth: ApnsAuthConfig;
+  requestSender?: ApnsRequestSender;
+  relayConfig?: never;
+  relayRequestSender?: never;
+};
+
+type RelayApnsExecApprovalAlertParams = ApnsExecApprovalAlertCommonParams & {
+  registration: RelayApnsRegistration;
+  relayConfig: ApnsRelayConfig;
+  relayRequestSender?: ApnsRelayRequestSender;
+  relayGatewayIdentity?: Pick<DeviceIdentity, "deviceId" | "privateKeyPem">;
+  auth?: never;
+  requestSender?: never;
+};
+
+type ApnsExecApprovalResolvedCommonParams = {
+  nodeId: string;
+  approvalId: string;
+  timeoutMs?: number;
+};
+
+type DirectApnsExecApprovalResolvedParams = ApnsExecApprovalResolvedCommonParams & {
+  registration: DirectApnsRegistration;
+  auth: ApnsAuthConfig;
+  requestSender?: ApnsRequestSender;
+  relayConfig?: never;
+  relayRequestSender?: never;
+};
+
+type RelayApnsExecApprovalResolvedParams = ApnsExecApprovalResolvedCommonParams & {
   registration: RelayApnsRegistration;
   relayConfig: ApnsRelayConfig;
   relayRequestSender?: ApnsRelayRequestSender;
@@ -995,6 +1116,72 @@ export async function sendApnsBackgroundWake(
     });
   }
   const directParams = params as DirectApnsBackgroundWakeParams;
+  return await sendDirectApnsPush({
+    auth: directParams.auth,
+    registration: directParams.registration,
+    payload,
+    timeoutMs: directParams.timeoutMs,
+    requestSender: directParams.requestSender,
+    pushType: "background",
+    priority: "5",
+  });
+}
+
+export async function sendApnsExecApprovalAlert(
+  params: DirectApnsExecApprovalAlertParams | RelayApnsExecApprovalAlertParams,
+): Promise<ApnsPushAlertResult> {
+  const payload = createExecApprovalAlertPayload({
+    nodeId: params.nodeId,
+    approvalId: params.approvalId,
+    request: params.request,
+    expiresAtMs: params.expiresAtMs,
+  });
+
+  if (params.registration.transport === "relay") {
+    const relayParams = params as RelayApnsExecApprovalAlertParams;
+    return await sendRelayApnsPush({
+      relayConfig: relayParams.relayConfig,
+      registration: relayParams.registration,
+      payload,
+      pushType: "alert",
+      priority: "10",
+      gatewayIdentity: relayParams.relayGatewayIdentity,
+      requestSender: relayParams.relayRequestSender,
+    });
+  }
+  const directParams = params as DirectApnsExecApprovalAlertParams;
+  return await sendDirectApnsPush({
+    auth: directParams.auth,
+    registration: directParams.registration,
+    payload,
+    timeoutMs: directParams.timeoutMs,
+    requestSender: directParams.requestSender,
+    pushType: "alert",
+    priority: "10",
+  });
+}
+
+export async function sendApnsExecApprovalResolvedWake(
+  params: DirectApnsExecApprovalResolvedParams | RelayApnsExecApprovalResolvedParams,
+): Promise<ApnsPushWakeResult> {
+  const payload = createExecApprovalResolvedPayload({
+    nodeId: params.nodeId,
+    approvalId: params.approvalId,
+  });
+
+  if (params.registration.transport === "relay") {
+    const relayParams = params as RelayApnsExecApprovalResolvedParams;
+    return await sendRelayApnsPush({
+      relayConfig: relayParams.relayConfig,
+      registration: relayParams.registration,
+      payload,
+      pushType: "background",
+      priority: "5",
+      gatewayIdentity: relayParams.relayGatewayIdentity,
+      requestSender: relayParams.relayRequestSender,
+    });
+  }
+  const directParams = params as DirectApnsExecApprovalResolvedParams;
   return await sendDirectApnsPush({
     auth: directParams.auth,
     registration: directParams.registration,

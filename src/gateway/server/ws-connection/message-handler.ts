@@ -3,6 +3,7 @@ import os from "node:os";
 import type { WebSocket } from "ws";
 import { loadConfig } from "../../../config/config.js";
 import {
+  getBoundDeviceBootstrapProfile,
   revokeDeviceBootstrapToken,
   verifyDeviceBootstrapToken,
 } from "../../../infra/device-bootstrap.js";
@@ -696,6 +697,18 @@ export function attachGatewayWsMessageHandler(params: {
           return;
         }
 
+        const bootstrapProfile =
+          authMethod === "bootstrap-token" &&
+          bootstrapTokenCandidate &&
+          device?.id &&
+          devicePublicKey
+            ? await getBoundDeviceBootstrapProfile({
+                token: bootstrapTokenCandidate,
+                deviceId: device.id,
+                publicKey: devicePublicKey,
+              })
+            : null;
+
         const trustedProxyAuthOk = isTrustedProxyControlUiOperatorAuth({
           isControlUi,
           role,
@@ -790,19 +803,24 @@ export function attachGatewayWsMessageHandler(params: {
               isWebchat,
               reason,
             });
-            // QR bootstrap onboarding is node-only and single-use. When a fresh device presents
-            // a valid bootstrap token for the baseline node profile, complete pairing in the same
-            // handshake so iOS does not get stuck retrying with an already-consumed bootstrap token.
+            // QR bootstrap onboarding stays single-use, but the first node bootstrap handshake
+            // should seed the full QR baseline so the app can switch over to stored node/operator
+            // device tokens without asking the user for shared auth.
             const allowSilentBootstrapPairing =
               authMethod === "bootstrap-token" &&
               reason === "not-paired" &&
               role === "node" &&
               scopes.length === 0 &&
-              !existingPairedDevice;
+              !existingPairedDevice &&
+              bootstrapProfile !== null;
+            const bootstrapPairingRoles = allowSilentBootstrapPairing
+              ? Array.from(new Set([role, ...bootstrapProfile.roles]))
+              : undefined;
             const pairing = await requestDevicePairing({
               deviceId: device.id,
               publicKey: devicePublicKey,
               ...clientPairingMetadata,
+              ...(bootstrapPairingRoles ? { roles: bootstrapPairingRoles } : {}),
               silent:
                 reason === "scope-upgrade"
                   ? false
@@ -828,7 +846,10 @@ export function attachGatewayWsMessageHandler(params: {
             };
             if (pairing.request.silent === true) {
               approved = await approveDevicePairing(pairing.request.requestId, {
-                callerScopes: scopes,
+                callerScopes: allowSilentBootstrapPairing ? bootstrapProfile.scopes : scopes,
+                approvedScopesOverride: allowSilentBootstrapPairing
+                  ? bootstrapProfile.scopes
+                  : undefined,
               });
               if (approved?.status === "approved") {
                 if (allowSilentBootstrapPairing && bootstrapTokenCandidate) {
@@ -990,6 +1011,42 @@ export function attachGatewayWsMessageHandler(params: {
         const deviceToken = device
           ? await ensureDeviceToken({ deviceId: device.id, role, scopes })
           : null;
+        const bootstrapDeviceTokens: Array<{
+          deviceToken: string;
+          role: string;
+          scopes: string[];
+          issuedAtMs: number;
+        }> = [];
+        if (deviceToken) {
+          bootstrapDeviceTokens.push({
+            deviceToken: deviceToken.token,
+            role: deviceToken.role,
+            scopes: deviceToken.scopes,
+            issuedAtMs: deviceToken.rotatedAtMs ?? deviceToken.createdAtMs,
+          });
+        }
+        if (device && authMethod === "bootstrap-token" && bootstrapProfile) {
+          for (const bootstrapRole of bootstrapProfile.roles) {
+            if (bootstrapDeviceTokens.some((entry) => entry.role === bootstrapRole)) {
+              continue;
+            }
+            const bootstrapRoleScopes = bootstrapRole === "operator" ? bootstrapProfile.scopes : [];
+            const extraToken = await ensureDeviceToken({
+              deviceId: device.id,
+              role: bootstrapRole,
+              scopes: bootstrapRoleScopes,
+            });
+            if (!extraToken) {
+              continue;
+            }
+            bootstrapDeviceTokens.push({
+              deviceToken: extraToken.token,
+              role: extraToken.role,
+              scopes: extraToken.scopes,
+              issuedAtMs: extraToken.rotatedAtMs ?? extraToken.createdAtMs,
+            });
+          }
+        }
 
         if (role === "node") {
           const reconciliation = await reconcileNodePairingOnConnect({
@@ -1079,6 +1136,9 @@ export function attachGatewayWsMessageHandler(params: {
                 role: deviceToken.role,
                 scopes: deviceToken.scopes,
                 issuedAtMs: deviceToken.rotatedAtMs ?? deviceToken.createdAtMs,
+                ...(bootstrapDeviceTokens.length > 1
+                  ? { deviceTokens: bootstrapDeviceTokens }
+                  : {}),
               }
             : undefined,
           policy: {
