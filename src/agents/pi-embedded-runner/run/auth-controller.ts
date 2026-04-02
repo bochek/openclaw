@@ -14,6 +14,7 @@ import {
   isFailoverErrorMessage,
   type FailoverReason,
 } from "../../pi-embedded-helpers.js";
+import { resolveProviderRequestConfig } from "../../provider-request-config.js";
 import { clampRuntimeAuthRefreshDelayMs } from "../../runtime-auth-refresh.js";
 import { describeUnknownError } from "../utils.js";
 import {
@@ -128,11 +129,31 @@ export function createEmbeddedRunAuthController(params: {
         );
       }
       params.authStorage.setRuntimeApiKey(runtimeModel.provider, preparedAuth.apiKey);
-      if (preparedAuth.baseUrl) {
-        params.setRuntimeModel({ ...runtimeModel, baseUrl: preparedAuth.baseUrl });
+      const runtimeRequestConfig =
+        preparedAuth.baseUrl || preparedAuth.request
+          ? resolveProviderRequestConfig({
+              provider: runtimeModel.provider,
+              api: runtimeModel.api,
+              baseUrl: preparedAuth.baseUrl ?? runtimeModel.baseUrl,
+              providerHeaders:
+                runtimeModel.headers && typeof runtimeModel.headers === "object"
+                  ? runtimeModel.headers
+                  : undefined,
+              request: preparedAuth.request,
+              capability: "llm",
+              transport: "stream",
+            })
+          : null;
+      if (preparedAuth.baseUrl || runtimeRequestConfig?.headers) {
+        params.setRuntimeModel({
+          ...runtimeModel,
+          ...(preparedAuth.baseUrl ? { baseUrl: preparedAuth.baseUrl } : {}),
+          ...(runtimeRequestConfig?.headers ? { headers: runtimeRequestConfig.headers } : {}),
+        });
         params.setEffectiveModel({
           ...params.getEffectiveModel(),
-          baseUrl: preparedAuth.baseUrl,
+          ...(preparedAuth.baseUrl ? { baseUrl: preparedAuth.baseUrl } : {}),
+          ...(runtimeRequestConfig?.headers ? { headers: runtimeRequestConfig.headers } : {}),
         });
       }
       params.setRuntimeAuthState({
