@@ -165,8 +165,11 @@ export async function dispatchReplyFromConfig(params: {
   replyResolver?: typeof import("./get-reply-from-config.runtime.js").getReplyFromConfig;
   /** Optional config override passed to getReplyFromConfig (e.g. per-sender timezone). */
   configOverride?: OpenClawConfig;
+  /** Skip plugin/internal hooks for internal classifier-style dispatches. */
+  skipHooks?: boolean;
 }): Promise<DispatchFromConfigResult> {
   const { ctx, cfg, dispatcher } = params;
+  const skipHooks = params.skipHooks === true;
   const diagnosticsEnabled = isDiagnosticsEnabled(cfg);
   const channel = String(ctx.Surface ?? ctx.Provider ?? "unknown").toLowerCase();
   const chatId = ctx.To ?? ctx.From;
@@ -235,7 +238,7 @@ export async function dispatchReplyFromConfig(params: {
     ctx.MessageThreadId ?? parseSessionThreadInfo(acpDispatchSessionKey).threadId;
   const inboundAudio = isInboundAudioContext(ctx);
   const sessionTtsAuto = normalizeTtsAutoMode(sessionStoreEntry.entry?.ttsAuto);
-  const hookRunner = getGlobalHookRunner();
+  const hookRunner = skipHooks ? undefined : getGlobalHookRunner();
 
   // Extract message context for hooks (plugin and internal)
   const timestamp =
@@ -339,7 +342,7 @@ export async function dispatchReplyFromConfig(params: {
   };
 
   const pluginOwnedBindingRecord =
-    inboundClaimContext.conversationId && inboundClaimContext.channelId
+    !skipHooks && inboundClaimContext.conversationId && inboundClaimContext.channelId
       ? resolveConversationBindingRecord({
           channel: inboundClaimContext.channelId,
           accountId: inboundClaimContext.accountId ?? "default",
@@ -436,7 +439,7 @@ export async function dispatchReplyFromConfig(params: {
   }
 
   // Bridge to internal hooks (HOOK.md discovery system) - refs #8807
-  if (sessionKey) {
+  if (!skipHooks && sessionKey) {
     fireAndForgetHook(
       triggerInternalHook(
         createInternalHookEvent("message", "received", sessionKey, {
@@ -556,7 +559,7 @@ export async function dispatchReplyFromConfig(params: {
     };
 
     // Run before_dispatch hook — let plugins inspect or handle before model dispatch.
-    if (hookRunner?.hasHooks("before_dispatch")) {
+    if (!skipHooks && hookRunner?.hasHooks("before_dispatch")) {
       const beforeDispatchResult = await hookRunner.runBeforeDispatch(
         {
           content: hookContext.content,

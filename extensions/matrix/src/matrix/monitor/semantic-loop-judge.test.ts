@@ -5,7 +5,7 @@ const dispatchReplyFromConfigWithSettledDispatcherMock = vi.hoisted(() =>
   vi.fn(async () => ({ queuedFinal: true, counts: { final: 0, block: 0, tool: 0 } })),
 );
 
-vi.mock("../../runtime-api.js", () => ({
+vi.mock("./runtime-api.js", () => ({
   dispatchReplyFromConfigWithSettledDispatcher: dispatchReplyFromConfigWithSettledDispatcherMock,
 }));
 
@@ -79,6 +79,7 @@ describe("runMatrixSemanticLoopJudge", () => {
             SessionKey: string;
           };
           configOverride: unknown;
+          skipHooks?: boolean;
         },
       ]
     >;
@@ -88,6 +89,8 @@ describe("runMatrixSemanticLoopJudge", () => {
     expect(firstCall?.ctxPayload.SessionKey).toContain("agent:ops:main:semantic-loop-judge:");
     expect(secondCall?.ctxPayload.SessionKey).toContain("agent:ops:main:semantic-loop-judge:");
     expect(firstCall?.ctxPayload.SessionKey).not.toBe(secondCall?.ctxPayload.SessionKey);
+    expect(firstCall?.skipHooks).toBe(true);
+    expect(secondCall?.skipHooks).toBe(true);
     expect(firstCall?.configOverride).toEqual({ tools: { deny: ["*"] } });
     expect(secondCall?.configOverride).toEqual({ tools: { deny: ["*"] } });
   });

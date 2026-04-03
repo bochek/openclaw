@@ -28,6 +28,7 @@ export async function dispatchReplyFromConfigWithSettledDispatcher(params: {
   onSettled: () => void | Promise<void>;
   replyOptions?: ReplyDispatchFromConfigOptions;
   configOverride?: OpenClawConfig;
+  skipHooks?: boolean;
 }): Promise<DispatchFromConfigResult> {
   return await withReplyDispatcher({
     dispatcher: params.dispatcher,
@@ -39,6 +40,7 @@ export async function dispatchReplyFromConfigWithSettledDispatcher(params: {
         dispatcher: params.dispatcher,
         replyOptions: params.replyOptions,
         configOverride: params.configOverride,
+        skipHooks: params.skipHooks,
       }),
   });
 }

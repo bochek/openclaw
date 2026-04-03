@@ -1793,6 +1793,90 @@ describe("matrix monitor handler semantic bot loop termination", () => {
 
     expect(runMatrixSemanticLoopJudgeMock).toHaveBeenCalledTimes(1);
   });
+
+  it("does not reopen a terminated chain when an older human turn finishes late", async () => {
+    let resolveHumanDispatch:
+      | ((value: {
+          queuedFinal: boolean;
+          counts: { final: number; block: number; tool: number };
+        }) => void)
+      | undefined;
+    const humanDispatch = new Promise<{
+      queuedFinal: boolean;
+      counts: { final: number; block: number; tool: number };
+    }>((resolve) => {
+      resolveHumanDispatch = resolve;
+    });
+    let dispatchCallCount = 0;
+    const dispatchReplyFromConfig = vi.fn(async () => {
+      dispatchCallCount += 1;
+      if (dispatchCallCount === 2) {
+        return await humanDispatch;
+      }
+      return { queuedFinal: true, counts: { final: 1, block: 0, tool: 0 } };
+    });
+    const { handler } = createMatrixHandlerTestHarness({
+      isDirectMessage: false,
+      accountAllowBots: true,
+      configuredBotUserIds: new Set(["@ops:example.org"]),
+      roomsConfig: {
+        "!room:example.org": { requireMention: false },
+      },
+      dispatchReplyFromConfig,
+      getMemberDisplayName: async () => "ops-bot",
+    });
+
+    await handler(
+      "!room:example.org",
+      createMatrixTextMessageEvent({
+        eventId: "$bot-seed-late-human",
+        sender: "@ops:example.org",
+        body: "seed bot message",
+      }),
+    );
+
+    const olderHumanTurn = handler(
+      "!room:example.org",
+      createMatrixTextMessageEvent({
+        eventId: "$human-late-finish",
+        sender: "@human:example.org",
+        body: "new human context",
+      }),
+    );
+
+    runMatrixSemanticLoopJudgeMock.mockResolvedValueOnce({
+      decision: "stop_loop",
+      confidence: 0.95,
+      reasonCode: "no_new_information",
+      reasonShort: "No meaningful information gain.",
+    });
+    await handler(
+      "!room:example.org",
+      createMatrixTextMessageEvent({
+        eventId: "$bot-terminate-after-human-start",
+        sender: "@ops:example.org",
+        body: "stuck bot message",
+      }),
+    );
+
+    resolveHumanDispatch?.({
+      queuedFinal: true,
+      counts: { final: 1, block: 0, tool: 0 },
+    });
+    await olderHumanTurn;
+
+    await handler(
+      "!room:example.org",
+      createMatrixTextMessageEvent({
+        eventId: "$bot-still-terminated",
+        sender: "@ops:example.org",
+        body: "bot retry after stale human finish",
+      }),
+    );
+
+    expect(dispatchReplyFromConfig).toHaveBeenCalledTimes(2);
+    expect(runMatrixSemanticLoopJudgeMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("matrix monitor handler durable inbound dedupe", () => {

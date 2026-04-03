@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
-import {
-  dispatchReplyFromConfigWithSettledDispatcher,
-  type PluginRuntime,
-} from "../../runtime-api.js";
 import type { CoreConfig } from "../../types.js";
+import { dispatchReplyFromConfigWithSettledDispatcher, type PluginRuntime } from "./runtime-api.js";
 
 export type MatrixSemanticLoopTurn = {
   senderId: string;
@@ -225,10 +222,12 @@ export async function runMatrixSemanticLoopJudge(params: {
       ctxPayload,
       dispatcher: capture.dispatcher,
       onSettled: () => capture.markDispatchIdle(),
+      skipHooks: true,
       replyOptions: {
         ...capture.replyOptions,
         disableBlockStreaming: true,
       },
+      configOverride: { tools: { deny: ["*"] } },
     });
   } catch {
     return DEFAULT_RESULT;

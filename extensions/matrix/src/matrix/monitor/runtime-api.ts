@@ -28,4 +28,7 @@ export {
   type RuntimeEnv,
   type RuntimeLogger,
 } from "openclaw/plugin-sdk/matrix";
-export { ensureConfiguredAcpBindingReady } from "openclaw/plugin-sdk/matrix-runtime-heavy";
+export {
+  dispatchReplyFromConfigWithSettledDispatcher,
+  ensureConfiguredAcpBindingReady,
+} from "openclaw/plugin-sdk/matrix-runtime-heavy";
