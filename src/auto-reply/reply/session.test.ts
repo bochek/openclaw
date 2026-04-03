@@ -442,6 +442,79 @@ describe("initSessionState thread forking", () => {
     expect(result.sessionEntry.sessionFile).not.toBe(parentSessionFile);
   });
 
+  it("skips fork when parent transcript estimate exceeds threshold and cached total is stale", async () => {
+    const root = await makeCaseDir("openclaw-thread-session-overflow-transcript-fallback-");
+    const sessionsDir = path.join(root, "sessions");
+    await fs.mkdir(sessionsDir);
+
+    const parentSessionId = "parent-overflow-transcript";
+    const parentSessionFile = path.join(sessionsDir, "parent.jsonl");
+    const lines = [
+      JSON.stringify({
+        type: "session",
+        version: 3,
+        id: parentSessionId,
+        timestamp: new Date().toISOString(),
+        cwd: process.cwd(),
+      }),
+    ];
+    for (let index = 0; index < 40; index += 1) {
+      const userId = `u${index}`;
+      const assistantId = `a${index}`;
+      const body = `turn-${index} ${"x".repeat(12_000)}`;
+      lines.push(
+        JSON.stringify({
+          type: "message",
+          id: userId,
+          parentId: index === 0 ? null : `a${index - 1}`,
+          timestamp: new Date().toISOString(),
+          message: { role: "user", content: body },
+        }),
+      );
+      lines.push(
+        JSON.stringify({
+          type: "message",
+          id: assistantId,
+          parentId: userId,
+          timestamp: new Date().toISOString(),
+          message: { role: "assistant", content: body },
+        }),
+      );
+    }
+    await fs.writeFile(parentSessionFile, `${lines.join("\n")}\n`, "utf-8");
+
+    const storePath = path.join(root, "sessions.json");
+    const parentSessionKey = "agent:main:slack:channel:c1";
+    await writeSessionStoreFast(storePath, {
+      [parentSessionKey]: {
+        sessionId: parentSessionId,
+        sessionFile: parentSessionFile,
+        updatedAt: Date.now(),
+        totalTokens: 1,
+        totalTokensFresh: false,
+      },
+    });
+
+    const cfg = {
+      session: { store: storePath },
+    } as OpenClawConfig;
+
+    const threadSessionKey = "agent:main:slack:channel:c1:thread:457";
+    const result = await initSessionState({
+      ctx: {
+        Body: "Thread reply",
+        SessionKey: threadSessionKey,
+        ParentSessionKey: parentSessionKey,
+      },
+      cfg,
+      commandAuthorized: true,
+    });
+
+    expect(result.sessionEntry.forkedFromParent).toBe(true);
+    expect(result.sessionEntry.sessionId).not.toBe(parentSessionId);
+    expect(result.sessionEntry.sessionFile).not.toBe(parentSessionFile);
+  });
+
   it("respects session.parentForkMaxTokens override", async () => {
     const root = await makeCaseDir("openclaw-thread-session-overflow-override-");
     const sessionsDir = path.join(root, "sessions");

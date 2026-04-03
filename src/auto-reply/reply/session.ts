@@ -47,7 +47,11 @@ import {
   resolveLastChannelRaw,
   resolveLastToRaw,
 } from "./session-delivery.js";
-import { forkSessionFromParent, resolveParentForkMaxTokens } from "./session-fork.js";
+import {
+  forkSessionFromParent,
+  resolveParentForkMaxTokens,
+  resolveParentForkTokenCount,
+} from "./session-fork.js";
 import { buildSessionEndHookPayload, buildSessionStartHookPayload } from "./session-hooks.js";
 
 const log = createSubsystemLogger("session-init");
@@ -597,23 +601,31 @@ export async function initSessionState(params: {
     sessionStore[parentSessionKey] &&
     !alreadyForked
   ) {
-    const parentTokens = sessionStore[parentSessionKey].totalTokens ?? 0;
-    if (parentForkMaxTokens > 0 && parentTokens > parentForkMaxTokens) {
+    const parentEntry = sessionStore[parentSessionKey];
+    const parentTokens = resolveParentForkTokenCount({
+      parentEntry,
+      storePath,
+    });
+    if (
+      parentForkMaxTokens > 0 &&
+      typeof parentTokens === "number" &&
+      parentTokens > parentForkMaxTokens
+    ) {
       // Parent context is too large — forking would create a thread session
       // that immediately overflows the model's context window. Start fresh
       // instead and mark as forked to prevent re-attempts. See #26905.
       log.warn(
         `skipping parent fork (parent too large): parentKey=${parentSessionKey} → sessionKey=${sessionKey} ` +
-          `parentTokens=${parentTokens} maxTokens=${parentForkMaxTokens}`,
+          `parentTokens=${parentTokens ?? "unknown"} maxTokens=${parentForkMaxTokens}`,
       );
       sessionEntry.forkedFromParent = true;
     } else {
       log.warn(
         `forking from parent session: parentKey=${parentSessionKey} → sessionKey=${sessionKey} ` +
-          `parentTokens=${parentTokens}`,
+          `parentTokens=${parentTokens ?? "unknown"}`,
       );
       const forked = await forkSessionFromParent({
-        parentEntry: sessionStore[parentSessionKey],
+        parentEntry,
         agentId,
         sessionsDir: path.dirname(storePath),
       });
