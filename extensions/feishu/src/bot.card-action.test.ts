@@ -13,6 +13,13 @@ import {
   FEISHU_APPROVAL_REQUEST_ACTION,
 } from "./card-ux-approval.js";
 
+const dispatchPluginInteractionActionMock = vi.hoisted(() => vi.fn());
+
+vi.mock("openclaw/plugin-sdk/plugin-runtime", () => ({
+  dispatchPluginInteractionAction: (...args: unknown[]) =>
+    dispatchPluginInteractionActionMock(...args),
+}));
+
 // Mock account resolution
 vi.mock("./accounts.js", () => ({
   resolveFeishuAccount: vi.fn().mockReturnValue({ accountId: "mock-account" }),
@@ -89,6 +96,7 @@ describe("Feishu Card Action Handler", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     resetProcessedFeishuCardActionTokensForTests();
+    dispatchPluginInteractionActionMock.mockResolvedValue({ matched: false, handled: false });
   });
 
   it("handles card action with text payload", async () => {
@@ -133,6 +141,36 @@ describe("Feishu Card Action Handler", () => {
         }),
       }),
     );
+  });
+
+  it("routes native interactive card actions into plugin interaction handlers", async () => {
+    dispatchPluginInteractionActionMock.mockResolvedValue({ matched: true, handled: true });
+    const event = createCardActionEvent({
+      token: "tok-plugin-1",
+      actionValue: {
+        oc: "interactive",
+        kind: "button",
+        actionId: "approval.approve",
+        value: "codex:approve.thread",
+      },
+      chatId: "chat1",
+      openId: "u123",
+    });
+
+    await handleFeishuCardAction({ cfg, event, runtime, accountId: "main" });
+
+    expect(dispatchPluginInteractionActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: "codex:approve.thread",
+        channel: "feishu",
+        accountId: "mock-account",
+        action: expect.objectContaining({
+          kind: "button",
+          actionId: "approval.approve",
+        }),
+      }),
+    );
+    expect(handleFeishuMessage).not.toHaveBeenCalled();
   });
 
   it("routes quick command actions with operator and conversation context", async () => {

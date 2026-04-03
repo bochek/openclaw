@@ -3,6 +3,7 @@ import * as conversationBinding from "./conversation-binding.js";
 import { createInteractiveConversationBindingHelpers } from "./interactive-binding-helpers.js";
 import {
   clearPluginInteractiveHandlers,
+  dispatchPluginInteractionCommand,
   dispatchPluginInteractiveHandler,
   registerPluginInteractionHandler,
   registerPluginInteractiveHandler,
@@ -523,6 +524,72 @@ describe("plugin interactive handlers", () => {
           payload: "approve.thread",
           actionId: "approve.thread",
           kind: "button",
+        }),
+      }),
+    );
+  });
+
+  it("dispatches command fallbacks into the same generic interaction pipeline", async () => {
+    const handler = vi.fn(async (ctx: PluginInteractionHandlerContext) => {
+      await ctx.respond.replyText({ text: `Handled ${ctx.action.actionId}` });
+      return { handled: true };
+    });
+
+    expect(
+      registerInteractionHandler({
+        namespace: "codex",
+        handler,
+      }),
+    ).toEqual({ ok: true });
+
+    const result = await dispatchPluginInteractionCommand({
+      commandBody: "/codex approve.thread",
+      channel: "feishu",
+      accountId: "default",
+      lane: {
+        channel: "feishu",
+        to: "chat:oc_123",
+        accountId: "default",
+      },
+      sender: {
+        channel: "feishu",
+        id: "ou_sender_1",
+        accountId: "default",
+      },
+      auth: {
+        isAuthorizedSender: true,
+      },
+    });
+
+    expect(result).toEqual({
+      matched: true,
+      handled: true,
+      reply: {
+        text: "Handled approve.thread",
+      },
+    });
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "feishu",
+        lane: expect.objectContaining({
+          channel: "feishu",
+          to: "chat:oc_123",
+        }),
+        sender: expect.objectContaining({
+          channel: "feishu",
+          id: "ou_sender_1",
+        }),
+        action: expect.objectContaining({
+          namespace: "codex",
+          payload: "approve.thread",
+          actionId: "approve.thread",
+          kind: "command",
+        }),
+        capabilities: expect.objectContaining({
+          acknowledge: false,
+          editText: false,
+          clearInteractive: false,
+          deleteMessage: false,
         }),
       }),
     );

@@ -1,10 +1,11 @@
-import { type OpenClawConfig, type RuntimeEnv } from "../runtime-api.js";
+import { dispatchPluginInteractionAction } from "openclaw/plugin-sdk/plugin-runtime";
+import { DEFAULT_ACCOUNT_ID, type OpenClawConfig, type RuntimeEnv } from "../runtime-api.js";
 import type { MSTeamsConversationStore } from "./conversation-store.js";
 import { formatUnknownError } from "./errors.js";
 import { buildFeedbackEvent, runFeedbackReflection } from "./feedback-reflection.js";
 import { buildFileInfoCard, parseFileConsentInvoke, uploadToConsentUrl } from "./file-consent.js";
 import { normalizeMSTeamsConversationId } from "./inbound.js";
-import type { MSTeamsAdapter } from "./messenger.js";
+import type { MSTeamsAdapter, MSTeamsConversationReference } from "./messenger.js";
 import { resolveMSTeamsSenderAccess } from "./monitor-handler/access.js";
 import { createMSTeamsMessageHandler } from "./monitor-handler/message-handler.js";
 import type { MSTeamsMonitorLogger } from "./monitor-types.js";
@@ -48,7 +49,7 @@ export type MSTeamsMessageHandlerDeps = {
   log: MSTeamsMonitorLogger;
 };
 
-async function isFeedbackInvokeAuthorized(
+async function isMessageSubmitActionAuthorized(
   context: MSTeamsTurnContext,
   deps: MSTeamsMessageHandlerDeps,
 ): Promise<boolean> {
@@ -91,6 +92,242 @@ async function isFeedbackInvokeAuthorized(
   }
 
   return true;
+}
+
+function readTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function buildMSTeamsInvokeConversationReference(
+  context: MSTeamsTurnContext,
+): MSTeamsConversationReference | null {
+  const conversationId = normalizeMSTeamsConversationId(context.activity.conversation?.id ?? "");
+  const userId = context.activity.from?.id?.trim();
+  const agentId = context.activity.recipient?.id?.trim();
+  if (!conversationId || !userId || !agentId) {
+    return null;
+  }
+  return {
+    activityId: context.activity.id,
+    user: {
+      id: userId,
+      ...(readTrimmedString(context.activity.from?.name)
+        ? { name: readTrimmedString(context.activity.from?.name) }
+        : {}),
+      ...(readTrimmedString(context.activity.from?.aadObjectId)
+        ? { aadObjectId: readTrimmedString(context.activity.from?.aadObjectId) }
+        : {}),
+    },
+    agent: {
+      id: agentId,
+      ...(readTrimmedString(context.activity.recipient?.name)
+        ? { name: readTrimmedString(context.activity.recipient?.name) }
+        : {}),
+    },
+    conversation: {
+      id: conversationId,
+      conversationType: context.activity.conversation?.conversationType,
+      tenantId:
+        readTrimmedString(context.activity.conversation?.tenantId) ??
+        readTrimmedString(context.activity.channelData?.tenant?.id),
+    },
+    channelId: readTrimmedString(context.activity.channelId) ?? "msteams",
+    ...(readTrimmedString(context.activity.serviceUrl)
+      ? { serviceUrl: readTrimmedString(context.activity.serviceUrl) }
+      : {}),
+    ...(readTrimmedString(context.activity.locale)
+      ? { locale: readTrimmedString(context.activity.locale) }
+      : {}),
+  };
+}
+
+async function sendMSTeamsInvokeFollowUp(params: {
+  context: MSTeamsTurnContext;
+  deps: MSTeamsMessageHandlerDeps;
+  text: string;
+}): Promise<void> {
+  const text = params.text.trim();
+  if (!text) {
+    return;
+  }
+  const reference = buildMSTeamsInvokeConversationReference(params.context);
+  await withRevokedProxyFallback({
+    run: async () => {
+      await params.context.sendActivity(text);
+    },
+    onRevoked: async () => {
+      if (!reference) {
+        throw new Error("Teams invoke follow-up could not resolve conversation reference");
+      }
+      await params.deps.adapter.continueConversation(
+        params.deps.appId,
+        { ...reference, activityId: undefined },
+        async (ctx) => {
+          await ctx.sendActivity(text);
+        },
+      );
+    },
+    onRevokedLog: () => {
+      params.deps.log.debug?.(
+        "turn context revoked during submitAction; sending follow-up via proactive messaging",
+      );
+    },
+  });
+}
+
+function parseMSTeamsInteractiveInvoke(value: unknown): {
+  data: string;
+  kind: "button" | "select";
+  actionId?: string;
+  values?: string[];
+  fields?: Array<{ id: string; name: string; values: string[] }>;
+} | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  if (record.oc !== "interactive") {
+    return null;
+  }
+
+  const kind = readTrimmedString(record.kind) === "select" ? "select" : "button";
+  const actionId = readTrimmedString(record.actionId);
+  if (kind === "select") {
+    const inputId = readTrimmedString(record.inputId);
+    const submitted = inputId ? record[inputId] : undefined;
+    const rawValues = Array.isArray(submitted)
+      ? submitted
+          .map((entry) => readTrimmedString(entry))
+          .filter((entry): entry is string => Boolean(entry))
+      : [readTrimmedString(submitted)].filter((entry): entry is string => Boolean(entry));
+    const data = rawValues[0] ?? readTrimmedString(record.value);
+    if (!data) {
+      return null;
+    }
+    return {
+      data,
+      kind,
+      ...(actionId ? { actionId } : {}),
+      ...(rawValues.length > 0 ? { values: rawValues } : {}),
+      ...(inputId && rawValues.length > 0
+        ? {
+            fields: [
+              {
+                id: inputId,
+                name: inputId,
+                values: rawValues,
+              },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  const data = readTrimmedString(record.value) ?? actionId;
+  if (!data) {
+    return null;
+  }
+  return {
+    data,
+    kind,
+    ...(actionId ? { actionId } : {}),
+  };
+}
+
+async function handleInteractiveInvoke(
+  context: MSTeamsTurnContext,
+  deps: MSTeamsMessageHandlerDeps,
+): Promise<boolean> {
+  const activity = context.activity;
+  if (activity.type !== "invoke" || activity.name !== "message/submitAction") {
+    return false;
+  }
+
+  const parsed = parseMSTeamsInteractiveInvoke(activity.value);
+  if (!parsed) {
+    return false;
+  }
+
+  const resolved = await resolveMSTeamsSenderAccess({
+    cfg: deps.cfg,
+    activity,
+  });
+  const accountId = resolved.pairing.accountId || DEFAULT_ACCOUNT_ID;
+  const conversationId = normalizeMSTeamsConversationId(activity.conversation?.id ?? "");
+  if (!conversationId) {
+    deps.log.debug?.("ignoring interactive submitAction without conversation id");
+    return true;
+  }
+  const senderId = resolved.senderId.trim();
+  const isAuthorizedSender = await isMessageSubmitActionAuthorized(context, deps);
+
+  const result = await dispatchPluginInteractionAction({
+    data: parsed.data,
+    channel: "msteams",
+    accountId,
+    interactionId: `msteams:${activity.id ?? conversationId}:${parsed.actionId ?? parsed.data}`,
+    lane: {
+      channel: "msteams",
+      to: `conversation:${conversationId}`,
+      accountId,
+    },
+    ...(senderId
+      ? {
+          sender: {
+            channel: "msteams",
+            id: senderId,
+            accountId,
+            ...(resolved.senderName?.trim() ? { displayName: resolved.senderName.trim() } : {}),
+            dmLane: {
+              channel: "msteams",
+              to: `user:${senderId}`,
+              accountId,
+            },
+          },
+        }
+      : {}),
+    auth: {
+      isAuthorizedSender,
+    },
+    action: {
+      raw: parsed.data,
+      kind: parsed.kind,
+      actionId: parsed.actionId ?? parsed.data,
+      ...(parsed.values?.length ? { values: parsed.values } : {}),
+      ...(parsed.fields?.length ? { fields: parsed.fields } : {}),
+    },
+    capabilities: {
+      acknowledge: false,
+      followUp: true,
+      editText: false,
+      clearInteractive: false,
+      deleteMessage: false,
+    },
+    respond: {
+      acknowledge: async () => {},
+      replyText: async ({ text }) => {
+        await sendMSTeamsInvokeFollowUp({ context, deps, text });
+      },
+      followUpText: async ({ text }) => {
+        await sendMSTeamsInvokeFollowUp({ context, deps, text });
+      },
+      editText: async ({ text }) => {
+        await sendMSTeamsInvokeFollowUp({ context, deps, text });
+      },
+      clearInteractive: async ({ text } = {}) => {
+        if (text?.trim()) {
+          await sendMSTeamsInvokeFollowUp({ context, deps, text });
+        }
+      },
+      deleteMessage: async () => {},
+    },
+  });
+
+  return result.matched;
 }
 
 /**
@@ -225,7 +462,7 @@ async function handleFeedbackInvoke(
     return true; // Still consume the invoke
   }
 
-  if (!(await isFeedbackInvokeAuthorized(context, deps))) {
+  if (!(await isMessageSubmitActionAuthorized(context, deps))) {
     return true;
   }
 
@@ -383,6 +620,10 @@ export function registerMSTeamsHandlers<T extends MSTeamsActivityHandler>(
       // Do NOT call sendActivity with invokeResponse; our custom adapter would POST
       // a new activity to Bot Framework instead of responding to the HTTP request.
       if (ctx.activity?.type === "invoke" && ctx.activity?.name === "message/submitAction") {
+        const matchedInteraction = await handleInteractiveInvoke(ctx, deps);
+        if (matchedInteraction) {
+          return;
+        }
         const handled = await handleFeedbackInvoke(ctx, deps);
         if (handled) {
           return;

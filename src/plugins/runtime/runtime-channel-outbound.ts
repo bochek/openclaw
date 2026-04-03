@@ -6,6 +6,7 @@ import {
 } from "../../infra/outbound/deliver.js";
 import type { OutboundIdentity } from "../../infra/outbound/identity.js";
 import type { OutboundSendDeps } from "../../infra/outbound/send-deps.js";
+import { createPluginLaneRef } from "../lane-refs.js";
 import { resolvePluginActorDmLane } from "../lane-refs.js";
 import type { PluginActorRef, PluginLaneRef } from "../types.js";
 
@@ -26,12 +27,16 @@ export async function sendPayloadToLane(params: {
   silent?: boolean;
   gatewayClientScopes?: readonly string[];
 }): Promise<OutboundDeliveryResult[]> {
+  const lane = createPluginLaneRef(params.lane);
+  if (!lane) {
+    throw new Error("A valid lane reference is required.");
+  }
   return deliverOutboundPayloads({
     cfg: params.cfg,
-    channel: params.lane.channel,
-    to: params.lane.to,
-    accountId: params.lane.accountId,
-    threadId: params.lane.threadId,
+    channel: lane.channel,
+    to: lane.to,
+    accountId: lane.accountId,
+    threadId: lane.threadId,
     payloads: toPayloadList(params.payload),
     identity: params.identity,
     deps: params.deps,
@@ -49,7 +54,8 @@ export async function sendPayloadToActorDm(params: {
   silent?: boolean;
   gatewayClientScopes?: readonly string[];
 }): Promise<OutboundDeliveryResult[]> {
-  const lane = resolvePluginActorDmLane(params.actor);
+  const actorLane = resolvePluginActorDmLane(params.actor);
+  const lane = actorLane ? createPluginLaneRef(actorLane) : undefined;
   if (!lane) {
     throw new Error("This actor does not expose a DM lane.");
   }

@@ -1,3 +1,4 @@
+import { dispatchPluginInteractionAction } from "openclaw/plugin-sdk/plugin-runtime";
 import type { ClawdbotConfig, RuntimeEnv } from "../runtime-api.js";
 import { resolveFeishuRuntimeAccount } from "./accounts.js";
 import { handleFeishuMessage, type FeishuMessageEvent } from "./bot.js";
@@ -143,6 +144,90 @@ async function dispatchSyntheticCommand(params: {
   });
 }
 
+async function dispatchPluginCardInteraction(params: {
+  cfg: ClawdbotConfig;
+  event: FeishuCardActionEvent;
+  accountId: string;
+}): Promise<boolean> {
+  const actionValue = params.event.action.value;
+  if (actionValue?.oc !== "interactive") {
+    return false;
+  }
+  const rawData = typeof actionValue.value === "string" ? actionValue.value.trim() : "";
+  if (!rawData) {
+    return false;
+  }
+  const result = await dispatchPluginInteractionAction({
+    data: rawData,
+    channel: "feishu",
+    accountId: params.accountId,
+    interactionId: `feishu:${params.event.token}`,
+    lane: {
+      channel: "feishu",
+      to: resolveCallbackTarget(params.event),
+      accountId: params.accountId,
+    },
+    sender: {
+      channel: "feishu",
+      id: params.event.operator.open_id,
+      accountId: params.accountId,
+      dmLane: {
+        channel: "feishu",
+        to: `user:${params.event.operator.open_id}`,
+        accountId: params.accountId,
+      },
+    },
+    auth: {
+      isAuthorizedSender: true,
+    },
+    action: {
+      raw: rawData,
+      kind: actionValue.kind === "select" ? "select" : "button",
+      actionId:
+        typeof actionValue.actionId === "string" && actionValue.actionId.trim()
+          ? actionValue.actionId.trim()
+          : undefined,
+    },
+    capabilities: {
+      acknowledge: false,
+      followUp: true,
+      editText: false,
+      clearInteractive: false,
+      deleteMessage: false,
+    },
+    respond: {
+      acknowledge: async () => {},
+      replyText: async ({ text }) => {
+        await sendMessageFeishu({
+          cfg: params.cfg,
+          to: resolveCallbackTarget(params.event),
+          text,
+          accountId: params.accountId,
+        });
+      },
+      followUpText: async ({ text }) => {
+        await sendMessageFeishu({
+          cfg: params.cfg,
+          to: resolveCallbackTarget(params.event),
+          text,
+          accountId: params.accountId,
+        });
+      },
+      editText: async ({ text }) => {
+        await sendMessageFeishu({
+          cfg: params.cfg,
+          to: resolveCallbackTarget(params.event),
+          text,
+          accountId: params.accountId,
+        });
+      },
+      clearInteractive: async () => {},
+      deleteMessage: async () => {},
+    },
+  });
+  return result.matched && result.handled;
+}
+
 async function sendInvalidInteractionNotice(params: {
   cfg: ClawdbotConfig;
   event: FeishuCardActionEvent;
@@ -187,6 +272,16 @@ export async function handleFeishuCardAction(params: {
   }
 
   try {
+    const handledPluginInteraction = await dispatchPluginCardInteraction({
+      cfg,
+      event,
+      accountId: account.accountId,
+    });
+    if (handledPluginInteraction) {
+      completeFeishuCardActionToken({ token: event.token, accountId: account.accountId });
+      return;
+    }
+
     if (decoded.kind === "invalid") {
       log(
         `feishu[${account.accountId}]: rejected card action from ${event.operator.open_id}: ${decoded.reason}`,

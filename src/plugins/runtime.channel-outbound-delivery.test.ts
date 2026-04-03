@@ -63,6 +63,48 @@ describe("runtime channel outbound lane delivery", () => {
     );
   });
 
+  it("normalizes topic-style lane refs before delivery", async () => {
+    const sendText = vi.fn(async () => ({
+      channel: "telegram",
+      messageId: "message-topic-1",
+      chatId: "-10099",
+    }));
+    setActivePluginRegistry(
+      createTestRegistry([
+        {
+          pluginId: "telegram",
+          plugin: createOutboundTestPlugin({
+            id: "telegram",
+            outbound: {
+              deliveryMode: "direct",
+              sendText,
+            },
+          }),
+          source: "test",
+        },
+      ]),
+    );
+
+    const runtimeChannel = createRuntimeChannel();
+    await runtimeChannel.outbound.sendToLane({
+      cfg: {} as never,
+      lane: {
+        channel: "telegram",
+        to: "-10099:topic:77",
+        accountId: "default",
+      },
+      payload: { text: "hello topic" },
+    });
+
+    expect(sendText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "-10099",
+        threadId: "77",
+        text: "hello topic",
+      }),
+    );
+  });
+
   it("uses the sender DM lane when delivering a private reply", async () => {
     const sendText = vi.fn(async () => ({
       channel: "slack",

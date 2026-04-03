@@ -17,7 +17,7 @@ import type {
   PluginInteractiveTelegramHandlerRegistration,
 } from "./types.js";
 
-type RegisteredInteractiveMetadata = {
+export type RegisteredInteractiveMetadata = {
   pluginId: string;
   pluginName?: string;
   pluginRoot?: string;
@@ -79,7 +79,7 @@ export type SlackInteractiveDispatchContext = Omit<
   >;
 };
 
-function createConversationBindingHelpers(params: {
+export function createConversationBindingHelpers(params: {
   registration: RegisteredInteractiveMetadata;
   senderId?: string;
   conversation: PluginBindingConversation;

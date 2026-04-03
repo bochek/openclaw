@@ -64,6 +64,9 @@ components".
   action rather than raw provider payloads.
 - When the channel does not support the requested richness, fall back to text
   and command affordances from the payload.
+- When you emit command affordances, prefer `/namespace action-id` shapes so
+  the host can route those fallbacks back into the same
+  `registerInteractionHandler(...)` namespace on text-only paths.
 
 The shared `ChannelCapabilities` contract now includes `richReplies` and
 `interactionResponses` so a channel can declare whether it supports buttons,

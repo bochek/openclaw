@@ -363,6 +363,11 @@ helpers exported from `openclaw/plugin-sdk/interactive-runtime`. Channel
 plugins project that semantic payload into native buttons, selects, cards, or
 fallback text/commands based on channel capabilities.
 
+When a fallback command is rendered as `/namespace action-id`, the normal text
+command pipeline can route that invocation back into the plugin's
+`api.registerInteractionHandler(...)` namespace as long as no explicit plugin
+command owns `/namespace`.
+
 Raw namespaces such as `api.runtime.channel.telegram` or
 `api.runtime.channel.discord` still exist for host-owned runtime code, but they
 are escape hatches. New plugin-facing features should usually land on a generic

@@ -52,6 +52,7 @@ import type {
   SpeechVoiceOption,
 } from "../tts/provider-types.js";
 import type { DeliveryContext } from "../utils/delivery-context.js";
+import type { DeliverableMessageChannel } from "../utils/message-channel.js";
 import type { WizardPrompter } from "../wizard/prompts.js";
 import type { SecretInputMode } from "./provider-auth-types.js";
 import type { createVpsAwareOAuthHandlers } from "./provider-oauth-flow.js";
@@ -1692,9 +1693,9 @@ export type OpenClawPluginCommandDefinition = {
   handler: PluginCommandHandler;
 };
 
-export type PluginInteractiveChannel = "telegram" | "discord" | "slack";
+export type PluginInteractiveChannel = DeliverableMessageChannel;
 
-export type PluginInteractionKind = "button" | "select" | "modal" | "unknown";
+export type PluginInteractionKind = "button" | "select" | "modal" | "command" | "unknown";
 
 export type PluginInteractionAction = {
   raw: string;

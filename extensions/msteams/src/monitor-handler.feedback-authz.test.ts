@@ -20,6 +20,10 @@ const feedbackReflectionMockState = vi.hoisted(() => ({
   runFeedbackReflection: vi.fn(),
 }));
 
+const pluginRuntimeMockState = vi.hoisted(() => ({
+  dispatchPluginInteractionAction: vi.fn(),
+}));
+
 vi.mock("./feedback-reflection.js", async () => {
   const actual = await vi.importActual<typeof import("./feedback-reflection.js")>(
     "./feedback-reflection.js",
@@ -27,6 +31,16 @@ vi.mock("./feedback-reflection.js", async () => {
   return {
     ...actual,
     runFeedbackReflection: feedbackReflectionMockState.runFeedbackReflection,
+  };
+});
+
+vi.mock("openclaw/plugin-sdk/plugin-runtime", async () => {
+  const actual = await vi.importActual<typeof import("openclaw/plugin-sdk/plugin-runtime")>(
+    "openclaw/plugin-sdk/plugin-runtime",
+  );
+  return {
+    ...actual,
+    dispatchPluginInteractionAction: pluginRuntimeMockState.dispatchPluginInteractionAction,
   };
 });
 
@@ -122,6 +136,66 @@ function createFeedbackInvokeContext(params: {
   } as unknown as MSTeamsTurnContext;
 }
 
+function createInteractiveInvokeContext(params: {
+  conversationId: string;
+  conversationType: string;
+  senderId: string;
+  senderName?: string;
+  teamId?: string;
+  channelName?: string;
+  kind?: "button" | "select";
+  value?: string;
+  actionId?: string;
+  inputId?: string;
+  selectedValue?: string;
+}): MSTeamsTurnContext {
+  const inputId = params.inputId ?? "openclaw_interactive_select_1";
+  return {
+    activity: {
+      id: `invoke-interactive-${params.kind ?? "button"}`,
+      type: "invoke",
+      name: "message/submitAction",
+      channelId: "msteams",
+      serviceUrl: "https://service.example.test",
+      from: {
+        id: `${params.senderId}-botframework`,
+        aadObjectId: params.senderId,
+        name: params.senderName ?? "Sender",
+      },
+      recipient: {
+        id: "bot-id",
+        name: "Bot",
+      },
+      conversation: {
+        id: params.conversationId,
+        conversationType: params.conversationType,
+        tenantId: params.teamId ? "tenant-1" : undefined,
+      },
+      channelData: params.teamId
+        ? {
+            team: { id: params.teamId, name: "Team 1" },
+            channel: params.channelName ? { name: params.channelName } : undefined,
+          }
+        : {},
+      value: {
+        oc: "interactive",
+        kind: params.kind ?? "button",
+        actionId: params.actionId ?? "approval.approve",
+        ...(params.kind === "select"
+          ? {
+              inputId,
+              [inputId]: params.selectedValue ?? "approval:approve",
+            }
+          : {
+              value: params.value ?? "approval:approve",
+            }),
+      },
+    },
+    sendActivity: vi.fn(async () => ({ id: "interactive-follow-up" })),
+    sendActivities: async () => [],
+  } as unknown as MSTeamsTurnContext;
+}
+
 async function expectFileMissing(filePath: string) {
   await expect(access(filePath)).rejects.toThrow();
 }
@@ -157,6 +231,91 @@ describe("msteams feedback invoke authz", () => {
   beforeEach(() => {
     feedbackReflectionMockState.runFeedbackReflection.mockReset();
     feedbackReflectionMockState.runFeedbackReflection.mockResolvedValue(undefined);
+    pluginRuntimeMockState.dispatchPluginInteractionAction.mockReset();
+    pluginRuntimeMockState.dispatchPluginInteractionAction.mockResolvedValue({
+      matched: false,
+      handled: false,
+    });
+  });
+
+  it("routes native interactive submitAction payloads into the generic plugin interaction pipeline", async () => {
+    pluginRuntimeMockState.dispatchPluginInteractionAction.mockResolvedValue({
+      matched: true,
+      handled: true,
+    });
+
+    const originalRun = vi.fn(async () => undefined);
+    const handler = registerMSTeamsHandlers(
+      createActivityHandler(originalRun),
+      createDeps({
+        cfg: {
+          channels: {
+            msteams: {
+              dmPolicy: "allowlist",
+              allowFrom: ["owner-aad"],
+            },
+          },
+        } as OpenClawConfig,
+      }),
+    ) as MSTeamsActivityHandler & {
+      run: NonNullable<MSTeamsActivityHandler["run"]>;
+    };
+
+    const context = createInteractiveInvokeContext({
+      conversationId: "19:group@thread.tacv2;messageid=bot-msg-1",
+      conversationType: "groupChat",
+      senderId: "owner-aad",
+      senderName: "Owner",
+      teamId: "team-1",
+      channelName: "General",
+      kind: "select",
+      actionId: "approval.select",
+      selectedValue: "approval:approve",
+    });
+
+    await handler.run(context);
+
+    expect(pluginRuntimeMockState.dispatchPluginInteractionAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: "approval:approve",
+        channel: "msteams",
+        accountId: "default",
+        lane: {
+          channel: "msteams",
+          to: "conversation:19:group@thread.tacv2",
+          accountId: "default",
+        },
+        sender: {
+          channel: "msteams",
+          id: "owner-aad",
+          accountId: "default",
+          displayName: "Owner",
+          dmLane: {
+            channel: "msteams",
+            to: "user:owner-aad",
+            accountId: "default",
+          },
+        },
+        auth: {
+          isAuthorizedSender: true,
+        },
+        action: expect.objectContaining({
+          kind: "select",
+          actionId: "approval.select",
+          values: ["approval:approve"],
+          fields: [
+            {
+              id: "openclaw_interactive_select_1",
+              name: "openclaw_interactive_select_1",
+              values: ["approval:approve"],
+            },
+          ],
+        }),
+      }),
+    );
+    expect(originalRun).not.toHaveBeenCalled();
+    expect(context.sendActivity).not.toHaveBeenCalled();
+    expect(feedbackReflectionMockState.runFeedbackReflection).not.toHaveBeenCalled();
   });
 
   it("records feedback for an allowlisted DM sender", async () => {

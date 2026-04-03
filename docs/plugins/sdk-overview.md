@@ -165,6 +165,11 @@ new plugins. It gives handlers a normalized lane, sender, semantic action, and
 capability-aware response helpers without forcing the plugin to branch on
 Telegram, Discord, Slack, Teams, or Lark-specific payload shapes.
 
+If a user invokes a text fallback command shaped like `/namespace action-id`
+and no explicit plugin command claims that command name, OpenClaw routes it
+through the same interaction handler namespace. That lets text-only channels
+and degraded rich replies reuse the same semantic action flow.
+
 `api.registerInteractiveHandler(...)` remains available as a compatibility path
 for legacy channel-specific handlers.
 

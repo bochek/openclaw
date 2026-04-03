@@ -6,6 +6,8 @@
  */
 
 import { matchPluginCommand, executePluginCommand } from "../../plugins/commands.js";
+import { dispatchPluginInteractionCommand } from "../../plugins/interactive.js";
+import { createPluginActorRef, createPluginLaneRef } from "../../plugins/lane-refs.js";
 import type { CommandHandler, CommandHandlerResult } from "./commands-types.js";
 
 /**
@@ -26,7 +28,52 @@ export const handlePluginCommand: CommandHandler = async (
   // Try to match a plugin command
   const match = matchPluginCommand(command.commandBodyNormalized);
   if (!match) {
-    return null;
+    const lane = createPluginLaneRef({
+      channel: command.channel,
+      to:
+        (typeof command.to === "string" && command.to.startsWith("slash:")
+          ? command.from
+          : command.to) ?? command.from,
+      accountId: params.ctx.AccountId ?? undefined,
+      threadId:
+        typeof params.ctx.MessageThreadId === "string" ||
+        typeof params.ctx.MessageThreadId === "number"
+          ? params.ctx.MessageThreadId
+          : undefined,
+    });
+    if (!lane) {
+      return null;
+    }
+    const sender = createPluginActorRef({
+      channel: command.channel,
+      id: command.senderId,
+      accountId: params.ctx.AccountId ?? undefined,
+      dmLane: command.senderId
+        ? (createPluginLaneRef({
+            channel: command.channel,
+            to: command.senderId,
+            accountId: params.ctx.AccountId ?? undefined,
+          }) ?? null)
+        : undefined,
+    });
+    const interactionResult = await dispatchPluginInteractionCommand({
+      commandBody: command.commandBodyNormalized,
+      channel: command.channel,
+      accountId: params.ctx.AccountId ?? "default",
+      lane,
+      sender,
+      parentConversationId: params.ctx.ThreadParentId?.trim() || undefined,
+      auth: {
+        isAuthorizedSender: command.isAuthorizedSender,
+      },
+    });
+    if (!interactionResult.matched) {
+      return null;
+    }
+    return {
+      shouldContinue: false,
+      reply: interactionResult.reply,
+    };
   }
 
   // Execute the plugin command (always returns a result)

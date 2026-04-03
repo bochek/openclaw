@@ -32,6 +32,10 @@ assembly, and contract enforcement.
 - Prefer generic lane/actor-oriented runtime contracts and semantic interaction
   registration. Treat channel-specific interactive handler registration as a
   compatibility bridge unless the surface is truly host-owned.
+- Keep text-command fallbacks inside the same semantic interaction contract
+  when possible. Prefer `/namespace action-id` style degradation that routes
+  back through `registerInteractionHandler(...)` over inventing a second
+  plugin-owned command path for the same action.
 - When plugin-owned tools or provider fallbacks need core participation, keep
   the contract generic and honor plugin disablement plus SecretRef semantics.
 - Keep contract loading and contract tests on the dedicated bundled registry

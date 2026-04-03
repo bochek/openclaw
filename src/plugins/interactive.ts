@@ -1,6 +1,8 @@
+import type { ReplyPayload } from "../auto-reply/types.js";
 import { createDedupeCache, resolveGlobalDedupeCache } from "../infra/dedupe.js";
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 import {
+  createConversationBindingHelpers,
   dispatchGenericDiscordInteractiveHandler,
   dispatchGenericSlackInteractiveHandler,
   dispatchGenericTelegramInteractiveHandler,
@@ -12,6 +14,9 @@ import {
   type TelegramInteractiveDispatchContext,
 } from "./interactive-dispatch-adapters.js";
 import type {
+  PluginActorRef,
+  PluginInteractionHandlerContext,
+  PluginLaneRef,
   PluginInteractionHandlerRegistration,
   PluginInteractiveDiscordHandlerContext,
   PluginInteractiveButtons,
@@ -44,16 +49,13 @@ type InteractiveDispatchResult =
   | { matched: false; handled: false; duplicate: false }
   | { matched: true; handled: boolean; duplicate: boolean };
 
-type PluginInteractiveDispatchRegistration = {
-  channel: string;
-  namespace: string;
-};
+type InteractionActionDispatchResult =
+  | { matched: false; handled: false }
+  | { matched: true; handled: boolean };
 
-export type PluginInteractiveMatch<TRegistration extends PluginInteractiveDispatchRegistration> = {
-  registration: RegisteredInteractiveHandler & TRegistration;
-  namespace: string;
-  payload: string;
-};
+type InteractionCommandDispatchResult =
+  | { matched: false; handled: false; reply?: undefined }
+  | { matched: true; handled: boolean; reply?: ReplyPayload };
 
 type InteractiveState = {
   interactionHandlers: Map<string, RegisteredInteractionHandler>;
@@ -245,10 +247,183 @@ export function clearPluginInteractiveHandlersForPlugin(pluginId: string): void 
   }
 }
 
-export async function dispatchPluginInteractiveHandler<
-  TRegistration extends PluginInteractiveDispatchRegistration,
->(params: {
-  channel: TRegistration["channel"];
+function parseInteractionCommandBody(
+  commandBody: string,
+): { raw: string; namespace: string; payload: string; data: string } | null {
+  const trimmed = commandBody.trim();
+  if (!trimmed.startsWith("/")) {
+    return null;
+  }
+  const withoutSlash = trimmed.slice(1).trim();
+  if (!withoutSlash) {
+    return null;
+  }
+  const spaceIndex = withoutSlash.indexOf(" ");
+  const namespace =
+    spaceIndex >= 0
+      ? normalizeNamespace(withoutSlash.slice(0, spaceIndex))
+      : normalizeNamespace(withoutSlash);
+  if (!namespace) {
+    return null;
+  }
+  const payload = spaceIndex >= 0 ? withoutSlash.slice(spaceIndex + 1).trim() : "";
+  return {
+    raw: trimmed,
+    namespace,
+    payload,
+    data: payload ? `${namespace}:${payload}` : namespace,
+  };
+}
+
+function buildInteractionCommandReply(
+  replies: Array<{ text: string; ephemeral?: boolean }>,
+): ReplyPayload | undefined {
+  const texts = replies.map((reply) => reply.text.trim()).filter(Boolean);
+  if (texts.length === 0) {
+    return undefined;
+  }
+  return {
+    text: texts.join("\n\n"),
+  };
+}
+
+export async function dispatchPluginInteractionAction(params: {
+  data: string;
+  channel: string;
+  accountId: string;
+  lane: PluginLaneRef;
+  sender?: PluginActorRef;
+  parentConversationId?: string;
+  interactionId: string;
+  action?: Partial<PluginInteractionHandlerContext["action"]>;
+  auth: {
+    isAuthorizedSender: boolean;
+  };
+  capabilities: PluginInteractionHandlerContext["capabilities"];
+  respond: PluginInteractionHandlerContext["respond"];
+}): Promise<InteractionActionDispatchResult> {
+  const match = resolveGenericNamespaceMatch(params.data);
+  if (!match) {
+    return { matched: false, handled: false };
+  }
+
+  const conversationId = params.lane.to;
+  const result = await match.registration.handler({
+    channel: params.channel as PluginInteractionHandlerContext["channel"],
+    accountId: params.accountId,
+    interactionId: params.interactionId,
+    conversationId,
+    parentConversationId: params.parentConversationId,
+    lane: params.lane,
+    sender: params.sender,
+    auth: params.auth,
+    action: {
+      raw: params.action?.raw ?? params.data,
+      namespace: match.namespace,
+      payload: match.payload,
+      actionId: params.action?.actionId ?? (match.payload || match.namespace),
+      kind: params.action?.kind ?? "unknown",
+      ...(params.action?.values?.length ? { values: params.action.values } : {}),
+      ...(params.action?.fields?.length ? { fields: params.action.fields } : {}),
+    },
+    capabilities: params.capabilities,
+    respond: params.respond,
+    ...createConversationBindingHelpers({
+      registration: match.registration,
+      senderId: params.sender?.id,
+      conversation: {
+        channel: params.lane.channel,
+        accountId: params.accountId,
+        conversationId,
+        parentConversationId: params.parentConversationId,
+        threadId: params.lane.threadId,
+      },
+    }),
+  });
+
+  return {
+    matched: true,
+    handled: result?.handled ?? true,
+  };
+}
+
+export async function dispatchPluginInteractionCommand(params: {
+  commandBody: string;
+  channel: string;
+  accountId: string;
+  lane: PluginLaneRef;
+  sender?: PluginActorRef;
+  parentConversationId?: string;
+  auth: {
+    isAuthorizedSender: boolean;
+  };
+}): Promise<InteractionCommandDispatchResult> {
+  const parsedCommand = parseInteractionCommandBody(params.commandBody);
+  if (!parsedCommand) {
+    return { matched: false, handled: false };
+  }
+
+  const replies: Array<{ text: string; ephemeral?: boolean }> = [];
+  const recordReply = (text: string, ephemeral?: boolean) => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return;
+    }
+    replies.push({ text: trimmed, ephemeral });
+  };
+
+  const result = await dispatchPluginInteractionAction({
+    data: parsedCommand.data,
+    channel: params.channel,
+    accountId: params.accountId,
+    lane: params.lane,
+    sender: params.sender,
+    parentConversationId: params.parentConversationId,
+    interactionId: `command:${params.channel}:${parsedCommand.namespace}:${parsedCommand.payload || "_"}`,
+    action: {
+      raw: parsedCommand.raw,
+      kind: "command",
+      actionId: parsedCommand.payload || parsedCommand.namespace,
+    },
+    auth: params.auth,
+    capabilities: {
+      acknowledge: false,
+      followUp: true,
+      editText: false,
+      clearInteractive: false,
+      deleteMessage: false,
+    },
+    respond: {
+      acknowledge: async () => {},
+      replyText: async ({ text, ephemeral }) => {
+        recordReply(text, ephemeral);
+      },
+      followUpText: async ({ text, ephemeral }) => {
+        recordReply(text, ephemeral);
+      },
+      editText: async ({ text }) => {
+        recordReply(text);
+      },
+      clearInteractive: async ({ text } = {}) => {
+        if (text?.trim()) {
+          recordReply(text);
+        }
+      },
+      deleteMessage: async () => {},
+    },
+  });
+  if (!result.matched) {
+    return result;
+  }
+  return {
+    matched: true,
+    handled: result.handled,
+    reply: buildInteractionCommandReply(replies),
+  };
+}
+
+export async function dispatchPluginInteractiveHandler(params: {
+  channel: "telegram";
   data: string;
   dedupeId?: string;
   onMatched?: () => Promise<void> | void;
