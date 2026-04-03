@@ -333,6 +333,17 @@ describe("gateway url override hardening", () => {
         },
       },
     },
+    {
+      name: "serializes numeric threadId in gateway send params",
+      params: {
+        threadId: 456,
+      },
+      expected: {
+        params: {
+          threadId: "456",
+        },
+      },
+    },
   ])("$name", async ({ params, expected }) => {
     expect(await sendMattermostGatewayMessage(params)).toMatchObject(expected);
   });

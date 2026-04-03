@@ -19,6 +19,7 @@ import type { OutboundMirror } from "./mirror.js";
 import { normalizeReplyPayloadsForDelivery } from "./payloads.js";
 import { buildOutboundSessionContext } from "./session-context.js";
 import { resolveOutboundTarget } from "./targets.js";
+import { normalizeOutboundThreadId } from "./thread-id.js";
 
 let messageConfigRuntimePromise: Promise<typeof import("./message.config.runtime.js")> | null =
   null;
@@ -317,7 +318,7 @@ export async function sendMessage(params: MessageSendParams): Promise<MessageSen
       agentId: params.agentId,
       replyToId: params.replyToId,
       replyToParticipant: params.replyToParticipant,
-      threadId: params.threadId,
+      threadId: normalizeOutboundThreadId(params.threadId),
       channel,
       sessionKey: params.mirror?.sessionKey,
       idempotencyKey: await resolveGatewayIdempotencyKey(params.idempotencyKey),
