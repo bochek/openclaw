@@ -367,6 +367,21 @@ describe("deliverWebReply", () => {
       expect((msg.reply as ReturnType<typeof vi.fn>).mock.calls[1][1]).toBeUndefined();
     });
 
+    it("ignores replyToId when replyToMode is off", async () => {
+      const msg = makeMsg();
+      await deliverWebReply({
+        replyResult: { text: "hello", replyToId: "msg-1" },
+        msg,
+        replyToMode: "off",
+        maxMediaBytes: 1024 * 1024,
+        textLimit: 200,
+        replyLogger,
+        skipLog: true,
+      });
+      expect(msg.reply).toHaveBeenCalledTimes(1);
+      expect((msg.reply as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBeUndefined();
+    });
+
     it("preserves quote for text fallback when media send fails", async () => {
       const msg = makeMsg();
       mockLoadedImageMedia();
