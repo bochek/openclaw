@@ -33,10 +33,7 @@ export type {
   OpenClawPluginDefinition,
   OpenClawPluginService,
   OpenClawPluginServiceContext,
-  PluginActorRef,
   PluginCommandContext,
-  PluginInteractiveTelegramHandlerContext,
-  PluginLaneRef,
   PluginLogger,
   ProviderAuthContext,
   ProviderAuthDoctorHintContext,
@@ -79,6 +76,11 @@ export type {
   SpeechProviderPlugin,
 } from "./plugin-entry.js";
 export type { OpenClawPluginToolContext, OpenClawPluginToolFactory } from "../plugins/types.js";
+export type {
+  PluginActorRef,
+  PluginInteractiveTelegramHandlerContext,
+  PluginLaneRef,
+} from "../plugins/types.js";
 export type { OpenClawConfig } from "../config/config.js";
 export { isSecretRef } from "../config/types.secrets.js";
 export type { GatewayRequestHandlerOptions } from "../gateway/server-methods/types.js";

@@ -17,7 +17,6 @@ import { createFeishuClient } from "./client.js";
 import { parseFeishuCommentTarget } from "./comment-target.js";
 import { replyComment } from "./drive.js";
 import { sendMediaFeishu } from "./media.js";
-import { chunkTextForOutbound, type ChannelOutboundAdapter } from "./outbound-runtime-api.js";
 import { getFeishuRuntime } from "./runtime.js";
 import {
   sendCardFeishu,

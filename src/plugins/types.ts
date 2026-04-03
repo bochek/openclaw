@@ -15,7 +15,11 @@ import type { ProviderRequestTransportOverrides } from "../agents/provider-reque
 import type { AnyAgentTool } from "../agents/tools/common.js";
 import type { ThinkLevel } from "../auto-reply/thinking.js";
 import type { ReplyPayload } from "../auto-reply/types.js";
-import type { ChannelId, ChannelPlugin } from "../channels/plugins/types.js";
+import type {
+  ChannelId,
+  ChannelPlugin,
+  ChannelStructuredComponents,
+} from "../channels/plugins/types.js";
 import type { OpenClawConfig } from "../config/config.js";
 import type {
   CliBackendConfig,
@@ -1695,6 +1699,20 @@ export type OpenClawPluginCommandDefinition = {
 
 export type PluginInteractiveChannel = DeliverableMessageChannel;
 
+type BivariantInteractiveHandler<TContext, TResult> = {
+  bivarianceHack: (ctx: TContext) => Promise<TResult> | TResult;
+}["bivarianceHack"];
+
+export type PluginInteractiveRegistration<
+  TContext = unknown,
+  TChannel extends string = string,
+  TResult = PluginInteractionHandlerResult,
+> = {
+  channel: TChannel;
+  namespace: string;
+  handler: BivariantInteractiveHandler<TContext, TResult>;
+};
+
 export type PluginInteractionKind = "button" | "select" | "modal" | "command" | "unknown";
 
 export type PluginInteractionAction = {
@@ -1893,11 +1911,20 @@ export type PluginInteractiveSlackHandlerContext = {
   getCurrentConversationBinding: () => Promise<PluginConversationBinding | null>;
 };
 
-export type PluginInteractiveTelegramHandlerRegistration = {
-  channel: "telegram";
-  namespace: string;
-  handler: BivariantInteractiveHandler<TContext, TResult>;
-};
+export type PluginInteractiveTelegramHandlerRegistration = PluginInteractiveRegistration<
+  PluginInteractiveTelegramHandlerContext,
+  "telegram"
+>;
+
+export type PluginInteractiveDiscordHandlerRegistration = PluginInteractiveRegistration<
+  PluginInteractiveDiscordHandlerContext,
+  "discord"
+>;
+
+export type PluginInteractiveSlackHandlerRegistration = PluginInteractiveRegistration<
+  PluginInteractiveSlackHandlerContext,
+  "slack"
+>;
 
 export type PluginInteractiveHandlerRegistration = PluginInteractiveRegistration;
 

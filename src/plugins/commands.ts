@@ -28,6 +28,7 @@ import {
   requestPluginConversationBinding,
 } from "./conversation-binding.js";
 import { createPluginActorRef, createPluginLaneRef } from "./lane-refs.js";
+import { getActivePluginChannelRegistry } from "./runtime.js";
 import type {
   OpenClawPluginCommandDefinition,
   PluginCommandContext,
