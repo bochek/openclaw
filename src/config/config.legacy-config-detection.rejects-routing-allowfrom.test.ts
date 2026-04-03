@@ -397,7 +397,9 @@ describe("legacy config detection", () => {
       input: { channels: { telegram: { streamMode: "off" } } },
       assert: (config: NonNullable<OpenClawConfig>) => {
         expect(config.channels?.telegram?.streaming).toBe("off");
-        expect(config.channels?.telegram?.streamMode).toBeUndefined();
+        expect(
+          (config.channels?.telegram as Record<string, unknown> | undefined)?.streamMode,
+        ).toBeUndefined();
       },
     },
     {
@@ -405,7 +407,9 @@ describe("legacy config detection", () => {
       input: { channels: { telegram: { streamMode: "block" } } },
       assert: (config: NonNullable<OpenClawConfig>) => {
         expect(config.channels?.telegram?.streaming).toBe("block");
-        expect(config.channels?.telegram?.streamMode).toBeUndefined();
+        expect(
+          (config.channels?.telegram as Record<string, unknown> | undefined)?.streamMode,
+        ).toBeUndefined();
       },
     },
     {
@@ -423,7 +427,10 @@ describe("legacy config detection", () => {
       },
       assert: (config: NonNullable<OpenClawConfig>) => {
         expect(config.channels?.telegram?.accounts?.ops?.streaming).toBe("off");
-        expect(config.channels?.telegram?.accounts?.ops?.streamMode).toBeUndefined();
+        expect(
+          (config.channels?.telegram?.accounts?.ops as Record<string, unknown> | undefined)
+            ?.streamMode,
+        ).toBeUndefined();
       },
     },
   ] as const)("normalizes telegram legacy streamMode alias: $name", ({ input, assert, name }) => {
@@ -458,7 +465,10 @@ describe("legacy config detection", () => {
         expect(res.changes, name).toContain(expectedChange);
       }
       expect(res.config?.channels?.discord?.streaming, name).toBe(expectedStreaming);
-      expect(res.config?.channels?.discord?.streamMode, name).toBeUndefined();
+      expect(
+        (res.config?.channels?.discord as Record<string, unknown> | undefined)?.streamMode,
+        name,
+      ).toBeUndefined();
     },
   );
 
@@ -485,7 +495,10 @@ describe("legacy config detection", () => {
       expect(res.ok, name).toBe(true);
       if (res.ok) {
         expect(res.config.channels?.discord?.streaming, name).toBe(expectedStreaming);
-        expect(res.config.channels?.discord?.streamMode, name).toBeUndefined();
+        expect(
+          (res.config.channels?.discord as Record<string, unknown> | undefined)?.streamMode,
+          name,
+        ).toBeUndefined();
       }
     },
   );
@@ -505,7 +518,10 @@ describe("legacy config detection", () => {
       },
       assert: (config: NonNullable<OpenClawConfig>) => {
         expect(config.channels?.discord?.accounts?.work?.streaming).toBe("partial");
-        expect(config.channels?.discord?.accounts?.work?.streamMode).toBeUndefined();
+        expect(
+          (config.channels?.discord?.accounts?.work as Record<string, unknown> | undefined)
+            ?.streamMode,
+        ).toBeUndefined();
       },
     },
     {
@@ -519,7 +535,9 @@ describe("legacy config detection", () => {
       },
       assert: (config: NonNullable<OpenClawConfig>) => {
         expect(config.channels?.slack?.streaming).toBe("progress");
-        expect(config.channels?.slack?.streamMode).toBeUndefined();
+        expect(
+          (config.channels?.slack as Record<string, unknown> | undefined)?.streamMode,
+        ).toBeUndefined();
         expect(config.channels?.slack?.nativeStreaming).toBe(true);
       },
     },

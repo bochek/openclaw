@@ -196,16 +196,18 @@ describe("matrixMessageActions", () => {
       },
     } as CoreConfig;
 
-    const assistantActions =
-      matrixMessageActions.describeMessageTool!({
-        cfg,
-        accountId: "assistant",
-      } as never).actions;
-    const opsActions =
-      matrixMessageActions.describeMessageTool!({
-        cfg,
-        accountId: "ops",
-      } as never).actions;
+    const assistantTool = matrixMessageActions.describeMessageTool!({
+      cfg,
+      accountId: "assistant",
+    } as never);
+    const opsTool = matrixMessageActions.describeMessageTool!({
+      cfg,
+      accountId: "ops",
+    } as never);
+    expect(assistantTool).toBeDefined();
+    expect(opsTool).toBeDefined();
+    const assistantActions = assistantTool?.actions ?? [];
+    const opsActions = opsTool?.actions ?? [];
 
     expect(assistantActions).not.toContain("react");
     expect(assistantActions).not.toContain("reactions");
