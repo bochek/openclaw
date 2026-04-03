@@ -1,7 +1,16 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../plugins/provider-runtime.js", () => ({
-  resolveProviderCapabilitiesWithPlugin: vi.fn(() => undefined),
+  resolveProviderCapabilitiesWithPlugin: vi.fn(({ provider }: { provider?: string }) => {
+    switch (provider) {
+      case "microsoft-foundry":
+        return {
+          providerFamily: "openai",
+        };
+      default:
+        return undefined;
+    }
+  }),
   resolveProviderReplayPolicyWithPlugin: vi.fn(
     ({
       provider,
@@ -255,6 +264,27 @@ describe("resolveTranscriptPolicy", () => {
     expect(policy.applyGoogleTurnOrdering).toBe(false);
     expect(policy.validateGeminiTurns).toBe(false);
     expect(policy.validateAnthropicTurns).toBe(false);
+  });
+
+  it("keeps non-migrated OpenAI-family providers off strict turn validation", () => {
+    const policy = resolveTranscriptPolicy({
+      provider: "microsoft-foundry",
+      modelId: "gpt-5.2",
+      modelApi: "openai-completions",
+    });
+    expect(policy.applyGoogleTurnOrdering).toBe(false);
+    expect(policy.validateGeminiTurns).toBe(false);
+    expect(policy.validateAnthropicTurns).toBe(false);
+  });
+
+  it("does not sanitize tool-call ids for OpenAI-family responses transports", () => {
+    const policy = resolveTranscriptPolicy({
+      provider: "microsoft-foundry",
+      modelId: "gpt-5.2",
+      modelApi: "openai-responses",
+    });
+    expect(policy.sanitizeToolCallIds).toBe(false);
+    expect(policy.toolCallIdMode).toBeUndefined();
   });
 
   it.each([

@@ -3,6 +3,10 @@ import { resolveProviderReplayPolicyWithPlugin } from "../plugins/provider-runti
 import type { ProviderRuntimeModel } from "../plugins/types.js";
 import { normalizeProviderId } from "./model-selection.js";
 import { isGoogleModelApi } from "./pi-embedded-helpers/google.js";
+import {
+  isOpenAiProviderFamily,
+  supportsOpenAiCompatTurnValidation,
+} from "./provider-capabilities.js";
 import type { ToolCallIdMode } from "./tool-call-id.js";
 
 export type TranscriptSanitizeMode = "full" | "images-only";
@@ -33,6 +37,21 @@ function shouldDropAnthropicThinkingBlocks(modelId?: string | null): boolean {
   return (modelId ?? "").toLowerCase().includes("claude");
 }
 
+const OPENAI_MODEL_APIS = new Set([
+  "openai",
+  "openai-completions",
+  "openai-responses",
+  "openai-codex-responses",
+  "azure-openai-responses",
+]);
+
+function isOpenAiApi(modelApi?: string | null): boolean {
+  if (!modelApi) {
+    return false;
+  }
+  return OPENAI_MODEL_APIS.has(modelApi);
+}
+
 export function resolveTranscriptPolicy(params: {
   modelApi?: string | null;
   provider?: string | null;
@@ -46,12 +65,18 @@ export function resolveTranscriptPolicy(params: {
   const modelId = params.modelId ?? "";
   const isGoogle = isGoogleModelApi(params.modelApi);
   const isAnthropic = isAnthropicApi(params.modelApi);
-  const isStrictOpenAiCompatible = params.modelApi === "openai-completions";
+  const isOpenAi =
+    isOpenAiProviderFamily(provider, params) || (!provider && isOpenAiApi(params.modelApi));
+  const isStrictOpenAiCompatible =
+    params.modelApi === "openai-completions" &&
+    !isOpenAi &&
+    supportsOpenAiCompatTurnValidation(provider, params);
   const requiresOpenAiCompatibleToolIdSanitization =
     params.modelApi === "openai-completions" ||
-    params.modelApi === "openai-responses" ||
-    params.modelApi === "openai-codex-responses" ||
-    params.modelApi === "azure-openai-responses";
+    (!isOpenAi &&
+      (params.modelApi === "openai-responses" ||
+        params.modelApi === "openai-codex-responses" ||
+        params.modelApi === "azure-openai-responses"));
   // All providers need orphaned tool_result repair after history truncation.
   // OpenAI rejects function_call_output items whose call_id has no matching
   // function_call in the conversation, so the repair must run universally.
@@ -70,9 +95,9 @@ export function resolveTranscriptPolicy(params: {
       : undefined,
     sanitizeThinkingSignatures: false,
     dropThinkingBlocks: isAnthropic && shouldDropAnthropicThinkingBlocks(modelId),
-    applyGoogleTurnOrdering: isGoogle || isStrictOpenAiCompatible,
-    validateGeminiTurns: isGoogle || isStrictOpenAiCompatible,
-    validateAnthropicTurns: isAnthropic || isStrictOpenAiCompatible,
+    applyGoogleTurnOrdering: !isOpenAi && (isGoogle || isStrictOpenAiCompatible),
+    validateGeminiTurns: !isOpenAi && (isGoogle || isStrictOpenAiCompatible),
+    validateAnthropicTurns: !isOpenAi && (isAnthropic || isStrictOpenAiCompatible),
     allowSyntheticToolResults: isGoogle || isAnthropic,
   };
 
