@@ -602,10 +602,13 @@ export async function initSessionState(params: {
     !alreadyForked
   ) {
     const parentEntry = sessionStore[parentSessionKey];
-    const parentTokens = resolveParentForkTokenCount({
-      parentEntry,
-      storePath,
-    });
+    const parentTokens =
+      parentForkMaxTokens > 0
+        ? resolveParentForkTokenCount({
+            parentEntry,
+            storePath,
+          })
+        : undefined;
     if (
       parentForkMaxTokens > 0 &&
       typeof parentTokens === "number" &&
@@ -616,7 +619,7 @@ export async function initSessionState(params: {
       // instead and mark as forked to prevent re-attempts. See #26905.
       log.warn(
         `skipping parent fork (parent too large): parentKey=${parentSessionKey} → sessionKey=${sessionKey} ` +
-          `parentTokens=${parentTokens ?? "unknown"} maxTokens=${parentForkMaxTokens}`,
+          `parentTokens=${parentTokens} maxTokens=${parentForkMaxTokens}`,
       );
       sessionEntry.forkedFromParent = true;
     } else {

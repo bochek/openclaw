@@ -39,19 +39,23 @@ export function resolveParentForkTokenCount(params: {
     return freshPersistedTokens;
   }
 
-  const transcriptMessages = readSessionMessages(
-    params.parentEntry.sessionId,
-    params.storePath,
-    params.parentEntry.sessionFile,
-  ) as AgentMessage[];
-  if (transcriptMessages.length > 0) {
-    const estimatedTokens = estimateMessagesTokens(transcriptMessages);
-    const transcriptTokens = resolvePositiveTokenCount(
-      Number.isFinite(estimatedTokens) ? Math.ceil(estimatedTokens) : undefined,
-    );
-    if (typeof transcriptTokens === "number") {
-      return transcriptTokens;
+  try {
+    const transcriptMessages = readSessionMessages(
+      params.parentEntry.sessionId,
+      params.storePath,
+      params.parentEntry.sessionFile,
+    ) as AgentMessage[];
+    if (transcriptMessages.length > 0) {
+      const estimatedTokens = estimateMessagesTokens(transcriptMessages);
+      const transcriptTokens = resolvePositiveTokenCount(
+        Number.isFinite(estimatedTokens) ? Math.ceil(estimatedTokens) : undefined,
+      );
+      if (typeof transcriptTokens === "number") {
+        return transcriptTokens;
+      }
     }
+  } catch {
+    // Fall back to cached totals/unknown tokens when the transcript cannot be read.
   }
 
   return resolvePositiveTokenCount(params.parentEntry.totalTokens);
