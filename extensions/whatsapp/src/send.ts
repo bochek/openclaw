@@ -58,9 +58,8 @@ export async function sendMessageWhatsApp(
     cfg,
     accountId: options.accountId,
   });
-  const { listener: active, accountId: resolvedAccountId } = requireActiveWebListener(
-    effectiveAccountId,
-  );
+  const { listener: active, accountId: resolvedAccountId } =
+    requireActiveWebListener(effectiveAccountId);
   const account = resolveWhatsAppAccount({
     cfg,
     accountId: resolvedAccountId ?? options.accountId,

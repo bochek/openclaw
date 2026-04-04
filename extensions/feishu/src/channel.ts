@@ -146,7 +146,9 @@ function describeFeishuMessageTool({
   NonNullable<ChannelMessageActionAdapter["describeMessageTool"]>
 >[0]): ChannelMessageToolDiscovery {
   const enabledAccounts = accountId
-    ? [resolveFeishuAccount({ cfg, accountId })].filter((account) => account.enabled && account.configured)
+    ? [resolveFeishuAccount({ cfg, accountId })].filter(
+        (account) => account.enabled && account.configured,
+      )
     : listEnabledFeishuAccounts(cfg);
   const enabled =
     enabledAccounts.length > 0 ||
@@ -179,9 +181,9 @@ function describeFeishuMessageTool({
     "channel-list",
   ]);
   if (
-    (accountId
+    accountId
       ? enabledAccounts.some((account) => isFeishuReactionsActionEnabled({ cfg, account }))
-      : areAnyFeishuReactionActionsEnabled(cfg))
+      : areAnyFeishuReactionActionsEnabled(cfg)
   ) {
     actions.add("react");
     actions.add("reactions");

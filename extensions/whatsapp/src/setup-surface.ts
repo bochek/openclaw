@@ -20,10 +20,7 @@ export const whatsappSetupWizard: ChannelSetupWizard = {
     configuredScore: 5,
     unconfiguredScore: 4,
     resolveConfigured: async ({ cfg, accountId }) => {
-      return await detectWhatsAppLinked(
-        cfg,
-        accountId || resolveDefaultWhatsAppAccountId(cfg),
-      );
+      return await detectWhatsAppLinked(cfg, accountId || resolveDefaultWhatsAppAccountId(cfg));
     },
     resolveStatusLines: async ({ cfg, accountId, configured }) => {
       const labelAccountId = accountId || resolveDefaultWhatsAppAccountId(cfg);

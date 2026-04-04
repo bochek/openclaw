@@ -184,7 +184,9 @@ const zalouserMessageActions: ChannelMessageActionAdapter = {
     const accounts = accountId
       ? [resolveZalouserAccountSync({ cfg, accountId })].filter((account) => account.enabled)
       : listZalouserAccountIds(cfg)
-          .map((resolvedAccountId) => resolveZalouserAccountSync({ cfg, accountId: resolvedAccountId }))
+          .map((resolvedAccountId) =>
+            resolveZalouserAccountSync({ cfg, accountId: resolvedAccountId }),
+          )
           .filter((account) => account.enabled);
     if (accounts.length === 0) {
       return null;

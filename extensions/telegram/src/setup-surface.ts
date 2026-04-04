@@ -105,9 +105,7 @@ const dmPolicy: ChannelSetupDmPolicy = {
       accountId: resolvedAccountId,
       patch: {
         dmPolicy: policy,
-        ...(policy === "open"
-          ? { allowFrom: addWildcardAllowFrom(merged.allowFrom) }
-          : {}),
+        ...(policy === "open" ? { allowFrom: addWildcardAllowFrom(merged.allowFrom) } : {}),
       },
     });
   },
@@ -127,8 +125,8 @@ export const telegramSetupWizard: ChannelSetupWizard = {
     resolveConfigured: ({ cfg, accountId }) =>
       (accountId ? [accountId] : listTelegramAccountIds(cfg)).some((resolvedAccountId) => {
         const account = inspectTelegramAccount({ cfg, accountId: resolvedAccountId });
-          return account.configured;
-        }),
+        return account.configured;
+      }),
   }),
   prepare: async ({ cfg, accountId, credentialValues }) => ({
     cfg: ensureTelegramDefaultGroupMentionGate(cfg, accountId),
