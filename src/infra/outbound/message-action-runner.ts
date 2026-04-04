@@ -22,7 +22,16 @@ import { hasPollCreationParams } from "../../poll-params.js";
 import { resolvePollMaxSelections } from "../../polls.js";
 import { buildChannelAccountBindings } from "../../routing/bindings.js";
 import { normalizeAgentId } from "../../routing/session-key.js";
-import { toWhatsappJid } from "../../utils.js";
+/** Minimal inline JID normalizer for same-chat comparison.
+ * TODO: Move WhatsApp-specific logic out of core (see PR #57413 review notes). */
+function toWhatsappJid(input: string): string {
+  const stripped = input.replace(/^whatsapp:/i, "").trim();
+  if (stripped.includes("@")) {
+    return stripped;
+  }
+  const digits = stripped.replace(/\D/g, "");
+  return `${digits}@s.whatsapp.net`;
+}
 import { type GatewayClientMode, type GatewayClientName } from "../../utils/message-channel.js";
 import { throwIfAborted } from "./abort.js";
 import { resolveOutboundChannelPlugin } from "./channel-resolution.js";
