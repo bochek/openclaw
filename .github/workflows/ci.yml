@@ -200,6 +200,11 @@ jobs:
                 ? [
                     { check_name: "checks-fast-bundled", runtime: "node", task: "bundled" },
                     {
+                      check_name: "checks-fast-prompt-cache",
+                      runtime: "node",
+                      task: "prompt-cache",
+                    },
+                    {
                       check_name: "checks-fast-contracts-protocol",
                       runtime: "node",
                       task: "contracts-protocol",
@@ -452,6 +457,9 @@ jobs:
           case "$TASK" in
             bundled)
               pnpm test:bundled
+              ;;
+            prompt-cache)
+              pnpm test:prompt-cache
               ;;
             contracts|contracts-protocol)
               pnpm build

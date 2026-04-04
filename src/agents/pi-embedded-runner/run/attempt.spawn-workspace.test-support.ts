@@ -42,7 +42,6 @@ type AttemptSpawnWorkspaceHoisted = {
   resolveSandboxContextMock: UnknownMock;
   subscribeEmbeddedPiSessionMock: Mock<SubscribeEmbeddedPiSessionFn>;
   acquireSessionWriteLockMock: Mock<AcquireSessionWriteLockFn>;
-  installToolResultContextGuardMock: UnknownMock;
   flushPendingToolResultsAfterIdleMock: AsyncUnknownMock;
   releaseWsSessionMock: UnknownMock;
   resolveBootstrapContextForRunMock: Mock<() => Promise<BootstrapContext>>;
@@ -57,7 +56,6 @@ const hoisted = vi.hoisted((): AttemptSpawnWorkspaceHoisted => {
   const createAgentSessionMock = vi.fn();
   const sessionManagerOpenMock = vi.fn();
   const resolveSandboxContextMock = vi.fn();
-  const installToolResultContextGuardMock = vi.fn(() => () => {});
   const flushPendingToolResultsAfterIdleMock = vi.fn(async () => {});
   const releaseWsSessionMock = vi.fn(() => {});
   const subscribeEmbeddedPiSessionMock = vi.fn<SubscribeEmbeddedPiSessionFn>(
@@ -104,7 +102,6 @@ const hoisted = vi.hoisted((): AttemptSpawnWorkspaceHoisted => {
     resolveSandboxContextMock,
     subscribeEmbeddedPiSessionMock,
     acquireSessionWriteLockMock,
-    installToolResultContextGuardMock,
     flushPendingToolResultsAfterIdleMock,
     releaseWsSessionMock,
     resolveBootstrapContextForRunMock,
@@ -234,11 +231,6 @@ vi.mock("../../session-write-lock.js", () => ({
   acquireSessionWriteLock: (params: Parameters<AcquireSessionWriteLockFn>[0]) =>
     hoisted.acquireSessionWriteLockMock(params),
   resolveSessionLockMaxHoldFromTimeout: () => 1,
-}));
-
-vi.mock("../tool-result-context-guard.js", () => ({
-  installToolResultContextGuard: (...args: unknown[]) =>
-    (hoisted.installToolResultContextGuardMock as (...args: unknown[]) => unknown)(...args),
 }));
 
 vi.mock("../wait-for-idle-before-flush.js", () => ({
@@ -565,7 +557,6 @@ export function resetEmbeddedAttemptHarness(
   hoisted.acquireSessionWriteLockMock.mockReset().mockResolvedValue({
     release: async () => {},
   });
-  hoisted.installToolResultContextGuardMock.mockReset().mockReturnValue(() => {});
   hoisted.flushPendingToolResultsAfterIdleMock.mockReset().mockResolvedValue(undefined);
   hoisted.releaseWsSessionMock.mockReset().mockReturnValue(undefined);
   hoisted.resolveBootstrapContextForRunMock.mockReset().mockResolvedValue({

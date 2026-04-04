@@ -337,6 +337,65 @@ describe("truncateOversizedToolResultsInSession", () => {
       openSpy.mockRestore();
     }
   });
+
+  it("preserves the existing prompt prefix when only the newest tool result is oversized", async () => {
+    const sessionFile = "/tmp/tool-result-truncation-prefix-stability.jsonl";
+    const sessionManager = SessionManager.inMemory();
+    sessionManager.appendMessage(makeUserMessage("summarize the first file"));
+    sessionManager.appendMessage(makeAssistantMessage("reading first file"));
+    sessionManager.appendMessage(makeToolResult("small result", "call_small"));
+    sessionManager.appendMessage(makeAssistantMessage("now reading the second file"));
+    sessionManager.appendMessage(makeToolResult("x".repeat(500_000), "call_large"));
+
+    const openSpy = vi
+      .spyOn(SessionManager, "open")
+      .mockReturnValue(sessionManager as unknown as ReturnType<typeof SessionManager.open>);
+
+    try {
+      const branchBefore = sessionManager.getBranch();
+      const prefixBefore = branchBefore.slice(0, 4).map((entry) => ({
+        id: entry.id,
+        type: entry.type,
+        message: entry.type === "message" ? JSON.stringify(entry.message) : undefined,
+      }));
+      const oversizedEntryBefore = branchBefore[4];
+
+      const result = await truncateOversizedToolResultsInSession({
+        sessionFile,
+        contextWindowTokens: 128_000,
+        sessionKey: "agent:main:test",
+      });
+
+      expect(result).toMatchObject({
+        truncated: true,
+        truncatedCount: 1,
+      });
+
+      const branchAfter = sessionManager.getBranch();
+      const prefixAfter = branchAfter.slice(0, 4).map((entry) => ({
+        id: entry.id,
+        type: entry.type,
+        message: entry.type === "message" ? JSON.stringify(entry.message) : undefined,
+      }));
+
+      expect(prefixAfter).toEqual(prefixBefore);
+
+      const rewrittenOversizedEntry = branchAfter[4];
+      expect(rewrittenOversizedEntry?.type).toBe("message");
+      expect(rewrittenOversizedEntry?.id).not.toBe(oversizedEntryBefore?.id);
+      if (
+        rewrittenOversizedEntry?.type !== "message" ||
+        rewrittenOversizedEntry.message.role !== "toolResult"
+      ) {
+        throw new Error("expected rewritten oversized tool result");
+      }
+      const rewrittenText = getFirstToolResultText(rewrittenOversizedEntry.message);
+      expect(rewrittenText.length).toBeLessThan(500_000);
+      expect(rewrittenText).toContain("truncated");
+    } finally {
+      openSpy.mockRestore();
+    }
+  });
 });
 
 describe("sessionLikelyHasOversizedToolResults", () => {
