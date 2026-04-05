@@ -1,6 +1,16 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import {
+  namedAccountPromotionKeys,
+  resolveSingleAccountPromotionTarget,
+  singleAccountKeysToMove,
+} from "../../../extensions/matrix/contract-api.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../../plugins/runtime.js";
 import { DEFAULT_ACCOUNT_ID } from "../../routing/session-key.js";
+import {
+  createChannelTestPluginBase,
+  createTestRegistry,
+} from "../../test-utils/channel-plugins.js";
 import {
   applySetupAccountConfigPatch,
   clearSetupPromotionRuntimeModuleCache,
@@ -14,8 +24,24 @@ function asConfig(value: unknown): OpenClawConfig {
   return value as OpenClawConfig;
 }
 
+const matrixSetupPlugin = {
+  ...createChannelTestPluginBase({ id: "matrix", label: "Matrix" }),
+  setup: {
+    singleAccountKeysToMove,
+    namedAccountPromotionKeys,
+    resolveSingleAccountPromotionTarget,
+  },
+};
+
+beforeEach(() => {
+  setActivePluginRegistry(
+    createTestRegistry([{ pluginId: "matrix", plugin: matrixSetupPlugin, source: "test" }]),
+  );
+});
+
 afterEach(() => {
   clearSetupPromotionRuntimeModuleCache();
+  resetPluginRuntimeStateForTest();
 });
 
 describe("applySetupAccountConfigPatch", () => {

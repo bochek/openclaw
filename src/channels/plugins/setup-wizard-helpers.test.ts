@@ -1,10 +1,16 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { singleAccountKeysToMove } from "../../../extensions/telegram/contract-api.js";
 import {
   resolveSetupWizardAllowFromEntries,
   resolveSetupWizardGroupAllowlist,
 } from "../../../test/helpers/plugins/setup-wizard.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import { resetPluginRuntimeStateForTest, setActivePluginRegistry } from "../../plugins/runtime.js";
 import { DEFAULT_ACCOUNT_ID } from "../../routing/session-key.js";
+import {
+  createChannelTestPluginBase,
+  createTestRegistry,
+} from "../../test-utils/channel-plugins.js";
 import {
   applySingleTokenPromptResult,
   buildSingleChannelSecretPromptState,
@@ -59,6 +65,23 @@ import {
   setSetupChannelEnabled,
   splitSetupEntries,
 } from "./setup-wizard-helpers.js";
+
+const telegramSetupPlugin = {
+  ...createChannelTestPluginBase({ id: "telegram", label: "Telegram" }),
+  setup: {
+    singleAccountKeysToMove,
+  },
+};
+
+beforeEach(() => {
+  setActivePluginRegistry(
+    createTestRegistry([{ pluginId: "telegram", plugin: telegramSetupPlugin, source: "test" }]),
+  );
+});
+
+afterEach(() => {
+  resetPluginRuntimeStateForTest();
+});
 
 function createPrompter(inputs: string[]) {
   return {
