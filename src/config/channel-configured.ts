@@ -21,6 +21,7 @@ function getBootstrapChannelPluginSafe(channelId: string) {
   try {
     return getBootstrapChannelPlugin(channelId);
   } catch {
+    // Facade/bootstrap callers must not fail just because an unrelated bundled channel explodes.
     return undefined;
   }
 }
