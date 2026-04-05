@@ -159,7 +159,7 @@ describe("matrix onboarding", () => {
     expect(noteText).toContain("MATRIX_<ACCOUNT_ID>_DEVICE_NAME");
   });
 
-  it("prompts for private-network access when onboarding an internal http homeserver", async () => {
+  it("accepts loopback http homeservers without storing private-network opt-in", async () => {
     installMatrixTestRuntime();
 
     const prompter = createMatrixWizardPrompter({
@@ -167,7 +167,7 @@ describe("matrix onboarding", () => {
         "Matrix auth method": "token",
       },
       text: {
-        "Matrix homeserver URL": "http://localhost.localdomain:8008",
+        "Matrix homeserver URL": "http://localhost:8008",
         "Matrix access token": "ops-token",
         "Matrix device name (optional)": "",
       },
@@ -189,12 +189,10 @@ describe("matrix onboarding", () => {
     }
 
     expect(result.cfg.channels?.matrix).toMatchObject({
-      homeserver: "http://localhost.localdomain:8008",
-      network: {
-        dangerouslyAllowPrivateNetwork: true,
-      },
+      homeserver: "http://localhost:8008",
       accessToken: "ops-token",
     });
+    expect(result.cfg.channels?.matrix?.network).toBeUndefined();
   });
 
   it("preserves SecretRef access tokens when keeping existing credentials", async () => {

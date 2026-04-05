@@ -150,14 +150,18 @@ export function loadBundledEntryExportSync<T>(
   reference: BundledEntryModuleRef,
 ): T {
   const loaded = loadBundledEntryModuleSync(importMetaUrl, reference.specifier);
+  const moduleRecord = loaded as Record<string, unknown> | undefined;
   const resolved =
-    loaded && typeof loaded === "object" && "default" in (loaded as Record<string, unknown>)
-      ? (loaded as { default: unknown }).default
+    moduleRecord && "default" in moduleRecord
+      ? (moduleRecord as { default: unknown }).default
       : loaded;
   if (!reference.exportName) {
     return resolved as T;
   }
-  const record = (resolved ?? loaded) as Record<string, unknown> | undefined;
+  if (moduleRecord && reference.exportName in moduleRecord) {
+    return moduleRecord[reference.exportName] as T;
+  }
+  const record = resolved as Record<string, unknown> | undefined;
   if (!record || !(reference.exportName in record)) {
     throw new Error(
       `missing export "${reference.exportName}" from bundled entry module ${reference.specifier}`,

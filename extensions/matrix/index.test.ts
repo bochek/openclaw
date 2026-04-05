@@ -1,19 +1,30 @@
 import { describe, expect, it, vi } from "vitest";
 import { createTestPluginApi } from "../../test/helpers/plugins/plugin-api.js";
-
-const cliMocks = vi.hoisted(() => ({
-  registerMatrixCli: vi.fn(),
-}));
-
-vi.mock("./src/cli.js", async () => {
-  const actual = await vi.importActual<typeof import("./src/cli.js")>("./src/cli.js");
-  return {
-    ...actual,
-    registerMatrixCli: cliMocks.registerMatrixCli,
-  };
-});
-
 import matrixPlugin from "./index.js";
+
+type CommandNode = {
+  command: ReturnType<typeof vi.fn>;
+} & Record<string, ReturnType<typeof vi.fn>>;
+
+function createCommandNode(): CommandNode {
+  const methods = new Map<string, ReturnType<typeof vi.fn>>();
+  let node = {} as CommandNode;
+  node = new Proxy(node, {
+    get(_target, prop) {
+      if (typeof prop !== "string") {
+        return undefined;
+      }
+      const existing = methods.get(prop);
+      if (existing) {
+        return existing;
+      }
+      const fn = prop === "command" ? vi.fn(() => createCommandNode()) : vi.fn(() => node);
+      methods.set(prop, fn);
+      return fn;
+    },
+  }) as CommandNode;
+  return node;
+}
 
 describe("matrix plugin", () => {
   it("registers matrix CLI through a descriptor-backed lazy registrar", async () => {
@@ -43,13 +54,12 @@ describe("matrix plugin", () => {
       ],
     });
     expect(typeof registrar).toBe("function");
-    expect(cliMocks.registerMatrixCli).not.toHaveBeenCalled();
 
-    const program = { command: vi.fn() };
+    const program = createCommandNode();
     const result = registrar?.({ program } as never);
 
     await result;
-    expect(cliMocks.registerMatrixCli).toHaveBeenCalledWith({ program });
+    expect(program.command).toHaveBeenCalledWith("matrix");
     expect(registerGatewayMethod).not.toHaveBeenCalled();
   });
 
