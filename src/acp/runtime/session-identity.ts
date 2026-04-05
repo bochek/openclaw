@@ -74,10 +74,18 @@ export function identityHasStableSessionId(identity: SessionAcpIdentity | undefi
 export function resolveRuntimeResumeSessionId(
   identity: SessionAcpIdentity | undefined,
 ): string | undefined {
+  return resolveRuntimeResumeSessionIds(identity)[0];
+}
+
+export function resolveRuntimeResumeSessionIds(identity: SessionAcpIdentity | undefined): string[] {
   if (!identity) {
-    return undefined;
+    return [];
   }
-  return normalizeText(identity.agentSessionId) ?? normalizeText(identity.acpxSessionId);
+  const resumeSessionIds = [
+    normalizeText(identity.agentSessionId),
+    normalizeText(identity.acpxSessionId),
+  ].filter((value): value is string => Boolean(value));
+  return Array.from(new Set(resumeSessionIds));
 }
 
 export function isSessionIdentityPending(identity: SessionAcpIdentity | undefined): boolean {

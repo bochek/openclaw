@@ -581,6 +581,7 @@ export async function cleanupMockRuntimeFixtures(): Promise<void> {
   delete process.env.MOCK_ACPX_NEW_EMPTY;
   delete process.env.MOCK_ACPX_AGENT_SESSION_PREFIX;
   delete process.env.MOCK_ACPX_PROMPT_LOAD_INVALID;
+  delete process.env.MOCK_ACPX_PROMPT_OMIT_LOAD_RESULT;
   delete process.env.MOCK_ACPX_PROMPT_NEW_AGENT_SESSION_ID;
   delete process.env.MOCK_ACPX_STATUS_STATUS;
   delete process.env.MOCK_ACPX_STATUS_NO_IDS;

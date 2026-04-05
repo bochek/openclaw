@@ -251,7 +251,14 @@ function mergeHandleStateWithFallbackIdentifiers(
 ): AcpxHandleState {
   const acpxRecordId = state.acpxRecordId ?? identifiers.acpxRecordId;
   const backendSessionId = state.backendSessionId ?? identifiers.backendSessionId;
-  const agentSessionId = state.agentSessionId ?? identifiers.agentSessionId;
+  // Status reconciliation can refresh handle.agentSessionId before the encoded runtime
+  // handle is rewritten. When the backend session still matches, trust the live handle id.
+  const agentSessionId =
+    identifiers.agentSessionId &&
+    identifiers.agentSessionId !== state.agentSessionId &&
+    (!identifiers.backendSessionId || identifiers.backendSessionId === state.backendSessionId)
+      ? identifiers.agentSessionId
+      : (state.agentSessionId ?? identifiers.agentSessionId);
   return {
     ...state,
     ...(acpxRecordId ? { acpxRecordId } : {}),

@@ -20,7 +20,7 @@ import {
   identityEquals,
   isSessionIdentityPending,
   mergeSessionIdentity,
-  resolveRuntimeResumeSessionId,
+  resolveRuntimeResumeSessionIds,
   resolveRuntimeHandleIdentifiersFromIdentity,
   resolveSessionIdentityFromMeta,
 } from "../runtime/session-identity.js";
@@ -1355,8 +1355,8 @@ export class AcpSessionManager {
     const previousMeta = params.meta;
     const previousIdentity = resolveSessionIdentityFromMeta(previousMeta);
     let identityForEnsure = previousIdentity;
-    const persistedResumeSessionId =
-      mode === "persistent" ? resolveRuntimeResumeSessionId(previousIdentity) : undefined;
+    const persistedResumeSessionIds =
+      mode === "persistent" ? resolveRuntimeResumeSessionIds(previousIdentity) : [];
     const ensureSession = async (resumeSessionId?: string) =>
       await withAcpRuntimeErrorBoundary({
         run: async () =>
@@ -1370,38 +1370,64 @@ export class AcpSessionManager {
         fallbackCode: "ACP_SESSION_INIT_FAILED",
         fallbackMessage: "Could not initialize ACP session runtime.",
       });
-    let ensured: AcpRuntimeHandle;
-    if (persistedResumeSessionId) {
-      try {
-        ensured = await ensureSession(persistedResumeSessionId);
-      } catch (error) {
-        const acpError = toAcpRuntimeError({
-          error,
-          fallbackCode: "ACP_SESSION_INIT_FAILED",
-          fallbackMessage: "Could not initialize ACP session runtime.",
-        });
-        if (acpError.code !== "ACP_SESSION_INIT_FAILED") {
-          throw acpError;
-        }
-        logVerbose(
-          `acp-manager: resume init failed for ${params.sessionKey}; retrying without persisted ACP session id: ${acpError.message}`,
-        );
-        if (identityForEnsure) {
-          const {
-            acpxSessionId: _staleAcpxSessionId,
-            agentSessionId: _staleAgentSessionId,
-            ...retryIdentity
-          } = identityForEnsure;
-          // The persisted resume identifiers already failed, so do not merge them back into the
-          // fresh named-session handle returned by the retry path.
-          identityForEnsure = {
-            ...retryIdentity,
-            state: "pending",
-          };
-        }
-        ensured = await ensureSession();
+    const stripRejectedResumeIdentifiers = (
+      identity: typeof identityForEnsure,
+      rejectedResumeSessionIds: ReadonlySet<string>,
+    ): typeof identityForEnsure => {
+      if (!identity || rejectedResumeSessionIds.size === 0) {
+        return identity;
       }
-    } else {
+      const {
+        acpxSessionId: staleAcpxSessionId,
+        agentSessionId: staleAgentSessionId,
+        ...baseIdentity
+      } = identity;
+      const acpxSessionId =
+        staleAcpxSessionId && !rejectedResumeSessionIds.has(staleAcpxSessionId)
+          ? staleAcpxSessionId
+          : undefined;
+      const agentSessionId =
+        staleAgentSessionId && !rejectedResumeSessionIds.has(staleAgentSessionId)
+          ? staleAgentSessionId
+          : undefined;
+      return {
+        ...baseIdentity,
+        ...(acpxSessionId ? { acpxSessionId } : {}),
+        ...(agentSessionId ? { agentSessionId } : {}),
+        state: acpxSessionId || agentSessionId ? identity.state : "pending",
+      };
+    };
+    let ensured: AcpRuntimeHandle | undefined;
+    if (persistedResumeSessionIds.length > 0) {
+      const rejectedResumeSessionIds = new Set<string>();
+      for (const [index, persistedResumeSessionId] of persistedResumeSessionIds.entries()) {
+        try {
+          ensured = await ensureSession(persistedResumeSessionId);
+          break;
+        } catch (error) {
+          const acpError = toAcpRuntimeError({
+            error,
+            fallbackCode: "ACP_SESSION_INIT_FAILED",
+            fallbackMessage: "Could not initialize ACP session runtime.",
+          });
+          if (acpError.code !== "ACP_SESSION_INIT_FAILED") {
+            throw acpError;
+          }
+          rejectedResumeSessionIds.add(persistedResumeSessionId);
+          identityForEnsure = stripRejectedResumeIdentifiers(
+            identityForEnsure,
+            rejectedResumeSessionIds,
+          );
+          const hasMoreResumeCandidates = index < persistedResumeSessionIds.length - 1;
+          logVerbose(
+            hasMoreResumeCandidates
+              ? `acp-manager: resume init failed for ${params.sessionKey}; retrying with the next persisted ACP session id: ${acpError.message}`
+              : `acp-manager: resume init failed for ${params.sessionKey}; retrying without persisted ACP session id: ${acpError.message}`,
+          );
+        }
+      }
+    }
+    if (!ensured) {
       ensured = await ensureSession();
     }
 

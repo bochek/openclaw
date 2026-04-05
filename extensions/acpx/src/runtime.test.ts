@@ -1103,7 +1103,7 @@ describe("AcpxRuntime", () => {
     expect(statusEntries.at(-1)?.sessionName).toBe("decoded-gemini-session");
   });
 
-  it("refreshes encoded runtime session identifiers after status learns a newer agent id", async () => {
+  it("prefers a refreshed handle agent session id when the encoded backend still matches", async () => {
     const { runtime, logPath } = await createMockRuntimeFixture();
     const sessionKey = "agent:gemini:acp:status-refresh";
     const handle = await runtime.ensureSession({
@@ -1156,7 +1156,7 @@ describe("AcpxRuntime", () => {
     const cancelEntries = (await readMockRuntimeLogEntries(logPath)).filter(
       (entry) => entry.kind === "cancel",
     );
-    expect(statusEntries.at(-1)?.sessionName).toBe("decoded-gemini-session");
+    expect(statusEntries.at(-1)?.sessionName).toBe("fresh-gemini-session");
     expect(cancelEntries.at(-1)?.sessionName).toBe("fresh-gemini-session");
   });
 
@@ -1190,5 +1190,17 @@ describe("AcpxRuntime", () => {
       delete process.env.MOCK_ACPX_ENSURE_NO_AGENT_SESSION_ID;
       delete process.env.MOCK_ACPX_PROMPT_OMIT_LOAD_RESULT;
     }
+  });
+
+  it("clears prompt-load mock env flags during fixture cleanup", async () => {
+    process.env.MOCK_ACPX_PROMPT_LOAD_INVALID = "1";
+    process.env.MOCK_ACPX_PROMPT_OMIT_LOAD_RESULT = "1";
+    process.env.MOCK_ACPX_PROMPT_NEW_AGENT_SESSION_ID = "gemini-session-cleanup";
+
+    await cleanupMockRuntimeFixtures();
+
+    expect(process.env.MOCK_ACPX_PROMPT_LOAD_INVALID).toBeUndefined();
+    expect(process.env.MOCK_ACPX_PROMPT_OMIT_LOAD_RESULT).toBeUndefined();
+    expect(process.env.MOCK_ACPX_PROMPT_NEW_AGENT_SESSION_ID).toBeUndefined();
   });
 });
