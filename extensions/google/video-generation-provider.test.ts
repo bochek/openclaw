@@ -39,7 +39,6 @@ describe("google video generation provider", () => {
       apiKey: "google-key",
       mode: "api-key",
       source: "env",
-      mode: "api-key",
     });
     generateVideosMock.mockResolvedValue({
       done: false,
@@ -103,7 +102,6 @@ describe("google video generation provider", () => {
       apiKey: "google-key",
       mode: "api-key",
       source: "env",
-      mode: "api-key",
     });
     const provider = buildGoogleVideoGenerationProvider();
 
