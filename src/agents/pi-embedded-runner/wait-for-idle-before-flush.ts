@@ -9,6 +9,13 @@ type ToolResultFlushManager = {
 
 export const DEFAULT_WAIT_FOR_IDLE_TIMEOUT_MS = 30_000;
 
+export type FlushPendingToolResultsAfterIdleOptions = {
+  agent: IdleAwareAgent | null | undefined;
+  sessionManager: ToolResultFlushManager | null | undefined;
+  timeoutMs?: number;
+  clearPendingOnTimeout?: boolean;
+};
+
 async function waitForAgentIdleBestEffort(
   agent: IdleAwareAgent | null | undefined,
   timeoutMs: number,
@@ -40,12 +47,9 @@ async function waitForAgentIdleBestEffort(
   }
 }
 
-export async function flushPendingToolResultsAfterIdle(opts: {
-  agent: IdleAwareAgent | null | undefined;
-  sessionManager: ToolResultFlushManager | null | undefined;
-  timeoutMs?: number;
-  clearPendingOnTimeout?: boolean;
-}): Promise<void> {
+export async function flushPendingToolResultsAfterIdle(
+  opts: FlushPendingToolResultsAfterIdleOptions,
+): Promise<void> {
   const timedOut = await waitForAgentIdleBestEffort(
     opts.agent,
     opts.timeoutMs ?? DEFAULT_WAIT_FOR_IDLE_TIMEOUT_MS,

@@ -21,8 +21,8 @@ describe("fal video generation provider", () => {
   it("posts to the model endpoint and downloads the returned video URL", async () => {
     vi.spyOn(providerAuth, "resolveApiKeyForProvider").mockResolvedValue({
       apiKey: "fal-key",
-      source: "env",
       mode: "api-key",
+      source: "env",
     });
     vi.spyOn(providerHttp, "resolveProviderHttpRequestConfig").mockReturnValue({
       baseUrl: "https://fal.run",

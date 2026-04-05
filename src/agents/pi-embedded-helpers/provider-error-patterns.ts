@@ -99,10 +99,18 @@ function resolveProviderRuntimeHooks(): ProviderRuntimeHooks | null {
     const loaded = requireProviderRuntime(
       "../../plugins/provider-runtime.js",
     ) as unknown as ProviderRuntimeModule;
+    const hooks = loaded as Partial<ProviderRuntimeHooks>;
+    if (
+      typeof hooks.classifyProviderFailoverReasonWithPlugin !== "function" ||
+      typeof hooks.matchesProviderContextOverflowWithPlugin !== "function"
+    ) {
+      cachedProviderRuntimeHooks = null;
+      return cachedProviderRuntimeHooks;
+    }
     cachedProviderRuntimeHooks = {
       classifyProviderFailoverReasonWithPlugin: ({ context }) =>
-        loaded.classifyProviderFailoverReasonWithPlugin({ context }) ?? null,
-      matchesProviderContextOverflowWithPlugin: loaded.matchesProviderContextOverflowWithPlugin,
+        hooks.classifyProviderFailoverReasonWithPlugin({ context }) ?? null,
+      matchesProviderContextOverflowWithPlugin: hooks.matchesProviderContextOverflowWithPlugin,
     };
   } catch {
     cachedProviderRuntimeHooks = null;

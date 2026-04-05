@@ -37,6 +37,7 @@ describe("google video generation provider", () => {
   it("submits generation and returns inline video bytes", async () => {
     vi.spyOn(providerAuthRuntime, "resolveApiKeyForProvider").mockResolvedValue({
       apiKey: "google-key",
+      mode: "api-key",
       source: "env",
       mode: "api-key",
     });
@@ -100,6 +101,7 @@ describe("google video generation provider", () => {
   it("rejects mixed image and video inputs", async () => {
     vi.spyOn(providerAuthRuntime, "resolveApiKeyForProvider").mockResolvedValue({
       apiKey: "google-key",
+      mode: "api-key",
       source: "env",
       mode: "api-key",
     });
