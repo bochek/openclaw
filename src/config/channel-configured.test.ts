@@ -1,5 +1,20 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { isChannelConfigured } from "./channel-configured.js";
+
+vi.mock("../channels/plugins/bootstrap-registry.js", async () => {
+  const actual = await vi.importActual<typeof import("../channels/plugins/bootstrap-registry.js")>(
+    "../channels/plugins/bootstrap-registry.js",
+  );
+  return {
+    ...actual,
+    getBootstrapChannelPlugin: vi.fn(actual.getBootstrapChannelPlugin),
+  };
+});
+
+async function getBootstrapRegistryMock() {
+  const module = await import("../channels/plugins/bootstrap-registry.js");
+  return vi.mocked(module.getBootstrapChannelPlugin);
+}
 
 describe("isChannelConfigured", () => {
   it("detects Telegram env configuration through the channel plugin seam", () => {
@@ -25,6 +40,27 @@ describe("isChannelConfigured", () => {
   });
 
   it("still falls back to generic config presence for channels without a custom hook", () => {
+    expect(
+      isChannelConfigured(
+        {
+          channels: {
+            signal: {
+              httpPort: 8080,
+            },
+          },
+        },
+        "signal",
+        {},
+      ),
+    ).toBe(true);
+  });
+
+  it("falls back to generic config presence when bootstrap registry loading throws", async () => {
+    const getBootstrapChannelPlugin = await getBootstrapRegistryMock();
+    getBootstrapChannelPlugin.mockImplementationOnce(() => {
+      throw new Error("boom");
+    });
+
     expect(
       isChannelConfigured(
         {

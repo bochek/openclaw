@@ -56,7 +56,7 @@ function shouldCopyRuntimeFile(sourcePath) {
 function writeRuntimeModuleWrapper(sourcePath, targetPath) {
   const specifier = relativeSymlinkTarget(sourcePath, targetPath).replace(/\\/g, "/");
   const normalizedSpecifier = specifier.startsWith(".") ? specifier : `./${specifier}`;
-  fs.writeFileSync(
+  writeFileIfChanged(
     targetPath,
     [
       `export * from ${JSON.stringify(normalizedSpecifier)};`,
@@ -64,12 +64,71 @@ function writeRuntimeModuleWrapper(sourcePath, targetPath) {
       "export default module.default;",
       "",
     ].join("\n"),
-    "utf8",
   );
+}
+
+function prepareWritableTarget(targetPath) {
+  try {
+    const stat = fs.lstatSync(targetPath);
+    if (!stat.isFile()) {
+      removePathIfExists(targetPath);
+    }
+  } catch {
+    // Target missing. Parent creation happens below.
+  }
+  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+}
+
+function writeFileIfChanged(targetPath, contents) {
+  prepareWritableTarget(targetPath);
+  const next = String(contents);
+  try {
+    if (fs.readFileSync(targetPath, "utf8") === next) {
+      return;
+    }
+  } catch {
+    // Rewrite when missing or unreadable.
+  }
+  fs.writeFileSync(targetPath, next, "utf8");
+}
+
+function copyFileIfChanged(sourcePath, targetPath) {
+  prepareWritableTarget(targetPath);
+  const next = fs.readFileSync(sourcePath);
+  try {
+    const current = fs.readFileSync(targetPath);
+    if (current.equals(next)) {
+      return;
+    }
+  } catch {
+    // Rewrite when missing or unreadable.
+  }
+  fs.writeFileSync(targetPath, next);
+}
+
+function removeStaleRuntimeEntries(sourceDir, targetDir) {
+  let targetEntries = [];
+  try {
+    targetEntries = fs.readdirSync(targetDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const entry of targetEntries) {
+    if (entry.name === "node_modules") {
+      continue;
+    }
+    const sourcePath = path.join(sourceDir, entry.name);
+    if (fs.existsSync(sourcePath)) {
+      continue;
+    }
+    removePathIfExists(path.join(targetDir, entry.name));
+  }
 }
 
 function stagePluginRuntimeOverlay(sourceDir, targetDir) {
   fs.mkdirSync(targetDir, { recursive: true });
+  removeStaleRuntimeEntries(sourceDir, targetDir);
 
   for (const dirent of fs.readdirSync(sourceDir, { withFileTypes: true })) {
     if (dirent.name === "node_modules") {
@@ -99,7 +158,7 @@ function stagePluginRuntimeOverlay(sourceDir, targetDir) {
     }
 
     if (shouldCopyRuntimeFile(sourcePath)) {
-      fs.copyFileSync(sourcePath, targetPath);
+      copyFileIfChanged(sourcePath, targetPath);
       continue;
     }
 
@@ -128,13 +187,14 @@ export function stageBundledPluginRuntime(params = {}) {
     return;
   }
 
-  removePathIfExists(runtimeRoot);
   fs.mkdirSync(runtimeExtensionsRoot, { recursive: true });
+  const sourcePluginIds = new Set();
 
   for (const dirent of fs.readdirSync(distExtensionsRoot, { withFileTypes: true })) {
     if (!dirent.isDirectory()) {
       continue;
     }
+    sourcePluginIds.add(dirent.name);
     const distPluginDir = path.join(distExtensionsRoot, dirent.name);
     const runtimePluginDir = path.join(runtimeExtensionsRoot, dirent.name);
     const distPluginNodeModulesDir = path.join(distPluginDir, "node_modules");
@@ -144,6 +204,16 @@ export function stageBundledPluginRuntime(params = {}) {
       runtimePluginDir,
       sourcePluginNodeModulesDir: distPluginNodeModulesDir,
     });
+  }
+
+  for (const dirent of fs.readdirSync(runtimeExtensionsRoot, { withFileTypes: true })) {
+    if (!dirent.isDirectory()) {
+      continue;
+    }
+    if (sourcePluginIds.has(dirent.name)) {
+      continue;
+    }
+    removePathIfExists(path.join(runtimeExtensionsRoot, dirent.name));
   }
 }
 

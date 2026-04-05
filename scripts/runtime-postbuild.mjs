@@ -85,8 +85,10 @@ export function runRuntimePostBuild(params = {}) {
   copyPluginSdkRootAlias(params);
   copyBundledPluginMetadata(params);
   writeOfficialChannelCatalog(params);
-  stageBundledPluginRuntimeDeps(params);
-  stageBundledPluginRuntime(params);
+  if (params.includeBundledRuntimeStaging !== false) {
+    stageBundledPluginRuntimeDeps(params);
+    stageBundledPluginRuntime(params);
+  }
   writeStableRootRuntimeAliases(params);
   copyStaticExtensionAssets(params);
 }

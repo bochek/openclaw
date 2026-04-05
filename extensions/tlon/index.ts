@@ -118,7 +118,7 @@ export default defineBundledChannelEntry({
   description: "Tlon/Urbit channel plugin",
   importMetaUrl: import.meta.url,
   plugin: {
-    specifier: "./api.js",
+    specifier: "./channel-entry.js",
     exportName: "tlonPlugin",
   },
   runtime: {

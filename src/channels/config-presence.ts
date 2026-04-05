@@ -39,6 +39,14 @@ function hasPersistedChannelState(env: NodeJS.ProcessEnv): boolean {
   return fs.existsSync(resolveStateDir(env, os.homedir));
 }
 
+function getBootstrapChannelPluginSafe(channelId: string) {
+  try {
+    return getBootstrapChannelPlugin(channelId);
+  } catch {
+    return undefined;
+  }
+}
+
 export function listPotentialConfiguredChannelIds(
   cfg: OpenClawConfig,
   env: NodeJS.ProcessEnv = process.env,
@@ -72,7 +80,7 @@ export function listPotentialConfiguredChannelIds(
 
   if (options.includePersistedAuthState !== false && hasPersistedChannelState(env)) {
     for (const channelId of channelIds) {
-      const plugin = getBootstrapChannelPlugin(channelId);
+      const plugin = getBootstrapChannelPluginSafe(channelId);
       if (plugin?.config?.hasPersistedAuthState?.({ cfg, env })) {
         configuredChannelIds.add(channelId);
       }
@@ -101,7 +109,7 @@ function hasEnvConfiguredChannel(
     return false;
   }
   return channelIds.some((channelId) =>
-    Boolean(getBootstrapChannelPlugin(channelId)?.config?.hasPersistedAuthState?.({ cfg, env })),
+    Boolean(getBootstrapChannelPluginSafe(channelId)?.config?.hasPersistedAuthState?.({ cfg, env })),
   );
 }
 

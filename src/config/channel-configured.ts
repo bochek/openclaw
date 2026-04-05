@@ -17,12 +17,20 @@ function isGenericChannelConfigured(cfg: OpenClawConfig, channelId: string): boo
   return hasMeaningfulChannelConfig(entry);
 }
 
+function getBootstrapChannelPluginSafe(channelId: string) {
+  try {
+    return getBootstrapChannelPlugin(channelId);
+  } catch {
+    return undefined;
+  }
+}
+
 export function isChannelConfigured(
   cfg: OpenClawConfig,
   channelId: string,
   env: NodeJS.ProcessEnv = process.env,
 ): boolean {
-  const plugin = getBootstrapChannelPlugin(channelId);
+  const plugin = getBootstrapChannelPluginSafe(channelId);
   const pluginConfigured = plugin?.config?.hasConfiguredState?.({ cfg, env });
   if (pluginConfigured) {
     return true;

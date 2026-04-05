@@ -70,6 +70,16 @@ async function writeRuntimePostBuildScaffold(tmp: string): Promise<void> {
   await fs.utimes(pluginSdkAliasPath, BUILD_TIME, BUILD_TIME);
 }
 
+async function writeRuntimeOverlayFiles(tmp: string, files: Record<string, string>) {
+  const runtimeFiles = Object.fromEntries(
+    Object.entries(files).map(([relativePath, contents]) => [
+      relativePath.replace(/^dist\//u, "dist-runtime/"),
+      contents,
+    ]),
+  );
+  await writeProjectFiles(tmp, runtimeFiles);
+}
+
 function expectedBuildSpawn() {
   return [process.execPath, "scripts/tsdown-build.mjs", "--no-clean"];
 }
@@ -179,7 +189,7 @@ async function runStatusCommand(params: {
   spawn: (cmd: string, args: string[]) => ReturnType<typeof createExitedProcess>;
   spawnSync?: (cmd: string, args: string[]) => { status: number; stdout: string };
   env?: Record<string, string>;
-  runRuntimePostBuild?: (params?: { cwd?: string }) => void;
+  runRuntimePostBuild?: (params: { cwd: string; includeBundledRuntimeStaging?: boolean }) => void;
 }) {
   return await runNodeMain({
     cwd: params.tmp,
@@ -351,6 +361,80 @@ describe("run-node script", () => {
       expect(exitCode).toBe(0);
       expect(spawnCalls).toEqual([statusCommandSpawn()]);
       expect(runRuntimePostBuild).not.toHaveBeenCalled();
+    });
+  });
+
+  it("skips bundled runtime staging on a clean tree when dist-runtime metadata is already current", async () => {
+    await withTempDir(async (tmp) => {
+      await setupTrackedProject(tmp, {
+        files: {
+          [ROOT_SRC]: "export const value = 1;\n",
+          [EXTENSION_MANIFEST]: '{"id":"demo","configSchema":{"type":"object"}}\n',
+          [EXTENSION_PACKAGE]: '{"name":"demo","openclaw":{"extensions":["./index.js"]}}\n',
+          [DIST_EXTENSION_MANIFEST]: '{"id":"demo","configSchema":{"type":"object"}}\n',
+          [DIST_EXTENSION_PACKAGE]: '{"name":"demo","openclaw":{"extensions":["./index.js"]}}\n',
+        },
+        oldPaths: [ROOT_SRC, ROOT_TSCONFIG, ROOT_PACKAGE, EXTENSION_MANIFEST, EXTENSION_PACKAGE],
+        buildPaths: [DIST_ENTRY, BUILD_STAMP, DIST_EXTENSION_MANIFEST, DIST_EXTENSION_PACKAGE],
+      });
+      await writeRuntimeOverlayFiles(tmp, {
+        [DIST_EXTENSION_MANIFEST]: '{"id":"demo","configSchema":{"type":"object"}}\n',
+        [DIST_EXTENSION_PACKAGE]: '{"name":"demo","openclaw":{"extensions":["./index.js"]}}\n',
+      });
+
+      const { spawnCalls, spawn, spawnSync } = createSpawnRecorder({
+        gitHead: "abc123\n",
+        gitStatus: "",
+      });
+      const runRuntimePostBuild = vi.fn();
+
+      const exitCode = await runStatusCommand({
+        tmp,
+        spawn,
+        spawnSync,
+        runRuntimePostBuild,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(spawnCalls).toEqual([statusCommandSpawn()]);
+      expect(runRuntimePostBuild).toHaveBeenCalledWith({
+        cwd: tmp,
+        includeBundledRuntimeStaging: false,
+      });
+    });
+  });
+
+  it("stages bundled runtime on a clean tree when dist-runtime metadata is missing", async () => {
+    await withTempDir(async (tmp) => {
+      await setupTrackedProject(tmp, {
+        files: {
+          [ROOT_SRC]: "export const value = 1;\n",
+          [EXTENSION_MANIFEST]: '{"id":"demo","configSchema":{"type":"object"}}\n',
+          [DIST_EXTENSION_MANIFEST]: '{"id":"demo","configSchema":{"type":"object"}}\n',
+        },
+        oldPaths: [ROOT_SRC, ROOT_TSCONFIG, ROOT_PACKAGE, EXTENSION_MANIFEST],
+        buildPaths: [DIST_ENTRY, BUILD_STAMP, DIST_EXTENSION_MANIFEST],
+      });
+
+      const { spawnCalls, spawn, spawnSync } = createSpawnRecorder({
+        gitHead: "abc123\n",
+        gitStatus: "",
+      });
+      const runRuntimePostBuild = vi.fn();
+
+      const exitCode = await runStatusCommand({
+        tmp,
+        spawn,
+        spawnSync,
+        runRuntimePostBuild,
+      });
+
+      expect(exitCode).toBe(0);
+      expect(spawnCalls).toEqual([statusCommandSpawn()]);
+      expect(runRuntimePostBuild).toHaveBeenCalledWith({
+        cwd: tmp,
+        includeBundledRuntimeStaging: true,
+      });
     });
   });
 

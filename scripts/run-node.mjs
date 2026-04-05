@@ -19,6 +19,7 @@ const runNodeConfigFiles = ["tsconfig.json", "package.json", "tsdown.config.ts"]
 export const runNodeWatchedPaths = [...runNodeSourceRoots, ...runNodeConfigFiles];
 const extensionSourceFilePattern = /\.(?:[cm]?[jt]sx?)$/;
 const extensionRestartMetadataFiles = new Set(["openclaw.plugin.json", "package.json"]);
+const runtimeMetadataFiles = ["package.json", "openclaw.plugin.json"];
 
 const normalizePath = (filePath) => String(filePath ?? "").replaceAll("\\", "/");
 
@@ -179,6 +180,75 @@ const readBuildStamp = (deps) => {
   }
 };
 
+const readUtf8IfExists = (filePath, fsImpl = fs) => {
+  try {
+    return fsImpl.readFileSync(filePath, "utf8");
+  } catch {
+    return null;
+  }
+};
+
+const hasCurrentBundledRuntimeOverlay = (deps) => {
+  const distExtensionsRoot = path.join(deps.distRoot, "extensions");
+  const runtimeRoot = path.join(deps.cwd, "dist-runtime");
+  const runtimeExtensionsRoot = path.join(runtimeRoot, "extensions");
+
+  if (!deps.fs.existsSync(distExtensionsRoot)) {
+    return !deps.fs.existsSync(runtimeRoot);
+  }
+  if (!deps.fs.existsSync(runtimeExtensionsRoot)) {
+    return false;
+  }
+
+  const sourcePluginIds = new Set();
+  let distEntries = [];
+  try {
+    distEntries = deps.fs.readdirSync(distExtensionsRoot, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+
+  for (const entry of distEntries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    sourcePluginIds.add(entry.name);
+    const distPluginDir = path.join(distExtensionsRoot, entry.name);
+    const runtimePluginDir = path.join(runtimeExtensionsRoot, entry.name);
+    if (!deps.fs.existsSync(runtimePluginDir)) {
+      return false;
+    }
+    for (const fileName of runtimeMetadataFiles) {
+      const distValue = readUtf8IfExists(path.join(distPluginDir, fileName), deps.fs);
+      const runtimeValue = readUtf8IfExists(path.join(runtimePluginDir, fileName), deps.fs);
+      if (distValue !== runtimeValue) {
+        return false;
+      }
+    }
+    const distNodeModulesDir = path.join(distPluginDir, "node_modules");
+    const runtimeNodeModulesDir = path.join(runtimePluginDir, "node_modules");
+    if (deps.fs.existsSync(distNodeModulesDir) !== deps.fs.existsSync(runtimeNodeModulesDir)) {
+      return false;
+    }
+  }
+
+  try {
+    const runtimeEntries = deps.fs.readdirSync(runtimeExtensionsRoot, { withFileTypes: true });
+    for (const entry of runtimeEntries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      if (!sourcePluginIds.has(entry.name)) {
+        return false;
+      }
+    }
+  } catch {
+    return false;
+  }
+
+  return true;
+};
+
 const hasSourceMtimeChanged = (stampMtime, deps) => {
   let latestSourceMtime = null;
   for (const sourceRoot of deps.sourceRoots) {
@@ -329,9 +399,12 @@ const runOpenClaw = async (deps) => {
   return res.exitCode ?? 1;
 };
 
-const syncRuntimeArtifacts = (deps) => {
+const syncRuntimeArtifacts = (deps, options = {}) => {
   try {
-    deps.runRuntimePostBuild({ cwd: deps.cwd });
+    deps.runRuntimePostBuild({
+      cwd: deps.cwd,
+      includeBundledRuntimeStaging: options.includeBundledRuntimeStaging,
+    });
   } catch (error) {
     logRunner(
       `Failed to write runtime build artifacts: ${error?.message ?? "unknown error"}`,
@@ -382,7 +455,12 @@ export async function runNodeMain(params = {}) {
 
   const buildRequirement = resolveBuildRequirement(deps);
   if (!buildRequirement.shouldBuild) {
-    if (!shouldSkipCleanWatchRuntimeSync(deps) && !syncRuntimeArtifacts(deps)) {
+    if (
+      !shouldSkipCleanWatchRuntimeSync(deps) &&
+      !syncRuntimeArtifacts(deps, {
+        includeBundledRuntimeStaging: !hasCurrentBundledRuntimeOverlay(deps),
+      })
+    ) {
       return 1;
     }
     return await runOpenClaw(deps);
@@ -410,7 +488,7 @@ export async function runNodeMain(params = {}) {
   if (buildRes.exitCode !== 0 && buildRes.exitCode !== null) {
     return buildRes.exitCode;
   }
-  if (!syncRuntimeArtifacts(deps)) {
+  if (!syncRuntimeArtifacts(deps, { includeBundledRuntimeStaging: true })) {
     return 1;
   }
   writeBuildStamp(deps);

@@ -6,7 +6,7 @@ export default defineBundledChannelEntry({
   description: "Zalo channel plugin",
   importMetaUrl: import.meta.url,
   plugin: {
-    specifier: "./api.js",
+    specifier: "./channel-entry.js",
     exportName: "zaloPlugin",
   },
   runtime: {
