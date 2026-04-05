@@ -108,6 +108,8 @@ type ZaloMessageAuthorizationResult = {
   senderName: string | undefined;
 };
 
+const ZALO_POLL_ABORTED = Symbol("zalo-poll-aborted");
+
 function formatZaloError(error: unknown): string {
   if (error instanceof Error) {
     return error.stack ?? `${error.name}: ${error.message}`;
@@ -133,6 +135,19 @@ function logVerbose(core: ZaloCoreRuntime, runtime: ZaloRuntimeEnv, message: str
   if (core.logging.shouldLogVerbose()) {
     runtime.log?.(`[zalo] ${message}`);
   }
+}
+
+async function waitForAbortResult(signal: AbortSignal): Promise<typeof ZALO_POLL_ABORTED> {
+  await waitForAbortSignal(signal);
+  return ZALO_POLL_ABORTED;
+}
+
+async function waitWithAbort(ms: number, signal: AbortSignal): Promise<boolean> {
+  const timerResult = await Promise.race([
+    new Promise<true>((resolve) => setTimeout(() => resolve(true), ms)),
+    waitForAbortResult(signal),
+  ]);
+  return timerResult !== ZALO_POLL_ABORTED;
 }
 
 export function registerZaloWebhookTarget(target: ZaloWebhookTarget): () => void {
@@ -214,7 +229,13 @@ function startPollingLoop(params: ZaloPollingLoopParams) {
     }
 
     try {
-      const response = await getUpdates(token, { timeout: pollTimeout }, fetcher);
+      const response = await Promise.race([
+        getUpdates(token, { timeout: pollTimeout }, fetcher),
+        waitForAbortResult(abortSignal),
+      ]);
+      if (response === ZALO_POLL_ABORTED || isStopped() || abortSignal.aborted) {
+        return;
+      }
       if (response.ok && response.result) {
         statusSink?.({ lastInboundAt: Date.now() });
         await processUpdate({
@@ -227,7 +248,9 @@ function startPollingLoop(params: ZaloPollingLoopParams) {
         // no updates
       } else if (!isStopped() && !abortSignal.aborted) {
         runtime.error?.(`[${account.accountId}] Zalo polling error: ${formatZaloError(err)}`);
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        if (!(await waitWithAbort(5000, abortSignal))) {
+          return;
+        }
       }
     }
 
