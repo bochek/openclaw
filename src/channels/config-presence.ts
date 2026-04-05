@@ -43,6 +43,7 @@ function getBootstrapChannelPluginSafe(channelId: string) {
   try {
     return getBootstrapChannelPlugin(channelId);
   } catch {
+    // Config discovery must stay resilient while unrelated bundled channels are mid-refactor.
     return undefined;
   }
 }
