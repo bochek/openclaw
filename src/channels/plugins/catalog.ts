@@ -9,6 +9,7 @@ import type { OpenClawPackageManifest } from "../../plugins/manifest.js";
 import type { PackageManifest as PluginPackageManifest } from "../../plugins/manifest.js";
 import type { PluginOrigin } from "../../plugins/types.js";
 import { isRecord, resolveConfigDir, resolveUserPath } from "../../utils.js";
+import { resolveChannelExposure } from "./exposure.js";
 import type { ChannelMeta } from "./types.js";
 
 export type ChannelUiMetaEntry = {
@@ -182,6 +183,7 @@ function toChannelMeta(params: {
   const docsPath = params.channel.docsPath?.trim() || `/channels/${params.id}`;
   const blurb = params.channel.blurb?.trim() || "";
   const systemImage = params.channel.systemImage?.trim();
+  const exposure = resolveChannelExposure(params.channel);
 
   return {
     id: params.id,
@@ -205,9 +207,7 @@ function toChannelMeta(params: {
     ...(params.channel.markdownCapable !== undefined
       ? { markdownCapable: params.channel.markdownCapable }
       : {}),
-    ...(params.channel.showConfigured !== undefined
-      ? { showConfigured: params.channel.showConfigured }
-      : {}),
+    exposure,
     ...(params.channel.quickstartAllowFrom !== undefined
       ? { quickstartAllowFrom: params.channel.quickstartAllowFrom }
       : {}),
