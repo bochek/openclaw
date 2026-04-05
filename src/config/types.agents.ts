@@ -71,8 +71,6 @@ export type AgentConfig = {
   verboseDefault?: "off" | "on" | "full";
   /** Optional per-agent default reasoning visibility. */
   reasoningDefault?: "on" | "off" | "stream";
-  /** Optional per-agent default verbose level. */
-  verboseDefault?: "off" | "on" | "full";
   /** Optional per-agent default for fast mode. */
   fastModeDefault?: boolean;
   /** Optional allowlist of skills for this agent; omitting it inherits agents.defaults.skills when set, and an explicit list replaces defaults instead of merging. */
