@@ -168,4 +168,50 @@ describe("resolvePluginWebFetchProviders", () => {
     ]);
     expect(loadOpenClawPluginsMock).not.toHaveBeenCalled();
   });
+
+  it("uses the active registry workspace for candidate discovery and snapshot loads when workspaceDir is omitted", () => {
+    const env = createWebFetchEnv();
+    const rawConfig = createFirecrawlAllowConfig();
+
+    setActivePluginRegistry(createEmptyPluginRegistry(), undefined, "default", "/tmp/runtime-workspace");
+
+    resolvePluginWebFetchProviders({
+      config: rawConfig,
+      bundledAllowlistCompat: true,
+      env,
+    });
+
+    expect(manifestRegistryModule.loadPluginManifestRegistry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceDir: "/tmp/runtime-workspace",
+      }),
+    );
+    expect(loadOpenClawPluginsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceDir: "/tmp/runtime-workspace",
+        onlyPluginIds: ["firecrawl"],
+      }),
+    );
+  });
+
+  it("invalidates web-fetch snapshot memoization when the active registry workspace changes", () => {
+    const env = createWebFetchEnv();
+    const config = createFirecrawlAllowConfig();
+
+    setActivePluginRegistry(createEmptyPluginRegistry(), undefined, "default", "/tmp/workspace-a");
+    resolvePluginWebFetchProviders({
+      config,
+      bundledAllowlistCompat: true,
+      env,
+    });
+
+    setActivePluginRegistry(createEmptyPluginRegistry(), undefined, "default", "/tmp/workspace-b");
+    resolvePluginWebFetchProviders({
+      config,
+      bundledAllowlistCompat: true,
+      env,
+    });
+
+    expect(loadOpenClawPluginsMock).toHaveBeenCalledTimes(2);
+  });
 });

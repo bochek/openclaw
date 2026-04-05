@@ -14,10 +14,26 @@ import {
   resolveMemoryFlushPlan,
 } from "./memory-state.js";
 import { createEmptyPluginRegistry } from "./registry.js";
-import { setActivePluginRegistry } from "./runtime.js";
+import { getActivePluginRegistryWorkspaceDir, setActivePluginRegistry } from "./runtime.js";
 
 afterEach(() => {
   resetPluginLoaderTestStateForTest();
+});
+
+describe("setActivePluginRegistry workspaceDir", () => {
+  it("stores and exposes the workspaceDir used at activation time", () => {
+    const registry = createEmptyPluginRegistry();
+    setActivePluginRegistry(registry, "key", "default", "/data/workspace");
+
+    expect(getActivePluginRegistryWorkspaceDir()).toBe("/data/workspace");
+  });
+
+  it("returns undefined when no workspaceDir was provided", () => {
+    const registry = createEmptyPluginRegistry();
+    setActivePluginRegistry(registry, "key");
+
+    expect(getActivePluginRegistryWorkspaceDir()).toBeUndefined();
+  });
 });
 
 describe("getCompatibleActivePluginRegistry", () => {

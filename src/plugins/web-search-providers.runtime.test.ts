@@ -398,12 +398,58 @@ describe("resolvePluginWebSearchProviders", () => {
     expectScopedWebSearchCandidates(["brave"]);
   });
 
+  it("uses the active registry workspace for candidate discovery and snapshot loads when workspaceDir is omitted", () => {
+    const env = createWebSearchEnv();
+    const rawConfig = createBraveAllowConfig();
+
+    setActivePluginRegistry(createEmptyPluginRegistry(), undefined, "default", "/tmp/runtime-workspace");
+
+    resolvePluginWebSearchProviders({
+      config: rawConfig,
+      bundledAllowlistCompat: true,
+      env,
+    });
+
+    expect(loadPluginManifestRegistryMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceDir: "/tmp/runtime-workspace",
+      }),
+    );
+    expect(loadOpenClawPluginsMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceDir: "/tmp/runtime-workspace",
+        onlyPluginIds: ["brave"],
+      }),
+    );
+  });
+
   it("memoizes snapshot provider resolution for the same config and env", () => {
     expectSnapshotMemoization({
       config: createBraveAllowConfig(),
       env: createWebSearchEnv(),
       expectedLoaderCalls: 1,
     });
+  });
+
+  it("invalidates web-search snapshot memoization when the active registry workspace changes", () => {
+    const config = createBraveAllowConfig();
+    const env = createWebSearchEnv();
+
+    setActivePluginRegistry(createEmptyPluginRegistry(), undefined, "default", "/tmp/workspace-a");
+    resolvePluginWebSearchProviders({
+      config,
+      bundledAllowlistCompat: true,
+      env,
+    });
+
+    setActivePluginRegistry(createEmptyPluginRegistry(), undefined, "default", "/tmp/workspace-b");
+    resolvePluginWebSearchProviders({
+      config,
+      bundledAllowlistCompat: true,
+      env,
+    });
+
+    expect(loadOpenClawPluginsMock).toHaveBeenCalledTimes(2);
   });
 
   it("reuses a compatible active registry for snapshot resolution when config is provided", () => {

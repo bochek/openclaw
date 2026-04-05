@@ -14,6 +14,7 @@ import {
   resolveOwningPluginIdsForModelRefs,
   withBundledProviderVitestCompat,
 } from "./providers.js";
+import { getActivePluginRegistryWorkspaceDir } from "./runtime.js";
 import type { ProviderPlugin } from "./types.js";
 
 const log = createSubsystemLogger("plugins");
@@ -33,11 +34,12 @@ export function resolvePluginProviders(params: {
   mode?: "runtime" | "setup";
 }): ProviderPlugin[] {
   const env = params.env ?? process.env;
+  const workspaceDir = params.workspaceDir ?? getActivePluginRegistryWorkspaceDir();
   const modelOwnedPluginIds = params.modelRefs?.length
     ? resolveOwningPluginIdsForModelRefs({
         models: params.modelRefs,
         config: params.config,
-        workspaceDir: params.workspaceDir,
+        workspaceDir,
         env,
       })
     : [];
@@ -82,7 +84,7 @@ export function resolvePluginProviders(params: {
   const activation = resolveBundledPluginCompatibleActivationInputs({
     rawConfig: runtimeConfig,
     env,
-    workspaceDir: params.workspaceDir,
+    workspaceDir,
     onlyPluginIds: requestedPluginIds,
     applyAutoEnable: true,
     compatMode: {
@@ -101,7 +103,7 @@ export function resolvePluginProviders(params: {
     : activation.config;
   const providerPluginIds = resolveEnabledProviderPluginIds({
     config,
-    workspaceDir: params.workspaceDir,
+    workspaceDir,
     env,
     onlyPluginIds: requestedPluginIds,
   });
@@ -109,7 +111,7 @@ export function resolvePluginProviders(params: {
     config,
     activationSourceConfig: activation.activationSourceConfig,
     autoEnabledReasons: activation.autoEnabledReasons,
-    workspaceDir: params.workspaceDir,
+    workspaceDir,
     env,
     onlyPluginIds: providerPluginIds,
     pluginSdkResolution: params.pluginSdkResolution,
