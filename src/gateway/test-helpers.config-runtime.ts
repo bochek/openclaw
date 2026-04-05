@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import fsSync from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
@@ -6,14 +7,52 @@ import { vi } from "vitest";
 import type { ReadConfigFileSnapshotForWriteResult } from "../config/io.js";
 import { applyPluginAutoEnable } from "../config/plugin-auto-enable.js";
 import type { AgentBinding } from "../config/types.agents.js";
-import type { ConfigFileSnapshot, OpenClawConfig } from "../config/types.js";
-import { buildTestConfigSnapshot } from "./test-helpers.config-snapshots.js";
+import type {
+  ConfigFileSnapshot,
+  OpenClawConfig,
+  ResolvedSourceConfig,
+  RuntimeConfig,
+} from "../config/types.js";
 import { testConfigRoot, testIsNixMode, testState } from "./test-helpers.runtime-state.js";
 
 type GatewayConfigModule = typeof import("../config/config.js");
 
 export function createGatewayConfigModuleMock(actual: GatewayConfigModule): GatewayConfigModule {
   const resolveConfigPath = () => path.join(testConfigRoot.value, "openclaw.json");
+  const hashConfigRaw = (raw: string | null) =>
+    crypto
+      .createHash("sha256")
+      .update(raw ?? "")
+      .digest("hex");
+
+  const buildSnapshot = (params: {
+    path: string;
+    exists: boolean;
+    raw: string | null;
+    parsed: unknown;
+    valid: boolean;
+    runtimeConfig: OpenClawConfig;
+    issues: Array<{ path: string; message: string }>;
+    legacyIssues: Array<{ path: string; message: string }>;
+  }): ConfigFileSnapshot => {
+    const runtimeConfig = params.runtimeConfig as RuntimeConfig;
+    const resolved = params.runtimeConfig as ResolvedSourceConfig;
+    return {
+      path: params.path,
+      exists: params.exists,
+      raw: params.raw,
+      parsed: params.parsed,
+      sourceConfig: resolved,
+      resolved,
+      valid: params.valid,
+      runtimeConfig,
+      config: runtimeConfig,
+      hash: hashConfigRaw(params.raw),
+      issues: params.issues,
+      warnings: [],
+      legacyIssues: params.legacyIssues,
+    };
+  };
 
   const composeTestConfig = (baseConfig: Record<string, unknown>) => {
     const fileAgents =
@@ -151,58 +190,58 @@ export function createGatewayConfigModuleMock(actual: GatewayConfigModule): Gate
   const readConfigFileSnapshot = async (): Promise<ConfigFileSnapshot> => {
     if (testState.legacyIssues.length > 0) {
       const raw = JSON.stringify(testState.legacyParsed ?? {});
-      return buildTestConfigSnapshot({
+      return buildSnapshot({
         path: resolveConfigPath(),
         exists: true,
         raw,
         parsed: testState.legacyParsed ?? {},
         valid: false,
-        config: composeTestConfig({}),
         issues: testState.legacyIssues.map((issue) => ({
           path: issue.path,
           message: issue.message,
         })),
         legacyIssues: testState.legacyIssues,
+        runtimeConfig: {},
       });
     }
     const configPath = resolveConfigPath();
     try {
       await fs.access(configPath);
     } catch {
-      return buildTestConfigSnapshot({
+      return buildSnapshot({
         path: configPath,
         exists: false,
         raw: null,
         parsed: {},
         valid: true,
-        config: composeTestConfig({}),
         issues: [],
         legacyIssues: [],
+        runtimeConfig: composeTestConfig({}),
       });
     }
     try {
       const raw = await fs.readFile(configPath, "utf-8");
       const parsed = JSON.parse(raw) as Record<string, unknown>;
-      return buildTestConfigSnapshot({
+      return buildSnapshot({
         path: configPath,
         exists: true,
         raw,
         parsed,
         valid: true,
-        config: composeTestConfig(parsed),
         issues: [],
         legacyIssues: [],
+        runtimeConfig: composeTestConfig(parsed),
       });
     } catch (err) {
-      return buildTestConfigSnapshot({
+      return buildSnapshot({
         path: configPath,
         exists: true,
         raw: null,
         parsed: {},
         valid: false,
-        config: composeTestConfig({}),
         issues: [{ path: "", message: `read failed: ${String(err)}` }],
         legacyIssues: [],
+        runtimeConfig: {},
       });
     }
   };
