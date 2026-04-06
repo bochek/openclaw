@@ -196,7 +196,7 @@ img.chat-avatar {
   word-wrap: break-word;
 }
 
-.chat-bubble.has-copy {
+.chat-bubble.has-actions {
   padding-right: 70px;
 }
 

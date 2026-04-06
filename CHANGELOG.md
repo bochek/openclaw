@@ -37,6 +37,7 @@ Docs: https://docs.openclaw.ai
 - iOS/Watch exec approvals: keep Apple Watch review and approval recovery working while the iPhone is locked or backgrounded, including background-safe reconnects, persisted pending approvals, notification cleanup, and APNs-backed watch refresh recovery. (#61757) Thanks @ngutman.
 - Gateway/status: probe local TLS gateways over `wss://`, forward the local cert fingerprint for self-signed loopback probes, and warn when the local TLS runtime cannot load the configured cert. (#61935) Thanks @ThanhNguyxn07.
 - Agents/history: keep truly legacy unsigned replay text unphased when mixed with phased OpenAI WS assistant blocks, while still inheriting message phase for id-only replay signatures. (#61529) Thanks @100yenadmin.
+- Control UI/chat: reserve right-side bubble padding whenever grouped assistant-message action buttons render so Canvas and Copy controls stop overlapping the message text. (#61872) Thanks @jjjojoj.
 
 ## 2026.4.5
 

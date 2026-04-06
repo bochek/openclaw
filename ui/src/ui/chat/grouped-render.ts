@@ -752,10 +752,6 @@ function renderGroupedMessage(
   // Detect pure-JSON messages and render as collapsible block
   const jsonResult = markdown && !opts.isStreaming ? detectJson(markdown) : null;
 
-  const bubbleClasses = ["chat-bubble", opts.isStreaming ? "streaming" : "", "fade-in", canCopyMarkdown ? "has-copy" : ""]
-    .filter(Boolean)
-    .join(" ");
-
   if (!markdown && hasToolCards && isToolResult) {
     return renderCollapsedToolCards(toolCards, onOpenSidebar);
   }
@@ -776,6 +772,14 @@ function renderGroupedMessage(
     markdown && !toolSummaryLabel ? markdown.trim().replace(/\s+/g, " ").slice(0, 120) : "";
 
   const hasActions = canCopyMarkdown || canExpand;
+  const bubbleClasses = [
+    "chat-bubble",
+    opts.isStreaming ? "streaming" : "",
+    "fade-in",
+    hasActions ? "has-actions" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return html`
     <div class="${bubbleClasses}">
