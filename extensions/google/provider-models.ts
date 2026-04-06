@@ -150,7 +150,7 @@ export function resolveGoogleGeminiForwardCompatModel(params: {
       googleTemplateIds: GEMMA_TEMPLATE_IDS,
       cliTemplateIds: GEMMA_TEMPLATE_IDS,
     };
-    patch = { reasoning: false };
+    patch = { reasoning: true };
   } else {
     return undefined;
   }

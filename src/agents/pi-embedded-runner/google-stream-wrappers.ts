@@ -8,6 +8,10 @@ function isGemini31Model(modelId: string): boolean {
   return normalized.includes("gemini-3.1-pro") || normalized.includes("gemini-3.1-flash");
 }
 
+function isGemma4Model(modelId: string): boolean {
+  return modelId.trim().toLowerCase().startsWith("gemma-4");
+}
+
 function mapThinkLevelToGoogleThinkingLevel(
   thinkingLevel: ThinkLevel,
 ): "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | undefined {
@@ -21,6 +25,40 @@ function mapThinkLevelToGoogleThinkingLevel(
       return "MEDIUM";
     case "high":
     case "xhigh":
+      return "HIGH";
+    default:
+      return undefined;
+  }
+}
+
+function mapThinkLevelToGemma4ThinkingLevel(
+  thinkingLevel?: ThinkLevel,
+): "MINIMAL" | "HIGH" | undefined {
+  switch (thinkingLevel) {
+    case "off":
+    case "minimal":
+    case "low":
+      return "MINIMAL";
+    case "medium":
+    case "adaptive":
+    case "high":
+    case "xhigh":
+      return "HIGH";
+    default:
+      return undefined;
+  }
+}
+
+function normalizeGemma4ThinkingLevel(value: unknown): "MINIMAL" | "HIGH" | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  switch (value.trim().toUpperCase()) {
+    case "MINIMAL":
+    case "LOW":
+      return "MINIMAL";
+    case "MEDIUM":
+    case "HIGH":
       return "HIGH";
     default:
       return undefined;
@@ -46,6 +84,22 @@ export function sanitizeGoogleThinkingPayload(params: {
     return;
   }
   const thinkingConfigObj = thinkingConfig as Record<string, unknown>;
+
+  if (typeof params.modelId === "string" && isGemma4Model(params.modelId)) {
+    const hadThinkingBudget = thinkingConfigObj.thinkingBudget !== undefined;
+    delete thinkingConfigObj.thinkingBudget;
+
+    const mappedLevel =
+      mapThinkLevelToGemma4ThinkingLevel(params.thinkingLevel) ??
+      normalizeGemma4ThinkingLevel(thinkingConfigObj.thinkingLevel) ??
+      (hadThinkingBudget ? "MINIMAL" : undefined);
+
+    if (mappedLevel) {
+      thinkingConfigObj.thinkingLevel = mappedLevel;
+    }
+    return;
+  }
+
   const thinkingBudget = thinkingConfigObj.thinkingBudget;
   if (typeof thinkingBudget !== "number" || thinkingBudget >= 0) {
     return;

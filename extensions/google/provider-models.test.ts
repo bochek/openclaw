@@ -222,7 +222,7 @@ describe("resolveGoogleGeminiForwardCompatModel", () => {
     expect(isModernGoogleModel("gemma-3-4b-it")).toBe(true);
   });
 
-  it("resolves gemma model with reasoning forced off regardless of template", () => {
+  it("resolves gemma model with reasoning enabled regardless of template", () => {
     const model = resolveGoogleGeminiForwardCompatModel({
       providerId: "google",
       ctx: createContext({
@@ -235,7 +235,7 @@ describe("resolveGoogleGeminiForwardCompatModel", () => {
     expect(model).toMatchObject({
       provider: "google",
       id: "gemma-4-26b-a4b-it",
-      reasoning: false, // patch must override the template value
+      reasoning: true, // patch must override the template value
     });
   });
 });
