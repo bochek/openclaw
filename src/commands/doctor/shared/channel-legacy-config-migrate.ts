@@ -1,19 +1,31 @@
-import { iterateBootstrapChannelPlugins } from "../../../channels/plugins/bootstrap-registry.js";
 import type { OpenClawConfig } from "../../../config/types.js";
+import { applyPluginDoctorCompatibilityMigrations } from "../../../plugins/doctor-contract-registry.js";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function collectRelevantDoctorChannelIds(raw: unknown): string[] {
+  const channels = asRecord(asRecord(raw)?.channels);
+  if (!channels) {
+    return [];
+  }
+  return Object.keys(channels)
+    .filter((channelId) => channelId !== "defaults")
+    .toSorted();
+}
 
 export function applyChannelDoctorCompatibilityMigrations(cfg: Record<string, unknown>): {
   next: Record<string, unknown>;
   changes: string[];
 } {
-  let nextCfg = cfg as OpenClawConfig & Record<string, unknown>;
-  const changes: string[] = [];
-  for (const plugin of iterateBootstrapChannelPlugins()) {
-    const mutation = plugin.doctor?.normalizeCompatibilityConfig?.({ cfg: nextCfg });
-    if (!mutation || mutation.changes.length === 0) {
-      continue;
-    }
-    nextCfg = mutation.config as OpenClawConfig & Record<string, unknown>;
-    changes.push(...mutation.changes);
-  }
-  return { next: nextCfg, changes };
+  const compat = applyPluginDoctorCompatibilityMigrations(cfg as OpenClawConfig, {
+    pluginIds: collectRelevantDoctorChannelIds(cfg),
+  });
+  return {
+    next: compat.config as OpenClawConfig & Record<string, unknown>,
+    changes: compat.changes,
+  };
 }

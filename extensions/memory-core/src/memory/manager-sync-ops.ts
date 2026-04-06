@@ -41,9 +41,13 @@ import {
   type EmbeddingProvider,
   type EmbeddingProviderId,
   type EmbeddingProviderRuntime,
-  resolveEmbeddingProviderFallbackModel,
 } from "./embeddings.js";
+import { runMemoryAtomicReindex } from "./manager-atomic-reindex.js";
 import { openMemoryDatabaseAtPath } from "./manager-db.js";
+import {
+  applyMemoryFallbackProviderState,
+  resolveMemoryFallbackProviderRequest,
+} from "./manager-provider-state.js";
 import {
   resolveConfiguredScopeHash,
   resolveConfiguredSourcesForMeta,
@@ -308,38 +312,6 @@ export abstract class MemoryManagerSyncOps {
       } catch {}
       throw err;
     }
-  }
-
-  private async swapIndexFiles(targetPath: string, tempPath: string): Promise<void> {
-    const backupPath = `${targetPath}.backup-${randomUUID()}`;
-    await this.moveIndexFiles(targetPath, backupPath);
-    try {
-      await this.moveIndexFiles(tempPath, targetPath);
-    } catch (err) {
-      await this.moveIndexFiles(backupPath, targetPath);
-      throw err;
-    }
-    await this.removeIndexFiles(backupPath);
-  }
-
-  private async moveIndexFiles(sourceBase: string, targetBase: string): Promise<void> {
-    const suffixes = ["", "-wal", "-shm"];
-    for (const suffix of suffixes) {
-      const source = `${sourceBase}${suffix}`;
-      const target = `${targetBase}${suffix}`;
-      try {
-        await fs.rename(source, target);
-      } catch (err) {
-        if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
-          throw err;
-        }
-      }
-    }
-  }
-
-  private async removeIndexFiles(basePath: string): Promise<void> {
-    const suffixes = ["", "-wal", "-shm"];
-    await Promise.all(suffixes.map((suffix) => fs.rm(`${basePath}${suffix}`, { force: true })));
   }
 
   protected ensureSchema() {
@@ -976,7 +948,7 @@ export abstract class MemoryManagerSyncOps {
         meta,
         // Also detects provider→FTS-only transitions so orphaned old-model FTS rows are cleaned up.
         provider: this.provider ? { id: this.provider.id, model: this.provider.model } : null,
-        providerKey: this.providerKey,
+        providerKey: this.providerKey ?? undefined,
         configuredSources,
         configuredScopeHash,
         chunkTokens: this.settings.chunking.tokens,
@@ -1067,8 +1039,12 @@ export abstract class MemoryManagerSyncOps {
   }
 
   private async activateFallbackProvider(reason: string): Promise<boolean> {
-    const fallback = this.settings.fallback;
-    if (!fallback || fallback === "none" || !this.provider || fallback === this.provider.id) {
+    const fallbackRequest = resolveMemoryFallbackProviderRequest({
+      cfg: this.cfg,
+      settings: this.settings,
+      currentProviderId: this.provider?.id ?? null,
+    });
+    if (!fallbackRequest || !this.provider) {
       return false;
     }
     if (this.fallbackFrom) {
@@ -1076,30 +1052,33 @@ export abstract class MemoryManagerSyncOps {
     }
     const fallbackFrom = this.provider.id;
 
-    const fallbackModel = resolveEmbeddingProviderFallbackModel(
-      fallback,
-      this.settings.model,
-      this.cfg,
-    );
-
     const fallbackResult = await createEmbeddingProvider({
       config: this.cfg,
       agentDir: resolveAgentDir(this.cfg, this.agentId),
-      provider: fallback,
-      remote: this.settings.remote,
-      model: fallbackModel,
-      outputDimensionality: this.settings.outputDimensionality,
-      fallback: "none",
-      local: this.settings.local,
+      ...fallbackRequest,
     });
 
-    this.fallbackFrom = fallbackFrom;
-    this.fallbackReason = reason;
-    this.provider = fallbackResult.provider;
-    this.providerRuntime = fallbackResult.runtime;
+    const fallbackState = applyMemoryFallbackProviderState({
+      current: {
+        provider: this.provider,
+        fallbackFrom: this.fallbackFrom,
+        fallbackReason: this.fallbackReason,
+        providerUnavailableReason: undefined,
+        providerRuntime: this.providerRuntime,
+      },
+      fallbackFrom,
+      reason,
+      result: fallbackResult,
+    });
+    this.fallbackFrom = fallbackState.fallbackFrom;
+    this.fallbackReason = fallbackState.fallbackReason;
+    this.provider = fallbackState.provider;
+    this.providerRuntime = fallbackState.providerRuntime;
     this.providerKey = this.computeProviderKey();
     this.batch = this.resolveBatchConfig();
-    log.warn(`memory embeddings: switched to fallback provider (${fallback})`, { reason });
+    log.warn(`memory embeddings: switched to fallback provider (${fallbackRequest.provider})`, {
+      reason,
+    });
     return true;
   }
 
@@ -1149,62 +1128,64 @@ export abstract class MemoryManagerSyncOps {
     let nextMeta: MemoryIndexMeta | null = null;
 
     try {
-      this.seedEmbeddingCache(originalDb);
-      const shouldSyncMemory = this.sources.has("memory");
-      const shouldSyncSessions = this.shouldSyncSessions(
-        { reason: params.reason, force: params.force },
-        true,
-      );
+      nextMeta = await runMemoryAtomicReindex({
+        targetPath: dbPath,
+        tempPath: tempDbPath,
+        build: async () => {
+          this.seedEmbeddingCache(originalDb);
+          const shouldSyncMemory = this.sources.has("memory");
+          const shouldSyncSessions = this.shouldSyncSessions(
+            { reason: params.reason, force: params.force },
+            true,
+          );
 
-      if (shouldSyncMemory) {
-        await this.syncMemoryFiles({ needsFullReindex: true, progress: params.progress });
-        this.dirty = false;
-      }
+          if (shouldSyncMemory) {
+            await this.syncMemoryFiles({ needsFullReindex: true, progress: params.progress });
+            this.dirty = false;
+          }
 
-      if (shouldSyncSessions) {
-        await this.syncSessionFiles({ needsFullReindex: true, progress: params.progress });
-        this.sessionsDirty = false;
-        this.sessionsDirtyFiles.clear();
-      } else if (this.sessionsDirtyFiles.size > 0) {
-        this.sessionsDirty = true;
-      } else {
-        this.sessionsDirty = false;
-      }
+          if (shouldSyncSessions) {
+            await this.syncSessionFiles({ needsFullReindex: true, progress: params.progress });
+            this.sessionsDirty = false;
+            this.sessionsDirtyFiles.clear();
+          } else if (this.sessionsDirtyFiles.size > 0) {
+            this.sessionsDirty = true;
+          } else {
+            this.sessionsDirty = false;
+          }
 
-      nextMeta = {
-        model: this.provider?.model ?? "fts-only",
-        provider: this.provider?.id ?? "none",
-        providerKey: this.providerKey!,
-        sources: resolveConfiguredSourcesForMeta(this.sources),
-        scopeHash: resolveConfiguredScopeHash({
-          workspaceDir: this.workspaceDir,
-          extraPaths: this.settings.extraPaths,
-          multimodal: {
-            enabled: this.settings.multimodal.enabled,
-            modalities: this.settings.multimodal.modalities,
-            maxFileBytes: this.settings.multimodal.maxFileBytes,
-          },
-        }),
-        chunkTokens: this.settings.chunking.tokens,
-        chunkOverlap: this.settings.chunking.overlap,
-        ftsTokenizer: this.settings.store.fts.tokenizer,
-      };
-      if (!nextMeta) {
-        throw new Error("Failed to compute memory index metadata for reindexing.");
-      }
+          const meta: MemoryIndexMeta = {
+            model: this.provider?.model ?? "fts-only",
+            provider: this.provider?.id ?? "none",
+            providerKey: this.providerKey!,
+            sources: resolveConfiguredSourcesForMeta(this.sources),
+            scopeHash: resolveConfiguredScopeHash({
+              workspaceDir: this.workspaceDir,
+              extraPaths: this.settings.extraPaths,
+              multimodal: {
+                enabled: this.settings.multimodal.enabled,
+                modalities: this.settings.multimodal.modalities,
+                maxFileBytes: this.settings.multimodal.maxFileBytes,
+              },
+            }),
+            chunkTokens: this.settings.chunking.tokens,
+            chunkOverlap: this.settings.chunking.overlap,
+            ftsTokenizer: this.settings.store.fts.tokenizer,
+          };
 
-      if (this.vector.available && this.vector.dims) {
-        nextMeta.vectorDims = this.vector.dims;
-      }
+          if (this.vector.available && this.vector.dims) {
+            meta.vectorDims = this.vector.dims;
+          }
 
-      this.writeMeta(nextMeta);
-      this.pruneEmbeddingCacheIfNeeded?.();
+          this.writeMeta(meta);
+          this.pruneEmbeddingCacheIfNeeded?.();
 
-      this.db.close();
-      originalDb.close();
-      originalDbClosed = true;
-
-      await this.swapIndexFiles(dbPath, tempDbPath);
+          this.db.close();
+          originalDb.close();
+          originalDbClosed = true;
+          return meta;
+        },
+      });
 
       this.db = openMemoryDatabaseAtPath(dbPath, this.settings.store.vector.enabled);
       this.vectorReady = null;
@@ -1216,7 +1197,6 @@ export abstract class MemoryManagerSyncOps {
       try {
         this.db.close();
       } catch {}
-      await this.removeIndexFiles(tempDbPath);
       restoreOriginalState();
       throw err;
     }
