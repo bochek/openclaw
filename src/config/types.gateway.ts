@@ -100,6 +100,17 @@ export type GatewayControlUiConfig = {
   allowInsecureAuth?: boolean;
   /** DANGEROUS: Disable device identity checks for the Control UI (default: false). */
   dangerouslyDisableDeviceAuth?: boolean;
+  /** Realtime voice settings for the browser chat UI. */
+  voice?: {
+    /** Enable browser voice sessions for the Control UI chat. */
+    enabled?: boolean;
+    /** Registered realtime transcription provider id to use for browser voice. */
+    transcriptionProvider?: string;
+    /** Provider-owned realtime transcription config keyed by provider id. */
+    providers?: Record<string, Record<string, unknown>>;
+    /** Enable browser speech synthesis playback for assistant replies. */
+    playbackEnabled?: boolean;
+  };
 };
 
 export type GatewayAuthMode = "none" | "token" | "password" | "trusted-proxy";

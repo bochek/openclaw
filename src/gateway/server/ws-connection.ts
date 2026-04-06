@@ -8,6 +8,7 @@ import { truncateUtf16Safe } from "../../utils.js";
 import { isWebchatClient } from "../../utils/message-channel.js";
 import type { AuthRateLimiter } from "../auth-rate-limit.js";
 import type { ResolvedGatewayAuth } from "../auth.js";
+import { closeChatVoiceSessionsForConn } from "../chat-voice-sessions.js";
 import { getPreauthHandshakeTimeoutMsFromEnv } from "../handshake-timeouts.js";
 import { isLoopbackAddress } from "../net.js";
 import type { GatewayRequestContext, GatewayRequestHandlers } from "../server-methods/types.js";
@@ -270,6 +271,9 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
       }
       const context = buildRequestContext();
       context.unsubscribeAllSessionEvents(connId);
+      closeChatVoiceSessionsForConn(connId, (targetConnId, payload) => {
+        context.broadcastToConnIds("chat.voice.event", payload, new Set([targetConnId]));
+      });
       if (client?.connect?.role === "node") {
         const nodeId = context.nodeRegistry.unregister(connId);
         if (nodeId) {

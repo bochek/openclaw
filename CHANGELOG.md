@@ -6,12 +6,14 @@ Docs: https://docs.openclaw.ai
 
 ### Changes
 
+- CLI/capabilities: add a first-class `openclaw capability ...` hub for provider-backed inference workflows across model, media, web, and embedding tasks, with capability inspection, provider discovery, and consistent JSON output. Thanks @Takhoffman.
 - Providers/Anthropic: restore Claude CLI as the preferred local Anthropic path in onboarding, model-auth guidance, and doctor flows again, and keep the Docker Claude CLI live lane aligned with the restored guidance.
 - Plugins/webhooks: add a bundled webhook ingress plugin so external automation can create and drive bound TaskFlows through per-route shared-secret endpoints. (#61892) Thanks @mbelinky.
 - Tools/media: document per-provider music and video generation capabilities, and add shared live video-to-video sweep coverage for providers that support local reference clips.
 
 ### Fixes
 
+- CLI/capabilities: keep provider-backed capability behavior aligned with actual runtime execution by fixing explicit TTS override handling, profile-aware gateway TTS prefs resolution, per-request transcription `prompt`/`language` overrides, image output MIME/extension mismatches, configured web-search fallback behavior, and agent-vs-CLI web-search execution drift.
 - Channels/secrets: keep bundled channel artifact and secret-contract loading stable under lazy loading so bundled channel secrets continue to appear in `openclaw secret`, status, and security-audit surfaces.
 - Providers/xAI: recognize `api.grok.x.ai` as an xAI-native endpoint again so native xAI web-search attribution keeps working on Grok-hosted base URLs. (#61377) Thanks @jjjojoj.
 - Providers/Anthropic/cache: preserve thinking blocks for Claude Opus 4.5+, Sonnet 4.5+, and newer Claude 4-family models so Anthropic prompt-cache prefixes keep matching after thinking turns. (#61793)

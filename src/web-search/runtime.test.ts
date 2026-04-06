@@ -289,4 +289,162 @@ describe("web search runtime", () => {
       result: { query: "runtime", provider: "beta", runtimeSelectedProvider: "beta" },
     });
   });
+
+  it("falls back to another provider when auto-selected search execution fails", async () => {
+    resolveRuntimeWebSearchProvidersMock.mockReturnValue([
+      createProvider({
+        pluginId: "google",
+        id: "google",
+        credentialPath: "tools.web.search.google.apiKey",
+        autoDetectOrder: 1,
+        getCredentialValue: () => "configured",
+        createTool: () => ({
+          description: "google",
+          parameters: {},
+          execute: async () => {
+            throw new Error("google aborted");
+          },
+        }),
+      }),
+      createProvider({
+        pluginId: "duckduckgo",
+        id: "duckduckgo",
+        credentialPath: "",
+        autoDetectOrder: 100,
+        requiresCredential: false,
+        createTool: () => ({
+          description: "duckduckgo",
+          parameters: {},
+          execute: async (args) => ({ ...args, provider: "duckduckgo" }),
+        }),
+      }),
+    ]);
+
+    await expect(
+      runWebSearch({
+        config: {},
+        args: { query: "fallback" },
+      }),
+    ).resolves.toEqual({
+      provider: "duckduckgo",
+      result: { query: "fallback", provider: "duckduckgo" },
+    });
+  });
+
+  it("does not prebuild fallback provider tools before attempting the selected provider", async () => {
+    resolveRuntimeWebSearchProvidersMock.mockReturnValue([
+      createProvider({
+        pluginId: "google",
+        id: "google",
+        credentialPath: "tools.web.search.google.apiKey",
+        autoDetectOrder: 1,
+        getCredentialValue: () => "configured",
+        createTool: () => ({
+          description: "google",
+          parameters: {},
+          execute: async (args) => ({ ...args, provider: "google" }),
+        }),
+      }),
+      createProvider({
+        pluginId: "broken-fallback",
+        id: "broken-fallback",
+        credentialPath: "",
+        autoDetectOrder: 100,
+        requiresCredential: false,
+        createTool: () => {
+          throw new Error("fallback createTool exploded");
+        },
+      }),
+    ]);
+
+    await expect(
+      runWebSearch({
+        config: {},
+        args: { query: "selected-first" },
+      }),
+    ).resolves.toEqual({
+      provider: "google",
+      result: { query: "selected-first", provider: "google" },
+    });
+  });
+
+  it("does not fall back when the provider came from explicit config selection", async () => {
+    resolveRuntimeWebSearchProvidersMock.mockReturnValue([
+      createProvider({
+        pluginId: "google",
+        id: "google",
+        credentialPath: "tools.web.search.google.apiKey",
+        autoDetectOrder: 1,
+        getCredentialValue: () => "configured",
+        createTool: () => ({
+          description: "google",
+          parameters: {},
+          execute: async () => {
+            throw new Error("google aborted");
+          },
+        }),
+      }),
+      createProvider({
+        pluginId: "duckduckgo",
+        id: "duckduckgo",
+        credentialPath: "",
+        autoDetectOrder: 100,
+        requiresCredential: false,
+        createTool: () => ({
+          description: "duckduckgo",
+          parameters: {},
+          execute: async (args) => ({ ...args, provider: "duckduckgo" }),
+        }),
+      }),
+    ]);
+
+    await expect(
+      runWebSearch({
+        config: {
+          tools: {
+            web: {
+              search: {
+                provider: "google",
+              },
+            },
+          },
+        },
+        args: { query: "configured" },
+      }),
+    ).rejects.toThrow("google aborted");
+  });
+
+  it("does not fall back when the caller explicitly selects a provider", async () => {
+    resolveRuntimeWebSearchProvidersMock.mockReturnValue([
+      createProvider({
+        pluginId: "google",
+        id: "google",
+        credentialPath: "tools.web.search.google.apiKey",
+        autoDetectOrder: 1,
+        getCredentialValue: () => "configured",
+        createTool: () => ({
+          description: "google",
+          parameters: {},
+          execute: async () => {
+            throw new Error("google aborted");
+          },
+        }),
+      }),
+      createProvider({
+        pluginId: "duckduckgo",
+        id: "duckduckgo",
+        credentialPath: "",
+        autoDetectOrder: 100,
+        requiresCredential: false,
+      }),
+    ]);
+
+    await expect(
+      runWebSearch({
+        config: {},
+        providerId: "google",
+        args: { query: "explicit" },
+      }),
+    ).rejects.toThrow("google aborted");
+  });
 });

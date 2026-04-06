@@ -125,6 +125,195 @@ export function isSttActive(): boolean {
   return activeRecognition !== null;
 }
 
+// ─── Realtime Voice Capture ───
+
+type RealtimeVoiceCallbacks = {
+  onChunk: (chunkBase64: string) => void;
+  onStart?: () => void;
+  onStop?: () => void;
+  onError?: (error: string) => void;
+};
+
+type RealtimeVoiceCapture = {
+  stop: () => void;
+};
+
+const REALTIME_VOICE_TARGET_SAMPLE_RATE = 16_000;
+const REALTIME_VOICE_CHUNK_MS = 250;
+
+let activeRealtimeVoiceCapture: RealtimeVoiceCapture | null = null;
+
+export function isRealtimeVoiceSupported(): boolean {
+  const hasGetUserMedia =
+    typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function";
+  return (
+    typeof window !== "undefined" &&
+    Boolean(window.isSecureContext) &&
+    hasGetUserMedia &&
+    typeof AudioContext !== "undefined"
+  );
+}
+
+export async function startRealtimeVoiceCapture(
+  callbacks: RealtimeVoiceCallbacks,
+): Promise<boolean> {
+  if (!isRealtimeVoiceSupported()) {
+    callbacks.onError?.("Realtime voice requires a secure context with microphone access");
+    return false;
+  }
+
+  stopRealtimeVoiceCapture();
+
+  let stream: MediaStream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    });
+  } catch (error) {
+    callbacks.onError?.(error instanceof Error ? error.message : String(error));
+    return false;
+  }
+
+  const audioContext = new AudioContext();
+  try {
+    if (audioContext.state !== "running") {
+      await audioContext.resume();
+    }
+  } catch (error) {
+    stream.getTracks().forEach((track) => track.stop());
+    callbacks.onError?.(
+      error instanceof Error ? error.message : "Failed to start realtime voice capture",
+    );
+    void audioContext.close();
+    return false;
+  }
+
+  const source = audioContext.createMediaStreamSource(stream);
+  const processor = audioContext.createScriptProcessor(4096, 1, 1);
+  const samplesPerChunk = Math.max(
+    1,
+    Math.round((REALTIME_VOICE_TARGET_SAMPLE_RATE * REALTIME_VOICE_CHUNK_MS) / 1000),
+  );
+  let pcmBuffer = new Int16Array(0);
+  let stopped = false;
+
+  const flushChunk = () => {
+    if (pcmBuffer.length < samplesPerChunk) {
+      return;
+    }
+    const chunk = pcmBuffer.slice(0, samplesPerChunk);
+    pcmBuffer = pcmBuffer.slice(samplesPerChunk);
+    callbacks.onChunk(encodePcm16Chunk(chunk));
+  };
+
+  processor.onaudioprocess = (event) => {
+    if (stopped) {
+      return;
+    }
+    const input = event.inputBuffer.getChannelData(0);
+    const downsampled = downsampleFloat32Buffer(
+      input,
+      audioContext.sampleRate,
+      REALTIME_VOICE_TARGET_SAMPLE_RATE,
+    );
+    if (downsampled.length === 0) {
+      return;
+    }
+    const next = new Int16Array(pcmBuffer.length + downsampled.length);
+    next.set(pcmBuffer, 0);
+    next.set(downsampled, pcmBuffer.length);
+    pcmBuffer = next;
+    flushChunk();
+  };
+
+  source.connect(processor);
+  processor.connect(audioContext.destination);
+
+  const stop = () => {
+    if (stopped) {
+      return;
+    }
+    stopped = true;
+    activeRealtimeVoiceCapture = null;
+    if (pcmBuffer.length > 0) {
+      callbacks.onChunk(encodePcm16Chunk(pcmBuffer));
+      pcmBuffer = new Int16Array(0);
+    }
+    processor.disconnect();
+    source.disconnect();
+    stream.getTracks().forEach((track) => track.stop());
+    void audioContext.close();
+    callbacks.onStop?.();
+  };
+
+  activeRealtimeVoiceCapture = { stop };
+  callbacks.onStart?.();
+  return true;
+}
+
+export function stopRealtimeVoiceCapture(): void {
+  activeRealtimeVoiceCapture?.stop();
+}
+
+function downsampleFloat32Buffer(
+  buffer: Float32Array,
+  inputSampleRate: number,
+  outputSampleRate: number,
+): Int16Array {
+  if (outputSampleRate >= inputSampleRate) {
+    return float32ToPcm16(buffer);
+  }
+  const ratio = inputSampleRate / outputSampleRate;
+  const outputLength = Math.max(1, Math.round(buffer.length / ratio));
+  const output = new Int16Array(outputLength);
+  let offsetBuffer = 0;
+  for (let i = 0; i < outputLength; i += 1) {
+    const nextOffsetBuffer = Math.min(buffer.length, Math.round((i + 1) * ratio));
+    let sum = 0;
+    let count = 0;
+    for (let j = offsetBuffer; j < nextOffsetBuffer; j += 1) {
+      sum += buffer[j];
+      count += 1;
+    }
+    const sample = count > 0 ? sum / count : 0;
+    output[i] = float32SampleToPcm16(sample);
+    offsetBuffer = nextOffsetBuffer;
+  }
+  return output;
+}
+
+function float32ToPcm16(buffer: Float32Array): Int16Array {
+  const output = new Int16Array(buffer.length);
+  for (let i = 0; i < buffer.length; i += 1) {
+    output[i] = float32SampleToPcm16(buffer[i]);
+  }
+  return output;
+}
+
+function float32SampleToPcm16(sample: number): number {
+  const clamped = Math.max(-1, Math.min(1, sample));
+  return clamped < 0 ? Math.round(clamped * 0x8000) : Math.round(clamped * 0x7fff);
+}
+
+function encodePcm16Chunk(chunk: Int16Array): string {
+  const bytes = new Uint8Array(chunk.length * 2);
+  for (let i = 0; i < chunk.length; i += 1) {
+    const value = chunk[i];
+    bytes[i * 2] = value & 0xff;
+    bytes[i * 2 + 1] = (value >> 8) & 0xff;
+  }
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
 // ─── TTS (Text-to-Speech) ───
 
 export function isTtsSupported(): boolean {

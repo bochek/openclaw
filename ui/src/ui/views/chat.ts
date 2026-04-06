@@ -29,7 +29,14 @@ import {
   type SlashCommandCategory,
   type SlashCommandDef,
 } from "../chat/slash-commands.ts";
-import { isSttSupported, startStt, stopStt } from "../chat/speech.ts";
+import {
+  isRealtimeVoiceSupported,
+  isSttSupported,
+  startRealtimeVoiceCapture,
+  startStt,
+  stopRealtimeVoiceCapture,
+  stopStt,
+} from "../chat/speech.ts";
 import { icons } from "../icons.ts";
 import { detectTextDirection } from "../text-direction.ts";
 import type { GatewaySessionRow, SessionsListResult } from "../types.ts";
@@ -62,6 +69,18 @@ export type ChatProps = {
   canSend: boolean;
   disabledReason: string | null;
   error: string | null;
+  voiceActive: boolean;
+  voiceState:
+    | "idle"
+    | "connecting"
+    | "listening"
+    | "processing"
+    | "speaking"
+    | "interrupted"
+    | "error";
+  voiceTranscript: string;
+  voiceError: string | null;
+  voicePlaybackEnabled: boolean;
   sessions: SessionsListResult | null;
   focusMode: boolean;
   sidebarOpen?: boolean;
@@ -80,6 +99,10 @@ export type ChatProps = {
   onDraftChange: (next: string) => void;
   onRequestUpdate?: () => void;
   onSend: () => void;
+  onVoiceStart?: () => Promise<boolean> | boolean;
+  onVoiceAudioChunk?: (chunkBase64: string) => Promise<void> | void;
+  onVoiceStop?: () => Promise<void> | void;
+  onVoiceInterrupt?: () => Promise<void> | void;
   onAbort?: () => void;
   onQueueRemove: (id: string) => void;
   onNewSession: () => void;
@@ -130,6 +153,7 @@ function getDeletedMessages(sessionKey: string): DeletedMessages {
 interface ChatEphemeralState {
   sttRecording: boolean;
   sttInterimText: string;
+  voiceRecording: boolean;
   slashMenuOpen: boolean;
   slashMenuItems: SlashCommandDef[];
   slashMenuIndex: number;
@@ -145,6 +169,7 @@ function createChatEphemeralState(): ChatEphemeralState {
   return {
     sttRecording: false,
     sttInterimText: "",
+    voiceRecording: false,
     slashMenuOpen: false,
     slashMenuItems: [],
     slashMenuIndex: 0,
@@ -166,6 +191,9 @@ const vs = createChatEphemeralState();
 export function resetChatViewState() {
   if (vs.sttRecording) {
     stopStt();
+  }
+  if (vs.voiceRecording) {
+    stopRealtimeVoiceCapture();
   }
   Object.assign(vs, createChatEphemeralState());
 }
@@ -250,6 +278,32 @@ function renderFallbackIndicator(status: FallbackIndicatorStatus | null | undefi
   return html`
     <div class=${className} role="status" aria-live="polite" title=${details}>
       ${icon} ${message}
+    </div>
+  `;
+}
+
+function renderVoiceStatus(props: ChatProps) {
+  if (!props.voiceActive && !props.voiceError) {
+    return nothing;
+  }
+  const label =
+    props.voiceState === "connecting"
+      ? "Connecting voice..."
+      : props.voiceState === "listening"
+        ? "Listening..."
+        : props.voiceState === "processing"
+          ? "Processing..."
+          : props.voiceState === "speaking"
+            ? "Speaking..."
+            : props.voiceState === "interrupted"
+              ? "Interrupted"
+              : props.voiceState === "error"
+                ? "Voice error"
+                : "Voice ready";
+  const detail = props.voiceError || props.voiceTranscript;
+  return html`
+    <div class="agent-chat__stt-interim">
+      <strong>${label}</strong>${detail ? html` ${detail}` : nothing}
     </div>
   `;
 }
@@ -913,6 +967,11 @@ export function renderChat(props: ChatProps) {
   const requestUpdate = props.onRequestUpdate ?? (() => {});
   const getDraft = props.getDraft ?? (() => props.draft);
 
+  if (!props.voiceActive && vs.voiceRecording) {
+    stopRealtimeVoiceCapture();
+    vs.voiceRecording = false;
+  }
+
   const splitRatio = props.splitRatio ?? 0.6;
   const sidebarOpen = Boolean(props.sidebarOpen && props.onCloseSidebar);
 
@@ -1262,6 +1321,7 @@ export function renderChat(props: ChatProps) {
         ${vs.sttRecording && vs.sttInterimText
           ? html`<div class="agent-chat__stt-interim">${vs.sttInterimText}</div>`
           : nothing}
+        ${renderVoiceStatus(props)}
 
         <textarea
           ${ref((el) => el && adjustTextareaHeight(el as HTMLTextAreaElement))}
@@ -1339,6 +1399,56 @@ export function renderChat(props: ChatProps) {
                     ?disabled=${!props.connected}
                   >
                     ${vs.sttRecording ? icons.micOff : icons.mic}
+                  </button>
+                `
+              : nothing}
+            ${isRealtimeVoiceSupported() && props.onVoiceStart && props.onVoiceStop
+              ? html`
+                  <button
+                    class="agent-chat__input-btn ${props.voiceActive
+                      ? "agent-chat__input-btn--recording"
+                      : ""}"
+                    @click=${async () => {
+                      if (props.voiceActive) {
+                        stopRealtimeVoiceCapture();
+                        vs.voiceRecording = false;
+                        await props.onVoiceStop?.();
+                        requestUpdate();
+                        return;
+                      }
+                      const started = await props.onVoiceStart?.();
+                      if (!started) {
+                        requestUpdate();
+                        return;
+                      }
+                      const captureStarted = await startRealtimeVoiceCapture({
+                        onChunk: (chunkBase64) => {
+                          void props.onVoiceAudioChunk?.(chunkBase64);
+                        },
+                        onStart: () => {
+                          vs.voiceRecording = true;
+                          requestUpdate();
+                        },
+                        onStop: () => {
+                          vs.voiceRecording = false;
+                          requestUpdate();
+                        },
+                        onError: async () => {
+                          vs.voiceRecording = false;
+                          await props.onVoiceStop?.();
+                          requestUpdate();
+                        },
+                      });
+                      if (!captureStarted) {
+                        await props.onVoiceStop?.();
+                        requestUpdate();
+                      }
+                    }}
+                    title=${props.voiceActive ? "Stop live voice" : "Start live voice"}
+                    aria-label=${props.voiceActive ? "Stop live voice" : "Start live voice"}
+                    ?disabled=${!props.connected || props.voiceState === "connecting"}
+                  >
+                    ${props.voiceActive ? icons.volume2 : icons.radio}
                   </button>
                 `
               : nothing}

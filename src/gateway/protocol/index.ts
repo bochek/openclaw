@@ -63,6 +63,18 @@ import {
   ChatHistoryParamsSchema,
   type ChatInjectParams,
   ChatInjectParamsSchema,
+  type ChatVoiceAudioParams,
+  ChatVoiceAudioParamsSchema,
+  type ChatVoiceCommitParams,
+  ChatVoiceCommitParamsSchema,
+  type ChatVoiceEvent,
+  ChatVoiceEventSchema,
+  type ChatVoiceInterruptParams,
+  ChatVoiceInterruptParamsSchema,
+  type ChatVoiceStartParams,
+  ChatVoiceStartParamsSchema,
+  type ChatVoiceStopParams,
+  ChatVoiceStopParamsSchema,
   ChatSendParamsSchema,
   type ConfigApplyParams,
   ConfigApplyParamsSchema,
@@ -474,6 +486,21 @@ export const validateChatSendParams = ajv.compile(ChatSendParamsSchema);
 export const validateChatAbortParams = ajv.compile<ChatAbortParams>(ChatAbortParamsSchema);
 export const validateChatInjectParams = ajv.compile<ChatInjectParams>(ChatInjectParamsSchema);
 export const validateChatEvent = ajv.compile(ChatEventSchema);
+export const validateChatVoiceStartParams = ajv.compile<ChatVoiceStartParams>(
+  ChatVoiceStartParamsSchema,
+);
+export const validateChatVoiceAudioParams = ajv.compile<ChatVoiceAudioParams>(
+  ChatVoiceAudioParamsSchema,
+);
+export const validateChatVoiceCommitParams = ajv.compile<ChatVoiceCommitParams>(
+  ChatVoiceCommitParamsSchema,
+);
+export const validateChatVoiceInterruptParams = ajv.compile<ChatVoiceInterruptParams>(
+  ChatVoiceInterruptParamsSchema,
+);
+export const validateChatVoiceStopParams =
+  ajv.compile<ChatVoiceStopParams>(ChatVoiceStopParamsSchema);
+export const validateChatVoiceEvent = ajv.compile<ChatVoiceEvent>(ChatVoiceEventSchema);
 export const validateUpdateRunParams = ajv.compile<UpdateRunParams>(UpdateRunParamsSchema);
 export const validateWebLoginStartParams =
   ajv.compile<WebLoginStartParams>(WebLoginStartParamsSchema);

@@ -131,9 +131,6 @@ function normalizeResolvedModel(params: {
   const normalizedInputModel = {
     ...params.model,
     input: resolveProviderModelInput({
-      provider: params.provider,
-      modelId: params.model.id,
-      modelName: params.model.name,
       input: params.model.input,
     }),
   } as Model<Api>;
@@ -233,7 +230,6 @@ function findInlineModelMatch(params: {
 }
 
 export { buildModelAliasLines };
-export { buildInlineProviderModels };
 
 function resolveConfiguredProviderConfig(
   cfg: OpenClawConfig | undefined,
@@ -248,6 +244,17 @@ function resolveConfiguredProviderConfig(
     return exactProviderConfig;
   }
   return findNormalizedProviderValue(configuredProviders, provider);
+}
+
+function resolveProviderModelInput(params: {
+  input?: unknown;
+  fallbackInput?: unknown;
+}): Array<"text" | "image"> {
+  const resolvedInput = Array.isArray(params.input) ? params.input : params.fallbackInput;
+  const normalizedInput = Array.isArray(resolvedInput)
+    ? resolvedInput.filter((item): item is "text" | "image" => item === "text" || item === "image")
+    : [];
+  return normalizedInput.length > 0 ? normalizedInput : ["text"];
 }
 
 function applyConfiguredProviderOverrides(params: {
@@ -290,9 +297,6 @@ function applyConfiguredProviderOverrides(params: {
     };
   }
   const normalizedInput = resolveProviderModelInput({
-    provider: params.provider,
-    modelId,
-    modelName: configuredModel?.name ?? discoveredModel.name,
     input: configuredModel?.input,
     fallbackInput: discoveredModel.input,
   });
@@ -337,6 +341,54 @@ function applyConfiguredProviderOverrides(params: {
   );
 }
 
+export function buildInlineProviderModels(
+  providers: Record<string, InlineProviderConfig>,
+): InlineModelEntry[] {
+  return Object.entries(providers).flatMap(([providerId, entry]) => {
+    const trimmed = providerId.trim();
+    if (!trimmed) {
+      return [];
+    }
+    const providerHeaders = sanitizeModelHeaders(entry?.headers, {
+      stripSecretRefMarkers: true,
+    });
+    const providerRequest = sanitizeConfiguredModelProviderRequest(entry?.request);
+    return (entry?.models ?? []).map((model) => {
+      const transport = resolveProviderTransport({
+        provider: trimmed,
+        api: model.api ?? entry?.api,
+        baseUrl: entry?.baseUrl,
+      });
+      const modelHeaders = sanitizeModelHeaders((model as InlineModelEntry).headers, {
+        stripSecretRefMarkers: true,
+      });
+      const requestConfig = resolveProviderRequestConfig({
+        provider: trimmed,
+        api: transport.api ?? model.api,
+        baseUrl: transport.baseUrl,
+        providerHeaders,
+        modelHeaders,
+        authHeader: entry?.authHeader,
+        request: providerRequest,
+        capability: "llm",
+        transport: "stream",
+      });
+      return attachModelProviderRequestTransport(
+        {
+          ...model,
+          input: resolveProviderModelInput({
+            input: model.input,
+          }),
+          provider: trimmed,
+          baseUrl: requestConfig.baseUrl ?? transport.baseUrl,
+          api: requestConfig.api ?? model.api,
+          headers: requestConfig.headers,
+        },
+        providerRequest,
+      );
+    });
+  });
+}
 function resolveExplicitModelWithRegistry(params: {
   provider: string;
   modelId: string;
@@ -505,9 +557,6 @@ function resolveConfiguredFallbackModel(params: {
         baseUrl: requestConfig.baseUrl,
         reasoning: configuredModel?.reasoning ?? false,
         input: resolveProviderModelInput({
-          provider,
-          modelId,
-          modelName: configuredModel?.name ?? modelId,
           input: configuredModel?.input,
         }),
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

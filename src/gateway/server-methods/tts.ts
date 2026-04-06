@@ -9,6 +9,7 @@ import {
   getTtsProvider,
   isTtsEnabled,
   isTtsProviderConfigured,
+  resolveExplicitTtsOverrides,
   resolveTtsAutoMode,
   resolveTtsConfig,
   resolveTtsPrefsPath,
@@ -89,7 +90,22 @@ export const ttsHandlers: GatewayRequestHandlers = {
     try {
       const cfg = loadConfig();
       const channel = typeof params.channel === "string" ? params.channel.trim() : undefined;
-      const result = await textToSpeech({ text, cfg, channel });
+      const providerRaw = typeof params.provider === "string" ? params.provider.trim() : undefined;
+      const modelId = typeof params.modelId === "string" ? params.modelId.trim() : undefined;
+      const voiceId = typeof params.voiceId === "string" ? params.voiceId.trim() : undefined;
+      const overrides = resolveExplicitTtsOverrides({
+        cfg,
+        provider: providerRaw,
+        modelId,
+        voiceId,
+      });
+      const result = await textToSpeech({
+        text,
+        cfg,
+        channel,
+        overrides,
+        disableFallback: Boolean(overrides.provider || modelId || voiceId),
+      });
       if (result.success && result.audioPath) {
         respond(true, {
           audioPath: result.audioPath,

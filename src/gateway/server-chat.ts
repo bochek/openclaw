@@ -5,6 +5,7 @@ import { loadConfig } from "../config/config.js";
 import { type AgentEventPayload, getAgentRunContext } from "../infra/agent-events.js";
 import { resolveHeartbeatVisibility } from "../infra/heartbeat-visibility.js";
 import { stripInlineDirectiveTagsForDisplay } from "../utils/directive-tags.js";
+import { getChatVoiceSessionByRunId, setChatVoiceRunId } from "./chat-voice-sessions.js";
 import { loadGatewaySessionRow } from "./server-chat.load-gateway-session-row.runtime.js";
 import { persistGatewaySessionLifecycleEvent } from "./server-chat.persist-session-lifecycle.runtime.js";
 import { deriveGatewaySessionLifecycleSnapshot } from "./session-lifecycle-state.js";
@@ -948,6 +949,72 @@ export function createAgentEventHandler({
       }
       if (!isAborted && evt.stream === "assistant" && typeof evt.data?.text === "string") {
         emitChatDelta(sessionKey, clientRunId, evt.runId, evt.seq, evt.data.text, evt.data.delta);
+      } else if (!isAborted && (lifecyclePhase === "end" || lifecyclePhase === "error")) {
+        const evtStopReason =
+          typeof evt.data?.stopReason === "string" ? evt.data.stopReason : undefined;
+        if (chatLink) {
+          const finished = chatRunState.registry.shift(evt.runId);
+          if (!finished) {
+            clearAgentRunContext(evt.runId);
+            return;
+          }
+          emitChatFinal(
+            finished.sessionKey,
+            finished.clientRunId,
+            evt.runId,
+            evt.seq,
+            lifecyclePhase === "error" ? "error" : "done",
+            evt.data?.error,
+            evtStopReason,
+          );
+        } else {
+          emitChatFinal(
+            sessionKey,
+            eventRunId,
+            evt.runId,
+            evt.seq,
+            lifecyclePhase === "error" ? "error" : "done",
+            evt.data?.error,
+            evtStopReason,
+          );
+        }
+        const voiceSession = getChatVoiceSessionByRunId(clientRunId);
+        if (voiceSession) {
+          setChatVoiceRunId(voiceSession.sessionKey, null);
+          broadcastToConnIds(
+            "chat.voice.event",
+            {
+              sessionKey: voiceSession.sessionKey,
+              state: "assistant_completed",
+              runId: clientRunId,
+              playbackEnabled: voiceSession.playbackEnabled,
+            },
+            new Set([voiceSession.connId]),
+          );
+        }
+      } else if (isAborted && (lifecyclePhase === "end" || lifecyclePhase === "error")) {
+        chatRunState.abortedRuns.delete(clientRunId);
+        chatRunState.abortedRuns.delete(evt.runId);
+        chatRunState.buffers.delete(clientRunId);
+        chatRunState.deltaSentAt.delete(clientRunId);
+        if (chatLink) {
+          chatRunState.registry.remove(evt.runId, clientRunId, sessionKey);
+        }
+        const voiceSession = getChatVoiceSessionByRunId(clientRunId);
+        if (voiceSession) {
+          setChatVoiceRunId(voiceSession.sessionKey, null);
+          broadcastToConnIds(
+            "chat.voice.event",
+            {
+              sessionKey: voiceSession.sessionKey,
+              state: "interrupted",
+              runId: clientRunId,
+              playbackEnabled: voiceSession.playbackEnabled,
+            },
+            new Set([voiceSession.connId]),
+            { dropIfSlow: true },
+          );
+        }
       }
     }
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { CURRENT_SESSION_VERSION, SessionManager } from "@mariozechner/pi-coding-agent";
@@ -19,6 +20,8 @@ import { jsonUtf8Bytes } from "../../infra/json-utf8-bytes.js";
 import type { PromptImageOrderEntry } from "../../media/prompt-image-order.js";
 import { type SavedMedia, saveMediaBuffer } from "../../media/store.js";
 import { createChannelReplyPipeline } from "../../plugin-sdk/channel-reply-pipeline.js";
+import { getRealtimeTranscriptionProvider } from "../../plugin-sdk/realtime-transcription.js";
+import type { RealtimeTranscriptionSession } from "../../realtime-transcription/provider-types.js";
 import { normalizeInputProvenance, type InputProvenance } from "../../sessions/input-provenance.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { parseAgentSessionKey } from "../../sessions/session-key-utils.js";
@@ -48,6 +51,13 @@ import {
   parseMessageWithAttachments,
 } from "../chat-attachments.js";
 import { stripEnvelopeFromMessage, stripEnvelopeFromMessages } from "../chat-sanitize.js";
+import {
+  deleteChatVoiceSession,
+  getChatVoiceSession,
+  setChatVoiceRunId,
+  setChatVoiceSession,
+  type ChatVoiceEventPayload,
+} from "../chat-voice-sessions.js";
 import { augmentChatHistoryWithCliSessionImports } from "../cli-session-history.js";
 import { ADMIN_SCOPE } from "../method-scopes.js";
 import {
@@ -57,6 +67,11 @@ import {
   hasGatewayClientCap,
 } from "../protocol/client-info.js";
 import {
+  validateChatVoiceAudioParams,
+  validateChatVoiceCommitParams,
+  validateChatVoiceInterruptParams,
+  validateChatVoiceStartParams,
+  validateChatVoiceStopParams,
   ErrorCodes,
   errorShape,
   formatValidationErrors,
@@ -1011,6 +1026,88 @@ function normalizeOptionalText(value?: string | null): string | undefined {
   return trimmed || undefined;
 }
 
+function getActiveChatVoiceCallbackSession(params: {
+  sessionKey: string;
+  connId: string;
+  sttSession: RealtimeTranscriptionSession;
+}) {
+  const active = getChatVoiceSession(params.sessionKey);
+  if (!active || active.connId !== params.connId || active.sttSession !== params.sttSession) {
+    return undefined;
+  }
+  return active;
+}
+
+function isStrictBase64(value: string): boolean {
+  const normalized = value.replace(/\s+/g, "");
+  if (!normalized || normalized.length % 4 !== 0) {
+    return false;
+  }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    return false;
+  }
+  const decoded = Buffer.from(normalized, "base64");
+  return decoded.length > 0 && decoded.toString("base64") === normalized;
+}
+
+function parseStrictBase64AudioBuffer(value: unknown): Buffer {
+  const audio = typeof value === "string" ? value.trim() : "";
+  if (!audio) {
+    throw new Error("audio is required.");
+  }
+  if (!isStrictBase64(audio)) {
+    throw new Error("audio must be base64 encoded.");
+  }
+  return Buffer.from(audio, "base64");
+}
+
+function resolveControlUiVoiceConfig(cfg: ReturnType<typeof loadSessionEntry>["cfg"]) {
+  return cfg.gateway?.controlUi?.voice;
+}
+
+function emitChatVoiceEvent(
+  context: GatewayRequestContext,
+  connId: string,
+  payload: ChatVoiceEventPayload,
+) {
+  context.broadcastToConnIds("chat.voice.event", payload, new Set([connId]));
+}
+
+async function closeChatVoiceSession(params: {
+  context: GatewayRequestContext;
+  sessionKey: string;
+  connId: string;
+  emitClosed?: boolean;
+  errorMessage?: string;
+}) {
+  const entry = deleteChatVoiceSession(params.sessionKey);
+  if (!entry) {
+    return;
+  }
+  try {
+    entry.sttSession.close();
+  } catch (err) {
+    params.context.logGateway.debug(
+      `chat.voice session close cleanup failed: ${formatForLog(err)}`,
+    );
+  }
+  if (params.errorMessage) {
+    emitChatVoiceEvent(params.context, params.connId, {
+      sessionKey: params.sessionKey,
+      state: "error",
+      errorMessage: params.errorMessage,
+      playbackEnabled: entry.playbackEnabled,
+    });
+  }
+  if (params.emitClosed !== false) {
+    emitChatVoiceEvent(params.context, params.connId, {
+      sessionKey: params.sessionKey,
+      state: "closed",
+      playbackEnabled: entry.playbackEnabled,
+    });
+  }
+}
+
 function normalizeExplicitChatSendOrigin(
   params: ChatSendExplicitOrigin,
 ): { ok: true; value?: ChatSendExplicitOrigin } | { ok: false; error: string } {
@@ -1953,6 +2050,425 @@ export const chatHandlers: GatewayRequestHandlers = {
         error: formatForLog(err),
       });
     }
+  },
+  "chat.voice.start": async ({ params, respond, context, client }) => {
+    if (!validateChatVoiceStartParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid chat.voice.start params: ${formatValidationErrors(validateChatVoiceStartParams.errors)}`,
+        ),
+      );
+      return;
+    }
+    const connId = normalizeOptionalText(client?.connId);
+    if (!connId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "voice requires connId"));
+      return;
+    }
+
+    const { sessionKey: rawSessionKey } = params as { sessionKey: string };
+    const { cfg, canonicalKey: sessionKey } = loadSessionEntry(rawSessionKey);
+    const voiceConfig = resolveControlUiVoiceConfig(cfg);
+    if (voiceConfig?.enabled !== true) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "web voice is disabled"));
+      return;
+    }
+
+    const providerId = normalizeOptionalText(voiceConfig.transcriptionProvider);
+    if (!providerId) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "voice transcription provider is not configured"),
+      );
+      return;
+    }
+
+    const provider = getRealtimeTranscriptionProvider(providerId, cfg);
+    if (!provider) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `voice transcription provider not found: ${providerId}`,
+        ),
+      );
+      return;
+    }
+
+    const modelProviderConfig =
+      provider.id === "microsoft-foundry"
+        ? cfg.models?.providers?.["microsoft-foundry"]
+        : cfg.models?.providers?.[provider.id];
+    const providerConfig = {
+      providers: {
+        [provider.id]: {
+          ...modelProviderConfig,
+          ...voiceConfig.providers?.[provider.id],
+          inputAudioFormat: "pcm16",
+        },
+      },
+    };
+    if (!provider.isConfigured({ cfg, providerConfig })) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `voice transcription provider is not configured: ${provider.id}`,
+        ),
+      );
+      return;
+    }
+
+    const existing = getChatVoiceSession(sessionKey);
+    if (existing?.connId === connId) {
+      await closeChatVoiceSession({
+        context,
+        sessionKey,
+        connId,
+        emitClosed: false,
+      });
+    }
+
+    const playbackEnabled = voiceConfig.playbackEnabled !== false;
+    try {
+      let sttSession: RealtimeTranscriptionSession;
+      sttSession = provider.createSession({
+        providerConfig,
+        onSpeechStart: () => {
+          const active = getActiveChatVoiceCallbackSession({ sessionKey, connId, sttSession });
+          if (!active) {
+            return;
+          }
+          active.transcriptPartial = "";
+          emitChatVoiceEvent(context, connId, {
+            sessionKey,
+            state: "speech_start",
+            playbackEnabled: active.playbackEnabled,
+          });
+        },
+        onPartial: (partial) => {
+          const active = getActiveChatVoiceCallbackSession({ sessionKey, connId, sttSession });
+          if (!active) {
+            return;
+          }
+          active.transcriptPartial = partial;
+          emitChatVoiceEvent(context, connId, {
+            sessionKey,
+            state: "partial_transcript",
+            transcript: partial,
+            playbackEnabled: active.playbackEnabled,
+          });
+        },
+        onTranscript: (transcript) => {
+          const active = getActiveChatVoiceCallbackSession({ sessionKey, connId, sttSession });
+          if (!active) {
+            return;
+          }
+          active.transcriptFinal = transcript;
+          active.transcriptPartial = "";
+          emitChatVoiceEvent(context, connId, {
+            sessionKey,
+            state: "final_transcript",
+            transcript,
+            playbackEnabled: active.playbackEnabled,
+          });
+        },
+        onError: (error) => {
+          const active = getActiveChatVoiceCallbackSession({ sessionKey, connId, sttSession });
+          if (!active) {
+            return;
+          }
+          void closeChatVoiceSession({
+            context,
+            sessionKey,
+            connId,
+            errorMessage: error.message || String(error),
+          });
+        },
+      });
+      await sttSession.connect();
+      setChatVoiceSession({
+        sessionKey,
+        connId,
+        providerId: provider.id,
+        playbackEnabled,
+        sttSession,
+        transcriptPartial: "",
+        transcriptFinal: "",
+        activeRunId: null,
+      });
+      respond(true, {
+        ok: true,
+        providerId: provider.id,
+        playbackEnabled,
+      });
+      emitChatVoiceEvent(context, connId, {
+        sessionKey,
+        state: "ready",
+        playbackEnabled,
+      });
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
+      context.logGateway.warn(`chat.voice.start failed: ${formatForLog(err)}`);
+    }
+  },
+  "chat.voice.audio": ({ params, respond, client }) => {
+    if (!validateChatVoiceAudioParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid chat.voice.audio params: ${formatValidationErrors(validateChatVoiceAudioParams.errors)}`,
+        ),
+      );
+      return;
+    }
+    const connId = normalizeOptionalText(client?.connId);
+    if (!connId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "voice requires connId"));
+      return;
+    }
+    const {
+      sessionKey: rawSessionKey,
+      audio,
+      format,
+    } = params as {
+      sessionKey: string;
+      audio: string;
+      format?: string;
+    };
+    const { canonicalKey: sessionKey } = loadSessionEntry(rawSessionKey);
+    const entry = getChatVoiceSession(sessionKey);
+    if (!entry || entry.connId !== connId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "voice session not found"));
+      return;
+    }
+    if (format && format.toLowerCase() !== "pcm16") {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `unsupported voice audio format: ${format}`),
+      );
+      return;
+    }
+    let audioBuffer: Buffer;
+    try {
+      audioBuffer = parseStrictBase64AudioBuffer(audio);
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, String(err)));
+      return;
+    }
+    try {
+      entry.sttSession.sendAudio(audioBuffer);
+      respond(true, { ok: true });
+    } catch (err) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, String(err)));
+    }
+  },
+  "chat.voice.commit": async ({ params, req, respond, context, client }) => {
+    if (!validateChatVoiceCommitParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid chat.voice.commit params: ${formatValidationErrors(validateChatVoiceCommitParams.errors)}`,
+        ),
+      );
+      return;
+    }
+    const connId = normalizeOptionalText(client?.connId);
+    if (!connId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "voice requires connId"));
+      return;
+    }
+    const { sessionKey: rawSessionKey, transcript: transcriptOverride } = params as {
+      sessionKey: string;
+      transcript?: string;
+    };
+    const { canonicalKey: sessionKey } = loadSessionEntry(rawSessionKey);
+    const entry = getChatVoiceSession(sessionKey);
+    if (!entry || entry.connId !== connId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "voice session not found"));
+      return;
+    }
+    if (entry.activeRunId) {
+      respond(true, { ok: false, status: "in_flight", runId: entry.activeRunId });
+      return;
+    }
+    const transcript = (
+      transcriptOverride ??
+      entry.transcriptFinal ??
+      entry.transcriptPartial
+    ).trim();
+    if (!transcript) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "voice transcript is empty"),
+      );
+      return;
+    }
+
+    const runId = randomUUID();
+    const voiceSendResult = await new Promise<{
+      ok: boolean;
+      payload?: unknown;
+      error?: ReturnType<typeof errorShape>;
+    }>((resolve) => {
+      void chatHandlers["chat.send"]({
+        req,
+        params: {
+          sessionKey,
+          message: transcript,
+          deliver: false,
+          idempotencyKey: runId,
+        },
+        client,
+        isWebchatConnect: () => false,
+        context,
+        respond: (ok, payload, error) => resolve({ ok, payload, error }),
+      });
+    });
+    if (!voiceSendResult.ok) {
+      respond(false, voiceSendResult.payload, voiceSendResult.error);
+      return;
+    }
+    entry.transcriptFinal = "";
+    entry.transcriptPartial = "";
+    setChatVoiceRunId(sessionKey, runId);
+    emitChatVoiceEvent(context, connId, {
+      sessionKey,
+      state: "assistant_started",
+      runId,
+      playbackEnabled: entry.playbackEnabled,
+    });
+    respond(true, {
+      ok: true,
+      runId,
+      transcript,
+      playbackEnabled: entry.playbackEnabled,
+      result: voiceSendResult.payload,
+    });
+  },
+  "chat.voice.interrupt": ({ params, req, respond, context, client }) => {
+    if (!validateChatVoiceInterruptParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid chat.voice.interrupt params: ${formatValidationErrors(validateChatVoiceInterruptParams.errors)}`,
+        ),
+      );
+      return;
+    }
+    const connId = normalizeOptionalText(client?.connId);
+    if (!connId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "voice requires connId"));
+      return;
+    }
+    const { sessionKey: rawSessionKey } = params as { sessionKey: string };
+    const { canonicalKey: sessionKey } = loadSessionEntry(rawSessionKey);
+    const entry = getChatVoiceSession(sessionKey);
+    if (!entry || entry.connId !== connId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "voice session not found"));
+      return;
+    }
+
+    emitChatVoiceEvent(context, connId, {
+      sessionKey,
+      state: "playback_clear",
+      playbackEnabled: entry.playbackEnabled,
+    });
+
+    const runId = entry.activeRunId;
+    if (!runId) {
+      emitChatVoiceEvent(context, connId, {
+        sessionKey,
+        state: "interrupted",
+        playbackEnabled: entry.playbackEnabled,
+      });
+      respond(true, { ok: true, aborted: false });
+      return;
+    }
+
+    void chatHandlers["chat.abort"]({
+      req,
+      params: {
+        sessionKey,
+        runId,
+      },
+      client,
+      isWebchatConnect: () => false,
+      context,
+      respond: () => undefined,
+    });
+    setChatVoiceRunId(sessionKey, null);
+    emitChatVoiceEvent(context, connId, {
+      sessionKey,
+      state: "interrupted",
+      runId,
+      playbackEnabled: entry.playbackEnabled,
+    });
+    respond(true, { ok: true, aborted: true, runId });
+  },
+  "chat.voice.stop": async ({ params, req, respond, context, client }) => {
+    if (!validateChatVoiceStopParams(params)) {
+      respond(
+        false,
+        undefined,
+        errorShape(
+          ErrorCodes.INVALID_REQUEST,
+          `invalid chat.voice.stop params: ${formatValidationErrors(validateChatVoiceStopParams.errors)}`,
+        ),
+      );
+      return;
+    }
+    const connId = normalizeOptionalText(client?.connId);
+    if (!connId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "voice requires connId"));
+      return;
+    }
+    const { sessionKey: rawSessionKey } = params as { sessionKey: string };
+    const { canonicalKey: sessionKey } = loadSessionEntry(rawSessionKey);
+    const entry = getChatVoiceSession(sessionKey);
+    if (!entry || entry.connId !== connId) {
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "voice session not found"));
+      return;
+    }
+    emitChatVoiceEvent(context, connId, {
+      sessionKey,
+      state: "playback_clear",
+      playbackEnabled: entry.playbackEnabled,
+    });
+    if (entry.activeRunId) {
+      void chatHandlers["chat.abort"]({
+        req,
+        params: {
+          sessionKey,
+          runId: entry.activeRunId,
+        },
+        client,
+        isWebchatConnect: () => false,
+        context,
+        respond: () => undefined,
+      });
+    }
+    setChatVoiceRunId(sessionKey, null);
+    await closeChatVoiceSession({
+      context,
+      sessionKey,
+      connId,
+    });
+    respond(true, { ok: true });
   },
   "chat.inject": async ({ params, respond, context }) => {
     if (!validateChatInjectParams(params)) {

@@ -27,6 +27,7 @@ describe("method scope resolution", () => {
   it.each([
     ["sessions.resolve", ["operator.read"]],
     ["config.schema.lookup", ["operator.read"]],
+    ["chat.voice.start", ["operator.write"]],
     ["sessions.create", ["operator.write"]],
     ["sessions.send", ["operator.write"]],
     ["sessions.abort", ["operator.write"]],
@@ -82,6 +83,10 @@ describe("operator scope authorization", () => {
 
   it("requires operator.write for write methods", () => {
     expect(authorizeOperatorScopesForMethod("send", ["operator.read"])).toEqual({
+      allowed: false,
+      missingScope: "operator.write",
+    });
+    expect(authorizeOperatorScopesForMethod("chat.voice.start", ["operator.read"])).toEqual({
       allowed: false,
       missingScope: "operator.write",
     });

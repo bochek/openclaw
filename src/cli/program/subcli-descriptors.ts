@@ -23,6 +23,11 @@ const subCliCommandCatalog = defineCommandDescriptorCatalog([
     hasSubcommands: true,
   },
   {
+    name: "capability",
+    description: "Run provider-backed capability commands",
+    hasSubcommands: true,
+  },
+  {
     name: "approvals",
     description: "Manage exec approvals (gateway or node host)",
     hasSubcommands: true,

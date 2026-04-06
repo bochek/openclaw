@@ -75,6 +75,16 @@ export const FIELD_HELP: Record<string, string> = {
     "Control UI hosting settings including enablement, pathing, and browser-origin/auth hardening behavior. Keep UI exposure minimal and pair with strong auth controls before internet-facing deployments.",
   "gateway.controlUi.enabled":
     "Enables serving the gateway Control UI from the gateway HTTP process when true. Keep enabled for local administration, and disable when an external control surface replaces it.",
+  "gateway.controlUi.voice":
+    "Browser voice settings for the Control UI chat, including realtime transcription provider selection and optional assistant speech playback.",
+  "gateway.controlUi.voice.enabled":
+    "Enables realtime browser voice sessions for the Control UI chat when a transcription provider is configured.",
+  "gateway.controlUi.voice.transcriptionProvider":
+    "Registered realtime transcription provider id used for browser mic input. Keep this explicit so browser voice fails closed when no provider is configured.",
+  "gateway.controlUi.voice.providers":
+    "Provider-owned realtime transcription config keyed by provider id for browser voice sessions.",
+  "gateway.controlUi.voice.playbackEnabled":
+    "Enables browser speech-synthesis playback for finalized assistant replies during a voice session.",
   "gateway.auth":
     "Authentication policy for gateway HTTP/WebSocket access including mode, credentials, trusted-proxy behavior, and rate limiting. Keep auth enabled for every non-loopback deployment.",
   "gateway.auth.mode":

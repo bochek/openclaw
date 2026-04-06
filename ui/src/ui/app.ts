@@ -165,6 +165,19 @@ export class OpenClawApp extends LitElement {
   @state() chatStream: string | null = null;
   @state() chatStreamStartedAt: number | null = null;
   @state() chatRunId: string | null = null;
+  @state() chatVoiceActive = false;
+  @state() chatVoiceState:
+    | "idle"
+    | "connecting"
+    | "listening"
+    | "processing"
+    | "speaking"
+    | "interrupted"
+    | "error" = "idle";
+  @state() chatVoiceTranscript = "";
+  @state() chatVoiceRunId: string | null = null;
+  @state() chatVoicePlaybackEnabled = true;
+  @state() chatVoiceError: string | null = null;
   @state() compactionStatus: CompactionStatus | null = null;
   @state() fallbackStatus: FallbackStatus | null = null;
   @state() chatAvatarUrl: string | null = null;

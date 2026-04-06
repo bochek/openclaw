@@ -676,6 +676,15 @@ export const OpenClawSchema = z
             dangerouslyAllowHostHeaderOriginFallback: z.boolean().optional(),
             allowInsecureAuth: z.boolean().optional(),
             dangerouslyDisableDeviceAuth: z.boolean().optional(),
+            voice: z
+              .object({
+                enabled: z.boolean().optional(),
+                transcriptionProvider: z.string().min(1).optional(),
+                providers: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+                playbackEnabled: z.boolean().optional(),
+              })
+              .strict()
+              .optional(),
           })
           .strict()
           .optional(),

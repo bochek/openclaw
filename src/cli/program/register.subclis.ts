@@ -75,6 +75,15 @@ const entrySpecs: readonly CommandGroupDescriptorSpec<SubCliRegistrar>[] = [
       exportName: "registerModelsCli",
     },
     {
+      name: "capability",
+      description: "Run provider-backed capability commands",
+      hasSubcommands: true,
+      register: async (program) => {
+        const mod = await import("../capability-cli.js");
+        mod.registerCapabilityCli(program);
+      },
+    },
+    {
       commandNames: ["approvals"],
       loadModule: () => import("../exec-approvals-cli.js"),
       exportName: "registerExecApprovalsCli",

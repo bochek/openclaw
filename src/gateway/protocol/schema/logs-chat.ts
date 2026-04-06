@@ -68,6 +68,68 @@ export const ChatInjectParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const ChatVoiceStartParamsSchema = Type.Object(
+  {
+    sessionKey: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+export const ChatVoiceAudioParamsSchema = Type.Object(
+  {
+    sessionKey: NonEmptyString,
+    audio: NonEmptyString,
+    format: Type.Optional(Type.String()),
+    sampleRate: Type.Optional(Type.Integer({ minimum: 1 })),
+  },
+  { additionalProperties: false },
+);
+
+export const ChatVoiceCommitParamsSchema = Type.Object(
+  {
+    sessionKey: NonEmptyString,
+    transcript: Type.Optional(Type.String()),
+  },
+  { additionalProperties: false },
+);
+
+export const ChatVoiceInterruptParamsSchema = Type.Object(
+  {
+    sessionKey: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+export const ChatVoiceStopParamsSchema = Type.Object(
+  {
+    sessionKey: NonEmptyString,
+  },
+  { additionalProperties: false },
+);
+
+export const ChatVoiceEventSchema = Type.Object(
+  {
+    sessionKey: NonEmptyString,
+    state: Type.Union([
+      Type.Literal("ready"),
+      Type.Literal("speech_start"),
+      Type.Literal("partial_transcript"),
+      Type.Literal("final_transcript"),
+      Type.Literal("assistant_started"),
+      Type.Literal("assistant_completed"),
+      Type.Literal("playback_clear"),
+      Type.Literal("interrupted"),
+      Type.Literal("error"),
+      Type.Literal("closed"),
+    ]),
+    transcript: Type.Optional(Type.String()),
+    runId: Type.Optional(Type.String()),
+    errorMessage: Type.Optional(Type.String()),
+    playbackEnabled: Type.Optional(Type.Boolean()),
+  },
+  { additionalProperties: false },
+);
+
 export const ChatEventSchema = Type.Object(
   {
     runId: NonEmptyString,
