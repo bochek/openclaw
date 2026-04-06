@@ -1,8 +1,6 @@
-type VectorWriteDb = {
-  prepare: (sql: string) => {
-    run: (...params: unknown[]) => void;
-  };
-};
+import type { DatabaseSync } from "node:sqlite";
+
+type VectorWriteDb = Pick<DatabaseSync, "prepare">;
 
 const vectorToBlob = (embedding: number[]): Buffer =>
   Buffer.from(new Float32Array(embedding).buffer);
