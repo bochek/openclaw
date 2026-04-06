@@ -48,6 +48,7 @@ export function buildQaGatewayConfig(params: {
   const alternateModel =
     params.alternateModel ??
     (providerMode === "live-openai" ? "openai/gpt-5.4" : "mock-openai/gpt-5.4-alt");
+  const mockProviderBaseUrl = params.providerBaseUrl ?? "http://127.0.0.1:44080/v1";
   const liveModelParams =
     providerMode === "live-openai"
       ? {
@@ -91,9 +92,7 @@ export function buildQaGatewayConfig(params: {
     agents: {
       defaults: {
         workspace: params.workspaceDir,
-        model: {
-          primary: primaryModel,
-        },
+        model: primaryModel,
         models: {
           [primaryModel]: {
             params: liveModelParams,
@@ -111,9 +110,7 @@ export function buildQaGatewayConfig(params: {
         {
           id: "qa",
           default: true,
-          model: {
-            primary: primaryModel,
-          },
+          model: primaryModel,
           identity: {
             name: "C-3PO QA",
             theme: "Flustered Protocol Droid",
@@ -132,7 +129,7 @@ export function buildQaGatewayConfig(params: {
             mode: "replace",
             providers: {
               "mock-openai": {
-                baseUrl: params.providerBaseUrl,
+                baseUrl: mockProviderBaseUrl,
                 apiKey: "test",
                 api: "openai-responses",
                 models: [
