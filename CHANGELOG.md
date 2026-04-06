@@ -38,6 +38,7 @@ Docs: https://docs.openclaw.ai
 - Gateway/status: probe local TLS gateways over `wss://`, forward the local cert fingerprint for self-signed loopback probes, and warn when the local TLS runtime cannot load the configured cert. (#61935) Thanks @ThanhNguyxn07.
 - Agents/history: keep truly legacy unsigned replay text unphased when mixed with phased OpenAI WS assistant blocks, while still inheriting message phase for id-only replay signatures. (#61529) Thanks @100yenadmin.
 - Discord/thread titles: stop forcing a hardcoded temperature for generated auto-thread names so Codex-backed thread title generation works on `openai-codex/*` models again. (#59525)
+- Providers/Google video: fall back to the REST Veo path for affected text-only SDK 404 and empty-result failures, while keeping reference-input generation on the SDK path and normalizing REST video downloads. (#61878) Thanks @leoleedev.
 
 ## 2026.4.5
 
