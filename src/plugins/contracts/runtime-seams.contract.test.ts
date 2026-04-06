@@ -138,6 +138,7 @@ describe("shared runtime seam contracts", () => {
     (globalThis as Record<string, unknown>)[TEST_UNDICI_RUNTIME_DEPS_KEY] = {
       Agent: MockAgent,
       EnvHttpProxyAgent: MockEnvHttpProxyAgent,
+      FormData: globalThis.FormData,
       ProxyAgent: MockProxyAgent,
       fetch: runtimeFetch,
     };

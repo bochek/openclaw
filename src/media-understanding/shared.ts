@@ -111,7 +111,7 @@ export async function fetchWithTimeoutGuarded(
   });
 }
 
-export async function postTranscriptionRequest(params: {
+type GuardedPostParams = {
   url: string;
   headers: Headers;
   body: BodyInit;
@@ -121,7 +121,39 @@ export async function postTranscriptionRequest(params: {
   allowPrivateNetwork?: boolean;
   dispatcherPolicy?: PinnedDispatcherPolicy;
   auditContext?: string;
-}) {
+};
+
+function buildGuardedFetchOptions(
+  params: Pick<
+    GuardedPostParams,
+    "allowPrivateNetwork" | "pinDns" | "dispatcherPolicy" | "auditContext"
+  >,
+):
+  | {
+      ssrfPolicy?: SsrFPolicy;
+      pinDns?: boolean;
+      dispatcherPolicy?: PinnedDispatcherPolicy;
+      auditContext?: string;
+    }
+  | undefined {
+  const auditContext = sanitizeAuditContext(params.auditContext);
+  if (
+    !params.allowPrivateNetwork &&
+    !params.dispatcherPolicy &&
+    params.pinDns === undefined &&
+    !auditContext
+  ) {
+    return undefined;
+  }
+  return {
+    ...(params.allowPrivateNetwork ? { ssrfPolicy: { allowPrivateNetwork: true } } : {}),
+    ...(params.pinDns !== undefined ? { pinDns: params.pinDns } : {}),
+    ...(params.dispatcherPolicy ? { dispatcherPolicy: params.dispatcherPolicy } : {}),
+    ...(auditContext ? { auditContext } : {}),
+  };
+}
+
+async function postGuardedRequest(params: GuardedPostParams): Promise<GuardedFetchResult> {
   return fetchWithTimeoutGuarded(
     params.url,
     {
@@ -131,52 +163,23 @@ export async function postTranscriptionRequest(params: {
     },
     params.timeoutMs,
     params.fetchFn,
-    params.allowPrivateNetwork ||
-      params.dispatcherPolicy ||
-      params.pinDns !== undefined ||
-      params.auditContext
-      ? {
-          ...(params.allowPrivateNetwork ? { ssrfPolicy: { allowPrivateNetwork: true } } : {}),
-          ...(params.pinDns !== undefined ? { pinDns: params.pinDns } : {}),
-          ...(params.dispatcherPolicy ? { dispatcherPolicy: params.dispatcherPolicy } : {}),
-          ...(params.auditContext ? { auditContext: params.auditContext } : {}),
-        }
-      : undefined,
+    buildGuardedFetchOptions(params),
   );
 }
 
-export async function postJsonRequest(params: {
-  url: string;
-  headers: Headers;
-  body: unknown;
-  timeoutMs?: number;
-  fetchFn: typeof fetch;
-  pinDns?: boolean;
-  allowPrivateNetwork?: boolean;
-  dispatcherPolicy?: PinnedDispatcherPolicy;
-  auditContext?: string;
-}) {
-  return fetchWithTimeoutGuarded(
-    params.url,
-    {
-      method: "POST",
-      headers: params.headers,
-      body: JSON.stringify(params.body),
-    },
-    params.timeoutMs,
-    params.fetchFn,
-    params.allowPrivateNetwork ||
-      params.dispatcherPolicy ||
-      params.pinDns !== undefined ||
-      params.auditContext
-      ? {
-          ...(params.allowPrivateNetwork ? { ssrfPolicy: { allowPrivateNetwork: true } } : {}),
-          ...(params.pinDns !== undefined ? { pinDns: params.pinDns } : {}),
-          ...(params.dispatcherPolicy ? { dispatcherPolicy: params.dispatcherPolicy } : {}),
-          ...(params.auditContext ? { auditContext: params.auditContext } : {}),
-        }
-      : undefined,
-  );
+export async function postTranscriptionRequest(params: GuardedPostParams) {
+  return postGuardedRequest(params);
+}
+
+export async function postJsonRequest(
+  params: Omit<GuardedPostParams, "body"> & {
+    body: unknown;
+  },
+) {
+  return postGuardedRequest({
+    ...params,
+    body: JSON.stringify(params.body),
+  });
 }
 
 export async function readErrorResponse(res: Response): Promise<string | undefined> {

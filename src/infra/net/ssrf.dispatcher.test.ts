@@ -31,6 +31,7 @@ beforeEach(() => {
   (globalThis as Record<string, unknown>)[TEST_UNDICI_RUNTIME_DEPS_KEY] = {
     Agent: agentCtor,
     EnvHttpProxyAgent: envHttpProxyAgentCtor,
+    FormData: globalThis.FormData,
     ProxyAgent: proxyAgentCtor,
     fetch: vi.fn(),
   };

@@ -1,4 +1,5 @@
 import type { Dispatcher } from "undici";
+import { callUndiciFetch } from "./undici-formdata.js";
 import { loadUndiciRuntimeDeps } from "./undici-runtime.js";
 
 export type DispatcherAwareRequestInit = RequestInit & { dispatcher?: Dispatcher };
@@ -16,9 +17,5 @@ export async function fetchWithRuntimeDispatcher(
   input: RequestInfo | URL,
   init?: DispatcherAwareRequestInit,
 ): Promise<Response> {
-  const runtimeFetch = loadUndiciRuntimeDeps().fetch as unknown as (
-    input: RequestInfo | URL,
-    init?: DispatcherAwareRequestInit,
-  ) => Promise<unknown>;
-  return (await runtimeFetch(input, init)) as Response;
+  return await callUndiciFetch(loadUndiciRuntimeDeps().fetch, input, init);
 }
