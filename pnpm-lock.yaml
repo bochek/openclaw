@@ -275,7 +275,11 @@ importers:
         specifier: 3.1023.0
         version: 3.1023.0
 
-  extensions/amazon-bedrock-mantle: {}
+  extensions/amazon-bedrock-mantle:
+    dependencies:
+      '@aws/bedrock-token-generator':
+        specifier: ^1.1.0
+        version: 1.1.0
 
   extensions/anthropic: {}
 
