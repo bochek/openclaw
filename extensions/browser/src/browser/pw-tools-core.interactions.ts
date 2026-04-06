@@ -1,7 +1,9 @@
+import type { SsrFPolicy } from "../infra/net/ssrf.js";
 import type { BrowserActRequest, BrowserFormField } from "./client-actions-core.js";
 import { DEFAULT_FILL_FIELD_TYPE } from "./form-fields.js";
 import { DEFAULT_UPLOAD_DIR, resolveStrictExistingPathsWithinRoot } from "./paths.js";
 import {
+  assertPageNavigationCompletedSafely,
   ensurePageState,
   forceDisconnectPlaywrightForTarget,
   getPageForTargetId,
@@ -80,6 +82,7 @@ export async function highlightViaPlaywright(opts: {
 export async function clickViaPlaywright(opts: {
   cdpUrl: string;
   targetId?: string;
+  ssrfPolicy?: SsrFPolicy;
   ref?: string;
   selector?: string;
   doubleClick?: boolean;
@@ -114,6 +117,13 @@ export async function clickViaPlaywright(opts: {
         modifiers: opts.modifiers,
       });
     }
+    await assertPageNavigationCompletedSafely({
+      cdpUrl: opts.cdpUrl,
+      page,
+      response: null,
+      ssrfPolicy: opts.ssrfPolicy,
+      targetId: opts.targetId,
+    });
   } catch (err) {
     throw toAIFriendlyError(err, label);
   }
@@ -289,6 +299,7 @@ export async function fillFormViaPlaywright(opts: {
 export async function evaluateViaPlaywright(opts: {
   cdpUrl: string;
   targetId?: string;
+  ssrfPolicy?: SsrFPolicy;
   fn: string;
   ref?: string;
   timeoutMs?: number;
@@ -378,7 +389,15 @@ export async function evaluateViaPlaywright(opts: {
         fnBody: fnText,
         timeoutMs: evaluateTimeout,
       });
-      return await awaitEvalWithAbort(evalPromise, abortPromise);
+      const result = await awaitEvalWithAbort(evalPromise, abortPromise);
+      await assertPageNavigationCompletedSafely({
+        cdpUrl: opts.cdpUrl,
+        page,
+        response: null,
+        ssrfPolicy: opts.ssrfPolicy,
+        targetId: opts.targetId,
+      });
+      return result;
     }
 
     // eslint-disable-next-line @typescript-eslint/no-implied-eval -- required for browser-context eval
@@ -408,7 +427,15 @@ export async function evaluateViaPlaywright(opts: {
       fnBody: fnText,
       timeoutMs: evaluateTimeout,
     });
-    return await awaitEvalWithAbort(evalPromise, abortPromise);
+    const result = await awaitEvalWithAbort(evalPromise, abortPromise);
+    await assertPageNavigationCompletedSafely({
+      cdpUrl: opts.cdpUrl,
+      page,
+      response: null,
+      ssrfPolicy: opts.ssrfPolicy,
+      targetId: opts.targetId,
+    });
+    return result;
   } finally {
     if (signal && abortListener) {
       signal.removeEventListener("abort", abortListener);
@@ -711,6 +738,7 @@ async function executeSingleAction(
   action: BrowserActRequest,
   cdpUrl: string,
   targetId?: string,
+  ssrfPolicy?: SsrFPolicy,
   evaluateEnabled?: boolean,
   depth = 0,
 ): Promise<void> {
@@ -723,6 +751,7 @@ async function executeSingleAction(
       await clickViaPlaywright({
         cdpUrl,
         targetId: effectiveTargetId,
+        ssrfPolicy,
         ref: action.ref,
         selector: action.selector,
         doubleClick: action.doubleClick,
@@ -833,6 +862,7 @@ async function executeSingleAction(
       await evaluateViaPlaywright({
         cdpUrl,
         targetId: effectiveTargetId,
+        ssrfPolicy,
         fn: action.fn,
         ref: action.ref,
         timeoutMs: action.timeoutMs,
@@ -848,6 +878,7 @@ async function executeSingleAction(
       await batchViaPlaywright({
         cdpUrl,
         targetId: effectiveTargetId,
+        ssrfPolicy,
         actions: action.actions,
         stopOnError: action.stopOnError,
         evaluateEnabled,
@@ -862,6 +893,7 @@ async function executeSingleAction(
 export async function batchViaPlaywright(opts: {
   cdpUrl: string;
   targetId?: string;
+  ssrfPolicy?: SsrFPolicy;
   actions: BrowserActRequest[];
   stopOnError?: boolean;
   evaluateEnabled?: boolean;
@@ -877,7 +909,14 @@ export async function batchViaPlaywright(opts: {
   const results: Array<{ ok: boolean; error?: string }> = [];
   for (const action of opts.actions) {
     try {
-      await executeSingleAction(action, opts.cdpUrl, opts.targetId, opts.evaluateEnabled, depth);
+      await executeSingleAction(
+        action,
+        opts.cdpUrl,
+        opts.targetId,
+        opts.ssrfPolicy,
+        opts.evaluateEnabled,
+        depth,
+      );
       results.push({ ok: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
