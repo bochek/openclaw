@@ -1,7 +1,9 @@
+import type { SsrFPolicy } from "../infra/net/ssrf.js";
 import type { BrowserActRequest, BrowserFormField } from "./client-actions-core.js";
 import { DEFAULT_FILL_FIELD_TYPE } from "./form-fields.js";
 import { DEFAULT_UPLOAD_DIR, resolveStrictExistingPathsWithinRoot } from "./paths.js";
 import {
+  assertPageNavigationCompletedSafely,
   ensurePageState,
   forceDisconnectPlaywrightForTarget,
   getPageForTargetId,
@@ -63,6 +65,24 @@ async function awaitEvalWithAbort<T>(
   }
 }
 
+async function assertPostInteractionNavigationSafe(opts: {
+  cdpUrl: string;
+  page: Awaited<ReturnType<typeof getPageForTargetId>>;
+  ssrfPolicy?: SsrFPolicy;
+  targetId?: string;
+}): Promise<void> {
+  if (!opts.ssrfPolicy) {
+    return;
+  }
+  await assertPageNavigationCompletedSafely({
+    cdpUrl: opts.cdpUrl,
+    page: opts.page,
+    response: null,
+    ssrfPolicy: opts.ssrfPolicy,
+    targetId: opts.targetId,
+  });
+}
+
 export async function highlightViaPlaywright(opts: {
   cdpUrl: string;
   targetId?: string;
@@ -87,6 +107,7 @@ export async function clickViaPlaywright(opts: {
   modifiers?: Array<"Alt" | "Control" | "ControlOrMeta" | "Meta" | "Shift">;
   delayMs?: number;
   timeoutMs?: number;
+  ssrfPolicy?: SsrFPolicy;
 }): Promise<void> {
   const resolved = requireRefOrSelector(opts.ref, opts.selector);
   const page = await getRestoredPageForTarget(opts);
@@ -114,6 +135,12 @@ export async function clickViaPlaywright(opts: {
         modifiers: opts.modifiers,
       });
     }
+    await assertPostInteractionNavigationSafe({
+      cdpUrl: opts.cdpUrl,
+      page,
+      ssrfPolicy: opts.ssrfPolicy,
+      targetId: opts.targetId,
+    });
   } catch (err) {
     throw toAIFriendlyError(err, label);
   }
@@ -201,6 +228,7 @@ export async function pressKeyViaPlaywright(opts: {
   targetId?: string;
   key: string;
   delayMs?: number;
+  ssrfPolicy?: SsrFPolicy;
 }): Promise<void> {
   const key = String(opts.key ?? "").trim();
   if (!key) {
@@ -210,6 +238,12 @@ export async function pressKeyViaPlaywright(opts: {
   ensurePageState(page);
   await page.keyboard.press(key, {
     delay: Math.max(0, Math.floor(opts.delayMs ?? 0)),
+  });
+  await assertPostInteractionNavigationSafe({
+    cdpUrl: opts.cdpUrl,
+    page,
+    ssrfPolicy: opts.ssrfPolicy,
+    targetId: opts.targetId,
   });
 }
 
@@ -222,6 +256,7 @@ export async function typeViaPlaywright(opts: {
   submit?: boolean;
   slowly?: boolean;
   timeoutMs?: number;
+  ssrfPolicy?: SsrFPolicy;
 }): Promise<void> {
   const resolved = requireRefOrSelector(opts.ref, opts.selector);
   const text = String(opts.text ?? "");
@@ -240,6 +275,12 @@ export async function typeViaPlaywright(opts: {
     }
     if (opts.submit) {
       await locator.press("Enter", { timeout });
+      await assertPostInteractionNavigationSafe({
+        cdpUrl: opts.cdpUrl,
+        page,
+        ssrfPolicy: opts.ssrfPolicy,
+        targetId: opts.targetId,
+      });
     }
   } catch (err) {
     throw toAIFriendlyError(err, label);
