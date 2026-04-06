@@ -1,7 +1,7 @@
 import { EnvHttpProxyAgent, ProxyAgent, fetch as undiciFetch } from "undici";
 import { logWarn } from "../../logger.js";
 import { hasEnvHttpProxyConfigured } from "./proxy-env.js";
-import { callUndiciFetch } from "./undici-formdata.js";
+import { createUndiciDispatcherFetch } from "./undici-formdata.js";
 
 export const PROXY_FETCH_PROXY_URL = Symbol.for("openclaw.proxyFetch.proxyUrl");
 type ProxyFetchWithMetadata = typeof fetch & {
@@ -22,11 +22,14 @@ export function makeProxyFetch(proxyUrl: string): typeof fetch {
   };
   // undici's fetch is runtime-compatible with global fetch but the types diverge
   // on stream/body internals. Single cast at the boundary keeps the rest type-safe.
-  const proxyFetch = ((input: RequestInfo | URL, init?: RequestInit) =>
-    callUndiciFetch(undiciFetch, input, {
-      ...(init as Record<string, unknown>),
-      dispatcher: resolveAgent(),
-    })) as ProxyFetchWithMetadata;
+  const proxyFetch = createUndiciDispatcherFetch({
+    fetchImpl: undiciFetch,
+    resolveInit: (init) =>
+      ({
+        ...(init as Record<string, unknown>),
+        dispatcher: resolveAgent(),
+      }) as RequestInit,
+  }) as ProxyFetchWithMetadata;
   Object.defineProperty(proxyFetch, PROXY_FETCH_PROXY_URL, {
     value: proxyUrl,
     enumerable: false,
@@ -60,11 +63,14 @@ export function resolveProxyFetchFromEnv(
   }
   try {
     const agent = new EnvHttpProxyAgent();
-    return ((input: RequestInfo | URL, init?: RequestInit) =>
-      callUndiciFetch(undiciFetch, input, {
-        ...(init as Record<string, unknown>),
-        dispatcher: agent,
-      })) as typeof fetch;
+    return createUndiciDispatcherFetch({
+      fetchImpl: undiciFetch,
+      resolveInit: (init) =>
+        ({
+          ...(init as Record<string, unknown>),
+          dispatcher: agent,
+        }) as RequestInit,
+    });
   } catch (err) {
     logWarn(
       `Proxy env var set but agent creation failed — falling back to direct fetch: ${err instanceof Error ? err.message : String(err)}`,

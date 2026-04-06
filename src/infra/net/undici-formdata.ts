@@ -1,9 +1,8 @@
 import { loadUndiciRuntimeDeps } from "./undici-runtime.js";
 
-type UndiciCompatibleFetch<TInit extends RequestInit> = (
-  input: string | URL,
-  init?: TInit,
-) => Promise<unknown>;
+type UndiciCompatibleFetch = (input: RequestInfo | URL, init?: unknown) => Promise<unknown>;
+
+type DispatcherResolver<TInit extends RequestInit> = (init?: TInit) => TInit;
 
 /**
  * Keep undici-backed fetch wrappers compatible with callers that construct
@@ -47,9 +46,21 @@ export function normalizeUndiciRequestInit<TInit extends RequestInit>(
 }
 
 export async function callUndiciFetch<TInit extends RequestInit>(
-  fetchImpl: UndiciCompatibleFetch<TInit>,
+  fetchImpl: UndiciCompatibleFetch,
   input: RequestInfo | URL,
   init?: TInit,
 ): Promise<Response> {
-  return (await fetchImpl(input as string | URL, normalizeUndiciRequestInit(init))) as Response;
+  return (await fetchImpl(input, normalizeUndiciRequestInit(init))) as Response;
+}
+
+export function createUndiciDispatcherFetch<TInit extends RequestInit>(params: {
+  fetchImpl: UndiciCompatibleFetch;
+  resolveInit: DispatcherResolver<TInit>;
+}): typeof fetch {
+  return ((input: RequestInfo | URL, init?: RequestInit) =>
+    callUndiciFetch(
+      params.fetchImpl,
+      input,
+      params.resolveInit(init as TInit | undefined),
+    )) as typeof fetch;
 }
