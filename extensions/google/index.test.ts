@@ -12,6 +12,7 @@ import {
 import googlePlugin from "./index.js";
 import {
   GOOGLE_FRONTIER_EXECUTION_BIAS,
+  GOOGLE_FRONTIER_INTERACTION_STYLE,
   GOOGLE_FRONTIER_OUTPUT_CONTRACT,
   GOOGLE_FRONTIER_TOOL_CALL_STYLE,
 } from "./prompt-overlay.js";
@@ -146,6 +147,7 @@ describe("google provider plugin hooks", () => {
     const contribution = {
       stablePrefix: GOOGLE_FRONTIER_OUTPUT_CONTRACT,
       sectionOverrides: {
+        interaction_style: GOOGLE_FRONTIER_INTERACTION_STYLE,
         tool_call_style: GOOGLE_FRONTIER_TOOL_CALL_STYLE,
         execution_bias: GOOGLE_FRONTIER_EXECUTION_BIAS,
       },

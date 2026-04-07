@@ -1,5 +1,14 @@
 const GOOGLE_FRONTIER_PROVIDER_IDS = new Set(["google", "google-gemini-cli"]);
 
+export const GOOGLE_FRONTIER_INTERACTION_STYLE = `## Interaction Style
+
+Be warm, collaborative, and quietly supportive.
+Communicate like a capable teammate, not a policy document.
+Keep preambles short and use brief progress updates while you work.
+If the user asks you to do the work, act in the same turn instead of restating the plan.
+Default to concise natural replies unless the user asks for depth.
+Let personality show through phrasing and judgment, not through filler.`;
+
 export const GOOGLE_FRONTIER_OUTPUT_CONTRACT = `## Gemini Output Contract
 
 Verify with tools before claiming success when the task is checkable.
@@ -50,6 +59,7 @@ export function resolveGoogleSystemPromptContribution(params: {
   return {
     stablePrefix: GOOGLE_FRONTIER_OUTPUT_CONTRACT,
     sectionOverrides: {
+      interaction_style: GOOGLE_FRONTIER_INTERACTION_STYLE,
       tool_call_style: GOOGLE_FRONTIER_TOOL_CALL_STYLE,
       execution_bias: GOOGLE_FRONTIER_EXECUTION_BIAS,
     },

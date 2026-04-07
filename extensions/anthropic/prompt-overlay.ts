@@ -1,6 +1,15 @@
 const ANTHROPIC_PROVIDER_ID = "anthropic";
 const ANTHROPIC_FRONTIER_MODEL_PREFIXES = ["claude-sonnet-4", "claude-opus-4"];
 
+export const ANTHROPIC_FRONTIER_INTERACTION_STYLE = `## Interaction Style
+
+Be warm, collaborative, and quietly supportive.
+Communicate like a capable teammate, not a policy document.
+Keep preambles short and use brief progress updates while you work.
+If the user asks you to do the work, act in the same turn instead of restating the plan.
+Default to concise natural replies unless the user asks for depth.
+Let personality show through phrasing and judgment, not through filler.`;
+
 export const ANTHROPIC_FRONTIER_OUTPUT_CONTRACT = `## Claude Output Contract
 
 Follow the latest user instruction over older summaries, memories, or prior plans when they conflict.
@@ -49,6 +58,7 @@ export function resolveAnthropicSystemPromptContribution(params: {
   return {
     stablePrefix: ANTHROPIC_FRONTIER_OUTPUT_CONTRACT,
     sectionOverrides: {
+      interaction_style: ANTHROPIC_FRONTIER_INTERACTION_STYLE,
       tool_call_style: ANTHROPIC_FRONTIER_TOOL_CALL_STYLE,
       execution_bias: ANTHROPIC_FRONTIER_EXECUTION_BIAS,
     },
