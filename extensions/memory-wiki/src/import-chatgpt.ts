@@ -275,7 +275,7 @@ export async function parseChatGptExportFile(
     throw new Error(`No ChatGPT conversations found in export: ${inputPath}`);
   }
 
-  return records.map((record, index) => {
+  const conversations = records.flatMap((record, index) => {
     const conversationId = resolveConversationId(record, index);
     const title =
       (typeof record.title === "string" && record.title.trim()) || `Conversation ${index + 1}`;
@@ -285,18 +285,27 @@ export async function parseChatGptExportFile(
       mappingValue: record.mapping,
       currentNodeId: record.current_node,
     });
+    if (messages.length === 0) {
+      return [];
+    }
     const participantRoles = [...new Set(messages.map((message) => message.role))].toSorted();
     const relativeSlug = slugifyWikiSegment(title);
     const idHash = createHash("sha1").update(conversationId).digest("hex").slice(0, 8);
-    return {
-      conversationId,
-      title,
-      relativePath: `${relativeSlug}-${idHash}.md`,
-      transcriptBody: renderTranscriptBody(messages),
-      messageCount: messages.length,
-      participantRoles,
-      ...(created.iso ? { conversationCreatedAt: created.iso } : {}),
-      ...(updated.iso ? { conversationUpdatedAt: updated.iso } : {}),
-    };
+    return [
+      {
+        conversationId,
+        title,
+        relativePath: `${relativeSlug}-${idHash}.md`,
+        transcriptBody: renderTranscriptBody(messages),
+        messageCount: messages.length,
+        participantRoles,
+        ...(created.iso ? { conversationCreatedAt: created.iso } : {}),
+        ...(updated.iso ? { conversationUpdatedAt: updated.iso } : {}),
+      },
+    ];
   });
+  if (conversations.length === 0) {
+    throw new Error(`No readable ChatGPT conversations found in export: ${inputPath}`);
+  }
+  return conversations;
 }

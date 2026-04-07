@@ -288,4 +288,53 @@ describe("parseChatGptExportFile", () => {
     expect(conversations[0]?.transcriptBody).not.toContain("hidden assistant turn");
     expect(conversations[0]?.transcriptBody).not.toContain("tool output");
   });
+
+  it("drops conversations with no readable visible messages", async () => {
+    const dir = await createTempDir("memory-wiki-chatgpt-empty-visible-");
+    const exportPath = path.join(dir, "export.json");
+    await fs.writeFile(
+      exportPath,
+      JSON.stringify([
+        {
+          id: "conv-empty",
+          title: "Empty visible thread",
+          mapping: {
+            hidden: {
+              message: {
+                author: { role: "assistant" },
+                metadata: { is_visually_hidden_from_conversation: true },
+                content: { parts: ["hidden assistant turn"] },
+              },
+            },
+            tool: {
+              message: {
+                author: { role: "tool" },
+                content: { parts: ["tool output"] },
+              },
+            },
+          },
+        },
+        {
+          id: "conv-visible",
+          title: "Visible thread",
+          mapping: {
+            root: {
+              message: {
+                author: { role: "user" },
+                content: { parts: ["keep me"] },
+              },
+            },
+          },
+        },
+      ]),
+      "utf8",
+    );
+
+    const conversations = await parseChatGptExportFile(exportPath);
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0]).toMatchObject({
+      conversationId: "conv-visible",
+      title: "Visible thread",
+    });
+  });
 });

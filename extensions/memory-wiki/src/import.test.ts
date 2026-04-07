@@ -205,6 +205,57 @@ alpha body with [[Beta Project|Beta]] and [Plan](projects/beta.md).
     );
   });
 
+  it("skips hidden-only ChatGPT conversations during import", async () => {
+    const { rootDir, config } = await createVault({ initialize: true });
+    const sourceRoot = await createTempDir("memory-wiki-import-chatgpt-skip-empty-");
+    const sourcePath = path.join(sourceRoot, "export.json");
+    await fs.writeFile(
+      sourcePath,
+      JSON.stringify([
+        {
+          id: "conv-hidden",
+          title: "Hidden thread",
+          mapping: {
+            hidden: {
+              message: {
+                author: { role: "assistant" },
+                metadata: { is_visually_hidden_from_conversation: true },
+                content: { parts: ["hidden turn"] },
+              },
+            },
+          },
+        },
+        {
+          id: "conv-visible",
+          title: "Visible thread",
+          mapping: {
+            root: {
+              message: {
+                author: { role: "user" },
+                content: { parts: ["visible turn"] },
+              },
+            },
+          },
+        },
+      ]),
+      "utf8",
+    );
+
+    const result = await importMemoryWikiInput({
+      config,
+      inputPath: sourcePath,
+      profileId: "chatgpt-export",
+    });
+
+    expect(result.profileId).toBe("chatgpt-export");
+    expect(result.artifactCount).toBe(1);
+    expect(result.importedCount).toBe(1);
+    expect(result.pagePaths).toHaveLength(1);
+    const importedPage = await fs.readFile(path.join(rootDir, result.pagePaths[0]), "utf8");
+    expect(importedPage).toContain("visible turn");
+    expect(importedPage).not.toContain("hidden turn");
+  });
+
   it("writes duplicate and low-signal review sections for vault imports", async () => {
     const { rootDir, config } = await createVault({ initialize: true });
     const vaultPath = await createTempDir("memory-wiki-import-review-");
