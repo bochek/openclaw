@@ -572,6 +572,46 @@ describe("getMemoryWikiPage", () => {
     });
   });
 
+  it("resolves wiki pages by title and imported alias", async () => {
+    const { rootDir, config } = await createQueryVault({
+      initialize: true,
+    });
+    await fs.writeFile(
+      path.join(rootDir, "sources", "alpha-import.md"),
+      renderWikiMarkdown({
+        frontmatter: {
+          pageType: "source",
+          id: "source.import.alpha",
+          title: "Alpha Imported Note",
+          sourceType: "markdown-vault",
+          importedAliases: ["Alpha Canon"],
+        },
+        body: "# Alpha Imported Note\n\nimported alpha body\n",
+      }),
+      "utf8",
+    );
+
+    const titleResult = await getMemoryWikiPage({
+      config,
+      lookup: "Alpha Imported Note",
+    });
+    expect(titleResult).toMatchObject({
+      corpus: "wiki",
+      path: "sources/alpha-import.md",
+      title: "Alpha Imported Note",
+    });
+
+    const aliasResult = await getMemoryWikiPage({
+      config,
+      lookup: "alpha canon",
+    });
+    expect(aliasResult).toMatchObject({
+      corpus: "wiki",
+      path: "sources/alpha-import.md",
+      title: "Alpha Imported Note",
+    });
+  });
+
   it("falls back to active memory reads when memory corpus is selected", async () => {
     const { config } = await createQueryVault({
       initialize: true,

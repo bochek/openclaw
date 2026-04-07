@@ -162,4 +162,58 @@ keep this note
       fs.readFile(path.join(rootDir, "entities", "index.md"), "utf8"),
     ).resolves.toContain("[Alpha](entities/alpha.md)");
   });
+
+  it("resolves metadata updates through imported aliases", async () => {
+    const { rootDir, config } = await createVault({
+      prefix: "memory-wiki-apply-",
+    });
+
+    const targetPath = path.join(rootDir, "sources", "alpha-import.md");
+    await fs.mkdir(path.dirname(targetPath), { recursive: true });
+    await fs.writeFile(
+      targetPath,
+      renderWikiMarkdown({
+        frontmatter: {
+          pageType: "source",
+          id: "source.import.alpha",
+          title: "Alpha Imported Note",
+          sourceType: "markdown-vault",
+          importedAliases: ["Alpha Canon"],
+          status: "active",
+        },
+        body: `# Alpha Imported Note
+
+## Notes
+<!-- openclaw:human:start -->
+keep imported note context
+<!-- openclaw:human:end -->
+`,
+      }),
+      "utf8",
+    );
+
+    const result = await applyMemoryWikiMutation({
+      config,
+      mutation: {
+        op: "update_metadata",
+        lookup: "alpha canon",
+        questions: ["Need to reconcile this imported note?"],
+        status: "review",
+      },
+    });
+
+    expect(result.changed).toBe(true);
+    expect(result.pagePath).toBe("sources/alpha-import.md");
+
+    const updated = await fs.readFile(targetPath, "utf8");
+    const parsed = parseWikiMarkdown(updated);
+    expect(parsed.frontmatter).toMatchObject({
+      id: "source.import.alpha",
+      title: "Alpha Imported Note",
+      importedAliases: ["Alpha Canon"],
+      questions: ["Need to reconcile this imported note?"],
+      status: "review",
+    });
+    expect(parsed.body).toContain("keep imported note context");
+  });
 });

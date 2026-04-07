@@ -12,6 +12,7 @@ import {
   type WikiClaim,
   type WikiPageSummary,
 } from "./markdown.js";
+import { normalizeLookupKey, resolveQueryableWikiPageByLookup } from "./query-lookup.js";
 import { initializeMemoryWikiVault } from "./vault.js";
 
 const QUERY_DIRS = ["entities", "concepts", "sources", "syntheses", "reports"] as const;
@@ -432,10 +433,7 @@ function scorePage(page: QueryableWikiPage, query: string): number {
   return score;
 }
 
-function normalizeLookupKey(value: string): string {
-  const normalized = value.trim().replace(/\\/g, "/");
-  return normalized.endsWith(".md") ? normalized : normalized.replace(/\/+$/, "");
-}
+export { resolveQueryableWikiPageByLookup } from "./query-lookup.js";
 
 function buildLookupCandidates(lookup: string): string[] {
   const normalized = normalizeLookupKey(lookup);
@@ -619,22 +617,6 @@ function resolveDigestClaimLookup(digest: QueryDigestBundle, lookup: string): st
   const claimId = trimmed.replace(/^claim:/i, "");
   const match = digest.claims.find((claim) => claim.id === claimId);
   return match?.pagePath ?? null;
-}
-
-export function resolveQueryableWikiPageByLookup(
-  pages: QueryableWikiPage[],
-  lookup: string,
-): QueryableWikiPage | null {
-  const key = normalizeLookupKey(lookup);
-  const withExtension = key.endsWith(".md") ? key : `${key}.md`;
-  return (
-    pages.find((page) => page.relativePath === key) ??
-    pages.find((page) => page.relativePath === withExtension) ??
-    pages.find((page) => page.relativePath.replace(/\.md$/i, "") === key) ??
-    pages.find((page) => path.basename(page.relativePath, ".md") === key) ??
-    pages.find((page) => page.id === key) ??
-    null
-  );
 }
 
 export async function searchMemoryWiki(params: {
