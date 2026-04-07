@@ -195,10 +195,10 @@ describe("test-projects args", () => {
     ]);
   });
 
-  it("routes pure light targets to the cache-friendly pure config", () => {
+  it("routes unit-fast light targets to the cache-friendly unit-fast config", () => {
     expect(buildVitestRunPlans(["src/plugin-sdk/lazy-value.test.ts"])).toEqual([
       {
-        config: "vitest.pure.config.ts",
+        config: "vitest.unit-fast.config.ts",
         forwardedArgs: [],
         includePatterns: ["src/plugin-sdk/lazy-value.test.ts"],
         watchMode: false,
@@ -228,10 +228,10 @@ describe("test-projects args", () => {
     ]);
   });
 
-  it("routes pure shared-core targets to the pure config", () => {
+  it("routes unit-fast shared-core targets to the unit-fast config", () => {
     expect(buildVitestRunPlans(["src/shared/text-chunking.test.ts"])).toEqual([
       {
-        config: "vitest.pure.config.ts",
+        config: "vitest.unit-fast.config.ts",
         forwardedArgs: [],
         includePatterns: ["src/shared/text-chunking.test.ts"],
         watchMode: false,

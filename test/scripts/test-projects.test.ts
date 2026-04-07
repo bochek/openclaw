@@ -55,7 +55,7 @@ describe("scripts/test-projects changed-target routing", () => {
 
     expect(plans).toEqual([
       {
-        config: "vitest.pure.config.ts",
+        config: "vitest.unit-fast.config.ts",
         forwardedArgs: [],
         includePatterns: ["src/shared/string-normalization.test.ts"],
         watchMode: false,
@@ -95,12 +95,12 @@ describe("scripts/test-projects changed-target routing", () => {
     ]);
   });
 
-  it("routes pure light tests to the cache-friendly pure lane", () => {
+  it("routes unit-fast light tests to the cache-friendly unit-fast lane", () => {
     const plans = buildVitestRunPlans(["src/commands/cleanup-utils.test.ts"], process.cwd());
 
     expect(plans).toEqual([
       {
-        config: "vitest.pure.config.ts",
+        config: "vitest.unit-fast.config.ts",
         forwardedArgs: [],
         includePatterns: ["src/commands/cleanup-utils.test.ts"],
         watchMode: false,
@@ -115,7 +115,7 @@ describe("scripts/test-projects changed-target routing", () => {
 
     expect(plans).toEqual([
       {
-        config: "vitest.pure.config.ts",
+        config: "vitest.unit-fast.config.ts",
         forwardedArgs: [],
         includePatterns: ["src/plugin-sdk/lazy-value.test.ts"],
         watchMode: false,
@@ -131,7 +131,7 @@ describe("scripts/test-projects changed-target routing", () => {
 
     expect(plans).toEqual([
       {
-        config: "vitest.pure.config.ts",
+        config: "vitest.unit-fast.config.ts",
         forwardedArgs: [],
         includePatterns: [
           "src/commands/status-overview-values.test.ts",
@@ -177,7 +177,7 @@ describe("scripts/test-projects full-suite sharding", () => {
   it("splits untargeted runs into fixed shard configs", () => {
     expect(buildFullSuiteVitestRunPlans([], process.cwd())).toEqual([
       {
-        config: "vitest.full-core-pure.config.ts",
+        config: "vitest.full-core-unit-fast.config.ts",
         forwardedArgs: [],
         includePatterns: null,
         watchMode: false,

@@ -26,7 +26,7 @@ export const rootVitestProjects = [
   "vitest.agents.config.ts",
   "vitest.daemon.config.ts",
   "vitest.media.config.ts",
-  "vitest.pure.config.ts",
+  "vitest.unit-fast.config.ts",
   "vitest.plugin-sdk-light.config.ts",
   "vitest.plugin-sdk.config.ts",
   "vitest.plugins.config.ts",

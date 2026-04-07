@@ -7,8 +7,8 @@ import baseConfig, { rootVitestProjects } from "../vitest.config.ts";
 import { createContractsVitestConfig } from "../vitest.contracts.config.ts";
 import { createGatewayVitestConfig } from "../vitest.gateway.config.ts";
 import { createPluginSdkLightVitestConfig } from "../vitest.plugin-sdk-light.config.ts";
-import { createPureVitestConfig } from "../vitest.pure.config.ts";
 import { createUiVitestConfig } from "../vitest.ui.config.ts";
+import { createUnitFastVitestConfig } from "../vitest.unit-fast.config.ts";
 import { createUnitVitestConfig } from "../vitest.unit.config.ts";
 
 describe("projects vitest config", () => {
@@ -22,7 +22,7 @@ describe("projects vitest config", () => {
     expect(createCommandsLightVitestConfig().test.pool).toBe("threads");
     expect(createCommandsVitestConfig().test.pool).toBe("threads");
     expect(createPluginSdkLightVitestConfig().test.pool).toBe("threads");
-    expect(createPureVitestConfig().test.pool).toBe("threads");
+    expect(createUnitFastVitestConfig().test.pool).toBe("threads");
     expect(createContractsVitestConfig().test.pool).toBe("threads");
   });
 
@@ -48,8 +48,8 @@ describe("projects vitest config", () => {
     expect(config.test.runner).toBe("./test/non-isolated-runner.ts");
   });
 
-  it("keeps the pure lane on shared workers without the reset-heavy runner", () => {
-    const config = createPureVitestConfig();
+  it("keeps the unit-fast lane on shared workers without the reset-heavy runner", () => {
+    const config = createUnitFastVitestConfig();
     expect(config.test.isolate).toBe(false);
     expect(config.test.runner).toBeUndefined();
   });

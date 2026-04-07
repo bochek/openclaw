@@ -1,22 +1,22 @@
 import {
-  collectBroadPureTestCandidates,
-  collectPureTestFileAnalysis,
-  collectPureTestCandidates,
-  pureTestFiles,
-} from "../vitest.pure-paths.mjs";
+  collectBroadUnitFastTestCandidates,
+  collectUnitFastTestFileAnalysis,
+  collectUnitFastTestCandidates,
+  unitFastTestFiles,
+} from "../vitest.unit-fast-paths.mjs";
 
 const args = new Set(process.argv.slice(2));
 const json = args.has("--json");
 const scope = args.has("--broad") ? "broad" : "current";
 
-const analysis = collectPureTestFileAnalysis(process.cwd(), { scope });
-const rejected = analysis.filter((entry) => !entry.pure);
+const analysis = collectUnitFastTestFileAnalysis(process.cwd(), { scope });
+const rejected = analysis.filter((entry) => !entry.unitFast);
 const reasonCounts = new Map();
 const candidateCount =
   scope === "broad"
-    ? collectBroadPureTestCandidates(process.cwd()).length
-    : collectPureTestCandidates(process.cwd()).length;
-const pureCount = analysis.filter((entry) => entry.pure).length;
+    ? collectBroadUnitFastTestCandidates(process.cwd()).length
+    : collectUnitFastTestCandidates(process.cwd()).length;
+const unitFastCount = analysis.filter((entry) => entry.unitFast).length;
 
 for (const entry of rejected) {
   for (const reason of entry.reasons) {
@@ -29,8 +29,8 @@ if (json) {
     JSON.stringify(
       {
         candidates: candidateCount,
-        pure: pureCount,
-        routedPure: pureTestFiles.length,
+        unitFast: unitFastCount,
+        routed: unitFastTestFiles.length,
         rejected: rejected.length,
         reasonCounts: Object.fromEntries(
           [...reasonCounts.entries()].toSorted(([a], [b]) => a.localeCompare(b)),
@@ -47,8 +47,10 @@ if (json) {
 
 console.log(
   [
-    `[test-pure-audit] scope=${scope} candidates=${analysis.length} pure=${pureCount} routed=${pureTestFiles.length} rejected=${rejected.length}`,
-    scope === "broad" ? `[test-pure-audit] broad pure candidates are not routed automatically` : "",
+    `[test-unit-fast-audit] scope=${scope} candidates=${analysis.length} unitFast=${unitFastCount} routed=${unitFastTestFiles.length} rejected=${rejected.length}`,
+    scope === "broad"
+      ? `[test-unit-fast-audit] broad unit-fast candidates are not routed automatically`
+      : "",
     "",
     "Rejected reasons:",
     ...[...reasonCounts.entries()]

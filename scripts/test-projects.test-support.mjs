@@ -26,8 +26,8 @@ import {
   isPluginSdkLightTarget,
   resolvePluginSdkLightIncludePattern,
 } from "../vitest.plugin-sdk-paths.mjs";
-import { resolvePureTestIncludePattern } from "../vitest.pure-paths.mjs";
 import { fullSuiteVitestShards } from "../vitest.test-shards.mjs";
+import { resolveUnitFastTestIncludePattern } from "../vitest.unit-fast-paths.mjs";
 import { isBoundaryTestFile, isBundledPluginDependentUnitTestFile } from "../vitest.unit-paths.mjs";
 import { resolveVitestCliEntry, resolveVitestNodeArgs } from "./run-vitest.mjs";
 
@@ -71,7 +71,7 @@ const LOGGING_VITEST_CONFIG = "vitest.logging.config.ts";
 const PLUGIN_SDK_LIGHT_VITEST_CONFIG = "vitest.plugin-sdk-light.config.ts";
 const PLUGIN_SDK_VITEST_CONFIG = "vitest.plugin-sdk.config.ts";
 const PLUGINS_VITEST_CONFIG = "vitest.plugins.config.ts";
-const PURE_VITEST_CONFIG = "vitest.pure.config.ts";
+const UNIT_FAST_VITEST_CONFIG = "vitest.unit-fast.config.ts";
 const PROCESS_VITEST_CONFIG = "vitest.process.config.ts";
 const RUNTIME_CONFIG_VITEST_CONFIG = "vitest.runtime-config.config.ts";
 const SECRETS_VITEST_CONFIG = "vitest.secrets.config.ts";
@@ -125,7 +125,7 @@ const VITEST_CONFIG_BY_KIND = {
   pluginSdk: PLUGIN_SDK_VITEST_CONFIG,
   pluginSdkLight: PLUGIN_SDK_LIGHT_VITEST_CONFIG,
   process: PROCESS_VITEST_CONFIG,
-  pure: PURE_VITEST_CONFIG,
+  unitFast: UNIT_FAST_VITEST_CONFIG,
   runtimeConfig: RUNTIME_CONFIG_VITEST_CONFIG,
   secrets: SECRETS_VITEST_CONFIG,
   sharedCore: SHARED_CORE_VITEST_CONFIG,
@@ -275,8 +275,8 @@ export function resolveChangedTargetArgs(
 
 function classifyTarget(arg, cwd) {
   const relative = toRepoRelativeTarget(arg, cwd);
-  if (resolvePureTestIncludePattern(relative)) {
-    return "pure";
+  if (resolveUnitFastTestIncludePattern(relative)) {
+    return "unitFast";
   }
   if (relative.endsWith(".e2e.test.ts")) {
     return "e2e";
@@ -433,8 +433,8 @@ function classifyTarget(arg, cwd) {
 
 function resolveLightLaneIncludePatterns(kind, targetArg, cwd) {
   const relative = toRepoRelativeTarget(targetArg, cwd);
-  if (kind === "pure") {
-    const includePattern = resolvePureTestIncludePattern(relative);
+  if (kind === "unitFast") {
+    const includePattern = resolveUnitFastTestIncludePattern(relative);
     return includePattern ? [includePattern] : null;
   }
   if (kind === "pluginSdkLight") {
@@ -520,7 +520,7 @@ export function buildVitestRunPlans(
 
   const nonTargetArgs = activeForwardedArgs.filter((arg) => !activeTargetArgs.includes(arg));
   const orderedKinds = [
-    "pure",
+    "unitFast",
     "default",
     "boundary",
     "tooling",

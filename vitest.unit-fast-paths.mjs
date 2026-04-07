@@ -8,7 +8,7 @@ import { pluginSdkLightSourceFiles, pluginSdkLightTestFiles } from "./vitest.plu
 
 const normalizeRepoPath = (value) => value.replaceAll("\\", "/");
 
-const pureCandidateGlobs = [
+const unitFastCandidateGlobs = [
   "packages/memory-host-sdk/**/*.test.ts",
   "packages/plugin-package-contract/**/*.test.ts",
   "src/bootstrap/**/*.test.ts",
@@ -39,9 +39,13 @@ const pureCandidateGlobs = [
   "src/video-generation/**/*.test.ts",
   "test/**/*.test.ts",
 ];
-const pureCandidateExactFiles = [...pluginSdkLightTestFiles, ...commandsLightTestFiles];
-const broadPureCandidateGlobs = ["src/**/*.test.ts", "packages/**/*.test.ts", "test/**/*.test.ts"];
-const broadPureCandidateSkipGlobs = [
+const unitFastCandidateExactFiles = [...pluginSdkLightTestFiles, ...commandsLightTestFiles];
+const broadUnitFastCandidateGlobs = [
+  "src/**/*.test.ts",
+  "packages/**/*.test.ts",
+  "test/**/*.test.ts",
+];
+const broadUnitFastCandidateSkipGlobs = [
   "**/*.e2e.test.ts",
   "**/*.live.test.ts",
   "test/fixtures/**/*.test.ts",
@@ -122,7 +126,7 @@ function walkFiles(directory, files = []) {
   return files;
 }
 
-export function classifyPureTestFileContent(source) {
+export function classifyUnitFastTestFileContent(source) {
   const reasons = [];
   for (const { code, pattern } of disqualifyingPatterns) {
     if (pattern.test(source)) {
@@ -132,39 +136,39 @@ export function classifyPureTestFileContent(source) {
   return reasons;
 }
 
-export function collectPureTestCandidates(cwd = process.cwd()) {
+export function collectUnitFastTestCandidates(cwd = process.cwd()) {
   const discovered = ["src", "packages", "test"]
     .flatMap((directory) => walkFiles(path.join(cwd, directory)))
     .map((file) => normalizeRepoPath(path.relative(cwd, file)))
     .filter(
       (file) =>
-        matchesAnyGlob(file, pureCandidateGlobs) &&
-        !matchesAnyGlob(file, broadPureCandidateSkipGlobs),
+        matchesAnyGlob(file, unitFastCandidateGlobs) &&
+        !matchesAnyGlob(file, broadUnitFastCandidateSkipGlobs),
     );
-  return [...new Set([...discovered, ...pureCandidateExactFiles])].toSorted((a, b) =>
+  return [...new Set([...discovered, ...unitFastCandidateExactFiles])].toSorted((a, b) =>
     a.localeCompare(b),
   );
 }
 
-export function collectBroadPureTestCandidates(cwd = process.cwd()) {
+export function collectBroadUnitFastTestCandidates(cwd = process.cwd()) {
   const discovered = ["src", "packages", "test"]
     .flatMap((directory) => walkFiles(path.join(cwd, directory)))
     .map((file) => normalizeRepoPath(path.relative(cwd, file)))
     .filter(
       (file) =>
-        matchesAnyGlob(file, broadPureCandidateGlobs) &&
-        !matchesAnyGlob(file, broadPureCandidateSkipGlobs),
+        matchesAnyGlob(file, broadUnitFastCandidateGlobs) &&
+        !matchesAnyGlob(file, broadUnitFastCandidateSkipGlobs),
     );
-  return [...new Set([...discovered, ...pureCandidateExactFiles])].toSorted((a, b) =>
+  return [...new Set([...discovered, ...unitFastCandidateExactFiles])].toSorted((a, b) =>
     a.localeCompare(b),
   );
 }
 
-export function collectPureTestFileAnalysis(cwd = process.cwd(), options = {}) {
+export function collectUnitFastTestFileAnalysis(cwd = process.cwd(), options = {}) {
   const candidates =
     options.scope === "broad"
-      ? collectBroadPureTestCandidates(cwd)
-      : collectPureTestCandidates(cwd);
+      ? collectBroadUnitFastTestCandidates(cwd)
+      : collectUnitFastTestCandidates(cwd);
   return candidates.map((file) => {
     const absolutePath = path.join(cwd, file);
     let source = "";
@@ -173,43 +177,43 @@ export function collectPureTestFileAnalysis(cwd = process.cwd(), options = {}) {
     } catch {
       return {
         file,
-        pure: false,
+        unitFast: false,
         reasons: ["missing-file"],
       };
     }
-    const reasons = classifyPureTestFileContent(source);
+    const reasons = classifyUnitFastTestFileContent(source);
     return {
       file,
-      pure: reasons.length === 0,
+      unitFast: reasons.length === 0,
       reasons,
     };
   });
 }
 
-export const pureTestFiles = collectPureTestFileAnalysis()
-  .filter((entry) => entry.pure)
+export const unitFastTestFiles = collectUnitFastTestFileAnalysis()
+  .filter((entry) => entry.unitFast)
   .map((entry) => entry.file);
 
-const pureTestFileSet = new Set(pureTestFiles);
-const sourceToPureTestFile = new Map(
+const unitFastTestFileSet = new Set(unitFastTestFiles);
+const sourceToUnitFastTestFile = new Map(
   [...pluginSdkLightSourceFiles, ...commandsLightSourceFiles].flatMap((sourceFile) => {
     const testFile = sourceFile.replace(/\.ts$/u, ".test.ts");
-    return pureTestFileSet.has(testFile) ? [[sourceFile, testFile]] : [];
+    return unitFastTestFileSet.has(testFile) ? [[sourceFile, testFile]] : [];
   }),
 );
 
-export function isPureTestFile(file) {
-  return pureTestFileSet.has(normalizeRepoPath(file));
+export function isUnitFastTestFile(file) {
+  return unitFastTestFileSet.has(normalizeRepoPath(file));
 }
 
-export function resolvePureTestIncludePattern(file) {
+export function resolveUnitFastTestIncludePattern(file) {
   const normalized = normalizeRepoPath(file);
-  if (pureTestFileSet.has(normalized)) {
+  if (unitFastTestFileSet.has(normalized)) {
     return normalized;
   }
   const siblingTestFile = normalized.replace(/\.ts$/u, ".test.ts");
-  if (pureTestFileSet.has(siblingTestFile)) {
+  if (unitFastTestFileSet.has(siblingTestFile)) {
     return siblingTestFile;
   }
-  return sourceToPureTestFile.get(normalized) ?? null;
+  return sourceToUnitFastTestFile.get(normalized) ?? null;
 }
