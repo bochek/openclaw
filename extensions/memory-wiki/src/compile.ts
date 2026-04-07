@@ -370,10 +370,17 @@ function buildPageLookupKeys(page: WikiPageSummary): Set<string> {
   keys.add(normalizeComparableTarget(page.relativePath));
   keys.add(normalizeComparableTarget(page.relativePath.replace(/\.md$/i, "")));
   keys.add(normalizeComparableTarget(page.title));
+  for (const alias of page.importedAliases) {
+    keys.add(normalizeComparableTarget(alias));
+  }
   if (page.id) {
     keys.add(normalizeComparableTarget(page.id));
   }
   return keys;
+}
+
+function getPageReferenceTargets(page: WikiPageSummary): string[] {
+  return [...page.linkTargets, ...page.importedLinkTargets];
 }
 
 function renderWikiPageLinks(params: {
@@ -418,7 +425,7 @@ function buildRelatedBlockBody(params: {
       if (candidate.sourceIds.includes(params.page.id ?? "")) {
         return true;
       }
-      return candidate.linkTargets.some((target) =>
+      return getPageReferenceTargets(candidate).some((target) =>
         backlinkKeys.has(normalizeComparableTarget(target)),
       );
     }),

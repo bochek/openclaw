@@ -392,4 +392,46 @@ describe("compileMemoryWikiVault", () => {
       fs.readFile(path.join(rootDir, "concepts", "gamma.md"), "utf8"),
     ).resolves.not.toContain("### Referenced By");
   });
+
+  it("uses imported vault aliases and link targets for related backlinks", async () => {
+    const { rootDir, config } = await createVault({
+      rootDir: nextCaseRoot(),
+      initialize: true,
+    });
+
+    await fs.writeFile(
+      path.join(rootDir, "sources", "alpha-import.md"),
+      renderWikiMarkdown({
+        frontmatter: {
+          pageType: "source",
+          id: "source.import.alpha",
+          title: "Alpha Note",
+          sourceType: "markdown-vault",
+          importedAliases: ["Alpha Canon"],
+        },
+        body: "# Alpha Note\n",
+      }),
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(rootDir, "sources", "beta-import.md"),
+      renderWikiMarkdown({
+        frontmatter: {
+          pageType: "source",
+          id: "source.import.beta",
+          title: "Beta Note",
+          sourceType: "markdown-vault",
+          importedLinkTargets: ["Alpha Canon"],
+        },
+        body: "# Beta Note\n",
+      }),
+      "utf8",
+    );
+
+    await compileMemoryWikiVault(config);
+
+    await expect(
+      fs.readFile(path.join(rootDir, "sources", "alpha-import.md"), "utf8"),
+    ).resolves.toContain("[Beta Note](sources/beta-import.md)");
+  });
 });
