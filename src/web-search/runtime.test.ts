@@ -476,6 +476,33 @@ describe("web search runtime", () => {
     ).rejects.toThrow('web_search provider "google" is not available.');
   });
 
+  it("fails fast when the caller explicitly selects an unknown provider", async () => {
+    resolveRuntimeWebSearchProvidersMock.mockReturnValue([
+      createProvider({
+        pluginId: "google",
+        id: "google",
+        credentialPath: "tools.web.search.google.apiKey",
+        autoDetectOrder: 1,
+        getCredentialValue: () => "configured",
+      }),
+      createProvider({
+        pluginId: "duckduckgo",
+        id: "duckduckgo",
+        credentialPath: "",
+        autoDetectOrder: 100,
+        requiresCredential: false,
+      }),
+    ]);
+
+    await expect(
+      runWebSearch({
+        config: {},
+        providerId: "missing-id",
+        args: { query: "explicit-missing" },
+      }),
+    ).rejects.toThrow('Unknown web_search provider "missing-id".');
+  });
+
   it("honors preferRuntimeProviders during execution", async () => {
     const configuredProvider = createProvider({
       pluginId: "google",

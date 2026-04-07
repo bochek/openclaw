@@ -246,6 +246,11 @@ function resolveWebSearchCandidates(
     (value, index, array): value is string => Boolean(value) && array.indexOf(value) === index,
   );
 
+  const explicitProviderId = options?.providerId?.trim();
+  if (explicitProviderId && !providers.some((entry) => entry.id === explicitProviderId)) {
+    throw new Error(`Unknown web_search provider "${explicitProviderId}".`);
+  }
+
   const orderedProviders = [
     ...preferredIds
       .map((id) => providers.find((entry) => entry.id === id))
