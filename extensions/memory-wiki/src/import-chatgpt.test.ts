@@ -86,4 +86,56 @@ describe("parseChatGptExportFile", () => {
       messageCount: 1,
     });
   });
+
+  it("prefers the current_node branch instead of flattening alternate branches", async () => {
+    const dir = await createTempDir("memory-wiki-chatgpt-branch-");
+    const exportPath = path.join(dir, "export.json");
+    await fs.writeFile(
+      exportPath,
+      JSON.stringify([
+        {
+          id: "conv-branch",
+          title: "Branch thread",
+          current_node: "assistant-good",
+          mapping: {
+            user: {
+              parent: null,
+              message: {
+                author: { role: "user" },
+                create_time: 1_710_000_010,
+                content: { parts: ["pick the right branch"] },
+              },
+            },
+            "assistant-bad": {
+              parent: "user",
+              message: {
+                author: { role: "assistant" },
+                create_time: 1_710_000_020,
+                content: { parts: ["wrong branch answer"] },
+              },
+            },
+            "assistant-good": {
+              parent: "user",
+              message: {
+                author: { role: "assistant" },
+                create_time: 1_710_000_030,
+                content: { parts: ["correct branch answer"] },
+              },
+            },
+          },
+        },
+      ]),
+      "utf8",
+    );
+
+    const conversations = await parseChatGptExportFile(exportPath);
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0]).toMatchObject({
+      conversationId: "conv-branch",
+      messageCount: 2,
+    });
+    expect(conversations[0]?.transcriptBody).toContain("pick the right branch");
+    expect(conversations[0]?.transcriptBody).toContain("correct branch answer");
+    expect(conversations[0]?.transcriptBody).not.toContain("wrong branch answer");
+  });
 });

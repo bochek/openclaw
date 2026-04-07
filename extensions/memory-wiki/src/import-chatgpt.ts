@@ -8,6 +8,12 @@ type ChatGptMessage = {
   sortTime: number;
 };
 
+type ChatGptMappingNode = {
+  id: string;
+  parentId?: string;
+  message: ChatGptMessage | null;
+};
+
 export type ChatGptExportConversation = {
   conversationId: string;
   title: string;
@@ -109,6 +115,70 @@ function extractConversationMessages(mappingValue: unknown): ChatGptMessage[] {
     );
 }
 
+function extractConversationMappingNodes(mappingValue: unknown): ChatGptMappingNode[] {
+  const mapping = asRecord(mappingValue);
+  if (!mapping) {
+    return [];
+  }
+  return Object.entries(mapping).map(([id, entry]) => {
+    const node = asRecord(entry);
+    const message = asRecord(node?.message);
+    const text = extractMessageText(message?.content);
+    const author = asRecord(message?.author);
+    const { sortTime } = normalizeTimestamp(message?.create_time ?? node?.create_time);
+    return {
+      id,
+      parentId:
+        typeof node?.parent === "string" && node.parent.trim() ? node.parent.trim() : undefined,
+      message: text
+        ? {
+            role: normalizeRole(author?.role ?? author?.name),
+            text,
+            sortTime,
+          }
+        : null,
+    };
+  });
+}
+
+function extractCurrentConversationMessages(params: {
+  mappingValue: unknown;
+  currentNodeId?: unknown;
+}): ChatGptMessage[] {
+  const nodes = extractConversationMappingNodes(params.mappingValue);
+  if (
+    nodes.length === 0 ||
+    typeof params.currentNodeId !== "string" ||
+    !params.currentNodeId.trim()
+  ) {
+    return extractConversationMessages(params.mappingValue);
+  }
+
+  const byId = new Map(nodes.map((node) => [node.id, node] as const));
+  const lineage: ChatGptMessage[] = [];
+  const seen = new Set<string>();
+  let cursor: string | undefined = params.currentNodeId.trim();
+  while (cursor && !seen.has(cursor)) {
+    seen.add(cursor);
+    const node = byId.get(cursor);
+    if (!node) {
+      break;
+    }
+    if (node.message) {
+      lineage.push(node.message);
+    }
+    cursor = node.parentId;
+  }
+  if (lineage.length === 0) {
+    return extractConversationMessages(params.mappingValue);
+  }
+  return lineage
+    .toReversed()
+    .toSorted(
+      (left, right) => left.sortTime - right.sortTime || left.role.localeCompare(right.role),
+    );
+}
+
 function renderTranscriptBody(messages: ChatGptMessage[]): string {
   if (messages.length === 0) {
     return "_No readable ChatGPT transcript messages were found in this export conversation._";
@@ -162,7 +232,10 @@ export async function parseChatGptExportFile(
       (typeof record.title === "string" && record.title.trim()) || `Conversation ${index + 1}`;
     const created = normalizeTimestamp(record.create_time);
     const updated = normalizeTimestamp(record.update_time);
-    const messages = extractConversationMessages(record.mapping);
+    const messages = extractCurrentConversationMessages({
+      mappingValue: record.mapping,
+      currentNodeId: record.current_node,
+    });
     const participantRoles = [...new Set(messages.map((message) => message.role))].toSorted();
     const relativeSlug = slugifyWikiSegment(title);
     const idHash = createHash("sha1").update(conversationId).digest("hex").slice(0, 8);
