@@ -1,9 +1,11 @@
+import { pureTestFiles } from "./vitest.pure-paths.mjs";
 import { createScopedVitestConfig } from "./vitest.scoped-config.ts";
 
 export function createUtilsVitestConfig(env?: Record<string, string | undefined>) {
   return createScopedVitestConfig(["src/utils/**/*.test.ts"], {
     dir: "src",
     env,
+    exclude: pureTestFiles,
     includeOpenClawRuntimeSetup: false,
     name: "utils",
     passWithNoTests: true,

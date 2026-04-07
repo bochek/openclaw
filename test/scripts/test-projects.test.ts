@@ -55,9 +55,9 @@ describe("scripts/test-projects changed-target routing", () => {
 
     expect(plans).toEqual([
       {
-        config: "vitest.shared-core.config.ts",
+        config: "vitest.pure.config.ts",
         forwardedArgs: [],
-        includePatterns: ["src/shared/**/*.test.ts"],
+        includePatterns: ["src/shared/string-normalization.test.ts"],
         watchMode: false,
       },
       {
@@ -83,11 +83,24 @@ describe("scripts/test-projects changed-target routing", () => {
   });
 
   it("routes explicit commands light tests to the lighter commands lane", () => {
-    const plans = buildVitestRunPlans(["src/commands/cleanup-utils.test.ts"], process.cwd());
+    const plans = buildVitestRunPlans(["src/commands/status-json-runtime.test.ts"], process.cwd());
 
     expect(plans).toEqual([
       {
         config: "vitest.commands-light.config.ts",
+        forwardedArgs: [],
+        includePatterns: ["src/commands/status-json-runtime.test.ts"],
+        watchMode: false,
+      },
+    ]);
+  });
+
+  it("routes pure light tests to the cache-friendly pure lane", () => {
+    const plans = buildVitestRunPlans(["src/commands/cleanup-utils.test.ts"], process.cwd());
+
+    expect(plans).toEqual([
+      {
+        config: "vitest.pure.config.ts",
         forwardedArgs: [],
         includePatterns: ["src/commands/cleanup-utils.test.ts"],
         watchMode: false,
@@ -102,7 +115,7 @@ describe("scripts/test-projects changed-target routing", () => {
 
     expect(plans).toEqual([
       {
-        config: "vitest.plugin-sdk-light.config.ts",
+        config: "vitest.pure.config.ts",
         forwardedArgs: [],
         includePatterns: ["src/plugin-sdk/lazy-value.test.ts"],
         watchMode: false,
@@ -118,7 +131,7 @@ describe("scripts/test-projects changed-target routing", () => {
 
     expect(plans).toEqual([
       {
-        config: "vitest.commands-light.config.ts",
+        config: "vitest.pure.config.ts",
         forwardedArgs: [],
         includePatterns: [
           "src/commands/status-overview-values.test.ts",
@@ -163,6 +176,12 @@ describe("scripts/test-projects changed-target routing", () => {
 describe("scripts/test-projects full-suite sharding", () => {
   it("splits untargeted runs into fixed shard configs", () => {
     expect(buildFullSuiteVitestRunPlans([], process.cwd())).toEqual([
+      {
+        config: "vitest.full-core-pure.config.ts",
+        forwardedArgs: [],
+        includePatterns: null,
+        watchMode: false,
+      },
       {
         config: "vitest.full-core-unit-src.config.ts",
         forwardedArgs: [],

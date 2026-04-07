@@ -1239,6 +1239,8 @@
     "test:perf:imports:changed": "OPENCLAW_VITEST_IMPORT_DURATIONS=1 OPENCLAW_VITEST_PRINT_IMPORT_BREAKDOWN=1 node scripts/test-projects.mjs --changed origin/main",
     "test:perf:profile:main": "node scripts/run-vitest-profile.mjs main",
     "test:perf:profile:runner": "node scripts/run-vitest-profile.mjs runner",
+    "test:pure": "node scripts/run-vitest.mjs run --config vitest.pure.config.ts",
+    "test:pure:audit": "node scripts/test-pure-audit.mjs",
     "test:sectriage": "node scripts/run-vitest.mjs run --config vitest.gateway.config.ts && node scripts/run-vitest.mjs run --config vitest.unit.config.ts --exclude src/daemon/launchd.integration.test.ts --exclude src/process/exec.test.ts",
     "test:serial": "OPENCLAW_VITEST_MAX_WORKERS=1 node scripts/run-vitest.mjs run --config vitest.config.ts",
     "test:startup:bench": "node --import tsx scripts/bench-cli-startup.ts",
