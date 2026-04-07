@@ -7,11 +7,14 @@ import {
   failPluginTaskRun,
   recordPluginTaskProgress,
 } from "openclaw/plugin-sdk/core";
+import { normalizeSingleOrTrimmedStringList } from "openclaw/plugin-sdk/text-runtime";
 import { compileMemoryWikiVault, type CompileMemoryWikiResult } from "./compile.js";
 import type { ResolvedMemoryWikiConfig } from "./config.js";
 import { appendMemoryWikiLog } from "./log.js";
 import {
+  extractWikiLinks,
   extractTitleFromMarkdown,
+  parseWikiMarkdown,
   renderMarkdownFence,
   renderWikiMarkdown,
   slugifyWikiSegment,
@@ -39,6 +42,8 @@ const MARKDOWN_VAULT_MARKERS = [".obsidian", "logseq"] as const;
 const IMPORT_TASK_KIND = "memory-wiki-import";
 const IMPORT_OWNER_KEY = "memory-wiki:import";
 const IMPORT_REVIEW_PATH = "reports/import-review.md";
+const IMPORTED_OBSIDIAN_LINK_PATTERN = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+const IMPORTED_MARKDOWN_LINK_PATTERN = /\[([^\]]+)\]\(([^)]+)\)/g;
 
 export const WIKI_IMPORT_PROFILE_IDS = [
   "local-file",
@@ -55,6 +60,14 @@ type WikiImportArtifact = {
   profileId: Exclude<WikiImportProfileId, "chatgpt-export">;
   importRootPath: string;
   sourceType: string;
+};
+
+type PreparedImportArtifact = {
+  title: string;
+  importedTags: string[];
+  importedAliases: string[];
+  importedLinkTargets: string[];
+  renderedContentBody: string;
 };
 
 type WikiImportTaskContext = {
@@ -145,6 +158,78 @@ function resolveImportArtifactTitle(params: {
     );
   }
   return extractTitleFromMarkdown(params.raw) ?? humanizeImportPath(params.relativePath);
+}
+
+function normalizeImportedAliases(frontmatter: Record<string, unknown>): string[] {
+  const aliases = normalizeSingleOrTrimmedStringList(frontmatter.aliases);
+  if (aliases.length > 0) {
+    return aliases;
+  }
+  return normalizeSingleOrTrimmedStringList(frontmatter.alias);
+}
+
+function renderMarkdownVaultBodyForEvidence(body: string): string {
+  const withoutWikilinks = body.replace(
+    IMPORTED_OBSIDIAN_LINK_PATTERN,
+    (_match: string, rawTarget: string, rawLabel?: string) => {
+      const target = rawTarget.trim();
+      const label = rawLabel?.trim();
+      return label || target;
+    },
+  );
+  return withoutWikilinks.replace(
+    IMPORTED_MARKDOWN_LINK_PATTERN,
+    (match: string, label: string, rawTarget: string) => {
+      const target = rawTarget.trim();
+      if (!target || target.startsWith("#") || /^[a-z]+:/i.test(target)) {
+        return match;
+      }
+      const normalizedTarget = target.split("#")[0]?.split("?")[0]?.replace(/\\/g, "/").trim();
+      return normalizedTarget ? `${label} (${normalizedTarget})` : label;
+    },
+  );
+}
+
+function prepareImportArtifact(params: {
+  artifact: WikiImportArtifact;
+  raw: string;
+  titleOverride?: string;
+}): PreparedImportArtifact {
+  const title = resolveImportArtifactTitle({
+    relativePath: params.artifact.relativePath,
+    raw: params.raw,
+    profileId: params.artifact.profileId,
+    titleOverride: params.artifact.profileId === "local-file" ? params.titleOverride : undefined,
+  });
+  if (params.artifact.profileId !== "markdown-vault") {
+    return {
+      title,
+      importedTags: [],
+      importedAliases: [],
+      importedLinkTargets: [],
+      renderedContentBody: renderMarkdownFence(
+        params.raw,
+        detectFenceLanguage(params.artifact.absolutePath),
+      ),
+    };
+  }
+
+  const parsed = parseWikiMarkdown(params.raw);
+  const importedTags = normalizeSingleOrTrimmedStringList(parsed.frontmatter.tags);
+  const importedAliases = normalizeImportedAliases(parsed.frontmatter);
+  const importedLinkTargets = extractWikiLinks(parsed.body);
+  const renderedContentBody = renderMarkdownVaultBodyForEvidence(parsed.body).trim();
+
+  return {
+    title,
+    importedTags,
+    importedAliases,
+    importedLinkTargets,
+    renderedContentBody:
+      renderedContentBody.length > 0
+        ? renderedContentBody
+        : "_Imported markdown note body was empty._",
+  };
 }
 
 function shouldSkipMarkdownVaultDir(relativePath: string): boolean {
@@ -389,11 +474,10 @@ async function writeImportArtifactPage(params: {
     await fs.readFile(params.artifact.absolutePath),
     params.artifact.absolutePath,
   );
-  const title = resolveImportArtifactTitle({
-    relativePath: params.artifact.relativePath,
+  const prepared = prepareImportArtifact({
+    artifact: params.artifact,
     raw,
-    profileId: params.artifact.profileId,
-    titleOverride: params.artifact.profileId === "local-file" ? params.titleOverride : undefined,
+    titleOverride: params.titleOverride,
   });
   const { pageId, pagePath } = resolveImportPageIdentity(params.artifact);
   const renderFingerprint = createHash("sha1")
@@ -403,7 +487,10 @@ async function writeImportArtifactPage(params: {
         sourceType: params.artifact.sourceType,
         importRootPath: params.artifact.importRootPath,
         relativePath: params.artifact.relativePath,
-        title,
+        title: prepared.title,
+        importedTags: prepared.importedTags,
+        importedAliases: prepared.importedAliases,
+        importedLinkTargets: prepared.importedLinkTargets,
       }),
     )
     .digest("hex");
@@ -424,26 +511,50 @@ async function writeImportArtifactPage(params: {
         frontmatter: {
           pageType: "source",
           id: pageId,
-          title,
+          title: prepared.title,
           sourceType: params.artifact.sourceType,
           sourcePath: params.artifact.absolutePath,
           importProfile: params.artifact.profileId,
           importRootPath: params.artifact.importRootPath,
           importRelativePath: params.artifact.relativePath,
+          ...(prepared.importedTags.length > 0 ? { importedTags: prepared.importedTags } : {}),
+          ...(prepared.importedAliases.length > 0
+            ? { importedAliases: prepared.importedAliases }
+            : {}),
+          ...(prepared.importedLinkTargets.length > 0
+            ? { importedLinkTargets: prepared.importedLinkTargets }
+            : {}),
           status: "active",
           updatedAt,
         },
         body: [
-          `# ${title}`,
+          `# ${prepared.title}`,
           "",
           "## Imported Source",
           `- Profile: \`${params.artifact.profileId}\``,
           `- Root: \`${params.artifact.importRootPath}\``,
           `- Relative path: \`${params.artifact.relativePath}\``,
           `- Updated: ${updatedAt}`,
+          ...(prepared.importedTags.length > 0
+            ? [`- Imported tags: ${prepared.importedTags.map((tag) => `\`${tag}\``).join(", ")}`]
+            : []),
+          ...(prepared.importedAliases.length > 0
+            ? [
+                `- Imported aliases: ${prepared.importedAliases
+                  .map((alias) => `\`${alias}\``)
+                  .join(", ")}`,
+              ]
+            : []),
+          ...(prepared.importedLinkTargets.length > 0
+            ? [
+                `- Imported links: ${prepared.importedLinkTargets
+                  .map((target) => `\`${target}\``)
+                  .join(", ")}`,
+              ]
+            : []),
           "",
-          "## Content",
-          renderMarkdownFence(raw, detectFenceLanguage(params.artifact.absolutePath)),
+          params.artifact.profileId === "markdown-vault" ? "## Imported Markdown" : "## Content",
+          prepared.renderedContentBody,
           "",
           "## Notes",
           "<!-- openclaw:human:start -->",

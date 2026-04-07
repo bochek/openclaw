@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { importMemoryWikiInput } from "./import.js";
+import { parseWikiMarkdown } from "./markdown.js";
 import { createMemoryWikiTestHarness } from "./test-helpers.js";
 
 const { createTempDir, createVault } = createMemoryWikiTestHarness();
@@ -42,7 +43,21 @@ alpha body
     const vaultPath = await createTempDir("memory-wiki-import-vault-");
     await fs.mkdir(path.join(vaultPath, ".obsidian"), { recursive: true });
     await fs.mkdir(path.join(vaultPath, "projects"), { recursive: true });
-    await fs.writeFile(path.join(vaultPath, "alpha.md"), "# Alpha\n\nalpha body\n", "utf8");
+    await fs.writeFile(
+      path.join(vaultPath, "alpha.md"),
+      `---
+tags:
+  - alpha
+aliases:
+  - Alpha Note
+---
+
+# Alpha
+
+alpha body with [[Beta Project|Beta]] and [Plan](projects/beta.md).
+`,
+      "utf8",
+    );
     await fs.writeFile(
       path.join(vaultPath, "projects", "beta.md"),
       "# Beta\n\nbeta body\n",
@@ -58,12 +73,17 @@ alpha body
     expect(result.profileId).toBe("markdown-vault");
     expect(result.artifactCount).toBe(2);
     expect(result.importedCount).toBe(2);
-    await expect(fs.readFile(path.join(rootDir, result.pagePaths[0]), "utf8")).resolves.toContain(
-      "sourceType: markdown-vault",
-    );
-    await expect(fs.readFile(path.join(rootDir, result.pagePaths[0]), "utf8")).resolves.toContain(
-      "importRelativePath:",
-    );
+    const importedPage = await fs.readFile(path.join(rootDir, result.pagePaths[0]), "utf8");
+    const parsedImportedPage = parseWikiMarkdown(importedPage);
+    expect(parsedImportedPage.frontmatter).toMatchObject({
+      sourceType: "markdown-vault",
+      importRelativePath: "alpha.md",
+      importedTags: ["alpha"],
+      importedAliases: ["Alpha Note"],
+      importedLinkTargets: ["Beta Project", "projects/beta.md"],
+    });
+    expect(parsedImportedPage.body).toContain("alpha body with Beta and Plan (projects/beta.md).");
+    expect(parsedImportedPage.body).not.toContain("[[Beta Project|Beta]]");
     const sourceEntries = await fs.readdir(path.join(rootDir, "sources"));
     expect(
       sourceEntries.filter((entry) => entry.endsWith(".md") && entry !== "index.md"),
