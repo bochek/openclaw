@@ -287,10 +287,10 @@ export async function updateDreamingEnabled(
   enabled: boolean,
 ): Promise<boolean> {
   // Respect plugins.slots.memory when set; fall back to "memory-core"
-  const cfg = state.configSnapshot?.config as Record<string, unknown> | null | undefined;
-  const plugins = cfg?.plugins as Record<string, unknown> | null | undefined;
-  const slots = plugins?.slots as Record<string, unknown> | null | undefined;
-  const memoryPluginId = String(slots?.memory ?? "memory-core");
+  const cfg = asRecord(state.configSnapshot?.config);
+  const plugins = asRecord(cfg?.plugins);
+  const slots = asRecord(plugins?.slots);
+  const memoryPluginId = normalizeTrimmedString(slots?.memory) ?? "memory-core";
   const ok = await writeDreamingPatch(state, {
     plugins: {
       entries: {

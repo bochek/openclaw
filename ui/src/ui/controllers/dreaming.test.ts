@@ -28,6 +28,14 @@ function createState(): { state: DreamingState; request: ReturnType<typeof vi.fn
   return { state, request };
 }
 
+function getConfigPatchRawPayload(request: ReturnType<typeof vi.fn>): Record<string, unknown> {
+  const call = request.mock.calls.find((entry) => entry[0] === "config.patch");
+  expect(call).toBeDefined();
+  const payload = call?.[1] as { raw?: unknown };
+  expect(typeof payload.raw).toBe("string");
+  return JSON.parse(payload.raw as string) as Record<string, unknown>;
+}
+
 describe("dreaming controller", () => {
   it("loads and normalizes dreaming status from doctor.memory.status", async () => {
     const { state, request } = createState();
@@ -117,8 +125,85 @@ describe("dreaming controller", () => {
         sessionKey: "main",
       }),
     );
+    expect(getConfigPatchRawPayload(request)).toEqual({
+      plugins: {
+        entries: {
+          "memory-core": {
+            config: {
+              dreaming: {
+                enabled: false,
+              },
+            },
+          },
+        },
+      },
+    });
     expect(state.dreamingModeSaving).toBe(false);
     expect(state.dreamingStatusError).toBeNull();
+  });
+
+  it("patches dreaming config for the selected memory slot plugin", async () => {
+    const { state, request } = createState();
+    state.configSnapshot = {
+      hash: "hash-1",
+      config: {
+        plugins: {
+          slots: {
+            memory: "memos-local-openclaw-plugin",
+          },
+        },
+      },
+    };
+    request.mockResolvedValue({ ok: true });
+
+    const ok = await updateDreamingEnabled(state, true);
+
+    expect(ok).toBe(true);
+    expect(getConfigPatchRawPayload(request)).toEqual({
+      plugins: {
+        entries: {
+          "memos-local-openclaw-plugin": {
+            config: {
+              dreaming: {
+                enabled: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it("falls back to memory-core when memory slot is blank", async () => {
+    const { state, request } = createState();
+    state.configSnapshot = {
+      hash: "hash-1",
+      config: {
+        plugins: {
+          slots: {
+            memory: "   ",
+          },
+        },
+      },
+    };
+    request.mockResolvedValue({ ok: true });
+
+    const ok = await updateDreamingEnabled(state, true);
+
+    expect(ok).toBe(true);
+    expect(getConfigPatchRawPayload(request)).toEqual({
+      plugins: {
+        entries: {
+          "memory-core": {
+            config: {
+              dreaming: {
+                enabled: true,
+              },
+            },
+          },
+        },
+      },
+    });
   });
 
   it("fails gracefully when config hash is missing", async () => {

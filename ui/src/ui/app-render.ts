@@ -158,6 +158,21 @@ const lazySessions = createLazy(() => import("./views/sessions.ts"));
 const lazySkills = createLazy(() => import("./views/skills.ts"));
 const lazyDreamingView = createLazy(() => import("./views/dreaming.ts"));
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function normalizeTrimmedString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function resolveConfiguredDreaming(configValue: Record<string, unknown> | null): {
   enabled: boolean;
 } {
@@ -166,11 +181,13 @@ function resolveConfiguredDreaming(configValue: Record<string, unknown> | null):
       enabled: false,
     };
   }
-  const plugins = configValue.plugins as Record<string, unknown> | undefined;
-  const entries = plugins?.entries as Record<string, unknown> | undefined;
-  const memoryCore = entries?.["memory-core"] as Record<string, unknown> | undefined;
-  const config = memoryCore?.config as Record<string, unknown> | undefined;
-  const dreaming = config?.dreaming as Record<string, unknown> | undefined;
+  const plugins = asRecord(configValue.plugins);
+  const slots = asRecord(plugins?.slots);
+  const entries = asRecord(plugins?.entries);
+  const memoryPluginId = normalizeTrimmedString(slots?.memory) ?? "memory-core";
+  const memoryPlugin = asRecord(entries?.[memoryPluginId]);
+  const config = asRecord(memoryPlugin?.config);
+  const dreaming = asRecord(config?.dreaming);
   return {
     enabled: typeof dreaming?.enabled === "boolean" ? dreaming.enabled : false,
   };

@@ -316,7 +316,7 @@ export function resolveMemoryCorePluginConfig(
   const slots = asNullableRecord(plugins?.slots);
   const entries = asNullableRecord(plugins?.entries);
   // Respect plugins.slots.memory when set; fall back to "memory-core"
-  const memoryPluginId = String(slots?.memory ?? "memory-core");
+  const memoryPluginId = normalizeTrimmedString(slots?.memory) ?? "memory-core";
   const memoryPlugin = asNullableRecord(entries?.[memoryPluginId]);
   return asNullableRecord(memoryPlugin?.config) ?? undefined;
 }

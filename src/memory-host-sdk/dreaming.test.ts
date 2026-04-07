@@ -175,4 +175,61 @@ describe("memory dreaming host helpers", () => {
       },
     });
   });
+
+  it("resolves dreaming config from the selected memory slot plugin", () => {
+    expect(
+      resolveMemoryCorePluginConfig({
+        plugins: {
+          slots: {
+            memory: "memos-local-openclaw-plugin",
+          },
+          entries: {
+            "memos-local-openclaw-plugin": {
+              config: {
+                dreaming: {
+                  enabled: true,
+                },
+              },
+            },
+            "memory-core": {
+              config: {
+                dreaming: {
+                  enabled: false,
+                },
+              },
+            },
+          },
+        },
+      } as OpenClawConfig),
+    ).toEqual({
+      dreaming: {
+        enabled: true,
+      },
+    });
+  });
+
+  it("falls back to memory-core when memory slot is blank", () => {
+    expect(
+      resolveMemoryCorePluginConfig({
+        plugins: {
+          slots: {
+            memory: "   ",
+          },
+          entries: {
+            "memory-core": {
+              config: {
+                dreaming: {
+                  enabled: true,
+                },
+              },
+            },
+          },
+        },
+      } as OpenClawConfig),
+    ).toEqual({
+      dreaming: {
+        enabled: true,
+      },
+    });
+  });
 });
