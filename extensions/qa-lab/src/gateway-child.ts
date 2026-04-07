@@ -9,6 +9,43 @@ import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { seedQaAgentWorkspace } from "./qa-agent-workspace.js";
 import { buildQaGatewayConfig } from "./qa-gateway-config.js";
 
+const QA_LIVE_ENV_ALIASES = Object.freeze([
+  {
+    liveVar: "OPENCLAW_LIVE_OPENAI_KEY",
+    providerVar: "OPENAI_API_KEY",
+  },
+  {
+    liveVar: "OPENCLAW_LIVE_ANTHROPIC_KEY",
+    providerVar: "ANTHROPIC_API_KEY",
+  },
+  {
+    liveVar: "OPENCLAW_LIVE_GEMINI_KEY",
+    providerVar: "GEMINI_API_KEY",
+  },
+]);
+
+const QA_MOCK_BLOCKED_ENV_VARS = Object.freeze([
+  "ANTHROPIC_API_KEY",
+  "ANTHROPIC_OAUTH_TOKEN",
+  "AWS_ACCESS_KEY_ID",
+  "AWS_BEARER_TOKEN_BEDROCK",
+  "AWS_REGION",
+  "AWS_SECRET_ACCESS_KEY",
+  "AWS_SESSION_TOKEN",
+  "GEMINI_API_KEY",
+  "GEMINI_API_KEYS",
+  "GOOGLE_API_KEY",
+  "MISTRAL_API_KEY",
+  "OPENAI_API_KEY",
+  "OPENAI_API_KEYS",
+  "OPENAI_BASE_URL",
+  "OPENCLAW_LIVE_ANTHROPIC_KEY",
+  "OPENCLAW_LIVE_ANTHROPIC_KEYS",
+  "OPENCLAW_LIVE_GEMINI_KEY",
+  "OPENCLAW_LIVE_OPENAI_KEY",
+  "VOYAGE_API_KEY",
+]);
+
 async function getFreePort() {
   return await new Promise<number>((resolve, reject) => {
     const server = net.createServer();
@@ -24,7 +61,31 @@ async function getFreePort() {
   });
 }
 
-function buildQaRuntimeEnv(params: {
+export function normalizeQaProviderModeEnv(
+  env: NodeJS.ProcessEnv,
+  providerMode?: "mock-openai" | "live-frontier",
+) {
+  if (providerMode === "mock-openai") {
+    for (const key of QA_MOCK_BLOCKED_ENV_VARS) {
+      delete env[key];
+    }
+    return env;
+  }
+
+  if (providerMode === "live-frontier") {
+    for (const { liveVar, providerVar } of QA_LIVE_ENV_ALIASES) {
+      const liveValue = env[liveVar]?.trim();
+      if (!liveValue || env[providerVar]?.trim()) {
+        continue;
+      }
+      env[providerVar] = liveValue;
+    }
+  }
+
+  return env;
+}
+
+export function buildQaRuntimeEnv(params: {
   configPath: string;
   gatewayToken: string;
   homeDir: string;
@@ -33,9 +94,10 @@ function buildQaRuntimeEnv(params: {
   xdgDataHome: string;
   xdgCacheHome: string;
   providerMode?: "mock-openai" | "live-frontier";
+  baseEnv?: NodeJS.ProcessEnv;
 }) {
   const env: NodeJS.ProcessEnv = {
-    ...process.env,
+    ...(params.baseEnv ?? process.env),
     HOME: params.homeDir,
     OPENCLAW_HOME: params.homeDir,
     OPENCLAW_CONFIG_PATH: params.configPath,
@@ -51,33 +113,18 @@ function buildQaRuntimeEnv(params: {
     XDG_DATA_HOME: params.xdgDataHome,
     XDG_CACHE_HOME: params.xdgCacheHome,
   };
-  if (params.providerMode === "mock-openai") {
-    for (const key of [
-      "OPENAI_API_KEY",
-      "OPENAI_BASE_URL",
-      "GEMINI_API_KEY",
-      "GOOGLE_API_KEY",
-      "VOYAGE_API_KEY",
-      "MISTRAL_API_KEY",
-      "AWS_ACCESS_KEY_ID",
-      "AWS_SECRET_ACCESS_KEY",
-      "AWS_SESSION_TOKEN",
-      "AWS_REGION",
-      "AWS_BEARER_TOKEN_BEDROCK",
-    ]) {
-      delete env[key];
-    }
-  }
-  return env;
+  return normalizeQaProviderModeEnv(env, params.providerMode);
 }
 
-async function waitForGatewayReady(baseUrl: string, logs: () => string, timeoutMs = 30_000) {
+async function waitForGatewayReady(baseUrl: string, logs: () => string, timeoutMs = 60_000) {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     try {
-      const response = await fetch(`${baseUrl}/healthz`);
-      if (response.ok) {
-        return;
+      for (const path of ["/readyz", "/healthz"]) {
+        const response = await fetch(`${baseUrl}${path}`);
+        if (response.ok) {
+          return;
+        }
       }
     } catch {
       // retry until timeout
@@ -126,6 +173,8 @@ export async function startQaGatewayChild(params: {
   controlUiEnabled?: boolean;
 }) {
   const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-qa-suite-"));
+  const runtimeCwd = tempRoot;
+  const distEntryPath = path.join(params.repoRoot, "dist", "index.js");
   const workspaceDir = path.join(tempRoot, "workspace");
   const stateDir = path.join(tempRoot, "state");
   const homeDir = path.join(tempRoot, "home");
@@ -177,7 +226,7 @@ export async function startQaGatewayChild(params: {
   const child = spawn(
     process.execPath,
     [
-      "dist/index.js",
+      distEntryPath,
       "gateway",
       "run",
       "--port",
@@ -187,7 +236,7 @@ export async function startQaGatewayChild(params: {
       "--allow-unconfigured",
     ],
     {
-      cwd: params.repoRoot,
+      cwd: runtimeCwd,
       env,
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -224,10 +273,10 @@ export async function startQaGatewayChild(params: {
       opts?: { expectFinal?: boolean; timeoutMs?: number },
     ) {
       return await runCliJson({
-        cwd: params.repoRoot,
+        cwd: runtimeCwd,
         env,
         args: [
-          "dist/index.js",
+          distEntryPath,
           "gateway",
           "call",
           method,
