@@ -246,4 +246,46 @@ describe("parseChatGptExportFile", () => {
       conversations[0]?.transcriptBody.indexOf("second exported message") ?? -1,
     );
   });
+
+  it("skips hidden and tool messages from imported transcripts", async () => {
+    const dir = await createTempDir("memory-wiki-chatgpt-hidden-tool-");
+    const exportPath = path.join(dir, "export.json");
+    await fs.writeFile(
+      exportPath,
+      JSON.stringify([
+        {
+          id: "conv-hidden-tool",
+          title: "Hidden tool thread",
+          mapping: {
+            visible: {
+              message: {
+                author: { role: "user" },
+                content: { parts: ["visible user turn"] },
+              },
+            },
+            hidden: {
+              message: {
+                author: { role: "assistant" },
+                metadata: { is_visually_hidden_from_conversation: true },
+                content: { parts: ["hidden assistant turn"] },
+              },
+            },
+            tool: {
+              message: {
+                author: { role: "tool" },
+                content: { parts: ["tool output"] },
+              },
+            },
+          },
+        },
+      ]),
+      "utf8",
+    );
+
+    const conversations = await parseChatGptExportFile(exportPath);
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0]?.transcriptBody).toContain("visible user turn");
+    expect(conversations[0]?.transcriptBody).not.toContain("hidden assistant turn");
+    expect(conversations[0]?.transcriptBody).not.toContain("tool output");
+  });
 });

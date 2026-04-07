@@ -104,6 +104,20 @@ function extractMessageText(contentValue: unknown): string {
   return "";
 }
 
+function shouldImportConversationMessage(params: {
+  role: string;
+  message: Record<string, unknown>;
+}): boolean {
+  if (params.role === "tool") {
+    return false;
+  }
+  const metadata = asRecord(params.message.metadata);
+  if (metadata?.is_visually_hidden_from_conversation === true) {
+    return false;
+  }
+  return true;
+}
+
 function compareChatGptMessages(left: ChatGptMessage, right: ChatGptMessage): number {
   if (left.sortTime !== right.sortTime) {
     if (left.sortTime === 0) {
@@ -134,10 +148,14 @@ function extractConversationMessages(mappingValue: unknown): ChatGptMessage[] {
         return [];
       }
       const author = asRecord(message.author);
+      const role = normalizeRole(author?.role ?? author?.name);
+      if (!shouldImportConversationMessage({ role, message })) {
+        return [];
+      }
       const { sortTime } = normalizeTimestamp(message.create_time ?? node?.create_time);
       return [
         {
-          role: normalizeRole(author?.role ?? author?.name),
+          role,
           text,
           sortTime,
           sourceIndex,
@@ -157,19 +175,21 @@ function extractConversationMappingNodes(mappingValue: unknown): ChatGptMappingN
     const message = asRecord(node?.message);
     const text = extractMessageText(message?.content);
     const author = asRecord(message?.author);
+    const role = normalizeRole(author?.role ?? author?.name);
     const { sortTime } = normalizeTimestamp(message?.create_time ?? node?.create_time);
     return {
       id,
       parentId:
         typeof node?.parent === "string" && node.parent.trim() ? node.parent.trim() : undefined,
-      message: text
-        ? {
-            role: normalizeRole(author?.role ?? author?.name),
-            text,
-            sortTime,
-            sourceIndex,
-          }
-        : null,
+      message:
+        text && message && shouldImportConversationMessage({ role, message })
+          ? {
+              role,
+              text,
+              sortTime,
+              sourceIndex,
+            }
+          : null,
     };
   });
 }
