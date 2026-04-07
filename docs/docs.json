@@ -1452,6 +1452,7 @@
                       "cli/agent",
                       "cli/agents",
                       "cli/hooks",
+                      "cli/infer",
                       "cli/memory",
                       "cli/message",
                       "cli/models",

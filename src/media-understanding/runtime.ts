@@ -26,6 +26,7 @@ export type RunMediaUnderstandingFileParams = {
   agentDir?: string;
   mime?: string;
   activeModel?: ActiveMediaModel;
+  preferProviderBacked?: boolean;
 };
 
 export type RunMediaUnderstandingFileResult = {
@@ -76,6 +77,7 @@ export async function runMediaUnderstandingFile(
       providerRegistry,
       config,
       activeModel: params.activeModel,
+      preferProviderBacked: params.preferProviderBacked,
     });
     const output = result.outputs.find(
       (entry) => entry.kind === KIND_BY_CAPABILITY[params.capability],
@@ -152,6 +154,7 @@ export async function transcribeAudioFile(params: {
   activeModel?: ActiveMediaModel;
   language?: string;
   prompt?: string;
+  preferProviderBacked?: boolean;
 }): Promise<{ text: string | undefined }> {
   const cfg =
     params.language || params.prompt
@@ -172,6 +175,11 @@ export async function transcribeAudioFile(params: {
           },
         }
       : params.cfg;
-  const result = await runMediaUnderstandingFile({ ...params, cfg, capability: "audio" });
+  const result = await runMediaUnderstandingFile({
+    ...params,
+    cfg,
+    capability: "audio",
+    preferProviderBacked: params.preferProviderBacked,
+  });
   return { text: result.text };
 }

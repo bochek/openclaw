@@ -354,5 +354,13 @@
   {
     "source": "Testing",
     "target": "测试"
+  },
+  {
+    "source": "Capability CLI Alias",
+    "target": "Capability CLI 别名"
+  },
+  {
+    "source": "Inference CLI",
+    "target": "推理 CLI"
   }
 ]

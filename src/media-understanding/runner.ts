@@ -571,12 +571,13 @@ async function resolveAutoEntries(params: {
   providerRegistry: ProviderRegistry;
   capability: MediaUnderstandingCapability;
   activeModel?: ActiveMediaModel;
+  preferProviderBacked?: boolean;
 }): Promise<MediaUnderstandingModelConfig[]> {
   const activeEntry = await resolveActiveModelEntry(params);
   if (activeEntry) {
     return [activeEntry];
   }
-  if (params.capability === "audio") {
+  if (params.capability === "audio" && !params.preferProviderBacked) {
     const localAudio = await resolveLocalAudioEntry();
     if (localAudio) {
       return [localAudio];
@@ -588,9 +589,11 @@ async function resolveAutoEntries(params: {
       return imageModelEntries;
     }
   }
-  const gemini = await resolveGeminiCliEntry(params.capability);
-  if (gemini) {
-    return [gemini];
+  if (!params.preferProviderBacked) {
+    const gemini = await resolveGeminiCliEntry(params.capability);
+    if (gemini) {
+      return [gemini];
+    }
   }
   const keys = await resolveKeyEntry(params);
   if (keys) {
@@ -788,6 +791,7 @@ export async function runCapability(params: {
   providerRegistry: ProviderRegistry;
   config?: MediaUnderstandingConfig;
   activeModel?: ActiveMediaModel;
+  preferProviderBacked?: boolean;
 }): Promise<RunCapabilityResult> {
   const { capability, cfg, ctx } = params;
   const config = params.config ?? cfg.tools?.media?.[capability];
@@ -876,6 +880,7 @@ export async function runCapability(params: {
       providerRegistry: params.providerRegistry,
       capability,
       activeModel: params.activeModel,
+      preferProviderBacked: params.preferProviderBacked,
     });
   }
   if (resolvedEntries.length === 0) {

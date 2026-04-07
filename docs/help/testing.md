@@ -568,6 +568,32 @@ If you want to rely on env keys (e.g. exported in your `~/.profile`), run local 
   - `pnpm test:live:media video --video-providers openai,runway --all-providers`
   - `pnpm test:live:media music --quiet`
 
+## Infer live harness
+
+- Command: `pnpm test:live:infer`
+- Live file: `src/cli/capability-cli.live.test.ts`
+- Purpose:
+  - Runs the `openclaw infer` CLI surface end-to-end instead of only provider runtimes
+  - Reuses `scripts/test-live.mjs` so quiet mode, heartbeat output, and temp live-home behavior stay consistent
+  - Auto-loads missing provider env vars from `~/.profile`
+  - Narrows suites to providers with usable auth by default
+- Current suite coverage:
+  - discovery: `infer list`, `infer inspect`
+  - discuss: `model run`, `image describe`, `audio transcribe`, `video describe`
+  - generate or convert: `image generate`, `tts convert`, `video generate`, `embedding create`
+  - edit: `image edit`
+  - web: `web providers`, `web search`, `web fetch`
+- Media discuss note:
+  - `image describe` and `video describe` run as best-effort probes by default because some maintainer setups have generation auth but no separate media-discussion provider path.
+  - Set `OPENCLAW_LIVE_INFER_REQUIRE_MEDIA_DISCUSS=1` to make those probes hard requirements.
+- Current non-goals:
+  - `infer` does not expose dedicated audio-edit or video-edit commands yet, so the harness does not pretend those lanes exist
+- Examples:
+  - `pnpm test:live:infer`
+  - `pnpm test:live:infer image video --providers openai,google`
+  - `pnpm test:live:infer audio --audio-providers deepgram,openai --all-providers`
+  - `pnpm test:live:infer web --quiet`
+
 ## Docker runners (optional "works in Linux" checks)
 
 These Docker runners split into two buckets:

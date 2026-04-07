@@ -57,10 +57,11 @@ function createProvider(params: {
 
 describe("web fetch runtime", () => {
   let resolveWebFetchDefinition: typeof import("./runtime.js").resolveWebFetchDefinition;
+  let isWebFetchProviderConfigured: typeof import("./runtime.js").isWebFetchProviderConfigured;
   let clearSecretsRuntimeSnapshot: typeof import("../secrets/runtime.js").clearSecretsRuntimeSnapshot;
 
   beforeAll(async () => {
-    ({ resolveWebFetchDefinition } = await import("./runtime.js"));
+    ({ resolveWebFetchDefinition, isWebFetchProviderConfigured } = await import("./runtime.js"));
     ({ clearSecretsRuntimeSnapshot } = await import("../secrets/runtime.js"));
   });
 
@@ -176,6 +177,18 @@ describe("web fetch runtime", () => {
     });
 
     expect(resolved?.provider.id).toBe("firecrawl");
+  });
+
+  it("reports configured state without throwing for fetch providers", () => {
+    const provider = createProvider({
+      pluginId: "firecrawl",
+      id: "firecrawl",
+      credentialPath: "plugins.entries.firecrawl.config.webFetch.apiKey",
+      autoDetectOrder: 1,
+    });
+    vi.stubEnv("FIRECRAWL_API_KEY", "firecrawl-env-key");
+
+    expect(isWebFetchProviderConfigured({ provider, config: {} })).toBe(true);
   });
 
   it("falls back to auto-detect when the configured provider is invalid", () => {

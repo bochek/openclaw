@@ -58,7 +58,11 @@ const mocks = vi.hoisted(() => ({
     model: "gpt-4.1-mini",
   })),
   generateImage: vi.fn(),
-  transcribeAudioFile: vi.fn(async () => ({ text: "meeting notes" })),
+  transcribeAudioFile: vi.fn<
+    (...args: unknown[]) => Promise<{
+      text: string | undefined;
+    }>
+  >(async () => ({ text: "meeting notes" })),
   textToSpeech: vi.fn(async () => ({
     success: true,
     audioPath: "/tmp/tts-source.mp3",
@@ -451,8 +455,89 @@ describe("capability cli", () => {
     );
   });
 
+  it("retries audio transcribe without configured CLI entries when the local transcript is empty", async () => {
+    mocks.loadConfig.mockReturnValueOnce({
+      tools: {
+        media: {
+          audio: {
+            models: [
+              {
+                type: "cli",
+                command: "whisper-cli",
+                args: ["{{MediaPath}}"],
+              },
+            ],
+          },
+        },
+      },
+    });
+    mocks.transcribeAudioFile
+      .mockImplementationOnce(async () => ({ text: undefined as string | undefined }))
+      .mockResolvedValueOnce({
+        text: "provider transcript",
+      });
+
+    await runRegisteredCli({
+      register: registerCapabilityCli as (program: Command) => void,
+      argv: ["capability", "audio", "transcribe", "--file", "memo.m4a", "--json"],
+    });
+
+    expect(mocks.transcribeAudioFile).toHaveBeenCalledTimes(2);
+    expect(mocks.transcribeAudioFile).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        cfg: expect.objectContaining({
+          tools: expect.objectContaining({
+            media: expect.objectContaining({
+              audio: expect.objectContaining({
+                models: [expect.objectContaining({ command: "whisper-cli" })],
+              }),
+            }),
+          }),
+        }),
+      }),
+    );
+    const retryArg = (mocks.transcribeAudioFile.mock.calls[1]?.[0] ?? undefined) as unknown as
+      | {
+          cfg?: { tools?: { media?: { audio?: { models?: unknown[] } } } };
+          preferProviderBacked?: boolean;
+        }
+      | undefined;
+    expect(retryArg?.cfg?.tools?.media?.audio?.models).toBeUndefined();
+    expect(retryArg?.preferProviderBacked).toBe(true);
+    expect(mocks.runtime.writeJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        capability: "audio.transcribe",
+        outputs: [expect.objectContaining({ text: "provider transcript" })],
+      }),
+    );
+  });
+
+  it("retries audio transcribe on provider-backed auto-detect even without explicit CLI config", async () => {
+    mocks.transcribeAudioFile
+      .mockImplementationOnce(async () => ({ text: undefined as string | undefined }))
+      .mockResolvedValueOnce({
+        text: "provider transcript",
+      });
+
+    await runRegisteredCli({
+      register: registerCapabilityCli as (program: Command) => void,
+      argv: ["capability", "audio", "transcribe", "--file", "memo.m4a", "--json"],
+    });
+
+    expect(mocks.transcribeAudioFile).toHaveBeenCalledTimes(2);
+    const retryArg = (mocks.transcribeAudioFile.mock.calls[1]?.[0] ?? undefined) as unknown as
+      | {
+          preferProviderBacked?: boolean;
+        }
+      | undefined;
+    expect(retryArg?.preferProviderBacked).toBe(true);
+  });
+
   it("fails audio transcribe when no transcript text is returned", async () => {
-    mocks.transcribeAudioFile.mockResolvedValueOnce({ text: undefined } as never);
+    mocks.transcribeAudioFile
+      .mockImplementationOnce(async () => ({ text: undefined as string | undefined }))
+      .mockImplementationOnce(async () => ({ text: undefined as string | undefined }));
 
     await expect(
       runRegisteredCli({

@@ -86,6 +86,62 @@ type CapabilityEnvelope = {
   error?: string;
 };
 
+function isCliMediaModelEntry(entry: unknown): boolean {
+  if (!entry || typeof entry !== "object") {
+    return false;
+  }
+  const candidate = entry as { type?: unknown; command?: unknown };
+  return candidate.type === "cli" || typeof candidate.command === "string";
+}
+
+function stripCliAudioEntriesForInfer(cfg: ReturnType<typeof loadConfig>): {
+  cfg: ReturnType<typeof loadConfig>;
+  removed: boolean;
+} {
+  const media = cfg.tools?.media;
+  if (!media) {
+    return { cfg, removed: false };
+  }
+
+  const sharedModels = media.models;
+  const audioModels = media.audio?.models;
+  const nextSharedModels = sharedModels?.filter((entry) => !isCliMediaModelEntry(entry));
+  const nextAudioModels = audioModels?.filter((entry) => !isCliMediaModelEntry(entry));
+  const removed =
+    (sharedModels?.length ?? 0) !== (nextSharedModels?.length ?? 0) ||
+    (audioModels?.length ?? 0) !== (nextAudioModels?.length ?? 0);
+
+  if (!removed) {
+    return { cfg, removed: false };
+  }
+
+  return {
+    removed: true,
+    cfg: {
+      ...cfg,
+      tools: {
+        ...cfg.tools,
+        media: {
+          ...media,
+          ...(sharedModels
+            ? { models: nextSharedModels?.length ? nextSharedModels : undefined }
+            : {}),
+          ...(media.audio
+            ? {
+                audio: {
+                  ...media.audio,
+                  ...(audioModels
+                    ? { models: nextAudioModels?.length ? nextAudioModels : undefined }
+                    : {}),
+                },
+              }
+            : {}),
+        },
+      },
+    },
+  };
+}
+
 const CAPABILITY_METADATA: CapabilityMetadata[] = [
   {
     id: "model.run",
@@ -782,13 +838,24 @@ async function runAudioTranscribe(params: {
 }) {
   const cfg = loadConfig();
   const activeModel = requireProviderModelOverride(params.model);
-  const result = await transcribeAudioFile({
+  const request = {
     filePath: path.resolve(params.file),
-    cfg,
     language: params.language,
     activeModel,
     prompt: params.prompt,
+  };
+  let result = await transcribeAudioFile({
+    ...request,
+    cfg,
   });
+  if (!result.text) {
+    const fallback = stripCliAudioEntriesForInfer(cfg);
+    result = await transcribeAudioFile({
+      ...request,
+      cfg: fallback.cfg,
+      preferProviderBacked: true,
+    });
+  }
   if (!result.text) {
     throw new Error(`No transcript returned for audio: ${path.resolve(params.file)}`);
   }
