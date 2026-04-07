@@ -1,4 +1,10 @@
-import type { AnyMessageContent, proto, WAMessage, WASocket } from "@whiskeysockets/baileys";
+import type {
+  AnyMessageContent,
+  MiscMessageGenerationOptions,
+  proto,
+  WAMessage,
+  WASocket,
+} from "@whiskeysockets/baileys";
 import { createInboundDebouncer, formatLocationText } from "openclaw/plugin-sdk/channel-inbound";
 import { recordChannelActivity } from "openclaw/plugin-sdk/infra-runtime";
 import { logVerbose, shouldLogVerbose } from "openclaw/plugin-sdk/runtime-env";
@@ -7,6 +13,7 @@ import { getChildLogger } from "openclaw/plugin-sdk/text-runtime";
 import { readWebSelfIdentity } from "../auth-store.js";
 import { getPrimaryIdentityId, resolveComparableIdentity } from "../identity.js";
 import { DEFAULT_RECONNECT_POLICY, computeBackoff, sleepWithAbort } from "../reconnect.js";
+import { cacheInboundMessageMeta } from "../quoted-message.js";
 import { createWaSocket, formatError, getStatusCode, waitForWaConnection } from "../session.js";
 import { resolveJidToE164 } from "../text-runtime.js";
 import { checkInboundAccessControl } from "./access-control.js";
@@ -136,6 +143,10 @@ export async function monitorWebInbox(options: {
       return `${msg.accountId}:${conversationKey}:${senderKey}`;
     },
     shouldDebounce: options.shouldDebounce,
+    onEnrich: (msg) => ({
+      ...msg,
+      wasQueued: true,
+    }),
     onFlush: async (entries) => {
       const last = entries.at(-1);
       if (!last) {
@@ -158,6 +169,7 @@ export async function monitorWebInbox(options: {
       const combinedMessage: WebInboundMessage = {
         ...last,
         body: combinedBody,
+        wasQueued: true,
         mentions: mentioned.size > 0 ? Array.from(mentioned) : undefined,
         mentionedJids: mentioned.size > 0 ? Array.from(mentioned) : undefined,
       };
@@ -193,13 +205,19 @@ export async function monitorWebInbox(options: {
     });
   };
 
-  const sendTrackedMessage = async (jid: string, content: AnyMessageContent) => {
+  const sendTrackedMessage = async (
+    jid: string,
+    content: AnyMessageContent,
+    sendOptions?: MiscMessageGenerationOptions,
+  ) => {
     let lastErr: unknown = new Error(RECONNECT_IN_PROGRESS_ERROR);
     for (let attempt = 1; ; attempt++) {
       const currentSock = getCurrentSock();
       if (currentSock) {
         try {
-          const result = await currentSock.sendMessage(jid, content);
+          const result = sendOptions
+            ? await currentSock.sendMessage(jid, content, sendOptions)
+            : await currentSock.sendMessage(jid, content);
           rememberOutboundMessage(jid, result);
           return result;
         } catch (err) {
@@ -341,7 +359,9 @@ export async function monitorWebInbox(options: {
       isFromMe: Boolean(msg.key?.fromMe),
       messageTimestampMs,
       connectedAtMs,
-      sock: { sendMessage: (jid, content) => sendTrackedMessage(jid, content) },
+      sock: {
+        sendMessage: (jid: string, content: AnyMessageContent) => sendTrackedMessage(jid, content),
+      },
       remoteJid,
     });
     if (!access.allowed) {
@@ -457,11 +477,14 @@ export async function monitorWebInbox(options: {
         logVerbose(`Presence update failed: ${String(err)}`);
       }
     };
-    const reply = async (text: string) => {
-      await sendTrackedMessage(chatJid, { text });
+    const reply = async (text: string, options?: MiscMessageGenerationOptions) => {
+      await sendTrackedMessage(chatJid, { text }, options);
     };
-    const sendMedia = async (payload: AnyMessageContent) => {
-      await sendTrackedMessage(chatJid, payload);
+    const sendMedia = async (
+      payload: AnyMessageContent,
+      options?: MiscMessageGenerationOptions,
+    ) => {
+      await sendTrackedMessage(chatJid, payload, options);
     };
     const timestamp = inbound.messageTimestampMs;
     const mentionedJids = extractMentionedJids(msg.message as proto.IMessage | undefined);
@@ -521,6 +544,12 @@ export async function monitorWebInbox(options: {
       mediaType: enriched.mediaType,
       mediaFileName: enriched.mediaFileName,
     };
+    if (inboundMessage.id) {
+      cacheInboundMessageMeta(inboundMessage.accountId, inboundMessage.chatId, inboundMessage.id, {
+        participant: inboundMessage.senderJid,
+        body: inboundMessage.body,
+      });
+    }
     try {
       const task = Promise.resolve(debouncer.enqueue(inboundMessage));
       void task.catch((err) => {
@@ -624,7 +653,11 @@ export async function monitorWebInbox(options: {
 
   const sendApi = createWebSendApi({
     sock: {
-      sendMessage: (jid: string, content: AnyMessageContent) => sendTrackedMessage(jid, content),
+      sendMessage: (
+        jid: string,
+        content: AnyMessageContent,
+        options?: MiscMessageGenerationOptions,
+      ) => sendTrackedMessage(jid, content, options),
       sendPresenceUpdate: async (presence, jid?: string) => {
         const currentSock = getCurrentSock();
         if (!currentSock) {
