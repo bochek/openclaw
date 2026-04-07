@@ -8,6 +8,10 @@ import { isCronSessionKey, isSubagentSessionKey } from "../../../routing/session
 import { joinPresentTextSegments } from "../../../shared/text/join-segments.js";
 import { resolveHeartbeatPromptForSystemPrompt } from "../../heartbeat-system-prompt.js";
 import { buildActiveMusicGenerationTaskPromptContextForSession } from "../../music-generation-task-status.js";
+import {
+  resolvePromptProfileForModel as resolvePromptProfileForModelBase,
+  type PromptProfile,
+} from "../../prompt-profile.js";
 import { prependSystemPromptAdditionAfterCacheBoundary } from "../../system-prompt-cache-boundary.js";
 import { resolveEffectiveToolFsWorkspaceOnly } from "../../tool-fs-policy.js";
 import { buildActiveVideoGenerationTaskPromptContextForSession } from "../../video-generation-task-status.js";
@@ -90,6 +94,13 @@ export function resolvePromptModeForSession(sessionKey?: string): "minimal" | "f
     return "full";
   }
   return isSubagentSessionKey(sessionKey) || isCronSessionKey(sessionKey) ? "minimal" : "full";
+}
+
+export function resolvePromptProfileForModel(params: {
+  provider?: string;
+  modelId?: string;
+}): PromptProfile {
+  return resolvePromptProfileForModelBase(params);
 }
 
 export function shouldInjectHeartbeatPrompt(params: {

@@ -12,6 +12,7 @@ import type {
 } from "../agents/auth-profiles/types.js";
 import type { ModelCatalogEntry } from "../agents/model-catalog.js";
 import type { FailoverReason } from "../agents/pi-embedded-helpers/types.js";
+import type { PromptProfile } from "../agents/prompt-profile.js";
 import type { ProviderRequestTransportOverrides } from "../agents/provider-request-config.js";
 import type { ProviderSystemPromptContribution } from "../agents/system-prompt-contribution.js";
 import type { PromptMode } from "../agents/system-prompt.js";
@@ -1075,9 +1076,23 @@ export type ProviderSystemPromptContributionContext = {
   provider: string;
   modelId: string;
   promptMode: PromptMode;
+  promptProfile: PromptProfile;
   runtimeChannel?: string;
   runtimeCapabilities?: string[];
   agentId?: string;
+};
+
+export type ProviderWrapFinalReplyContext = {
+  config?: OpenClawConfig;
+  agentDir?: string;
+  workspaceDir?: string;
+  provider: string;
+  modelId: string;
+  agentId?: string;
+  sessionKey: string;
+  promptProfile: PromptProfile;
+  assistantTexts: string[];
+  replyText: string;
 };
 
 /** Text-inference provider capability registered by a plugin. */
@@ -1446,6 +1461,16 @@ export type ProviderPlugin = {
   resolveSystemPromptContribution?: (
     ctx: ProviderSystemPromptContributionContext,
   ) => ProviderSystemPromptContribution | null | undefined;
+  /**
+   * Provider-owned final reply wrapper.
+   *
+   * Runs after the model already produced a final user-facing reply payload.
+   * Use this for optional post-processing such as style polish, not for tool
+   * use, planning, or execution control.
+   */
+  wrapFinalReply?: (
+    ctx: ProviderWrapFinalReplyContext,
+  ) => string | null | undefined | Promise<string | null | undefined>;
   /**
    * Provider-owned global config defaults.
    *

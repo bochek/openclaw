@@ -13,6 +13,7 @@ import {
   normalizePromptCapabilityIds,
   normalizeStructuredPromptSection,
 } from "./prompt-cache-stability.js";
+import type { PromptProfile } from "./prompt-profile.js";
 import { sanitizeForPromptLiteral } from "./sanitize-for-prompt.js";
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from "./system-prompt-cache-boundary.js";
 import type {
@@ -113,6 +114,18 @@ function buildIdentitySection(files: EmbeddedContextFile[]) {
     lines.push(`## ${file.path}`, "", file.content, "");
   }
   return lines;
+}
+
+function buildPromptProfileSection(promptProfile: PromptProfile) {
+  switch (promptProfile) {
+    case "small-model-lite":
+      // Reserved injection point for smaller/open-model shaping. The eventual
+      // lite profile should trim repeated policy, shrink tool narration, and
+      // keep provider overlays terse without reordering identity/cache seams.
+      return [];
+    default:
+      return [];
+  }
 }
 
 function buildSkillsSection(params: { skillsPrompt?: string; readToolName: string }) {
@@ -342,6 +355,8 @@ export function buildAgentSystemPrompt(params: {
   ttsHint?: string;
   /** Controls which hardcoded sections to include. Defaults to "full". */
   promptMode?: PromptMode;
+  /** Reserved for future model-family prompt shaping such as Qwen-lite. */
+  promptProfile?: PromptProfile;
   /** Whether ACP-specific routing guidance should be included. Defaults to true. */
   acpEnabled?: boolean;
   runtimeInfo?: {
@@ -446,6 +461,7 @@ export function buildAgentSystemPrompt(params: {
   const inlineButtonsEnabled = runtimeCapabilitiesLower.has("inlinebuttons");
   const messageChannelOptions = listDeliverableMessageChannels().join("|");
   const promptMode = params.promptMode ?? "full";
+  const promptProfile = params.promptProfile ?? "default";
   const isMinimal = promptMode === "minimal" || promptMode === "none";
   const sandboxContainerWorkspace = params.sandboxInfo?.containerWorkspaceDir?.trim();
   const sanitizedWorkspaceDir = sanitizeForPromptLiteral(params.workspaceDir);
@@ -510,6 +526,7 @@ export function buildAgentSystemPrompt(params: {
     ...(identityContextFiles.length > 0
       ? buildIdentitySection(identityContextFiles)
       : ["You are the OpenClaw agent for this workspace.", ""]),
+    ...buildPromptProfileSection(promptProfile),
     "You operate inside OpenClaw. Use the runtime and tools below to help the user.",
     "",
     "## Tooling",

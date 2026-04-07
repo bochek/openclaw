@@ -122,6 +122,7 @@ import { buildEmbeddedMessageActionDiscoveryInput } from "./message-action-disco
 import { readPiModelContextTokens } from "./model-context-tokens.js";
 import { buildModelAliasLines, resolveModelAsync } from "./model.js";
 import { sanitizeSessionHistory, validateReplayTurns } from "./replay-history.js";
+import { resolvePromptProfileForModel } from "./run/attempt.prompt-helpers.js";
 import { shouldUseOpenAIWebSocketTransport } from "./run/attempt.thread-helpers.js";
 import { buildEmbeddedSandboxInfo } from "./sandbox-info.js";
 import { prewarmSessionFile, trackSessionManagerAccess } from "./session-manager-cache.js";
@@ -712,6 +713,10 @@ export async function compactEmbeddedPiSessionDirect(
       isSubagentSessionKey(params.sessionKey) || isCronSessionKey(params.sessionKey)
         ? "minimal"
         : "full";
+    const promptProfile = resolvePromptProfileForModel({
+      provider,
+      modelId,
+    });
     const docsPath = await resolveOpenClawDocsPath({
       workspaceDir: effectiveWorkspace,
       argv1: process.argv[1],
@@ -731,6 +736,7 @@ export async function compactEmbeddedPiSessionDirect(
         provider,
         modelId,
         promptMode,
+        promptProfile,
         runtimeChannel,
         runtimeCapabilities,
         agentId: sessionAgentId,
@@ -760,6 +766,7 @@ export async function compactEmbeddedPiSessionDirect(
             docsPath: docsPath ?? undefined,
             ttsHint,
             promptMode,
+            promptProfile,
             acpEnabled: params.config?.acp?.enabled !== false,
             runtimeInfo,
             reactionGuidance,

@@ -9,6 +9,7 @@ import { emitAgentPlanEvent } from "../../infra/agent-events.js";
 import { sleepWithAbort } from "../../infra/backoff.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
+import { wrapProviderFinalReplyWithPlugin } from "../../plugins/provider-runtime.js";
 import { enqueueCommandInLane } from "../../process/command-queue.js";
 import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { sanitizeForLog } from "../../terminal/ansi.js";
@@ -61,6 +62,7 @@ import {
   parseImageSizeError,
   pickFallbackThinkingLevel,
 } from "../pi-embedded-helpers.js";
+import { resolvePromptProfileForModel } from "../prompt-profile.js";
 import { ensureRuntimePluginsLoaded } from "../runtime-plugins.js";
 import { derivePromptTokens, normalizeUsage, type UsageLike } from "../usage.js";
 import { redactRunIdentifier, resolveRunWorkspaceDir } from "../workspace-run.js";
@@ -95,7 +97,7 @@ import {
   resolvePlanningOnlyRetryInstruction,
 } from "./run/incomplete-turn.js";
 import type { RunEmbeddedPiAgentParams } from "./run/params.js";
-import { buildEmbeddedRunPayloads } from "./run/payloads.js";
+import { applyFinalReplyTextWrapper, buildEmbeddedRunPayloads } from "./run/payloads.js";
 import { handleRetryLimitExhaustion } from "./run/retry-limit.js";
 import { resolveEffectiveRuntimeModel, resolveHookModelSelection } from "./run/setup.js";
 import {
@@ -1397,7 +1399,11 @@ export async function runEmbeddedPiAgent(
             compactionCount: autoCompactionCount > 0 ? autoCompactionCount : undefined,
           };
 
-          const payloads = buildEmbeddedRunPayloads({
+          const promptProfile = resolvePromptProfileForModel({
+            provider: activeErrorContext.provider,
+            modelId: activeErrorContext.model,
+          });
+          let payloads = buildEmbeddedRunPayloads({
             assistantTexts: attempt.assistantTexts,
             toolMetas: attempt.toolMetas,
             lastAssistant: attempt.lastAssistant,
@@ -1414,6 +1420,27 @@ export async function runEmbeddedPiAgent(
             inlineToolResultsAllowed: false,
             didSendViaMessagingTool: attempt.didSendViaMessagingTool,
             didSendDeterministicApprovalPrompt: attempt.didSendDeterministicApprovalPrompt,
+          });
+          payloads = await applyFinalReplyTextWrapper({
+            payloads,
+            wrapText: async (replyText) =>
+              await wrapProviderFinalReplyWithPlugin({
+                provider: activeErrorContext.provider,
+                config: params.config,
+                workspaceDir: resolvedWorkspace,
+                context: {
+                  config: params.config,
+                  agentDir,
+                  workspaceDir: resolvedWorkspace,
+                  provider: activeErrorContext.provider,
+                  modelId: activeErrorContext.model,
+                  agentId: workspaceResolution.agentId,
+                  sessionKey: params.sessionKey ?? params.sessionId,
+                  promptProfile,
+                  assistantTexts: attempt.assistantTexts,
+                  replyText,
+                },
+              }),
           });
 
           // Timeout aborts can leave the run without any assistant payloads.

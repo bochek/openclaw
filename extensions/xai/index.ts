@@ -170,6 +170,8 @@ export default defineSingleProviderPluginEntry({
         tool_stream: true,
       };
     },
+    // If we add a Grok-flavored second-pass reply polish later, it should plug
+    // into the generic `wrapFinalReply` hook instead of touching tool/planning turns.
     wrapStreamFn: wrapXaiProviderStream,
     // Provider-specific fallback auth stays owned by the xAI plugin so core
     // auth/discovery code can consume it generically without parsing xAI's

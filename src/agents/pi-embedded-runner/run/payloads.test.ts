@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { applyFinalReplyTextWrapper } from "./payloads.js";
 import { buildPayloads, expectSingleToolErrorPayload } from "./payloads.test-helpers.js";
 
 describe("buildEmbeddedRunPayloads tool-error warnings", () => {
@@ -140,5 +141,25 @@ describe("buildEmbeddedRunPayloads tool-error warnings", () => {
     expectNoPayloads({
       assistantTexts: ['{"action":"NO_REPLY"}'],
     });
+  });
+});
+
+describe("applyFinalReplyTextWrapper", () => {
+  it("wraps the last visible assistant reply only", async () => {
+    await expect(
+      applyFinalReplyTextWrapper({
+        payloads: [{ text: "thinking", isReasoning: true }, { text: "done" }],
+        wrapText: async (text) => `${text} [wrapped]`,
+      }),
+    ).resolves.toEqual([{ text: "thinking", isReasoning: true }, { text: "done [wrapped]" }]);
+  });
+
+  it("ignores empty wrapper results", async () => {
+    await expect(
+      applyFinalReplyTextWrapper({
+        payloads: [{ text: "done" }],
+        wrapText: async () => "   ",
+      }),
+    ).resolves.toEqual([{ text: "done" }]);
   });
 });

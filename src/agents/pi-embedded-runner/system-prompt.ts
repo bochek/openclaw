@@ -3,6 +3,7 @@ import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import type { MemoryCitationsMode } from "../../config/types.memory.js";
 import type { ResolvedTimeFormat } from "../date-time.js";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
+import type { PromptProfile } from "../prompt-profile.js";
 import type { ProviderSystemPromptContribution } from "../system-prompt-contribution.js";
 import { buildAgentSystemPrompt, type PromptMode } from "../system-prompt.js";
 import type { EmbeddedSandboxInfo } from "./types.js";
@@ -28,6 +29,8 @@ export function buildEmbeddedSystemPrompt(params: {
   workspaceNotes?: string[];
   /** Controls which hardcoded sections to include. Defaults to "full". */
   promptMode?: PromptMode;
+  /** Reserved for future model-family prompt shaping such as Qwen-lite. */
+  promptProfile?: PromptProfile;
   /** Whether ACP-specific routing guidance should be included. Defaults to true. */
   acpEnabled?: boolean;
   runtimeInfo: {
@@ -70,6 +73,7 @@ export function buildEmbeddedSystemPrompt(params: {
     workspaceNotes: params.workspaceNotes,
     reactionGuidance: params.reactionGuidance,
     promptMode: params.promptMode,
+    promptProfile: params.promptProfile,
     acpEnabled: params.acpEnabled,
     runtimeInfo: params.runtimeInfo,
     messageToolHints: params.messageToolHints,

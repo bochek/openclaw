@@ -71,6 +71,7 @@ let refreshProviderOAuthCredentialWithPlugin: typeof import("./provider-runtime.
 let resolveProviderRuntimePlugin: typeof import("./provider-runtime.js").resolveProviderRuntimePlugin;
 let runProviderDynamicModel: typeof import("./provider-runtime.js").runProviderDynamicModel;
 let validateProviderReplayTurnsWithPlugin: typeof import("./provider-runtime.js").validateProviderReplayTurnsWithPlugin;
+let wrapProviderFinalReplyWithPlugin: typeof import("./provider-runtime.js").wrapProviderFinalReplyWithPlugin;
 let wrapProviderStreamFn: typeof import("./provider-runtime.js").wrapProviderStreamFn;
 
 const MODEL: ProviderRuntimeModel = {
@@ -281,6 +282,7 @@ describe("provider-runtime", () => {
       resolveProviderRuntimePlugin,
       runProviderDynamicModel,
       validateProviderReplayTurnsWithPlugin,
+      wrapProviderFinalReplyWithPlugin,
       wrapProviderStreamFn,
     } = await import("./provider-runtime.js"));
   });
@@ -479,6 +481,32 @@ describe("provider-runtime", () => {
         }),
       }),
     ).toBe(wrappedStreamFn);
+  });
+
+  it("resolves final reply wrapper hooks through hook-only aliases", async () => {
+    resolvePluginProvidersMock.mockReturnValue([
+      {
+        id: "xai",
+        label: "xAI",
+        hookAliases: ["grok"],
+        auth: [],
+        wrapFinalReply: async ({ replyText }) => `${replyText} [wrapped]`,
+      },
+    ]);
+
+    await expect(
+      wrapProviderFinalReplyWithPlugin({
+        provider: "grok",
+        context: {
+          provider: "grok",
+          modelId: "grok-4-fast",
+          sessionKey: "session:test",
+          promptProfile: "default",
+          assistantTexts: ["raw reply"],
+          replyText: "raw reply",
+        },
+      }),
+    ).resolves.toBe("raw reply [wrapped]");
   });
 
   it("normalizes transport hooks without needing provider ownership", () => {

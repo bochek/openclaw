@@ -166,6 +166,7 @@ import {
   resolveAttemptFsWorkspaceOnly,
   resolveAttemptPrependSystemContext,
   resolvePromptBuildHookResult,
+  resolvePromptProfileForModel,
   resolvePromptModeForSession,
   shouldWarnOnOrphanedUserRepair,
   shouldInjectHeartbeatPrompt,
@@ -226,6 +227,7 @@ export {
   resolveAttemptFsWorkspaceOnly,
   resolveAttemptPrependSystemContext,
   resolvePromptBuildHookResult,
+  resolvePromptProfileForModel,
   resolvePromptModeForSession,
   shouldWarnOnOrphanedUserRepair,
   shouldInjectHeartbeatPrompt,
@@ -683,6 +685,10 @@ export async function runEmbeddedAttempt(
     });
     const isDefaultAgent = sessionAgentId === defaultAgentId;
     const promptMode = resolvePromptModeForSession(params.sessionKey);
+    const promptProfile = resolvePromptProfileForModel({
+      provider: params.provider,
+      modelId: params.modelId,
+    });
 
     // When toolsAllow is set, use minimal prompt and strip skills catalog
     const effectivePromptMode = params.toolsAllow?.length ? ("minimal" as const) : promptMode;
@@ -719,6 +725,7 @@ export async function runEmbeddedAttempt(
         provider: params.provider,
         modelId: params.modelId,
         promptMode: effectivePromptMode,
+        promptProfile,
         runtimeChannel,
         runtimeCapabilities,
         agentId: sessionAgentId,
@@ -746,6 +753,7 @@ export async function runEmbeddedAttempt(
         workspaceNotes,
         reactionGuidance,
         promptMode: effectivePromptMode,
+        promptProfile,
         acpEnabled: params.config?.acp?.enabled !== false,
         runtimeInfo,
         messageToolHints,

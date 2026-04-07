@@ -44,6 +44,7 @@ import type {
   ProviderResolveUsageAuthContext,
   ProviderPlugin,
   ProviderResolveDynamicModelContext,
+  ProviderWrapFinalReplyContext,
   ProviderResolveTransportTurnStateContext,
   ProviderResolveWebSocketSessionPolicyContext,
   ProviderSystemPromptContributionContext,
@@ -575,6 +576,16 @@ export function wrapProviderStreamFn(params: {
   context: ProviderWrapStreamFnContext;
 }) {
   return resolveProviderHookPlugin(params)?.wrapStreamFn?.(params.context) ?? undefined;
+}
+
+export async function wrapProviderFinalReplyWithPlugin(params: {
+  provider: string;
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  context: ProviderWrapFinalReplyContext;
+}) {
+  return await resolveProviderHookPlugin(params)?.wrapFinalReply?.(params.context);
 }
 
 export function resolveProviderTransportTurnStateWithPlugin(params: {

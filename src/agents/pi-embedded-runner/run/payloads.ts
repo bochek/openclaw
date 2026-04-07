@@ -29,6 +29,17 @@ type ToolErrorWarningPolicy = {
   showWarning: boolean;
   includeDetails: boolean;
 };
+export type EmbeddedRunPayload = {
+  text?: string;
+  mediaUrl?: string;
+  mediaUrls?: string[];
+  replyToId?: string;
+  isError?: boolean;
+  isReasoning?: boolean;
+  audioAsVoice?: boolean;
+  replyToTag?: boolean;
+  replyToCurrent?: boolean;
+};
 
 const RECOVERABLE_TOOL_ERROR_KEYWORDS = [
   "required",
@@ -119,17 +130,7 @@ export function buildEmbeddedRunPayloads(params: {
   inlineToolResultsAllowed: boolean;
   didSendViaMessagingTool?: boolean;
   didSendDeterministicApprovalPrompt?: boolean;
-}): Array<{
-  text?: string;
-  mediaUrl?: string;
-  mediaUrls?: string[];
-  replyToId?: string;
-  isError?: boolean;
-  isReasoning?: boolean;
-  audioAsVoice?: boolean;
-  replyToTag?: boolean;
-  replyToCurrent?: boolean;
-}> {
+}): EmbeddedRunPayload[] {
   const replyItems: Array<{
     text: string;
     media?: string[];
@@ -362,4 +363,46 @@ export function buildEmbeddedRunPayloads(params: {
       }
       return true;
     });
+}
+
+export async function applyFinalReplyTextWrapper(params: {
+  payloads: EmbeddedRunPayload[];
+  wrapText?: (text: string) => string | null | undefined | Promise<string | null | undefined>;
+}): Promise<EmbeddedRunPayload[]> {
+  if (!params.wrapText || params.payloads.length === 0) {
+    return params.payloads;
+  }
+
+  const candidateIndex = params.payloads.findLastIndex(
+    (payload) =>
+      typeof payload.text === "string" &&
+      payload.text.trim().length > 0 &&
+      payload.isError !== true &&
+      payload.isReasoning !== true,
+  );
+  if (candidateIndex < 0) {
+    return params.payloads;
+  }
+
+  const payload = params.payloads[candidateIndex];
+  const replyText = payload?.text?.trim();
+  if (!payload || !replyText) {
+    return params.payloads;
+  }
+
+  const wrappedText = await params.wrapText(payload.text ?? "");
+  const normalizedWrappedText = normalizeOptionalString(wrappedText ?? undefined);
+  if (!normalizedWrappedText || normalizedWrappedText === payload.text) {
+    return params.payloads;
+  }
+
+  // Keep late reply wrapping scoped to the final visible assistant text so
+  // future Grok-style style passes cannot interfere with tool summaries,
+  // reasoning blocks, or error payloads.
+  const nextPayloads = params.payloads.slice();
+  nextPayloads[candidateIndex] = {
+    ...payload,
+    text: normalizedWrappedText,
+  };
+  return nextPayloads;
 }
