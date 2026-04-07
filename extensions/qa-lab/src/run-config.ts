@@ -44,7 +44,7 @@ export function defaultQaModelForMode(mode: QaProviderMode, alternate = false) {
   return alternate ? "mock-openai/gpt-5.4-alt" : "mock-openai/gpt-5.4";
 }
 
-function normalizeProviderMode(input: unknown): QaProviderMode {
+export function normalizeQaProviderMode(input: unknown): QaProviderMode {
   return input === "live-frontier" || input === "live-openai" ? "live-frontier" : "mock-openai";
 }
 
@@ -71,7 +71,7 @@ export function normalizeQaRunSelection(
   scenarios: QaSeedScenario[],
 ): QaLabRunSelection {
   const payload = input && typeof input === "object" ? (input as Record<string, unknown>) : {};
-  const providerMode = normalizeProviderMode(payload.providerMode);
+  const providerMode = normalizeQaProviderMode(payload.providerMode);
   return {
     providerMode,
     primaryModel: normalizeModel(payload.primaryModel, defaultQaModelForMode(providerMode)),
