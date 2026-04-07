@@ -196,11 +196,11 @@ describe("test-projects args", () => {
   });
 
   it("routes unit-fast light targets to the cache-friendly unit-fast config", () => {
-    expect(buildVitestRunPlans(["src/plugin-sdk/lazy-value.test.ts"])).toEqual([
+    expect(buildVitestRunPlans(["src/plugin-sdk/provider-entry.test.ts"])).toEqual([
       {
         config: "vitest.unit-fast.config.ts",
         forwardedArgs: [],
-        includePatterns: ["src/plugin-sdk/lazy-value.test.ts"],
+        includePatterns: ["src/plugin-sdk/provider-entry.test.ts"],
         watchMode: false,
       },
     ]);

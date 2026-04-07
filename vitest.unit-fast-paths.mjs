@@ -11,11 +11,15 @@ const normalizeRepoPath = (value) => value.replaceAll("\\", "/");
 const unitFastCandidateGlobs = [
   "packages/memory-host-sdk/**/*.test.ts",
   "packages/plugin-package-contract/**/*.test.ts",
+  "src/acp/**/*.test.ts",
   "src/bootstrap/**/*.test.ts",
   "src/channels/**/*.test.ts",
+  "src/cli/**/*.test.ts",
   "src/config/**/*.test.ts",
   "src/daemon/**/*.test.ts",
   "src/i18n/**/*.test.ts",
+  "src/hooks/**/*.test.ts",
+  "src/image-generation/**/*.test.ts",
   "src/infra/**/*.test.ts",
   "src/interactive/**/*.test.ts",
   "src/link-understanding/**/*.test.ts",
@@ -23,6 +27,8 @@ const unitFastCandidateGlobs = [
   "src/markdown/**/*.test.ts",
   "src/media/**/*.test.ts",
   "src/media-generation/**/*.test.ts",
+  "src/media-understanding/**/*.test.ts",
+  "src/memory-host-sdk/**/*.test.ts",
   "src/music-generation/**/*.test.ts",
   "src/node-host/**/*.test.ts",
   "src/plugin-sdk/**/*.test.ts",
@@ -34,9 +40,11 @@ const unitFastCandidateGlobs = [
   "src/shared/**/*.test.ts",
   "src/terminal/**/*.test.ts",
   "src/test-utils/**/*.test.ts",
+  "src/tasks/**/*.test.ts",
   "src/tts/**/*.test.ts",
   "src/utils/**/*.test.ts",
   "src/video-generation/**/*.test.ts",
+  "src/wizard/**/*.test.ts",
   "test/**/*.test.ts",
 ];
 const unitFastCandidateExactFiles = [...pluginSdkLightTestFiles, ...commandsLightTestFiles];
@@ -65,6 +73,10 @@ const disqualifyingPatterns = [
   {
     code: "module-mocking",
     pattern: /\bvi\.(?:mock|doMock|unmock|doUnmock|importActual|resetModules)\s*\(/u,
+  },
+  {
+    code: "vitest-mock-api",
+    pattern: /\bvi\b/u,
   },
   {
     code: "dynamic-import",

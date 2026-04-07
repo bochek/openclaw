@@ -19,8 +19,8 @@ describe("unit-fast vitest lane", () => {
     expect(config.test?.isolate).toBe(false);
     expect(config.test?.runner).toBeUndefined();
     expect(config.test?.setupFiles).toEqual([]);
-    expect(config.test?.include).toContain("src/plugin-sdk/lazy-value.test.ts");
-    expect(config.test?.include).toContain("src/commands/cleanup-utils.test.ts");
+    expect(config.test?.include).toContain("src/plugin-sdk/provider-entry.test.ts");
+    expect(config.test?.include).toContain("src/commands/status-overview-values.test.ts");
   });
 
   it("keeps obvious stateful files out of the unit-fast lane", () => {
@@ -28,16 +28,17 @@ describe("unit-fast vitest lane", () => {
     expect(resolveUnitFastTestIncludePattern("src/plugin-sdk/temp-path.ts")).toBeNull();
     expect(classifyUnitFastTestFileContent("vi.resetModules(); await import('./x.js')")).toEqual([
       "module-mocking",
+      "vitest-mock-api",
       "dynamic-import",
     ]);
   });
 
   it("routes unit-fast source files to their unit-fast sibling tests", () => {
-    expect(resolveUnitFastTestIncludePattern("src/plugin-sdk/lazy-value.ts")).toBe(
-      "src/plugin-sdk/lazy-value.test.ts",
+    expect(resolveUnitFastTestIncludePattern("src/plugin-sdk/provider-entry.ts")).toBe(
+      "src/plugin-sdk/provider-entry.test.ts",
     );
-    expect(resolveUnitFastTestIncludePattern("src/commands/cleanup-utils.ts")).toBe(
-      "src/commands/cleanup-utils.test.ts",
+    expect(resolveUnitFastTestIncludePattern("src/commands/status-overview-values.ts")).toBe(
+      "src/commands/status-overview-values.test.ts",
     );
   });
 
@@ -57,8 +58,8 @@ describe("unit-fast vitest lane", () => {
     const pluginSdkLight = createPluginSdkLightVitestConfig({});
     const commandsLight = createCommandsLightVitestConfig({});
 
-    expect(unitFastTestFiles).toContain("src/plugin-sdk/lazy-value.test.ts");
-    expect(pluginSdkLight.test?.exclude).toContain("plugin-sdk/lazy-value.test.ts");
-    expect(commandsLight.test?.exclude).toContain("cleanup-utils.test.ts");
+    expect(unitFastTestFiles).toContain("src/plugin-sdk/provider-entry.test.ts");
+    expect(pluginSdkLight.test?.exclude).toContain("plugin-sdk/provider-entry.test.ts");
+    expect(commandsLight.test?.exclude).toContain("status-overview-values.test.ts");
   });
 });
