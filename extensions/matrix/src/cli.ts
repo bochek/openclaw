@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import { resolveMatrixAccount, resolveMatrixAccountConfig } from "./matrix/accounts.js";
 import { withResolvedActionClient, withStartedActionClient } from "./matrix/actions/client.js";
 import { listMatrixOwnDevices, pruneMatrixStaleGatewayDevices } from "./matrix/actions/devices.js";
@@ -29,6 +30,9 @@ import { matrixSetupAdapter } from "./setup-core.js";
 import type { CoreConfig } from "./types.js";
 
 let matrixCliExitScheduled = false;
+const loadMatrixSetupBootstrapModule = createLazyPluginLocalModule<
+  typeof import("./setup-bootstrap.js")
+>(import.meta.url, "./setup-bootstrap.js");
 
 export function resetMatrixCliStateForTests(): void {
   matrixCliExitScheduled = false;
@@ -221,7 +225,7 @@ async function addMatrixAccount(params: {
     backupVersion: null,
   };
   if (accountConfig.encryption === true) {
-    const { maybeBootstrapNewEncryptedMatrixAccount } = await import("./setup-bootstrap.js");
+    const { maybeBootstrapNewEncryptedMatrixAccount } = await loadMatrixSetupBootstrapModule();
     verificationBootstrap = await maybeBootstrapNewEncryptedMatrixAccount({
       previousCfg: cfg,
       cfg: updated,

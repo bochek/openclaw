@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import { writeJsonFileAtomically as writeJsonFileAtomicallyImpl } from "openclaw/plugin-sdk/json-store";
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import { resolveStateDir } from "openclaw/plugin-sdk/state-paths";
 import { resolveConfiguredMatrixAccountIds } from "./account-selection.js";
 import { formatMatrixErrorMessage } from "./matrix/errors.js";
@@ -14,6 +15,9 @@ import { resolveMatrixLegacyFlatStoragePaths } from "./storage-paths.js";
 
 const MATRIX_LEGACY_CRYPTO_INSPECTOR_UNAVAILABLE_MESSAGE =
   "Legacy Matrix encrypted state was detected, but the Matrix crypto inspector is unavailable.";
+const loadMatrixLegacyCryptoInspectorModule = createLazyPluginLocalModule<
+  typeof import("./matrix/legacy-crypto-inspector.js")
+>(import.meta.url, "./matrix/legacy-crypto-inspector.js");
 
 type MatrixLegacyCryptoCounts = {
   total: number;
@@ -113,7 +117,7 @@ function isMatrixLegacyCryptoInspectorAvailable(): boolean {
 }
 
 async function loadMatrixLegacyCryptoInspector(): Promise<MatrixLegacyCryptoInspector> {
-  const module = await import("./matrix/legacy-crypto-inspector.js");
+  const module = await loadMatrixLegacyCryptoInspectorModule();
   return module.inspectLegacyMatrixCryptoStore as MatrixLegacyCryptoInspector;
 }
 

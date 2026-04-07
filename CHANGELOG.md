@@ -55,6 +55,7 @@ Docs: https://docs.openclaw.ai
 - Matrix/onboarding: add an invite auto-join setup step with explicit off warnings and strict stable-target validation so new Matrix accounts stop silently ignoring invited rooms and fresh DM-style invites unless operators opt in. (#62168) Thanks @gumadeiras.
 - Telegram/doctor: keep top-level access-control fallback in place during multi-account normalization while still promoting legacy default auth into `accounts.default`, so existing named bots keep inherited allowlists without dropping the legacy default bot. (#62263) Thanks @obviyus.
 - Agents/subagents: honor `sessions_spawn(lightContext: true)` for spawned subagent runs by preserving lightweight bootstrap context through the gateway and embedded runner instead of silently falling back to full workspace bootstrap injection. (#62264) Thanks @theSamPadilla.
+- Matrix/Docker: load bundled Matrix lazy local runtime modules through an alias-safe plugin-local loader so source-checkout and nested-package runtime paths stop failing on `Cannot find package 'openclaw'`. (#62170, #62260)
 
 ## 2026.4.5
 

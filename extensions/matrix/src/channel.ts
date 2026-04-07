@@ -20,7 +20,10 @@ import {
   createRuntimeDirectoryLiveAdapter,
 } from "openclaw/plugin-sdk/directory-runtime";
 import { buildTrafficStatusSummary } from "openclaw/plugin-sdk/extension-shared";
-import { createLazyRuntimeNamedExport } from "openclaw/plugin-sdk/lazy-runtime";
+import {
+  createLazyPluginLocalModule,
+  createLazyRuntimeNamedExport,
+} from "openclaw/plugin-sdk/lazy-runtime";
 import { createRuntimeOutboundDelegates } from "openclaw/plugin-sdk/outbound-runtime";
 import {
   buildProbeChannelStatusSummary,
@@ -73,9 +76,15 @@ import type { CoreConfig } from "./types.js";
 let matrixStartupLock: Promise<void> = Promise.resolve();
 
 const loadMatrixChannelRuntime = createLazyRuntimeNamedExport(
-  () => import("./channel.runtime.js"),
+  createLazyPluginLocalModule<typeof import("./channel.runtime.js")>(
+    import.meta.url,
+    "./channel.runtime.js",
+  ),
   "matrixChannelRuntime",
 );
+const loadMatrixMonitorRuntime = createLazyPluginLocalModule<
+  typeof import("./matrix/monitor/index.js")
+>(import.meta.url, "./matrix/monitor/index.js");
 
 const meta = {
   id: "matrix",
@@ -531,7 +540,7 @@ export const matrixPlugin: ChannelPlugin<ResolvedMatrixAccount, MatrixProbe> =
           // Wrap in try/finally to ensure lock is released even if import fails.
           let monitorMatrixProvider: typeof import("./matrix/monitor/index.js").monitorMatrixProvider;
           try {
-            const module = await import("./matrix/monitor/index.js");
+            const module = await loadMatrixMonitorRuntime();
             monitorMatrixProvider = module.monitorMatrixProvider;
           } finally {
             // Release lock after import completes or fails

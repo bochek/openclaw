@@ -173,7 +173,7 @@ explicitly promotes one as public.
     | `plugin-sdk/runtime-store` | `createPluginRuntimeStore` |
     | `plugin-sdk/plugin-runtime` | Shared plugin command/hook/http/interactive helpers |
     | `plugin-sdk/hook-runtime` | Shared webhook/internal hook pipeline helpers |
-    | `plugin-sdk/lazy-runtime` | Lazy runtime import/binding helpers such as `createLazyRuntimeModule`, `createLazyRuntimeMethod`, and `createLazyRuntimeSurface` |
+    | `plugin-sdk/lazy-runtime` | Lazy runtime import/binding helpers such as `createLazyRuntimeModule`, `createLazyRuntimeMethod`, `createLazyRuntimeSurface`, and `createLazyPluginLocalModule` for plugin-local runtime modules |
     | `plugin-sdk/process-runtime` | Process exec helpers |
     | `plugin-sdk/cli-runtime` | CLI formatting, wait, and version helpers |
     | `plugin-sdk/gateway-runtime` | Gateway client and channel-status patch helpers |

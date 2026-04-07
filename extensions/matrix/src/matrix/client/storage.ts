@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { normalizeAccountId } from "openclaw/plugin-sdk/account-id";
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import {
   requiresExplicitMatrixDefaultAccount,
   resolveMatrixDefaultOrOnlyAccountId,
@@ -21,6 +22,9 @@ const LEGACY_CRYPTO_MIGRATION_FILENAME = "legacy-crypto-migration.json";
 const RECOVERY_KEY_FILENAME = "recovery-key.json";
 const IDB_SNAPSHOT_FILENAME = "crypto-idb-snapshot.json";
 const STARTUP_VERIFICATION_FILENAME = "startup-verification.json";
+const loadMatrixMigrationSnapshotRuntime = createLazyPluginLocalModule<
+  typeof import("./migration-snapshot.runtime.js")
+>(import.meta.url, "./migration-snapshot.runtime.js");
 
 type LegacyMoveRecord = {
   sourcePath: string;
@@ -366,7 +370,7 @@ export async function maybeMigrateLegacyStorage(params: {
   });
 
   const logger = getMatrixRuntime().logging.getChildLogger({ module: "matrix-storage" });
-  const { maybeCreateMatrixMigrationSnapshot } = await import("./migration-snapshot.runtime.js");
+  const { maybeCreateMatrixMigrationSnapshot } = await loadMatrixMigrationSnapshotRuntime();
   await maybeCreateMatrixMigrationSnapshot({
     trigger: "matrix-client-fallback",
     env: params.env,

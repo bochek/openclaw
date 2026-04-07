@@ -191,7 +191,7 @@ Current bundled provider examples:
   | `plugin-sdk/runtime-env` | Narrow runtime env helpers | Logger/runtime env, timeout, retry, and backoff helpers |
   | `plugin-sdk/plugin-runtime` | Shared plugin runtime helpers | Plugin commands/hooks/http/interactive helpers |
   | `plugin-sdk/hook-runtime` | Hook pipeline helpers | Shared webhook/internal hook pipeline helpers |
-  | `plugin-sdk/lazy-runtime` | Lazy runtime helpers | `createLazyRuntimeModule`, `createLazyRuntimeMethod`, `createLazyRuntimeMethodBinder`, `createLazyRuntimeNamedExport`, `createLazyRuntimeSurface` |
+  | `plugin-sdk/lazy-runtime` | Lazy runtime helpers | `createLazyRuntimeModule`, `createLazyRuntimeMethod`, `createLazyRuntimeMethodBinder`, `createLazyRuntimeNamedExport`, `createLazyRuntimeSurface`, `createLazyPluginLocalModule` |
   | `plugin-sdk/process-runtime` | Process helpers | Shared exec helpers |
   | `plugin-sdk/cli-runtime` | CLI runtime helpers | Command formatting, waits, version helpers |
   | `plugin-sdk/gateway-runtime` | Gateway helpers | Gateway client and channel-status patch helpers |

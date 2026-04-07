@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import type { PinnedDispatcherPolicy } from "openclaw/plugin-sdk/infra-runtime";
+import {
+  createLazyPluginLocalModule,
+  createLazyRuntimeSurface,
+} from "openclaw/plugin-sdk/lazy-runtime";
 import type { SsrFPolicy } from "../../runtime-api.js";
 import type { MatrixClient } from "../sdk.js";
 import { resolveValidatedMatrixHomeserverUrl } from "./config.js";
@@ -15,15 +19,27 @@ type MatrixCreateClientRuntimeDeps = {
 };
 
 let matrixCreateClientRuntimeDepsPromise: Promise<MatrixCreateClientRuntimeDeps> | undefined;
-
-async function loadMatrixCreateClientRuntimeDeps(): Promise<MatrixCreateClientRuntimeDeps> {
-  matrixCreateClientRuntimeDepsPromise ??= Promise.all([
-    import("../sdk.js"),
-    import("./logging.js"),
-  ]).then(([sdkModule, loggingModule]) => ({
+const loadMatrixSdkModule = createLazyPluginLocalModule<typeof import("../sdk.js")>(
+  import.meta.url,
+  "../sdk.js",
+);
+const loadMatrixLoggingModule = createLazyPluginLocalModule<typeof import("./logging.js")>(
+  import.meta.url,
+  "./logging.js",
+);
+const loadMatrixCreateClientRuntimeDepsSurface = createLazyRuntimeSurface(
+  async () => ({
+    sdkModule: await loadMatrixSdkModule(),
+    loggingModule: await loadMatrixLoggingModule(),
+  }),
+  ({ sdkModule, loggingModule }) => ({
     MatrixClient: sdkModule.MatrixClient,
     ensureMatrixSdkLoggingConfigured: loggingModule.ensureMatrixSdkLoggingConfigured,
-  }));
+  }),
+);
+
+async function loadMatrixCreateClientRuntimeDeps(): Promise<MatrixCreateClientRuntimeDeps> {
+  matrixCreateClientRuntimeDepsPromise ??= loadMatrixCreateClientRuntimeDepsSurface();
   return await matrixCreateClientRuntimeDepsPromise;
 }
 

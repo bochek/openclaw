@@ -1147,6 +1147,9 @@ authoring plugins:
   `telegram-command-config` is the narrow public seam for Telegram custom
   command normalization/validation and stays available even if the bundled
   Telegram contract surface is temporarily unavailable.
+  `lazy-runtime` also exposes `createLazyPluginLocalModule` for bundled
+  plugins that need alias-safe lazy loading of plugin-local runtime modules
+  under nested package roots.
   `text-runtime` is the shared text/markdown/logging seam, including
   assistant-visible-text stripping, markdown render/chunking helpers, redaction
   helpers, directive-tag helpers, and safe-text utilities.

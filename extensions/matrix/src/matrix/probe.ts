@@ -1,4 +1,5 @@
 import { formatErrorMessage, type PinnedDispatcherPolicy } from "openclaw/plugin-sdk/infra-runtime";
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import type { SsrFPolicy } from "../runtime-api.js";
 import type { BaseProbeResult } from "../runtime-api.js";
 import { isBunRuntime } from "./client/runtime.js";
@@ -6,9 +7,12 @@ import { isBunRuntime } from "./client/runtime.js";
 type MatrixProbeRuntimeDeps = Pick<typeof import("./probe.runtime.js"), "createMatrixClient">;
 
 let matrixProbeRuntimeDepsPromise: Promise<MatrixProbeRuntimeDeps> | undefined;
+const loadMatrixProbeRuntimeModule = createLazyPluginLocalModule<
+  typeof import("./probe.runtime.js")
+>(import.meta.url, "./probe.runtime.js");
 
 async function loadMatrixProbeRuntimeDeps(): Promise<MatrixProbeRuntimeDeps> {
-  matrixProbeRuntimeDepsPromise ??= import("./probe.runtime.js").then((runtimeModule) => ({
+  matrixProbeRuntimeDepsPromise ??= loadMatrixProbeRuntimeModule().then((runtimeModule) => ({
     createMatrixClient: runtimeModule.createMatrixClient,
   }));
   return await matrixProbeRuntimeDepsPromise;

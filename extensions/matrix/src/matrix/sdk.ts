@@ -10,6 +10,7 @@ import {
 import { VerificationMethod } from "matrix-js-sdk/lib/types.js";
 import { KeyedAsyncQueue } from "openclaw/plugin-sdk/core";
 import type { PinnedDispatcherPolicy } from "openclaw/plugin-sdk/infra-runtime";
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import { normalizeNullableString } from "openclaw/plugin-sdk/text-runtime";
 import type { SsrFPolicy } from "../runtime-api.js";
 import { resolveMatrixRoomKeyBackupReadinessError } from "./backup-health.js";
@@ -169,9 +170,12 @@ type MatrixCryptoRuntime = typeof import("./sdk/crypto-runtime.js");
 
 let loadedMatrixCryptoRuntime: MatrixCryptoRuntime | null = null;
 let matrixCryptoRuntimePromise: Promise<MatrixCryptoRuntime> | null = null;
+const loadMatrixCryptoRuntimeModule = createLazyPluginLocalModule<
+  typeof import("./sdk/crypto-runtime.js")
+>(import.meta.url, "./sdk/crypto-runtime.js");
 
 async function loadMatrixCryptoRuntime(): Promise<MatrixCryptoRuntime> {
-  matrixCryptoRuntimePromise ??= import("./sdk/crypto-runtime.js").then((runtime) => {
+  matrixCryptoRuntimePromise ??= loadMatrixCryptoRuntimeModule().then((runtime) => {
     loadedMatrixCryptoRuntime = runtime;
     return runtime;
   });

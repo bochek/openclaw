@@ -1,4 +1,5 @@
 import { Type } from "@sinclair/typebox";
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import { extractToolSend } from "openclaw/plugin-sdk/tool-send";
 import { requiresExplicitMatrixDefaultAccount } from "./account-selection.js";
 import { resolveDefaultMatrixAccountId, resolveMatrixAccount } from "./matrix/accounts.js";
@@ -30,6 +31,9 @@ const MATRIX_PLUGIN_HANDLED_ACTIONS = new Set<ChannelMessageActionName>([
   "channel-info",
   "permissions",
 ]);
+const loadMatrixToolActionsRuntime = createLazyPluginLocalModule<
+  typeof import("./tool-actions.runtime.js")
+>(import.meta.url, "./tool-actions.runtime.js");
 
 function createMatrixExposedActions(params: {
   gate: ReturnType<typeof createActionGate>;
@@ -137,7 +141,7 @@ export const matrixMessageActions: ChannelMessageActionAdapter = {
     return extractToolSend(args, "sendMessage");
   },
   handleAction: async (ctx: ChannelMessageActionContext) => {
-    const { handleMatrixAction } = await import("./tool-actions.runtime.js");
+    const { handleMatrixAction } = await loadMatrixToolActionsRuntime();
     const { action, params, cfg, accountId, mediaLocalRoots } = ctx;
     const dispatch = async (actionParams: Record<string, unknown>) =>
       await handleMatrixAction(

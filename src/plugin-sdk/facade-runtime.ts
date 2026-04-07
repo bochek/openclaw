@@ -20,7 +20,6 @@ import {
 import { resolveBundledPluginPublicSurfacePath } from "../plugins/public-surface-runtime.js";
 import { resolveLoaderPackageRoot } from "../plugins/sdk-alias.js";
 import {
-  loadBundledPluginPublicSurfaceModuleSync as loadBundledPluginPublicSurfaceModuleSyncLight,
   loadFacadeModuleAtLocationSync as loadFacadeModuleAtLocationSyncShared,
   resetFacadeLoaderStateForTest,
   type FacadeModuleLocation,
@@ -531,8 +530,14 @@ function resolveActivatedBundledPluginPublicSurfaceAccessOrThrow(
 export function loadBundledPluginPublicSurfaceModuleSync<T extends object>(
   params: BundledPluginPublicSurfaceParams,
 ): T {
-  return loadBundledPluginPublicSurfaceModuleSyncLight<T>({
-    ...params,
+  const location = resolveFacadeModuleLocation(params);
+  if (!location) {
+    throw new Error(
+      `Unable to resolve bundled plugin public surface ${params.dirName}/${params.artifactBasename}`,
+    );
+  }
+  return loadFacadeModuleAtLocationSync({
+    location,
     trackedPluginId: () => resolveTrackedFacadePluginId(params),
   });
 }

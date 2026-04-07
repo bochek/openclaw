@@ -1,3 +1,7 @@
+import {
+  createLazyPluginLocalModule,
+  createLazyRuntimeSurface,
+} from "openclaw/plugin-sdk/lazy-runtime";
 import { getMatrixRuntime } from "../runtime.js";
 import type { CoreConfig } from "../types.js";
 import { getActiveMatrixClient } from "./active-client.js";
@@ -25,16 +29,27 @@ type MatrixSharedClientRuntimeDeps = Pick<
   Pick<typeof import("./client/shared.js"), "releaseSharedClientInstance">;
 
 let matrixSharedClientRuntimeDepsPromise: Promise<MatrixSharedClientRuntimeDeps> | undefined;
-
-async function loadMatrixSharedClientRuntimeDeps(): Promise<MatrixSharedClientRuntimeDeps> {
-  matrixSharedClientRuntimeDepsPromise ??= Promise.all([
-    import("./client.js"),
-    import("./client/shared.js"),
-  ]).then(([clientModule, sharedModule]) => ({
+const loadMatrixClientModule = createLazyPluginLocalModule<typeof import("./client.js")>(
+  import.meta.url,
+  "./client.js",
+);
+const loadMatrixSharedClientModule = createLazyPluginLocalModule<
+  typeof import("./client/shared.js")
+>(import.meta.url, "./client/shared.js");
+const loadMatrixSharedClientRuntimeDepsSurface = createLazyRuntimeSurface(
+  async () => ({
+    clientModule: await loadMatrixClientModule(),
+    sharedModule: await loadMatrixSharedClientModule(),
+  }),
+  ({ clientModule, sharedModule }) => ({
     acquireSharedMatrixClient: clientModule.acquireSharedMatrixClient,
     resolveMatrixAuthContext: clientModule.resolveMatrixAuthContext,
     releaseSharedClientInstance: sharedModule.releaseSharedClientInstance,
-  }));
+  }),
+);
+
+async function loadMatrixSharedClientRuntimeDeps(): Promise<MatrixSharedClientRuntimeDeps> {
+  matrixSharedClientRuntimeDepsPromise ??= loadMatrixSharedClientRuntimeDepsSurface();
   return await matrixSharedClientRuntimeDepsPromise;
 }
 

@@ -1,3 +1,4 @@
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import {
   DEFAULT_ACCOUNT_ID,
   normalizeAccountId,
@@ -8,6 +9,9 @@ import { applyMatrixSetupAccountConfig, validateMatrixSetupInput } from "./setup
 import type { CoreConfig } from "./types.js";
 
 const channel = "matrix" as const;
+const loadMatrixSetupBootstrapModule = createLazyPluginLocalModule<
+  typeof import("./setup-bootstrap.js")
+>(import.meta.url, "./setup-bootstrap.js");
 
 function resolveMatrixSetupAccountId(params: { accountId?: string; name?: string }): string {
   return normalizeAccountId(params.accountId?.trim() || params.name?.trim() || DEFAULT_ACCOUNT_ID);
@@ -39,7 +43,7 @@ export const matrixSetupAdapter: ChannelSetupAdapter = {
       input,
     }),
   afterAccountConfigWritten: async ({ previousCfg, cfg, accountId, runtime }) => {
-    const { runMatrixSetupBootstrapAfterConfigWrite } = await import("./setup-bootstrap.js");
+    const { runMatrixSetupBootstrapAfterConfigWrite } = await loadMatrixSetupBootstrapModule();
     await runMatrixSetupBootstrapAfterConfigWrite({
       previousCfg: previousCfg as CoreConfig,
       cfg: cfg as CoreConfig,

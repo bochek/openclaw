@@ -1,6 +1,11 @@
 import { defineBundledChannelEntry } from "openclaw/plugin-sdk/channel-entry-contract";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import { registerMatrixCliMetadata } from "./cli-metadata.js";
+
+const loadMatrixPluginEntryHandlersRuntime = createLazyPluginLocalModule<
+  typeof import("./plugin-entry.handlers.runtime.js")
+>(import.meta.url, "./plugin-entry.handlers.runtime.js");
 
 export default defineBundledChannelEntry({
   id: "matrix",
@@ -21,7 +26,7 @@ export default defineBundledChannelEntry({
   },
   registerCliMetadata: registerMatrixCliMetadata,
   registerFull(api) {
-    void import("./plugin-entry.handlers.runtime.js")
+    void loadMatrixPluginEntryHandlersRuntime()
       .then(({ ensureMatrixCryptoRuntime }) =>
         ensureMatrixCryptoRuntime({ log: api.logger.info }).catch((err: unknown) => {
           const message = formatErrorMessage(err);
@@ -34,17 +39,17 @@ export default defineBundledChannelEntry({
       });
 
     api.registerGatewayMethod("matrix.verify.recoveryKey", async (ctx) => {
-      const { handleVerifyRecoveryKey } = await import("./plugin-entry.handlers.runtime.js");
+      const { handleVerifyRecoveryKey } = await loadMatrixPluginEntryHandlersRuntime();
       await handleVerifyRecoveryKey(ctx);
     });
 
     api.registerGatewayMethod("matrix.verify.bootstrap", async (ctx) => {
-      const { handleVerificationBootstrap } = await import("./plugin-entry.handlers.runtime.js");
+      const { handleVerificationBootstrap } = await loadMatrixPluginEntryHandlersRuntime();
       await handleVerificationBootstrap(ctx);
     });
 
     api.registerGatewayMethod("matrix.verify.status", async (ctx) => {
-      const { handleVerificationStatus } = await import("./plugin-entry.handlers.runtime.js");
+      const { handleVerificationStatus } = await loadMatrixPluginEntryHandlersRuntime();
       await handleVerificationStatus(ctx);
     });
   },

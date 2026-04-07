@@ -1,4 +1,5 @@
 import { normalizeOptionalAccountId } from "openclaw/plugin-sdk/account-id";
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import type { CoreConfig } from "../../types.js";
 import type { MatrixClient } from "../sdk.js";
 import { LogService } from "../sdk/logger.js";
@@ -10,9 +11,12 @@ type MatrixCreateClientDeps = {
 };
 
 let matrixCreateClientDepsPromise: Promise<MatrixCreateClientDeps> | undefined;
+const loadMatrixCreateClientModule = createLazyPluginLocalModule<
+  typeof import("./create-client.js")
+>(import.meta.url, "./create-client.js");
 
 async function loadMatrixCreateClientDeps(): Promise<MatrixCreateClientDeps> {
-  matrixCreateClientDepsPromise ??= import("./create-client.js").then((runtime) => ({
+  matrixCreateClientDepsPromise ??= loadMatrixCreateClientModule().then((runtime) => ({
     createMatrixClient: runtime.createMatrixClient,
   }));
   return await matrixCreateClientDepsPromise;

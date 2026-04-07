@@ -1,9 +1,15 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/core";
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
+
+const loadMatrixCliModule = createLazyPluginLocalModule<typeof import("./cli.js")>(
+  import.meta.url,
+  "./cli.js",
+);
 
 export function registerMatrixCliMetadata(api: OpenClawPluginApi) {
   api.registerCli(
     async ({ program }) => {
-      const { registerMatrixCli } = await import("./cli.js");
+      const { registerMatrixCli } = await loadMatrixCliModule();
       registerMatrixCli({ program });
     },
     {

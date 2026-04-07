@@ -1,3 +1,4 @@
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import { getMatrixRuntime } from "../../runtime.js";
 import type { CoreConfig } from "../../types.js";
 import { resolveMatrixAccountConfig } from "../account-config.js";
@@ -11,9 +12,12 @@ type MatrixSendClientRuntime = Pick<
 >;
 
 let matrixSendClientRuntimePromise: Promise<MatrixSendClientRuntime> | null = null;
+const loadMatrixClientBootstrapModule = createLazyPluginLocalModule<
+  typeof import("../client-bootstrap.js")
+>(import.meta.url, "../client-bootstrap.js");
 
 async function loadMatrixSendClientRuntime(): Promise<MatrixSendClientRuntime> {
-  matrixSendClientRuntimePromise ??= import("../client-bootstrap.js");
+  matrixSendClientRuntimePromise ??= loadMatrixClientBootstrapModule();
   return await matrixSendClientRuntimePromise;
 }
 

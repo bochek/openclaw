@@ -1,3 +1,4 @@
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import type { MatrixClient } from "../sdk.js";
 import { resolveMatrixMonitorAccessState } from "./access-state.js";
 import type { MatrixRawEvent } from "./types.js";
@@ -36,11 +37,18 @@ type MatrixDirectRoomDeps = {
 };
 
 let matrixDirectRoomDepsPromise: Promise<MatrixDirectRoomDeps> | undefined;
+const loadMatrixDirectManagementModule = createLazyPluginLocalModule<
+  typeof import("../direct-management.js")
+>(import.meta.url, "../direct-management.js");
+const loadMatrixDirectRoomModule = createLazyPluginLocalModule<typeof import("../direct-room.js")>(
+  import.meta.url,
+  "../direct-room.js",
+);
 
 async function loadMatrixDirectRoomDeps(): Promise<MatrixDirectRoomDeps> {
   matrixDirectRoomDepsPromise ??= Promise.all([
-    import("../direct-management.js"),
-    import("../direct-room.js"),
+    loadMatrixDirectManagementModule(),
+    loadMatrixDirectRoomModule(),
   ]).then(([directManagementModule, directRoomModule]) => ({
     inspectMatrixDirectRooms: directManagementModule.inspectMatrixDirectRooms,
     isStrictDirectRoom: directRoomModule.isStrictDirectRoom,

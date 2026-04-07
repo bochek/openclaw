@@ -1,3 +1,4 @@
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import type { MatrixRecoveryKeyStore } from "./recovery-key-store.js";
 import type { EncryptedFile } from "./types.js";
 import type {
@@ -65,10 +66,13 @@ export type MatrixCryptoFacade = {
 
 type MatrixCryptoNodeRuntime = typeof import("./crypto-node.runtime.js");
 let matrixCryptoNodeRuntimePromise: Promise<MatrixCryptoNodeRuntime> | null = null;
+const loadMatrixCryptoNodeRuntimeModule = createLazyPluginLocalModule<
+  typeof import("./crypto-node.runtime.js")
+>(import.meta.url, "./crypto-node.runtime.js");
 
 async function loadMatrixCryptoNodeRuntime(): Promise<MatrixCryptoNodeRuntime> {
   // Keep the native crypto package out of the main CLI startup graph.
-  matrixCryptoNodeRuntimePromise ??= import("./crypto-node.runtime.js");
+  matrixCryptoNodeRuntimePromise ??= loadMatrixCryptoNodeRuntimeModule();
   return await matrixCryptoNodeRuntimePromise;
 }
 

@@ -1,4 +1,5 @@
 import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/account-id";
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import {
   type ChannelSetupDmPolicy,
   type ChannelSetupWizardAdapter,
@@ -39,6 +40,9 @@ import type { CoreConfig, MatrixConfig } from "./types.js";
 
 const channel = "matrix" as const;
 type MatrixInviteAutoJoinPolicy = NonNullable<MatrixConfig["autoJoin"]>;
+const loadMatrixSetupBootstrapModule = createLazyPluginLocalModule<
+  typeof import("./setup-bootstrap.js")
+>(import.meta.url, "./setup-bootstrap.js");
 
 const matrixInviteAutoJoinOptions: Array<{
   value: MatrixInviteAutoJoinPolicy;
@@ -732,7 +736,7 @@ export const matrixOnboardingAdapter: ChannelSetupWizardAdapter = {
     });
   },
   afterConfigWritten: async ({ previousCfg, cfg, accountId, runtime }) => {
-    const { runMatrixSetupBootstrapAfterConfigWrite } = await import("./setup-bootstrap.js");
+    const { runMatrixSetupBootstrapAfterConfigWrite } = await loadMatrixSetupBootstrapModule();
     await runMatrixSetupBootstrapAfterConfigWrite({
       previousCfg: previousCfg as CoreConfig,
       cfg: cfg as CoreConfig,

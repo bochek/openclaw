@@ -1,3 +1,4 @@
+import { createLazyPluginLocalModule } from "openclaw/plugin-sdk/lazy-runtime";
 import type { RuntimeLogger } from "../../runtime-api.js";
 import type { CoreConfig, MatrixConfig } from "../../types.js";
 import type { MatrixAuth } from "../client.js";
@@ -24,14 +25,30 @@ export type MatrixStartupMaintenanceDeps = {
 };
 
 let matrixStartupMaintenanceDepsPromise: Promise<MatrixStartupMaintenanceDeps> | undefined;
+const loadMatrixConfigUpdateModule = createLazyPluginLocalModule<
+  typeof import("../config-update.js")
+>(import.meta.url, "../config-update.js");
+const loadMatrixDeviceHealthModule = createLazyPluginLocalModule<
+  typeof import("../device-health.js")
+>(import.meta.url, "../device-health.js");
+const loadMatrixProfileModule = createLazyPluginLocalModule<typeof import("../profile.js")>(
+  import.meta.url,
+  "../profile.js",
+);
+const loadMatrixLegacyCryptoRestoreModule = createLazyPluginLocalModule<
+  typeof import("./legacy-crypto-restore.js")
+>(import.meta.url, "./legacy-crypto-restore.js");
+const loadMatrixStartupVerificationModule = createLazyPluginLocalModule<
+  typeof import("./startup-verification.js")
+>(import.meta.url, "./startup-verification.js");
 
 async function loadMatrixStartupMaintenanceDeps(): Promise<MatrixStartupMaintenanceDeps> {
   matrixStartupMaintenanceDepsPromise ??= Promise.all([
-    import("../config-update.js"),
-    import("../device-health.js"),
-    import("../profile.js"),
-    import("./legacy-crypto-restore.js"),
-    import("./startup-verification.js"),
+    loadMatrixConfigUpdateModule(),
+    loadMatrixDeviceHealthModule(),
+    loadMatrixProfileModule(),
+    loadMatrixLegacyCryptoRestoreModule(),
+    loadMatrixStartupVerificationModule(),
   ]).then(
     ([
       configUpdateModule,
