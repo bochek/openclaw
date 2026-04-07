@@ -135,6 +135,8 @@ openclaw wiki obsidian daily
 
 Imported aliases also work as lookup keys for `wiki_get` and metadata updates, so imported vault notes stay addressable by their original note names instead of only by generated file paths.
 
+Imported markdown vault relative paths also survive into lookup, retrieval, and `## Related` reconstruction, so `projects/alpha.md` keeps behaving like note identity instead of disappearing after import.
+
 `reports/import-review.md` now also flags duplicate imported titles/aliases, duplicate note bodies, and obviously low-signal notes so large vault backfills are easier to triage before you start turning them into syntheses or claims.
 
 ## Agent tools

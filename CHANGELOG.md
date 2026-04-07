@@ -30,6 +30,7 @@ Docs: https://docs.openclaw.ai
 - Memory/wiki: let `wiki_get` and metadata updates resolve imported vault titles and aliases directly, so imported notes stay addressable by their original note names instead of only generated paths. Thanks @vincentkoc.
 - Memory/wiki: upgrade `reports/import-review.md` to flag duplicate imported titles and aliases plus obviously low-signal notes, so large vault imports are easier to triage before promotion or synthesis work. Thanks @vincentkoc.
 - Memory/wiki: add duplicate-body clustering to `reports/import-review.md` so large vault imports can surface copied or renamed notes even when titles and aliases differ. Thanks @vincentkoc.
+- Memory/wiki: preserve imported markdown vault relative paths in digest, lookup, and related-link reconstruction so imported note identity survives search and `wiki_get`. Thanks @vincentkoc.
 - Plugin SDK/context engines: pass `availableTools` and `citationsMode` into `assemble()`, and expose `buildMemorySystemPromptAddition(...)` so non-legacy context engines can adopt the active memory prompt path without reimplementing it. Thanks @vincentkoc.
 
 ### Fixes

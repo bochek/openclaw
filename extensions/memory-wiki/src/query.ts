@@ -24,6 +24,7 @@ type QueryDigestPage = {
   title: string;
   kind: WikiPageSummary["kind"];
   path: string;
+  importRelativePath?: string;
   sourceIds: string[];
   questions: string[];
   contradictions: string[];
@@ -198,6 +199,7 @@ function buildPageSearchText(page: QueryableWikiPage): string {
   return [
     page.title,
     page.relativePath,
+    page.importRelativePath ?? "",
     page.id ?? "",
     page.sourceIds.join(" "),
     page.questions.join(" "),
@@ -216,6 +218,7 @@ function buildDigestPageSearchText(page: QueryDigestPage, claims: QueryDigestCla
   return [
     page.title,
     page.path,
+    page.importRelativePath ?? "",
     page.id ?? "",
     page.sourceIds.join(" "),
     page.questions.join(" "),
@@ -282,6 +285,7 @@ function buildDigestCandidatePaths(params: {
       let score = 1;
       const titleLower = page.title.toLowerCase();
       const pathLower = page.path.toLowerCase();
+      const importRelativePathLower = page.importRelativePath?.toLowerCase() ?? "";
       const idLower = page.id?.toLowerCase() ?? "";
       if (titleLower === queryLower) {
         score += 50;
@@ -290,6 +294,9 @@ function buildDigestCandidatePaths(params: {
       }
       if (pathLower.includes(queryLower)) {
         score += 10;
+      }
+      if (importRelativePathLower.includes(queryLower)) {
+        score += 14;
       }
       if (idLower.includes(queryLower)) {
         score += 20;
@@ -384,6 +391,7 @@ function scorePage(page: QueryableWikiPage, query: string): number {
   const queryLower = query.toLowerCase();
   const titleLower = page.title.toLowerCase();
   const pathLower = page.relativePath.toLowerCase();
+  const importRelativePathLower = page.importRelativePath?.toLowerCase() ?? "";
   const idLower = page.id?.toLowerCase() ?? "";
   const metadataLower = buildPageSearchText(page).toLowerCase();
   const rawLower = page.raw.toLowerCase();
@@ -391,6 +399,7 @@ function scorePage(page: QueryableWikiPage, query: string): number {
     !(
       titleLower.includes(queryLower) ||
       pathLower.includes(queryLower) ||
+      importRelativePathLower.includes(queryLower) ||
       idLower.includes(queryLower) ||
       metadataLower.includes(queryLower) ||
       rawLower.includes(queryLower)
@@ -407,6 +416,9 @@ function scorePage(page: QueryableWikiPage, query: string): number {
   }
   if (pathLower.includes(queryLower)) {
     score += 10;
+  }
+  if (importRelativePathLower.includes(queryLower)) {
+    score += 14;
   }
   if (idLower.includes(queryLower)) {
     score += 20;

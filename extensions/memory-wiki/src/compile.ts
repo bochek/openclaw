@@ -369,6 +369,10 @@ function buildPageLookupKeys(page: WikiPageSummary): Set<string> {
   const keys = new Set<string>();
   keys.add(normalizeComparableTarget(page.relativePath));
   keys.add(normalizeComparableTarget(page.relativePath.replace(/\.md$/i, "")));
+  if (page.importRelativePath) {
+    keys.add(normalizeComparableTarget(page.importRelativePath));
+    keys.add(normalizeComparableTarget(page.importRelativePath.replace(/\.md$/i, "")));
+  }
   keys.add(normalizeComparableTarget(page.title));
   for (const alias of page.importedAliases) {
     keys.add(normalizeComparableTarget(alias));
@@ -713,6 +717,7 @@ type AgentDigestPage = {
   title: string;
   kind: WikiPageKind;
   path: string;
+  importRelativePath?: string;
   sourceIds: string[];
   questions: string[];
   contradictions: string[];
@@ -851,6 +856,7 @@ function buildAgentDigest(params: {
         title: page.title,
         kind: page.kind,
         path: page.relativePath,
+        ...(page.importRelativePath ? { importRelativePath: page.importRelativePath } : {}),
         sourceIds: [...page.sourceIds],
         questions: [...page.questions],
         contradictions: [...page.contradictions],

@@ -53,6 +53,7 @@ export type WikiPageSummary = {
   sourceType?: string;
   provenanceMode?: string;
   sourcePath?: string;
+  importRelativePath?: string;
   bridgeRelativePath?: string;
   bridgeWorkspaceDir?: string;
   unsafeLocalConfiguredPath?: string;
@@ -275,6 +276,7 @@ export function toWikiPageSummary(params: {
     sourceType: normalizeOptionalString(parsed.frontmatter.sourceType),
     provenanceMode: normalizeOptionalString(parsed.frontmatter.provenanceMode),
     sourcePath: normalizeOptionalString(parsed.frontmatter.sourcePath),
+    importRelativePath: normalizeOptionalString(parsed.frontmatter.importRelativePath),
     bridgeRelativePath: normalizeOptionalString(parsed.frontmatter.bridgeRelativePath),
     bridgeWorkspaceDir: normalizeOptionalString(parsed.frontmatter.bridgeWorkspaceDir),
     unsafeLocalConfiguredPath: normalizeOptionalString(

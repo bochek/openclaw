@@ -3,7 +3,7 @@ import type { WikiPageSummary } from "./markdown.js";
 
 export type QueryableWikiLookupPage = Pick<
   WikiPageSummary,
-  "relativePath" | "title" | "id" | "importedAliases"
+  "relativePath" | "title" | "id" | "importedAliases" | "importRelativePath"
 >;
 
 export function normalizeLookupKey(value: string): string {
@@ -33,6 +33,10 @@ export function resolveQueryableWikiPageByLookup<T extends QueryableWikiLookupPa
     pages.find((page) => page.relativePath === withExtension) ??
     pages.find((page) => page.relativePath.replace(/\.md$/i, "") === key) ??
     pages.find((page) => path.basename(page.relativePath, ".md") === key) ??
+    pages.find((page) => page.importRelativePath === key) ??
+    pages.find((page) => page.importRelativePath === withExtension) ??
+    pages.find((page) => page.importRelativePath?.replace(/\.md$/i, "") === key) ??
+    pages.find((page) => path.basename(page.importRelativePath ?? "", ".md") === key) ??
     pages.find((page) => page.id === key) ??
     pages.find((page) => normalizeLookupLabel(page.title) === normalizedLabel) ??
     pages.find((page) =>

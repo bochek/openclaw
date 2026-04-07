@@ -99,6 +99,7 @@ describe("compileMemoryWikiVault", () => {
           id: "source.import.alpha",
           title: "Alpha Import",
           sourceType: "markdown-vault",
+          importRelativePath: "projects/alpha.md",
           importedTags: ["project-alpha"],
           importedAliases: ["Alpha Canon"],
           importedLinkTargets: ["beta-project"],
@@ -115,6 +116,7 @@ describe("compileMemoryWikiVault", () => {
     ) as {
       pages: Array<{
         path: string;
+        importRelativePath?: string;
         importedTags?: string[];
         importedAliases?: string[];
         importedLinkTargets?: string[];
@@ -123,6 +125,7 @@ describe("compileMemoryWikiVault", () => {
     expect(agentDigest.pages).toContainEqual(
       expect.objectContaining({
         path: "sources/alpha-import.md",
+        importRelativePath: "projects/alpha.md",
         importedTags: ["project-alpha"],
         importedAliases: ["Alpha Canon"],
         importedLinkTargets: ["beta-project"],
@@ -407,6 +410,7 @@ describe("compileMemoryWikiVault", () => {
           id: "source.import.alpha",
           title: "Alpha Note",
           sourceType: "markdown-vault",
+          importRelativePath: "projects/alpha.md",
           importedAliases: ["Alpha Canon"],
         },
         body: "# Alpha Note\n",
@@ -421,7 +425,7 @@ describe("compileMemoryWikiVault", () => {
           id: "source.import.beta",
           title: "Beta Note",
           sourceType: "markdown-vault",
-          importedLinkTargets: ["Alpha Canon"],
+          importedLinkTargets: ["projects/alpha.md"],
         },
         body: "# Beta Note\n",
       }),
