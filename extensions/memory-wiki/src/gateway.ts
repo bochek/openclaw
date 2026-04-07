@@ -7,6 +7,7 @@ import {
   WIKI_SEARCH_CORPORA,
   type ResolvedMemoryWikiConfig,
 } from "./config.js";
+import { importMemoryWikiInput } from "./import.js";
 import { ingestMemoryWikiSource } from "./ingest.js";
 import { lintMemoryWikiVault } from "./lint.js";
 import {
@@ -149,6 +150,34 @@ export function registerMemoryWikiGatewayMethods(params: {
       try {
         await syncImportedSourcesIfNeeded(config, appConfig);
         respond(true, await compileMemoryWikiVault(config));
+      } catch (error) {
+        respondError(respond, error);
+      }
+    },
+    { scope: WRITE_SCOPE },
+  );
+
+  api.registerGatewayMethod(
+    "wiki.import",
+    async ({ params: requestParams, respond }) => {
+      try {
+        const inputPath = readStringParam(requestParams, "inputPath", { required: true });
+        const profileId = readStringParam(requestParams, "profile");
+        respond(
+          true,
+          await importMemoryWikiInput({
+            config,
+            inputPath,
+            ...(profileId ? { profileId } : {}),
+            taskContext: {
+              requesterSessionKey: readStringParam(requestParams, "sessionKey"),
+              ownerKey: readStringParam(requestParams, "ownerKey"),
+              parentFlowId: readStringParam(requestParams, "parentFlowId"),
+              parentTaskId: readStringParam(requestParams, "parentTaskId"),
+              agentId: readStringParam(requestParams, "agentId"),
+            },
+          }),
+        );
       } catch (error) {
         respondError(respond, error);
       }

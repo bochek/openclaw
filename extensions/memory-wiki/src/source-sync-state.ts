@@ -1,10 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 
-export type MemoryWikiImportedSourceGroup = "bridge" | "unsafe-local";
+export type MemoryWikiImportedSourceGroup = "bridge" | "unsafe-local" | "import";
 
 export type MemoryWikiImportedSourceStateEntry = {
   group: MemoryWikiImportedSourceGroup;
+  scopeKey?: string;
   pagePath: string;
   sourcePath: string;
   sourceUpdatedAtMs: number;
@@ -100,10 +101,15 @@ export async function pruneImportedSourceEntries(params: {
   group: MemoryWikiImportedSourceGroup;
   activeKeys: Set<string>;
   state: MemoryWikiImportedSourceState;
+  scopeKey?: string;
 }): Promise<number> {
   let removedCount = 0;
   for (const [syncKey, entry] of Object.entries(params.state.entries)) {
-    if (entry.group !== params.group || params.activeKeys.has(syncKey)) {
+    if (
+      entry.group !== params.group ||
+      params.activeKeys.has(syncKey) ||
+      (params.scopeKey !== undefined && entry.scopeKey !== params.scopeKey)
+    ) {
       continue;
     }
     const pageAbsPath = path.join(params.vaultRoot, entry.pagePath);

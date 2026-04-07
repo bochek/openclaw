@@ -77,6 +77,34 @@ describe("memory-wiki cli", () => {
     );
   });
 
+  it("registers import and auto-detects markdown vaults", async () => {
+    const { rootDir, config } = await createCliVault({ initialize: true });
+    const sourceRoot = path.join(suiteRoot, `case-${caseIndex++}`, "vault");
+    await fs.mkdir(path.join(sourceRoot, ".obsidian"), { recursive: true });
+    await fs.writeFile(
+      path.join(sourceRoot, "alpha.md"),
+      `# Alpha
+
+cli import body
+`,
+      "utf8",
+    );
+
+    const program = new Command();
+    program.name("test");
+    registerWikiCli(program, config);
+
+    await program.parseAsync(["wiki", "import", sourceRoot, "--json"], { from: "user" });
+
+    const sourceEntries = await fs.readdir(path.join(rootDir, "sources"));
+    expect(
+      sourceEntries.filter((entry) => entry.endsWith(".md") && entry !== "index.md"),
+    ).toHaveLength(1);
+    await expect(
+      fs.readFile(path.join(rootDir, "reports", "import-review.md"), "utf8"),
+    ).resolves.toContain("Profile: `markdown-vault` (automatic)");
+  });
+
   it("registers apply metadata and preserves the page body", async () => {
     const { rootDir, config } = await createCliVault();
     const targetPath = path.join(rootDir, "entities", "alpha.md");

@@ -105,7 +105,8 @@ When `render.createDashboards` is enabled, compile also maintains report dashboa
 openclaw wiki status
 openclaw wiki doctor
 openclaw wiki init
-openclaw wiki ingest ./notes/alpha.md
+openclaw wiki import ./notes/alpha.md
+openclaw wiki import ~/Documents/KnowledgeVault
 openclaw wiki compile
 openclaw wiki lint
 openclaw wiki search "alpha"
@@ -129,6 +130,8 @@ openclaw wiki obsidian open syntheses/alpha-summary.md
 openclaw wiki obsidian command workspace:quick-switcher
 openclaw wiki obsidian daily
 ```
+
+`wiki import` is the recommended path for local files, folders, and markdown vaults like Obsidian or Logseq. It auto-detects the best import profile when possible, writes imported artifacts as source pages, and records progress in the shared task ledger for larger imports. `wiki ingest` still exists as a compatibility shortcut for single-file imports.
 
 ## Agent tools
 
@@ -159,6 +162,7 @@ Write methods:
 
 - `wiki.init`
 - `wiki.compile`
+- `wiki.import`
 - `wiki.ingest`
 - `wiki.lint`
 - `wiki.bridge.import`

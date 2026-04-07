@@ -1,0 +1,634 @@
+import { createHash } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
+import {
+  completePluginTaskRun,
+  createPluginTaskRun,
+  failPluginTaskRun,
+  recordPluginTaskProgress,
+} from "openclaw/plugin-sdk/core";
+import { compileMemoryWikiVault, type CompileMemoryWikiResult } from "./compile.js";
+import type { ResolvedMemoryWikiConfig } from "./config.js";
+import { appendMemoryWikiLog } from "./log.js";
+import {
+  extractTitleFromMarkdown,
+  renderMarkdownFence,
+  renderWikiMarkdown,
+  slugifyWikiSegment,
+} from "./markdown.js";
+import { writeImportedSourcePage } from "./source-page-shared.js";
+import { pathExists, resolveArtifactKey } from "./source-path-shared.js";
+import {
+  pruneImportedSourceEntries,
+  readMemoryWikiSourceSyncState,
+  writeMemoryWikiSourceSyncState,
+} from "./source-sync-state.js";
+import { initializeMemoryWikiVault } from "./vault.js";
+
+const DIRECTORY_TEXT_EXTENSIONS = new Set([
+  ".json",
+  ".jsonl",
+  ".md",
+  ".markdown",
+  ".txt",
+  ".yaml",
+  ".yml",
+]);
+const MARKDOWN_VAULT_EXTENSIONS = new Set([".md", ".markdown"]);
+const MARKDOWN_VAULT_MARKERS = [".obsidian", "logseq"] as const;
+const IMPORT_TASK_KIND = "memory-wiki-import";
+const IMPORT_OWNER_KEY = "memory-wiki:import";
+const IMPORT_REVIEW_PATH = "reports/import-review.md";
+
+export const WIKI_IMPORT_PROFILE_IDS = [
+  "local-file",
+  "directory-text",
+  "markdown-vault",
+  "chatgpt-export",
+] as const;
+
+export type WikiImportProfileId = (typeof WIKI_IMPORT_PROFILE_IDS)[number];
+
+type WikiImportArtifact = {
+  absolutePath: string;
+  relativePath: string;
+  profileId: Exclude<WikiImportProfileId, "chatgpt-export">;
+  importRootPath: string;
+  sourceType: string;
+};
+
+type WikiImportTaskContext = {
+  requesterSessionKey?: string;
+  ownerKey?: string;
+  requesterOrigin?: Parameters<typeof createPluginTaskRun>[0]["requesterOrigin"];
+  parentFlowId?: string;
+  parentTaskId?: string;
+  agentId?: string;
+};
+
+export type WikiImportResult = {
+  inputPath: string;
+  profileId: WikiImportProfileId;
+  profileResolution: "automatic" | "explicit";
+  artifactCount: number;
+  importedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  removedCount: number;
+  pagePaths: string[];
+  reportPath: string;
+  indexesRefreshed: boolean;
+  indexUpdatedFiles: string[];
+  indexRefreshReason: "compiled" | "auto-compile-disabled";
+  taskId?: string;
+  runId?: string;
+};
+
+type WikiImportProfileResolution = {
+  profileId: WikiImportProfileId;
+  profileResolution: "automatic" | "explicit";
+};
+
+function normalizeImportProfileId(value?: string): WikiImportProfileId | undefined {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+  return (WIKI_IMPORT_PROFILE_IDS as readonly string[]).includes(normalized)
+    ? (normalized as WikiImportProfileId)
+    : undefined;
+}
+
+function detectFenceLanguage(filePath: string): string {
+  const ext = path.extname(filePath).toLowerCase();
+  if (ext === ".json" || ext === ".jsonl") {
+    return "json";
+  }
+  if (ext === ".yaml" || ext === ".yml") {
+    return "yaml";
+  }
+  if (ext === ".txt") {
+    return "text";
+  }
+  return "markdown";
+}
+
+function assertUtf8Text(buffer: Buffer, sourcePath: string): string {
+  const preview = buffer.subarray(0, Math.min(buffer.length, 4096));
+  if (preview.includes(0)) {
+    throw new Error(`Cannot import binary file as text source: ${sourcePath}`);
+  }
+  return buffer.toString("utf8");
+}
+
+function humanizeImportPath(value: string): string {
+  return value
+    .replace(/\\/g, "/")
+    .replace(/\.[^.]+$/, "")
+    .replace(/[-_]+/g, " ")
+    .replace(/\//g, " / ")
+    .trim();
+}
+
+function resolveImportArtifactTitle(params: {
+  relativePath: string;
+  raw: string;
+  profileId: WikiImportArtifact["profileId"];
+  titleOverride?: string;
+}): string {
+  if (params.titleOverride?.trim()) {
+    return params.titleOverride.trim();
+  }
+  if (params.profileId === "local-file") {
+    return (
+      extractTitleFromMarkdown(params.raw) ?? humanizeImportPath(path.basename(params.relativePath))
+    );
+  }
+  return extractTitleFromMarkdown(params.raw) ?? humanizeImportPath(params.relativePath);
+}
+
+function shouldSkipMarkdownVaultDir(relativePath: string): boolean {
+  const normalized = relativePath.replace(/\\/g, "/").replace(/\/+$/g, "");
+  if (!normalized) {
+    return false;
+  }
+  return (
+    normalized === ".obsidian" ||
+    normalized.startsWith(".obsidian/") ||
+    normalized === "logseq" ||
+    normalized.startsWith("logseq/") ||
+    normalized === ".git" ||
+    normalized.startsWith(".git/") ||
+    normalized === "node_modules" ||
+    normalized.startsWith("node_modules/") ||
+    normalized === ".trash" ||
+    normalized.startsWith(".trash/") ||
+    normalized === ".logseq" ||
+    normalized.startsWith(".logseq/")
+  );
+}
+
+async function listImportFilesRecursive(params: {
+  rootDir: string;
+  allowedExtensions: ReadonlySet<string>;
+  skipDir?: (relativePath: string) => boolean;
+}): Promise<string[]> {
+  async function walk(relativeDir: string): Promise<string[]> {
+    const fullDir = relativeDir ? path.join(params.rootDir, relativeDir) : params.rootDir;
+    const entries = await fs.readdir(fullDir, { withFileTypes: true }).catch(() => []);
+    const files: string[] = [];
+    for (const entry of entries) {
+      const relativePath = relativeDir ? path.join(relativeDir, entry.name) : entry.name;
+      if (entry.isDirectory()) {
+        if (params.skipDir?.(relativePath)) {
+          continue;
+        }
+        files.push(...(await walk(relativePath)));
+        continue;
+      }
+      const ext = path.extname(entry.name).toLowerCase();
+      if (entry.isFile() && params.allowedExtensions.has(ext)) {
+        files.push(relativePath.replace(/\\/g, "/"));
+      }
+    }
+    return files;
+  }
+
+  return (await walk("")).toSorted((left, right) => left.localeCompare(right));
+}
+
+async function isMarkdownVaultRoot(inputPath: string): Promise<boolean> {
+  for (const marker of MARKDOWN_VAULT_MARKERS) {
+    if (await pathExists(path.join(inputPath, marker))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function resolveWikiImportProfile(params: {
+  inputPath: string;
+  profileId?: WikiImportProfileId;
+}): Promise<WikiImportProfileResolution> {
+  if (params.profileId) {
+    if (params.profileId === "chatgpt-export") {
+      throw new Error("`chatgpt-export` import is reserved but not implemented yet.");
+    }
+    return {
+      profileId: params.profileId,
+      profileResolution: "explicit",
+    };
+  }
+
+  const stat = await fs.stat(params.inputPath).catch(() => null);
+  if (!stat) {
+    throw new Error(`Import path not found: ${params.inputPath}`);
+  }
+  if (stat.isFile()) {
+    const ext = path.extname(params.inputPath).toLowerCase();
+    if (!DIRECTORY_TEXT_EXTENSIONS.has(ext)) {
+      throw new Error(`Import path is not a supported text source: ${params.inputPath}`);
+    }
+    return {
+      profileId: "local-file",
+      profileResolution: "automatic",
+    };
+  }
+  if (!stat.isDirectory()) {
+    throw new Error(`Import path must be a file or directory: ${params.inputPath}`);
+  }
+  if (await isMarkdownVaultRoot(params.inputPath)) {
+    return {
+      profileId: "markdown-vault",
+      profileResolution: "automatic",
+    };
+  }
+  return {
+    profileId: "directory-text",
+    profileResolution: "automatic",
+  };
+}
+
+async function enumerateImportArtifacts(params: {
+  inputPath: string;
+  profileId: Exclude<WikiImportProfileId, "chatgpt-export">;
+}): Promise<WikiImportArtifact[]> {
+  if (params.profileId === "local-file") {
+    return [
+      {
+        absolutePath: path.resolve(params.inputPath),
+        relativePath: path.basename(params.inputPath),
+        profileId: "local-file",
+        importRootPath: path.dirname(path.resolve(params.inputPath)),
+        sourceType: "local-file",
+      },
+    ];
+  }
+
+  const inputRoot = path.resolve(params.inputPath);
+  const relativePaths = await listImportFilesRecursive({
+    rootDir: inputRoot,
+    allowedExtensions:
+      params.profileId === "markdown-vault" ? MARKDOWN_VAULT_EXTENSIONS : DIRECTORY_TEXT_EXTENSIONS,
+    ...(params.profileId === "markdown-vault" ? { skipDir: shouldSkipMarkdownVaultDir } : {}),
+  });
+
+  return relativePaths.map((relativePath) => ({
+    absolutePath: path.join(inputRoot, relativePath),
+    relativePath,
+    profileId: params.profileId,
+    importRootPath: inputRoot,
+    sourceType: params.profileId === "markdown-vault" ? "markdown-vault" : "directory-text",
+  }));
+}
+
+function resolveImportScopeKey(params: {
+  inputPath: string;
+  profileId: Exclude<WikiImportProfileId, "chatgpt-export">;
+}): string {
+  return `${params.profileId}:${path.resolve(params.inputPath)}`;
+}
+
+function resolveImportPageIdentity(artifact: WikiImportArtifact): {
+  pageId: string;
+  pagePath: string;
+} {
+  const rootHash = createHash("sha1").update(artifact.importRootPath).digest("hex").slice(0, 8);
+  const relativeHash = createHash("sha1").update(artifact.relativePath).digest("hex").slice(0, 8);
+  const artifactSlug = slugifyWikiSegment(
+    artifact.relativePath.replace(/\.[^.]+$/, "").replace(/[\\/]+/g, "-"),
+  );
+  return {
+    pageId: `source.import.${artifact.profileId}.${rootHash}.${relativeHash}`,
+    pagePath: path
+      .join(
+        "sources",
+        `import-${artifact.profileId}-${rootHash}-${artifactSlug}-${relativeHash}.md`,
+      )
+      .replace(/\\/g, "/"),
+  };
+}
+
+function buildImportReviewBody(params: {
+  inputPath: string;
+  profileId: WikiImportProfileId;
+  profileResolution: "automatic" | "explicit";
+  artifactCount: number;
+  importedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  removedCount: number;
+  pagePaths: string[];
+}): string {
+  const lines = [
+    "# Import Review",
+    "",
+    "## Summary",
+    `- Input: \`${params.inputPath}\``,
+    `- Profile: \`${params.profileId}\` (${params.profileResolution})`,
+    `- Artifacts discovered: ${params.artifactCount}`,
+    `- Imported: ${params.importedCount}`,
+    `- Updated: ${params.updatedCount}`,
+    `- Unchanged: ${params.skippedCount}`,
+    `- Removed: ${params.removedCount}`,
+    "",
+    "## Imported Pages",
+  ];
+  if (params.pagePaths.length === 0) {
+    lines.push("- No importable pages were written.");
+  } else {
+    for (const pagePath of params.pagePaths) {
+      lines.push(`- ${pagePath}`);
+    }
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+async function writeImportReviewReport(params: {
+  config: ResolvedMemoryWikiConfig;
+  inputPath: string;
+  profileId: WikiImportProfileId;
+  profileResolution: "automatic" | "explicit";
+  artifactCount: number;
+  importedCount: number;
+  updatedCount: number;
+  skippedCount: number;
+  removedCount: number;
+  pagePaths: string[];
+}): Promise<string> {
+  const reportPath = path.join(params.config.vault.path, IMPORT_REVIEW_PATH);
+  await fs.mkdir(path.dirname(reportPath), { recursive: true });
+  await fs.writeFile(
+    reportPath,
+    renderWikiMarkdown({
+      frontmatter: {
+        pageType: "report",
+        id: "report.import-review",
+        title: "Import Review",
+        status: "active",
+        sourceType: "wiki-import-report",
+        updatedAt: new Date().toISOString(),
+      },
+      body: buildImportReviewBody(params),
+    }),
+    "utf8",
+  );
+  return IMPORT_REVIEW_PATH;
+}
+
+async function writeImportArtifactPage(params: {
+  config: ResolvedMemoryWikiConfig;
+  artifact: WikiImportArtifact;
+  state: Awaited<ReturnType<typeof readMemoryWikiSourceSyncState>>;
+  scopeKey: string;
+  titleOverride?: string;
+}): Promise<{ pagePath: string; changed: boolean; created: boolean }> {
+  const stats = await fs.stat(params.artifact.absolutePath);
+  const raw = assertUtf8Text(
+    await fs.readFile(params.artifact.absolutePath),
+    params.artifact.absolutePath,
+  );
+  const title = resolveImportArtifactTitle({
+    relativePath: params.artifact.relativePath,
+    raw,
+    profileId: params.artifact.profileId,
+    titleOverride: params.artifact.profileId === "local-file" ? params.titleOverride : undefined,
+  });
+  const { pageId, pagePath } = resolveImportPageIdentity(params.artifact);
+  const renderFingerprint = createHash("sha1")
+    .update(
+      JSON.stringify({
+        profileId: params.artifact.profileId,
+        sourceType: params.artifact.sourceType,
+        importRootPath: params.artifact.importRootPath,
+        relativePath: params.artifact.relativePath,
+        title,
+      }),
+    )
+    .digest("hex");
+
+  return await writeImportedSourcePage({
+    vaultRoot: params.config.vault.path,
+    syncKey: await resolveArtifactKey(params.artifact.absolutePath),
+    sourcePath: params.artifact.absolutePath,
+    sourceUpdatedAtMs: stats.mtimeMs,
+    sourceSize: stats.size,
+    renderFingerprint,
+    pagePath,
+    group: "import",
+    scopeKey: params.scopeKey,
+    state: params.state,
+    buildRendered: (_existingRaw, updatedAt) =>
+      renderWikiMarkdown({
+        frontmatter: {
+          pageType: "source",
+          id: pageId,
+          title,
+          sourceType: params.artifact.sourceType,
+          sourcePath: params.artifact.absolutePath,
+          importProfile: params.artifact.profileId,
+          importRootPath: params.artifact.importRootPath,
+          importRelativePath: params.artifact.relativePath,
+          status: "active",
+          updatedAt,
+        },
+        body: [
+          `# ${title}`,
+          "",
+          "## Imported Source",
+          `- Profile: \`${params.artifact.profileId}\``,
+          `- Root: \`${params.artifact.importRootPath}\``,
+          `- Relative path: \`${params.artifact.relativePath}\``,
+          `- Updated: ${updatedAt}`,
+          "",
+          "## Content",
+          renderMarkdownFence(raw, detectFenceLanguage(params.artifact.absolutePath)),
+          "",
+          "## Notes",
+          "<!-- openclaw:human:start -->",
+          "<!-- openclaw:human:end -->",
+          "",
+        ].join("\n"),
+      }),
+  });
+}
+
+export async function importMemoryWikiInput(params: {
+  config: ResolvedMemoryWikiConfig;
+  inputPath: string;
+  profileId?: string;
+  title?: string;
+  taskContext?: WikiImportTaskContext;
+}): Promise<WikiImportResult> {
+  await initializeMemoryWikiVault(params.config);
+
+  const normalizedInputPath = path.resolve(params.inputPath);
+  const requestedProfileId = normalizeImportProfileId(params.profileId);
+  if (params.profileId && !requestedProfileId) {
+    throw new Error(
+      `Unknown import profile: ${params.profileId}. Expected one of: ${WIKI_IMPORT_PROFILE_IDS.join(", ")}`,
+    );
+  }
+
+  const taskHandle = createPluginTaskRun({
+    taskKind: IMPORT_TASK_KIND,
+    sourceId: "memory-wiki:import",
+    requesterSessionKey: params.taskContext?.requesterSessionKey,
+    ownerKey:
+      params.taskContext?.ownerKey ??
+      (params.taskContext?.requesterSessionKey ? undefined : IMPORT_OWNER_KEY),
+    requesterOrigin: params.taskContext?.requesterOrigin,
+    parentFlowId: params.taskContext?.parentFlowId,
+    parentTaskId: params.taskContext?.parentTaskId,
+    agentId: params.taskContext?.agentId,
+    label: "Wiki import",
+    task: `Import wiki sources from ${normalizedInputPath}`,
+    progressSummary: "Detecting import profile",
+  });
+
+  try {
+    const profile = await resolveWikiImportProfile({
+      inputPath: normalizedInputPath,
+      profileId: requestedProfileId,
+    });
+    recordPluginTaskProgress({
+      handle: taskHandle,
+      progressSummary: `Enumerating ${profile.profileId} sources`,
+      eventSummary: `Detected ${profile.profileId} import profile`,
+    });
+
+    if (profile.profileId === "chatgpt-export") {
+      throw new Error("`chatgpt-export` import is reserved but not implemented yet.");
+    }
+
+    const artifacts = await enumerateImportArtifacts({
+      inputPath: normalizedInputPath,
+      profileId: profile.profileId,
+    });
+    if (artifacts.length === 0) {
+      throw new Error(
+        `No importable sources found for ${profile.profileId}: ${normalizedInputPath}`,
+      );
+    }
+    const scopeKey = resolveImportScopeKey({
+      inputPath: normalizedInputPath,
+      profileId: profile.profileId,
+    });
+    const state = await readMemoryWikiSourceSyncState(params.config.vault.path);
+    const activeKeys = new Set<string>();
+    const results: Array<{ pagePath: string; changed: boolean; created: boolean }> = [];
+
+    for (const [index, artifact] of artifacts.entries()) {
+      activeKeys.add(await resolveArtifactKey(artifact.absolutePath));
+      recordPluginTaskProgress({
+        handle: taskHandle,
+        progressSummary: `Importing ${index + 1}/${artifacts.length} sources`,
+        eventSummary: artifact.relativePath,
+      });
+      results.push(
+        await writeImportArtifactPage({
+          config: params.config,
+          artifact,
+          state,
+          scopeKey,
+          titleOverride: params.title,
+        }),
+      );
+    }
+
+    const removedCount = await pruneImportedSourceEntries({
+      vaultRoot: params.config.vault.path,
+      group: "import",
+      activeKeys,
+      state,
+      scopeKey,
+    });
+    await writeMemoryWikiSourceSyncState(params.config.vault.path, state);
+
+    const pagePaths = results
+      .map((result) => result.pagePath)
+      .toSorted((left, right) => left.localeCompare(right));
+    const importedCount = results.filter((result) => result.changed && result.created).length;
+    const updatedCount = results.filter((result) => result.changed && !result.created).length;
+    const skippedCount = results.filter((result) => !result.changed).length;
+
+    recordPluginTaskProgress({
+      handle: taskHandle,
+      progressSummary: "Writing import review",
+    });
+    const reportPath = await writeImportReviewReport({
+      config: params.config,
+      inputPath: normalizedInputPath,
+      profileId: profile.profileId,
+      profileResolution: profile.profileResolution,
+      artifactCount: artifacts.length,
+      importedCount,
+      updatedCount,
+      skippedCount,
+      removedCount,
+      pagePaths,
+    });
+
+    let compile: CompileMemoryWikiResult | null = null;
+    let indexRefreshReason: WikiImportResult["indexRefreshReason"] = "auto-compile-disabled";
+    if (params.config.ingest.autoCompile) {
+      recordPluginTaskProgress({
+        handle: taskHandle,
+        progressSummary: "Compiling wiki indexes",
+      });
+      compile = await compileMemoryWikiVault(params.config);
+      indexRefreshReason = "compiled";
+    }
+
+    await appendMemoryWikiLog(params.config.vault.path, {
+      type: "ingest",
+      timestamp: new Date().toISOString(),
+      details: {
+        sourceType: "memory-import",
+        inputPath: normalizedInputPath,
+        profileId: profile.profileId,
+        profileResolution: profile.profileResolution,
+        artifactCount: artifacts.length,
+        importedCount,
+        updatedCount,
+        skippedCount,
+        removedCount,
+        reportPath,
+      },
+    });
+
+    const result: WikiImportResult = {
+      inputPath: normalizedInputPath,
+      profileId: profile.profileId,
+      profileResolution: profile.profileResolution,
+      artifactCount: artifacts.length,
+      importedCount,
+      updatedCount,
+      skippedCount,
+      removedCount,
+      pagePaths,
+      reportPath,
+      indexesRefreshed: compile !== null,
+      indexUpdatedFiles: compile?.updatedFiles ?? [],
+      indexRefreshReason,
+      taskId: taskHandle.taskId,
+      runId: taskHandle.runId,
+    };
+
+    completePluginTaskRun({
+      handle: taskHandle,
+      progressSummary: `Imported ${artifacts.length} sources`,
+      terminalSummary: `Imported ${artifacts.length} sources via ${profile.profileId} (${importedCount} new, ${updatedCount} updated, ${skippedCount} unchanged, ${removedCount} removed).`,
+    });
+    return result;
+  } catch (error) {
+    failPluginTaskRun({
+      handle: taskHandle,
+      error,
+      progressSummary: "Wiki import failed",
+      terminalSummary: `Wiki import failed: ${error instanceof Error ? error.message : String(error)}`,
+    });
+    throw error;
+  }
+}

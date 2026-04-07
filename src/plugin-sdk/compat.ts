@@ -28,6 +28,13 @@ export {
   buildMemorySystemPromptAddition,
   delegateCompactionToRuntime,
 } from "../context-engine/delegate.js";
+export {
+  completePluginTaskRun,
+  createPluginTaskRun,
+  failPluginTaskRun,
+  recordPluginTaskProgress,
+} from "./task-run-runtime.js";
+export type { PluginTaskRunHandle } from "./task-run-runtime.js";
 export type { DiagnosticEventPayload } from "../infra/diagnostic-events.js";
 export { onDiagnosticEvent } from "../infra/diagnostic-events.js";
 export {

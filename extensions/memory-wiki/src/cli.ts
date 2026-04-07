@@ -10,7 +10,7 @@ import {
   type MemoryWikiPluginConfig,
   type ResolvedMemoryWikiConfig,
 } from "./config.js";
-import { ingestMemoryWikiSource } from "./ingest.js";
+import { importMemoryWikiInput, WIKI_IMPORT_PROFILE_IDS } from "./import.js";
 import { lintMemoryWikiVault } from "./lint.js";
 import {
   probeObsidianCli,
@@ -52,6 +52,11 @@ type WikiLintCommandOptions = {
 type WikiIngestCommandOptions = {
   json?: boolean;
   title?: string;
+};
+
+type WikiImportCommandOptions = {
+  json?: boolean;
+  profile?: string;
 };
 
 type WikiSearchCommandOptions = {
@@ -331,13 +336,32 @@ export async function runWikiIngest(params: {
     json: params.json,
     stdout: params.stdout,
     run: () =>
-      ingestMemoryWikiSource({
+      runWikiImport({ config: params.config, inputPath: params.inputPath, title: params.title }),
+    render: (value) =>
+      `Imported ${value.inputPath} via ${value.profileId} (${value.importedCount} new, ${value.updatedCount} updated, ${value.skippedCount} unchanged, ${value.removedCount} removed). Indexes ${value.indexesRefreshed ? `refreshed (${value.indexUpdatedFiles.length} files)` : `not refreshed (${value.indexRefreshReason})`}.`,
+  });
+}
+
+export async function runWikiImport(params: {
+  config: ResolvedMemoryWikiConfig;
+  inputPath: string;
+  profileId?: string;
+  title?: string;
+  json?: boolean;
+  stdout?: Pick<NodeJS.WriteStream, "write">;
+}) {
+  return runWikiCommandWithSummary({
+    json: params.json,
+    stdout: params.stdout,
+    run: () =>
+      importMemoryWikiInput({
         config: params.config,
         inputPath: params.inputPath,
+        profileId: params.profileId,
         title: params.title,
       }),
     render: (value) =>
-      `Ingested ${value.sourcePath} into ${value.pagePath}. Refreshed ${value.indexUpdatedFiles.length} index file${value.indexUpdatedFiles.length === 1 ? "" : "s"}.`,
+      `Imported ${value.inputPath} via ${value.profileId} (${value.importedCount} new, ${value.updatedCount} updated, ${value.skippedCount} unchanged, ${value.removedCount} removed). Indexes ${value.indexesRefreshed ? `refreshed (${value.indexUpdatedFiles.length} files)` : `not refreshed (${value.indexRefreshReason})`}.`,
   });
 }
 
@@ -640,6 +664,16 @@ export function registerWikiCli(
     .option("--json", "Print JSON")
     .action(async (opts: WikiLintCommandOptions) => {
       await runWikiLint({ config, appConfig, json: opts.json });
+    });
+
+  wiki
+    .command("import")
+    .description("Import a local file or markdown vault into wiki source pages")
+    .argument("<input>", "Local file or directory to import")
+    .option("--profile <id>", `Override import profile (${WIKI_IMPORT_PROFILE_IDS.join(", ")})`)
+    .option("--json", "Print JSON")
+    .action(async (inputPath: string, opts: WikiImportCommandOptions) => {
+      await runWikiImport({ config, inputPath, profileId: opts.profile, json: opts.json });
     });
 
   wiki

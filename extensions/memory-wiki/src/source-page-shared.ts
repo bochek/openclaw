@@ -18,6 +18,7 @@ export async function writeImportedSourcePage(params: {
   renderFingerprint: string;
   pagePath: string;
   group: MemoryWikiImportedSourceGroup;
+  scopeKey?: string;
   state: ImportedSourceState;
   buildRendered: (raw: string, updatedAt: string) => string;
 }): Promise<{ pagePath: string; changed: boolean; created: boolean }> {
@@ -50,6 +51,7 @@ export async function writeImportedSourcePage(params: {
     state: params.state,
     entry: {
       group: params.group,
+      ...(params.scopeKey ? { scopeKey: params.scopeKey } : {}),
       pagePath: params.pagePath,
       sourcePath: params.sourcePath,
       sourceUpdatedAtMs: params.sourceUpdatedAtMs,

@@ -1,0 +1,114 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { describe, expect, it } from "vitest";
+import { importMemoryWikiInput } from "./import.js";
+import { createMemoryWikiTestHarness } from "./test-helpers.js";
+
+const { createTempDir, createVault } = createMemoryWikiTestHarness();
+
+describe("memory-wiki import", () => {
+  it("imports a single local file through the unified import runner", async () => {
+    const { rootDir, config } = await createVault({ initialize: true });
+    const sourceRoot = await createTempDir("memory-wiki-import-file-");
+    const sourcePath = path.join(sourceRoot, "alpha-notes.md");
+    await fs.writeFile(
+      sourcePath,
+      `# Alpha Notes
+
+alpha body
+`,
+      "utf8",
+    );
+
+    const result = await importMemoryWikiInput({
+      config,
+      inputPath: sourcePath,
+    });
+
+    expect(result.profileId).toBe("local-file");
+    expect(result.importedCount).toBe(1);
+    await expect(fs.readFile(path.join(rootDir, result.pagePaths[0]), "utf8")).resolves.toContain(
+      "sourceType: local-file",
+    );
+    await expect(fs.readFile(path.join(rootDir, result.reportPath), "utf8")).resolves.toContain(
+      "Profile: `local-file` (automatic)",
+    );
+    expect(result.taskId).toBeTruthy();
+    expect(result.runId).toBeTruthy();
+  });
+
+  it("auto-detects markdown vaults and skips vault metadata directories", async () => {
+    const { rootDir, config } = await createVault({ initialize: true });
+    const vaultPath = await createTempDir("memory-wiki-import-vault-");
+    await fs.mkdir(path.join(vaultPath, ".obsidian"), { recursive: true });
+    await fs.mkdir(path.join(vaultPath, "projects"), { recursive: true });
+    await fs.writeFile(path.join(vaultPath, "alpha.md"), "# Alpha\n\nalpha body\n", "utf8");
+    await fs.writeFile(
+      path.join(vaultPath, "projects", "beta.md"),
+      "# Beta\n\nbeta body\n",
+      "utf8",
+    );
+    await fs.writeFile(path.join(vaultPath, ".obsidian", "workspace.json"), "{}", "utf8");
+
+    const result = await importMemoryWikiInput({
+      config,
+      inputPath: vaultPath,
+    });
+
+    expect(result.profileId).toBe("markdown-vault");
+    expect(result.artifactCount).toBe(2);
+    expect(result.importedCount).toBe(2);
+    await expect(fs.readFile(path.join(rootDir, result.pagePaths[0]), "utf8")).resolves.toContain(
+      "sourceType: markdown-vault",
+    );
+    await expect(fs.readFile(path.join(rootDir, result.pagePaths[0]), "utf8")).resolves.toContain(
+      "importRelativePath:",
+    );
+    const sourceEntries = await fs.readdir(path.join(rootDir, "sources"));
+    expect(
+      sourceEntries.filter((entry) => entry.endsWith(".md") && entry !== "index.md"),
+    ).toHaveLength(2);
+    await expect(fs.readFile(path.join(rootDir, result.reportPath), "utf8")).resolves.toContain(
+      "Profile: `markdown-vault` (automatic)",
+    );
+  });
+
+  it("auto-detects logseq vaults and skips logseq metadata directories", async () => {
+    const { rootDir, config } = await createVault({ initialize: true });
+    const vaultPath = await createTempDir("memory-wiki-import-logseq-");
+    await fs.mkdir(path.join(vaultPath, "logseq"), { recursive: true });
+    await fs.writeFile(path.join(vaultPath, "alpha.md"), "# Alpha\n\nlogseq vault body\n", "utf8");
+    await fs.writeFile(
+      path.join(vaultPath, "logseq", "settings.md"),
+      "# Settings\n\nskip me\n",
+      "utf8",
+    );
+
+    const result = await importMemoryWikiInput({
+      config,
+      inputPath: vaultPath,
+    });
+
+    expect(result.profileId).toBe("markdown-vault");
+    expect(result.artifactCount).toBe(1);
+    expect(result.importedCount).toBe(1);
+    await expect(fs.readFile(path.join(rootDir, result.pagePaths[0]), "utf8")).resolves.toContain(
+      "logseq vault body",
+    );
+  });
+
+  it("keeps chatgpt-export as an explicit placeholder", async () => {
+    const { config } = await createVault({ initialize: true });
+    const sourceRoot = await createTempDir("memory-wiki-import-placeholder-");
+    const sourcePath = path.join(sourceRoot, "chatgpt-export.json");
+    await fs.writeFile(sourcePath, "{}", "utf8");
+
+    await expect(
+      importMemoryWikiInput({
+        config,
+        inputPath: sourcePath,
+        profileId: "chatgpt-export",
+      }),
+    ).rejects.toThrow("reserved but not implemented");
+  });
+});

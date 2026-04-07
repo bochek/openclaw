@@ -10,7 +10,7 @@ Use this skill when working inside a memory-wiki vault.
 - Use `wiki_search` to discover candidate pages when you want wiki-specific ranking/provenance, then `wiki_get` to inspect the exact page before editing or citing it.
 - Use `wiki_apply` for narrow synthesis filing and metadata updates when a tool-level mutation is enough.
 - Run `wiki_lint` after meaningful wiki updates so contradictions, provenance gaps, and open questions get surfaced before you trust the vault.
-- Use `openclaw wiki ingest`, `openclaw wiki compile`, and `openclaw wiki lint` as the default maintenance loop.
+- Use `openclaw wiki import`, `openclaw wiki compile`, and `openclaw wiki lint` as the default maintenance loop.
 - In `bridge` mode, run `openclaw wiki bridge import` before relying on search results if you need the latest public memory artifacts pulled in.
 - In `unsafe-local` mode, use `openclaw wiki unsafe-local import` only when the user explicitly opted into private local path access.
 - Keep generated sections inside managed markers. Do not overwrite human note blocks.

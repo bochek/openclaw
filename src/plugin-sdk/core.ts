@@ -155,6 +155,13 @@ export {
   buildMemorySystemPromptAddition,
   delegateCompactionToRuntime,
 } from "../context-engine/delegate.js";
+export {
+  completePluginTaskRun,
+  createPluginTaskRun,
+  failPluginTaskRun,
+  recordPluginTaskProgress,
+} from "./task-run-runtime.js";
+export type { PluginTaskRunHandle } from "./task-run-runtime.js";
 export { DEFAULT_ACCOUNT_ID, normalizeAccountId } from "../routing/session-key.js";
 export {
   buildChannelConfigSchema,

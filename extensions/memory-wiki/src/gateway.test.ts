@@ -5,6 +5,7 @@ import {
   type ApplyMemoryWikiMutation,
 } from "./apply.js";
 import { registerMemoryWikiGatewayMethods } from "./gateway.js";
+import { importMemoryWikiInput } from "./import.js";
 import { ingestMemoryWikiSource } from "./ingest.js";
 import { searchMemoryWiki } from "./query.js";
 import { syncMemoryWikiImportedSources } from "./source-sync.js";
@@ -22,6 +23,10 @@ vi.mock("./compile.js", () => ({
 
 vi.mock("./ingest.js", () => ({
   ingestMemoryWikiSource: vi.fn(),
+}));
+
+vi.mock("./import.js", () => ({
+  importMemoryWikiInput: vi.fn(),
 }));
 
 vi.mock("./lint.js", () => ({
@@ -89,6 +94,10 @@ describe("memory-wiki gateway methods", () => {
     } as never);
     vi.mocked(ingestMemoryWikiSource).mockResolvedValue({
       pagePath: "sources/alpha-notes.md",
+    } as never);
+    vi.mocked(importMemoryWikiInput).mockResolvedValue({
+      pagePaths: ["sources/import-markdown-vault-alpha.md"],
+      profileId: "markdown-vault",
     } as never);
     vi.mocked(normalizeMemoryWikiMutationInput).mockReturnValue({
       op: "create_synthesis",
@@ -187,6 +196,47 @@ describe("memory-wiki gateway methods", () => {
       true,
       expect.objectContaining({
         pagePath: "sources/alpha-notes.md",
+      }),
+    );
+  });
+
+  it("forwards import requests over the gateway", async () => {
+    const { config } = await createVault({ prefix: "memory-wiki-gateway-" });
+    const { api, registerGatewayMethod } = createPluginApi();
+
+    registerMemoryWikiGatewayMethods({ api, config });
+    const handler = findGatewayHandler(registerGatewayMethod, "wiki.import");
+    if (!handler) {
+      throw new Error("wiki.import handler missing");
+    }
+    const respond = vi.fn();
+
+    await handler({
+      params: {
+        inputPath: "/tmp/alpha-vault",
+        profile: "markdown-vault",
+        sessionKey: "agent:main:test",
+        parentFlowId: "flow-1",
+      },
+      respond,
+    });
+
+    expect(importMemoryWikiInput).toHaveBeenCalledWith({
+      config,
+      inputPath: "/tmp/alpha-vault",
+      profileId: "markdown-vault",
+      taskContext: {
+        requesterSessionKey: "agent:main:test",
+        ownerKey: undefined,
+        parentFlowId: "flow-1",
+        parentTaskId: undefined,
+        agentId: undefined,
+      },
+    });
+    expect(respond).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({
+        profileId: "markdown-vault",
       }),
     );
   });
