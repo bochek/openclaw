@@ -15,6 +15,7 @@ async function runQaSelfCheck(opts: { output?: string }) {
 }
 
 async function runQaSuite(opts: {
+  repoRoot?: string;
   outputDir?: string;
   providerMode?: "mock-openai" | "live-frontier";
   primaryModel?: string;
@@ -27,6 +28,7 @@ async function runQaSuite(opts: {
 }
 
 async function runQaManualLane(opts: {
+  repoRoot?: string;
   providerMode?: "mock-openai" | "live-frontier";
   primaryModel?: string;
   alternateModel?: string;
@@ -107,6 +109,7 @@ export function registerQaLabCli(program: Command) {
 
   qa.command("suite")
     .description("Run repo-backed QA scenarios against the QA gateway lane")
+    .option("--repo-root <path>", "Repository root to target when running from a neutral cwd")
     .option("--output-dir <path>", "Suite artifact directory")
     .option(
       "--provider-mode <mode>",
@@ -119,6 +122,7 @@ export function registerQaLabCli(program: Command) {
     .option("--fast", "Enable provider fast mode where supported", false)
     .action(
       async (opts: {
+        repoRoot?: string;
         outputDir?: string;
         providerMode?: "mock-openai" | "live-frontier";
         model?: string;
@@ -127,6 +131,7 @@ export function registerQaLabCli(program: Command) {
         fast?: boolean;
       }) => {
         await runQaSuite({
+          repoRoot: opts.repoRoot,
           outputDir: opts.outputDir,
           providerMode: opts.providerMode,
           primaryModel: opts.model,
@@ -140,6 +145,7 @@ export function registerQaLabCli(program: Command) {
   qa.command("manual")
     .description("Run a one-off QA agent prompt against the selected provider/model lane")
     .requiredOption("--message <text>", "Prompt to send to the QA agent")
+    .option("--repo-root <path>", "Repository root to target when running from a neutral cwd")
     .option(
       "--provider-mode <mode>",
       "Provider mode: mock-openai or live-frontier (legacy live-openai still works)",
@@ -152,6 +158,7 @@ export function registerQaLabCli(program: Command) {
     .action(
       async (opts: {
         message: string;
+        repoRoot?: string;
         providerMode?: "mock-openai" | "live-frontier";
         model?: string;
         altModel?: string;
@@ -159,6 +166,7 @@ export function registerQaLabCli(program: Command) {
         timeoutMs?: number;
       }) => {
         await runQaManualLane({
+          repoRoot: opts.repoRoot,
           providerMode: opts.providerMode,
           primaryModel: opts.model,
           alternateModel: opts.altModel,
