@@ -71,6 +71,7 @@ type PreparedImportArtifact = {
   renderedContentBody: string;
   bodyTextLength: number;
   nonEmptyLineCount: number;
+  bodyFingerprint: string;
 };
 
 type WikiImportTaskContext = {
@@ -207,6 +208,15 @@ function buildImportBodyMetrics(text: string): {
   };
 }
 
+function buildImportBodyFingerprint(text: string): string {
+  const normalized = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+  return createHash("sha1").update(normalized).digest("hex").slice(0, 12);
+}
+
 function prepareImportArtifact(params: {
   artifact: WikiImportArtifact;
   raw: string;
@@ -229,6 +239,7 @@ function prepareImportArtifact(params: {
         params.raw,
         detectFenceLanguage(params.artifact.absolutePath),
       ),
+      bodyFingerprint: buildImportBodyFingerprint(params.raw),
       ...metrics,
     };
   }
@@ -249,6 +260,7 @@ function prepareImportArtifact(params: {
       renderedContentBody.length > 0
         ? renderedContentBody
         : "_Imported markdown note body was empty._",
+    bodyFingerprint: buildImportBodyFingerprint(renderedContentBody),
     ...metrics,
   };
 }
@@ -564,6 +576,7 @@ async function writeImportArtifactPage(params: {
       importedTags: [...prepared.importedTags],
       bodyTextLength: prepared.bodyTextLength,
       nonEmptyLineCount: prepared.nonEmptyLineCount,
+      bodyFingerprint: prepared.bodyFingerprint,
     },
   };
 }

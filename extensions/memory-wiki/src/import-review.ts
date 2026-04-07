@@ -6,6 +6,7 @@ export type ImportReviewEntry = {
   importedTags: string[];
   bodyTextLength: number;
   nonEmptyLineCount: number;
+  bodyFingerprint?: string;
 };
 
 function normalizeImportReviewKey(value: string): string {
@@ -56,6 +57,38 @@ export function buildLowSignalImportEntries(
     .toSorted((left, right) => left.relativePath.localeCompare(right.relativePath));
 }
 
+export function buildImportBodyDuplicateClusters(reviewEntries: ImportReviewEntry[]): Array<{
+  fingerprint: string;
+  entryCount: number;
+  entries: ImportReviewEntry[];
+}> {
+  const clusters = new Map<string, ImportReviewEntry[]>();
+  for (const entry of reviewEntries) {
+    const fingerprint = entry.bodyFingerprint?.trim();
+    if (!fingerprint || entry.bodyTextLength < 80) {
+      continue;
+    }
+    const current = clusters.get(fingerprint) ?? [];
+    current.push(entry);
+    clusters.set(fingerprint, current);
+  }
+  return [...clusters.entries()]
+    .filter(([, entries]) => entries.length > 1)
+    .map(([fingerprint, entries]) => ({
+      fingerprint,
+      entryCount: entries.length,
+      entries: [...entries].toSorted((left, right) =>
+        left.relativePath.localeCompare(right.relativePath),
+      ),
+    }))
+    .toSorted((left, right) => {
+      if (left.entryCount !== right.entryCount) {
+        return right.entryCount - left.entryCount;
+      }
+      return left.fingerprint.localeCompare(right.fingerprint);
+    });
+}
+
 export function buildImportReviewBody(params: {
   inputPath: string;
   profileId: string;
@@ -98,6 +131,20 @@ export function buildImportReviewBody(params: {
     for (const cluster of duplicateClusters) {
       lines.push(
         `- \`${cluster.label}\` (${cluster.entryCount} notes): ${cluster.entries
+          .map((entry) => `\`${entry.relativePath}\``)
+          .join(", ")}`,
+      );
+    }
+  }
+
+  const bodyDuplicateClusters = buildImportBodyDuplicateClusters(params.reviewEntries);
+  lines.push("", "## Duplicate Body Clusters");
+  if (bodyDuplicateClusters.length === 0) {
+    lines.push("- No duplicate imported note bodies detected.");
+  } else {
+    for (const cluster of bodyDuplicateClusters) {
+      lines.push(
+        `- \`${cluster.fingerprint}\` (${cluster.entryCount} notes): ${cluster.entries
           .map((entry) => `\`${entry.relativePath}\``)
           .join(", ")}`,
       );

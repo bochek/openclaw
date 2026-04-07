@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildImportBodyDuplicateClusters,
   buildImportDuplicateClusters,
   buildImportReviewBody,
   buildLowSignalImportEntries,
@@ -15,6 +16,7 @@ const entries: ImportReviewEntry[] = [
     importedTags: ["alpha"],
     bodyTextLength: 120,
     nonEmptyLineCount: 5,
+    bodyFingerprint: "body-dup-1",
   },
   {
     title: "Shared Title",
@@ -24,6 +26,7 @@ const entries: ImportReviewEntry[] = [
     importedTags: ["beta"],
     bodyTextLength: 110,
     nonEmptyLineCount: 4,
+    bodyFingerprint: "body-dup-1",
   },
   {
     title: "Tiny",
@@ -33,6 +36,7 @@ const entries: ImportReviewEntry[] = [
     importedTags: [],
     bodyTextLength: 12,
     nonEmptyLineCount: 2,
+    bodyFingerprint: "tiny-body",
   },
 ];
 
@@ -55,6 +59,15 @@ describe("import-review", () => {
     ]);
   });
 
+  it("clusters duplicate imported note bodies", () => {
+    expect(buildImportBodyDuplicateClusters(entries)).toEqual([
+      expect.objectContaining({
+        fingerprint: "body-dup-1",
+        entryCount: 2,
+      }),
+    ]);
+  });
+
   it("renders duplicate and low-signal sections in the review body", () => {
     const body = buildImportReviewBody({
       inputPath: "/tmp/vault",
@@ -71,6 +84,8 @@ describe("import-review", () => {
 
     expect(body).toContain("## Duplicate Title/Alias Clusters");
     expect(body).toContain("`Shared Title` (2 notes)");
+    expect(body).toContain("## Duplicate Body Clusters");
+    expect(body).toContain("`body-dup-1` (2 notes)");
     expect(body).toContain("## Low-Signal Sources");
     expect(body).toContain("`tiny.md` (Tiny): 2 non-empty lines, 12 characters");
   });
