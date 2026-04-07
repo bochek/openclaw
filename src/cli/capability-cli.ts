@@ -635,13 +635,17 @@ async function runModelAuthLogout(provider: string) {
   const agentDir = resolveAgentDir(cfg, resolveDefaultAgentId(cfg));
   const store = loadAuthProfileStoreForRuntime(agentDir);
   const profileIds = listProfilesForProvider(store, provider);
-  await updateAuthProfileStoreWithLock({
+  const updated = await updateAuthProfileStoreWithLock({
     agentDir,
     updater: (nextStore) => {
       let changed = false;
       for (const profileId of profileIds) {
         if (nextStore.profiles[profileId]) {
           delete nextStore.profiles[profileId];
+          changed = true;
+        }
+        if (nextStore.usageStats?.[profileId]) {
+          delete nextStore.usageStats[profileId];
           changed = true;
         }
       }
@@ -656,6 +660,9 @@ async function runModelAuthLogout(provider: string) {
       return changed;
     },
   });
+  if (!updated) {
+    throw new Error(`Failed to remove saved auth profiles for provider ${provider}.`);
+  }
   return {
     provider,
     removedProfiles: profileIds,

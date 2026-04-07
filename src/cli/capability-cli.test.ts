@@ -19,6 +19,19 @@ const mocks = vi.hoisted(() => ({
   loadConfig: vi.fn(() => ({})),
   loadAuthProfileStoreForRuntime: vi.fn(() => ({ profiles: {}, order: {} })),
   listProfilesForProvider: vi.fn(() => []),
+  updateAuthProfileStoreWithLock: vi.fn(
+    async ({ updater }: { updater: (store: any) => boolean }) => {
+      const store = {
+        version: 1,
+        profiles: {},
+        order: {},
+        lastGood: {},
+        usageStats: {},
+      };
+      updater(store);
+      return store;
+    },
+  ),
   resolveMemorySearchConfig: vi.fn(() => null),
   loadModelCatalog: vi.fn(async () => []),
   agentCommand: vi.fn(async () => ({
@@ -129,6 +142,11 @@ vi.mock("../agents/auth-profiles.js", () => ({
   listProfilesForProvider: (...args: unknown[]) => mocks.listProfilesForProvider(...args),
 }));
 
+vi.mock("../agents/auth-profiles/store.js", () => ({
+  updateAuthProfileStoreWithLock: (...args: unknown[]) =>
+    mocks.updateAuthProfileStoreWithLock(...args),
+}));
+
 vi.mock("../agents/memory-search.js", () => ({
   resolveMemorySearchConfig: (...args: unknown[]) => mocks.resolveMemorySearchConfig(...args),
 }));
@@ -218,6 +236,19 @@ describe("capability cli", () => {
       .mockResolvedValue([{ id: "gpt-5.4", provider: "openai", name: "GPT-5.4" }]);
     mocks.loadAuthProfileStoreForRuntime.mockReset().mockReturnValue({ profiles: {}, order: {} });
     mocks.listProfilesForProvider.mockReset().mockReturnValue([]);
+    mocks.updateAuthProfileStoreWithLock
+      .mockReset()
+      .mockImplementation(async ({ updater }: { updater: (store: any) => boolean }) => {
+        const store = {
+          version: 1,
+          profiles: {},
+          order: {},
+          lastGood: {},
+          usageStats: {},
+        };
+        updater(store);
+        return store;
+      });
     mocks.resolveMemorySearchConfig.mockReset().mockReturnValue(null);
     mocks.agentCommand.mockClear();
     mocks.callGateway.mockClear().mockImplementation(async ({ method }: { method: string }) => {
@@ -605,6 +636,84 @@ describe("capability cli", () => {
         fallback: "none",
         model: "text-embedding-3-large",
       }),
+    );
+  });
+
+  it("cleans provider auth profiles and usage stats on logout", async () => {
+    mocks.loadAuthProfileStoreForRuntime.mockReturnValue({
+      profiles: {
+        "openai:default": { id: "openai:default" },
+        "openai:secondary": { id: "openai:secondary" },
+        "anthropic:default": { id: "anthropic:default" },
+      },
+      order: { openai: ["openai:default", "openai:secondary"] },
+      lastGood: { openai: "openai:secondary" },
+      usageStats: {
+        "openai:default": { errorCount: 2 },
+        "openai:secondary": { errorCount: 1 },
+        "anthropic:default": { errorCount: 3 },
+      },
+    });
+    mocks.listProfilesForProvider.mockReturnValue(["openai:default", "openai:secondary"]);
+
+    let updatedStore: Record<string, any> | null = null;
+    mocks.updateAuthProfileStoreWithLock.mockImplementationOnce(
+      async ({ updater }: { updater: (store: any) => boolean }) => {
+        const store = {
+          version: 1,
+          profiles: {
+            "openai:default": { id: "openai:default" },
+            "openai:secondary": { id: "openai:secondary" },
+            "anthropic:default": { id: "anthropic:default" },
+          },
+          order: { openai: ["openai:default", "openai:secondary"] },
+          lastGood: { openai: "openai:secondary" },
+          usageStats: {
+            "openai:default": { errorCount: 2 },
+            "openai:secondary": { errorCount: 1 },
+            "anthropic:default": { errorCount: 3 },
+          },
+        };
+        updater(store);
+        updatedStore = store;
+        return store;
+      },
+    );
+
+    await runRegisteredCli({
+      register: registerCapabilityCli as (program: Command) => void,
+      argv: ["capability", "model", "auth", "logout", "--provider", "openai", "--json"],
+    });
+
+    expect(updatedStore).toMatchObject({
+      profiles: {
+        "anthropic:default": { id: "anthropic:default" },
+      },
+      order: {},
+      lastGood: {},
+      usageStats: {
+        "anthropic:default": { errorCount: 3 },
+      },
+    });
+    expect(mocks.runtime.writeJson).toHaveBeenCalledWith({
+      provider: "openai",
+      removedProfiles: ["openai:default", "openai:secondary"],
+    });
+  });
+
+  it("fails logout if the auth store update does not complete", async () => {
+    mocks.listProfilesForProvider.mockReturnValue(["openai:default"]);
+    mocks.updateAuthProfileStoreWithLock.mockResolvedValueOnce(null);
+
+    await expect(
+      runRegisteredCli({
+        register: registerCapabilityCli as (program: Command) => void,
+        argv: ["capability", "model", "auth", "logout", "--provider", "openai", "--json"],
+      }),
+    ).rejects.toThrow("exit 1");
+
+    expect(mocks.runtime.error).toHaveBeenCalledWith(
+      expect.stringContaining("Failed to remove saved auth profiles for provider openai."),
     );
   });
 
