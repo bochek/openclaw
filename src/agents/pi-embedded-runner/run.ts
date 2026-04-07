@@ -390,10 +390,12 @@ export async function runEmbeddedPiAgent(
       let planningOnlyRetryAttempts = 0;
       let lastRetryFailoverReason: FailoverReason | null = null;
       let planningOnlyRetryInstruction: string | null = null;
+      const toolsAvailable = params.disableTools !== true || (params.clientTools?.length ?? 0) > 0;
       const ackExecutionFastPathInstruction = resolveAckExecutionFastPathInstruction({
         provider,
         modelId,
         prompt: params.prompt,
+        toolsAvailable,
       });
       let rateLimitProfileRotations = 0;
       let timeoutCompactionAttempts = 0;
@@ -1452,6 +1454,7 @@ export async function runEmbeddedPiAgent(
           const nextPlanningOnlyRetryInstruction = resolvePlanningOnlyRetryInstruction({
             provider,
             modelId,
+            toolsAvailable,
             aborted,
             timedOut,
             attempt,

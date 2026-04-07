@@ -31,7 +31,7 @@ type PlanningOnlyAttempt = Pick<
 >;
 
 const PLANNING_ONLY_PROMISE_RE =
-  /\b(?:i(?:'ll| will)|let me|going to|first[, ]+i(?:'ll| will)|next[, ]+i(?:'ll| will)|i can do that)\b/i;
+  /\b(?:i(?:'ll| will)|i(?:'m| am)\s+going to|let me|going to|first[, ]+i(?:'ll| will)|next[, ]+i(?:'ll| will)|i can do that)\b/i;
 const PLANNING_ONLY_COMPLETION_RE =
   /\b(?:done|finished|implemented|updated|fixed|changed|ran|verified|found|here(?:'s| is) what|blocked by|the blocker is)\b/i;
 const ACK_EXECUTION_NORMALIZED_SET = new Set([
@@ -129,11 +129,23 @@ export function resolveIncompleteTurnPayloadText(params: {
 function shouldApplyPlanningOnlyRetryGuard(params: {
   provider?: string;
   modelId?: string;
+  toolsAvailable?: boolean;
 }): boolean {
-  if (params.provider !== "openai" && params.provider !== "openai-codex") {
+  if (params.toolsAvailable !== true) {
     return false;
   }
-  return /^gpt-5(?:[.-]|$)/i.test(params.modelId ?? "");
+  const provider = params.provider?.trim().toLowerCase();
+  const modelId = params.modelId ?? "";
+  if (provider === "openai" || provider === "openai-codex") {
+    return /^gpt-5(?:[.-]|$)/i.test(modelId);
+  }
+  if (provider === "anthropic" || provider === "claude-cli") {
+    return /^claude-(?:sonnet|opus)-4(?:[.-]|$)/i.test(modelId);
+  }
+  if (provider === "google" || provider === "google-gemini-cli") {
+    return /^gemini-.*pro/i.test(modelId);
+  }
+  return false;
 }
 
 function normalizeAckPrompt(text: string): string {
@@ -158,11 +170,13 @@ export function resolveAckExecutionFastPathInstruction(params: {
   provider?: string;
   modelId?: string;
   prompt: string;
+  toolsAvailable?: boolean;
 }): string | null {
   if (
     !shouldApplyPlanningOnlyRetryGuard({
       provider: params.provider,
       modelId: params.modelId,
+      toolsAvailable: params.toolsAvailable,
     }) ||
     !isLikelyExecutionAckPrompt(params.prompt)
   ) {
@@ -204,6 +218,7 @@ export function extractPlanningOnlyPlanDetails(text: string): PlanningOnlyPlanDe
 export function resolvePlanningOnlyRetryInstruction(params: {
   provider?: string;
   modelId?: string;
+  toolsAvailable?: boolean;
   aborted: boolean;
   timedOut: boolean;
   attempt: PlanningOnlyAttempt;
@@ -212,6 +227,7 @@ export function resolvePlanningOnlyRetryInstruction(params: {
     !shouldApplyPlanningOnlyRetryGuard({
       provider: params.provider,
       modelId: params.modelId,
+      toolsAvailable: params.toolsAvailable,
     }) ||
     params.aborted ||
     params.timedOut ||

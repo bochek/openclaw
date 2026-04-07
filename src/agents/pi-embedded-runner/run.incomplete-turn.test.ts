@@ -59,6 +59,7 @@ describe("runEmbeddedPiAgent incomplete-turn safety", () => {
     const retryInstruction = resolvePlanningOnlyRetryInstruction({
       provider: "openai",
       modelId: "gpt-5.4",
+      toolsAvailable: true,
       aborted: false,
       timedOut: false,
       attempt: makeAttemptResult({
@@ -73,6 +74,7 @@ describe("runEmbeddedPiAgent incomplete-turn safety", () => {
     const retryInstruction = resolvePlanningOnlyRetryInstruction({
       provider: "openai",
       modelId: "gpt-5.4",
+      toolsAvailable: true,
       aborted: false,
       timedOut: false,
       attempt: makeAttemptResult({
@@ -88,6 +90,7 @@ describe("runEmbeddedPiAgent incomplete-turn safety", () => {
     const retryInstruction = resolvePlanningOnlyRetryInstruction({
       provider: "openai",
       modelId: "gpt-5.4",
+      toolsAvailable: true,
       aborted: false,
       timedOut: false,
       attempt: makeAttemptResult({
@@ -124,9 +127,58 @@ describe("runEmbeddedPiAgent incomplete-turn safety", () => {
       provider: "openai",
       modelId: "gpt-5.4",
       prompt: "go ahead",
+      toolsAvailable: true,
     });
 
     expect(instruction).toContain("Do not recap or restate the plan");
+  });
+
+  it("extends the planning-only retry guard to frontier Claude and Gemini models", () => {
+    const anthropicInstruction = resolvePlanningOnlyRetryInstruction({
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-6",
+      toolsAvailable: true,
+      aborted: false,
+      timedOut: false,
+      attempt: makeAttemptResult({
+        assistantTexts: ["I'll inspect the code, make the change, and run the checks."],
+      }),
+    });
+    const googleInstruction = resolvePlanningOnlyRetryInstruction({
+      provider: "google",
+      modelId: "gemini-3.1-pro-preview",
+      toolsAvailable: true,
+      aborted: false,
+      timedOut: false,
+      attempt: makeAttemptResult({
+        assistantTexts: ["I'll inspect the code, make the change, and run the checks."],
+      }),
+    });
+
+    expect(anthropicInstruction).toContain("Do not restate the plan");
+    expect(googleInstruction).toContain("Do not restate the plan");
+  });
+
+  it("does not apply frontier execution guards when tools are unavailable", () => {
+    const retryInstruction = resolvePlanningOnlyRetryInstruction({
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-6",
+      toolsAvailable: false,
+      aborted: false,
+      timedOut: false,
+      attempt: makeAttemptResult({
+        assistantTexts: ["I'll inspect the code, make the change, and run the checks."],
+      }),
+    });
+    const ackInstruction = resolveAckExecutionFastPathInstruction({
+      provider: "google",
+      modelId: "gemini-3.1-pro-preview",
+      prompt: "go ahead",
+      toolsAvailable: false,
+    });
+
+    expect(retryInstruction).toBeNull();
+    expect(ackInstruction).toBeNull();
   });
 
   it("extracts structured steps from planning-only narration", () => {
