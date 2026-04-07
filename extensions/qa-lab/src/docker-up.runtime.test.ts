@@ -5,6 +5,39 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { runQaDockerUp } from "./docker-up.runtime.js";
 
+async function occupyOrReuseBusyPort(server: ReturnType<typeof createServer>, port: number) {
+  return await new Promise<void>((resolve, reject) => {
+    const onError = (error: NodeJS.ErrnoException) => {
+      cleanup();
+      if (error.code === "EADDRINUSE") {
+        resolve();
+        return;
+      }
+      reject(error);
+    };
+    const onListening = () => {
+      cleanup();
+      resolve();
+    };
+    const cleanup = () => {
+      server.off("error", onError);
+      server.off("listening", onListening);
+    };
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, "127.0.0.1");
+  });
+}
+
+async function closeIfListening(server: ReturnType<typeof createServer>) {
+  if (!server.listening) {
+    return;
+  }
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+}
+
 describe("runQaDockerUp", () => {
   it("builds the QA UI, writes the harness, starts compose, and waits for health", async () => {
     const calls: string[] = [];
@@ -91,8 +124,8 @@ describe("runQaDockerUp", () => {
     const labServer = createServer();
     const outputDir = await mkdtemp(path.join(os.tmpdir(), "qa-docker-up-"));
 
-    await new Promise<void>((resolve) => gatewayServer.listen(18789, "127.0.0.1", () => resolve()));
-    await new Promise<void>((resolve) => labServer.listen(43124, "127.0.0.1", () => resolve()));
+    await occupyOrReuseBusyPort(gatewayServer, 18789);
+    await occupyOrReuseBusyPort(labServer, 43124);
 
     try {
       const result = await runQaDockerUp(
@@ -114,12 +147,8 @@ describe("runQaDockerUp", () => {
       expect(result.gatewayUrl).not.toBe("http://127.0.0.1:18789/");
       expect(result.qaLabUrl).not.toBe("http://127.0.0.1:43124");
     } finally {
-      await new Promise<void>((resolve, reject) =>
-        gatewayServer.close((error) => (error ? reject(error) : resolve())),
-      );
-      await new Promise<void>((resolve, reject) =>
-        labServer.close((error) => (error ? reject(error) : resolve())),
-      );
+      await closeIfListening(gatewayServer);
+      await closeIfListening(labServer);
       await rm(outputDir, { recursive: true, force: true });
     }
   });
