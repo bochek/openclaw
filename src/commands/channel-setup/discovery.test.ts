@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginAutoEnableResult } from "../../config/plugin-auto-enable.js";
 
 const loadPluginManifestRegistry = vi.hoisted(() => vi.fn());
-const listChannelPluginCatalogEntries = vi.hoisted(() => vi.fn((): unknown[] => []));
+const listChannelPluginCatalogEntries = vi.hoisted(() => vi.fn((_args?: unknown): unknown[] => []));
 const listChatChannels = vi.hoisted(() => vi.fn((): Array<Record<string, string>> => []));
 const applyPluginAutoEnable = vi.hoisted(() =>
   vi.fn<(args: { config: unknown; env?: NodeJS.ProcessEnv }) => PluginAutoEnableResult>(
@@ -24,7 +24,7 @@ vi.mock("../../config/plugin-auto-enable.js", () => ({
 }));
 
 vi.mock("../../channels/plugins/catalog.js", () => ({
-  listChannelPluginCatalogEntries: (_args?: unknown) => listChannelPluginCatalogEntries(),
+  listChannelPluginCatalogEntries: (args?: unknown) => listChannelPluginCatalogEntries(args),
 }));
 
 vi.mock("../../channels/registry.js", () => ({
@@ -115,5 +115,19 @@ describe("listManifestInstalledChannelIds", () => {
     });
 
     expect(resolved.entries.map((entry) => entry.id)).toEqual(["telegram"]);
+  });
+
+  it("excludes workspace catalog entries from setup discovery", () => {
+    resolveChannelSetupEntries({
+      cfg: {} as never,
+      installedPlugins: [],
+      workspaceDir: "/tmp/workspace",
+      env: { OPENCLAW_HOME: "/tmp/home" } as NodeJS.ProcessEnv,
+    });
+
+    expect(listChannelPluginCatalogEntries).toHaveBeenCalledWith({
+      workspaceDir: "/tmp/workspace",
+      excludeWorkspace: true,
+    });
   });
 });
