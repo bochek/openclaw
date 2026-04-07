@@ -1142,7 +1142,7 @@ describe("applyExtraParamsToAgent", () => {
     });
   });
 
-  it("maps Gemma 4 thinking off to MINIMAL instead of unsupported thinkingBudget=0", () => {
+  it("preserves Gemma 4 thinking off instead of rewriting thinkingBudget=0 to MINIMAL", () => {
     const payloads: Record<string, unknown>[] = [];
     const baseStreamFn: StreamFn = (_model, _context, options) => {
       const payload: Record<string, unknown> = {
@@ -1170,11 +1170,7 @@ describe("applyExtraParamsToAgent", () => {
     void agent.streamFn?.(model, context, {});
 
     expect(payloads).toHaveLength(1);
-    expect(payloads[0]?.config).toEqual({
-      thinkingConfig: {
-        thinkingLevel: "MINIMAL",
-      },
-    });
+    expect(payloads[0]?.config).toEqual({});
   });
   it("passes configured websocket transport through stream options", () => {
     const { calls, agent } = createOptionsCaptureAgent();

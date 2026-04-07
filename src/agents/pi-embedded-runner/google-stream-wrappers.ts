@@ -36,6 +36,7 @@ function mapThinkLevelToGemma4ThinkingLevel(
 ): "MINIMAL" | "HIGH" | undefined {
   switch (thinkingLevel) {
     case "off":
+      return undefined;
     case "minimal":
     case "low":
       return "MINIMAL";
@@ -86,12 +87,23 @@ export function sanitizeGoogleThinkingPayload(params: {
   const thinkingConfigObj = thinkingConfig as Record<string, unknown>;
 
   if (typeof params.modelId === "string" && isGemma4Model(params.modelId)) {
+    const normalizedThinkingLevel = normalizeGemma4ThinkingLevel(thinkingConfigObj.thinkingLevel);
+    const disabledViaBudget =
+      typeof thinkingConfigObj.thinkingBudget === "number" && thinkingConfigObj.thinkingBudget <= 0;
     const hadThinkingBudget = thinkingConfigObj.thinkingBudget !== undefined;
     delete thinkingConfigObj.thinkingBudget;
 
+    if (params.thinkingLevel === "off" || (disabledViaBudget && !normalizedThinkingLevel)) {
+      delete thinkingConfigObj.thinkingLevel;
+      if (Object.keys(thinkingConfigObj).length === 0) {
+        delete configObj.thinkingConfig;
+      }
+      return;
+    }
+
     const mappedLevel =
       mapThinkLevelToGemma4ThinkingLevel(params.thinkingLevel) ??
-      normalizeGemma4ThinkingLevel(thinkingConfigObj.thinkingLevel) ??
+      normalizedThinkingLevel ??
       (hadThinkingBudget ? "MINIMAL" : undefined);
 
     if (mappedLevel) {

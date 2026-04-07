@@ -226,5 +226,16 @@ describe("resolveGoogleGeminiForwardCompatModel", () => {
     const model = resolveGoogleGeminiForwardCompatModel({
       providerId: "google",
       ctx: createContext({
-      models: [createTemplateModel("google", "gemini-3-flash-preview", { reasoning: false })],
+        provider: "google",
+        modelId: "gemma-4-26b-a4b-it",
+        models: [createTemplateModel("google", "gemini-3-flash-preview", { reasoning: false })],
+      }),
+    });
+
+    expect(model).toMatchObject({
+      provider: "google",
+      id: "gemma-4-26b-a4b-it",
+      reasoning: true,
+    });
+  });
 });
