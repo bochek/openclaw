@@ -31,7 +31,7 @@ func processFileDoc(ctx context.Context, translator docsTranslator, docsRoot, fi
 
 	outputPath := filepath.Join(docsRoot, tgtLang, relPath)
 	if !overwrite {
-		skip, err := shouldSkipDoc(outputPath, currentHash)
+		skip, err := shouldSkipDoc(outputPath, currentHash, tgtLang)
 		if err != nil {
 			return false, "", err
 		}
@@ -223,7 +223,7 @@ func setReadWhenValue(existing any, index int, value string) []any {
 	return readWhen
 }
 
-func shouldSkipDoc(outputPath string, sourceHash string) (bool, error) {
+func shouldSkipDoc(outputPath string, sourceHash string, targetLang string) (bool, error) {
 	data, err := os.ReadFile(outputPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -242,6 +242,9 @@ func shouldSkipDoc(outputPath string, sourceHash string) (bool, error) {
 	storedHash := extractSourceHash(frontData)
 	if storedHash == "" {
 		return false, nil
+	}
+	if strings.EqualFold(strings.TrimSpace(targetLang), "en") {
+		return strings.EqualFold(storedHash, sourceHash), nil
 	}
 	postprocessVersion := extractPostprocessVersion(frontData)
 	if !strings.EqualFold(postprocessVersion, localizedLinkPostprocessVersion) {
