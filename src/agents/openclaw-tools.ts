@@ -210,6 +210,7 @@ export function createOpenClawTools(
         sandboxRoot: options?.sandboxRoot,
         requireExplicitTarget: options?.requireExplicitMessageTarget,
         requesterSenderId: options?.requesterSenderId ?? undefined,
+        senderIsOwner: options?.senderIsOwner,
       });
   const tools: AnyAgentTool[] = [
     createCanvasTool({ config: options?.config }),

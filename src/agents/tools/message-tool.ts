@@ -3,7 +3,6 @@ import { listChannelPlugins } from "../../channels/plugins/index.js";
 import {
   channelSupportsMessageCapability,
   channelSupportsMessageCapabilityForChannel,
-  listChannelMessageActions,
   resolveChannelMessageToolSchemaProperties,
 } from "../../channels/plugins/message-action-discovery.js";
 import type { ChannelMessageCapability } from "../../channels/plugins/message-capabilities.js";
@@ -24,7 +23,7 @@ import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { stripReasoningTagsFromText } from "../../shared/text/reasoning-tags.js";
 import { normalizeMessageChannel } from "../../utils/message-channel.js";
 import { resolveSessionAgentId } from "../agent-scope.js";
-import { listChannelSupportedActions } from "../channel-tools.js";
+import { listAllChannelSupportedActions, listChannelSupportedActions } from "../channel-tools.js";
 import { channelTargetSchema, channelTargetsSchema, stringEnum } from "../schema/typebox.js";
 import type { AnyAgentTool } from "./common.js";
 import { jsonResult, readNumberParam, readStringParam } from "./common.js";
@@ -408,6 +407,7 @@ type MessageToolOptions = {
   sandboxRoot?: string;
   requireExplicitTarget?: boolean;
   requesterSenderId?: string;
+  senderIsOwner?: boolean;
 };
 
 function resolveMessageToolSchemaActions(params: {
@@ -421,6 +421,7 @@ function resolveMessageToolSchemaActions(params: {
   sessionId?: string;
   agentId?: string;
   requesterSenderId?: string;
+  senderIsOwner?: boolean;
 }): string[] {
   const currentChannel = normalizeMessageChannel(params.currentChannelProvider);
   if (currentChannel) {
@@ -435,6 +436,7 @@ function resolveMessageToolSchemaActions(params: {
       sessionId: params.sessionId,
       agentId: params.agentId,
       requesterSenderId: params.requesterSenderId,
+      senderIsOwner: params.senderIsOwner,
     });
     const allActions = new Set<string>(["send", ...scopedActions]);
     // Include actions from other configured channels so isolated/cron agents
@@ -454,13 +456,25 @@ function resolveMessageToolSchemaActions(params: {
         sessionId: params.sessionId,
         agentId: params.agentId,
         requesterSenderId: params.requesterSenderId,
+        senderIsOwner: params.senderIsOwner,
       })) {
         allActions.add(action);
       }
     }
     return Array.from(allActions);
   }
-  const actions = listChannelMessageActions(params.cfg);
+  const actions = listAllChannelSupportedActions({
+    cfg: params.cfg,
+    currentChannelId: params.currentChannelId,
+    currentThreadTs: params.currentThreadTs,
+    currentMessageId: params.currentMessageId,
+    accountId: params.currentAccountId,
+    sessionKey: params.sessionKey,
+    sessionId: params.sessionId,
+    agentId: params.agentId,
+    requesterSenderId: params.requesterSenderId,
+    senderIsOwner: params.senderIsOwner,
+  });
   return actions.length > 0 ? actions : ["send"];
 }
 
@@ -511,6 +525,7 @@ function resolveIncludeInteractive(params: {
   sessionId?: string;
   agentId?: string;
   requesterSenderId?: string;
+  senderIsOwner?: boolean;
 }): boolean {
   return resolveIncludeCapability(params, "interactive");
 }
@@ -526,6 +541,7 @@ function buildMessageToolSchema(params: {
   sessionId?: string;
   agentId?: string;
   requesterSenderId?: string;
+  senderIsOwner?: boolean;
 }) {
   const actions = resolveMessageToolSchemaActions(params);
   const includeInteractive = resolveIncludeInteractive(params);
@@ -540,6 +556,7 @@ function buildMessageToolSchema(params: {
     sessionId: params.sessionId,
     agentId: params.agentId,
     requesterSenderId: params.requesterSenderId,
+    senderIsOwner: params.senderIsOwner,
   });
   return buildMessageToolSchemaFromActions(actions.length > 0 ? actions : ["send"], {
     includeInteractive,
@@ -566,6 +583,7 @@ function buildMessageToolDescription(options?: {
   sessionId?: string;
   agentId?: string;
   requesterSenderId?: string;
+  senderIsOwner?: boolean;
 }): string {
   const baseDescription = "Send, delete, and manage messages via channel plugins.";
   const resolvedOptions = options ?? {};
@@ -584,6 +602,7 @@ function buildMessageToolDescription(options?: {
       sessionId: resolvedOptions.sessionId,
       agentId: resolvedOptions.agentId,
       requesterSenderId: resolvedOptions.requesterSenderId,
+      senderIsOwner: resolvedOptions.senderIsOwner,
     });
     if (channelActions.length > 0) {
       // Always include "send" as a base action
@@ -608,6 +627,7 @@ function buildMessageToolDescription(options?: {
           sessionId: resolvedOptions.sessionId,
           agentId: resolvedOptions.agentId,
           requesterSenderId: resolvedOptions.requesterSenderId,
+          senderIsOwner: resolvedOptions.senderIsOwner,
         });
         if (actions.length > 0) {
           const all = new Set<ChannelMessageActionName | "send">(["send", ...actions]);
@@ -627,7 +647,18 @@ function buildMessageToolDescription(options?: {
 
   // Fallback to generic description with all configured actions
   if (resolvedOptions.config) {
-    const actions = listChannelMessageActions(resolvedOptions.config);
+    const actions = listAllChannelSupportedActions({
+      cfg: resolvedOptions.config,
+      currentChannelId: resolvedOptions.currentChannelId,
+      currentThreadTs: resolvedOptions.currentThreadTs,
+      currentMessageId: resolvedOptions.currentMessageId,
+      accountId: resolvedOptions.currentAccountId,
+      sessionKey: resolvedOptions.sessionKey,
+      sessionId: resolvedOptions.sessionId,
+      agentId: resolvedOptions.agentId,
+      requesterSenderId: resolvedOptions.requesterSenderId,
+      senderIsOwner: resolvedOptions.senderIsOwner,
+    });
     if (actions.length > 0) {
       return appendMessageToolReadHint(
         `${baseDescription} Supports actions: ${actions.join(", ")}.`,
@@ -675,6 +706,7 @@ export function createMessageTool(options?: MessageToolOptions): AnyAgentTool {
         sessionId: options.sessionId,
         agentId: resolvedAgentId,
         requesterSenderId: options.requesterSenderId,
+        senderIsOwner: options.senderIsOwner,
       })
     : MessageToolSchema;
   const description = buildMessageToolDescription({
@@ -688,6 +720,7 @@ export function createMessageTool(options?: MessageToolOptions): AnyAgentTool {
     sessionId: options?.sessionId,
     agentId: resolvedAgentId,
     requesterSenderId: options?.requesterSenderId,
+    senderIsOwner: options?.senderIsOwner,
   });
 
   return {
@@ -807,6 +840,7 @@ export function createMessageTool(options?: MessageToolOptions): AnyAgentTool {
         params,
         defaultAccountId: accountId ?? undefined,
         requesterSenderId: options?.requesterSenderId,
+        senderIsOwner: options?.senderIsOwner,
         gateway,
         toolContext,
         sessionKey: options?.agentSessionKey,

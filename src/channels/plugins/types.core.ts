@@ -47,6 +47,7 @@ export type ChannelMessageActionDiscoveryContext = {
   sessionId?: string | null;
   agentId?: string | null;
   requesterSenderId?: string | null;
+  senderIsOwner?: boolean;
 };
 
 /**
@@ -601,6 +602,7 @@ export type ChannelMessageActionContext = {
    * never be sourced from tool/model-controlled params.
    */
   requesterSenderId?: string | null;
+  senderIsOwner?: boolean;
   sessionKey?: string | null;
   sessionId?: string | null;
   agentId?: string | null;
