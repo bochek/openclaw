@@ -172,6 +172,9 @@ export async function readPostCompactionContext(
           : "Session was just compacted. The conversation summary above is a hint, NOT a substitute for your identity anchor. Re-read the identity files injected below before responding to the user.",
       );
     }
+    proseParts.push(
+      "Resume the next unfinished action from the summary and injected context. Do not restart the analysis or restate the plan unless you hit a real blocker.",
+    );
 
     const contextBlocks: string[] = [];
     if (identityBlocks.length > 0) {

@@ -12,7 +12,8 @@
  */
 export const DEFAULT_COMPACTION_INSTRUCTIONS =
   "Write the summary body in the primary language used in the conversation.\n" +
-  "Focus on factual content: what was discussed, decisions made, and current state.\n" +
+  "Focus on factual content: what was discussed, decisions made, current state, and the next unfinished action.\n" +
+  "Call out any active blocker, pending verification, or deliverable the agent still owes the user.\n" +
   "Keep the required summary structure and section headers unchanged.\n" +
   "Do not translate or alter code, file paths, identifiers, or error messages.";
 

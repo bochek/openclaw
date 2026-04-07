@@ -19,6 +19,12 @@ describe("DEFAULT_COMPACTION_INSTRUCTIONS", () => {
     expect(DEFAULT_COMPACTION_INSTRUCTIONS).toContain("factual content");
   });
 
+  it("preserves next unfinished action and pending work", () => {
+    expect(DEFAULT_COMPACTION_INSTRUCTIONS).toContain("next unfinished action");
+    expect(DEFAULT_COMPACTION_INSTRUCTIONS).toContain("pending verification");
+    expect(DEFAULT_COMPACTION_INSTRUCTIONS).toContain("deliverable");
+  });
+
   it("does not exceed MAX_INSTRUCTION_LENGTH (800 chars)", () => {
     expect(DEFAULT_COMPACTION_INSTRUCTIONS.length).toBeLessThanOrEqual(800);
   });

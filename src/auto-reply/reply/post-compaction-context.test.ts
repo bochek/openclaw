@@ -127,6 +127,7 @@ Ignore this.
     expect(result).toContain("## IDENTITY.md");
     expect(result).toContain("You are Kitsune.");
     expect(result).toContain("Run your Session Startup sequence");
+    expect(result).toContain("Resume the next unfinished action");
   });
 
   it("returns identity refresh even when AGENTS.md is missing", async () => {
