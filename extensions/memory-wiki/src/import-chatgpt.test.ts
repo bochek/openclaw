@@ -171,4 +171,79 @@ describe("parseChatGptExportFile", () => {
     expect(conversations[0]?.transcriptBody).toContain("first rich paragraph");
     expect(conversations[0]?.transcriptBody).toContain("second rich paragraph");
   });
+
+  it("preserves lineage order when current_node messages have missing timestamps", async () => {
+    const dir = await createTempDir("memory-wiki-chatgpt-no-times-");
+    const exportPath = path.join(dir, "export.json");
+    await fs.writeFile(
+      exportPath,
+      JSON.stringify([
+        {
+          id: "conv-no-times",
+          title: "No times thread",
+          current_node: "assistant-final",
+          mapping: {
+            user: {
+              parent: null,
+              message: {
+                author: { role: "user" },
+                content: { parts: ["first turn"] },
+              },
+            },
+            "assistant-final": {
+              parent: "user",
+              message: {
+                author: { role: "assistant" },
+                content: { parts: ["second turn"] },
+              },
+            },
+          },
+        },
+      ]),
+      "utf8",
+    );
+
+    const conversations = await parseChatGptExportFile(exportPath);
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0]?.transcriptBody.indexOf("first turn")).toBeLessThan(
+      conversations[0]?.transcriptBody.indexOf("second turn") ?? -1,
+    );
+  });
+
+  it("preserves source order when fallback transcript messages share the same timestamp", async () => {
+    const dir = await createTempDir("memory-wiki-chatgpt-same-times-");
+    const exportPath = path.join(dir, "export.json");
+    await fs.writeFile(
+      exportPath,
+      JSON.stringify([
+        {
+          id: "conv-same-times",
+          title: "Same times thread",
+          mapping: {
+            "1": {
+              message: {
+                author: { role: "assistant" },
+                create_time: 1_710_000_010,
+                content: { parts: ["first exported message"] },
+              },
+            },
+            "2": {
+              message: {
+                author: { role: "user" },
+                create_time: 1_710_000_010,
+                content: { parts: ["second exported message"] },
+              },
+            },
+          },
+        },
+      ]),
+      "utf8",
+    );
+
+    const conversations = await parseChatGptExportFile(exportPath);
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0]?.transcriptBody.indexOf("first exported message")).toBeLessThan(
+      conversations[0]?.transcriptBody.indexOf("second exported message") ?? -1,
+    );
+  });
 });

@@ -6,6 +6,7 @@ type ChatGptMessage = {
   role: string;
   text: string;
   sortTime: number;
+  sourceIndex: number;
 };
 
 type ChatGptMappingNode = {
@@ -103,13 +104,26 @@ function extractMessageText(contentValue: unknown): string {
   return "";
 }
 
+function compareChatGptMessages(left: ChatGptMessage, right: ChatGptMessage): number {
+  if (left.sortTime !== right.sortTime) {
+    if (left.sortTime === 0) {
+      return 1;
+    }
+    if (right.sortTime === 0) {
+      return -1;
+    }
+    return left.sortTime - right.sortTime;
+  }
+  return left.sourceIndex - right.sourceIndex;
+}
+
 function extractConversationMessages(mappingValue: unknown): ChatGptMessage[] {
   const mapping = asRecord(mappingValue);
   if (!mapping) {
     return [];
   }
   return Object.values(mapping)
-    .flatMap((entry) => {
+    .flatMap((entry, sourceIndex) => {
       const node = asRecord(entry);
       const message = asRecord(node?.message);
       if (!message) {
@@ -126,12 +140,11 @@ function extractConversationMessages(mappingValue: unknown): ChatGptMessage[] {
           role: normalizeRole(author?.role ?? author?.name),
           text,
           sortTime,
+          sourceIndex,
         },
       ];
     })
-    .toSorted(
-      (left, right) => left.sortTime - right.sortTime || left.role.localeCompare(right.role),
-    );
+    .toSorted(compareChatGptMessages);
 }
 
 function extractConversationMappingNodes(mappingValue: unknown): ChatGptMappingNode[] {
@@ -139,7 +152,7 @@ function extractConversationMappingNodes(mappingValue: unknown): ChatGptMappingN
   if (!mapping) {
     return [];
   }
-  return Object.entries(mapping).map(([id, entry]) => {
+  return Object.entries(mapping).map(([id, entry], sourceIndex) => {
     const node = asRecord(entry);
     const message = asRecord(node?.message);
     const text = extractMessageText(message?.content);
@@ -154,6 +167,7 @@ function extractConversationMappingNodes(mappingValue: unknown): ChatGptMappingN
             role: normalizeRole(author?.role ?? author?.name),
             text,
             sortTime,
+            sourceIndex,
           }
         : null,
     };
@@ -191,11 +205,7 @@ function extractCurrentConversationMessages(params: {
   if (lineage.length === 0) {
     return extractConversationMessages(params.mappingValue);
   }
-  return lineage
-    .toReversed()
-    .toSorted(
-      (left, right) => left.sortTime - right.sortTime || left.role.localeCompare(right.role),
-    );
+  return lineage.toReversed();
 }
 
 function renderTranscriptBody(messages: ChatGptMessage[]): string {
