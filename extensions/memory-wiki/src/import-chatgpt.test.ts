@@ -138,4 +138,37 @@ describe("parseChatGptExportFile", () => {
     expect(conversations[0]?.transcriptBody).toContain("correct branch answer");
     expect(conversations[0]?.transcriptBody).not.toContain("wrong branch answer");
   });
+
+  it("extracts readable text from object-shaped content parts", async () => {
+    const dir = await createTempDir("memory-wiki-chatgpt-rich-parts-");
+    const exportPath = path.join(dir, "export.json");
+    await fs.writeFile(
+      exportPath,
+      JSON.stringify([
+        {
+          id: "conv-rich",
+          title: "Rich parts thread",
+          mapping: {
+            root: {
+              message: {
+                author: { role: "assistant" },
+                content: {
+                  parts: [
+                    { text: "first rich paragraph" },
+                    { content: { text: "second rich paragraph" } },
+                  ],
+                },
+              },
+            },
+          },
+        },
+      ]),
+      "utf8",
+    );
+
+    const conversations = await parseChatGptExportFile(exportPath);
+    expect(conversations).toHaveLength(1);
+    expect(conversations[0]?.transcriptBody).toContain("first rich paragraph");
+    expect(conversations[0]?.transcriptBody).toContain("second rich paragraph");
+  });
 });

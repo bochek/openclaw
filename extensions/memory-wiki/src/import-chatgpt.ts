@@ -63,23 +63,42 @@ function formatRoleHeading(role: string): string {
     .join(" ");
 }
 
+function collectTextFragments(value: unknown): string[] {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => collectTextFragments(entry));
+  }
+  const record = asRecord(value);
+  if (!record) {
+    return [];
+  }
+  for (const key of ["text", "parts", "content"]) {
+    if (key in record) {
+      const fragments = collectTextFragments(record[key]);
+      if (fragments.length > 0) {
+        return fragments;
+      }
+    }
+  }
+  return [];
+}
+
 function extractMessageText(contentValue: unknown): string {
   const content = asRecord(contentValue);
   if (!content) {
     return "";
   }
   if (Array.isArray(content.parts)) {
-    return content.parts
-      .flatMap((part) => (typeof part === "string" && part.trim() ? [part.trim()] : []))
-      .join("\n\n");
+    return collectTextFragments(content.parts).join("\n\n");
   }
   if (typeof content.text === "string" && content.text.trim()) {
     return content.text.trim();
   }
   if (Array.isArray(content.text)) {
-    return content.text
-      .flatMap((part) => (typeof part === "string" && part.trim() ? [part.trim()] : []))
-      .join("\n\n");
+    return collectTextFragments(content.text).join("\n\n");
   }
   return "";
 }
