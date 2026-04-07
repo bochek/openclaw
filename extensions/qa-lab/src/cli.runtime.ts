@@ -44,10 +44,11 @@ export async function runQaLabSelfCheckCommand(opts: { output?: string }) {
 
 export async function runQaSuiteCommand(opts: {
   outputDir?: string;
-  providerMode?: "mock-openai" | "live-openai";
+  providerMode?: "mock-openai" | "live-frontier";
   primaryModel?: string;
   alternateModel?: string;
   fastMode?: boolean;
+  scenarioIds?: string[];
 }) {
   const result = await runQaSuite({
     outputDir: opts.outputDir ? path.resolve(opts.outputDir) : undefined,
@@ -55,6 +56,7 @@ export async function runQaSuiteCommand(opts: {
     primaryModel: opts.primaryModel,
     alternateModel: opts.alternateModel,
     fastMode: opts.fastMode,
+    scenarioIds: opts.scenarioIds,
   });
   process.stdout.write(`QA suite watch: ${result.watchUrl}\n`);
   process.stdout.write(`QA suite report: ${result.reportPath}\n`);

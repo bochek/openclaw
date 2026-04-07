@@ -35,7 +35,7 @@ function defaultModelsForProviderMode(
   mode: RunnerSelection["providerMode"],
   bootstrap?: Bootstrap | null,
 ): Pick<RunnerSelection, "primaryModel" | "alternateModel" | "fastMode"> {
-  if (mode === "live-openai") {
+  if (mode === "live-frontier") {
     const preferred = bootstrap?.runnerCatalog.real[0]?.key;
     return {
       primaryModel: preferred ?? "openai/gpt-5.4",
@@ -486,8 +486,8 @@ export async function createQaLabApp(root: HTMLDivElement) {
     /* Config form */
     root.querySelector<HTMLSelectElement>("#provider-mode")?.addEventListener("change", (e) => {
       const mode =
-        (e.currentTarget as HTMLSelectElement).value === "live-openai"
-          ? "live-openai"
+        (e.currentTarget as HTMLSelectElement).value === "live-frontier"
+          ? "live-frontier"
           : "mock-openai";
       updateRunnerDraft((d) => ({
         ...d,

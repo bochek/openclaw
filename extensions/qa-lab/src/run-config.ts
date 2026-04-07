@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { QaSeedScenario } from "./scenario-catalog.js";
 
-export type QaProviderMode = "mock-openai" | "live-openai";
+export type QaProviderMode = "mock-openai" | "live-frontier";
 
 export type QaLabRunSelection = {
   providerMode: QaProviderMode;
@@ -38,14 +38,14 @@ export function createDefaultQaRunSelection(scenarios: QaSeedScenario[]): QaLabR
 }
 
 function defaultModelForMode(mode: QaProviderMode, alternate = false) {
-  if (mode === "live-openai") {
+  if (mode === "live-frontier") {
     return "openai/gpt-5.4";
   }
   return alternate ? "mock-openai/gpt-5.4-alt" : "mock-openai/gpt-5.4";
 }
 
 function normalizeProviderMode(input: unknown): QaProviderMode {
-  return input === "live-openai" ? "live-openai" : "mock-openai";
+  return input === "live-frontier" || input === "live-openai" ? "live-frontier" : "mock-openai";
 }
 
 function normalizeModel(input: unknown, fallback: string) {
@@ -77,7 +77,7 @@ export function normalizeQaRunSelection(
     primaryModel: normalizeModel(payload.primaryModel, defaultModelForMode(providerMode)),
     alternateModel: normalizeModel(payload.alternateModel, defaultModelForMode(providerMode, true)),
     fastMode:
-      typeof payload.fastMode === "boolean" ? payload.fastMode : providerMode === "live-openai",
+      typeof payload.fastMode === "boolean" ? payload.fastMode : providerMode === "live-frontier",
     scenarioIds: normalizeScenarioIds(payload.scenarioIds, scenarios),
   };
 }

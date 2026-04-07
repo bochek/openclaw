@@ -33,9 +33,11 @@ export function buildQaGatewayConfig(params: {
   controlUiRoot?: string;
   controlUiAllowedOrigins?: string[];
   controlUiEnabled?: boolean;
-  providerMode?: "mock-openai" | "live-openai";
+  providerMode?: "mock-openai" | "live-frontier";
   primaryModel?: string;
   alternateModel?: string;
+  imageGenerationModel?: string | null;
+  enabledProviderIds?: string[];
   fastMode?: boolean;
 }): OpenClawConfig {
   const splitModelRef = (ref: string) => {
@@ -104,32 +106,43 @@ export function buildQaGatewayConfig(params: {
   const providerMode = params.providerMode ?? "mock-openai";
   const primaryModel =
     params.primaryModel ??
-    (providerMode === "live-openai" ? "openai/gpt-5.4" : "mock-openai/gpt-5.4");
+    (providerMode === "live-frontier" ? "openai/gpt-5.4" : "mock-openai/gpt-5.4");
   const alternateModel =
     params.alternateModel ??
-    (providerMode === "live-openai" ? "openai/gpt-5.4" : "mock-openai/gpt-5.4-alt");
+    (providerMode === "live-frontier" ? "openai/gpt-5.4" : "mock-openai/gpt-5.4-alt");
+  const modelProviderIds = [primaryModel, alternateModel]
+    .map((ref) => splitModelRef(ref)?.provider)
+    .filter((provider): provider is string => Boolean(provider));
   const imageGenerationModelRef =
-    providerMode === "live-openai" ? "openai/gpt-image-1" : "mock-openai/gpt-image-1";
+    params.imageGenerationModel !== undefined
+      ? params.imageGenerationModel
+      : providerMode === "mock-openai"
+        ? "mock-openai/gpt-image-1"
+        : modelProviderIds.includes("openai")
+          ? "openai/gpt-image-1"
+          : null;
   const selectedProviderIds =
-    providerMode === "live-openai"
+    providerMode === "live-frontier"
       ? [
           ...new Set(
-            [primaryModel, alternateModel, imageGenerationModelRef]
-              .map((ref) => splitModelRef(ref)?.provider)
+            [...(params.enabledProviderIds ?? []), ...modelProviderIds, imageGenerationModelRef]
+              .map((value) =>
+                typeof value === "string" ? (splitModelRef(value)?.provider ?? value) : null,
+              )
               .filter((provider): provider is string => Boolean(provider)),
           ),
         ]
       : [];
   const pluginEntries =
-    providerMode === "live-openai"
+    providerMode === "live-frontier"
       ? Object.fromEntries(selectedProviderIds.map((providerId) => [providerId, { enabled: true }]))
       : {};
   const allowedPlugins =
-    providerMode === "live-openai"
+    providerMode === "live-frontier"
       ? ["memory-core", ...selectedProviderIds, "qa-channel"]
       : ["memory-core", "qa-channel"];
   const liveModelParams =
-    providerMode === "live-openai"
+    providerMode === "live-frontier"
       ? {
           transport: "sse",
           openaiWsWarmup: false,
@@ -168,9 +181,13 @@ export function buildQaGatewayConfig(params: {
         model: {
           primary: primaryModel,
         },
-        imageGenerationModel: {
-          primary: imageGenerationModelRef,
-        },
+        ...(imageGenerationModelRef
+          ? {
+              imageGenerationModel: {
+                primary: imageGenerationModelRef,
+              },
+            }
+          : {}),
         memorySearch: {
           sync: {
             watch: true,
