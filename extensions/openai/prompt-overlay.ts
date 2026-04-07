@@ -54,6 +54,12 @@ Keep going until the requested outcome is complete or clearly blocked.
 Multi-part requests stay incomplete until every requested item is handled or clearly marked blocked.
 Before the final answer, quickly verify correctness, coverage, formatting, and obvious side effects.`;
 
+export const OPENAI_GPT5_TOOL_CALL_STYLE = `## Tool Call Style
+
+For routine inspection, search, open, read, edit, or verify steps, call the tool immediately instead of narrating the intent first.
+If the first concrete tool call is obvious, make it before any commentary.
+Narrate only when the action is sensitive, non-obvious, or the user explicitly asked for reasoning.`;
+
 export type OpenAIPromptOverlayMode = "friendly" | "off";
 
 export function resolveOpenAIPromptOverlayMode(
@@ -93,6 +99,7 @@ export function resolveOpenAISystemPromptContribution(params: {
   return {
     stablePrefix: OPENAI_GPT5_OUTPUT_CONTRACT,
     sectionOverrides: {
+      tool_call_style: OPENAI_GPT5_TOOL_CALL_STYLE,
       execution_bias: OPENAI_GPT5_EXECUTION_BIAS,
       ...(params.mode === "friendly" ? { interaction_style: OPENAI_FRIENDLY_PROMPT_OVERLAY } : {}),
     },

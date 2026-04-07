@@ -13,6 +13,7 @@ import {
   OPENAI_FRIENDLY_PROMPT_OVERLAY,
   OPENAI_GPT5_EXECUTION_BIAS,
   OPENAI_GPT5_OUTPUT_CONTRACT,
+  OPENAI_GPT5_TOOL_CALL_STYLE,
 } from "./prompt-overlay.js";
 
 const runtimeMocks = vi.hoisted(() => ({
@@ -278,6 +279,7 @@ describe("openai plugin", () => {
       stablePrefix: OPENAI_GPT5_OUTPUT_CONTRACT,
       sectionOverrides: {
         interaction_style: OPENAI_FRIENDLY_PROMPT_OVERLAY,
+        tool_call_style: OPENAI_GPT5_TOOL_CALL_STYLE,
         execution_bias: OPENAI_GPT5_EXECUTION_BIAS,
       },
     });
@@ -295,6 +297,7 @@ describe("openai plugin", () => {
       stablePrefix: OPENAI_GPT5_OUTPUT_CONTRACT,
       sectionOverrides: {
         interaction_style: OPENAI_FRIENDLY_PROMPT_OVERLAY,
+        tool_call_style: OPENAI_GPT5_TOOL_CALL_STYLE,
         execution_bias: OPENAI_GPT5_EXECUTION_BIAS,
       },
     });
@@ -324,6 +327,9 @@ describe("openai plugin", () => {
     );
     expect(OPENAI_GPT5_EXECUTION_BIAS).toContain(
       "Do prerequisite lookup or discovery before dependent actions.",
+    );
+    expect(OPENAI_GPT5_TOOL_CALL_STYLE).toContain(
+      "If the first concrete tool call is obvious, make it before any commentary.",
     );
     expect(OPENAI_GPT5_EXECUTION_BIAS).toContain(
       "After compaction or summary refresh, resume the next unfinished action instead of restarting the analysis from scratch.",
@@ -363,6 +369,7 @@ describe("openai plugin", () => {
       stablePrefix: OPENAI_GPT5_OUTPUT_CONTRACT,
       sectionOverrides: {
         interaction_style: OPENAI_FRIENDLY_PROMPT_OVERLAY,
+        tool_call_style: OPENAI_GPT5_TOOL_CALL_STYLE,
         execution_bias: OPENAI_GPT5_EXECUTION_BIAS,
       },
     });
@@ -390,6 +397,7 @@ describe("openai plugin", () => {
     ).toEqual({
       stablePrefix: OPENAI_GPT5_OUTPUT_CONTRACT,
       sectionOverrides: {
+        tool_call_style: OPENAI_GPT5_TOOL_CALL_STYLE,
         execution_bias: OPENAI_GPT5_EXECUTION_BIAS,
       },
     });
@@ -416,6 +424,7 @@ describe("openai plugin", () => {
     ).toEqual({
       stablePrefix: OPENAI_GPT5_OUTPUT_CONTRACT,
       sectionOverrides: {
+        tool_call_style: OPENAI_GPT5_TOOL_CALL_STYLE,
         execution_bias: OPENAI_GPT5_EXECUTION_BIAS,
       },
     });
@@ -444,6 +453,7 @@ describe("openai plugin", () => {
       stablePrefix: OPENAI_GPT5_OUTPUT_CONTRACT,
       sectionOverrides: {
         interaction_style: OPENAI_FRIENDLY_PROMPT_OVERLAY,
+        tool_call_style: OPENAI_GPT5_TOOL_CALL_STYLE,
         execution_bias: OPENAI_GPT5_EXECUTION_BIAS,
       },
     });
@@ -471,6 +481,7 @@ describe("openai plugin", () => {
       stablePrefix: OPENAI_GPT5_OUTPUT_CONTRACT,
       sectionOverrides: {
         interaction_style: OPENAI_FRIENDLY_PROMPT_OVERLAY,
+        tool_call_style: OPENAI_GPT5_TOOL_CALL_STYLE,
         execution_bias: OPENAI_GPT5_EXECUTION_BIAS,
       },
     });

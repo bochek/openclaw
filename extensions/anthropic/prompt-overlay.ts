@@ -14,6 +14,11 @@ Do not say you will inspect, search, open, edit, or verify something unless you 
 After compaction or summary refresh, resume the next unfinished action instead of restarting the analysis from scratch.
 Keep going until the requested outcome is complete or clearly blocked.`;
 
+export const ANTHROPIC_FRONTIER_TOOL_CALL_STYLE = `## Tool Call Style
+
+For routine inspection, search, open, read, edit, or verify steps, call the tool immediately instead of narrating the intent first.
+Keep pre-tool commentary brief and only use it when the action is sensitive, non-obvious, or user-requested.`;
+
 function matchesAnthropicFrontierModel(modelId?: string): boolean {
   const normalizedModelId = modelId?.trim().toLowerCase() ?? "";
   return ANTHROPIC_FRONTIER_MODEL_PREFIXES.some((prefix) => normalizedModelId.startsWith(prefix));
@@ -44,6 +49,7 @@ export function resolveAnthropicSystemPromptContribution(params: {
   return {
     stablePrefix: ANTHROPIC_FRONTIER_OUTPUT_CONTRACT,
     sectionOverrides: {
+      tool_call_style: ANTHROPIC_FRONTIER_TOOL_CALL_STYLE,
       execution_bias: ANTHROPIC_FRONTIER_EXECUTION_BIAS,
     },
   };

@@ -4,6 +4,7 @@ import { registerSingleProviderPlugin } from "../../test/helpers/plugins/plugin-
 import {
   ANTHROPIC_FRONTIER_EXECUTION_BIAS,
   ANTHROPIC_FRONTIER_OUTPUT_CONTRACT,
+  ANTHROPIC_FRONTIER_TOOL_CALL_STYLE,
 } from "./prompt-overlay.js";
 
 const { readClaudeCliCredentialsForSetupMock, readClaudeCliCredentialsForRuntimeMock } = vi.hoisted(
@@ -69,6 +70,7 @@ describe("anthropic provider replay hooks", () => {
     ).toEqual({
       stablePrefix: ANTHROPIC_FRONTIER_OUTPUT_CONTRACT,
       sectionOverrides: {
+        tool_call_style: ANTHROPIC_FRONTIER_TOOL_CALL_STYLE,
         execution_bias: ANTHROPIC_FRONTIER_EXECUTION_BIAS,
       },
     });

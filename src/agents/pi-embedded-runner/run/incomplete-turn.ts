@@ -31,7 +31,7 @@ type PlanningOnlyAttempt = Pick<
 >;
 
 const PLANNING_ONLY_PROMISE_RE =
-  /\b(?:i(?:'ll| will)|i(?:'m| am)\s+going to|let me|going to|first[, ]+i(?:'ll| will)|next[, ]+i(?:'ll| will)|i can do that)\b/i;
+  /\b(?:i(?:'ll| will)|i(?:'m| am)\s+going to|let me|going to|first[, ]+i(?:'ll| will)|next[, ]+i(?:'ll| will)|i can do that|checking|inspecting|searching|opening|reading|reviewing|verifying|patching|editing)\b/i;
 const PLANNING_ONLY_COMPLETION_RE =
   /\b(?:done|finished|implemented|updated|fixed|changed|ran|verified|found|here(?:'s| is) what|blocked by|the blocker is)\b/i;
 const ACK_EXECUTION_NORMALIZED_SET = new Set([

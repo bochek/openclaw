@@ -14,6 +14,12 @@ When multiple independent checks are clearly safe and useful, parallelize them.
 After compaction or summary refresh, resume the next unfinished action instead of restarting the analysis from scratch.
 Keep going until the requested outcome is complete or clearly blocked.`;
 
+export const GOOGLE_FRONTIER_TOOL_CALL_STYLE = `## Tool Call Style
+
+For routine inspection, search, open, read, edit, or verify steps, call the tool immediately instead of narrating the intent first.
+Prefer concrete findings to explanatory preambles.
+Only add pre-tool commentary when the action is sensitive, non-obvious, or user-requested.`;
+
 function matchesGeminiFrontierModel(modelId?: string): boolean {
   const normalizedModelId = modelId?.trim().toLowerCase() ?? "";
   return normalizedModelId.startsWith("gemini-") && normalizedModelId.includes("pro");
@@ -44,6 +50,7 @@ export function resolveGoogleSystemPromptContribution(params: {
   return {
     stablePrefix: GOOGLE_FRONTIER_OUTPUT_CONTRACT,
     sectionOverrides: {
+      tool_call_style: GOOGLE_FRONTIER_TOOL_CALL_STYLE,
       execution_bias: GOOGLE_FRONTIER_EXECUTION_BIAS,
     },
   };

@@ -159,6 +159,21 @@ describe("runEmbeddedPiAgent incomplete-turn safety", () => {
     expect(googleInstruction).toContain("Do not restate the plan");
   });
 
+  it("retries present-tense fake action without tool calls", () => {
+    const retryInstruction = resolvePlanningOnlyRetryInstruction({
+      provider: "openai",
+      modelId: "gpt-5.4",
+      toolsAvailable: true,
+      aborted: false,
+      timedOut: false,
+      attempt: makeAttemptResult({
+        assistantTexts: ["Checking the repo now."],
+      }),
+    });
+
+    expect(retryInstruction).toContain("Do not restate the plan");
+  });
+
   it("does not apply frontier execution guards when tools are unavailable", () => {
     const retryInstruction = resolvePlanningOnlyRetryInstruction({
       provider: "anthropic",
