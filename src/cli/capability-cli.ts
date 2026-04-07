@@ -135,7 +135,7 @@ const CAPABILITY_METADATA: CapabilityMetadata[] = [
     resultShape: "model status summary",
   },
   {
-    id: "media.image.generate",
+    id: "image.generate",
     description: "Generate raster images with configured image providers.",
     transports: ["local"],
     flags: [
@@ -151,49 +151,49 @@ const CAPABILITY_METADATA: CapabilityMetadata[] = [
     resultShape: "saved image files plus attempts",
   },
   {
-    id: "media.image.edit",
+    id: "image.edit",
     description: "Generate edited images from one or more input files.",
     transports: ["local"],
     flags: ["--file", "--prompt", "--model", "--output", "--json"],
     resultShape: "saved image files plus attempts",
   },
   {
-    id: "media.image.describe",
+    id: "image.describe",
     description: "Describe one image file through media-understanding providers.",
     transports: ["local"],
     flags: ["--file", "--prompt", "--model", "--json"],
     resultShape: "normalized text output",
   },
   {
-    id: "media.image.describe-many",
+    id: "image.describe-many",
     description: "Describe multiple image files independently.",
     transports: ["local"],
     flags: ["--file", "--prompt", "--model", "--json"],
     resultShape: "one text output per file",
   },
   {
-    id: "media.image.providers",
+    id: "image.providers",
     description: "List image generation providers.",
     transports: ["local"],
     flags: ["--json"],
     resultShape: "provider ids and defaults",
   },
   {
-    id: "media.audio.transcribe",
+    id: "audio.transcribe",
     description: "Transcribe one audio file.",
     transports: ["local"],
     flags: ["--file", "--model", "--json"],
     resultShape: "normalized text output",
   },
   {
-    id: "media.audio.providers",
+    id: "audio.providers",
     description: "List audio transcription providers.",
     transports: ["local"],
     flags: ["--json"],
     resultShape: "provider ids and capabilities",
   },
   {
-    id: "media.tts.convert",
+    id: "tts.convert",
     description: "Convert text to speech.",
     transports: ["local", "gateway"],
     flags: [
@@ -209,63 +209,63 @@ const CAPABILITY_METADATA: CapabilityMetadata[] = [
     resultShape: "saved audio file plus attempts",
   },
   {
-    id: "media.tts.voices",
+    id: "tts.voices",
     description: "List voices for a speech provider.",
     transports: ["local"],
     flags: ["--provider", "--json"],
     resultShape: "voice entries",
   },
   {
-    id: "media.tts.providers",
+    id: "tts.providers",
     description: "List speech providers.",
     transports: ["local", "gateway"],
     flags: ["--local", "--gateway", "--json"],
     resultShape: "provider ids, configured state, models, voices",
   },
   {
-    id: "media.tts.status",
+    id: "tts.status",
     description: "Show gateway-managed TTS state.",
     transports: ["gateway"],
     flags: ["--gateway", "--json"],
     resultShape: "enabled/provider state",
   },
   {
-    id: "media.tts.enable",
+    id: "tts.enable",
     description: "Enable TTS in prefs.",
     transports: ["local", "gateway"],
     flags: ["--local", "--gateway", "--json"],
     resultShape: "enabled state",
   },
   {
-    id: "media.tts.disable",
+    id: "tts.disable",
     description: "Disable TTS in prefs.",
     transports: ["local", "gateway"],
     flags: ["--local", "--gateway", "--json"],
     resultShape: "enabled state",
   },
   {
-    id: "media.tts.set-provider",
+    id: "tts.set-provider",
     description: "Set the active TTS provider.",
     transports: ["local", "gateway"],
     flags: ["--provider", "--local", "--gateway", "--json"],
     resultShape: "selected provider",
   },
   {
-    id: "media.video.generate",
+    id: "video.generate",
     description: "Generate video files with configured video providers.",
     transports: ["local"],
     flags: ["--prompt", "--model", "--output", "--json"],
     resultShape: "saved video files plus attempts",
   },
   {
-    id: "media.video.describe",
+    id: "video.describe",
     description: "Describe one video file through media-understanding providers.",
     transports: ["local"],
     flags: ["--file", "--model", "--json"],
     resultShape: "normalized text output",
   },
   {
-    id: "media.video.providers",
+    id: "video.providers",
     description: "List video generation and description providers.",
     transports: ["local"],
     flags: ["--json"],
@@ -663,7 +663,7 @@ async function runModelAuthLogout(provider: string) {
 }
 
 async function runImageGenerate(params: {
-  capability: "media.image.generate" | "media.image.edit";
+  capability: "image.generate" | "image.edit";
   prompt: string;
   model?: string;
   count?: number;
@@ -729,7 +729,7 @@ async function runImageGenerate(params: {
 }
 
 async function runImageDescribe(params: {
-  capability: "media.image.describe" | "media.image.describe-many";
+  capability: "image.describe" | "image.describe-many";
   files: string[];
   model?: string;
 }) {
@@ -785,7 +785,7 @@ async function runAudioTranscribe(params: {
   }
   return {
     ok: true,
-    capability: "media.audio.transcribe",
+    capability: "audio.transcribe",
     transport: "local" as const,
     attempts: [],
     outputs: [{ path: path.resolve(params.file), text: result.text, kind: "audio.transcription" }],
@@ -816,7 +816,7 @@ async function runVideoGenerate(params: { prompt: string; model?: string; output
   );
   return {
     ok: true,
-    capability: "media.video.generate",
+    capability: "video.generate",
     transport: "local" as const,
     provider: result.provider,
     model: result.model,
@@ -838,7 +838,7 @@ async function runVideoDescribe(params: { file: string; model?: string }) {
   }
   return {
     ok: true,
-    capability: "media.video.describe",
+    capability: "video.describe",
     transport: "local" as const,
     provider: result.provider,
     model: result.model,
@@ -889,7 +889,7 @@ async function runTtsConvert(params: {
     }
     return {
       ok: true,
-      capability: "media.tts.convert",
+      capability: "tts.convert",
       transport: "gateway" as const,
       provider: result.provider,
       attempts: [],
@@ -932,7 +932,7 @@ async function runTtsConvert(params: {
   }
   return {
     ok: true,
-    capability: "media.tts.convert",
+    capability: "tts.convert",
     transport: "local" as const,
     provider: result.provider,
     attempts: result.attempts ?? [],
@@ -1003,15 +1003,15 @@ async function runTtsVoices(providerRaw?: string) {
 }
 
 async function runTtsStateMutation(params: {
-  capability: "media.tts.enable" | "media.tts.disable" | "media.tts.set-provider";
+  capability: "tts.enable" | "tts.disable" | "tts.set-provider";
   transport: CapabilityTransport;
   provider?: string;
 }) {
   if (params.transport === "gateway") {
     const method =
-      params.capability === "media.tts.enable"
+      params.capability === "tts.enable"
         ? "tts.enable"
-        : params.capability === "media.tts.disable"
+        : params.capability === "tts.disable"
           ? "tts.disable"
           : "tts.setProvider";
     const payload = await callGateway({
@@ -1025,11 +1025,11 @@ async function runTtsStateMutation(params: {
   const cfg = loadConfig();
   const config = resolveTtsConfig(cfg);
   const prefsPath = resolveTtsPrefsPath(config);
-  if (params.capability === "media.tts.enable") {
+  if (params.capability === "tts.enable") {
     setTtsEnabled(prefsPath, true);
     return { enabled: true };
   }
-  if (params.capability === "media.tts.disable") {
+  if (params.capability === "tts.disable") {
     setTtsEnabled(prefsPath, false);
     return { enabled: false };
   }
@@ -1292,8 +1292,7 @@ export function registerCapabilityCli(program: Command) {
       });
     });
 
-  const media = capability.command("media").description("Media capabilities");
-  const image = media.command("image").description("Image generation and description");
+  const image = capability.command("image").description("Image generation and description");
 
   image
     .command("generate")
@@ -1309,7 +1308,7 @@ export function registerCapabilityCli(program: Command) {
     .action(async (opts) => {
       await runCommandWithRuntime(defaultRuntime, async () => {
         const result = await runImageGenerate({
-          capability: "media.image.generate",
+          capability: "image.generate",
           prompt: String(opts.prompt),
           model: opts.model as string | undefined,
           count: opts.count ? Number.parseInt(String(opts.count), 10) : undefined,
@@ -1334,7 +1333,7 @@ export function registerCapabilityCli(program: Command) {
       await runCommandWithRuntime(defaultRuntime, async () => {
         const files = Array.isArray(opts.file) ? (opts.file as string[]) : [String(opts.file)];
         const result = await runImageGenerate({
-          capability: "media.image.edit",
+          capability: "image.edit",
           prompt: String(opts.prompt),
           model: opts.model as string | undefined,
           file: files,
@@ -1353,7 +1352,7 @@ export function registerCapabilityCli(program: Command) {
     .action(async (opts) => {
       await runCommandWithRuntime(defaultRuntime, async () => {
         const result = await runImageDescribe({
-          capability: "media.image.describe",
+          capability: "image.describe",
           files: [String(opts.file)],
           model: opts.model as string | undefined,
         });
@@ -1370,7 +1369,7 @@ export function registerCapabilityCli(program: Command) {
     .action(async (opts) => {
       await runCommandWithRuntime(defaultRuntime, async () => {
         const result = await runImageDescribe({
-          capability: "media.image.describe-many",
+          capability: "image.describe-many",
           files: opts.file as string[],
           model: opts.model as string | undefined,
         });
@@ -1404,7 +1403,7 @@ export function registerCapabilityCli(program: Command) {
       });
     });
 
-  const audio = media.command("audio").description("Audio transcription");
+  const audio = capability.command("audio").description("Audio transcription");
 
   audio
     .command("transcribe")
@@ -1447,7 +1446,7 @@ export function registerCapabilityCli(program: Command) {
       });
     });
 
-  const tts = media.command("tts").description("Text to speech");
+  const tts = capability.command("tts").description("Text to speech");
 
   tts
     .command("convert")
@@ -1541,8 +1540,8 @@ export function registerCapabilityCli(program: Command) {
     });
 
   for (const [commandName, capabilityId] of [
-    ["enable", "media.tts.enable"],
-    ["disable", "media.tts.disable"],
+    ["enable", "tts.enable"],
+    ["disable", "tts.disable"],
   ] as const) {
     tts
       .command(commandName)
@@ -1585,7 +1584,7 @@ export function registerCapabilityCli(program: Command) {
           defaultTransport: "gateway",
         });
         const result = await runTtsStateMutation({
-          capability: "media.tts.set-provider",
+          capability: "tts.set-provider",
           provider: String(opts.provider),
           transport,
         });
@@ -1595,7 +1594,7 @@ export function registerCapabilityCli(program: Command) {
       });
     });
 
-  const video = media.command("video").description("Video generation and description");
+  const video = capability.command("video").description("Video generation and description");
 
   video
     .command("generate")

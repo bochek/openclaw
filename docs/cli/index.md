@@ -253,10 +253,10 @@ openclaw [--dev] [--profile <name>] <command>
     list
     inspect
     model run|list|inspect|providers|auth login|logout|status
-    media image generate|edit|describe|describe-many|providers
-    media audio transcribe|providers
-    media tts convert|voices|providers|status|enable|disable|set-provider
-    media video generate|describe|providers
+    image generate|edit|describe|describe-many|providers
+    audio transcribe|providers
+    tts convert|voices|providers|status|enable|disable|set-provider
+    video generate|describe|providers
     web search|fetch|providers
     embedding create|providers
     auth add|login|login-github-copilot|setup-token|paste-token

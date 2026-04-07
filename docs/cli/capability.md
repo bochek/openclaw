@@ -1,5 +1,5 @@
 ---
-summary: "Infer-first CLI for provider-backed model, media, web, and embedding workflows"
+summary: "Infer-first CLI for provider-backed model, image, audio, TTS, video, web, and embedding workflows"
 read_when:
   - Adding or modifying `openclaw infer` commands
   - Designing stable headless capability automation
@@ -30,28 +30,30 @@ It intentionally exposes capability families, not raw gateway RPC names and not 
     auth logout
     auth status
 
-  media
-    image
-      generate
-      edit
-      describe
-      describe-many
-      providers
-    audio
-      transcribe
-      providers
-    tts
-      convert
-      voices
-      providers
-      status
-      enable
-      disable
-      set-provider
-    video
-      generate
-      describe
-      providers
+  image
+    generate
+    edit
+    describe
+    describe-many
+    providers
+
+  audio
+    transcribe
+    providers
+
+  tts
+    convert
+    voices
+    providers
+    status
+    enable
+    disable
+    set-provider
+
+  video
+    generate
+    describe
+    providers
 
   web
     search
@@ -79,8 +81,8 @@ Examples:
 
 ```bash
 openclaw infer model run --prompt "hello" --json
-openclaw infer media image generate --prompt "friendly lobster" --json
-openclaw infer media tts status --json
+openclaw infer image generate --prompt "friendly lobster" --json
+openclaw infer tts status --json
 openclaw infer embedding create --text "hello world" --json
 ```
 
@@ -91,7 +93,7 @@ Capability commands normalize JSON output under a shared envelope:
 ```json
 {
   "ok": true,
-  "capability": "media.image.generate",
+  "capability": "image.generate",
   "transport": "local",
   "provider": "openai",
   "model": "gpt-image-1",
@@ -114,4 +116,4 @@ Top-level fields are stable:
 ## Notes
 
 - `model run` reuses the agent runtime so provider/model overrides behave like normal agent execution.
-- `media tts status` defaults to gateway because it reflects gateway-managed TTS state.
+- `tts status` defaults to gateway because it reflects gateway-managed TTS state.

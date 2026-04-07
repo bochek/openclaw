@@ -278,7 +278,7 @@ describe("capability cli", () => {
 
     const payload = mocks.runtime.writeJson.mock.calls[0]?.[0] as Array<{ id: string }>;
     expect(payload.some((entry) => entry.id === "model.run")).toBe(true);
-    expect(payload.some((entry) => entry.id === "media.image.describe")).toBe(true);
+    expect(payload.some((entry) => entry.id === "image.describe")).toBe(true);
   });
 
   it("defaults model run to local transport", async () => {
@@ -300,7 +300,7 @@ describe("capability cli", () => {
   it("defaults tts status to gateway transport", async () => {
     await runRegisteredCli({
       register: registerCapabilityCli as (program: Command) => void,
-      argv: ["capability", "media", "tts", "status", "--json"],
+      argv: ["capability", "tts", "status", "--json"],
     });
 
     expect(mocks.callGateway).toHaveBeenCalledWith(
@@ -314,7 +314,7 @@ describe("capability cli", () => {
   it("routes image describe through media understanding, not generation", async () => {
     await runRegisteredCli({
       register: registerCapabilityCli as (program: Command) => void,
-      argv: ["capability", "media", "image", "describe", "--file", "photo.jpg", "--json"],
+      argv: ["capability", "image", "describe", "--file", "photo.jpg", "--json"],
     });
 
     expect(mocks.describeImageFile).toHaveBeenCalledWith(
@@ -322,7 +322,7 @@ describe("capability cli", () => {
     );
     expect(mocks.runtime.writeJson).toHaveBeenCalledWith(
       expect.objectContaining({
-        capability: "media.image.describe",
+        capability: "image.describe",
         outputs: [expect.objectContaining({ kind: "image.description" })],
       }),
     );
@@ -338,7 +338,7 @@ describe("capability cli", () => {
     await expect(
       runRegisteredCli({
         register: registerCapabilityCli as (program: Command) => void,
-        argv: ["capability", "media", "image", "describe", "--file", "photo.jpg", "--json"],
+        argv: ["capability", "image", "describe", "--file", "photo.jpg", "--json"],
       }),
     ).rejects.toThrow("exit 1");
     expect(mocks.runtime.error).toHaveBeenCalledWith(
@@ -370,7 +370,6 @@ describe("capability cli", () => {
       register: registerCapabilityCli as (program: Command) => void,
       argv: [
         "capability",
-        "media",
         "image",
         "generate",
         "--prompt",
@@ -396,7 +395,7 @@ describe("capability cli", () => {
   it("routes audio transcribe through transcription, not realtime", async () => {
     await runRegisteredCli({
       register: registerCapabilityCli as (program: Command) => void,
-      argv: ["capability", "media", "audio", "transcribe", "--file", "memo.m4a", "--json"],
+      argv: ["capability", "audio", "transcribe", "--file", "memo.m4a", "--json"],
     });
 
     expect(mocks.transcribeAudioFile).toHaveBeenCalledWith(
@@ -404,7 +403,7 @@ describe("capability cli", () => {
     );
     expect(mocks.runtime.writeJson).toHaveBeenCalledWith(
       expect.objectContaining({
-        capability: "media.audio.transcribe",
+        capability: "audio.transcribe",
         outputs: [expect.objectContaining({ kind: "audio.transcription" })],
       }),
     );
@@ -416,7 +415,7 @@ describe("capability cli", () => {
     await expect(
       runRegisteredCli({
         register: registerCapabilityCli as (program: Command) => void,
-        argv: ["capability", "media", "audio", "transcribe", "--file", "memo.m4a", "--json"],
+        argv: ["capability", "audio", "transcribe", "--file", "memo.m4a", "--json"],
       }),
     ).rejects.toThrow("exit 1");
     expect(mocks.runtime.error).toHaveBeenCalledWith(
@@ -429,7 +428,6 @@ describe("capability cli", () => {
       register: registerCapabilityCli as (program: Command) => void,
       argv: [
         "capability",
-        "media",
         "audio",
         "transcribe",
         "--file",
@@ -456,7 +454,6 @@ describe("capability cli", () => {
       register: registerCapabilityCli as (program: Command) => void,
       argv: [
         "capability",
-        "media",
         "tts",
         "convert",
         "--text",
@@ -490,7 +487,6 @@ describe("capability cli", () => {
       register: registerCapabilityCli as (program: Command) => void,
       argv: [
         "capability",
-        "media",
         "tts",
         "convert",
         "--text",
@@ -515,7 +511,6 @@ describe("capability cli", () => {
       register: registerCapabilityCli as (program: Command) => void,
       argv: [
         "capability",
-        "media",
         "tts",
         "convert",
         "--gateway",
@@ -551,7 +546,6 @@ describe("capability cli", () => {
         register: registerCapabilityCli as (program: Command) => void,
         argv: [
           "capability",
-          "media",
           "tts",
           "convert",
           "--gateway",
@@ -620,7 +614,6 @@ describe("capability cli", () => {
         register: registerCapabilityCli as (program: Command) => void,
         argv: [
           "capability",
-          "media",
           "audio",
           "transcribe",
           "--file",
@@ -644,7 +637,6 @@ describe("capability cli", () => {
         register: registerCapabilityCli as (program: Command) => void,
         argv: [
           "capability",
-          "media",
           "image",
           "describe",
           "--file",
@@ -675,7 +667,6 @@ describe("capability cli", () => {
         register: registerCapabilityCli as (program: Command) => void,
         argv: [
           "capability",
-          "media",
           "video",
           "describe",
           "--file",
