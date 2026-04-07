@@ -5,9 +5,11 @@ import { resolveUserTimezone } from "../../agents/date-time.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { openBoundaryFile } from "../../infra/boundary-file-read.js";
 
-const MAX_CONTEXT_CHARS = 3000;
+const MAX_AGENTS_CONTEXT_CHARS = 3000;
+const MAX_IDENTITY_CONTEXT_CHARS = 1500;
 const DEFAULT_POST_COMPACTION_SECTIONS = ["Session Startup", "Red Lines"];
 const LEGACY_POST_COMPACTION_SECTIONS = ["Every Session", "Safety"];
+const POST_COMPACTION_IDENTITY_FILES = ["SOUL.md", "IDENTITY.md"];
 
 // Compare configured section names as a case-insensitive set so deployments can
 // pin the documented defaults in any order without changing fallback semantics.
@@ -54,6 +56,30 @@ function formatDateStamp(nowMs: number, timezone: string): string {
   return new Date(nowMs).toISOString().slice(0, 10);
 }
 
+async function readWorkspaceBoundaryFile(
+  workspaceDir: string,
+  fileName: string,
+): Promise<string | null> {
+  const absolutePath = path.join(workspaceDir, fileName);
+  const opened = await openBoundaryFile({
+    absolutePath,
+    rootPath: workspaceDir,
+    boundaryLabel: "workspace root",
+  });
+  if (!opened.ok) {
+    return null;
+  }
+  try {
+    return fs.readFileSync(opened.fd, "utf-8");
+  } finally {
+    fs.closeSync(opened.fd);
+  }
+}
+
+function truncateInjectedContext(content: string, maxChars: number): string {
+  return content.length > maxChars ? content.slice(0, maxChars) + "\n...[truncated]..." : content;
+}
+
 /**
  * Read critical sections from workspace AGENTS.md for post-compaction injection.
  * Returns formatted system event text, or null if no AGENTS.md or no relevant sections.
@@ -65,24 +91,17 @@ export async function readPostCompactionContext(
   cfg?: OpenClawConfig,
   nowMs?: number,
 ): Promise<string | null> {
-  const agentsPath = path.join(workspaceDir, "AGENTS.md");
-
   try {
-    const opened = await openBoundaryFile({
-      absolutePath: agentsPath,
-      rootPath: workspaceDir,
-      boundaryLabel: "workspace root",
-    });
-    if (!opened.ok) {
-      return null;
-    }
-    const content = (() => {
-      try {
-        return fs.readFileSync(opened.fd, "utf-8");
-      } finally {
-        fs.closeSync(opened.fd);
+    const content = await readWorkspaceBoundaryFile(workspaceDir, "AGENTS.md");
+    const identityBlocks: string[] = [];
+    for (const fileName of POST_COMPACTION_IDENTITY_FILES) {
+      const identityContent = await readWorkspaceBoundaryFile(workspaceDir, fileName);
+      const trimmed = identityContent?.trim();
+      if (!trimmed) {
+        continue;
       }
-    })();
+      identityBlocks.push(`## ${fileName}\n\n${trimmed}`);
+    }
 
     // Extract configured sections from AGENTS.md (default: Session Startup + Red Lines).
     // An explicit empty array disables post-compaction context injection entirely.
@@ -91,12 +110,13 @@ export async function readPostCompactionContext(
       ? configuredSections
       : DEFAULT_POST_COMPACTION_SECTIONS;
 
-    if (sectionNames.length === 0) {
+    if (sectionNames.length === 0 && identityBlocks.length === 0) {
       return null;
     }
 
     const foundSectionNames: string[] = [];
-    let sections = extractSections(content, sectionNames, foundSectionNames);
+    let sections =
+      typeof content === "string" ? extractSections(content, sectionNames, foundSectionNames) : [];
 
     // Fall back to legacy section names ("Every Session" / "Safety") when using
     // defaults and the current headings aren't found — preserves compatibility
@@ -106,11 +126,11 @@ export async function readPostCompactionContext(
     const isDefaultSections =
       !Array.isArray(configuredSections) ||
       matchesSectionSet(configuredSections, DEFAULT_POST_COMPACTION_SECTIONS);
-    if (sections.length === 0 && isDefaultSections) {
+    if (sections.length === 0 && isDefaultSections && typeof content === "string") {
       sections = extractSections(content, LEGACY_POST_COMPACTION_SECTIONS, foundSectionNames);
     }
 
-    if (sections.length === 0) {
+    if (sections.length === 0 && identityBlocks.length === 0) {
       return null;
     }
 
@@ -125,29 +145,49 @@ export async function readPostCompactionContext(
     const { timeLine } = resolveCronStyleNow(cfg ?? {}, resolvedNowMs);
 
     const combined = sections.join("\n\n").replaceAll("YYYY-MM-DD", dateStamp);
-    const safeContent =
-      combined.length > MAX_CONTEXT_CHARS
-        ? combined.slice(0, MAX_CONTEXT_CHARS) + "\n...[truncated]..."
-        : combined;
+    const safeAgentsContent = truncateInjectedContext(combined, MAX_AGENTS_CONTEXT_CHARS);
+    const safeIdentityContent = truncateInjectedContext(
+      identityBlocks.join("\n\n"),
+      MAX_IDENTITY_CONTEXT_CHARS,
+    );
 
-    // When using the default section set, use precise prose that names the
-    // "Session Startup" sequence explicitly. When custom sections are configured,
-    // use generic prose — referencing a hardcoded "Session Startup" sequence
-    // would be misleading for deployments that use different section names.
-    const prose = isDefaultSections
-      ? "Session was just compacted. The conversation summary above is a hint, NOT a substitute for your startup sequence. " +
-        "Run your Session Startup sequence - read the required files before responding to the user."
-      : `Session was just compacted. The conversation summary above is a hint, NOT a substitute for your full startup sequence. ` +
-        `Re-read the sections injected below (${displayNames.join(", ")}) and follow your configured startup procedure before responding to the user.`;
+    const proseParts: string[] = [];
+    if (sections.length > 0) {
+      // When using the default section set, use precise prose that names the
+      // "Session Startup" sequence explicitly. When custom sections are configured,
+      // use generic prose — referencing a hardcoded "Session Startup" sequence
+      // would be misleading for deployments that use different section names.
+      proseParts.push(
+        isDefaultSections
+          ? "Session was just compacted. The conversation summary above is a hint, NOT a substitute for your startup sequence. " +
+              "Run your Session Startup sequence - read the required files before responding to the user."
+          : `Session was just compacted. The conversation summary above is a hint, NOT a substitute for your full startup sequence. ` +
+              `Re-read the sections injected below (${displayNames.join(", ")}) and follow your configured startup procedure before responding to the user.`,
+      );
+    }
+    if (identityBlocks.length > 0) {
+      proseParts.push(
+        sections.length > 0
+          ? "Re-anchor on the identity files injected below before responding to the user."
+          : "Session was just compacted. The conversation summary above is a hint, NOT a substitute for your identity anchor. Re-read the identity files injected below before responding to the user.",
+      );
+    }
 
-    const sectionLabel = isDefaultSections
-      ? "Critical rules from AGENTS.md:"
-      : `Injected sections from AGENTS.md (${displayNames.join(", ")}):`;
+    const contextBlocks: string[] = [];
+    if (identityBlocks.length > 0) {
+      contextBlocks.push(`Identity refresh:\n\n${safeIdentityContent}`);
+    }
+    if (sections.length > 0) {
+      const sectionLabel = isDefaultSections
+        ? "Critical rules from AGENTS.md:"
+        : `Injected sections from AGENTS.md (${displayNames.join(", ")}):`;
+      contextBlocks.push(`${sectionLabel}\n\n${safeAgentsContent}`);
+    }
 
     return (
       "[Post-compaction context refresh]\n\n" +
-      `${prose}\n\n` +
-      `${sectionLabel}\n\n${safeContent}\n\n${timeLine}`
+      `${proseParts.join("\n\n")}\n\n` +
+      `${contextBlocks.join("\n\n")}\n\n${timeLine}`
     );
   } catch {
     return null;

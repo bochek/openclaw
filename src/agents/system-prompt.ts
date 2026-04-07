@@ -40,6 +40,7 @@ const CONTEXT_FILE_ORDER = new Map<string, number>([
 ]);
 
 const DYNAMIC_CONTEXT_FILE_BASENAMES = new Set(["heartbeat.md"]);
+const IDENTITY_CONTEXT_FILE_BASENAMES = new Set(["soul.md", "identity.md"]);
 
 function normalizeContextFilePath(pathValue: string): string {
   return pathValue.trim().replace(/\\/g, "/");
@@ -52,6 +53,10 @@ function getContextFileBasename(pathValue: string): string {
 
 function isDynamicContextFile(pathValue: string): boolean {
   return DYNAMIC_CONTEXT_FILE_BASENAMES.has(getContextFileBasename(pathValue));
+}
+
+function isIdentityContextFile(pathValue: string): boolean {
+  return IDENTITY_CONTEXT_FILE_BASENAMES.has(getContextFileBasename(pathValue));
 }
 
 function sortContextFilesForPrompt(contextFiles: EmbeddedContextFile[]): EmbeddedContextFile[] {
@@ -87,18 +92,24 @@ function buildProjectContextSection(params: {
       "",
     );
   } else {
-    const hasSoulFile = params.files.some(
-      (file) => getContextFileBasename(file.path) === "soul.md",
-    );
     lines.push("The following project context files have been loaded:");
-    if (hasSoulFile) {
-      lines.push(
-        "If SOUL.md is present, embody its persona and tone. Avoid stiff, generic replies; follow its guidance unless higher-priority instructions override it.",
-      );
-    }
     lines.push("");
   }
   for (const file of params.files) {
+    lines.push(`## ${file.path}`, "", file.content, "");
+  }
+  return lines;
+}
+
+function buildIdentitySection(files: EmbeddedContextFile[]) {
+  if (files.length === 0) {
+    return [];
+  }
+  const lines = [
+    "The following workspace identity files define who you are and how you should sound. Follow them as your primary identity anchor unless higher-priority instructions override them.",
+    "",
+  ];
+  for (const file of files) {
     lines.push(`## ${file.path}`, "", file.content, "");
   }
   return lines;
@@ -479,11 +490,27 @@ export function buildAgentSystemPrompt(params: {
 
   // For "none" mode, return just the basic identity line
   if (promptMode === "none") {
-    return "You are a personal assistant operating inside OpenClaw.";
+    return "You are the OpenClaw agent for this workspace.";
   }
 
+  const contextFiles = params.contextFiles ?? [];
+  const validContextFiles = contextFiles.filter(
+    (file) => typeof file.path === "string" && file.path.trim().length > 0,
+  );
+  const orderedContextFiles = sortContextFilesForPrompt(validContextFiles);
+  const identityContextFiles = orderedContextFiles.filter((file) =>
+    isIdentityContextFile(file.path),
+  );
+  const stableContextFiles = orderedContextFiles.filter(
+    (file) => !isDynamicContextFile(file.path) && !isIdentityContextFile(file.path),
+  );
+  const dynamicContextFiles = orderedContextFiles.filter((file) => isDynamicContextFile(file.path));
+
   const lines = [
-    "You are a personal assistant operating inside OpenClaw.",
+    ...(identityContextFiles.length > 0
+      ? buildIdentitySection(identityContextFiles)
+      : ["You are the OpenClaw agent for this workspace.", ""]),
+    "You operate inside OpenClaw. Use the runtime and tools below to help the user.",
     "",
     "## Tooling",
     "Structured tool definitions are the source of truth for tool names, descriptions, and parameters.",
@@ -687,14 +714,6 @@ export function buildAgentSystemPrompt(params: {
   if (reasoningHint) {
     lines.push("## Reasoning Format", reasoningHint, "");
   }
-
-  const contextFiles = params.contextFiles ?? [];
-  const validContextFiles = contextFiles.filter(
-    (file) => typeof file.path === "string" && file.path.trim().length > 0,
-  );
-  const orderedContextFiles = sortContextFilesForPrompt(validContextFiles);
-  const stableContextFiles = orderedContextFiles.filter((file) => !isDynamicContextFile(file.path));
-  const dynamicContextFiles = orderedContextFiles.filter((file) => isDynamicContextFile(file.path));
   lines.push(
     ...buildProjectContextSection({
       files: stableContextFiles,

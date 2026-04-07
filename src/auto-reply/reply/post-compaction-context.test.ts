@@ -112,6 +112,35 @@ Ignore this.
     expect(result).not.toContain("Other");
   });
 
+  it("injects identity files alongside AGENTS refresh content", async () => {
+    const agentsContent = `## Session Startup\n\nDo startup things.\n`;
+    fs.writeFileSync(path.join(tmpDir, "AGENTS.md"), agentsContent);
+    fs.writeFileSync(path.join(tmpDir, "SOUL.md"), "Warm but direct.");
+    fs.writeFileSync(path.join(tmpDir, "IDENTITY.md"), "You are Kitsune.");
+
+    const result = await readPostCompactionContext(tmpDir);
+
+    expect(result).not.toBeNull();
+    expect(result).toContain("Identity refresh:");
+    expect(result).toContain("## SOUL.md");
+    expect(result).toContain("Warm but direct.");
+    expect(result).toContain("## IDENTITY.md");
+    expect(result).toContain("You are Kitsune.");
+    expect(result).toContain("Run your Session Startup sequence");
+  });
+
+  it("returns identity refresh even when AGENTS.md is missing", async () => {
+    fs.writeFileSync(path.join(tmpDir, "SOUL.md"), "Stay sharp.");
+
+    const result = await readPostCompactionContext(tmpDir);
+
+    expect(result).not.toBeNull();
+    expect(result).toContain("Identity refresh:");
+    expect(result).toContain("## SOUL.md");
+    expect(result).toContain("Stay sharp.");
+    expect(result).toContain("identity anchor");
+  });
+
   it("truncates when content exceeds limit", async () => {
     const longContent = "## Session Startup\n\n" + "A".repeat(4000) + "\n\n## Other\n\nStuff.";
     fs.writeFileSync(path.join(tmpDir, "AGENTS.md"), longContent);

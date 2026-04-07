@@ -634,6 +634,13 @@ describe("buildAgentSystemPrompt", () => {
       ],
     });
 
+    const identityIndex = prompt.indexOf("## IDENTITY.md");
+    const projectContextIndex = prompt.indexOf("# Project Context");
+    const agentsIndex = prompt.indexOf("## AGENTS.md");
+
+    expect(identityIndex).toBeGreaterThan(-1);
+    expect(projectContextIndex).toBeGreaterThan(identityIndex);
+    expect(agentsIndex).toBeGreaterThan(projectContextIndex);
     expect(prompt).toContain("# Project Context");
     expect(prompt).toContain("## AGENTS.md");
     expect(prompt).toContain("Alpha");
@@ -658,7 +665,7 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).not.toContain("Blank path");
   });
 
-  it("adds SOUL guidance when a soul file is present", () => {
+  it("uses identity files as the primary identity anchor and keeps them out of project context", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
       contextFiles: [
@@ -667,9 +674,16 @@ describe("buildAgentSystemPrompt", () => {
       ],
     });
 
-    expect(prompt).toContain(
-      "If SOUL.md is present, embody its persona and tone. Avoid stiff, generic replies; follow its guidance unless higher-priority instructions override it.",
+    const introIndex = prompt.indexOf(
+      "The following workspace identity files define who you are and how you should sound.",
     );
+    const soulIndex = prompt.indexOf("## ./SOUL.md");
+    const toolingIndex = prompt.indexOf("## Tooling");
+
+    expect(introIndex).toBeGreaterThan(-1);
+    expect(soulIndex).toBeGreaterThan(introIndex);
+    expect(toolingIndex).toBeGreaterThan(soulIndex);
+    expect(prompt).not.toContain("# Project Context\n\n## ./SOUL.md");
   });
 
   it("omits project context when no context files are injected", () => {
@@ -695,6 +709,7 @@ describe("buildAgentSystemPrompt", () => {
 
     const agentsIndex = prompt.indexOf("## AGENTS.md");
     const soulIndex = prompt.indexOf("## SOUL.md");
+    const toolingIndex = prompt.indexOf("## Tooling");
     const toolsIndex = prompt.indexOf("## TOOLS.md");
     const memoryIndex = prompt.indexOf("## MEMORY.md");
     const boundaryIndex = prompt.indexOf(SYSTEM_PROMPT_CACHE_BOUNDARY);
@@ -702,12 +717,14 @@ describe("buildAgentSystemPrompt", () => {
     const heartbeatFileIndex = prompt.indexOf("## HEARTBEAT.md");
 
     expect(agentsIndex).toBeGreaterThan(-1);
-    expect(soulIndex).toBeGreaterThan(agentsIndex);
-    expect(toolsIndex).toBeGreaterThan(soulIndex);
+    expect(soulIndex).toBeGreaterThan(-1);
+    expect(toolingIndex).toBeGreaterThan(soulIndex);
+    expect(toolsIndex).toBeGreaterThan(agentsIndex);
     expect(memoryIndex).toBeGreaterThan(toolsIndex);
     expect(boundaryIndex).toBeGreaterThan(memoryIndex);
     expect(heartbeatHeadingIndex).toBeGreaterThan(boundaryIndex);
     expect(heartbeatFileIndex).toBeGreaterThan(heartbeatHeadingIndex);
+    expect(prompt.indexOf("## SOUL.md")).toBe(prompt.lastIndexOf("## SOUL.md"));
     expect(prompt).toContain(
       "The following frequently-changing project context files are kept below the cache boundary when possible:",
     );
