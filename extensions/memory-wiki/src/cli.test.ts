@@ -105,6 +105,22 @@ cli import body
     ).resolves.toContain("Profile: `markdown-vault` (automatic)");
   });
 
+  it("prints task guidance for non-json imports", async () => {
+    const { config } = await createCliVault({ initialize: true });
+    const sourceRoot = path.join(suiteRoot, `case-${caseIndex++}`, "task-vault");
+    await fs.mkdir(path.join(sourceRoot, ".obsidian"), { recursive: true });
+    await fs.writeFile(path.join(sourceRoot, "alpha.md"), "# Alpha\n\ncli import body\n", "utf8");
+
+    const program = new Command();
+    program.name("test");
+    registerWikiCli(program, config);
+
+    await program.parseAsync(["wiki", "import", sourceRoot], { from: "user" });
+
+    const writes = vi.mocked(process.stdout.write).mock.calls.map((call) => String(call[0]));
+    expect(writes.join("")).toContain("inspect with `openclaw tasks show ");
+  });
+
   it("registers apply metadata and preserves the page body", async () => {
     const { rootDir, config } = await createCliVault();
     const targetPath = path.join(rootDir, "entities", "alpha.md");

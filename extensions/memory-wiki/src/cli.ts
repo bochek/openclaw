@@ -190,6 +190,17 @@ function formatJsonOrText<T>(
   return json ? JSON.stringify(result, null, 2) : render(result);
 }
 
+function formatWikiImportSummary(value: Awaited<ReturnType<typeof importMemoryWikiInput>>): string {
+  const summary =
+    `Imported ${value.inputPath} via ${value.profileId} ` +
+    `(${value.importedCount} new, ${value.updatedCount} updated, ${value.skippedCount} unchanged, ${value.removedCount} removed). ` +
+    `Indexes ${value.indexesRefreshed ? `refreshed (${value.indexUpdatedFiles.length} files)` : `not refreshed (${value.indexRefreshReason})`}.`;
+  if (!value.taskId) {
+    return summary;
+  }
+  return `${summary} Task ${value.taskId}; inspect with \`openclaw tasks show ${value.taskId}\`.`;
+}
+
 async function runWikiCommandWithSummary<T>(params: {
   json?: boolean;
   stdout?: Pick<NodeJS.WriteStream, "write">;
@@ -337,8 +348,7 @@ export async function runWikiIngest(params: {
     stdout: params.stdout,
     run: () =>
       runWikiImport({ config: params.config, inputPath: params.inputPath, title: params.title }),
-    render: (value) =>
-      `Imported ${value.inputPath} via ${value.profileId} (${value.importedCount} new, ${value.updatedCount} updated, ${value.skippedCount} unchanged, ${value.removedCount} removed). Indexes ${value.indexesRefreshed ? `refreshed (${value.indexUpdatedFiles.length} files)` : `not refreshed (${value.indexRefreshReason})`}.`,
+    render: formatWikiImportSummary,
   });
 }
 
@@ -360,8 +370,7 @@ export async function runWikiImport(params: {
         profileId: params.profileId,
         title: params.title,
       }),
-    render: (value) =>
-      `Imported ${value.inputPath} via ${value.profileId} (${value.importedCount} new, ${value.updatedCount} updated, ${value.skippedCount} unchanged, ${value.removedCount} removed). Indexes ${value.indexesRefreshed ? `refreshed (${value.indexUpdatedFiles.length} files)` : `not refreshed (${value.indexRefreshReason})`}.`,
+    render: formatWikiImportSummary,
   });
 }
 
