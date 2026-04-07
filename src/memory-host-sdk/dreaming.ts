@@ -313,9 +313,12 @@ export function resolveMemoryCorePluginConfig(
 ): Record<string, unknown> | undefined {
   const root = asNullableRecord(cfg);
   const plugins = asNullableRecord(root?.plugins);
+  const slots = asNullableRecord(plugins?.slots);
   const entries = asNullableRecord(plugins?.entries);
-  const memoryCore = asNullableRecord(entries?.["memory-core"]);
-  return asNullableRecord(memoryCore?.config) ?? undefined;
+  // Respect plugins.slots.memory when set; fall back to "memory-core"
+  const memoryPluginId = String(slots?.memory ?? "memory-core");
+  const memoryPlugin = asNullableRecord(entries?.[memoryPluginId]);
+  return asNullableRecord(memoryPlugin?.config) ?? undefined;
 }
 
 export function resolveMemoryDreamingConfig(params: {
