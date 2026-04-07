@@ -64,9 +64,11 @@ async function runQaUi(opts: {
 }
 
 async function runQaDockerScaffold(opts: {
+  repoRoot?: string;
   outputDir: string;
   gatewayPort?: number;
   qaLabPort?: number;
+  providerBaseUrl?: string;
   image?: string;
   usePrebuiltImage?: boolean;
 }) {
@@ -74,12 +76,13 @@ async function runQaDockerScaffold(opts: {
   await runtime.runQaDockerScaffoldCommand(opts);
 }
 
-async function runQaDockerBuildImage(opts: { image?: string }) {
+async function runQaDockerBuildImage(opts: { repoRoot?: string; image?: string }) {
   const runtime = await loadQaLabCliRuntime();
   await runtime.runQaDockerBuildImageCommand(opts);
 }
 
 async function runQaDockerUp(opts: {
+  repoRoot?: string;
   outputDir?: string;
   gatewayPort?: number;
   qaLabPort?: number;
@@ -222,6 +225,7 @@ export function registerQaLabCli(program: Command) {
 
   qa.command("docker-scaffold")
     .description("Write a prebaked Docker scaffold for the QA dashboard + gateway lane")
+    .option("--repo-root <path>", "Repository root to target when running from a neutral cwd")
     .requiredOption("--output-dir <path>", "Output directory for docker-compose + state files")
     .option("--gateway-port <port>", "Gateway host port", (value: string) => Number(value))
     .option("--qa-lab-port <port>", "QA lab host port", (value: string) => Number(value))
@@ -230,6 +234,7 @@ export function registerQaLabCli(program: Command) {
     .option("--use-prebuilt-image", "Use image: instead of build: in docker-compose", false)
     .action(
       async (opts: {
+        repoRoot?: string;
         outputDir: string;
         gatewayPort?: number;
         qaLabPort?: number;
@@ -243,13 +248,15 @@ export function registerQaLabCli(program: Command) {
 
   qa.command("docker-build-image")
     .description("Build the prebaked QA Docker image with qa-channel + qa-lab bundled")
+    .option("--repo-root <path>", "Repository root to target when running from a neutral cwd")
     .option("--image <name>", "Image tag", "openclaw:qa-local-prebaked")
-    .action(async (opts: { image?: string }) => {
+    .action(async (opts: { repoRoot?: string; image?: string }) => {
       await runQaDockerBuildImage(opts);
     });
 
   qa.command("up")
     .description("Build the QA site, start the Docker-backed QA stack, and print the QA Lab URL")
+    .option("--repo-root <path>", "Repository root to target when running from a neutral cwd")
     .option("--output-dir <path>", "Output directory for docker-compose + state files")
     .option("--gateway-port <port>", "Gateway host port", (value: string) => Number(value))
     .option("--qa-lab-port <port>", "QA lab host port", (value: string) => Number(value))
@@ -259,6 +266,7 @@ export function registerQaLabCli(program: Command) {
     .option("--skip-ui-build", "Skip pnpm qa:lab:build before starting Docker", false)
     .action(
       async (opts: {
+        repoRoot?: string;
         outputDir?: string;
         gatewayPort?: number;
         qaLabPort?: number;
