@@ -89,6 +89,7 @@ import {
 } from "./run/helpers.js";
 import {
   resolveAckExecutionFastPathInstruction,
+  resolveAckExecutionRetryInstruction,
   resolveIncompleteTurnPayloadText,
   extractPlanningOnlyPlanDetails,
   resolvePlanningOnlyRetryInstruction,
@@ -1451,6 +1452,15 @@ export async function runEmbeddedPiAgent(
             timedOut,
             attempt,
           });
+          const nextAckExecutionRetryInstruction = resolveAckExecutionRetryInstruction({
+            provider,
+            modelId,
+            prompt: params.prompt,
+            toolsAvailable,
+            aborted,
+            timedOut,
+            attempt,
+          });
           const nextPlanningOnlyRetryInstruction = resolvePlanningOnlyRetryInstruction({
             provider,
             modelId,
@@ -1459,11 +1469,9 @@ export async function runEmbeddedPiAgent(
             timedOut,
             attempt,
           });
-          if (
-            !incompleteTurnText &&
-            nextPlanningOnlyRetryInstruction &&
-            planningOnlyRetryAttempts < 1
-          ) {
+          const nextActNowRetryInstruction =
+            nextAckExecutionRetryInstruction ?? nextPlanningOnlyRetryInstruction;
+          if (!incompleteTurnText && nextActNowRetryInstruction && planningOnlyRetryAttempts < 1) {
             const planningOnlyText = attempt.assistantTexts.join("\n\n").trim();
             const planDetails = extractPlanningOnlyPlanDetails(planningOnlyText);
             if (planDetails) {
@@ -1490,10 +1498,11 @@ export async function runEmbeddedPiAgent(
               });
             }
             planningOnlyRetryAttempts += 1;
-            planningOnlyRetryInstruction = nextPlanningOnlyRetryInstruction;
+            planningOnlyRetryInstruction = nextActNowRetryInstruction;
             log.warn(
-              `planning-only turn detected: runId=${params.runId} sessionId=${params.sessionId} ` +
-                `provider=${provider}/${modelId} — retrying once with act-now steer`,
+              `act-now retry guard triggered: runId=${params.runId} sessionId=${params.sessionId} ` +
+                `provider=${provider}/${modelId} source=${nextAckExecutionRetryInstruction ? "ack_execution" : "planning_only"} ` +
+                "— retrying once with act-now steer",
             );
             continue;
           }

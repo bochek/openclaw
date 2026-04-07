@@ -34,6 +34,8 @@ const PLANNING_ONLY_PROMISE_RE =
   /\b(?:i(?:'ll| will)|i(?:'m| am)\s+going to|let me|going to|first[, ]+i(?:'ll| will)|next[, ]+i(?:'ll| will)|i can do that|checking|inspecting|searching|opening|reading|reviewing|verifying|patching|editing)\b/i;
 const PLANNING_ONLY_COMPLETION_RE =
   /\b(?:done|finished|implemented|updated|fixed|changed|ran|verified|found|here(?:'s| is) what|blocked by|the blocker is)\b/i;
+const ACK_EXECUTION_STALL_RE =
+  /\b(?:on it|working on it|starting with|starting on|taking a look|looking into(?: it)?|digging in|pulling up|jumping in|one sec|one second|give me a sec|give me a second)\b/i;
 const ACK_EXECUTION_NORMALIZED_SET = new Set([
   "ok",
   "okay",
@@ -80,6 +82,8 @@ export const PLANNING_ONLY_RETRY_INSTRUCTION =
   "The previous assistant turn only described the plan. Do not restate the plan. Act now: take the first concrete tool action you can. If a real blocker prevents action, reply with the exact blocker in one sentence.";
 export const ACK_EXECUTION_FAST_PATH_INSTRUCTION =
   "The latest user message is a short approval to proceed. Do not recap or restate the plan. Start with the first concrete tool action immediately. Keep any user-facing follow-up brief and natural.";
+export const ACK_EXECUTION_RETRY_INSTRUCTION =
+  "The previous assistant turn acknowledged the go-ahead but did not act. Do not recap or restate the plan. Start with the first concrete tool action immediately. If a real blocker prevents action, reply with the exact blocker in one sentence.";
 const MAX_RETRY_STEP_CHARS = 160;
 
 export type PlanningOnlyPlanDetails = {
@@ -184,6 +188,48 @@ export function resolveAckExecutionFastPathInstruction(params: {
     return null;
   }
   return ACK_EXECUTION_FAST_PATH_INSTRUCTION;
+}
+
+export function resolveAckExecutionRetryInstruction(params: {
+  provider?: string;
+  modelId?: string;
+  prompt: string;
+  toolsAvailable?: boolean;
+  aborted: boolean;
+  timedOut: boolean;
+  attempt: PlanningOnlyAttempt;
+}): string | null {
+  if (
+    !shouldApplyPlanningOnlyRetryGuard({
+      provider: params.provider,
+      modelId: params.modelId,
+      toolsAvailable: params.toolsAvailable,
+    }) ||
+    !isLikelyExecutionAckPrompt(params.prompt) ||
+    params.aborted ||
+    params.timedOut ||
+    params.attempt.clientToolCall ||
+    params.attempt.yieldDetected ||
+    params.attempt.didSendDeterministicApprovalPrompt ||
+    params.attempt.didSendViaMessagingTool ||
+    params.attempt.lastToolError ||
+    params.attempt.itemLifecycle.startedCount > 0 ||
+    params.attempt.replayMetadata.hadPotentialSideEffects
+  ) {
+    return null;
+  }
+
+  const assistantText = params.attempt.assistantTexts.join("\n\n").trim();
+  if (!assistantText || PLANNING_ONLY_COMPLETION_RE.test(assistantText)) {
+    return null;
+  }
+  if (
+    !PLANNING_ONLY_PROMISE_RE.test(assistantText) &&
+    !ACK_EXECUTION_STALL_RE.test(assistantText)
+  ) {
+    return null;
+  }
+  return ACK_EXECUTION_RETRY_INSTRUCTION;
 }
 
 function extractPlanningOnlySteps(text: string): string[] {

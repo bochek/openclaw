@@ -12,6 +12,7 @@ import {
   extractPlanningOnlyPlanDetails,
   isLikelyExecutionAckPrompt,
   resolveAckExecutionFastPathInstruction,
+  resolveAckExecutionRetryInstruction,
   resolvePlanningOnlyRetryInstruction,
 } from "./run/incomplete-turn.js";
 import type { EmbeddedRunAttemptResult } from "./run/types.js";
@@ -150,6 +151,59 @@ describe("runEmbeddedPiAgent incomplete-turn safety", () => {
     });
 
     expect(instruction).toContain("Do not recap or restate the plan");
+  });
+
+  it("retries short approval turns that acknowledge action without a tool call", () => {
+    const instruction = resolveAckExecutionRetryInstruction({
+      provider: "anthropic",
+      modelId: "claude-sonnet-4-6",
+      prompt: "ok do it",
+      toolsAvailable: true,
+      aborted: false,
+      timedOut: false,
+      attempt: makeAttemptResult({
+        assistantTexts: ["On it. Starting with a quick repo scan now."],
+      }),
+    });
+
+    expect(instruction).toContain("acknowledged the go-ahead but did not act");
+  });
+
+  it("does not retry short approval turns after completion-style text", () => {
+    const instruction = resolveAckExecutionRetryInstruction({
+      provider: "google",
+      modelId: "gemini-3.1-pro-preview",
+      prompt: "go ahead",
+      toolsAvailable: true,
+      aborted: false,
+      timedOut: false,
+      attempt: makeAttemptResult({
+        assistantTexts: ["Done. The change is in place."],
+      }),
+    });
+
+    expect(instruction).toBeNull();
+  });
+
+  it("does not retry short approval turns after tool activity", () => {
+    const instruction = resolveAckExecutionRetryInstruction({
+      provider: "openai",
+      modelId: "gpt-5.4",
+      prompt: "go ahead",
+      toolsAvailable: true,
+      aborted: false,
+      timedOut: false,
+      attempt: makeAttemptResult({
+        assistantTexts: ["On it."],
+        itemLifecycle: {
+          startedCount: 1,
+          completedCount: 0,
+          activeCount: 1,
+        },
+      }),
+    });
+
+    expect(instruction).toBeNull();
   });
 
   it("extends the planning-only retry guard to frontier Claude and Gemini models", () => {
