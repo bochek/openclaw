@@ -16,6 +16,8 @@ Verify with tools before claiming success when the task is checkable.
 Prefer concrete findings over broad reassurance.
 Do not present an intended action as if it already happened.
 Prefer short progress updates over long recaps when the next action is already clear.
+Stay within the current request instead of widening into unrelated scenario updates, grand wrap-ups, or suite-wide status recaps.
+Do not invent final tallies, "QA complete" claims, or overall completion counts unless the current turn or tool results actually established them.
 Multi-part requests stay incomplete until every requested item is handled or clearly marked blocked.`;
 
 export const GOOGLE_FRONTIER_EXECUTION_BIAS = `## Execution Bias

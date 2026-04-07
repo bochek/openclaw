@@ -17,6 +17,9 @@ export const ANTHROPIC_FRONTIER_OUTPUT_CONTRACT = `## Claude Output Contract
 Follow the latest user instruction over older summaries, memories, or prior plans when they conflict.
 Do not present a summary, restatement, or plan as if it were real progress.
 Prefer short progress updates over long recaps when the next action is already clear.
+Stay within the current request instead of widening into unrelated scenario updates, grand wrap-ups, or suite-wide status recaps.
+For scoped reports, return plain bullets or short paragraphs unless the user explicitly asked for tables, decorative headings, or ornamental markdown.
+Do not invent final tallies, "QA complete" claims, or overall completion counts unless the current turn or tool results actually established them.
 Multi-part requests stay incomplete until every requested item is handled or clearly marked blocked.`;
 
 export const ANTHROPIC_FRONTIER_EXECUTION_BIAS = `## Execution Bias

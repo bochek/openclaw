@@ -9,7 +9,11 @@ import type { OpenClawConfig } from "openclaw/plugin-sdk/core";
 import { formatErrorMessage } from "openclaw/plugin-sdk/error-runtime";
 import { buildAgentSessionKey } from "openclaw/plugin-sdk/routing";
 import type { QaBusState } from "./bus-state.js";
-import { hasDiscoveryLabels, reportsMissingDiscoveryFiles } from "./discovery-eval.js";
+import {
+  hasDiscoveryLabels,
+  reportsDiscoveryScopeLeak,
+  reportsMissingDiscoveryFiles,
+} from "./discovery-eval.js";
 import { extractQaToolPayload } from "./extract-tool-payload.js";
 import { startQaGatewayChild } from "./gateway-child.js";
 import { startQaLabServer } from "./lab-server.js";
@@ -1008,6 +1012,9 @@ function buildScenarioMap(env: QaSuiteEnvironment) {
               );
               if (reportsMissingDiscoveryFiles(outbound.text)) {
                 throw new Error(`discovery report still missed repo files: ${outbound.text}`);
+              }
+              if (reportsDiscoveryScopeLeak(outbound.text)) {
+                throw new Error(`discovery report drifted beyond scope: ${outbound.text}`);
               }
               return outbound.text;
             },
