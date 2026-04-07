@@ -10,6 +10,7 @@ import {
 import { normalizeSingleOrTrimmedStringList } from "openclaw/plugin-sdk/text-runtime";
 import { compileMemoryWikiVault, type CompileMemoryWikiResult } from "./compile.js";
 import type { ResolvedMemoryWikiConfig } from "./config.js";
+import { buildImportReviewBody, type ImportReviewEntry } from "./import-review.js";
 import { appendMemoryWikiLog } from "./log.js";
 import {
   extractWikiLinks,
@@ -68,6 +69,8 @@ type PreparedImportArtifact = {
   importedAliases: string[];
   importedLinkTargets: string[];
   renderedContentBody: string;
+  bodyTextLength: number;
+  nonEmptyLineCount: number;
 };
 
 type WikiImportTaskContext = {
@@ -190,6 +193,20 @@ function renderMarkdownVaultBodyForEvidence(body: string): string {
   );
 }
 
+function buildImportBodyMetrics(text: string): {
+  bodyTextLength: number;
+  nonEmptyLineCount: number;
+} {
+  const lines = text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return {
+    bodyTextLength: lines.join(" ").length,
+    nonEmptyLineCount: lines.length,
+  };
+}
+
 function prepareImportArtifact(params: {
   artifact: WikiImportArtifact;
   raw: string;
@@ -202,6 +219,7 @@ function prepareImportArtifact(params: {
     titleOverride: params.artifact.profileId === "local-file" ? params.titleOverride : undefined,
   });
   if (params.artifact.profileId !== "markdown-vault") {
+    const metrics = buildImportBodyMetrics(params.raw);
     return {
       title,
       importedTags: [],
@@ -211,6 +229,7 @@ function prepareImportArtifact(params: {
         params.raw,
         detectFenceLanguage(params.artifact.absolutePath),
       ),
+      ...metrics,
     };
   }
 
@@ -219,6 +238,7 @@ function prepareImportArtifact(params: {
   const importedAliases = normalizeImportedAliases(parsed.frontmatter);
   const importedLinkTargets = extractWikiLinks(parsed.body);
   const renderedContentBody = renderMarkdownVaultBodyForEvidence(parsed.body).trim();
+  const metrics = buildImportBodyMetrics(renderedContentBody);
 
   return {
     title,
@@ -229,6 +249,7 @@ function prepareImportArtifact(params: {
       renderedContentBody.length > 0
         ? renderedContentBody
         : "_Imported markdown note body was empty._",
+    ...metrics,
   };
 }
 
@@ -394,42 +415,6 @@ function resolveImportPageIdentity(artifact: WikiImportArtifact): {
   };
 }
 
-function buildImportReviewBody(params: {
-  inputPath: string;
-  profileId: WikiImportProfileId;
-  profileResolution: "automatic" | "explicit";
-  artifactCount: number;
-  importedCount: number;
-  updatedCount: number;
-  skippedCount: number;
-  removedCount: number;
-  pagePaths: string[];
-}): string {
-  const lines = [
-    "# Import Review",
-    "",
-    "## Summary",
-    `- Input: \`${params.inputPath}\``,
-    `- Profile: \`${params.profileId}\` (${params.profileResolution})`,
-    `- Artifacts discovered: ${params.artifactCount}`,
-    `- Imported: ${params.importedCount}`,
-    `- Updated: ${params.updatedCount}`,
-    `- Unchanged: ${params.skippedCount}`,
-    `- Removed: ${params.removedCount}`,
-    "",
-    "## Imported Pages",
-  ];
-  if (params.pagePaths.length === 0) {
-    lines.push("- No importable pages were written.");
-  } else {
-    for (const pagePath of params.pagePaths) {
-      lines.push(`- ${pagePath}`);
-    }
-  }
-  lines.push("");
-  return lines.join("\n");
-}
-
 async function writeImportReviewReport(params: {
   config: ResolvedMemoryWikiConfig;
   inputPath: string;
@@ -441,6 +426,7 @@ async function writeImportReviewReport(params: {
   skippedCount: number;
   removedCount: number;
   pagePaths: string[];
+  reviewEntries: ImportReviewEntry[];
 }): Promise<string> {
   const reportPath = path.join(params.config.vault.path, IMPORT_REVIEW_PATH);
   await fs.mkdir(path.dirname(reportPath), { recursive: true });
@@ -468,7 +454,12 @@ async function writeImportArtifactPage(params: {
   state: Awaited<ReturnType<typeof readMemoryWikiSourceSyncState>>;
   scopeKey: string;
   titleOverride?: string;
-}): Promise<{ pagePath: string; changed: boolean; created: boolean }> {
+}): Promise<{
+  pagePath: string;
+  changed: boolean;
+  created: boolean;
+  reviewEntry: ImportReviewEntry;
+}> {
   const stats = await fs.stat(params.artifact.absolutePath);
   const raw = assertUtf8Text(
     await fs.readFile(params.artifact.absolutePath),
@@ -495,7 +486,7 @@ async function writeImportArtifactPage(params: {
     )
     .digest("hex");
 
-  return await writeImportedSourcePage({
+  const writeResult = await writeImportedSourcePage({
     vaultRoot: params.config.vault.path,
     syncKey: await resolveArtifactKey(params.artifact.absolutePath),
     sourcePath: params.artifact.absolutePath,
@@ -563,6 +554,18 @@ async function writeImportArtifactPage(params: {
         ].join("\n"),
       }),
   });
+  return {
+    ...writeResult,
+    reviewEntry: {
+      title: prepared.title,
+      relativePath: params.artifact.relativePath,
+      pagePath,
+      importedAliases: [...prepared.importedAliases],
+      importedTags: [...prepared.importedTags],
+      bodyTextLength: prepared.bodyTextLength,
+      nonEmptyLineCount: prepared.nonEmptyLineCount,
+    },
+  };
 }
 
 export async function importMemoryWikiInput(params: {
@@ -628,7 +631,12 @@ export async function importMemoryWikiInput(params: {
     });
     const state = await readMemoryWikiSourceSyncState(params.config.vault.path);
     const activeKeys = new Set<string>();
-    const results: Array<{ pagePath: string; changed: boolean; created: boolean }> = [];
+    const results: Array<{
+      pagePath: string;
+      changed: boolean;
+      created: boolean;
+      reviewEntry: ImportReviewEntry;
+    }> = [];
 
     for (const [index, artifact] of artifacts.entries()) {
       activeKeys.add(await resolveArtifactKey(artifact.absolutePath));
@@ -679,6 +687,7 @@ export async function importMemoryWikiInput(params: {
       skippedCount,
       removedCount,
       pagePaths,
+      reviewEntries: results.map((result) => result.reviewEntry),
     });
 
     let compile: CompileMemoryWikiResult | null = null;

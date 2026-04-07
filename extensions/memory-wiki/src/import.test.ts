@@ -131,4 +131,48 @@ alpha body with [[Beta Project|Beta]] and [Plan](projects/beta.md).
       }),
     ).rejects.toThrow("reserved but not implemented");
   });
+
+  it("writes duplicate and low-signal review sections for vault imports", async () => {
+    const { rootDir, config } = await createVault({ initialize: true });
+    const vaultPath = await createTempDir("memory-wiki-import-review-");
+    await fs.mkdir(path.join(vaultPath, ".obsidian"), { recursive: true });
+    await fs.writeFile(
+      path.join(vaultPath, "alpha.md"),
+      `---
+aliases:
+  - Shared Alias
+---
+
+# Shared Title
+
+This imported note has enough substance to avoid the low-signal bucket.
+`,
+      "utf8",
+    );
+    await fs.writeFile(
+      path.join(vaultPath, "beta.md"),
+      `---
+aliases:
+  - Shared Alias
+---
+
+# Shared Title
+
+Another imported note with enough text to trigger duplicate clustering.
+`,
+      "utf8",
+    );
+    await fs.writeFile(path.join(vaultPath, "tiny.md"), "# Tiny\n\nok\n", "utf8");
+
+    const result = await importMemoryWikiInput({
+      config,
+      inputPath: vaultPath,
+    });
+
+    const report = await fs.readFile(path.join(rootDir, result.reportPath), "utf8");
+    expect(report).toContain("## Duplicate Title/Alias Clusters");
+    expect(report).toContain("`Shared Title` (2 notes)");
+    expect(report).toContain("## Low-Signal Sources");
+    expect(report).toContain("`tiny.md` (Tiny):");
+  });
 });

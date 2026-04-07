@@ -28,6 +28,7 @@ Docs: https://docs.openclaw.ai
 - Memory/wiki: use imported vault tags, aliases, and link hints in the compiled digest and wiki search ranking so imported Obsidian and Logseq notes are easier to recall by their original note metadata. Thanks @vincentkoc.
 - Memory/wiki: use imported vault aliases and link hints when building `## Related` backlinks so imported Obsidian and Logseq notes can reconnect their note graph after import. Thanks @vincentkoc.
 - Memory/wiki: let `wiki_get` and metadata updates resolve imported vault titles and aliases directly, so imported notes stay addressable by their original note names instead of only generated paths. Thanks @vincentkoc.
+- Memory/wiki: upgrade `reports/import-review.md` to flag duplicate imported titles and aliases plus obviously low-signal notes, so large vault imports are easier to triage before promotion or synthesis work. Thanks @vincentkoc.
 - Plugin SDK/context engines: pass `availableTools` and `citationsMode` into `assemble()`, and expose `buildMemorySystemPromptAddition(...)` so non-legacy context engines can adopt the active memory prompt path without reimplementing it. Thanks @vincentkoc.
 
 ### Fixes

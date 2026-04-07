@@ -135,6 +135,8 @@ openclaw wiki obsidian daily
 
 Imported aliases also work as lookup keys for `wiki_get` and metadata updates, so imported vault notes stay addressable by their original note names instead of only by generated file paths.
 
+`reports/import-review.md` now also flags duplicate imported titles/aliases and obviously low-signal notes so large vault backfills are easier to triage before you start turning them into syntheses or claims.
+
 ## Agent tools
 
 - `wiki_status`
