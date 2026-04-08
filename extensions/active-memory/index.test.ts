@@ -200,6 +200,33 @@ describe("active-memory plugin", () => {
     });
   });
 
+  it("preserves leading digits in recalled memory bullets", async () => {
+    runEmbeddedPiAgent.mockResolvedValueOnce({
+      payloads: [{ text: "- 2024 trip to tokyo\n- 2% milk" }],
+    });
+
+    const result = await hooks.before_prompt_build(
+      {
+        prompt: "what should i remember from my 2024 trip and should i buy 2% milk?",
+        messages: [],
+      },
+      {
+        agentId: "main",
+        trigger: "user",
+        sessionKey: "agent:main:main",
+        messageProvider: "webchat",
+      },
+    );
+
+    expect(result).toEqual({
+      appendSystemContext: expect.stringContaining("<active_memory>"),
+    });
+    expect((result as { appendSystemContext: string }).appendSystemContext).toContain(
+      "2024 trip to tokyo",
+    );
+    expect((result as { appendSystemContext: string }).appendSystemContext).toContain("2% milk");
+  });
+
   it("preserves canonical parent session scope in the blocking memory subagent session key", async () => {
     await hooks.before_prompt_build(
       { prompt: "what should i grab on the way?", messages: [] },

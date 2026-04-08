@@ -648,7 +648,10 @@ function parseRawReply(rawReply: string): string[] {
     if (/^(memories|memory|relevant memories|active memory)\s*:/i.test(line)) {
       continue;
     }
-    const normalized = line.replace(/^[-*•\d.)\s]+/, "").trim();
+    const normalized = line
+      .replace(/^[-*•]\s+/, "")
+      .replace(/^\d+[.)]\s+/, "")
+      .trim();
     if (!normalized || normalizeNoRecallValue(normalized)) {
       continue;
     }
