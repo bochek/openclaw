@@ -148,3 +148,10 @@ export function requireKovaCapabilityIds(ids: string[]) {
   }
   return ids;
 }
+
+export function summarizeKovaCapabilityAreas(ids: string[]) {
+  requireKovaCapabilityIds(ids);
+  return [...new Set(ids.map((id) => capabilityById.get(id)?.area).filter(Boolean))]
+    .map((area) => area as string)
+    .toSorted();
+}

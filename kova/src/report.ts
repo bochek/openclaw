@@ -46,8 +46,17 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
   ];
   if (artifact.coverage.scenarioIds.length > 0) {
     lines.push(
-      `Coverage: ${artifact.coverage.scenarioIds.length} scenario(s), ${artifact.coverage.surfaces.length} surface(s), ${artifact.coverage.capabilities.length} capability id(s)`,
+      `Coverage: ${artifact.coverage.scenarioIds.length} scenario(s), ${artifact.coverage.surfaces.length} surface(s), ${artifact.coverage.capabilities.length} capability id(s), ${artifact.coverage.capabilityAreas.length} capability area(s)`,
     );
+  }
+  lines.push(
+    `Execution: ${artifact.execution.state} (${artifact.execution.availability})${artifact.execution.instanceId ? ` [${artifact.execution.instanceId}]` : ""}`,
+  );
+  if (artifact.execution.binaryPath) {
+    lines.push(`Binary: ${artifact.execution.binaryPath}`);
+  }
+  if (artifact.coverage.capabilityAreas.length > 0) {
+    lines.push(`Capability Areas: ${artifact.coverage.capabilityAreas.join(", ")}`);
   }
   if (artifact.selection.scenarioIds?.length) {
     lines.push(`Selected Scenarios: ${artifact.selection.scenarioIds.join(", ")}`);
@@ -69,6 +78,12 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
   }
   if (artifact.evidence.sourceArtifactPaths.length > 0) {
     lines.push(`Artifacts: ${artifact.evidence.sourceArtifactPaths.length} path(s) captured`);
+  }
+  if (artifact.execution.paths.planPath) {
+    lines.push(`Plan: ${artifact.execution.paths.planPath}`);
+  }
+  if (artifact.execution.paths.logPath) {
+    lines.push(`Backend Log: ${artifact.execution.paths.logPath}`);
   }
   if (artifact.notes.length > 0) {
     lines.push("Notes:");

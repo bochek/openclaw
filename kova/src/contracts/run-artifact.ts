@@ -32,6 +32,40 @@ export const kovaScenarioResultSchema = z.object({
   }),
 });
 
+export const kovaBackendExecutionSchema = z
+  .object({
+    state: z.enum(["planned", "executed", "blocked", "failed"]).default("planned"),
+    availability: z.enum(["available", "missing", "unknown"]).default("unknown"),
+    binaryPath: z.string().trim().min(1).optional(),
+    instanceId: z.string().trim().min(1).optional(),
+    cleanup: z
+      .object({
+        status: z.enum(["not_needed", "completed", "failed", "unknown"]).default("unknown"),
+        details: z.string().trim().min(1).optional(),
+      })
+      .default({
+        status: "unknown",
+      }),
+    paths: z
+      .object({
+        artifactRoot: z.string().trim().min(1).optional(),
+        logPath: z.string().trim().min(1).optional(),
+        planPath: z.string().trim().min(1).optional(),
+        mountedRepoPath: z.string().trim().min(1).optional(),
+        guestRepoPath: z.string().trim().min(1).optional(),
+        guestScriptPath: z.string().trim().min(1).optional(),
+      })
+      .default({}),
+  })
+  .default({
+    state: "planned",
+    availability: "unknown",
+    cleanup: {
+      status: "unknown",
+    },
+    paths: {},
+  });
+
 export const kovaRunArtifactSchema = z.object({
   schemaVersion: z.literal(1),
   runId: z.string().trim().min(1),
@@ -82,13 +116,16 @@ export const kovaRunArtifactSchema = z.object({
     .object({
       scenarioIds: z.array(z.string().trim().min(1)).default([]),
       capabilities: z.array(z.string().trim().min(1)).default([]),
+      capabilityAreas: z.array(z.string().trim().min(1)).default([]),
       surfaces: z.array(z.string().trim().min(1)).default([]),
     })
     .default({
       scenarioIds: [],
       capabilities: [],
+      capabilityAreas: [],
       surfaces: [],
     }),
+  execution: kovaBackendExecutionSchema,
   scenarioResults: z.array(kovaScenarioResultSchema).default([]),
   evidence: z.object({
     reportPath: z.string().trim().min(1).optional(),

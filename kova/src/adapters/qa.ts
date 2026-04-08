@@ -95,7 +95,7 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
       id: "qa",
       title: "QA suite",
       category: "behavior",
-      capabilities: ["behavior", "qa"],
+      capabilities: ["lane.qa", "workflow.behavior"],
     },
     backend: {
       id: backend.id,
@@ -145,6 +145,16 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
       },
       counts,
       coverage: buildKovaCoverageFromScenarioResults(scenarioResults),
+      execution: {
+        state: "executed",
+        availability: "available",
+        cleanup: {
+          status: "not_needed",
+        },
+        paths: {
+          artifactRoot: qaOutputDir,
+        },
+      },
       scenarioResults,
       evidence: {
         reportPath: qaResult.reportPath,
@@ -182,6 +192,16 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
         failed: 0,
       },
       coverage: baseArtifact.coverage,
+      execution: {
+        state: "failed",
+        availability: "available",
+        cleanup: {
+          status: "not_needed",
+        },
+        paths: {
+          artifactRoot: qaOutputDir,
+        },
+      },
       scenarioResults: [],
       evidence: {
         sourceArtifactPaths: [qaOutputDir],

@@ -53,7 +53,7 @@ function createMultipassBaseArtifact(params: {
       id: params.selection.target,
       title: "QA suite",
       category: "behavior",
-      capabilities: ["behavior", "qa"],
+      capabilities: ["lane.qa", "workflow.behavior"],
     },
     backend: {
       id: backend.id,
@@ -137,6 +137,22 @@ export const multipassBackend: KovaBackend = {
           failed: 0,
         },
         coverage: baseArtifact.coverage,
+        execution: {
+          state: "blocked",
+          availability: "missing",
+          instanceId: plan.vmName,
+          cleanup: {
+            status: "not_needed",
+          },
+          paths: {
+            artifactRoot: runDir,
+            logPath: hostLogPath,
+            planPath,
+            mountedRepoPath: plan.guestMountedRepoPath,
+            guestRepoPath: plan.guestRepoPath,
+            guestScriptPath: plan.guestScriptPath,
+          },
+        },
         scenarioResults: [],
         evidence: {
           sourceArtifactPaths: evidencePaths,
@@ -211,6 +227,23 @@ export const multipassBackend: KovaBackend = {
         },
         counts: summary.counts,
         coverage: buildKovaCoverageFromScenarioResults(scenarioResults),
+        execution: {
+          state: "executed",
+          availability: "available",
+          binaryPath: availability.binaryPath,
+          instanceId: plan.vmName,
+          cleanup: {
+            status: "unknown",
+          },
+          paths: {
+            artifactRoot: runDir,
+            logPath: hostLogPath,
+            planPath,
+            mountedRepoPath: plan.guestMountedRepoPath,
+            guestRepoPath: plan.guestRepoPath,
+            guestScriptPath: plan.guestScriptPath,
+          },
+        },
         scenarioResults,
         evidence: {
           reportPath,
@@ -255,6 +288,23 @@ export const multipassBackend: KovaBackend = {
           failed: 0,
         },
         coverage: baseArtifact.coverage,
+        execution: {
+          state: "failed",
+          availability: "available",
+          binaryPath: availability.binaryPath,
+          instanceId: plan.vmName,
+          cleanup: {
+            status: "unknown",
+          },
+          paths: {
+            artifactRoot: runDir,
+            logPath: hostLogPath,
+            planPath,
+            mountedRepoPath: plan.guestMountedRepoPath,
+            guestRepoPath: plan.guestRepoPath,
+            guestScriptPath: plan.guestScriptPath,
+          },
+        },
         scenarioResults: [],
         evidence: {
           sourceArtifactPaths: evidencePaths,

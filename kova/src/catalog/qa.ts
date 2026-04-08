@@ -1,5 +1,8 @@
 import { readQaScenarioPack } from "../../../extensions/qa-lab/api.js";
-import { requireKovaCapabilityIds } from "../capabilities/registry.js";
+import {
+  requireKovaCapabilityIds,
+  summarizeKovaCapabilityAreas,
+} from "../capabilities/registry.js";
 import type { KovaScenarioResult } from "../contracts/run-artifact.js";
 
 export type KovaQaScenarioCatalogEntry = {
@@ -130,18 +133,24 @@ export function buildKovaCoverageFromScenarioResults(scenarioResults: KovaScenar
       surfaces.add(scenario.surface);
     }
   }
+  const capabilityIds = [...capabilities].toSorted();
   return {
     scenarioIds,
-    capabilities: [...capabilities].toSorted(),
+    capabilities: capabilityIds,
+    capabilityAreas: summarizeKovaCapabilityAreas(capabilityIds),
     surfaces: [...surfaces].toSorted(),
   };
 }
 
 export function buildKovaCoverageFromQaCatalog(selectedIds?: string[]) {
   const scenarios = selectKovaQaScenarios(selectedIds);
+  const capabilityIds = [
+    ...new Set(scenarios.flatMap((scenario) => scenario.capabilities)),
+  ].toSorted();
   return {
     scenarioIds: scenarios.map((scenario) => scenario.id),
-    capabilities: [...new Set(scenarios.flatMap((scenario) => scenario.capabilities))].toSorted(),
+    capabilities: capabilityIds,
+    capabilityAreas: summarizeKovaCapabilityAreas(capabilityIds),
     surfaces: [...new Set(scenarios.map((scenario) => scenario.surface))].toSorted(),
   };
 }
