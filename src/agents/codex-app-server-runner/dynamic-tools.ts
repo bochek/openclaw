@@ -5,6 +5,10 @@ import {
   isMessagingToolSendAction,
   type MessagingToolSend,
 } from "../pi-embedded-messaging.js";
+import {
+  extractToolResultMediaArtifact,
+  filterToolResultMediaUrls,
+} from "../pi-embedded-subscribe.tools.js";
 import type { AnyAgentTool } from "../tools/common.js";
 import {
   type CodexDynamicToolCallOutputContentItem,
@@ -22,6 +26,8 @@ export type CodexDynamicToolBridge = {
     messagingToolSentTexts: string[];
     messagingToolSentMediaUrls: string[];
     messagingToolSentTargets: MessagingToolSend[];
+    toolMediaUrls: string[];
+    toolAudioAsVoice: boolean;
     successfulCronAdds?: number;
   };
 };
@@ -36,6 +42,8 @@ export function createCodexDynamicToolBridge(params: {
     messagingToolSentTexts: [],
     messagingToolSentMediaUrls: [],
     messagingToolSentTargets: [],
+    toolMediaUrls: [],
+    toolAudioAsVoice: false,
   };
 
   return {
@@ -99,6 +107,22 @@ function collectToolTelemetry(params: {
 }): void {
   if (!params.isError && params.toolName === "cron" && isCronAddAction(params.args)) {
     params.telemetry.successfulCronAdds = (params.telemetry.successfulCronAdds ?? 0) + 1;
+  }
+  if (!params.isError && params.result) {
+    const media = extractToolResultMediaArtifact(params.result);
+    if (media) {
+      const mediaUrls = filterToolResultMediaUrls(params.toolName, media.mediaUrls, params.result);
+      const seen = new Set(params.telemetry.toolMediaUrls);
+      for (const mediaUrl of mediaUrls) {
+        if (!seen.has(mediaUrl)) {
+          seen.add(mediaUrl);
+          params.telemetry.toolMediaUrls.push(mediaUrl);
+        }
+      }
+      if (media.audioAsVoice) {
+        params.telemetry.toolAudioAsVoice = true;
+      }
+    }
   }
   if (
     !isMessagingTool(params.toolName) ||

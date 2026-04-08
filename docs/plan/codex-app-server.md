@@ -376,6 +376,9 @@ Bridge flow:
 Important caveat: app-server dynamic tool responses are text/image content
 items. Some OpenClaw tools have richer side effects. The bridge must keep those
 side effects in OpenClaw state, then return a concise text summary to Codex.
+Media-generating tools now preserve structured `details.media` side effects
+inside the OpenClaw bridge, so image/video/music/TTS outputs can be delivered as
+final reply media without smuggling `MEDIA:` tokens into assistant text.
 
 Start with a narrow dynamic-tool allowlist:
 
@@ -495,7 +498,9 @@ metadata remains limited by the app-server usage payload.
 - Add cron count support.
 
 Done through the OpenClaw dynamic tool bridge. Broader plugin-owned tools still
-depend on schema compatibility and per-tool validation.
+depend on schema compatibility and per-tool validation. Structured media
+artifacts from image/video/music/TTS tool results are preserved and merged into
+the final reply payload.
 
 ### Slice 6: Compaction and Overflow
 
@@ -600,6 +605,7 @@ Unit tests:
 - active run handle queues via `turn/steer`.
 - active run handle aborts via `turn/interrupt`.
 - dynamic tool bridge maps a message tool side effect.
+- dynamic tool bridge preserves structured tool media artifacts.
 - approval requests route through plugin approvals and fail closed when no
   approval route is available.
 - guardian telemetry is accepted but non-fatal.

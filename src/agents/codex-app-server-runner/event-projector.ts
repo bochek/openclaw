@@ -21,6 +21,8 @@ export type CodexAppServerToolTelemetry = {
   messagingToolSentTexts: string[];
   messagingToolSentMediaUrls: string[];
   messagingToolSentTargets: MessagingToolSend[];
+  toolMediaUrls?: string[];
+  toolAudioAsVoice?: boolean;
   successfulCronAdds?: number;
 };
 
@@ -152,6 +154,8 @@ export class CodexAppServerEventProjector {
       messagingToolSentTexts: toolTelemetry.messagingToolSentTexts,
       messagingToolSentMediaUrls: toolTelemetry.messagingToolSentMediaUrls,
       messagingToolSentTargets: toolTelemetry.messagingToolSentTargets,
+      toolMediaUrls: toolTelemetry.toolMediaUrls,
+      toolAudioAsVoice: toolTelemetry.toolAudioAsVoice,
       successfulCronAdds: toolTelemetry.successfulCronAdds,
       cloudCodeAssistFormatError: false,
       attemptUsage: this.tokenUsage,
