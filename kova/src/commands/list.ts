@@ -2,6 +2,7 @@ import { listKovaBackends, listKovaTargets } from "../backends/registry.js";
 import type { KovaRunTarget } from "../backends/types.js";
 import { listKovaCapabilities } from "../capabilities/registry.js";
 import { listKovaQaScenarios, summarizeKovaQaSurfaces } from "../catalog/qa.js";
+import { readKovaRunIndex } from "../lib/run-index.js";
 
 function parseListArgs(args: string[]) {
   const json = args.includes("--json");
@@ -58,8 +59,43 @@ function renderCapabilityLines() {
   ];
 }
 
-export async function listCommand(args: string[]) {
+function renderRunLines(
+  latestRunId: string | undefined,
+  runs: Awaited<ReturnType<typeof readKovaRunIndex>>["runs"],
+) {
+  return [
+    `Runs:${latestRunId ? ` latest=${latestRunId}` : ""}`,
+    ...runs.toReversed().map((run) => {
+      const backendLabel = run.backend.id ?? run.backend.kind;
+      const counts = `${run.counts.passed}/${run.counts.total}`;
+      const areas =
+        run.coverage.capabilityAreas.length > 0 ? run.coverage.capabilityAreas.join(",") : "-";
+      return `  - ${run.runId}: ${run.verdict} ${run.selection.target} via ${backendLabel} [${run.execution.state}/${run.execution.availability}] counts=${counts} areas=${areas}`;
+    }),
+  ];
+}
+
+export async function listCommand(repoRoot: string, args: string[]) {
   const options = parseListArgs(args);
+
+  if (options.subject === "runs") {
+    const index = await readKovaRunIndex(repoRoot);
+    if (options.json) {
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            latestRunId: index.latestRunId ?? null,
+            runs: index.runs,
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      return;
+    }
+    process.stdout.write(`${renderRunLines(index.latestRunId, index.runs).join("\n")}\n`);
+    return;
+  }
 
   if (options.subject === "targets") {
     if (options.json) {
@@ -145,6 +181,7 @@ export async function listCommand(args: string[]) {
   }
 
   if (options.subject === "inventory") {
+    const index = await readKovaRunIndex(repoRoot);
     const scenarioCount = listKovaQaScenarios().length;
     const surfaceCount = summarizeKovaQaSurfaces().length;
     const capabilityCount = listKovaCapabilities().length;
@@ -164,6 +201,8 @@ export async function listCommand(args: string[]) {
             capabilityRegistry: {
               count: capabilityCount,
             },
+            latestRunId: index.latestRunId ?? null,
+            runCount: index.runs.length,
           },
           null,
           2,
@@ -178,6 +217,7 @@ export async function listCommand(args: string[]) {
       "",
       `QA Catalog: ${scenarioCount} scenario(s) across ${surfaceCount} surface(s)`,
       `Capability Registry: ${capabilityCount} capability id(s)`,
+      `Run History: ${index.runs.length} run(s)${index.latestRunId ? `, latest=${index.latestRunId}` : ""}`,
     ];
     process.stdout.write(`${lines.join("\n")}\n`);
     return;

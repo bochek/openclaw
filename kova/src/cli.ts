@@ -10,7 +10,7 @@ function printHelp() {
       "Kova",
       "",
       "Usage:",
-      "  kova list [inventory|targets|backends [qa]|scenarios [qa]|surfaces [qa]|capabilities] [--json]",
+      "  kova list [inventory|runs|targets|backends [qa]|scenarios [qa]|surfaces [qa]|capabilities] [--json]",
       "  kova run qa [--backend host|multipass] [--provider-mode mock-openai|live-frontier] [--scenario <id>] [--json]",
       "  kova report [latest|<run-id>] [--json]",
       "",
@@ -41,7 +41,7 @@ async function main() {
   }
 
   if (command === "list") {
-    await listCommand(args);
+    await listCommand(repoRoot, args);
     return;
   }
 
