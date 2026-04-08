@@ -1,5 +1,6 @@
 import { resolveKovaBackend } from "../backends/registry.js";
 import type { KovaBackendId, KovaRunTarget } from "../backends/types.js";
+import { findMissingKovaQaScenarioIds } from "../catalog/qa.js";
 import type { KovaRunArtifact, KovaVerdict } from "../contracts/run-artifact.js";
 import { createKovaRunId } from "../lib/run-id.js";
 import { renderArtifactSummary } from "../report.js";
@@ -61,6 +62,12 @@ export async function runCommand(repoRoot: string, args: string[]) {
   const options = parseRunOptions(args);
   if (options.target !== "qa") {
     throw new Error(`unsupported kova run target: ${String(options.target ?? "")}`);
+  }
+  if (options.scenarioIds.length > 0) {
+    const missingScenarioIds = findMissingKovaQaScenarioIds(options.scenarioIds);
+    if (missingScenarioIds.length > 0) {
+      throw new Error(`unknown qa scenario id(s): ${missingScenarioIds.join(", ")}`);
+    }
   }
 
   const backend = resolveKovaBackend(options.target, options.backend);
