@@ -40,8 +40,10 @@ const MAX_EXEC_EVENT_OUTPUT_CHARS = 180;
 const MAX_NOTIFICATION_EVENT_TEXT_CHARS = 120;
 const VOICE_TRANSCRIPT_DEDUPE_WINDOW_MS = 1500;
 const MAX_RECENT_VOICE_TRANSCRIPTS = 200;
+const NODE_PRESENCE_PERSIST_MIN_INTERVAL_MS = 60_000;
 
 const recentVoiceTranscripts = new Map<string, { fingerprint: string; ts: number }>();
+const recentNodePresencePersistAt = new Map<string, number>();
 
 function normalizeFiniteInteger(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? Math.trunc(value) : null;
@@ -269,7 +271,7 @@ export const handleNodeEvent = async (
   ctx: NodeEventContext,
   nodeId: string,
   evt: NodeEvent,
-  opts?: { nodePairingIds?: readonly string[] },
+  opts?: { deviceId?: string },
 ) => {
   switch (evt.event) {
     case "voice.transcript": {
@@ -692,23 +694,27 @@ export const handleNodeEvent = async (
       }
       const trigger = normalizeOptionalString(obj.trigger) ?? "background";
       const receivedAtMs = Date.now();
-      const nodePairingIds = new Set<string>(
-        opts?.nodePairingIds?.length ? opts.nodePairingIds : [nodeId],
-      );
+      const presenceKey = opts?.deviceId ?? nodeId;
+      const lastPersistedAt = recentNodePresencePersistAt.get(presenceKey) ?? 0;
+      if (receivedAtMs - lastPersistedAt < NODE_PRESENCE_PERSIST_MIN_INTERVAL_MS) {
+        return;
+      }
       try {
         await Promise.all([
-          ...[...nodePairingIds].map(
-            async (pairedNodeId) =>
-              await updatePairedNodeMetadata(pairedNodeId, {
-                lastSeenAtMs: receivedAtMs,
-                lastSeenReason: trigger,
-              }),
-          ),
-          updatePairedDeviceMetadata(nodeId, {
+          updatePairedNodeMetadata(nodeId, {
             lastSeenAtMs: receivedAtMs,
             lastSeenReason: trigger,
           }),
+          ...(opts?.deviceId
+            ? [
+                updatePairedDeviceMetadata(opts.deviceId, {
+                  lastSeenAtMs: receivedAtMs,
+                  lastSeenReason: trigger,
+                }),
+              ]
+            : []),
         ]);
+        recentNodePresencePersistAt.set(presenceKey, receivedAtMs);
       } catch (err) {
         ctx.logGateway.warn(`node presence alive failed node=${nodeId}: ${formatForLog(err)}`);
       }

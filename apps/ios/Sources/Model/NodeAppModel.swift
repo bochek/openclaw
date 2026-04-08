@@ -3121,11 +3121,12 @@ extension NodeAppModel {
             trigger: pushKind)
         let outcomeMessage =
             "Silent push outcome wakeId=\(wakeId) "
+            + "handled=\(result.handled) "
             + "applied=\(result.applied) "
             + "reason=\(result.reason) "
             + "durationMs=\(result.durationMs)"
         self.pushWakeLogger.info("\(outcomeMessage, privacy: .public)")
-        return result.applied
+        return result.handled
     }
 
     func handleBackgroundRefreshWake(trigger: String = "bg_app_refresh") async -> Bool {
@@ -3141,11 +3142,12 @@ extension NodeAppModel {
             trigger: trigger)
         let outcomeMessage =
             "Background refresh wake outcome wakeId=\(wakeId) "
+            + "handled=\(result.handled) "
             + "applied=\(result.applied) "
             + "reason=\(result.reason) "
             + "durationMs=\(result.durationMs)"
         self.pushWakeLogger.info("\(outcomeMessage, privacy: .public)")
-        return result.applied
+        return result.handled
     }
 
     func handleSignificantLocationWakeIfNeeded() async {
@@ -3179,6 +3181,7 @@ extension NodeAppModel {
             trigger: "significant_location")
         let triggerMessage =
             "Location wake trigger wakeId=\(wakeId) "
+            + "handled=\(result.handled) "
             + "applied=\(result.applied) "
             + "reason=\(result.reason) "
             + "durationMs=\(result.durationMs)"
@@ -3602,6 +3605,7 @@ extension NodeAppModel {
     }
 
     private struct SilentPushWakeAttemptResult {
+        var handled: Bool
         var applied: Bool
         var reason: String
         var durationMs: Int
@@ -3831,6 +3835,13 @@ extension NodeAppModel {
             minimumIntervalMs: minimumIntervalMs)
     }
 
+    nonisolated private static func shouldTreatBackgroundAliveWakeAsHandled(
+        applied: Bool,
+        reason: String) -> Bool
+    {
+        applied || reason == "recent_success"
+    }
+
     private func performBackgroundAliveBeaconIfNeeded(
         wakeId: String,
         trigger: String
@@ -3841,6 +3852,7 @@ extension NodeAppModel {
         let makeResult: (Bool, String) -> SilentPushWakeAttemptResult = { applied, reason in
             let durationMs = Int(Date().timeIntervalSince(startedAt) * 1000)
             return SilentPushWakeAttemptResult(
+                handled: Self.shouldTreatBackgroundAliveWakeAsHandled(applied: applied, reason: reason),
                 applied: applied,
                 reason: reason,
                 durationMs: max(0, durationMs))
@@ -4403,6 +4415,13 @@ extension NodeAppModel {
             nowMs: nowMs,
             minimumIntervalMs: minimumIntervalMs,
             gatewayConnected: gatewayConnected)
+    }
+
+    nonisolated static func _test_shouldTreatBackgroundAliveWakeAsHandled(
+        applied: Bool,
+        reason: String) -> Bool
+    {
+        self.shouldTreatBackgroundAliveWakeAsHandled(applied: applied, reason: reason)
     }
 
     nonisolated static func _test_shouldRequestOperatorApprovalScope(

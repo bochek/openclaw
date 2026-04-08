@@ -64,10 +64,16 @@ type NodePairingStateFile = {
   pairedByNodeId: Record<string, NodePairingPairedNode>;
 };
 
+const RESERVED_PAIRING_MAP_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 const PENDING_TTL_MS = 5 * 60 * 1000;
 const OPERATOR_ROLE = "operator";
 
 const withLock = createAsyncLock();
+
+function toNullPrototypeRecord<T>(record: Record<string, T> | null | undefined): Record<string, T> {
+  return Object.assign(Object.create(null) as Record<string, T>, record ?? {});
+}
 
 function buildPendingNodePairingRequest(params: {
   requestId?: string;
@@ -140,8 +146,8 @@ async function loadState(baseDir?: string): Promise<NodePairingStateFile> {
     readJsonFile<Record<string, NodePairingPairedNode>>(pairedPath),
   ]);
   const state: NodePairingStateFile = {
-    pendingById: pending ?? {},
-    pairedByNodeId: paired ?? {},
+    pendingById: toNullPrototypeRecord(pending),
+    pairedByNodeId: toNullPrototypeRecord(paired),
   };
   pruneExpiredPending(state.pendingById, Date.now(), PENDING_TTL_MS);
   return state;
@@ -156,7 +162,11 @@ async function persistState(state: NodePairingStateFile, baseDir?: string) {
 }
 
 function normalizeNodeId(nodeId: string) {
-  return nodeId.trim();
+  const normalized = nodeId.trim();
+  if (RESERVED_PAIRING_MAP_KEYS.has(normalized)) {
+    throw new Error(`reserved node pairing id: ${normalized}`);
+  }
+  return normalized;
 }
 
 function newToken() {

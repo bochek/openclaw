@@ -97,11 +97,25 @@ type DevicePairingStateFile = {
   pairedByDeviceId: Record<string, PairedDevice>;
 };
 
+const RESERVED_PAIRING_MAP_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+
 const PENDING_TTL_MS = 5 * 60 * 1000;
 const OPERATOR_ROLE = "operator";
 const OPERATOR_SCOPE_PREFIX = "operator.";
 
 const withLock = createAsyncLock();
+
+function toNullPrototypeRecord<T>(record: Record<string, T> | null | undefined): Record<string, T> {
+  return Object.assign(Object.create(null) as Record<string, T>, record ?? {});
+}
+
+function normalizeDeviceMapKey(deviceId: string): string {
+  const normalized = normalizeDeviceId(deviceId);
+  if (RESERVED_PAIRING_MAP_KEYS.has(normalized)) {
+    throw new Error(`reserved device pairing id: ${normalized}`);
+  }
+  return normalized;
+}
 
 async function loadState(baseDir?: string): Promise<DevicePairingStateFile> {
   const { pendingPath, pairedPath } = resolvePairingPaths(baseDir, "devices");
@@ -110,8 +124,8 @@ async function loadState(baseDir?: string): Promise<DevicePairingStateFile> {
     readJsonFile<Record<string, PairedDevice>>(pairedPath),
   ]);
   const state: DevicePairingStateFile = {
-    pendingById: pending ?? {},
-    pairedByDeviceId: paired ?? {},
+    pendingById: toNullPrototypeRecord(pending),
+    pairedByDeviceId: toNullPrototypeRecord(paired),
   };
   pruneExpiredPending(state.pendingById, Date.now(), PENDING_TTL_MS);
   return state;
@@ -729,13 +743,14 @@ export async function updatePairedDeviceMetadata(
 ): Promise<void> {
   return await withLock(async () => {
     const state = await loadState(baseDir);
-    const existing = state.pairedByDeviceId[normalizeDeviceId(deviceId)];
+    const normalized = normalizeDeviceMapKey(deviceId);
+    const existing = state.pairedByDeviceId[normalized];
     if (!existing) {
       return;
     }
     const roles = mergeRoles(existing.roles, existing.role, patch.role);
     const scopes = mergeScopes(existing.scopes, patch.scopes);
-    state.pairedByDeviceId[deviceId] = {
+    state.pairedByDeviceId[normalized] = {
       ...existing,
       ...patch,
       deviceId: existing.deviceId,

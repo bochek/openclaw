@@ -53,4 +53,15 @@ import Testing
                 minimumIntervalMs: 60_000,
                 gatewayConnected: true))
     }
+
+    @Test func recentSuccessCountsAsHandledWake() {
+        #expect(
+            NodeAppModel._test_shouldTreatBackgroundAliveWakeAsHandled(
+                applied: false,
+                reason: "recent_success"))
+        #expect(
+            NodeAppModel._test_shouldTreatBackgroundAliveWakeAsHandled(
+                applied: false,
+                reason: "beacon_failed") == false)
+    }
 }

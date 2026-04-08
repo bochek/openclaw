@@ -1131,11 +1131,6 @@ export const nodeHandlers: GatewayRequestHandlers = {
         loadGatewayModelCatalog: context.loadGatewayModelCatalog,
         logGateway: { warn: context.logGateway.warn },
       };
-      const nodePairingIds = new Set<string>([nodeId]);
-      const instanceId = normalizeOptionalString(client?.connect?.client?.instanceId) ?? "";
-      if (instanceId) {
-        nodePairingIds.add(instanceId);
-      }
       await handleNodeEvent(
         nodeContext,
         nodeId,
@@ -1143,7 +1138,7 @@ export const nodeHandlers: GatewayRequestHandlers = {
           event: p.event,
           payloadJSON,
         },
-        { nodePairingIds: [...nodePairingIds] },
+        { deviceId: client?.connect?.device?.id },
       );
       respond(true, { ok: true }, undefined);
     });
