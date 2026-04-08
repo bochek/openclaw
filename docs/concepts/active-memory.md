@@ -1,6 +1,6 @@
 ---
 title: "Active Memory"
-summary: "A plugin-owned sidecar memory pass that injects relevant memory into interactive chat sessions"
+summary: "A plugin-owned blocking memory subagent that injects relevant memory into interactive chat sessions"
 read_when:
   - You want to understand what active memory is for
   - You want to turn active memory on for a conversational agent
@@ -9,8 +9,8 @@ read_when:
 
 # Active Memory
 
-Active memory is an optional plugin-owned memory pass that runs before the main
-reply for eligible conversational sessions.
+Active memory is an optional plugin-owned blocking memory subagent that runs
+before the main reply for eligible conversational sessions.
 
 It exists because most memory systems are capable but reactive. They rely on
 the main agent to decide when to search memory, or on the user to say things
@@ -84,8 +84,8 @@ Those lines are derived from the same active memory pass that feeds the hidden
 system context, but they are formatted for humans instead of exposing raw prompt
 markup.
 
-By default, the sidecar transcript for that pass is temporary and deleted after
-the run completes.
+By default, the blocking memory subagent transcript is temporary and deleted
+after the run completes.
 
 Example flow:
 
@@ -170,13 +170,13 @@ The runtime shape is:
 ```mermaid
 flowchart LR
   U["User Message"] --> Q["Build Memory Query"]
-  Q --> R["Active Memory Sidecar"]
+  Q --> R["Active Memory Blocking Memory Subagent"]
   R -->|NONE or empty| M["Main Reply"]
   R -->|relevant bullets| I["Append Hidden active_memory System Context"]
   I --> M["Main Reply"]
 ```
 
-The sidecar can use only:
+The blocking memory subagent can use only:
 
 - `memory_search`
 - `memory_get`
@@ -185,7 +185,7 @@ If the connection is weak, it should return `NONE`.
 
 ## Query modes
 
-`config.queryMode` controls how much conversation the sidecar sees.
+`config.queryMode` controls how much conversation the blocking memory subagent sees.
 
 ### `message`
 
@@ -230,7 +230,7 @@ Recommended timeout:
 
 ### `full`
 
-The full conversation is sent to the sidecar.
+The full conversation is sent to the blocking memory subagent.
 
 ```text
 Full conversation context:
@@ -258,16 +258,16 @@ message < recent < full
 
 ## Transcript persistence
 
-Active memory sidecar runs create a real `session.jsonl` transcript during the
-sidecar call.
+Active memory blocking memory subagent runs create a real `session.jsonl`
+transcript during the blocking memory subagent call.
 
 By default, that transcript is temporary:
 
 - it is written to a temp directory
-- it is used only for the sidecar run
+- it is used only for the blocking memory subagent run
 - it is deleted immediately after the run finishes
 
-If you want to keep those sidecar transcripts on disk for debugging or
+If you want to keep those blocking memory subagent transcripts on disk for debugging or
 inspection, turn persistence on explicitly:
 
 ```json5
@@ -294,14 +294,14 @@ path.
 The default layout is conceptually:
 
 ```text
-agents/<agent>/sessions/active-memory/<sidecar-session-id>.jsonl
+agents/<agent>/sessions/active-memory/<blocking-memory-subagent-session-id>.jsonl
 ```
 
 You can change the relative subdirectory with `config.transcriptDir`.
 
 Use this carefully:
 
-- sidecar transcripts can accumulate quickly on busy sessions
+- blocking memory subagent transcripts can accumulate quickly on busy sessions
 - `full` query mode can duplicate a lot of conversation context
 - these transcripts contain hidden prompt context and recalled memories
 
@@ -319,13 +319,13 @@ The most important fields are:
 | --------------------------- | --------------------------------- | ------------------------------------------------------------------------------------ |
 | `enabled`                   | `boolean`                         | Enables the plugin itself                                                            |
 | `config.agents`             | `string[]`                        | Agent ids that may use active memory                                                 |
-| `config.model`              | `string`                          | Optional sidecar model ref; when unset, active memory uses the current session model |
-| `config.queryMode`          | `"message" \| "recent" \| "full"` | Controls how much conversation the sidecar sees                                      |
-| `config.timeoutMs`          | `number`                          | Hard timeout for the sidecar                                                         |
+| `config.model`              | `string`                          | Optional blocking memory subagent model ref; when unset, active memory uses the current session model |
+| `config.queryMode`          | `"message" \| "recent" \| "full"` | Controls how much conversation the blocking memory subagent sees                     |
+| `config.timeoutMs`          | `number`                          | Hard timeout for the blocking memory subagent                                        |
 | `config.maxMemories`        | `number`                          | Maximum recalled bullets to inject                                                   |
 | `config.logging`            | `boolean`                         | Emits active memory logs while tuning                                                |
-| `config.persistTranscripts` | `boolean`                         | Keeps sidecar transcripts on disk instead of deleting temp files                     |
-| `config.transcriptDir`      | `string`                          | Relative sidecar transcript directory under the agent sessions folder                |
+| `config.persistTranscripts` | `boolean`                         | Keeps blocking memory subagent transcripts on disk instead of deleting temp files    |
+| `config.transcriptDir`      | `string`                          | Relative blocking memory subagent transcript directory under the agent sessions folder |
 
 Useful tuning fields:
 
@@ -369,7 +369,7 @@ session instead of looking for a separate active-memory debug command.
 Then move to:
 
 - `message` if you want lower latency
-- `full` if you decide extra context is worth the slower sidecar
+- `full` if you decide extra context is worth the slower blocking memory subagent
 
 ## Debugging
 

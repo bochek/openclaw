@@ -1,7 +1,7 @@
 {
   "id": "active-memory",
   "name": "Active Memory",
-  "description": "Runs a bounded memory sidecar before eligible conversational replies and injects relevant memory into prompt context.",
+  "description": "Runs a bounded blocking memory subagent before eligible conversational replies and injects relevant memory into prompt context.",
   "configSchema": {
     "type": "object",
     "additionalProperties": false,
@@ -37,14 +37,14 @@
     },
     "model": {
       "label": "Memory Model",
-      "help": "Provider/model used for the memory sidecar."
+      "help": "Provider/model used for the blocking memory subagent."
     },
     "timeoutMs": {
       "label": "Timeout (ms)"
     },
     "queryMode": {
       "label": "Query Mode",
-      "help": "Choose whether the sidecar sees only the latest user message, a small recent tail, or the full conversation."
+      "help": "Choose whether the blocking memory subagent sees only the latest user message, a small recent tail, or the full conversation."
     },
     "logging": {
       "label": "Enable Logging",
@@ -52,7 +52,7 @@
     },
     "persistTranscripts": {
       "label": "Persist Transcripts",
-      "help": "Keep sidecar session transcripts on disk in a separate plugin-owned directory."
+      "help": "Keep blocking memory subagent session transcripts on disk in a separate plugin-owned directory."
     },
     "transcriptDir": {
       "label": "Transcript Directory",
