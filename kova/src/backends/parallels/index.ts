@@ -36,13 +36,17 @@ const parallelsProviderEnvVar: Record<KovaParallelsProvider, string> = {
 };
 
 const parallelsForwardedEnvKeys = [
+  "ALL_PROXY",
   "CI",
   "HOME",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
   "LANG",
   "LC_ALL",
   "LC_CTYPE",
   "LC_MESSAGES",
   "LOGNAME",
+  "NO_PROXY",
   "PATH",
   "SHELL",
   "TERM",
@@ -50,6 +54,10 @@ const parallelsForwardedEnvKeys = [
   "TMPDIR",
   "TEMP",
   "USER",
+  "all_proxy",
+  "http_proxy",
+  "https_proxy",
+  "no_proxy",
 ] as const;
 
 function resolveParallelsAxes(selection: KovaBackendRunSelection) {

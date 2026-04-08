@@ -69,6 +69,9 @@ export function parseKovaSelectorFilters(args: string[]) {
       index += 1;
       continue;
     }
+    if (arg.startsWith("--")) {
+      throw new Error(`unsupported Kova selector filter: ${arg}.`);
+    }
     rest.push(arg);
   }
 
