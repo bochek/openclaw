@@ -1,5 +1,6 @@
 import { listKovaBackends, listKovaTargets } from "../backends/registry.js";
 import type { KovaRunTarget } from "../backends/types.js";
+import { listKovaQaScenarios } from "../catalog/qa.js";
 
 function parseListArgs(args: string[]) {
   const [subject, maybeTarget] = args;
@@ -22,6 +23,18 @@ function renderBackendLines(target?: KovaRunTarget) {
   ];
 }
 
+function renderScenarioLines(target?: KovaRunTarget) {
+  const resolvedTarget: "qa" = target ?? "qa";
+  const scenarios = listKovaQaScenarios();
+  return [
+    `Scenarios (${resolvedTarget}):`,
+    ...scenarios.map(
+      (scenario) =>
+        `  - ${scenario.id}: ${scenario.title} [${scenario.surface}] (${scenario.sourcePath})`,
+    ),
+  ];
+}
+
 export async function listCommand(args: string[]) {
   const options = parseListArgs(args);
 
@@ -32,6 +45,11 @@ export async function listCommand(args: string[]) {
 
   if (options.subject === "backends") {
     process.stdout.write(`${renderBackendLines(options.target).join("\n")}\n`);
+    return;
+  }
+
+  if (options.subject === "scenarios") {
+    process.stdout.write(`${renderScenarioLines(options.target).join("\n")}\n`);
     return;
   }
 
