@@ -305,8 +305,8 @@ describe("active-memory plugin", () => {
       sessionId: "s-main",
       updatedAt: 0,
       pluginStatusLines: [
-        "🧩 Active Memory: ok 13.4s recent 1 mem",
-        "🔎 Active Memory Debug: Favorite desk snack: roasted almonds or cashews.",
+        "Active Memory: ok 13.4s recent 1 mem",
+        "Active Memory Debug: Favorite desk snack: roasted almonds or cashews.",
         "Other Plugin: keep me",
       ],
     };
@@ -327,8 +327,8 @@ describe("active-memory plugin", () => {
         sessionId: "s-main",
         updatedAt: 0,
         pluginStatusLines: [
-          "🧩 Active Memory: ok 13.4s recent 1 mem",
-          "🔎 Active Memory Debug: Favorite desk snack: roasted almonds or cashews.",
+          "Active Memory: ok 13.4s recent 1 mem",
+          "Active Memory Debug: Favorite desk snack: roasted almonds or cashews.",
           "Other Plugin: keep me",
         ],
       },

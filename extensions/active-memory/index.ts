@@ -179,6 +179,8 @@ type ActiveMemoryChatType = "direct" | "group" | "channel";
 
 const ACTIVE_MEMORY_STATUS_PREFIX = "🧩 Active Memory:";
 const ACTIVE_MEMORY_DEBUG_PREFIX = "🔎 Active Memory Debug:";
+const LEGACY_ACTIVE_MEMORY_STATUS_PREFIX = "Active Memory:";
+const LEGACY_ACTIVE_MEMORY_DEBUG_PREFIX = "Active Memory Debug:";
 
 const activeRecallCache = new Map<string, CachedActiveRecallResult>();
 
@@ -462,7 +464,10 @@ function isLegacyActiveMemoryLine(line: unknown): line is string {
   }
   const trimmed = line.trim();
   return (
-    trimmed.startsWith(ACTIVE_MEMORY_STATUS_PREFIX) || trimmed.startsWith(ACTIVE_MEMORY_DEBUG_PREFIX)
+    trimmed.startsWith(ACTIVE_MEMORY_STATUS_PREFIX) ||
+    trimmed.startsWith(ACTIVE_MEMORY_DEBUG_PREFIX) ||
+    trimmed.startsWith(LEGACY_ACTIVE_MEMORY_STATUS_PREFIX) ||
+    trimmed.startsWith(LEGACY_ACTIVE_MEMORY_DEBUG_PREFIX)
   );
 }
 
