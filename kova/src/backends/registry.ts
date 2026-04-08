@@ -17,6 +17,10 @@ export function listKovaBackends(target?: KovaRunTarget) {
   return kovaBackends.filter((backend) => (target ? backend.supportsTarget(target) : true));
 }
 
+export function readKovaBackend(id: KovaBackendId) {
+  return kovaBackends.find((backend) => backend.id === id);
+}
+
 export function resolveKovaBackend(target: KovaRunTarget, backendId?: KovaBackendId) {
   const backend = listKovaBackends(target).find((candidate) => {
     if (!candidate.supportsTarget(target)) {

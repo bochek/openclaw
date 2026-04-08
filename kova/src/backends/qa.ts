@@ -4,6 +4,8 @@ import type { KovaBackend } from "./types.js";
 export const qaBackend: KovaBackend = {
   id: "host",
   title: "Host runtime",
+  kind: "host",
+  runner: "host",
   supportsTarget(target): target is "qa" {
     return target === "qa";
   },

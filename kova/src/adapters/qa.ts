@@ -1,5 +1,6 @@
 import path from "node:path";
 import { readQaBootstrapScenarioCatalog, runQaSuite } from "../../../extensions/qa-lab/api.js";
+import { readKovaBackend } from "../backends/registry.js";
 import {
   buildKovaCoverageFromQaCatalog,
   buildKovaCoverageFromScenarioResults,
@@ -77,6 +78,10 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
   const runDir = resolveKovaRunDir(opts.repoRoot, opts.runId);
   const qaOutputDir = path.join(runDir, "qa");
   await ensureDir(qaOutputDir);
+  const backend = readKovaBackend("host");
+  if (!backend) {
+    throw new Error("Kova backend metadata missing for host");
+  }
   const baseArtifact = {
     schemaVersion: 1 as const,
     runId: opts.runId,
@@ -93,11 +98,12 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
       capabilities: ["behavior", "qa"],
     },
     backend: {
-      id: "host",
-      title: "Host runtime",
-      kind: "host",
-      runner: "host",
+      id: backend.id,
+      title: backend.title,
+      kind: backend.kind,
+      runner: backend.runner,
       mode: opts.providerMode ?? "mock-openai",
+      binary: backend.binary,
     },
     environment: {
       os: process.platform,

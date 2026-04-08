@@ -9,6 +9,7 @@ import { kovaRunArtifactSchema } from "../../contracts/run-artifact.js";
 import { ensureDir, resolveKovaRunDir, writeJsonFile, writeTextFile } from "../../lib/fs.js";
 import { resolveGitCommit, resolveGitDirty } from "../../lib/git.js";
 import { updateKovaRunIndex } from "../../lib/run-index.js";
+import { readKovaBackend } from "../registry.js";
 import type { KovaBackend, KovaBackendRunSelection } from "../types.js";
 import { buildMultipassPlan, renderGuestRunScript } from "./plan.js";
 import {
@@ -30,8 +31,12 @@ function createMultipassBaseArtifact(params: {
   gitDirty: boolean;
 }): Pick<
   KovaRunArtifact,
-  "schemaVersion" | "runId" | "selection" | "scenario" | "backend" | "environment"
+  "schemaVersion" | "runId" | "selection" | "scenario" | "backend" | "environment" | "coverage"
 > {
+  const backend = readKovaBackend("multipass");
+  if (!backend) {
+    throw new Error("Kova backend metadata missing for multipass");
+  }
   return {
     schemaVersion: 1,
     runId: params.selection.runId,
@@ -51,12 +56,12 @@ function createMultipassBaseArtifact(params: {
       capabilities: ["behavior", "qa"],
     },
     backend: {
-      id: "multipass",
-      title: "Multipass VM",
-      kind: "multipass",
-      runner: "vm",
+      id: backend.id,
+      title: backend.title,
+      kind: backend.kind,
+      runner: backend.runner,
       mode: params.providerMode,
-      binary: "multipass",
+      binary: backend.binary,
     },
     environment: {
       os: process.platform,
@@ -72,6 +77,9 @@ function createMultipassBaseArtifact(params: {
 export const multipassBackend: KovaBackend = {
   id: "multipass",
   title: "Multipass VM",
+  kind: "multipass",
+  runner: "vm",
+  binary: "multipass",
   supportsTarget(target): target is "qa" {
     return target === "qa";
   },

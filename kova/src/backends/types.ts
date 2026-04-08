@@ -16,6 +16,9 @@ export type KovaBackendRunSelection = {
 export type KovaBackend = {
   id: KovaBackendId;
   title: string;
+  kind: string;
+  runner: "host" | "vm" | "docker" | "live";
+  binary?: string;
   supportsTarget(target: string): target is KovaRunTarget;
   run(selection: KovaBackendRunSelection): Promise<KovaRunArtifact>;
 };
