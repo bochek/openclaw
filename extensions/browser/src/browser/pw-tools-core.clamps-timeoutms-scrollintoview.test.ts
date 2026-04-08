@@ -65,7 +65,7 @@ describe("pw-tools-core", () => {
       throw new Error(errorMessage);
     });
     setPwToolsCoreCurrentRefLocator({ click });
-    setPwToolsCoreCurrentPage({});
+    setPwToolsCoreCurrentPage({ url: vi.fn(() => "http://127.0.0.1/") });
 
     await expect(
       mod.clickViaPlaywright({
@@ -82,7 +82,7 @@ describe("pw-tools-core", () => {
       );
     });
     setPwToolsCoreCurrentRefLocator({ click });
-    setPwToolsCoreCurrentPage({});
+    setPwToolsCoreCurrentPage({ url: vi.fn(() => "http://127.0.0.1/") });
 
     await expect(
       mod.clickViaPlaywright({

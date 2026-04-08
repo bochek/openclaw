@@ -32,6 +32,7 @@ const INTERACTION_NAVIGATION_GRACE_MS = 250;
 type NavigationObservablePage = Pick<Page, "url"> & {
   on?: (event: "framenavigated", listener: (frame: Frame) => void) => unknown;
   off?: (event: "framenavigated", listener: (frame: Frame) => void) => unknown;
+  mainFrame?: () => Frame;
 };
 
 const pendingInteractionNavigationGuardCleanup = new WeakMap<Page, () => void>();
@@ -119,6 +120,11 @@ function observeDelayedInteractionNavigation(
 
   return new Promise<boolean>((resolve) => {
     const onFrameNavigated = (_frame: Frame) => {
+      // Only react to main-frame navigations; iframe redirects must not trigger
+      // SSRF checks for the top-level document.
+      if (typeof page.mainFrame === "function" && _frame !== page.mainFrame()) {
+        return;
+      }
       // Use isHashOnlyNavigation rather than !didCrossDocumentUrlChange: the
       // event firing is itself the navigation signal, so a same-URL reload must
       // not be treated as "no navigation" the way URL polling would.
@@ -170,6 +176,11 @@ function scheduleDelayedInteractionNavigationGuard(opts: {
   pendingInteractionNavigationGuardCleanup.get(opts.page)?.();
 
   const onFrameNavigated = (_frame: Frame) => {
+    // Only react to main-frame navigations; iframe redirects must not trigger
+    // SSRF checks for the top-level document.
+    if (typeof opts.page.mainFrame === "function" && _frame !== opts.page.mainFrame()) {
+      return;
+    }
     // Use isHashOnlyNavigation rather than !didCrossDocumentUrlChange: the
     // event firing is itself the navigation signal, so a same-URL reload must
     // not be treated as "no navigation" the way URL polling would.
@@ -215,6 +226,11 @@ async function assertInteractionNavigationCompletedSafely<T>(opts: {
   const navPage = opts.page as unknown as NavigationObservablePage;
   let navigatedDuringAction = false;
   const onFrameNavigated = (_frame: Frame) => {
+    // Only react to main-frame navigations; iframe redirects must not trigger
+    // SSRF checks for the top-level document.
+    if (typeof opts.page.mainFrame === "function" && _frame !== opts.page.mainFrame()) {
+      return;
+    }
     // Use isHashOnlyNavigation rather than didCrossDocumentUrlChange: the event
     // firing is the navigation signal, so a same-URL reload must not be skipped
     // the way it would be by URL-equality polling.
