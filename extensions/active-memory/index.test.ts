@@ -441,6 +441,44 @@ describe("active-memory plugin", () => {
     expect(prompt).toContain("user: packing is annoying");
   });
 
+  it("strips prior memory/debug traces from assistant context before retrieval", async () => {
+    api.pluginConfig = {
+      agents: ["main"],
+      queryMode: "recent",
+    };
+    plugin.register(api as unknown as OpenClawPluginApi);
+
+    await hooks.before_prompt_build(
+      {
+        prompt: "what should i grab on the way?",
+        messages: [
+          { role: "user", content: "i have a flight tomorrow" },
+          {
+            role: "assistant",
+            content:
+              "🧠 Memory Search: favorite food comfort food tacos sushi ramen\n🧩 Active Memory: ok 842ms recent 2 mem\n🔎 Active Memory Debug: spicy ramen; tacos\nSounds like you want something easy before the airport.",
+          },
+        ],
+      },
+      {
+        agentId: "main",
+        trigger: "user",
+        sessionKey: "agent:main:main",
+        messageProvider: "webchat",
+      },
+    );
+
+    const prompt = runEmbeddedPiAgent.mock.calls.at(-1)?.[0]?.prompt;
+    expect(prompt).toContain(
+      "ignore that text and do not search for those same surfaced memories again",
+    );
+    expect(prompt).toContain("assistant: Sounds like you want something easy before the airport.");
+    expect(prompt).not.toContain("Memory Search:");
+    expect(prompt).not.toContain("Active Memory:");
+    expect(prompt).not.toContain("Active Memory Debug:");
+    expect(prompt).not.toContain("spicy ramen; tacos");
+  });
+
   it("loosens zero-overlap filtering for preference-seeking turns when concrete relevance is disabled", async () => {
     api.pluginConfig = {
       agents: ["main"],

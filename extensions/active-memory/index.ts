@@ -94,6 +94,15 @@ const STOPWORDS = new Set([
   "your",
 ]);
 
+const RECALLED_CONTEXT_LINE_PATTERNS = [
+  /^🧩\s*active memory:/i,
+  /^🔎\s*active memory debug:/i,
+  /^🧠\s*memory search:/i,
+  /^memory search:/i,
+  /^active memory debug:/i,
+  /^active memory:/i,
+];
+
 type ActiveRecallPluginConfig = {
   agents?: string[];
   model?: string;
@@ -665,6 +674,22 @@ function extractTextContent(content: unknown): string {
   return parts.join(" ").trim();
 }
 
+function stripRecalledContextNoise(text: string): string {
+  const cleanedLines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => {
+      if (!line) {
+        return false;
+      }
+      if (line.includes("<active_memory>") || line.includes("</active_memory>")) {
+        return false;
+      }
+      return !RECALLED_CONTEXT_LINE_PATTERNS.some((pattern) => pattern.test(line));
+    });
+  return cleanedLines.join(" ").replace(/\s+/g, " ").trim();
+}
+
 function extractRecentTurns(messages: unknown[]): ActiveRecallRecentTurn[] {
   const turns: ActiveRecallRecentTurn[] = [];
   for (const message of messages) {
@@ -676,7 +701,8 @@ function extractRecentTurns(messages: unknown[]): ActiveRecallRecentTurn[] {
     if (!role) {
       continue;
     }
-    const text = extractTextContent(typed.content);
+    const rawText = extractTextContent(typed.content);
+    const text = role === "assistant" ? stripRecalledContextNoise(rawText) : rawText;
     if (!text) {
       continue;
     }
@@ -765,6 +791,7 @@ async function runRecallSidecar(params: {
     "You are Active Memory, a fast sidecar memory model.",
     "Use only memory_search and memory_get.",
     "Search for memories relevant to the user's latest message.",
+    "If the provided conversation context already contains recalled-memory summaries, debug output, or prior memory/tool traces, ignore that text and do not search for those same surfaced memories again unless the latest user message clearly requires re-checking them.",
     "Return memories only if they would concretely change or personalize the answer.",
     "If the connection is weak, broad, or only vaguely related, reply with NONE.",
     "Do not return generic lifestyle or food preferences unless the latest user message is clearly asking for a choice, recommendation, habit, or preference-sensitive answer.",
