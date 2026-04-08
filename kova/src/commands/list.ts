@@ -60,22 +60,31 @@ function parseListArgs(args: string[]) {
   const all = args.includes("--all");
   const retainedArgs = args.filter((arg) => arg !== "--json" && arg !== "--all");
   const { filters, rest } = parseKovaSelectorFilters(retainedArgs);
+  const resolvedFilters = filters ?? {};
   const [subject, maybeTarget] = rest;
   const target =
-    filters.target ??
+    resolvedFilters.target ??
     (maybeTarget === "qa" || maybeTarget === "character-eval" || maybeTarget === "parallels"
       ? maybeTarget
       : undefined);
   return {
     subject,
     target,
-    backend: filters.backend,
-    guest: filters.guest,
-    mode: filters.mode,
-    provider: filters.provider,
+    backend: resolvedFilters.backend,
+    guest: resolvedFilters.guest,
+    mode: resolvedFilters.mode,
+    provider: resolvedFilters.provider,
     all,
     json,
   };
+}
+
+function assertKovaQaCatalogTarget(subject: "scenarios" | "surfaces", target?: KovaRunTarget) {
+  if (target && target !== "qa") {
+    throw new Error(
+      `kova list ${subject} only supports the qa target. Use 'kova list ${subject} qa'.`,
+    );
+  }
 }
 
 function filterRuns(
@@ -390,6 +399,7 @@ export async function listCommand(repoRoot: string, args: string[]) {
   }
 
   if (options.subject === "scenarios") {
+    assertKovaQaCatalogTarget("scenarios", options.target);
     if (options.json) {
       process.stdout.write(
         `${JSON.stringify(
@@ -408,6 +418,7 @@ export async function listCommand(repoRoot: string, args: string[]) {
   }
 
   if (options.subject === "surfaces") {
+    assertKovaQaCatalogTarget("surfaces", options.target);
     if (options.json) {
       process.stdout.write(
         `${JSON.stringify(

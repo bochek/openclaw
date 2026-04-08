@@ -6,6 +6,14 @@ import { isHelpFlag, renderRunHelp } from "../help.js";
 import { createKovaRunId } from "../lib/run-id.js";
 import { renderArtifactSummary } from "../report.js";
 
+function shiftRequiredValue(args: string[], flag: string) {
+  const value = args.shift();
+  if (!value || value.startsWith("--")) {
+    throw new Error(`missing value for ${flag}.`);
+  }
+  return value;
+}
+
 function parseRunOptions(args: string[]) {
   const options: {
     target?: KovaRunTarget;
@@ -40,45 +48,57 @@ function parseRunOptions(args: string[]) {
   while (rest.length > 0) {
     const arg = rest.shift();
     if (arg === "--provider-mode") {
-      const value = rest.shift();
-      if (value === "mock-openai" || value === "live-frontier") {
-        options.providerMode = value;
+      const value = shiftRequiredValue(rest, "--provider-mode");
+      if (value !== "mock-openai" && value !== "live-frontier") {
+        throw new Error(
+          `unsupported value for --provider-mode: ${value}. Use mock-openai or live-frontier.`,
+        );
       }
+      options.providerMode = value;
       continue;
     }
     if (arg === "--backend") {
-      const value = rest.shift();
-      if (value === "host" || value === "multipass" || value === "parallels") {
-        options.backend = value;
+      const value = shiftRequiredValue(rest, "--backend");
+      if (value !== "host" && value !== "multipass" && value !== "parallels") {
+        throw new Error(
+          `unsupported value for --backend: ${value}. Use 'kova list backends' to inspect supported backends.`,
+        );
       }
+      options.backend = value;
       continue;
     }
     if (arg === "--provider") {
-      const value = rest.shift();
-      if (value === "openai" || value === "anthropic" || value === "minimax") {
-        options.parallelsProvider = value;
+      const value = shiftRequiredValue(rest, "--provider");
+      if (value !== "openai" && value !== "anthropic" && value !== "minimax") {
+        throw new Error(
+          `unsupported value for --provider: ${value}. Use openai, anthropic, or minimax.`,
+        );
       }
+      options.parallelsProvider = value;
       continue;
     }
     if (arg === "--model") {
-      const value = rest.shift();
-      if (value?.trim()) {
-        options.modelRefs.push(value.trim());
+      const value = shiftRequiredValue(rest, "--model").trim();
+      if (!value) {
+        throw new Error("missing value for --model.");
       }
+      options.modelRefs.push(value);
       continue;
     }
     if (arg === "--judge-model") {
-      const value = rest.shift();
-      if (value?.trim()) {
-        options.judgeModel = value.trim();
+      const value = shiftRequiredValue(rest, "--judge-model").trim();
+      if (!value) {
+        throw new Error("missing value for --judge-model.");
       }
+      options.judgeModel = value;
       continue;
     }
     if (arg === "--judge-timeout-ms") {
-      const value = rest.shift();
-      if (value && Number.isFinite(Number(value))) {
-        options.judgeTimeoutMs = Number(value);
+      const value = shiftRequiredValue(rest, "--judge-timeout-ms");
+      if (!Number.isFinite(Number(value))) {
+        throw new Error(`unsupported value for --judge-timeout-ms: ${value}. Use a number.`);
       }
+      options.judgeTimeoutMs = Number(value);
       continue;
     }
     if (arg === "--fast") {
@@ -86,25 +106,30 @@ function parseRunOptions(args: string[]) {
       continue;
     }
     if (arg === "--guest") {
-      const value = rest.shift();
-      if (value === "macos" || value === "windows" || value === "linux") {
-        options.guest = value;
+      const value = shiftRequiredValue(rest, "--guest");
+      if (value !== "macos" && value !== "windows" && value !== "linux") {
+        throw new Error(`unsupported value for --guest: ${value}. Use macos, windows, or linux.`);
       }
+      options.guest = value;
       continue;
     }
     if (arg === "--mode") {
-      const value = rest.shift();
-      if (value === "fresh" || value === "upgrade" || value === "both") {
-        options.mode = value;
+      const value = shiftRequiredValue(rest, "--mode");
+      if (value !== "fresh" && value !== "upgrade" && value !== "both") {
+        throw new Error(`unsupported value for --mode: ${value}. Use fresh, upgrade, or both.`);
       }
+      options.mode = value;
       continue;
     }
     if (arg === "--scenario") {
-      const value = rest.shift();
-      if (value?.trim()) {
-        options.scenarioIds.push(value.trim());
+      const value = shiftRequiredValue(rest, "--scenario").trim();
+      if (!value) {
+        throw new Error("missing value for --scenario.");
       }
+      options.scenarioIds.push(value);
+      continue;
     }
+    throw new Error(`unsupported kova run option: ${arg}`);
   }
   return options;
 }

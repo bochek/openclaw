@@ -79,10 +79,37 @@ async function commandExists(command: string) {
   }
 }
 
+async function findCommandOnPath(command: string) {
+  const pathValue = process.env.PATH;
+  if (!pathValue) {
+    return undefined;
+  }
+  for (const candidateDir of pathValue.split(path.delimiter).filter(Boolean)) {
+    const candidatePath = path.join(candidateDir, command);
+    if (await commandExists(candidatePath)) {
+      return candidatePath;
+    }
+  }
+  return undefined;
+}
+
 async function resolveParallelsAvailability() {
   const binaryPath = process.env.PRLCTL_BIN || "";
-  if (binaryPath && (await commandExists(binaryPath))) {
-    return { available: true, binaryPath };
+  if (binaryPath) {
+    if (binaryPath.includes(path.sep)) {
+      if (await commandExists(binaryPath)) {
+        return { available: true, binaryPath };
+      }
+    } else {
+      const resolvedBinaryPath = await findCommandOnPath(binaryPath);
+      if (resolvedBinaryPath) {
+        return { available: true, binaryPath: resolvedBinaryPath };
+      }
+    }
+  }
+  const pathBinary = await findCommandOnPath("prlctl");
+  if (pathBinary) {
+    return { available: true, binaryPath: pathBinary };
   }
   const candidates = [
     "/usr/local/bin/prlctl",

@@ -293,7 +293,7 @@ export function renderListBackendsHelp() {
 export function renderListScenariosHelp() {
   return joinBlocks([
     pageHeader("kova list scenarios", "Browse scenario catalog entries"),
-    usageBlock(["kova list scenarios [target] [--json]"]),
+    usageBlock(["kova list scenarios [qa] [--json]"]),
     block("Arguments", keyValueBlock([["target", "qa"]])),
     examplesBlock(["kova list scenarios qa"]),
     notesBlock(["Scenarios are the executable proofs Kova can run."]),
@@ -304,7 +304,7 @@ export function renderListScenariosHelp() {
 export function renderListSurfacesHelp() {
   return joinBlocks([
     pageHeader("kova list surfaces", "Browse coverage surfaces"),
-    usageBlock(["kova list surfaces [target] [--json]"]),
+    usageBlock(["kova list surfaces [qa] [--json]"]),
     block("Arguments", keyValueBlock([["target", "qa"]])),
     examplesBlock(["kova list surfaces qa"]),
     notesBlock([
