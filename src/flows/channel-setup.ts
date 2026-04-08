@@ -23,6 +23,7 @@ import type {
   ChannelOnboardingPostWriteHook,
   SetupChannelsOptions,
 } from "../commands/channel-setup/types.js";
+import { isTrustedWorkspaceChannelCatalogEntry } from "../commands/channel-setup/workspace-trust.js";
 import type { ChannelChoice } from "../commands/onboard-types.js";
 import { isChannelConfigured } from "../config/channel-configured.js";
 import type { OpenClawConfig } from "../config/config.js";
@@ -146,11 +147,15 @@ export async function setupChannels(
   };
   const preloadConfiguredExternalPlugins = () => {
     // Keep setup memory bounded by snapshot-loading only configured external plugins.
+    // Use the full catalog (including trusted workspace entries) so that a configured
+    // trusted workspace channel plugin is still preloaded here. Untrusted workspace
+    // entries are skipped via the trust check below, preserving the security guard
+    // added for GHSA-82qx-6vj7-p8m2 without dropping legitimate workspace channels.
     const workspaceDir = resolveWorkspaceDir();
-    for (const entry of listChannelPluginCatalogEntries({
-      workspaceDir,
-      excludeWorkspace: true,
-    })) {
+    for (const entry of listChannelPluginCatalogEntries({ workspaceDir })) {
+      if (!isTrustedWorkspaceChannelCatalogEntry(entry, next)) {
+        continue;
+      }
       const channel = entry.id as ChannelChoice;
       if (getVisibleChannelPlugin(channel)) {
         continue;

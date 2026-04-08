@@ -6,6 +6,9 @@ const resolveAgentWorkspaceDir = vi.hoisted(() =>
 );
 const resolveDefaultAgentId = vi.hoisted(() => vi.fn((_cfg?: unknown) => "default"));
 const listChannelPluginCatalogEntries = vi.hoisted(() => vi.fn((_args?: unknown): unknown[] => []));
+const isTrustedWorkspaceChannelCatalogEntry = vi.hoisted(() =>
+  vi.fn((_entry?: unknown, _cfg?: unknown) => true),
+);
 const getChannelSetupPlugin = vi.hoisted(() => vi.fn((_channel?: unknown) => undefined));
 const listChannelSetupPlugins = vi.hoisted(() => vi.fn((): unknown[] => []));
 const collectChannelStatus = vi.hoisted(() =>
@@ -49,6 +52,11 @@ vi.mock("../commands/channel-setup/plugin-install.js", () => ({
   })),
 }));
 
+vi.mock("../commands/channel-setup/workspace-trust.js", () => ({
+  isTrustedWorkspaceChannelCatalogEntry: (entry?: unknown, cfg?: unknown) =>
+    isTrustedWorkspaceChannelCatalogEntry(entry, cfg),
+}));
+
 vi.mock("../config/channel-configured.js", () => ({
   isChannelConfigured: vi.fn(() => false),
 }));
@@ -68,6 +76,7 @@ describe("setupChannels", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     listChannelPluginCatalogEntries.mockReturnValue([]);
+    isTrustedWorkspaceChannelCatalogEntry.mockReturnValue(true);
     collectChannelStatus.mockResolvedValue({
       installedPlugins: [],
       catalogEntries: [],
@@ -77,7 +86,7 @@ describe("setupChannels", () => {
     });
   });
 
-  it("excludes workspace catalog entries while preloading scoped setup plugins", async () => {
+  it("queries the full catalog (including trusted workspace entries) while preloading scoped setup plugins", async () => {
     const prompter = {
       confirm: vi.fn(async () => false),
       note: vi.fn(async () => {}),
@@ -85,9 +94,37 @@ describe("setupChannels", () => {
 
     await setupChannels({} as never, {} as never, prompter, {});
 
+    // Preload uses the full catalog; workspace trust filtering is applied per-entry
+    // rather than via excludeWorkspace so trusted workspace channels remain discoverable.
     expect(listChannelPluginCatalogEntries).toHaveBeenCalledWith({
       workspaceDir: "/tmp/openclaw-workspace",
-      excludeWorkspace: true,
     });
+  });
+
+  it("skips untrusted workspace catalog entries during preload", async () => {
+    const untrustedEntry = {
+      id: "matrix",
+      origin: "workspace",
+      pluginId: "malicious-plugin",
+      meta: {},
+    };
+    listChannelPluginCatalogEntries.mockReturnValue([untrustedEntry]);
+    // Simulate untrusted workspace entry
+    isTrustedWorkspaceChannelCatalogEntry.mockReturnValue(false);
+
+    const loadChannelSetupPluginRegistrySnapshotForChannel = vi.fn(() => ({
+      channels: [],
+      channelSetups: [],
+    }));
+
+    const prompter = {
+      confirm: vi.fn(async () => false),
+      note: vi.fn(async () => {}),
+    } as unknown as WizardPrompter;
+
+    await setupChannels({} as never, {} as never, prompter, {});
+
+    // The untrusted entry must not reach loadScopedChannelPlugin
+    expect(loadChannelSetupPluginRegistrySnapshotForChannel).not.toHaveBeenCalled();
   });
 });
