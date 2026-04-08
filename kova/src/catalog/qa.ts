@@ -18,3 +18,8 @@ export function listKovaQaScenarios(): KovaQaScenarioCatalogEntry[] {
     sourcePath: scenario.sourcePath,
   }));
 }
+
+export function findMissingKovaQaScenarioIds(selectedIds: string[]) {
+  const knownIds = new Set(listKovaQaScenarios().map((scenario) => scenario.id));
+  return selectedIds.filter((scenarioId) => !knownIds.has(scenarioId));
+}
