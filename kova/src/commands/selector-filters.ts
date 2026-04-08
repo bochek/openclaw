@@ -73,7 +73,7 @@ export function parseKovaSelectorFilters(args: string[]) {
   }
 
   return {
-    filters,
+    filters: hasKovaSelectorFilters(filters) ? filters : undefined,
     rest,
   };
 }

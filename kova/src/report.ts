@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { KovaRunSelectorFilters } from "./commands/selector-filters.js";
-import { matchesKovaSelectorFilters } from "./commands/selector-filters.js";
+import { hasKovaSelectorFilters, matchesKovaSelectorFilters } from "./commands/selector-filters.js";
 import {
   block,
   bulletList,
@@ -249,7 +249,7 @@ export async function resolveLatestRunId(repoRoot: string, filters?: KovaRunSele
     if (latestFilteredRunId) {
       return latestFilteredRunId;
     }
-    if (!filters && index.latestRunId) {
+    if ((!filters || !hasKovaSelectorFilters(filters)) && index.latestRunId) {
       return index.latestRunId;
     }
   }
@@ -795,19 +795,31 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
     ...notes.keyed.map(([key, value]) => [humanizeLabel(key), value] as const),
   ];
   const selectionLabel = describeScenarioSelection(artifact);
-  const artifactLines = [
-    artifact.evidence.reportPath ? `report   ${displayPath(artifact.evidence.reportPath)}` : "",
-    artifact.evidence.summaryPath ? `summary  ${displayPath(artifact.evidence.summaryPath)}` : "",
+  const artifactPaths = [
+    artifact.evidence.reportPath
+      ? ({ label: "report", path: artifact.evidence.reportPath } as const)
+      : null,
+    artifact.evidence.summaryPath
+      ? ({ label: "summary", path: artifact.evidence.summaryPath } as const)
+      : null,
     artifact.execution.paths.planPath
-      ? `plan     ${displayPath(artifact.execution.paths.planPath)}`
-      : "",
+      ? ({ label: "plan", path: artifact.execution.paths.planPath } as const)
+      : null,
     artifact.execution.paths.logPath
-      ? `log      ${displayPath(artifact.execution.paths.logPath)}`
-      : "",
+      ? ({ label: "log", path: artifact.execution.paths.logPath } as const)
+      : null,
     artifact.execution.paths.bootstrapLogPath
-      ? `bootstrap ${displayPath(artifact.execution.paths.bootstrapLogPath)}`
-      : "",
-  ].filter(Boolean);
+      ? ({ label: "bootstrap", path: artifact.execution.paths.bootstrapLogPath } as const)
+      : null,
+  ].filter(Boolean) as Array<{ label: string; path: string }>;
+  const artifactPathSet = new Set(artifactPaths.map((entry) => entry.path));
+  const additionalArtifactPaths = artifact.evidence.sourceArtifactPaths.filter(
+    (artifactPath) => !artifactPathSet.has(artifactPath),
+  );
+  const artifactLines = [
+    ...artifactPaths.map((entry) => `${entry.label.padEnd(8, " ")}${displayPath(entry.path)}`),
+    ...additionalArtifactPaths.map((artifactPath) => `captured ${displayPath(artifactPath)}`),
+  ];
   return joinBlocks([
     pageHeader(
       `Run ${artifact.runId}`,
@@ -887,14 +899,7 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
       : []),
     block(
       "Artifacts",
-      artifactLines.length > 0
-        ? [
-            ...artifactLines,
-            artifact.evidence.sourceArtifactPaths.length > 0
-              ? muted(`${artifact.evidence.sourceArtifactPaths.length} additional captured path(s)`)
-              : "",
-          ].filter(Boolean)
-        : [muted("No artifact paths recorded.")],
+      artifactLines.length > 0 ? artifactLines : [muted("No artifact paths recorded.")],
     ),
     ...(notes.keyed.length > 0 ? [block("Context", keyValueBlock(keyedContext))] : []),
     ...(notes.plain.length > 0 ? [block("Notes", bulletList(notes.plain))] : []),
