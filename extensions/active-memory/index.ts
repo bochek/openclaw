@@ -610,72 +610,12 @@ function normalizeNoRecallValue(value: string): boolean {
   return NO_RECALL_VALUES.has(value.trim().toLowerCase());
 }
 
-function extractLatestUserMessage(query: string): string {
-  const marker = "Latest user message:";
-  const idx = query.lastIndexOf(marker);
-  if (idx >= 0) {
-    return query.slice(idx + marker.length).trim();
-  }
-  return query.trim();
-}
-
-function tokenizeMeaningful(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((token) => token.length >= 3 && !STOPWORDS.has(token));
-}
-
-function isPreferenceSeekingTurn(latestUserMessage: string): boolean {
-  const text = latestUserMessage.toLowerCase();
-  if (
-    /\b(what should|should i|which|pick|choose|order|get|grab|buy|listen|watch|drink|eat|want|sounds right|fits me|safe pick|usual|normally|probably|preference|prefer)\b/.test(
-      text,
-    )
-  ) {
-    return true;
-  }
-  return text.endsWith("?");
-}
-
-function isGenericPreferenceMemory(memory: string): boolean {
-  const text = memory.toLowerCase();
-  return /\b(prefers|usually|default|safe pick|comfort food|counts|better dip|default coffee order|likes?|dislikes?)\b/.test(
-    text,
-  );
-}
-
 function filterWeakRecallCandidates(params: {
-  query: string;
   candidates: ActiveRecallCandidate[];
   maxMemories: number;
   maxMemoryChars: number;
-  requireConcreteRelevance: boolean;
-  dropGenericPreferencesOnNonPreferenceTurns: boolean;
 }): ActiveRecallCandidate[] {
-  const latestUserMessage = extractLatestUserMessage(params.query);
-  const latestTokens = new Set(tokenizeMeaningful(latestUserMessage));
-  const preferenceSeeking = isPreferenceSeekingTurn(latestUserMessage);
-  const filtered = params.candidates.filter((candidate) => {
-    const candidateTokens = tokenizeMeaningful(candidate.text);
-    const overlap = candidateTokens.filter((token) => latestTokens.has(token)).length;
-    if (overlap > 0) {
-      return true;
-    }
-    if (
-      params.dropGenericPreferencesOnNonPreferenceTurns &&
-      !preferenceSeeking &&
-      isGenericPreferenceMemory(candidate.text)
-    ) {
-      return false;
-    }
-    if (params.requireConcreteRelevance) {
-      return false;
-    }
-    return preferenceSeeking;
-  });
-  return filtered.slice(0, params.maxMemories).map((candidate) => ({
+  return params.candidates.slice(0, params.maxMemories).map((candidate) => ({
     ...candidate,
     text: candidate.text.slice(0, params.maxMemoryChars),
   }));
@@ -710,7 +650,6 @@ function parseRawReply(rawReply: string): string[] {
 
 function toRecallCandidates(params: {
   rawReply: string;
-  query: string;
   config: ResolvedActiveRecallPluginConfig;
 }): ActiveRecallCandidate[] {
   const parsed = parseRawReply(params.rawReply);
@@ -718,13 +657,9 @@ function toRecallCandidates(params: {
     return [];
   }
   return filterWeakRecallCandidates({
-    query: params.query,
     candidates: parsed.map((text) => ({ text })),
     maxMemories: params.config.maxMemories,
     maxMemoryChars: params.config.maxMemoryChars,
-    requireConcreteRelevance: params.config.requireConcreteRelevance,
-    dropGenericPreferencesOnNonPreferenceTurns:
-      params.config.dropGenericPreferencesOnNonPreferenceTurns,
   });
 }
 
@@ -1077,7 +1012,6 @@ async function maybeResolveActiveRecall(params: {
     });
     const memories = toRecallCandidates({
       rawReply,
-      query: params.query,
       config: params.config,
     });
     if (params.config.logging && transcriptPath) {

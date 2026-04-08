@@ -619,19 +619,13 @@ describe("active-memory plugin", () => {
     expect(prompt).not.toContain("spicy ramen; tacos");
   });
 
-  it("loosens zero-overlap filtering for preference-seeking turns when concrete relevance is disabled", async () => {
-    api.pluginConfig = {
-      agents: ["main"],
-      requireConcreteRelevance: false,
-      dropGenericPreferencesOnNonPreferenceTurns: false,
-    };
-    plugin.register(api as unknown as OpenClawPluginApi);
+  it("trusts the subagent's relevance decision for explicit preference recall prompts", async () => {
     runEmbeddedPiAgent.mockResolvedValueOnce({
-      payloads: [{ text: "- spicy ramen with a soft-boiled egg" }],
+      payloads: [{ text: "- aisle seat\n- extra buffer on connections" }],
     });
 
     const result = await hooks.before_prompt_build(
-      { prompt: "what should i order?", messages: [] },
+      { prompt: "u remember my flight preferences", messages: [] },
       {
         agentId: "main",
         trigger: "user",
@@ -641,18 +635,21 @@ describe("active-memory plugin", () => {
     );
 
     expect(result).toEqual({
-      appendSystemContext: expect.stringContaining("spicy ramen with a soft-boiled egg"),
+      appendSystemContext: expect.stringContaining("aisle seat"),
     });
+    expect((result as { appendSystemContext: string }).appendSystemContext).toContain(
+      "extra buffer on connections",
+    );
   });
 
-  it("filters candidates before applying max-memory truncation", async () => {
+  it("applies max-memory truncation after parsing without re-ranking subagent results", async () => {
     api.pluginConfig = {
       agents: ["main"],
       maxMemories: 1,
     };
     plugin.register(api as unknown as OpenClawPluginApi);
     runEmbeddedPiAgent.mockResolvedValueOnce({
-      payloads: [{ text: "- unrelated preference\n- lemon pepper wings\n- blue cheese" }],
+      payloads: [{ text: "- lemon pepper wings\n- blue cheese" }],
     });
 
     const result = await hooks.before_prompt_build(
@@ -669,7 +666,7 @@ describe("active-memory plugin", () => {
       appendSystemContext: expect.stringContaining("lemon pepper wings"),
     });
     expect((result as { appendSystemContext: string }).appendSystemContext).not.toContain(
-      "unrelated preference",
+      "blue cheese",
     );
   });
 
