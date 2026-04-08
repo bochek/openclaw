@@ -1,0 +1,45 @@
+import { listKovaBackends, listKovaTargets } from "../backends/registry.js";
+import type { KovaRunTarget } from "../backends/types.js";
+
+function parseListArgs(args: string[]) {
+  const [subject, maybeTarget] = args;
+  const target = maybeTarget === "qa" ? maybeTarget : undefined;
+  return {
+    subject: subject ?? "inventory",
+    target,
+  };
+}
+
+function renderTargetLines() {
+  return ["Targets:", ...listKovaTargets().map((target) => `  - ${target}`)];
+}
+
+function renderBackendLines(target?: KovaRunTarget) {
+  const heading = target ? `Backends (${target}):` : "Backends:";
+  return [
+    heading,
+    ...listKovaBackends(target).map((backend) => `  - ${backend.id}: ${backend.title}`),
+  ];
+}
+
+export async function listCommand(args: string[]) {
+  const options = parseListArgs(args);
+
+  if (options.subject === "targets") {
+    process.stdout.write(`${renderTargetLines().join("\n")}\n`);
+    return;
+  }
+
+  if (options.subject === "backends") {
+    process.stdout.write(`${renderBackendLines(options.target).join("\n")}\n`);
+    return;
+  }
+
+  if (options.subject === "inventory") {
+    const lines = [...renderTargetLines(), "", ...renderBackendLines()];
+    process.stdout.write(`${lines.join("\n")}\n`);
+    return;
+  }
+
+  throw new Error(`unsupported kova list subject: ${options.subject}`);
+}

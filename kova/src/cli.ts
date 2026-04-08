@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { listCommand } from "./commands/list.js";
 import { reportCommand } from "./commands/report.js";
 import { runCommand } from "./commands/run.js";
 
@@ -9,6 +10,7 @@ function printHelp() {
       "Kova",
       "",
       "Usage:",
+      "  kova list [inventory|targets|backends [qa]]",
       "  kova run qa [--backend host|multipass] [--provider-mode mock-openai|live-frontier] [--scenario <id>]",
       "  kova report [latest|<run-id>]",
       "",
@@ -35,6 +37,11 @@ async function main() {
 
   if (command === "run") {
     await runCommand(repoRoot, args);
+    return;
+  }
+
+  if (command === "list") {
+    await listCommand(args);
     return;
   }
 
