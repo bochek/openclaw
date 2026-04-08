@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  clearActiveMcpLoopbackRuntime,
+  setActiveMcpLoopbackRuntime,
+} from "../gateway/mcp-http.loopback-runtime.js";
 import { setupClaudeCliRunnerTestModule, supervisorSpawnMock } from "./cli-runner.test-support.js";
 
 function createDeferred<T>() {
@@ -122,6 +126,34 @@ describe("runClaudeCliAgent", () => {
     expect(spawnInput.argv).not.toContain("c9d7b831-1c31-4d22-80b9-1e50ca207d4b");
     expect(spawnInput.argv).toContain("--session-id");
     expect(spawnInput.input).toBe("hi");
+  });
+
+  it("forwards senderIsOwner into bundled MCP env", async () => {
+    setActiveMcpLoopbackRuntime({ port: 23119, token: "loopback-token-123" });
+    try {
+      supervisorSpawnMock.mockResolvedValueOnce(
+        createManagedRun(Promise.resolve(successExit({ message: "ok", session_id: "sid-3" }))),
+      );
+
+      await runClaudeCliAgent({
+        sessionId: "openclaw-session",
+        sessionKey: "agent:main:matrix:room:123",
+        sessionFile: "/tmp/session.jsonl",
+        workspaceDir: "/tmp",
+        prompt: "hi",
+        model: "opus",
+        timeoutMs: 1_000,
+        runId: "run-3",
+        senderIsOwner: false,
+      });
+
+      const spawnInput = supervisorSpawnMock.mock.calls[0]?.[0] as {
+        env?: Record<string, string | undefined>;
+      };
+      expect(spawnInput.env?.OPENCLAW_MCP_SENDER_IS_OWNER).toBe("false");
+    } finally {
+      clearActiveMcpLoopbackRuntime("loopback-token-123");
+    }
   });
 
   it("serializes concurrent claude-cli runs in the same workspace", async () => {

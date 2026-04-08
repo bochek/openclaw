@@ -34,6 +34,7 @@ export const requestHeartbeatNowMock: UnknownMock = vi.fn();
 export const SMALL_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/woAAn8B9FD5fHAAAAAASUVORK5CYII=";
 let cliRunnerModulePromise: Promise<typeof import("./cli-runner.js")> | undefined;
+let claudeCliRunnerModulePromise: Promise<typeof import("./claude-cli-runner.js")> | undefined;
 
 const hoisted = vi.hoisted(
   (): {
@@ -365,12 +366,9 @@ export function setupCliRunnerTestRegistry() {
 }
 
 export async function setupClaudeCliRunnerTestModule() {
-  const runCliAgent = await setupCliRunnerTestModule();
-  return (params: Parameters<typeof import("./claude-cli-runner.js").runClaudeCliAgent>[0]) =>
-    runCliAgent({
-      ...params,
-      provider: params.provider ?? "claude-cli",
-    });
+  setupCliRunnerTestRegistry();
+  claudeCliRunnerModulePromise ??= import("./claude-cli-runner.js");
+  return (await claudeCliRunnerModulePromise).runClaudeCliAgent;
 }
 
 export function stubBootstrapContext(params: {

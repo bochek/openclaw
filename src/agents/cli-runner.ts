@@ -1,6 +1,3 @@
-import type { ImageContent } from "@mariozechner/pi-ai";
-import type { ThinkLevel } from "../auto-reply/thinking.js";
-import type { OpenClawConfig } from "../config/config.js";
 import { formatErrorMessage } from "../infra/errors.js";
 import { executePreparedCliRun } from "./cli-runner/execute.js";
 import { prepareCliRunContext } from "./cli-runner/prepare.js";
@@ -89,24 +86,14 @@ export async function runCliAgent(params: RunCliAgentParams): Promise<EmbeddedPi
   }
 }
 
-export async function runClaudeCliAgent(params: {
-  sessionId: string;
-  sessionKey?: string;
-  agentId?: string;
-  sessionFile: string;
-  workspaceDir: string;
-  config?: OpenClawConfig;
-  prompt: string;
+export type RunClaudeCliAgentParams = Omit<RunCliAgentParams, "provider" | "cliSessionId"> & {
   provider?: string;
-  model?: string;
-  thinkLevel?: ThinkLevel;
-  timeoutMs: number;
-  runId: string;
-  extraSystemPrompt?: string;
-  ownerNumbers?: string[];
   claudeSessionId?: string;
-  images?: ImageContent[];
-}): Promise<EmbeddedPiRunResult> {
+};
+
+export async function runClaudeCliAgent(
+  params: RunClaudeCliAgentParams,
+): Promise<EmbeddedPiRunResult> {
   return runCliAgent({
     sessionId: params.sessionId,
     sessionKey: params.sessionKey,
@@ -122,7 +109,10 @@ export async function runClaudeCliAgent(params: {
     runId: params.runId,
     extraSystemPrompt: params.extraSystemPrompt,
     ownerNumbers: params.ownerNumbers,
-    cliSessionId: params.claudeSessionId,
+    // Legacy `claudeSessionId` callers predate the shared CLI session contract.
+    // Ignore it here so the compatibility wrapper does not accidentally resume
+    // an incompatible Claude session on the generic runner path.
     images: params.images,
+    senderIsOwner: params.senderIsOwner,
   });
 }
