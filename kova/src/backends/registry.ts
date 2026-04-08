@@ -1,7 +1,8 @@
+import { multipassBackend } from "./multipass.js";
 import { qaBackend } from "./qa.js";
 import type { KovaBackend, KovaBackendId, KovaRunTarget } from "./types.js";
 
-const kovaBackends: KovaBackend[] = [qaBackend];
+const kovaBackends: KovaBackend[] = [qaBackend, multipassBackend];
 
 export function resolveKovaBackend(target: KovaRunTarget, backendId?: KovaBackendId) {
   const backend = kovaBackends.find((candidate) => {
