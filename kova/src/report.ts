@@ -63,5 +63,9 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
   if (artifact.evidence.sourceArtifactPaths.length > 0) {
     lines.push(`Artifacts: ${artifact.evidence.sourceArtifactPaths.length} path(s) captured`);
   }
+  if (artifact.notes.length > 0) {
+    lines.push("Notes:");
+    lines.push(...artifact.notes.map((note) => `  - ${note}`));
+  }
   return `${lines.join("\n")}\n`;
 }
