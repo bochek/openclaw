@@ -9,6 +9,7 @@ export async function mirrorCodexAppServerTranscript(params: {
   sessionFile: string;
   sessionKey?: string;
   messages: AgentMessage[];
+  idempotencyScope?: string;
 }): Promise<void> {
   const messages = params.messages.filter(
     (message) => message.role === "user" || message.role === "assistant",
@@ -23,9 +24,23 @@ export async function mirrorCodexAppServerTranscript(params: {
     timeoutMs: 10_000,
   });
   try {
+    const existingIdempotencyKeys = await readTranscriptIdempotencyKeys(params.sessionFile);
     const sessionManager = SessionManager.open(params.sessionFile);
-    for (const message of messages) {
-      sessionManager.appendMessage(message as Parameters<SessionManager["appendMessage"]>[0]);
+    for (const [index, message] of messages.entries()) {
+      const idempotencyKey = params.idempotencyScope
+        ? `${params.idempotencyScope}:${message.role}:${index}`
+        : undefined;
+      if (idempotencyKey && existingIdempotencyKeys.has(idempotencyKey)) {
+        continue;
+      }
+      const transcriptMessage = {
+        ...message,
+        ...(idempotencyKey ? { idempotencyKey } : {}),
+      } as Parameters<SessionManager["appendMessage"]>[0];
+      sessionManager.appendMessage(transcriptMessage);
+      if (idempotencyKey) {
+        existingIdempotencyKeys.add(idempotencyKey);
+      }
     }
   } finally {
     await lock.release();
@@ -36,4 +51,31 @@ export async function mirrorCodexAppServerTranscript(params: {
   } else {
     emitSessionTranscriptUpdate(params.sessionFile);
   }
+}
+
+async function readTranscriptIdempotencyKeys(sessionFile: string): Promise<Set<string>> {
+  const keys = new Set<string>();
+  let raw: string;
+  try {
+    raw = await fs.readFile(sessionFile, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      throw error;
+    }
+    return keys;
+  }
+  for (const line of raw.split(/\r?\n/)) {
+    if (!line.trim()) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(line) as { message?: { idempotencyKey?: unknown } };
+      if (typeof parsed.message?.idempotencyKey === "string") {
+        keys.add(parsed.message.idempotencyKey);
+      }
+    } catch {
+      continue;
+    }
+  }
+  return keys;
 }

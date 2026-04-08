@@ -16,7 +16,12 @@ import { clearActiveEmbeddedRun, setActiveEmbeddedRun } from "../pi-embedded-run
 import { normalizeProviderToolSchemas } from "../pi-embedded-runner/tool-schema-runtime.js";
 import { createOpenClawCodingTools } from "../pi-tools.js";
 import { resolveSandboxContext } from "../sandbox.js";
-import { getSharedCodexAppServerClient, type CodexAppServerClient } from "./client.js";
+import {
+  defaultServerRequestResponse,
+  getSharedCodexAppServerClient,
+  isCodexAppServerApprovalRequest,
+  type CodexAppServerClient,
+} from "./client.js";
 import { createCodexDynamicToolBridge } from "./dynamic-tools.js";
 import { CodexAppServerEventProjector } from "./event-projector.js";
 import {
@@ -120,6 +125,15 @@ export async function runCodexAppServerAttempt(
   });
   const requestCleanup = client.addRequestHandler(async (request) => {
     if (request.method !== "item/tool/call") {
+      if (isCodexAppServerApprovalRequest(request.method)) {
+        return handleApprovalRequest({
+          method: request.method,
+          params: request.params,
+          paramsForRun: params,
+          threadId: thread.threadId,
+          turnId,
+        });
+      }
       return undefined;
     }
     const call = readDynamicToolCallParams(request.params);
@@ -139,7 +153,7 @@ export async function runCodexAppServerAttempt(
       });
     },
     isStreaming: () => !completed,
-    isCompacting: () => false,
+    isCompacting: () => projector.isCompacting(),
     cancel: () => runAbortController.abort("cancelled"),
     abort: () => runAbortController.abort("aborted"),
   };
@@ -174,6 +188,8 @@ export async function runCodexAppServerAttempt(
     await mirrorTranscriptBestEffort({
       params,
       result,
+      threadId: thread.threadId,
+      turnId,
     });
     return {
       ...result,
@@ -448,16 +464,69 @@ function readString(record: JsonObject, key: string): string | undefined {
 async function mirrorTranscriptBestEffort(params: {
   params: EmbeddedRunAttemptParams;
   result: EmbeddedRunAttemptResult;
+  threadId: string;
+  turnId: string;
 }): Promise<void> {
   try {
     await mirrorCodexAppServerTranscript({
       sessionFile: params.params.sessionFile,
       sessionKey: params.params.sessionKey,
       messages: params.result.messagesSnapshot,
+      idempotencyScope: `codex-app-server:${params.threadId}:${params.turnId}`,
     });
   } catch (error) {
     log.warn("failed to mirror codex app-server transcript", { error });
   }
+}
+
+function handleApprovalRequest(params: {
+  method: string;
+  params: JsonValue | undefined;
+  paramsForRun: EmbeddedRunAttemptParams;
+  threadId: string;
+  turnId: string;
+}): JsonValue | undefined {
+  const requestParams = isJsonObject(params.params) ? params.params : undefined;
+  const requestThreadId = requestParams ? readString(requestParams, "threadId") : undefined;
+  const requestTurnId = requestParams ? readString(requestParams, "turnId") : undefined;
+  if (requestThreadId && requestThreadId !== params.threadId) {
+    return undefined;
+  }
+  if (requestTurnId && requestTurnId !== params.turnId) {
+    return undefined;
+  }
+  const itemId = requestParams ? readString(requestParams, "itemId") : undefined;
+  const command = requestParams ? readString(requestParams, "command") : undefined;
+  const reason = requestParams ? readString(requestParams, "reason") : undefined;
+  params.paramsForRun.onAgentEvent?.({
+    stream: "approval",
+    data: {
+      phase: "resolved",
+      kind: approvalKindForMethod(params.method),
+      status: "denied",
+      title: "Codex app-server approval denied",
+      message: "OpenClaw codex app-server approval bridging is not interactive yet.",
+      method: params.method,
+      ...(itemId ? { itemId } : {}),
+      ...(command ? { command } : {}),
+      ...(reason ? { reason } : {}),
+    },
+  });
+  return defaultServerRequestResponse({
+    id: "openclaw-approval",
+    method: params.method,
+    params: params.params,
+  });
+}
+
+function approvalKindForMethod(method: string): "exec" | "plugin" | "unknown" {
+  if (method.includes("commandExecution") || method.includes("execCommand")) {
+    return "exec";
+  }
+  if (method.includes("fileChange") || method.includes("Patch")) {
+    return "plugin";
+  }
+  return "unknown";
 }
 
 export const __testing = {

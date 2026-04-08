@@ -31,11 +31,17 @@ Implementation status on `app-server`:
 - `OPENCLAW_AGENT_RUNTIME=codex-app-server` forces the Codex app-server backend.
 - `OPENCLAW_AGENT_RUNTIME=auto` tries app-server for `openai-codex` and falls
   back to PI if app-server fails.
-- default remains `pi`.
+- default is `auto`; set `OPENCLAW_AGENT_RUNTIME=pi` for the legacy PI kill
+  switch.
 - the app-server backend has a long-lived stdio JSON-RPC client, thread sidecar
   binding, turn start/interrupt/steer wiring, event projection, and dynamic
   OpenClaw tool bridging.
+- transcript mirroring is idempotent per app-server thread turn.
+- app-server compaction items now drive active-run compaction state and
+  compaction events.
 - guardian review notifications are projected as diagnostic agent events only.
+- native app-server approval callbacks fail closed and emit approval telemetry
+  until OpenClaw has an interactive approval bridge for those request kinds.
 
 ## Goal
 
@@ -144,7 +150,9 @@ Initial module layout:
   notification dispatch, server-initiated request handling.
 - `src/agents/codex-app-server-runner/protocol.ts`
   Hand-curated local subset of the generated app-server protocol. Refresh
-  against `codex app-server generate-ts --experimental` when app-server changes.
+  against `../codex/codex-rs/app-server-protocol/schema/typescript` when
+  app-server changes. Run `pnpm codex-app-server:protocol:check` to catch drift
+  in the generated event/request shapes this bridge depends on.
 - `src/agents/codex-app-server-runner/session-binding.ts`
   Map OpenClaw session files to Codex thread ids through a sidecar file.
 - `src/agents/codex-app-server-runner/event-projector.ts`
@@ -404,13 +412,13 @@ repo's `guardian` references are unrelated platform/UI code or prose examples.
 
 ## Feature Flags
 
-Add a runtime selector with a conservative default:
+Runtime selector:
 
 - `OPENCLAW_AGENT_RUNTIME=pi`
 - `OPENCLAW_AGENT_RUNTIME=codex-app-server`
 - `OPENCLAW_AGENT_RUNTIME=auto`
 
-Default: `pi`.
+Default: `auto`.
 
 `auto` should only choose app-server when all of these are true:
 
@@ -472,6 +480,10 @@ Done with targeted queue and abort coverage.
 - Add usage extraction when app-server provides token usage.
 - Mark `totalTokensFresh=false` when usage is unavailable or not comparable.
 
+Done for command/file/MCP/dynamic item status, reasoning end, plan updates,
+tool summaries, token usage, and app-server compaction item state. Freshness
+metadata remains limited by the app-server usage payload.
+
 ### Slice 5: Message and Subagent Tools
 
 - Enable dynamic tools experimentally.
@@ -479,6 +491,9 @@ Done with targeted queue and abort coverage.
 - Preserve `didSendViaMessagingTool` suppression.
 - Preserve sent text/media/target metadata.
 - Add cron count support.
+
+Done through the OpenClaw dynamic tool bridge. Broader plugin-owned tools still
+depend on schema compatibility and per-tool validation.
 
 ### Slice 6: Compaction and Overflow
 
@@ -539,8 +554,9 @@ Codex native tools and OpenClaw PI tools are not the same contract. Message,
 subagent, cron, channel, and plugin tools must be bridged deliberately rather
 than assumed.
 
-Mitigation: keep app-server default off until dynamic tool side effects match
-`EmbeddedPiRunResult`.
+Mitigation: keep `OPENCLAW_AGENT_RUNTIME=pi` as the kill switch and keep
+non-Codex providers on PI while dynamic tool side effects continue to be
+measured against `EmbeddedPiRunResult`.
 
 ### Auth and Provider Drift
 
@@ -584,10 +600,13 @@ Unit tests:
 - dynamic tool bridge maps a message tool side effect.
 - approval requests fail closed when unhandled.
 - guardian telemetry is accepted but non-fatal.
+- transcript mirroring dedupes repeated turn mirrors.
+- protocol drift check matches generated Codex app-server request/item shapes.
 
 Targeted test commands:
 
 ```sh
+pnpm codex-app-server:protocol:check
 pnpm test src/agents/pi-embedded-runner/runs.test.ts
 pnpm test src/agents/command/attempt-execution.test.ts
 pnpm test src/agents/codex-app-server-runner
@@ -639,12 +658,12 @@ of `src/agents/pi-embedded.ts`.
 The first production-safe milestone is:
 
 - app-server backend exists
-- default remains PI
-- Codex provider can opt in with env flag
+- default `auto` routes Codex provider through app-server with PI fallback
+- `OPENCLAW_AGENT_RUNTIME=pi` remains the kill switch
 - text/reasoning/plan streaming works
 - resume, abort, and steer work
-- transcript mirror is written
+- transcript mirror is written idempotently
 - PI fallback remains available
 
-Only after message/subagent/cron tools work through dynamic tools should the
-Codex provider move toward default-on app-server execution.
+The Codex provider is now default-on through `auto`; PI remains available for
+fallback, non-Codex providers, and explicit rollback.

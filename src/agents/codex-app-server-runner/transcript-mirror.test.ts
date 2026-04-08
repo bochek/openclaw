@@ -50,4 +50,49 @@ describe("mirrorCodexAppServerTranscript", () => {
     expect(records[0]?.type).toBe("session");
     expect(records.slice(1).map((record) => record.message?.role)).toEqual(["user", "assistant"]);
   });
+
+  it("deduplicates app-server turn mirrors by idempotency scope", async () => {
+    const sessionFile = path.join(tempDir, "session.jsonl");
+    const messages = [
+      { role: "user" as const, content: "hello", timestamp: 1 },
+      {
+        role: "assistant" as const,
+        content: [{ type: "text" as const, text: "hi" }],
+        api: "openai-codex-responses",
+        provider: "openai-codex",
+        model: "gpt-5.4-codex",
+        usage: {
+          input: 0,
+          output: 0,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 0,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+        },
+        stopReason: "stop" as const,
+        timestamp: 2,
+      },
+    ];
+
+    await mirrorCodexAppServerTranscript({
+      sessionFile,
+      messages,
+      idempotencyScope: "codex-app-server:thread-1:turn-1",
+    });
+    await mirrorCodexAppServerTranscript({
+      sessionFile,
+      messages,
+      idempotencyScope: "codex-app-server:thread-1:turn-1",
+    });
+
+    const records = (await fs.readFile(sessionFile, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { message?: { role?: string; idempotencyKey?: string } });
+    expect(records.slice(1).map((record) => record.message?.role)).toEqual(["user", "assistant"]);
+    expect(records.slice(1).map((record) => record.message?.idempotencyKey)).toEqual([
+      "codex-app-server:thread-1:turn-1:user:0",
+      "codex-app-server:thread-1:turn-1:assistant:1",
+    ]);
+  });
 });

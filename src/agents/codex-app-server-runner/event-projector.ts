@@ -42,15 +42,21 @@ const ZERO_USAGE: Usage = {
 export class CodexAppServerEventProjector {
   private readonly assistantTextByItem = new Map<string, string>();
   private readonly reasoningTextByItem = new Map<string, string>();
+  private readonly planTextByItem = new Map<string, string>();
   private readonly activeItemIds = new Set<string>();
   private readonly completedItemIds = new Set<string>();
+  private readonly activeCompactionItemIds = new Set<string>();
+  private readonly toolMetas = new Map<string, { toolName: string; meta?: string }>();
   private assistantStarted = false;
+  private reasoningStarted = false;
+  private reasoningEnded = false;
   private completedTurn: CodexTurn | undefined;
   private promptError: unknown;
   private promptErrorSource: EmbeddedRunAttemptResult["promptErrorSource"] = null;
   private aborted = false;
   private tokenUsage: NormalizedUsage | undefined;
   private guardianReviewCount = 0;
+  private completedCompactionCount = 0;
 
   constructor(
     private readonly params: EmbeddedRunAttemptParams,
@@ -72,6 +78,12 @@ export class CodexAppServerEventProjector {
       case "item/reasoning/textDelta":
         await this.handleReasoningDelta(params);
         break;
+      case "item/plan/delta":
+        this.handlePlanDelta(params);
+        break;
+      case "turn/plan/updated":
+        this.handleTurnPlanUpdated(params);
+        break;
       case "item/started":
         this.handleItemStarted(params);
         break;
@@ -90,7 +102,7 @@ export class CodexAppServerEventProjector {
         this.handleTokenUsage(params);
         break;
       case "turn/completed":
-        this.handleTurnCompleted(params);
+        await this.handleTurnCompleted(params);
         break;
       case "error":
         this.promptError = readString(params, "message") ?? "codex app-server error";
@@ -134,7 +146,7 @@ export class CodexAppServerEventProjector {
       bootstrapPromptWarningSignature: this.params.bootstrapPromptWarningSignature,
       messagesSnapshot,
       assistantTexts,
-      toolMetas: [],
+      toolMetas: [...this.toolMetas.values()],
       lastAssistant,
       didSendViaMessagingTool: toolTelemetry.didSendViaMessagingTool,
       messagingToolSentTexts: toolTelemetry.messagingToolSentTexts,
@@ -151,6 +163,9 @@ export class CodexAppServerEventProjector {
         startedCount: this.activeItemIds.size + this.completedItemIds.size,
         completedCount: this.completedItemIds.size,
         activeCount: this.activeItemIds.size,
+        ...(this.completedCompactionCount > 0
+          ? { compactionCount: this.completedCompactionCount }
+          : {}),
       },
       yieldDetected: false,
       didSendDeterministicApprovalPrompt: this.guardianReviewCount > 0 ? false : undefined,
@@ -161,6 +176,10 @@ export class CodexAppServerEventProjector {
     this.aborted = true;
     this.promptError = "codex app-server attempt timed out";
     this.promptErrorSource = "prompt";
+  }
+
+  isCompacting(): boolean {
+    return this.activeCompactionItemIds.size > 0;
   }
 
   private async handleAssistantDelta(params: JsonObject): Promise<void> {
@@ -184,18 +203,65 @@ export class CodexAppServerEventProjector {
     if (!delta) {
       return;
     }
+    this.reasoningStarted = true;
     this.reasoningTextByItem.set(itemId, `${this.reasoningTextByItem.get(itemId) ?? ""}${delta}`);
     await this.params.onReasoningStream?.({ text: delta });
   }
 
+  private handlePlanDelta(params: JsonObject): void {
+    const itemId = readString(params, "itemId") ?? readString(params, "id") ?? "plan";
+    const delta = readString(params, "delta") ?? "";
+    if (!delta) {
+      return;
+    }
+    const text = `${this.planTextByItem.get(itemId) ?? ""}${delta}`;
+    this.planTextByItem.set(itemId, text);
+    this.emitPlanUpdate({ explanation: undefined, steps: splitPlanText(text) });
+  }
+
+  private handleTurnPlanUpdated(params: JsonObject): void {
+    const plan = Array.isArray(params.plan)
+      ? params.plan.flatMap((entry) => {
+          if (!isJsonObject(entry)) {
+            return [];
+          }
+          const step = readString(entry, "step");
+          const status = readString(entry, "status");
+          if (!step) {
+            return [];
+          }
+          return status ? [`${step} (${status})`] : [step];
+        })
+      : undefined;
+    this.emitPlanUpdate({
+      explanation: readNullableString(params, "explanation"),
+      steps: plan,
+    });
+  }
+
   private handleItemStarted(params: JsonObject): void {
-    const itemId = readString(params, "itemId") ?? readString(params, "id");
+    const item = readItem(params.item);
+    const itemId = item?.id ?? readString(params, "itemId") ?? readString(params, "id");
     if (itemId) {
       this.activeItemIds.add(itemId);
     }
+    if (item?.type === "contextCompaction" && itemId) {
+      this.activeCompactionItemIds.add(itemId);
+      this.params.onAgentEvent?.({
+        stream: "compaction",
+        data: {
+          phase: "start",
+          backend: "codex-app-server",
+          threadId: this.threadId,
+          turnId: this.turnId,
+          itemId,
+        },
+      });
+    }
+    this.emitStandardItemEvent({ phase: "start", item });
     this.params.onAgentEvent?.({
       stream: "codex_app_server.item",
-      data: { phase: "started", itemId },
+      data: { phase: "started", itemId, type: item?.type },
     });
   }
 
@@ -209,6 +275,26 @@ export class CodexAppServerEventProjector {
     if (item?.type === "agentMessage" && typeof item.text === "string" && item.text) {
       this.assistantTextByItem.set(item.id, item.text);
     }
+    if (item?.type === "plan" && typeof item.text === "string" && item.text) {
+      this.planTextByItem.set(item.id, item.text);
+      this.emitPlanUpdate({ explanation: undefined, steps: splitPlanText(item.text) });
+    }
+    if (item?.type === "contextCompaction" && itemId) {
+      this.activeCompactionItemIds.delete(itemId);
+      this.completedCompactionCount += 1;
+      this.params.onAgentEvent?.({
+        stream: "compaction",
+        data: {
+          phase: "end",
+          backend: "codex-app-server",
+          threadId: this.threadId,
+          turnId: this.turnId,
+          itemId,
+        },
+      });
+    }
+    this.recordToolMeta(item);
+    this.emitStandardItemEvent({ phase: "end", item });
     this.params.onAgentEvent?.({
       stream: "codex_app_server.item",
       data: { phase: "completed", itemId, type: item?.type },
@@ -229,7 +315,7 @@ export class CodexAppServerEventProjector {
     });
   }
 
-  private handleTurnCompleted(params: JsonObject): void {
+  private async handleTurnCompleted(params: JsonObject): Promise<void> {
     const turn = readTurn(params.turn);
     if (!turn || turn.id !== this.turnId) {
       return;
@@ -246,7 +332,78 @@ export class CodexAppServerEventProjector {
       if (item.type === "agentMessage" && typeof item.text === "string" && item.text) {
         this.assistantTextByItem.set(item.id, item.text);
       }
+      if (item.type === "plan" && typeof item.text === "string" && item.text) {
+        this.planTextByItem.set(item.id, item.text);
+        this.emitPlanUpdate({ explanation: undefined, steps: splitPlanText(item.text) });
+      }
+      this.recordToolMeta(item);
     }
+    this.activeCompactionItemIds.clear();
+    await this.maybeEndReasoning();
+  }
+
+  private async maybeEndReasoning(): Promise<void> {
+    if (!this.reasoningStarted || this.reasoningEnded) {
+      return;
+    }
+    this.reasoningEnded = true;
+    await this.params.onReasoningEnd?.();
+  }
+
+  private emitPlanUpdate(params: { explanation?: string | null; steps?: string[] }): void {
+    if (!params.explanation && (!params.steps || params.steps.length === 0)) {
+      return;
+    }
+    this.params.onAgentEvent?.({
+      stream: "plan",
+      data: {
+        phase: "update",
+        title: "Plan updated",
+        source: "codex-app-server",
+        ...(params.explanation ? { explanation: params.explanation } : {}),
+        ...(params.steps && params.steps.length > 0 ? { steps: params.steps } : {}),
+      },
+    });
+  }
+
+  private emitStandardItemEvent(params: {
+    phase: "start" | "end";
+    item: CodexThreadItem | undefined;
+  }): void {
+    const { item } = params;
+    if (!item) {
+      return;
+    }
+    const kind = itemKind(item);
+    if (!kind) {
+      return;
+    }
+    this.params.onAgentEvent?.({
+      stream: "item",
+      data: {
+        itemId: item.id,
+        phase: params.phase,
+        kind,
+        title: itemTitle(item),
+        status: params.phase === "start" ? "running" : itemStatus(item),
+        ...(itemName(item) ? { name: itemName(item) } : {}),
+        ...(itemMeta(item) ? { meta: itemMeta(item) } : {}),
+      },
+    });
+  }
+
+  private recordToolMeta(item: CodexThreadItem | undefined): void {
+    if (!item) {
+      return;
+    }
+    const toolName = itemName(item);
+    if (!toolName) {
+      return;
+    }
+    this.toolMetas.set(item.id, {
+      toolName,
+      ...(itemMeta(item) ? { meta: itemMeta(item) } : {}),
+    });
   }
 
   private collectAssistantTexts(): string[] {
@@ -294,9 +451,112 @@ function readString(record: JsonObject, key: string): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+function readNullableString(record: JsonObject, key: string): string | null | undefined {
+  const value = record[key];
+  if (value === null) {
+    return null;
+  }
+  return typeof value === "string" ? value : undefined;
+}
+
 function readNumber(record: JsonObject, key: string): number | undefined {
   const value = record[key];
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function splitPlanText(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/^[-*]\s+/, ""))
+    .filter((line) => line.length > 0);
+}
+
+function itemKind(
+  item: CodexThreadItem,
+): "tool" | "command" | "patch" | "search" | "analysis" | undefined {
+  switch (item.type) {
+    case "dynamicToolCall":
+    case "mcpToolCall":
+      return "tool";
+    case "commandExecution":
+      return "command";
+    case "fileChange":
+      return "patch";
+    case "webSearch":
+      return "search";
+    case "reasoning":
+    case "contextCompaction":
+      return "analysis";
+    default:
+      return undefined;
+  }
+}
+
+function itemTitle(item: CodexThreadItem): string {
+  switch (item.type) {
+    case "commandExecution":
+      return "Command";
+    case "fileChange":
+      return "File change";
+    case "mcpToolCall":
+      return "MCP tool";
+    case "dynamicToolCall":
+      return "Tool";
+    case "webSearch":
+      return "Web search";
+    case "contextCompaction":
+      return "Context compaction";
+    case "reasoning":
+      return "Reasoning";
+    default:
+      return item.type;
+  }
+}
+
+function itemStatus(item: CodexThreadItem): "completed" | "failed" | "running" {
+  const status = readItemString(item, "status");
+  if (status === "failed") {
+    return "failed";
+  }
+  if (status === "inProgress" || status === "running") {
+    return "running";
+  }
+  return "completed";
+}
+
+function itemName(item: CodexThreadItem): string | undefined {
+  if (item.type === "dynamicToolCall" && typeof item.tool === "string") {
+    return item.tool;
+  }
+  if (item.type === "mcpToolCall" && typeof item.tool === "string") {
+    const server = typeof item.server === "string" ? item.server : undefined;
+    return server ? `${server}.${item.tool}` : item.tool;
+  }
+  if (item.type === "commandExecution") {
+    return "bash";
+  }
+  if (item.type === "fileChange") {
+    return "apply_patch";
+  }
+  if (item.type === "webSearch") {
+    return "web_search";
+  }
+  return undefined;
+}
+
+function itemMeta(item: CodexThreadItem): string | undefined {
+  if (item.type === "commandExecution" && typeof item.command === "string") {
+    return item.command;
+  }
+  if (item.type === "webSearch" && typeof item.query === "string") {
+    return item.query;
+  }
+  return readItemString(item, "status");
+}
+
+function readItemString(item: CodexThreadItem, key: string): string | undefined {
+  const value = (item as Record<string, unknown>)[key];
+  return typeof value === "string" ? value : undefined;
 }
 
 function readItem(value: JsonValue | undefined): CodexThreadItem | undefined {

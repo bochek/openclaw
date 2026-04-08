@@ -72,4 +72,21 @@ describe("CodexAppServerClient", () => {
       result: { contentItems: [{ type: "inputText", text: "ok" }], success: true },
     });
   });
+
+  it("fails closed for unhandled native app-server approvals", async () => {
+    const harness = createClientHarness();
+    clients.push(harness.client);
+
+    harness.send({
+      id: "approval-1",
+      method: "item/commandExecution/requestApproval",
+      params: { threadId: "thread-1", turnId: "turn-1", itemId: "cmd-1", command: "pnpm test" },
+    });
+    await vi.waitFor(() => expect(harness.writes.length).toBe(1));
+
+    expect(JSON.parse(harness.writes[0] ?? "{}")).toEqual({
+      id: "approval-1",
+      result: { decision: "decline" },
+    });
+  });
 });

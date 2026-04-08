@@ -103,4 +103,98 @@ describe("CodexAppServerEventProjector", () => {
     });
     expect(result.assistantTexts).toEqual([]);
   });
+
+  it("projects reasoning end, plan updates, compaction state, and tool metadata", async () => {
+    const onReasoningStream = vi.fn();
+    const onReasoningEnd = vi.fn();
+    const onAgentEvent = vi.fn();
+    const params = {
+      ...createParams(),
+      onReasoningStream,
+      onReasoningEnd,
+      onAgentEvent,
+    };
+    const projector = new CodexAppServerEventProjector(params, "thread-1", "turn-1");
+
+    await projector.handleNotification({
+      method: "item/reasoning/textDelta",
+      params: { threadId: "thread-1", turnId: "turn-1", itemId: "reason-1", delta: "thinking" },
+    });
+    await projector.handleNotification({
+      method: "item/plan/delta",
+      params: { threadId: "thread-1", turnId: "turn-1", itemId: "plan-1", delta: "- inspect\n" },
+    });
+    await projector.handleNotification({
+      method: "turn/plan/updated",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        explanation: "next",
+        plan: [{ step: "patch", status: "in_progress" }],
+      },
+    });
+    await projector.handleNotification({
+      method: "item/started",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        item: { type: "contextCompaction", id: "compact-1" },
+      },
+    });
+    expect(projector.isCompacting()).toBe(true);
+    await projector.handleNotification({
+      method: "item/completed",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        item: { type: "contextCompaction", id: "compact-1" },
+      },
+    });
+    expect(projector.isCompacting()).toBe(false);
+    await projector.handleNotification({
+      method: "item/completed",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        item: {
+          type: "dynamicToolCall",
+          id: "tool-1",
+          tool: "sessions_send",
+          status: "completed",
+        },
+      },
+    });
+    await projector.handleNotification({
+      method: "turn/completed",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        turn: { id: "turn-1", status: "completed", items: [] },
+      },
+    });
+
+    const result = projector.buildResult({
+      didSendViaMessagingTool: false,
+      messagingToolSentTexts: [],
+      messagingToolSentMediaUrls: [],
+      messagingToolSentTargets: [],
+    });
+
+    expect(onReasoningStream).toHaveBeenCalledWith({ text: "thinking" });
+    expect(onReasoningEnd).toHaveBeenCalledTimes(1);
+    expect(onAgentEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stream: "plan",
+        data: expect.objectContaining({ steps: ["patch (in_progress)"] }),
+      }),
+    );
+    expect(onAgentEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stream: "compaction",
+        data: expect.objectContaining({ phase: "start", itemId: "compact-1" }),
+      }),
+    );
+    expect(result.toolMetas).toEqual([{ toolName: "sessions_send", meta: "completed" }]);
+    expect(result.itemLifecycle).toMatchObject({ compactionCount: 1 });
+  });
 });

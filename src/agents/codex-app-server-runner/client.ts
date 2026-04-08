@@ -253,7 +253,7 @@ export function resetSharedCodexAppServerClientForTests(): void {
   sharedClientPromise = undefined;
 }
 
-function defaultServerRequestResponse(
+export function defaultServerRequestResponse(
   request: Required<Pick<RpcRequest, "id" | "method">> & { params?: JsonValue },
 ): JsonValue {
   if (request.method === "item/tool/call") {
@@ -267,9 +267,24 @@ function defaultServerRequestResponse(
       success: false,
     };
   }
-  if (request.method.includes("requestApproval") || request.method.includes("Approval")) {
+  if (
+    request.method === "item/commandExecution/requestApproval" ||
+    request.method === "execCommandApproval"
+  ) {
+    return { decision: "decline" };
+  }
+  if (
+    request.method === "item/fileChange/requestApproval" ||
+    request.method === "applyPatchApproval"
+  ) {
+    return { decision: "decline" };
+  }
+  if (request.method === "item/permissions/requestApproval") {
+    return { permissions: {}, scope: "turn" };
+  }
+  if (isCodexAppServerApprovalRequest(request.method)) {
     return {
-      decision: "deny",
+      decision: "decline",
       reason: "OpenClaw codex app-server bridge does not grant native approvals yet.",
     };
   }
@@ -284,6 +299,10 @@ function defaultServerRequestResponse(
     };
   }
   return {};
+}
+
+export function isCodexAppServerApprovalRequest(method: string): boolean {
+  return method.includes("requestApproval") || method.includes("Approval");
 }
 
 function splitShellWords(value: string): string[] {
