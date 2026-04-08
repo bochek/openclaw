@@ -23,6 +23,10 @@ export const multipassBackend: KovaBackend = {
       selection: {
         command: "run",
         target: selection.target,
+        scenarioIds:
+          selection.scenarioIds && selection.scenarioIds.length > 0
+            ? selection.scenarioIds
+            : undefined,
       },
       scenario: {
         id: selection.target,
