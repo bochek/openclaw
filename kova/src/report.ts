@@ -2,8 +2,13 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { KovaRunArtifact } from "./contracts/run-artifact.js";
 import { readJsonFile, resolveKovaRunDir, resolveKovaRunsDir } from "./lib/fs.js";
+import { readKovaRunIndex } from "./lib/run-index.js";
 
 export async function resolveLatestRunId(repoRoot: string) {
+  const index = await readKovaRunIndex(repoRoot).catch(() => null);
+  if (index?.latestRunId) {
+    return index.latestRunId;
+  }
   const runsDir = resolveKovaRunsDir(repoRoot);
   const entries = await fs.readdir(runsDir).catch(() => []);
   const runIds = entries.toSorted((left, right) => left.localeCompare(right));

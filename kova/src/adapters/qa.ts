@@ -7,6 +7,7 @@ import {
 } from "../contracts/run-artifact.js";
 import { ensureDir, resolveKovaRunDir, writeJsonFile } from "../lib/fs.js";
 import { resolveGitCommit, resolveGitDirty } from "../lib/git.js";
+import { updateKovaRunIndex } from "../lib/run-index.js";
 
 export type KovaQaRunOptions = {
   repoRoot: string;
@@ -138,6 +139,7 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
 
     await writeJsonFile(path.join(runDir, "run.json"), artifact);
     await writeJsonFile(path.join(runDir, "qa-result.json"), qaResult);
+    await updateKovaRunIndex(opts.repoRoot, artifact);
     return artifact;
   } catch (error) {
     const finishedAt = new Date();
@@ -166,6 +168,7 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
       notes: [`providerMode=${opts.providerMode ?? "mock-openai"}`],
     } satisfies KovaRunArtifact);
     await writeJsonFile(path.join(runDir, "run.json"), artifact);
+    await updateKovaRunIndex(opts.repoRoot, artifact);
     throw error;
   }
 }
