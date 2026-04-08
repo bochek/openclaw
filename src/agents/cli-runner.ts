@@ -94,25 +94,14 @@ export type RunClaudeCliAgentParams = Omit<RunCliAgentParams, "provider" | "cliS
 export async function runClaudeCliAgent(
   params: RunClaudeCliAgentParams,
 ): Promise<EmbeddedPiRunResult> {
+  // Spread all inherited RunCliAgentParams fields so nothing is silently dropped
+  // (abortSignal, replyOperation, cliSessionBinding, authProfileId, etc.).
+  // `claudeSessionId` is intentionally not forwarded as `cliSessionId` — legacy
+  // callers predate the shared CLI session contract and must not accidentally
+  // resume an incompatible Claude session on the generic runner path.
   return runCliAgent({
-    sessionId: params.sessionId,
-    sessionKey: params.sessionKey,
-    agentId: params.agentId,
-    sessionFile: params.sessionFile,
-    workspaceDir: params.workspaceDir,
-    config: params.config,
-    prompt: params.prompt,
+    ...params,
     provider: params.provider ?? "claude-cli",
     model: params.model ?? "opus",
-    thinkLevel: params.thinkLevel,
-    timeoutMs: params.timeoutMs,
-    runId: params.runId,
-    extraSystemPrompt: params.extraSystemPrompt,
-    ownerNumbers: params.ownerNumbers,
-    // Legacy `claudeSessionId` callers predate the shared CLI session contract.
-    // Ignore it here so the compatibility wrapper does not accidentally resume
-    // an incompatible Claude session on the generic runner path.
-    images: params.images,
-    senderIsOwner: params.senderIsOwner,
   });
 }
