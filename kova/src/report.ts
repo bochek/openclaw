@@ -245,10 +245,13 @@ export async function resolveLatestRunId(repoRoot: string, filters?: KovaRunSele
   const index = await hydrateKovaRunIndex(repoRoot).catch(() => null);
   if (index) {
     const filteredRuns = index.runs.filter((entry) => matchesKovaSelectorFilters(entry, filters));
-    return filteredRuns.at(-1)?.runId;
-  }
-  if (!filters && index?.latestRunId) {
-    return index.latestRunId;
+    const latestFilteredRunId = filteredRuns.at(-1)?.runId;
+    if (latestFilteredRunId) {
+      return latestFilteredRunId;
+    }
+    if (!filters && index.latestRunId) {
+      return index.latestRunId;
+    }
   }
   const runsDir = resolveKovaRunsDir(repoRoot);
   const entries = await fs.readdir(runsDir).catch(() => []);
