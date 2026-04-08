@@ -6,7 +6,7 @@ export async function reportCommand(repoRoot: string, args: string[]) {
   const selector = filteredArgs[0] ?? "latest";
   const runId = selector === "latest" ? await resolveLatestRunId(repoRoot) : selector;
   if (!runId) {
-    throw new Error("no Kova runs found");
+    throw new Error("no Kova runs found. Run 'kova run qa' to record the first artifact.");
   }
   const artifact = await readKovaArtifact(repoRoot, runId);
   if (json) {

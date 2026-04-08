@@ -50,6 +50,7 @@ export const kovaBackendExecutionSchema = z
       .object({
         artifactRoot: z.string().trim().min(1).optional(),
         logPath: z.string().trim().min(1).optional(),
+        bootstrapLogPath: z.string().trim().min(1).optional(),
         planPath: z.string().trim().min(1).optional(),
         mountedRepoPath: z.string().trim().min(1).optional(),
         guestRepoPath: z.string().trim().min(1).optional(),

@@ -74,7 +74,9 @@ export async function runCommand(repoRoot: string, args: string[]) {
   if (options.scenarioIds.length > 0) {
     const missingScenarioIds = findMissingKovaQaScenarioIds(options.scenarioIds);
     if (missingScenarioIds.length > 0) {
-      throw new Error(`unknown qa scenario id(s): ${missingScenarioIds.join(", ")}`);
+      throw new Error(
+        `unknown qa scenario id(s): ${missingScenarioIds.join(", ")}. Use 'kova list scenarios qa' to inspect available scenario ids.`,
+      );
     }
   }
 
