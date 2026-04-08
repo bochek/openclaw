@@ -42,6 +42,9 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
     `Counts: ${artifact.counts.passed}/${artifact.counts.total} passed, ${artifact.counts.failed} failed`,
     `Duration: ${artifact.timing.durationMs}ms`,
   ];
+  if (artifact.selection.scenarioIds?.length) {
+    lines.push(`Selected Scenarios: ${artifact.selection.scenarioIds.join(", ")}`);
+  }
   if (artifact.scenarioResults.length > 0) {
     lines.push("Scenario Results:");
     const scenarioLines = artifact.scenarioResults.map((scenario) => {
