@@ -12,11 +12,16 @@ function parseRunOptions(args: string[]) {
     backend?: KovaBackendId;
     providerMode?: "mock-openai" | "live-frontier";
     parallelsProvider?: "openai" | "anthropic" | "minimax";
+    modelRefs: string[];
+    judgeModel?: string;
+    judgeTimeoutMs?: number;
+    candidateFastMode?: boolean;
     guest?: "macos" | "windows" | "linux";
     mode?: "fresh" | "upgrade" | "both";
     scenarioIds: string[];
     json: boolean;
   } = {
+    modelRefs: [],
     scenarioIds: [],
     json: false,
   };
@@ -29,7 +34,7 @@ function parseRunOptions(args: string[]) {
     return true;
   });
   const rawTarget = rest.shift();
-  if (rawTarget === "qa" || rawTarget === "parallels") {
+  if (rawTarget === "qa" || rawTarget === "character-eval" || rawTarget === "parallels") {
     options.target = rawTarget;
   }
   while (rest.length > 0) {
@@ -53,6 +58,31 @@ function parseRunOptions(args: string[]) {
       if (value === "openai" || value === "anthropic" || value === "minimax") {
         options.parallelsProvider = value;
       }
+      continue;
+    }
+    if (arg === "--model") {
+      const value = rest.shift();
+      if (value?.trim()) {
+        options.modelRefs.push(value.trim());
+      }
+      continue;
+    }
+    if (arg === "--judge-model") {
+      const value = rest.shift();
+      if (value?.trim()) {
+        options.judgeModel = value.trim();
+      }
+      continue;
+    }
+    if (arg === "--judge-timeout-ms") {
+      const value = rest.shift();
+      if (value && Number.isFinite(Number(value))) {
+        options.judgeTimeoutMs = Number(value);
+      }
+      continue;
+    }
+    if (arg === "--fast") {
+      options.candidateFastMode = true;
       continue;
     }
     if (arg === "--guest") {
@@ -97,7 +127,11 @@ export async function runCommand(repoRoot: string, args: string[]) {
     return;
   }
   const options = parseRunOptions(args);
-  if (options.target !== "qa" && options.target !== "parallels") {
+  if (
+    options.target !== "qa" &&
+    options.target !== "character-eval" &&
+    options.target !== "parallels"
+  ) {
     throw new Error(`unsupported kova run target: ${String(options.target ?? "")}`);
   }
   if (options.target === "qa" && options.scenarioIds.length > 0) {
@@ -106,6 +140,20 @@ export async function runCommand(repoRoot: string, args: string[]) {
       throw new Error(
         `unknown qa scenario id(s): ${missingScenarioIds.join(", ")}. Use 'kova list scenarios qa' to inspect available scenario ids.`,
       );
+    }
+  }
+  if (options.target === "character-eval") {
+    if (options.scenarioIds.length > 1) {
+      throw new Error("kova run character-eval accepts at most one --scenario value.");
+    }
+    const scenarioId = options.scenarioIds[0];
+    if (scenarioId) {
+      const missingScenarioIds = findMissingKovaQaScenarioIds([scenarioId]);
+      if (missingScenarioIds.length > 0) {
+        throw new Error(
+          `unknown character-eval scenario id: ${missingScenarioIds.join(", ")}. Use 'kova list scenarios qa' to inspect available scenario ids.`,
+        );
+      }
     }
   }
 
@@ -117,6 +165,7 @@ export async function runCommand(repoRoot: string, args: string[]) {
     backend: options.backend,
     providerMode: options.providerMode,
     scenarioIds: options.scenarioIds.length > 0 ? options.scenarioIds : undefined,
+    modelRefs: options.modelRefs.length > 0 ? options.modelRefs : undefined,
     axes:
       options.target === "parallels"
         ? {
@@ -124,7 +173,13 @@ export async function runCommand(repoRoot: string, args: string[]) {
             ...(options.mode ? { mode: options.mode } : {}),
             ...(options.parallelsProvider ? { provider: options.parallelsProvider } : {}),
           }
-        : undefined,
+        : options.target === "character-eval"
+          ? {
+              ...(options.judgeModel ? { judgeModel: options.judgeModel } : {}),
+              ...(options.judgeTimeoutMs ? { judgeTimeoutMs: String(options.judgeTimeoutMs) } : {}),
+              ...(options.candidateFastMode ? { fast: "on" } : {}),
+            }
+          : undefined,
   });
   if (options.json) {
     process.stdout.write(`${JSON.stringify(artifact, null, 2)}\n`);

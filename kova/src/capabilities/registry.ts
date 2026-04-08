@@ -37,6 +37,20 @@ const kovaCapabilityDefinitions = [
     description: "Character-driven multi-turn responses stay natural and on-role.",
   },
   {
+    id: "lane.character-eval",
+    title: "Character Eval Lane",
+    area: "verification",
+    description:
+      "The judged character-eval lane is healthy and produces usable cross-model evaluation evidence.",
+  },
+  {
+    id: "evaluation.judged-ranking",
+    title: "Judged Ranking",
+    area: "evaluation",
+    description:
+      "Judged model rankings are produced successfully for a character-eval run and remain comparable over time.",
+  },
+  {
     id: "config.apply",
     title: "Config Apply",
     area: "config",

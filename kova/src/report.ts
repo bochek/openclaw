@@ -81,6 +81,11 @@ export type KovaArtifactDiff = {
     baseline: KovaRunArtifact["execution"];
     candidate: KovaRunArtifact["execution"];
   };
+  judgmentChanged: boolean;
+  judgment: {
+    baseline?: KovaRunArtifact["judgment"];
+    candidate?: KovaRunArtifact["judgment"];
+  };
   coverage: {
     capabilityAreasAdded: string[];
     capabilityAreasRemoved: string[];
@@ -119,6 +124,10 @@ function normalizeExecutionForDiff(execution: KovaRunArtifact["execution"]) {
 
 function normalizeScenarioIds(scenarioIds: string[] | undefined) {
   return [...(scenarioIds ?? [])].toSorted();
+}
+
+function normalizeModelRefs(modelRefs: string[] | undefined) {
+  return [...(modelRefs ?? [])].toSorted();
 }
 
 function splitKeyValueNotes(notes: string[]) {
@@ -160,6 +169,7 @@ export function createArtifactIdentity(artifact: KovaRunArtifact) {
   const suite = artifact.selection.suite ?? "";
   const scenarioMode = artifact.selection.scenarioMode ?? "all";
   const scenarioIds = normalizeScenarioIds(artifact.selection.scenarioIds).join(",");
+  const modelRefs = normalizeModelRefs(artifact.selection.modelRefs).join(",");
   const axes = Object.entries(artifact.selection.axes ?? {})
     .toSorted(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => `${key}=${value}`)
@@ -172,6 +182,7 @@ export function createArtifactIdentity(artifact: KovaRunArtifact) {
     `selectionMode=${scenarioMode}`,
     `axes=${axes}`,
     `scenarios=${scenarioIds}`,
+    `models=${modelRefs}`,
   ].join("|");
 }
 
@@ -197,6 +208,8 @@ export function classifyArtifactComparison(
   const candidateProvider = candidate.backend.mode ?? "default";
   const baselineScenarioIds = normalizeScenarioIds(baseline.selection.scenarioIds);
   const candidateScenarioIds = normalizeScenarioIds(candidate.selection.scenarioIds);
+  const baselineModelRefs = normalizeModelRefs(baseline.selection.modelRefs);
+  const candidateModelRefs = normalizeModelRefs(candidate.selection.modelRefs);
   const baselineAxes = Object.entries(baseline.selection.axes ?? {}).toSorted(([left], [right]) =>
     left.localeCompare(right),
   );
@@ -214,6 +227,7 @@ export function classifyArtifactComparison(
   } else if (
     baseline.selection.suite !== candidate.selection.suite ||
     JSON.stringify(baselineScenarioIds) !== JSON.stringify(candidateScenarioIds) ||
+    JSON.stringify(baselineModelRefs) !== JSON.stringify(candidateModelRefs) ||
     JSON.stringify(baselineAxes) !== JSON.stringify(candidateAxes)
   ) {
     kind = "cross-selection";
@@ -452,6 +466,12 @@ export function diffArtifacts(
       baseline: baseline.execution,
       candidate: candidate.execution,
     },
+    judgmentChanged:
+      JSON.stringify(baseline.judgment ?? null) !== JSON.stringify(candidate.judgment ?? null),
+    judgment: {
+      baseline: baseline.judgment,
+      candidate: candidate.judgment,
+    },
     coverage: {
       capabilityAreasAdded: capabilityAreas.added,
       capabilityAreasRemoved: capabilityAreas.removed,
@@ -488,6 +508,12 @@ function compareVerdictSeverity(verdict: KovaRunArtifact["verdict"]) {
   return severityOrder[verdict];
 }
 
+function rankingOrder(judgment: KovaRunArtifact["judgment"]) {
+  return (judgment?.rankings ?? [])
+    .toSorted((left, right) => left.rank - right.rank || right.score - left.score)
+    .map((ranking) => `${ranking.rank}:${ranking.model}:${ranking.score.toFixed(1)}`);
+}
+
 export function interpretArtifactDiff(
   diff: Omit<KovaArtifactDiff, "interpretation">,
 ): KovaArtifactDiff["interpretation"] {
@@ -510,6 +536,16 @@ export function interpretArtifactDiff(
   }
   if (diff.classificationChanged) {
     infoSignals.push("classification changed");
+  }
+  if (diff.judgment.baseline?.error && !diff.judgment.candidate?.error) {
+    improvingSignals.push("judge recovered");
+  } else if (!diff.judgment.baseline?.error && diff.judgment.candidate?.error) {
+    worseningSignals.push("judge failed");
+  } else if (
+    JSON.stringify(rankingOrder(diff.judgment.baseline)) !==
+    JSON.stringify(rankingOrder(diff.judgment.candidate))
+  ) {
+    infoSignals.push("judge ranking changed");
   }
   if (diff.executionChanged) {
     if (
@@ -646,8 +682,9 @@ export function renderArtifactDiff(
     diff.executionChanged
       ? `execution ${baseline.execution.state}/${baseline.execution.availability} -> ${candidate.execution.state}/${candidate.execution.availability}`
       : "",
+    diff.judgmentChanged ? "judgment updated" : "",
     diff.durationDeltaMs !== 0
-      ? `duration ${diff.durationDeltaMs >= 0 ? "+" : ""}${formatDuration(Math.abs(diff.durationDeltaMs))}`
+      ? `duration ${diff.durationDeltaMs >= 0 ? "+" : "-"}${formatDuration(Math.abs(diff.durationDeltaMs))}`
       : "",
     diff.countsDelta.failed !== 0
       ? `failed count ${diff.countsDelta.failed >= 0 ? "+" : ""}${diff.countsDelta.failed}`
@@ -744,7 +781,12 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
   const selectionContext = Object.entries(artifact.selection.axes ?? {})
     .toSorted(([left], [right]) => left.localeCompare(right))
     .map(([key, value]) => [humanizeLabel(key), value] as const);
+  const modelContext =
+    artifact.selection.modelRefs && artifact.selection.modelRefs.length > 0
+      ? ([["Models", artifact.selection.modelRefs.join(", ")]] as const)
+      : ([] as const);
   const keyedContext = [
+    ...modelContext,
     ...selectionContext,
     ...resourceContext,
     ...notes.keyed.map(([key, value]) => [humanizeLabel(key), value] as const),
@@ -813,6 +855,30 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
               const details = scenario.details ? ` | ${scenario.details}` : "";
               return `${verdictBadge(scenario.verdict)} ${scenario.id} ${muted(`(${counts}${details})`)}`;
             }),
+          ),
+        ]
+      : []),
+    ...(artifact.judgment
+      ? [
+          block(
+            "Judgment",
+            [
+              ...keyValueBlock([
+                ["model", artifact.judgment.model],
+                ["thinking", artifact.judgment.thinkingDefault ?? ""],
+                ["fast mode", artifact.judgment.fastMode ? "on" : "off"],
+                ["status", artifact.judgment.error ? "error" : "ranked"],
+                ["error", artifact.judgment.error ?? ""],
+              ]),
+              ...((artifact.judgment.rankings ?? []).length > 0
+                ? bulletList(
+                    artifact.judgment.rankings.map(
+                      (ranking) =>
+                        `${ranking.rank}. ${ranking.model} (${ranking.score.toFixed(1)}) - ${ranking.summary}`,
+                    ),
+                  )
+                : []),
+            ].filter(Boolean),
           ),
         ]
       : []),

@@ -242,7 +242,6 @@ function formatDuration(ms: number) {
   const seconds = totalSeconds % 60;
   return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
 }
-
 function buildJudgePrompt(params: { scenarioId: string; runs: readonly QaCharacterEvalRun[] }) {
   const runBlocks = params.runs
     .map(
@@ -550,7 +549,7 @@ export async function runQaCharacterEval(params: QaCharacterEvalParams) {
       });
       rankings = parseJudgeReply(rawReply, new Set(models));
     } catch (error) {
-      judgeError = formatErrorMessage(error);
+      judgeError = describeCharacterEvalError(error);
     }
 
     return {

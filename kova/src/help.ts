@@ -49,6 +49,7 @@ export function renderKovaHelp() {
     ),
     examplesBlock([
       "kova run qa --scenario channel-chat-baseline",
+      "kova run character-eval --model openai/gpt-5.4",
       "kova report latest",
       "kova diff",
       "kova list runs",
@@ -61,7 +62,7 @@ export function renderRunHelp() {
   return joinBlocks([
     pageHeader("kova run", "Execute a verification run"),
     usageBlock(["kova run <target> [options]"]),
-    block("Arguments", keyValueBlock([["target", "qa | parallels"]])),
+    block("Arguments", keyValueBlock([["target", "qa | character-eval | parallels"]])),
     block(
       "Shared Options",
       keyValueBlock([
@@ -79,6 +80,18 @@ export function renderRunHelp() {
       ]),
     ),
     block(
+      "Character Eval Target",
+      keyValueBlock([
+        ["default backend", "host"],
+        ["backend", "host"],
+        ["--model", "candidate provider/model ref, repeatable"],
+        ["--scenario", "character scenario id"],
+        ["--fast", "enable candidate fast mode"],
+        ["--judge-model", "judge provider/model ref"],
+        ["--judge-timeout-ms", "judge timeout override in milliseconds"],
+      ]),
+    ),
+    block(
       "Parallels Target",
       keyValueBlock([
         ["backend", "parallels"],
@@ -89,11 +102,13 @@ export function renderRunHelp() {
     ),
     examplesBlock([
       "kova run qa --scenario channel-chat-baseline",
+      "kova run character-eval --model openai/gpt-5.4 --judge-model openai/gpt-5.4",
       "kova run qa --backend multipass",
       "kova run parallels --guest macos --mode fresh",
     ]),
     notesBlock([
       "QA uses the host backend by default.",
+      "Character eval uses the host backend and live-frontier model lanes.",
       "Multipass without --scenario runs the curated QA core subset.",
       "Guest, mode, and provider axes apply only to the parallels target.",
     ]),
@@ -115,7 +130,7 @@ export function renderReportHelp() {
     block(
       "Filters",
       keyValueBlock([
-        ["--target", "qa | parallels"],
+        ["--target", "qa | character-eval | parallels"],
         ["--backend", "host | multipass | parallels"],
         ["--guest", "macos | windows | linux"],
         ["--mode", "fresh | upgrade | both"],
@@ -224,7 +239,7 @@ export function renderListRunsHelp() {
     block(
       "Filters",
       keyValueBlock([
-        ["--target", "qa | parallels"],
+        ["--target", "qa | character-eval | parallels"],
         ["--backend", "host | multipass | parallels"],
         ["--guest", "macos | windows | linux"],
         ["--mode", "fresh | upgrade | both"],
@@ -252,7 +267,11 @@ export function renderListTargetsHelp() {
     pageHeader("kova list targets", "Browse registered verification targets"),
     usageBlock(["kova list targets [--json]"]),
     examplesBlock(["kova list targets"]),
-    relatedBlock(["kova run qa --help", "kova run parallels --guest macos --mode fresh"]),
+    relatedBlock([
+      "kova run qa --help",
+      "kova run character-eval --help",
+      "kova run parallels --guest macos --mode fresh",
+    ]),
   ]);
 }
 
@@ -260,8 +279,13 @@ export function renderListBackendsHelp() {
   return joinBlocks([
     pageHeader("kova list backends", "Browse execution backends"),
     usageBlock(["kova list backends [target] [--json]"]),
-    block("Arguments", keyValueBlock([["target", "qa | parallels"]])),
-    examplesBlock(["kova list backends", "kova list backends qa", "kova list backends parallels"]),
+    block("Arguments", keyValueBlock([["target", "qa | character-eval | parallels"]])),
+    examplesBlock([
+      "kova list backends",
+      "kova list backends qa",
+      "kova list backends character-eval",
+      "kova list backends parallels",
+    ]),
     relatedBlock(["kova list targets", "kova run --help"]),
   ]);
 }

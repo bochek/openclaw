@@ -2,6 +2,7 @@ export * from "./src/bus-queries.js";
 export * from "./src/bus-server.js";
 export * from "./src/bus-state.js";
 export * from "./src/bus-waiters.js";
+export * from "./src/character-eval.js";
 export * from "./src/cli.js";
 export * from "./src/harness-runtime.js";
 export * from "./src/lab-server.js";

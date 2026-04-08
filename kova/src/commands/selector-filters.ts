@@ -40,7 +40,7 @@ export function parseKovaSelectorFilters(args: string[]) {
     const arg = args[index];
     if (arg === "--target") {
       const value = readFlagValue(args, index, "--target");
-      if (value !== "qa" && value !== "parallels") {
+      if (value !== "qa" && value !== "character-eval" && value !== "parallels") {
         throw new Error(
           `unsupported Kova target filter: ${value}. Use 'kova list targets' to inspect supported targets.`,
         );

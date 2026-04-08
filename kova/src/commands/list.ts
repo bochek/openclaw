@@ -37,7 +37,10 @@ const kovaListSubjects = [
 ] as const;
 
 function formatTargetLabel(target: string) {
-  return target.toLowerCase() === "qa" ? "QA" : target;
+  if (target.toLowerCase() === "qa") {
+    return "QA";
+  }
+  return formatGroupLabel(target);
 }
 
 function formatGroupLabel(value: string) {
@@ -60,7 +63,9 @@ function parseListArgs(args: string[]) {
   const [subject, maybeTarget] = rest;
   const target =
     filters.target ??
-    (maybeTarget === "qa" || maybeTarget === "parallels" ? maybeTarget : undefined);
+    (maybeTarget === "qa" || maybeTarget === "character-eval" || maybeTarget === "parallels"
+      ? maybeTarget
+      : undefined);
   return {
     subject,
     target,
@@ -102,12 +107,15 @@ function groupLines<T>(items: T[], keyOf: (item: T) => string, render: (item: T)
 function renderTargetLines() {
   return joinBlocks([
     pageHeader("Kova Targets", "Verification targets registered in Kova"),
-    block("Available Targets", bulletList(listKovaTargets())),
+    block(
+      "Available Targets",
+      bulletList(listKovaTargets().map((target) => formatTargetLabel(target))),
+    ),
   ]);
 }
 
 function renderBackendLines(target?: KovaRunTarget) {
-  const label = target ? `Backends (${target})` : "Backends";
+  const label = target ? `Backends (${formatTargetLabel(target)})` : "Backends";
   const rows = listKovaBackends(target).map((backend) => [
     backend.id,
     backend.title,
@@ -117,7 +125,7 @@ function renderBackendLines(target?: KovaRunTarget) {
     pageHeader(
       label,
       target
-        ? `Execution backends available for ${target}`
+        ? `Execution backends available for ${formatTargetLabel(target)}`
         : "Execution backends available to Kova",
     ),
     block("Catalog", table(["backend", "runtime", "binary"], rows)),

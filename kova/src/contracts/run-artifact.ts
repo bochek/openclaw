@@ -32,6 +32,15 @@ export const kovaScenarioResultSchema = z.object({
   }),
 });
 
+export const kovaJudgmentRankingSchema = z.object({
+  model: z.string().trim().min(1),
+  rank: z.number().int().positive(),
+  score: z.number(),
+  summary: z.string().trim().min(1),
+  strengths: z.array(z.string().trim().min(1)).default([]),
+  weaknesses: z.array(z.string().trim().min(1)).default([]),
+});
+
 export const kovaBackendExecutionSchema = z
   .object({
     state: z.enum(["planned", "executed", "blocked", "failed"]).default("planned"),
@@ -86,6 +95,7 @@ export const kovaRunArtifactSchema = z.object({
     suite: z.string().trim().min(1).optional(),
     scenarioMode: z.enum(["all", "explicit", "backend-default"]).default("all"),
     scenarioIds: z.array(z.string().trim().min(1)).min(1).optional(),
+    modelRefs: z.array(z.string().trim().min(1)).min(1).optional(),
     axes: z.record(z.string(), z.string().trim().min(1)).default({}),
   }),
   scenario: z.object({
@@ -138,6 +148,15 @@ export const kovaRunArtifactSchema = z.object({
       capabilityAreas: [],
       surfaces: [],
     }),
+  judgment: z
+    .object({
+      model: z.string().trim().min(1),
+      thinkingDefault: z.string().trim().min(1).optional(),
+      fastMode: z.boolean().optional(),
+      rankings: z.array(kovaJudgmentRankingSchema).default([]),
+      error: z.string().trim().min(1).optional(),
+    })
+    .optional(),
   execution: kovaBackendExecutionSchema,
   scenarioResults: z.array(kovaScenarioResultSchema).default([]),
   evidence: z.object({
