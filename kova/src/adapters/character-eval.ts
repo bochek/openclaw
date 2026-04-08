@@ -198,11 +198,15 @@ export async function runCharacterEvalAdapter(opts: KovaCharacterEvalRunOptions)
       judgeTimeoutMs: opts.judgeTimeoutMs,
     });
     const finishedAt = new Date();
+    const primaryJudgment = result.judgments[0];
+    const judgmentError =
+      primaryJudgment?.error ??
+      (result.judgments.length === 0 ? "character eval did not produce judge output" : undefined);
     const failedRuns = result.runs.filter((run) => run.status === "fail");
     const scenarioResults = buildCharacterEvalScenarioResults({
       scenarioId,
       runs: result.runs,
-      rankings: result.judgment.rankings,
+      rankings: primaryJudgment?.rankings ?? [],
     });
     const artifact = kovaRunArtifactSchema.parse({
       ...baseArtifact,
@@ -211,18 +215,18 @@ export async function runCharacterEvalAdapter(opts: KovaCharacterEvalRunOptions)
         modelRefs: result.runs.map((run) => run.model),
         axes: {
           ...baseArtifact.selection.axes,
-          judgeModel: result.judgment.model,
+          judgeModel: primaryJudgment?.model ?? baseArtifact.selection.axes.judgeModel,
         },
       },
       status: "completed",
       verdict: deriveCharacterEvalVerdict({
         failedRunCount: failedRuns.length,
-        judgmentError: result.judgment.error,
+        judgmentError,
       }),
       classification: deriveCharacterEvalClassification({
         totalRuns: result.runs.length,
         failedRuns,
-        judgmentError: result.judgment.error,
+        judgmentError,
       }),
       timing: {
         startedAt: startedAt.toISOString(),
@@ -234,7 +238,7 @@ export async function runCharacterEvalAdapter(opts: KovaCharacterEvalRunOptions)
         passed: result.runs.filter((run) => run.status === "pass").length,
         failed: failedRuns.length,
       },
-      judgment: result.judgment,
+      judgment: primaryJudgment,
       execution: {
         state: "executed",
         availability: "available",
@@ -296,6 +300,6 @@ export async function runCharacterEvalAdapter(opts: KovaCharacterEvalRunOptions)
     } satisfies KovaRunArtifact);
     await writeJsonFile(path.join(runDir, "run.json"), artifact);
     await updateKovaRunIndex(opts.repoRoot, artifact);
-    throw error;
+    return artifact;
   }
 }

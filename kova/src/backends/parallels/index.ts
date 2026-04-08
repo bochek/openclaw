@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
+import { constants as fsConstants, createWriteStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { KovaRunArtifact } from "../../contracts/run-artifact.js";
@@ -20,6 +20,7 @@ import {
   type KovaParallelsGuest,
   type KovaParallelsMode,
   type KovaParallelsProvider,
+  type KovaParallelsSummary,
 } from "./summary.js";
 
 const parallelsScriptByGuest: Record<KovaParallelsGuest, string> = {
@@ -54,7 +55,7 @@ function resolveParallelsAxes(selection: KovaBackendRunSelection) {
 
 async function commandExists(command: string) {
   try {
-    await fs.access(command);
+    await fs.access(command, fsConstants.X_OK);
     return true;
   } catch {
     return false;
@@ -63,7 +64,7 @@ async function commandExists(command: string) {
 
 async function resolveParallelsAvailability() {
   const binaryPath = process.env.PRLCTL_BIN || "";
-  if (binaryPath) {
+  if (binaryPath && (await commandExists(binaryPath))) {
     return { available: true, binaryPath };
   }
   const candidates = [
@@ -340,9 +341,51 @@ export const parallelsBackend: KovaBackend = {
     }
 
     const summaryPath = path.join(externalRunDir, "summary.json");
-    const summary = parallelsSummarySchema.parse(
-      JSON.parse(await fs.readFile(summaryPath, "utf8")),
-    );
+    let summary: KovaParallelsSummary;
+    try {
+      summary = parallelsSummarySchema.parse(JSON.parse(await fs.readFile(summaryPath, "utf8")));
+    } catch (error) {
+      const finishedAt = new Date();
+      const artifact = kovaRunArtifactSchema.parse({
+        ...baseArtifact,
+        status: "infra_failed",
+        verdict: "blocked",
+        classification: {
+          domain: "backend",
+          reason:
+            error instanceof Error
+              ? `Parallels smoke run did not produce a readable summary: ${error.message}`
+              : "Parallels smoke run did not produce a readable summary.",
+        },
+        timing: {
+          startedAt: startedAt.toISOString(),
+          finishedAt: finishedAt.toISOString(),
+          durationMs: finishedAt.getTime() - startedAt.getTime(),
+        },
+        counts: { total: 0, passed: 0, failed: 0 },
+        execution: {
+          state: "failed",
+          availability: "available",
+          binaryPath: availability.binaryPath,
+          cleanup: {
+            status: "unknown",
+          },
+          paths: {
+            artifactRoot: externalRunDir,
+            logPath: hostLogPath,
+            summaryPath,
+          },
+        },
+        scenarioResults: [],
+        evidence: {
+          sourceArtifactPaths: [...evidencePaths, externalRunDir, summaryPath],
+        },
+        notes: ["backend=parallels", `exitCode=${exitCode}`],
+      });
+      await writeJsonFile(path.join(runDir, "run.json"), artifact);
+      await updateKovaRunIndex(selection.repoRoot, artifact);
+      return artifact;
+    }
     const scenarioResults = buildParallelsScenarioResults({
       summary,
       guest,

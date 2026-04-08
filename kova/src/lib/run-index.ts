@@ -58,6 +58,15 @@ const kovaRunIndexFileSchema = kovaRunArtifactSchema.pick({}).extend({
 type KovaRunIndexEntry = typeof kovaRunIndexSchema._type;
 type KovaRunIndexFile = typeof kovaRunIndexFileSchema._type;
 
+function isEnoentError(error: unknown) {
+  return (
+    error instanceof Error &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    error.code === "ENOENT"
+  );
+}
+
 function createKovaRunIndexEntry(artifact: KovaRunArtifact): KovaRunIndexEntry {
   return {
     runId: artifact.runId,
@@ -86,10 +95,18 @@ function needsHydration(entry: KovaRunIndexEntry) {
 
 export async function readKovaRunIndex(repoRoot: string): Promise<KovaRunIndexFile> {
   const indexPath = resolveKovaRunIndexPath(repoRoot);
-  const current = await readJsonFile<KovaRunIndexFile>(indexPath).catch(() => ({
-    latestRunId: undefined,
-    runs: [],
-  }));
+  let current: KovaRunIndexFile;
+  try {
+    current = await readJsonFile<KovaRunIndexFile>(indexPath);
+  } catch (error) {
+    if (!isEnoentError(error)) {
+      throw error;
+    }
+    current = {
+      latestRunId: undefined,
+      runs: [],
+    };
+  }
   return kovaRunIndexFileSchema.parse(current);
 }
 

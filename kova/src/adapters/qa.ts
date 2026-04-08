@@ -211,6 +211,6 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
     } satisfies KovaRunArtifact);
     await writeJsonFile(path.join(runDir, "run.json"), artifact);
     await updateKovaRunIndex(opts.repoRoot, artifact);
-    throw error;
+    return artifact;
   }
 }
