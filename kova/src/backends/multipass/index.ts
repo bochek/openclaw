@@ -20,8 +20,10 @@ import {
 } from "./qa-summary.js";
 import {
   appendMultipassLog,
+  mountMultipassRepo,
   resolveMultipassAvailability,
   runMultipassCommand,
+  waitForMultipassGuestReady,
 } from "./runtime.js";
 
 function createMultipassBaseArtifact(params: {
@@ -90,6 +92,7 @@ export const multipassBackend: KovaBackend = {
 
     const hostLogPath = path.join(runDir, "multipass-host.log");
     const hostGuestScriptPath = path.join(runDir, "multipass-guest-run.sh");
+    const hostBootstrapLogPath = path.join(runDir, "multipass-guest-bootstrap.log");
     const plan = buildMultipassPlan(selection, hostGuestScriptPath);
     const planPath = path.join(runDir, "multipass-plan.json");
     await writeTextFile(hostGuestScriptPath, renderGuestRunScript(plan));
@@ -112,6 +115,7 @@ export const multipassBackend: KovaBackend = {
       planPath,
       hostGuestScriptPath,
       hostLogPath,
+      hostBootstrapLogPath,
       path.join(runDir, "run.json"),
     ];
 
@@ -124,7 +128,7 @@ export const multipassBackend: KovaBackend = {
         verdict: "blocked",
         classification: {
           domain: "backend",
-          reason: `multipass CLI not found on host; generated plan artifacts in ${runDir}`,
+          reason: "Multipass CLI is not available on this host.",
         },
         timing: {
           startedAt: startedAt.toISOString(),
@@ -173,17 +177,54 @@ export const multipassBackend: KovaBackend = {
     }
 
     let launched = false;
+    let cleanupStatus: KovaRunArtifact["execution"]["cleanup"]["status"] = "not_needed";
+    let cleanupDetails: string | undefined;
+    const cleanupInstance = async () => {
+      if (!launched) {
+        return;
+      }
+      try {
+        await runMultipassCommand({
+          binaryPath: availability.binaryPath,
+          logPath: hostLogPath,
+          args: ["delete", "--purge", plan.vmName],
+        });
+        cleanupStatus = "completed";
+      } catch (error) {
+        cleanupStatus = "failed";
+        cleanupDetails = error instanceof Error ? error.message : String(error);
+        await appendMultipassLog(hostLogPath, `CLEANUP ERROR: ${cleanupDetails}\n`);
+      }
+    };
     try {
       await runMultipassCommand({
         binaryPath: availability.binaryPath,
         logPath: hostLogPath,
-        args: ["launch", "--name", plan.vmName, plan.image],
+        args: [
+          "launch",
+          "--name",
+          plan.vmName,
+          "--cpus",
+          String(plan.cpus),
+          "--memory",
+          plan.memory,
+          "--disk",
+          plan.disk,
+          plan.image,
+        ],
       });
       launched = true;
-      await runMultipassCommand({
+      await waitForMultipassGuestReady({
         binaryPath: availability.binaryPath,
         logPath: hostLogPath,
-        args: ["mount", selection.repoRoot, `${plan.vmName}:${plan.guestMountedRepoPath}`],
+        vmName: plan.vmName,
+      });
+      await mountMultipassRepo({
+        binaryPath: availability.binaryPath,
+        logPath: hostLogPath,
+        hostRepoPath: selection.repoRoot,
+        vmName: plan.vmName,
+        guestMountedRepoPath: plan.guestMountedRepoPath,
       });
       await runMultipassCommand({
         binaryPath: availability.binaryPath,
@@ -200,6 +241,11 @@ export const multipassBackend: KovaBackend = {
         logPath: hostLogPath,
         args: ["exec", plan.vmName, "--", plan.guestScriptPath],
       });
+      await runMultipassCommand({
+        binaryPath: availability.binaryPath,
+        logPath: hostLogPath,
+        args: ["transfer", `${plan.vmName}:${plan.guestBootstrapLogPath}`, hostBootstrapLogPath],
+      }).catch(() => undefined);
 
       const reportPath = path.join(runDir, "qa", "qa-suite-report.md");
       const { summaryPath, summary } = await readQaSummary(runDir);
@@ -214,6 +260,7 @@ export const multipassBackend: KovaBackend = {
         selectedScenarioIds: selection.scenarioIds,
         summary,
       });
+      await cleanupInstance();
       const finishedAt = new Date();
       const artifact = kovaRunArtifactSchema.parse({
         ...baseArtifact,
@@ -233,11 +280,13 @@ export const multipassBackend: KovaBackend = {
           binaryPath: availability.binaryPath,
           instanceId: plan.vmName,
           cleanup: {
-            status: "unknown",
+            status: cleanupStatus,
+            details: cleanupDetails,
           },
           paths: {
             artifactRoot: runDir,
             logPath: hostLogPath,
+            bootstrapLogPath: hostBootstrapLogPath,
             planPath,
             mountedRepoPath: plan.guestMountedRepoPath,
             guestRepoPath: plan.guestRepoPath,
@@ -268,6 +317,14 @@ export const multipassBackend: KovaBackend = {
         hostLogPath,
         `ERROR: ${error instanceof Error ? error.message : String(error)}\n`,
       );
+      if (launched) {
+        await runMultipassCommand({
+          binaryPath: availability.binaryPath,
+          logPath: hostLogPath,
+          args: ["transfer", `${plan.vmName}:${plan.guestBootstrapLogPath}`, hostBootstrapLogPath],
+        }).catch(() => undefined);
+      }
+      await cleanupInstance();
       const finishedAt = new Date();
       const artifact = kovaRunArtifactSchema.parse({
         ...baseArtifact,
@@ -294,7 +351,8 @@ export const multipassBackend: KovaBackend = {
           binaryPath: availability.binaryPath,
           instanceId: plan.vmName,
           cleanup: {
-            status: "unknown",
+            status: cleanupStatus,
+            details: cleanupDetails,
           },
           paths: {
             artifactRoot: runDir,
@@ -303,6 +361,7 @@ export const multipassBackend: KovaBackend = {
             mountedRepoPath: plan.guestMountedRepoPath,
             guestRepoPath: plan.guestRepoPath,
             guestScriptPath: plan.guestScriptPath,
+            bootstrapLogPath: hostBootstrapLogPath,
           },
         },
         scenarioResults: [],
@@ -322,19 +381,6 @@ export const multipassBackend: KovaBackend = {
       await writeJsonFile(path.join(runDir, "run.json"), artifact);
       await updateKovaRunIndex(selection.repoRoot, artifact);
       return artifact;
-    } finally {
-      if (launched) {
-        await runMultipassCommand({
-          binaryPath: availability.binaryPath,
-          logPath: hostLogPath,
-          args: ["delete", "--purge", plan.vmName],
-        }).catch(async (error) => {
-          await appendMultipassLog(
-            hostLogPath,
-            `CLEANUP ERROR: ${error instanceof Error ? error.message : String(error)}\n`,
-          );
-        });
-      }
     }
   },
 };
