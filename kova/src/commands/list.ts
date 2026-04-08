@@ -3,11 +3,14 @@ import type { KovaRunTarget } from "../backends/types.js";
 import { listKovaQaScenarios, summarizeKovaQaSurfaces } from "../catalog/qa.js";
 
 function parseListArgs(args: string[]) {
-  const [subject, maybeTarget] = args;
+  const json = args.includes("--json");
+  const filteredArgs = args.filter((arg) => arg !== "--json");
+  const [subject, maybeTarget] = filteredArgs;
   const target = maybeTarget === "qa" ? maybeTarget : undefined;
   return {
     subject: subject ?? "inventory",
     target,
+    json,
   };
 }
 
@@ -49,21 +52,67 @@ export async function listCommand(args: string[]) {
   const options = parseListArgs(args);
 
   if (options.subject === "targets") {
+    if (options.json) {
+      process.stdout.write(`${JSON.stringify({ targets: listKovaTargets() }, null, 2)}\n`);
+      return;
+    }
     process.stdout.write(`${renderTargetLines().join("\n")}\n`);
     return;
   }
 
   if (options.subject === "backends") {
+    if (options.json) {
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            target: options.target ?? null,
+            backends: listKovaBackends(options.target).map((backend) => ({
+              id: backend.id,
+              title: backend.title,
+            })),
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      return;
+    }
     process.stdout.write(`${renderBackendLines(options.target).join("\n")}\n`);
     return;
   }
 
   if (options.subject === "scenarios") {
+    if (options.json) {
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            target: options.target ?? "qa",
+            scenarios: listKovaQaScenarios(),
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      return;
+    }
     process.stdout.write(`${renderScenarioLines(options.target).join("\n")}\n`);
     return;
   }
 
   if (options.subject === "surfaces") {
+    if (options.json) {
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            target: options.target ?? "qa",
+            surfaces: summarizeKovaQaSurfaces(),
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      return;
+    }
     process.stdout.write(`${renderSurfaceLines(options.target).join("\n")}\n`);
     return;
   }
@@ -71,6 +120,26 @@ export async function listCommand(args: string[]) {
   if (options.subject === "inventory") {
     const scenarioCount = listKovaQaScenarios().length;
     const surfaceCount = summarizeKovaQaSurfaces().length;
+    if (options.json) {
+      process.stdout.write(
+        `${JSON.stringify(
+          {
+            targets: listKovaTargets(),
+            backends: listKovaBackends().map((backend) => ({
+              id: backend.id,
+              title: backend.title,
+            })),
+            qaCatalog: {
+              scenarioCount,
+              surfaceCount,
+            },
+          },
+          null,
+          2,
+        )}\n`,
+      );
+      return;
+    }
     const lines = [
       ...renderTargetLines(),
       "",
