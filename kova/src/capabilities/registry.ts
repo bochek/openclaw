@@ -127,6 +127,60 @@ const kovaCapabilityDefinitions = [
     area: "workspace",
     description: "Workspace reads and writes produce the intended artifact or change outcome.",
   },
+  {
+    id: "lane.parallels",
+    title: "Parallels Lane",
+    area: "verification",
+    description:
+      "The Parallels guest-smoke lane is healthy and produces usable guest-runtime evidence.",
+  },
+  {
+    id: "install.baseline",
+    title: "Baseline Install",
+    area: "install",
+    description:
+      "A baseline OpenClaw install succeeds inside a guest OS and yields a usable runtime.",
+  },
+  {
+    id: "update.dev-channel",
+    title: "Dev Channel Update",
+    area: "update",
+    description:
+      "Stable-to-dev or baseline-to-main update flows complete correctly inside a guest OS.",
+  },
+  {
+    id: "runtime.gateway",
+    title: "Gateway Runtime",
+    area: "runtime",
+    description:
+      "Gateway startup, reachability, and deep health remain correct after install or update.",
+  },
+  {
+    id: "runtime.agent-turn",
+    title: "Agent Turn Runtime",
+    area: "runtime",
+    description: "A real post-onboard agent turn succeeds inside the guest runtime.",
+  },
+  {
+    id: "dashboard.control-ui",
+    title: "Dashboard Load",
+    area: "dashboard",
+    description: "The Control UI loads successfully through the guest-facing dashboard flow.",
+  },
+  {
+    id: "platform.compatibility",
+    title: "Platform Compatibility",
+    area: "platform",
+    description:
+      "OpenClaw remains compatible across supported guest operating systems and guest-specific constraints.",
+  },
+  {
+    id: "integration.discord-roundtrip",
+    title: "Discord Roundtrip",
+    area: "integrations",
+    description:
+      "Optional Discord send/readback roundtrip behavior succeeds end to end in guest smoke.",
+  },
 ] as const satisfies readonly KovaCapabilityDefinition[];
 
 const capabilityById = new Map(

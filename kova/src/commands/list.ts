@@ -19,7 +19,7 @@ import { hydrateKovaRunIndex } from "../lib/run-index.js";
 const kovaListSubjects = [
   ["runs", "recorded verification runs"],
   ["targets", "registered verification targets"],
-  ["backends [qa]", "execution backends for a target"],
+  ["backends [target]", "execution backends for a target"],
   ["scenarios [qa]", "scenario catalog entries for a target"],
   ["surfaces [qa]", "scenario coverage surfaces for a target"],
   ["capabilities", "capability registry entries"],
@@ -46,7 +46,7 @@ function parseListArgs(args: string[]) {
   const all = args.includes("--all");
   const filteredArgs = args.filter((arg) => arg !== "--json" && arg !== "--all");
   const [subject, maybeTarget] = filteredArgs;
-  const target = maybeTarget === "qa" ? maybeTarget : undefined;
+  const target = maybeTarget === "qa" || maybeTarget === "parallels" ? maybeTarget : undefined;
   return {
     subject,
     target,

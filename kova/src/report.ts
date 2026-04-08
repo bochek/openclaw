@@ -158,12 +158,17 @@ export function createArtifactIdentity(artifact: KovaRunArtifact) {
   const suite = artifact.selection.suite ?? "";
   const scenarioMode = artifact.selection.scenarioMode ?? "all";
   const scenarioIds = normalizeScenarioIds(artifact.selection.scenarioIds).join(",");
+  const axes = Object.entries(artifact.selection.axes ?? {})
+    .toSorted(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join(",");
   return [
     `target=${artifact.selection.target}`,
     `backend=${backendId}`,
     `provider=${providerMode}`,
     `suite=${suite}`,
     `selectionMode=${scenarioMode}`,
+    `axes=${axes}`,
     `scenarios=${scenarioIds}`,
   ].join("|");
 }
@@ -190,6 +195,12 @@ export function classifyArtifactComparison(
   const candidateProvider = candidate.backend.mode ?? "default";
   const baselineScenarioIds = normalizeScenarioIds(baseline.selection.scenarioIds);
   const candidateScenarioIds = normalizeScenarioIds(candidate.selection.scenarioIds);
+  const baselineAxes = Object.entries(baseline.selection.axes ?? {}).toSorted(([left], [right]) =>
+    left.localeCompare(right),
+  );
+  const candidateAxes = Object.entries(candidate.selection.axes ?? {}).toSorted(([left], [right]) =>
+    left.localeCompare(right),
+  );
 
   let kind: KovaArtifactComparisonKind = "comparable";
   if (baseline.selection.target !== candidate.selection.target) {
@@ -200,7 +211,8 @@ export function classifyArtifactComparison(
     kind = "cross-provider";
   } else if (
     baseline.selection.suite !== candidate.selection.suite ||
-    JSON.stringify(baselineScenarioIds) !== JSON.stringify(candidateScenarioIds)
+    JSON.stringify(baselineScenarioIds) !== JSON.stringify(candidateScenarioIds) ||
+    JSON.stringify(baselineAxes) !== JSON.stringify(candidateAxes)
   ) {
     kind = "cross-selection";
   }
@@ -707,7 +719,11 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
       ? (["Disk", artifact.execution.resources.disk] as const)
       : null,
   ].filter(Boolean) as Array<readonly [string, string]>;
+  const selectionContext = Object.entries(artifact.selection.axes ?? {})
+    .toSorted(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => [humanizeLabel(key), value] as const);
   const keyedContext = [
+    ...selectionContext,
     ...resourceContext,
     ...notes.keyed.map(([key, value]) => [humanizeLabel(key), value] as const),
   ];

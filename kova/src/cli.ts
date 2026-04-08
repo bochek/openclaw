@@ -37,6 +37,7 @@ function printHelp() {
       "Common Flows",
       bulletList([
         "kova run qa --scenario channel-chat-baseline",
+        "kova run parallels --guest macos --mode fresh",
         "kova report latest",
         "kova diff",
         "kova list runs",
@@ -45,9 +46,12 @@ function printHelp() {
     block(
       "Run",
       keyValueBlock([
-        ["--backend", "host | multipass"],
+        ["--backend", "host | multipass | parallels"],
         ["--provider-mode", "mock-openai | live-frontier"],
         ["--scenario", "qa scenario id, repeatable"],
+        ["--guest", "parallels guest: macos | windows | linux"],
+        ["--mode", "parallels mode: fresh | upgrade | both"],
+        ["--provider", "parallels provider: openai | anthropic | minimax"],
         ["--json", "machine-readable output"],
       ]),
     ),
@@ -82,7 +86,7 @@ function printHelp() {
       bulletList([
         "runs",
         "targets",
-        "backends [qa]",
+        "backends [target]",
         "scenarios [qa]",
         "surfaces [qa]",
         "capabilities",

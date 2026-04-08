@@ -1,4 +1,5 @@
 import { multipassBackend } from "./multipass/index.js";
+import { parallelsBackend } from "./parallels/index.js";
 import { qaBackend } from "./qa.js";
 import {
   kovaRunTargets,
@@ -7,7 +8,7 @@ import {
   type KovaRunTarget,
 } from "./types.js";
 
-const kovaBackends: KovaBackend[] = [qaBackend, multipassBackend];
+const kovaBackends: KovaBackend[] = [qaBackend, multipassBackend, parallelsBackend];
 
 export function listKovaTargets() {
   return [...kovaRunTargets];

@@ -86,6 +86,7 @@ export const kovaRunArtifactSchema = z.object({
     suite: z.string().trim().min(1).optional(),
     scenarioMode: z.enum(["all", "explicit", "backend-default"]).default("all"),
     scenarioIds: z.array(z.string().trim().min(1)).min(1).optional(),
+    axes: z.record(z.string(), z.string().trim().min(1)).default({}),
   }),
   scenario: z.object({
     id: z.string().trim().min(1),

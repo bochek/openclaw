@@ -10,6 +10,9 @@ function parseRunOptions(args: string[]) {
     target?: KovaRunTarget;
     backend?: KovaBackendId;
     providerMode?: "mock-openai" | "live-frontier";
+    parallelsProvider?: "openai" | "anthropic" | "minimax";
+    guest?: "macos" | "windows" | "linux";
+    mode?: "fresh" | "upgrade" | "both";
     scenarioIds: string[];
     json: boolean;
   } = {
@@ -25,7 +28,7 @@ function parseRunOptions(args: string[]) {
     return true;
   });
   const rawTarget = rest.shift();
-  if (rawTarget === "qa") {
+  if (rawTarget === "qa" || rawTarget === "parallels") {
     options.target = rawTarget;
   }
   while (rest.length > 0) {
@@ -39,8 +42,29 @@ function parseRunOptions(args: string[]) {
     }
     if (arg === "--backend") {
       const value = rest.shift();
-      if (value === "host" || value === "multipass") {
+      if (value === "host" || value === "multipass" || value === "parallels") {
         options.backend = value;
+      }
+      continue;
+    }
+    if (arg === "--provider") {
+      const value = rest.shift();
+      if (value === "openai" || value === "anthropic" || value === "minimax") {
+        options.parallelsProvider = value;
+      }
+      continue;
+    }
+    if (arg === "--guest") {
+      const value = rest.shift();
+      if (value === "macos" || value === "windows" || value === "linux") {
+        options.guest = value;
+      }
+      continue;
+    }
+    if (arg === "--mode") {
+      const value = rest.shift();
+      if (value === "fresh" || value === "upgrade" || value === "both") {
+        options.mode = value;
       }
       continue;
     }
@@ -68,10 +92,10 @@ function resolveRunExitCode(artifact: KovaRunArtifact) {
 
 export async function runCommand(repoRoot: string, args: string[]) {
   const options = parseRunOptions(args);
-  if (options.target !== "qa") {
+  if (options.target !== "qa" && options.target !== "parallels") {
     throw new Error(`unsupported kova run target: ${String(options.target ?? "")}`);
   }
-  if (options.scenarioIds.length > 0) {
+  if (options.target === "qa" && options.scenarioIds.length > 0) {
     const missingScenarioIds = findMissingKovaQaScenarioIds(options.scenarioIds);
     if (missingScenarioIds.length > 0) {
       throw new Error(
@@ -88,6 +112,14 @@ export async function runCommand(repoRoot: string, args: string[]) {
     backend: options.backend,
     providerMode: options.providerMode,
     scenarioIds: options.scenarioIds.length > 0 ? options.scenarioIds : undefined,
+    axes:
+      options.target === "parallels"
+        ? {
+            ...(options.guest ? { guest: options.guest } : {}),
+            ...(options.mode ? { mode: options.mode } : {}),
+            ...(options.parallelsProvider ? { provider: options.parallelsProvider } : {}),
+          }
+        : undefined,
   });
   if (options.json) {
     process.stdout.write(`${JSON.stringify(artifact, null, 2)}\n`);
