@@ -134,6 +134,34 @@ describe("active-memory plugin", () => {
     expect((result as { appendSystemContext: string }).appendSystemContext).toContain(
       "lemon pepper wings",
     );
+    expect(runEmbeddedPiAgent.mock.calls.at(-1)?.[0]).toMatchObject({
+      provider: "github-copilot",
+      model: "gpt-5.4-mini",
+    });
+  });
+
+  it("falls back to the current session model when no plugin model is configured", async () => {
+    api.pluginConfig = {
+      agents: ["main"],
+    };
+    plugin.register(api as unknown as OpenClawPluginApi);
+
+    await hooks.before_prompt_build(
+      { prompt: "what wings should i order? temp transcript", messages: [] },
+      {
+        agentId: "main",
+        trigger: "user",
+        sessionKey: "agent:main:main",
+        messageProvider: "webchat",
+        modelProviderId: "qwen",
+        modelId: "glm-5",
+      },
+    );
+
+    expect(runEmbeddedPiAgent.mock.calls.at(-1)?.[0]).toMatchObject({
+      provider: "qwen",
+      model: "glm-5",
+    });
   });
 
   it("persists a readable debug summary alongside the status line", async () => {
@@ -315,6 +343,32 @@ describe("active-memory plugin", () => {
     expect(prompt).toContain("user: i have a flight tomorrow");
     expect(prompt).toContain("assistant: got it");
     expect(prompt).toContain("user: packing is annoying");
+  });
+
+  it("loosens zero-overlap filtering for preference-seeking turns when concrete relevance is disabled", async () => {
+    api.pluginConfig = {
+      agents: ["main"],
+      requireConcreteRelevance: false,
+      dropGenericPreferencesOnNonPreferenceTurns: false,
+    };
+    plugin.register(api as unknown as OpenClawPluginApi);
+    runEmbeddedPiAgent.mockResolvedValueOnce({
+      payloads: [{ text: "- spicy ramen with a soft-boiled egg" }],
+    });
+
+    const result = await hooks.before_prompt_build(
+      { prompt: "what should i order?", messages: [] },
+      {
+        agentId: "main",
+        trigger: "user",
+        sessionKey: "agent:main:main",
+        messageProvider: "webchat",
+      },
+    );
+
+    expect(result).toEqual({
+      appendSystemContext: expect.stringContaining("spicy ramen with a soft-boiled egg"),
+    });
   });
 
   it("keeps sidecar transcripts off disk by default by using a temp session file", async () => {

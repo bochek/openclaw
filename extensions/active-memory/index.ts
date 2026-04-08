@@ -115,7 +115,7 @@ type ActiveRecallPluginConfig = {
 
 type ResolvedActiveRecallPluginConfig = {
   agents: string[];
-  model: string;
+  model?: string;
   timeoutMs: number;
   queryMode: "message" | "recent" | "full";
   maxMemories: number;
@@ -202,7 +202,7 @@ function normalizePluginConfig(pluginConfig: unknown): ResolvedActiveRecallPlugi
     agents: Array.isArray(raw.agents)
       ? raw.agents.map((agentId) => String(agentId).trim()).filter(Boolean)
       : [],
-    model: typeof raw.model === "string" && raw.model.trim() ? raw.model.trim() : DEFAULT_MODEL_REF,
+    model: typeof raw.model === "string" && raw.model.trim() ? raw.model.trim() : undefined,
     timeoutMs: clampInt(
       parseOptionalPositiveInt(raw.timeoutMs, DEFAULT_TIMEOUT_MS),
       DEFAULT_TIMEOUT_MS,
@@ -297,9 +297,7 @@ function shouldCacheResult(result: ActiveRecallResult): boolean {
   return result.status === "ok" || result.status === "empty";
 }
 
-function resolveStatusUpdateAgentId(
-  ctx: { agentId?: string; sessionKey?: string },
-): string {
+function resolveStatusUpdateAgentId(ctx: { agentId?: string; sessionKey?: string }): string {
   const explicit = ctx.agentId?.trim();
   if (explicit) {
     return explicit;
@@ -483,7 +481,7 @@ function filterWeakRecallCandidates(params: {
     if (params.requireConcreteRelevance) {
       return false;
     }
-    return candidateTokens.some((token) => latestTokens.has(token));
+    return preferenceSeeking;
   });
   return filtered.slice(0, params.maxMemories).map((candidate) => ({
     ...candidate,
@@ -670,8 +668,18 @@ function getModelRef(
   api: OpenClawPluginApi,
   agentId: string,
   config: ResolvedActiveRecallPluginConfig,
+  ctx?: {
+    modelProviderId?: string;
+    modelId?: string;
+  },
 ) {
-  const configured = config.model || resolveAgentEffectiveModelPrimary(api.config, agentId) || DEFAULT_MODEL_REF;
+  const currentRunModel =
+    ctx?.modelProviderId && ctx?.modelId ? `${ctx.modelProviderId}/${ctx.modelId}` : undefined;
+  const configured =
+    config.model ||
+    currentRunModel ||
+    resolveAgentEffectiveModelPrimary(api.config, agentId) ||
+    DEFAULT_MODEL_REF;
   const parsed = parseModelRef(configured, DEFAULT_PROVIDER);
   if (parsed) {
     return parsed;
@@ -690,10 +698,15 @@ async function runRecallSidecar(params: {
   agentId: string;
   sessionKey?: string;
   query: string;
+  currentModelProviderId?: string;
+  currentModelId?: string;
 }): Promise<{ rawReply: string; transcriptPath?: string }> {
   const workspaceDir = resolveAgentWorkspaceDir(params.api.config, params.agentId);
   const agentDir = resolveAgentDir(params.api.config, params.agentId);
-  const modelRef = getModelRef(params.api, params.agentId, params.config);
+  const modelRef = getModelRef(params.api, params.agentId, params.config, {
+    modelProviderId: params.currentModelProviderId,
+    modelId: params.currentModelId,
+  });
   const sidecarSessionId = `active-memory-${Date.now().toString(36)}`;
   const sidecarSessionKey = `active-memory:${params.agentId}:${crypto
     .createHash("sha1")
@@ -706,7 +719,8 @@ async function runRecallSidecar(params: {
       agentId: params.agentId,
     },
   );
-  const resolvedStorePath = storePath || path.join(os.tmpdir(), "openclaw-active-memory-sessions.json");
+  const resolvedStorePath =
+    storePath || path.join(os.tmpdir(), "openclaw-active-memory-sessions.json");
   const baseSessionsDir = path.dirname(path.resolve(resolvedStorePath));
   const tempDir = params.config.persistTranscripts
     ? undefined
@@ -781,6 +795,8 @@ async function maybeResolveActiveRecall(params: {
   agentId: string;
   sessionKey?: string;
   query: string;
+  currentModelProviderId?: string;
+  currentModelId?: string;
 }): Promise<ActiveRecallResult> {
   const startedAt = Date.now();
   const cacheKey = buildCacheKey({
@@ -915,6 +931,8 @@ export default definePluginEntry({
         agentId: effectiveAgentId,
         sessionKey: ctx.sessionKey,
         query,
+        currentModelProviderId: ctx.modelProviderId,
+        currentModelId: ctx.modelId,
       });
       if (result.memories.length === 0) {
         return;

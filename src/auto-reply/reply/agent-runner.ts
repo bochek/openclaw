@@ -748,12 +748,14 @@ export async function runReplyAgent(params: {
       }
     }
 
-    activeSessionEntry = refreshSessionEntryFromStore({
-      storePath,
-      sessionKey,
-      fallbackEntry: activeSessionEntry,
-      activeSessionStore,
-    });
+    if (verboseEnabled) {
+      activeSessionEntry = refreshSessionEntryFromStore({
+        storePath,
+        sessionKey,
+        fallbackEntry: activeSessionEntry,
+        activeSessionStore,
+      });
+    }
 
     // If verbose is enabled, prepend operational run notices.
     let finalPayloads = guardedReplyPayloads;

@@ -38,7 +38,6 @@ Start with this in `openclaw.json`:
         enabled: true,
         config: {
           agents: ["main"],
-          model: "github-copilot/gpt-5.4-mini",
           queryMode: "recent",
           timeoutMs: 8000,
           maxMemories: 2,
@@ -54,13 +53,14 @@ Start with this in `openclaw.json`:
 Then restart the gateway:
 
 ```bash
-pnpm gateway:dev
+node scripts/run-node.mjs gateway --profile dev
 ```
 
 What this means:
 
 - `plugins.entries.active-memory.enabled: true` turns the plugin on
 - `config.agents: ["main"]` opts only the `main` agent into active memory
+- if `config.model` is unset, active memory inherits the current session model
 - active memory still runs only on eligible interactive persistent chat sessions
 
 ## How to see it
@@ -315,17 +315,17 @@ plugins.entries.active-memory
 
 The most important fields are:
 
-| Key                         | Type                              | Meaning                                                               |
-| --------------------------- | --------------------------------- | --------------------------------------------------------------------- |
-| `enabled`                   | `boolean`                         | Enables the plugin itself                                             |
-| `config.agents`             | `string[]`                        | Agent ids that may use active memory                                  |
-| `config.model`              | `string`                          | Sidecar model ref                                                     |
-| `config.queryMode`          | `"message" \| "recent" \| "full"` | Controls how much conversation the sidecar sees                       |
-| `config.timeoutMs`          | `number`                          | Hard timeout for the sidecar                                          |
-| `config.maxMemories`        | `number`                          | Maximum recalled bullets to inject                                    |
-| `config.logging`            | `boolean`                         | Emits active memory logs while tuning                                 |
-| `config.persistTranscripts` | `boolean`                         | Keeps sidecar transcripts on disk instead of deleting temp files      |
-| `config.transcriptDir`      | `string`                          | Relative sidecar transcript directory under the agent sessions folder |
+| Key                         | Type                              | Meaning                                                                              |
+| --------------------------- | --------------------------------- | ------------------------------------------------------------------------------------ |
+| `enabled`                   | `boolean`                         | Enables the plugin itself                                                            |
+| `config.agents`             | `string[]`                        | Agent ids that may use active memory                                                 |
+| `config.model`              | `string`                          | Optional sidecar model ref; when unset, active memory uses the current session model |
+| `config.queryMode`          | `"message" \| "recent" \| "full"` | Controls how much conversation the sidecar sees                                      |
+| `config.timeoutMs`          | `number`                          | Hard timeout for the sidecar                                                         |
+| `config.maxMemories`        | `number`                          | Maximum recalled bullets to inject                                                   |
+| `config.logging`            | `boolean`                         | Emits active memory logs while tuning                                                |
+| `config.persistTranscripts` | `boolean`                         | Keeps sidecar transcripts on disk instead of deleting temp files                     |
+| `config.transcriptDir`      | `string`                          | Relative sidecar transcript directory under the agent sessions folder                |
 
 Useful tuning fields:
 
@@ -352,7 +352,6 @@ Start with `recent`.
         enabled: true,
         config: {
           agents: ["main"],
-          model: "github-copilot/gpt-5.4-mini",
           queryMode: "recent",
           timeoutMs: 8000,
           maxMemories: 2,
