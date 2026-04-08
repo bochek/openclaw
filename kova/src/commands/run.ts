@@ -1,10 +1,11 @@
 import { runQaAdapter } from "../adapters/qa.js";
+import type { KovaRunTarget } from "../backends/types.js";
 import { createKovaRunId } from "../lib/run-id.js";
 import { renderArtifactSummary } from "../report.js";
 
 function parseRunOptions(args: string[]) {
   const options: {
-    target?: string;
+    target?: KovaRunTarget;
     providerMode?: "mock-openai" | "live-frontier";
     scenarioIds: string[];
   } = {
@@ -12,7 +13,10 @@ function parseRunOptions(args: string[]) {
   };
 
   const rest = [...args];
-  options.target = rest.shift();
+  const rawTarget = rest.shift();
+  if (rawTarget === "qa") {
+    options.target = rawTarget;
+  }
   while (rest.length > 0) {
     const arg = rest.shift();
     if (arg === "--provider-mode") {
