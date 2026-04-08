@@ -1,6 +1,7 @@
 packages:
   - .
   - ui
+  - kova
   - packages/*
   - extensions/*
 

@@ -1139,6 +1139,7 @@
     "ios:version:check": "node --import tsx scripts/ios-sync-versioning.ts --check",
     "ios:version:pin": "node --import tsx scripts/ios-pin-version.ts",
     "ios:version:sync": "node --import tsx scripts/ios-sync-versioning.ts --write",
+    "kova": "node --import tsx kova/src/cli.ts",
     "lint": "node scripts/run-oxlint.mjs",
     "lint:agent:ingress-owner": "node scripts/check-ingress-agent-owner-context.mjs",
     "lint:all": "pnpm lint && pnpm lint:swift",
