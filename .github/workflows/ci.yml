@@ -565,13 +565,6 @@ jobs:
             echo "OPENCLAW_VITEST_MAX_WORKERS=1" >> "$GITHUB_ENV"
           fi
 
-      - name: Download A2UI bundle artifact
-        if: matrix.task == 'test-core' || matrix.task == 'channels'
-        uses: actions/download-artifact@v8
-        with:
-          name: canvas-a2ui-bundle
-          path: src/canvas-host/a2ui/
-
       - name: Run ${{ matrix.task }} (${{ matrix.runtime }})
         if: github.event_name != 'pull_request' || matrix.task != 'compat-node22'
         env:

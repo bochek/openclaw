@@ -69,7 +69,7 @@ function expectResolvedBundledDir(params: {
   bundledDirOverride?: string;
   disableBundledPlugins?: string;
   vitest?: string;
-  execArgv?: string[];
+  execArgv?: readonly string[];
 }) {
   vi.spyOn(process, "cwd").mockReturnValue(params.cwd);
   process.argv[1] = params.argv1 ?? "/usr/bin/env";
@@ -103,7 +103,7 @@ function expectResolvedBundledDirFromRoot(params: {
   bundledDirOverride?: string;
   vitest?: string;
   cwd?: string;
-  execArgv?: string[];
+  execArgv?: readonly string[];
 }) {
   expectResolvedBundledDir({
     cwd: params.cwd ?? params.repoRoot,
@@ -120,12 +120,14 @@ function expectInstalledBundledDirScenario(params: {
   cwd?: string;
   argv1?: string;
   bundledDirOverride?: string;
+  execArgv?: readonly string[];
 }) {
   expectResolvedBundledDirFromRoot({
     repoRoot: params.installedRoot,
     cwd: params.cwd ?? process.cwd(),
     ...(params.argv1 ? { argv1: params.argv1 } : {}),
     ...(params.bundledDirOverride ? { bundledDirOverride: params.bundledDirOverride } : {}),
+    ...(params.execArgv ? { execArgv: params.execArgv } : {}),
     expectedRelativeDir: path.join("dist", "extensions"),
   });
 }
@@ -136,6 +138,7 @@ function expectInstalledBundledDirScenarioCase(
     cwd?: string;
     argv1?: string;
     bundledDirOverride?: string;
+    execArgv?: readonly string[];
   },
 ) {
   expectInstalledBundledDirScenario(createScenario());
