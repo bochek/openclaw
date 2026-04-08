@@ -269,15 +269,12 @@ export function defaultServerRequestResponse(
   }
   if (
     request.method === "item/commandExecution/requestApproval" ||
-    request.method === "execCommandApproval"
+    request.method === "item/fileChange/requestApproval"
   ) {
     return { decision: "decline" };
   }
-  if (
-    request.method === "item/fileChange/requestApproval" ||
-    request.method === "applyPatchApproval"
-  ) {
-    return { decision: "decline" };
+  if (request.method === "execCommandApproval" || request.method === "applyPatchApproval") {
+    return { decision: "denied" };
   }
   if (request.method === "item/permissions/requestApproval") {
     return { permissions: {}, scope: "turn" };

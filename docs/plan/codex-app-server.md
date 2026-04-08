@@ -40,8 +40,9 @@ Implementation status on `app-server`:
 - app-server compaction items now drive active-run compaction state and
   compaction events.
 - guardian review notifications are projected as diagnostic agent events only.
-- native app-server approval callbacks fail closed and emit approval telemetry
-  until OpenClaw has an interactive approval bridge for those request kinds.
+- native app-server command/file/permission approval callbacks route through
+  OpenClaw plugin approval requests, then fail closed if no approval route is
+  available.
 
 ## Goal
 
@@ -400,12 +401,13 @@ Approval handling rules:
 
 - if `approvalPolicy` is never/no-approval, no client approval UI needed
 - if app-server asks OpenClaw for command/file/network approval and guardian is
-  disabled, fail closed until OpenClaw has a real approval surface for that
-  request kind
+  disabled, register an OpenClaw plugin approval request and translate the
+  result back into the app-server approval response family
 - if guardian is enabled, let app-server make the review decision and project
   guardian status to `onAgentEvent`
 - never auto-accept app-server approval requests just because OpenClaw allowed
   a similar PI tool before
+- if the OpenClaw approval route is missing or errors, fail closed
 
 OpenClaw currently has no equivalent core agent guardian implementation. The
 repo's `guardian` references are unrelated platform/UI code or prose examples.
@@ -598,7 +600,8 @@ Unit tests:
 - active run handle queues via `turn/steer`.
 - active run handle aborts via `turn/interrupt`.
 - dynamic tool bridge maps a message tool side effect.
-- approval requests fail closed when unhandled.
+- approval requests route through plugin approvals and fail closed when no
+  approval route is available.
 - guardian telemetry is accepted but non-fatal.
 - transcript mirroring dedupes repeated turn mirrors.
 - protocol drift check matches generated Codex app-server request/item shapes.

@@ -16,8 +16,8 @@ import { clearActiveEmbeddedRun, setActiveEmbeddedRun } from "../pi-embedded-run
 import { normalizeProviderToolSchemas } from "../pi-embedded-runner/tool-schema-runtime.js";
 import { createOpenClawCodingTools } from "../pi-tools.js";
 import { resolveSandboxContext } from "../sandbox.js";
+import { handleCodexAppServerApprovalRequest } from "./approval-bridge.js";
 import {
-  defaultServerRequestResponse,
   getSharedCodexAppServerClient,
   isCodexAppServerApprovalRequest,
   type CodexAppServerClient,
@@ -132,6 +132,7 @@ export async function runCodexAppServerAttempt(
           paramsForRun: params,
           threadId: thread.threadId,
           turnId,
+          signal: runAbortController.signal,
         });
       }
       return undefined;
@@ -485,48 +486,16 @@ function handleApprovalRequest(params: {
   paramsForRun: EmbeddedRunAttemptParams;
   threadId: string;
   turnId: string;
-}): JsonValue | undefined {
-  const requestParams = isJsonObject(params.params) ? params.params : undefined;
-  const requestThreadId = requestParams ? readString(requestParams, "threadId") : undefined;
-  const requestTurnId = requestParams ? readString(requestParams, "turnId") : undefined;
-  if (requestThreadId && requestThreadId !== params.threadId) {
-    return undefined;
-  }
-  if (requestTurnId && requestTurnId !== params.turnId) {
-    return undefined;
-  }
-  const itemId = requestParams ? readString(requestParams, "itemId") : undefined;
-  const command = requestParams ? readString(requestParams, "command") : undefined;
-  const reason = requestParams ? readString(requestParams, "reason") : undefined;
-  params.paramsForRun.onAgentEvent?.({
-    stream: "approval",
-    data: {
-      phase: "resolved",
-      kind: approvalKindForMethod(params.method),
-      status: "denied",
-      title: "Codex app-server approval denied",
-      message: "OpenClaw codex app-server approval bridging is not interactive yet.",
-      method: params.method,
-      ...(itemId ? { itemId } : {}),
-      ...(command ? { command } : {}),
-      ...(reason ? { reason } : {}),
-    },
-  });
-  return defaultServerRequestResponse({
-    id: "openclaw-approval",
+  signal?: AbortSignal;
+}): Promise<JsonValue | undefined> {
+  return handleCodexAppServerApprovalRequest({
     method: params.method,
-    params: params.params,
+    requestParams: params.params,
+    paramsForRun: params.paramsForRun,
+    threadId: params.threadId,
+    turnId: params.turnId,
+    signal: params.signal,
   });
-}
-
-function approvalKindForMethod(method: string): "exec" | "plugin" | "unknown" {
-  if (method.includes("commandExecution") || method.includes("execCommand")) {
-    return "exec";
-  }
-  if (method.includes("fileChange") || method.includes("Patch")) {
-    return "plugin";
-  }
-  return "unknown";
 }
 
 export const __testing = {

@@ -30,6 +30,14 @@ const checks: Array<{ file: string; snippets: string[] }> = [
     snippets: ["name: string", "description: string", "inputSchema: JsonValue"],
   },
   {
+    file: "v2/CommandExecutionApprovalDecision.ts",
+    snippets: ['"accept"', '"acceptForSession"', '"decline"', '"cancel"'],
+  },
+  {
+    file: "ReviewDecision.ts",
+    snippets: ['"approved"', '"approved_for_session"', '"denied"', '"abort"'],
+  },
+  {
     file: "v2/PlanDeltaNotification.ts",
     snippets: ["itemId: string", "delta: string"],
   },
