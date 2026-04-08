@@ -1,6 +1,10 @@
 import path from "node:path";
-import { runQaSuite } from "../../../extensions/qa-lab/api.js";
-import { kovaRunArtifactSchema, type KovaRunArtifact } from "../contracts/run-artifact.js";
+import { readQaBootstrapScenarioCatalog, runQaSuite } from "../../../extensions/qa-lab/api.js";
+import {
+  kovaRunArtifactSchema,
+  type KovaRunArtifact,
+  type KovaScenarioResult,
+} from "../contracts/run-artifact.js";
 import { ensureDir, resolveKovaRunDir, writeJsonFile } from "../lib/fs.js";
 import { resolveGitCommit, resolveGitDirty } from "../lib/git.js";
 
@@ -27,6 +31,34 @@ function deriveClassification(failedCount: number) {
       };
 }
 
+function buildQaScenarioResults(params: {
+  selectedScenarioIds?: string[];
+  qaResult: Awaited<ReturnType<typeof runQaSuite>>;
+}) {
+  const catalog = readQaBootstrapScenarioCatalog();
+  const selectedScenarios =
+    params.selectedScenarioIds && params.selectedScenarioIds.length > 0
+      ? catalog.scenarios.filter((scenario) => params.selectedScenarioIds?.includes(scenario.id))
+      : catalog.scenarios;
+
+  return params.qaResult.scenarios.map((scenario, index) => {
+    const catalogScenario = selectedScenarios[index];
+    const passedSteps = scenario.steps.filter((step) => step.status === "pass").length;
+    const failedSteps = scenario.steps.filter((step) => step.status === "fail").length;
+    return {
+      id: catalogScenario?.id ?? scenario.name,
+      title: catalogScenario?.title ?? scenario.name,
+      verdict: scenario.status,
+      details: scenario.details,
+      stepCounts: {
+        total: scenario.steps.length,
+        passed: passedSteps,
+        failed: failedSteps,
+      },
+    } satisfies KovaScenarioResult;
+  });
+}
+
 export async function runQaAdapter(opts: KovaQaRunOptions) {
   const startedAt = new Date();
   const runDir = resolveKovaRunDir(opts.repoRoot, opts.runId);
@@ -45,6 +77,10 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
     passed: qaResult.scenarios.filter((scenario) => scenario.status === "pass").length,
     failed: qaResult.scenarios.filter((scenario) => scenario.status === "fail").length,
   };
+  const scenarioResults = buildQaScenarioResults({
+    selectedScenarioIds: opts.scenarioIds,
+    qaResult,
+  });
 
   const artifact = kovaRunArtifactSchema.parse({
     schemaVersion: 1,
@@ -80,6 +116,7 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
       durationMs: finishedAt.getTime() - startedAt.getTime(),
     },
     counts,
+    scenarioResults,
     evidence: {
       reportPath: qaResult.reportPath,
       summaryPath: qaResult.summaryPath,

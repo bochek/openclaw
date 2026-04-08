@@ -17,6 +17,18 @@ export const kovaClassificationDomainSchema = z.enum([
   "unknown",
 ]);
 
+export const kovaScenarioResultSchema = z.object({
+  id: z.string().trim().min(1),
+  title: z.string().trim().min(1),
+  verdict: kovaVerdictSchema,
+  details: z.string().trim().min(1).optional(),
+  stepCounts: z.object({
+    total: z.number().int().nonnegative(),
+    passed: z.number().int().nonnegative(),
+    failed: z.number().int().nonnegative(),
+  }),
+});
+
 export const kovaRunArtifactSchema = z.object({
   schemaVersion: z.literal(1),
   runId: z.string().trim().min(1),
@@ -58,6 +70,7 @@ export const kovaRunArtifactSchema = z.object({
     passed: z.number().int().nonnegative(),
     failed: z.number().int().nonnegative(),
   }),
+  scenarioResults: z.array(kovaScenarioResultSchema).default([]),
   evidence: z.object({
     reportPath: z.string().trim().min(1).optional(),
     summaryPath: z.string().trim().min(1).optional(),
@@ -67,3 +80,4 @@ export const kovaRunArtifactSchema = z.object({
 });
 
 export type KovaRunArtifact = z.infer<typeof kovaRunArtifactSchema>;
+export type KovaScenarioResult = z.infer<typeof kovaScenarioResultSchema>;
