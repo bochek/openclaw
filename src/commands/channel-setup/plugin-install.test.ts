@@ -573,6 +573,10 @@ describe("ensureChannelSetupPluginInstalled", () => {
         onlyPluginIds: expect.anything(),
       }),
     );
+    expect(getChannelPluginCatalogEntry).toHaveBeenCalledWith("telegram", {
+      workspaceDir: "/tmp/openclaw-workspace",
+      excludeWorkspace: true,
+    });
   });
 
   it("scopes snapshots by a unique discovered manifest match when catalog mapping is missing", () => {
