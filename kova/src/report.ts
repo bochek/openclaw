@@ -31,11 +31,23 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
     `Counts: ${artifact.counts.passed}/${artifact.counts.total} passed, ${artifact.counts.failed} failed`,
     `Duration: ${artifact.timing.durationMs}ms`,
   ];
+  if (artifact.scenarioResults.length > 0) {
+    lines.push("Scenario Results:");
+    const scenarioLines = artifact.scenarioResults.map((scenario) => {
+      const counts = `${scenario.stepCounts.passed}/${scenario.stepCounts.total} steps passed`;
+      const details = scenario.details ? ` - ${scenario.details}` : "";
+      return `  - [${scenario.verdict}] ${scenario.id} (${counts})${details}`;
+    });
+    lines.push(...scenarioLines);
+  }
   if (artifact.evidence.reportPath) {
     lines.push(`Report: ${artifact.evidence.reportPath}`);
   }
   if (artifact.evidence.summaryPath) {
     lines.push(`Summary: ${artifact.evidence.summaryPath}`);
+  }
+  if (artifact.evidence.sourceArtifactPaths.length > 0) {
+    lines.push(`Artifacts: ${artifact.evidence.sourceArtifactPaths.length} path(s) captured`);
   }
   return `${lines.join("\n")}\n`;
 }
