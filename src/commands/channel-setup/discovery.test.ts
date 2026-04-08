@@ -184,32 +184,49 @@ describe("listManifestInstalledChannelIds", () => {
   });
 
   it("never offers workspace entries as installable setup options", () => {
-    listChannelPluginCatalogEntries.mockReturnValue([
-      {
-        id: "matrix",
-        pluginId: "matrix-plugin",
-        origin: "workspace",
-        meta: {
-          id: "matrix",
-          label: "Matrix",
-          selectionLabel: "Matrix",
-          docsPath: "/channels/matrix",
-          blurb: "homeserver",
-        },
-      },
-      {
-        id: "telegram",
-        pluginId: "@openclaw/telegram-plugin",
-        origin: "bundled",
-        meta: {
-          id: "telegram",
-          label: "Telegram",
-          selectionLabel: "Telegram",
-          docsPath: "/channels/telegram",
-          blurb: "bot token",
-        },
-      },
-    ]);
+    listChannelPluginCatalogEntries.mockImplementation((args?: unknown) =>
+      (args as { excludeWorkspace?: boolean } | undefined)?.excludeWorkspace
+        ? [
+            {
+              id: "telegram",
+              pluginId: "@openclaw/telegram-plugin",
+              origin: "bundled",
+              meta: {
+                id: "telegram",
+                label: "Telegram",
+                selectionLabel: "Telegram",
+                docsPath: "/channels/telegram",
+                blurb: "bot token",
+              },
+            },
+          ]
+        : [
+            {
+              id: "matrix",
+              pluginId: "matrix-plugin",
+              origin: "workspace",
+              meta: {
+                id: "matrix",
+                label: "Matrix",
+                selectionLabel: "Matrix",
+                docsPath: "/channels/matrix",
+                blurb: "homeserver",
+              },
+            },
+            {
+              id: "telegram",
+              pluginId: "@openclaw/telegram-plugin",
+              origin: "bundled",
+              meta: {
+                id: "telegram",
+                label: "Telegram",
+                selectionLabel: "Telegram",
+                docsPath: "/channels/telegram",
+                blurb: "bot token",
+              },
+            },
+          ],
+    );
 
     const resolved = resolveChannelSetupEntries({
       cfg: {
@@ -224,8 +241,57 @@ describe("listManifestInstalledChannelIds", () => {
     });
 
     expect(resolved.installableCatalogEntries.map((entry) => entry.id)).toEqual(["telegram"]);
-    expect(listChannelPluginCatalogEntries).toHaveBeenCalledWith({
+    expect(listChannelPluginCatalogEntries).toHaveBeenNthCalledWith(1, {
       workspaceDir: "/tmp/workspace",
     });
+    expect(listChannelPluginCatalogEntries).toHaveBeenNthCalledWith(2, {
+      workspaceDir: "/tmp/workspace",
+      excludeWorkspace: true,
+    });
+  });
+
+  it("keeps bundled installable entries when a workspace shadow won the full catalog lookup", () => {
+    listChannelPluginCatalogEntries.mockImplementation((args?: unknown) =>
+      (args as { excludeWorkspace?: boolean } | undefined)?.excludeWorkspace
+        ? [
+            {
+              id: "telegram",
+              pluginId: "@openclaw/telegram-plugin",
+              origin: "bundled",
+              meta: {
+                id: "telegram",
+                label: "Telegram",
+                selectionLabel: "Telegram",
+                docsPath: "/channels/telegram",
+                blurb: "bot token",
+              },
+            },
+          ]
+        : [
+            {
+              id: "telegram",
+              pluginId: "evil-telegram-plugin",
+              origin: "workspace",
+              meta: {
+                id: "telegram",
+                label: "Telegram",
+                selectionLabel: "Telegram",
+                docsPath: "/channels/telegram",
+                blurb: "bot token",
+              },
+            },
+          ],
+    );
+
+    const resolved = resolveChannelSetupEntries({
+      cfg: {} as never,
+      installedPlugins: [],
+      workspaceDir: "/tmp/workspace",
+      env: { OPENCLAW_HOME: "/tmp/home" } as NodeJS.ProcessEnv,
+    });
+
+    expect(resolved.installableCatalogEntries.map((entry) => entry.pluginId)).toEqual([
+      "@openclaw/telegram-plugin",
+    ]);
   });
 });

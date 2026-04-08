@@ -77,6 +77,10 @@ export function resolveChannelSetupEntries(params: {
   });
   const installedPluginIds = new Set(params.installedPlugins.map((plugin) => plugin.id));
   const catalogEntries = listChannelPluginCatalogEntries({ workspaceDir });
+  const nonWorkspaceCatalogEntries = listChannelPluginCatalogEntries({
+    workspaceDir,
+    excludeWorkspace: true,
+  });
   const installedCatalogEntries = catalogEntries.filter(
     (entry) =>
       !installedPluginIds.has(entry.id) &&
@@ -84,11 +88,10 @@ export function resolveChannelSetupEntries(params: {
       isTrustedWorkspaceChannelCatalogEntry(entry, params.cfg) &&
       shouldShowChannelInSetup(entry.meta),
   );
-  const installableCatalogEntries = catalogEntries.filter(
+  const installableCatalogEntries = nonWorkspaceCatalogEntries.filter(
     (entry) =>
       !installedPluginIds.has(entry.id) &&
       !manifestInstalledIds.has(entry.id as ChannelChoice) &&
-      entry.origin !== "workspace" &&
       shouldShowChannelInSetup(entry.meta),
   );
 
