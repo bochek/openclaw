@@ -718,6 +718,7 @@ async function runRecallSidecar(params: {
   config: ResolvedActiveRecallPluginConfig;
   agentId: string;
   sessionKey?: string;
+  sessionId?: string;
   query: string;
   currentModelProviderId?: string;
   currentModelId?: string;
@@ -730,11 +731,15 @@ async function runRecallSidecar(params: {
     modelId: params.currentModelId,
   });
   const sidecarSessionId = `active-memory-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
-  const sidecarSessionKey = `active-memory:${params.agentId}:${crypto
+  const sidecarScope = params.sessionKey ?? params.sessionId ?? crypto.randomUUID();
+  const sidecarSuffix = `active-memory:${crypto
     .createHash("sha1")
-    .update(`${params.sessionKey ?? "none"}:${params.query}`)
+    .update(`${sidecarScope}:${params.query}`)
     .digest("hex")
     .slice(0, 12)}`;
+  const sidecarSessionKey = params.sessionKey
+    ? `${params.sessionKey}:${sidecarSuffix}`
+    : `agent:${params.agentId}:${sidecarSuffix}`;
   const storePath = params.api.runtime.agent.session.resolveStorePath(
     params.api.config.session?.store,
     {
@@ -830,7 +835,7 @@ async function maybeResolveActiveRecall(params: {
     query: params.query,
   });
   const cached = getCachedResult(cacheKey);
-  const logPrefix = `active-memory: agent=${params.agentId} session=${params.sessionKey ?? "none"}`;
+  const logPrefix = `active-memory: agent=${params.agentId} session=${params.sessionKey ?? params.sessionId ?? "none"}`;
   if (cached) {
     await persistPluginStatusLines({
       api: params.api,

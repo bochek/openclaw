@@ -262,14 +262,12 @@ export function resolveSessionPluginDebugLines(
           : [],
       )
     : [];
-  if (structured.length > 0) {
-    return structured;
-  }
-  return Array.isArray(entry?.pluginStatusLines)
+  const legacy = Array.isArray(entry?.pluginStatusLines)
     ? entry.pluginStatusLines.filter(
         (line): line is string => typeof line === "string" && line.trim().length > 0,
       )
     : [];
+  return [...structured, ...legacy];
 }
 
 export function normalizeSessionRuntimeModelFields(entry: SessionEntry): SessionEntry {

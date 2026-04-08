@@ -152,7 +152,27 @@ describe("active-memory plugin", () => {
     expect(runEmbeddedPiAgent.mock.calls.at(-1)?.[0]).toMatchObject({
       provider: "github-copilot",
       model: "gpt-5.4-mini",
+      sessionKey: expect.stringMatching(
+        /^agent:main:main:active-memory:[a-f0-9]{12}$/,
+      ),
     });
+  });
+
+  it("preserves canonical parent session scope in the blocking memory subagent session key", async () => {
+    await hooks.before_prompt_build(
+      { prompt: "what should i grab on the way?", messages: [] },
+      {
+        agentId: "main",
+        trigger: "user",
+        sessionKey: "agent:main:telegram:direct:12345:thread:99",
+        messageProvider: "telegram",
+        channelId: "telegram",
+      },
+    );
+
+    expect(runEmbeddedPiAgent.mock.calls.at(-1)?.[0]?.sessionKey).toMatch(
+      /^agent:main:telegram:direct:12345:thread:99:active-memory:[a-f0-9]{12}$/,
+    );
   });
 
   it("falls back to the current session model when no plugin model is configured", async () => {
@@ -312,6 +332,22 @@ describe("active-memory plugin", () => {
       .mocked(api.logger.info)
       .mock.calls.map((call: unknown[]) => String(call[0]));
     expect(infoLines.some((line: string) => line.includes(" cached "))).toBe(false);
+  });
+
+  it("uses a canonical agent session key when only sessionId is available", async () => {
+    await hooks.before_prompt_build(
+      { prompt: "what wings should i order? session id only", messages: [] },
+      {
+        agentId: "main",
+        trigger: "user",
+        sessionId: "session-a",
+        messageProvider: "webchat",
+      },
+    );
+
+    expect(runEmbeddedPiAgent.mock.calls.at(-1)?.[0]?.sessionKey).toMatch(
+      /^agent:main:active-memory:[a-f0-9]{12}$/,
+    );
   });
 
   it("clears stale status on skipped non-interactive turns even when agentId is missing", async () => {
