@@ -22,6 +22,7 @@ const DEFAULT_RECENT_ASSISTANT_CHARS = 180;
 const DEFAULT_REQUIRE_CONCRETE_RELEVANCE = true;
 const DEFAULT_DROP_GENERIC_PREFERENCES = true;
 const DEFAULT_CACHE_TTL_MS = 15_000;
+const DEFAULT_MAX_CACHE_ENTRIES = 1000;
 const DEFAULT_MODEL_REF = "github-copilot/gpt-5.4-mini";
 const DEFAULT_QUERY_MODE = "recent" as const;
 const DEFAULT_TRANSCRIPT_DIR = "active-memory";
@@ -203,6 +204,19 @@ function normalizeTranscriptDir(value: unknown): string {
   return safeParts.length > 0 ? path.join(...safeParts) : DEFAULT_TRANSCRIPT_DIR;
 }
 
+function resolveSafeTranscriptDir(baseSessionsDir: string, transcriptDir: string): string {
+  const normalized = transcriptDir.trim();
+  if (!normalized || normalized.includes(":") || path.isAbsolute(normalized)) {
+    return path.resolve(baseSessionsDir, DEFAULT_TRANSCRIPT_DIR);
+  }
+  const resolvedBase = path.resolve(baseSessionsDir);
+  const candidate = path.resolve(resolvedBase, normalized);
+  if (candidate !== resolvedBase && !candidate.startsWith(resolvedBase + path.sep)) {
+    return path.resolve(resolvedBase, DEFAULT_TRANSCRIPT_DIR);
+  }
+  return candidate;
+}
+
 function normalizePluginConfig(pluginConfig: unknown): ResolvedActiveRecallPluginConfig {
   const raw = (
     pluginConfig && typeof pluginConfig === "object" ? pluginConfig : {}
@@ -302,10 +316,20 @@ function getCachedResult(cacheKey: string): ActiveRecallResult | undefined {
 
 function setCachedResult(cacheKey: string, result: ActiveRecallResult, ttlMs: number): void {
   sweepExpiredCacheEntries();
+  if (activeRecallCache.has(cacheKey)) {
+    activeRecallCache.delete(cacheKey);
+  }
   activeRecallCache.set(cacheKey, {
     expiresAt: Date.now() + ttlMs,
     result,
   });
+  while (activeRecallCache.size > DEFAULT_MAX_CACHE_ENTRIES) {
+    const oldestKey = activeRecallCache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    activeRecallCache.delete(oldestKey);
+  }
 }
 
 function sweepExpiredCacheEntries(now = Date.now()): void {
@@ -361,11 +385,23 @@ function buildPluginStatusLine(params: {
 }
 
 function buildPluginDebugLine(memories: ActiveRecallCandidate[]): string | null {
-  const cleaned = memories.map((memory) => memory.text.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const cleaned = memories.map((memory) => sanitizeDebugText(memory.text)).filter(Boolean);
   if (cleaned.length === 0) {
     return null;
   }
   return `${ACTIVE_MEMORY_DEBUG_PREFIX} ${cleaned.join("; ")}`;
+}
+
+function sanitizeDebugText(text: string): string {
+  let sanitized = "";
+  for (const ch of text) {
+    const code = ch.charCodeAt(0);
+    const isControl = (code >= 0x00 && code <= 0x1f) || (code >= 0x7f && code <= 0x9f);
+    if (!isControl) {
+      sanitized += ch;
+    }
+  }
+  return sanitized.replace(/\s+/g, " ").trim();
 }
 
 async function persistPluginStatusLines(params: {
@@ -779,7 +815,7 @@ async function runRecallSidecar(params: {
     ? undefined
     : await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-active-memory-"));
   const persistedDir = params.config.persistTranscripts
-    ? path.join(baseSessionsDir, params.config.transcriptDir)
+    ? resolveSafeTranscriptDir(baseSessionsDir, params.config.transcriptDir)
     : undefined;
   if (persistedDir) {
     await fs.mkdir(persistedDir, { recursive: true });

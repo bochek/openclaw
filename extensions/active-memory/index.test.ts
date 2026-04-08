@@ -152,9 +152,7 @@ describe("active-memory plugin", () => {
     expect(runEmbeddedPiAgent.mock.calls.at(-1)?.[0]).toMatchObject({
       provider: "github-copilot",
       model: "gpt-5.4-mini",
-      sessionKey: expect.stringMatching(
-        /^agent:main:main:active-memory:[a-f0-9]{12}$/,
-      ),
+      sessionKey: expect.stringMatching(/^agent:main:main:active-memory:[a-f0-9]{12}$/),
     });
   });
 
@@ -590,5 +588,105 @@ describe("active-memory plugin", () => {
           String(call[0]).includes("transcript=/tmp/active-memory-sidecars/"),
         ),
     ).toBe(true);
+  });
+
+  it("falls back to the default transcript directory when transcriptDir is unsafe", async () => {
+    api.pluginConfig = {
+      agents: ["main"],
+      persistTranscripts: true,
+      transcriptDir: "C:/temp/escape",
+      logging: true,
+    };
+    plugin.register(api as unknown as OpenClawPluginApi);
+    const mkdirSpy = vi.spyOn(fs, "mkdir").mockResolvedValue(undefined);
+
+    await hooks.before_prompt_build(
+      { prompt: "what wings should i order? unsafe transcript dir", messages: [] },
+      {
+        agentId: "main",
+        trigger: "user",
+        sessionKey: "agent:main:unsafe-transcript",
+        messageProvider: "webchat",
+      },
+    );
+
+    expect(mkdirSpy).toHaveBeenCalledWith("/tmp/active-memory", { recursive: true });
+    expect(runEmbeddedPiAgent.mock.calls.at(-1)?.[0]?.sessionFile).toMatch(
+      /^\/tmp\/active-memory\/active-memory-[a-z0-9]+-[a-f0-9]{8}\.jsonl$/,
+    );
+  });
+
+  it("sanitizes control characters out of debug lines", async () => {
+    const sessionKey = "agent:main:debug-sanitize";
+    hoisted.sessionStore[sessionKey] = {
+      sessionId: "s-main",
+      updatedAt: 0,
+    };
+    runEmbeddedPiAgent.mockResolvedValueOnce({
+      payloads: [{ text: "- spicy ramen\u001b[31m\n- fries\r\n- blue cheese\t" }],
+    });
+
+    await hooks.before_prompt_build(
+      { prompt: "what should i order?", messages: [] },
+      { agentId: "main", trigger: "user", sessionKey, messageProvider: "webchat" },
+    );
+
+    const updater = hoisted.updateSessionStore.mock.calls.at(-1)?.[1] as
+      | ((store: Record<string, Record<string, unknown>>) => void)
+      | undefined;
+    const store = {
+      [sessionKey]: {
+        sessionId: "s-main",
+        updatedAt: 0,
+      },
+    } as Record<string, Record<string, unknown>>;
+    updater?.(store);
+    const lines =
+      (store[sessionKey]?.pluginDebugEntries as Array<{ lines?: string[] }> | undefined)?.[0]
+        ?.lines ?? [];
+    expect(lines.some((line) => line.includes("\u001b"))).toBe(false);
+    expect(lines.some((line) => line.includes("\r"))).toBe(false);
+  });
+
+  it("caps the active-memory cache size and evicts the oldest entries", async () => {
+    api.pluginConfig = {
+      agents: ["main"],
+      logging: true,
+    };
+    plugin.register(api as unknown as OpenClawPluginApi);
+
+    for (let index = 0; index <= 1000; index += 1) {
+      await hooks.before_prompt_build(
+        { prompt: `cache pressure prompt ${index}`, messages: [] },
+        {
+          agentId: "main",
+          trigger: "user",
+          sessionKey: "agent:main:cache-cap",
+          messageProvider: "webchat",
+        },
+      );
+    }
+
+    const callsBeforeReplay = runEmbeddedPiAgent.mock.calls.length;
+
+    await hooks.before_prompt_build(
+      { prompt: "cache pressure prompt 0", messages: [] },
+      {
+        agentId: "main",
+        trigger: "user",
+        sessionKey: "agent:main:cache-cap",
+        messageProvider: "webchat",
+      },
+    );
+
+    expect(runEmbeddedPiAgent.mock.calls.length).toBe(callsBeforeReplay + 1);
+    const infoLines = vi
+      .mocked(api.logger.info)
+      .mock.calls.map((call: unknown[]) => String(call[0]));
+    expect(
+      infoLines.some(
+        (line: string) => line.includes("cached status=ok") && line.includes("prompt 0"),
+      ),
+    ).toBe(false);
   });
 });
