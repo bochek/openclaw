@@ -54,6 +54,8 @@ function buildQaScenarioResults(params: {
       id: catalogScenario?.id ?? scenario.name,
       title: catalogScenario?.title ?? scenario.name,
       verdict: scenario.status,
+      surface: catalogScenario?.surface,
+      sourcePath: catalogScenario?.sourcePath,
       details: scenario.details,
       stepCounts: {
         total: scenario.steps.length,

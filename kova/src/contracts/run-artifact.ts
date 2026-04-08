@@ -21,6 +21,8 @@ export const kovaScenarioResultSchema = z.object({
   id: z.string().trim().min(1),
   title: z.string().trim().min(1),
   verdict: kovaVerdictSchema,
+  surface: z.string().trim().min(1).optional(),
+  sourcePath: z.string().trim().min(1).optional(),
   details: z.string().trim().min(1).optional(),
   stepCounts: z.object({
     total: z.number().int().nonnegative(),
