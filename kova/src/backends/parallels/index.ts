@@ -35,6 +35,23 @@ const parallelsProviderEnvVar: Record<KovaParallelsProvider, string> = {
   minimax: "MINIMAX_API_KEY",
 };
 
+const parallelsForwardedEnvKeys = [
+  "CI",
+  "HOME",
+  "LANG",
+  "LC_ALL",
+  "LC_CTYPE",
+  "LC_MESSAGES",
+  "LOGNAME",
+  "PATH",
+  "SHELL",
+  "TERM",
+  "TMP",
+  "TMPDIR",
+  "TEMP",
+  "USER",
+] as const;
+
 function resolveParallelsAxes(selection: KovaBackendRunSelection) {
   const guest = selection.axes?.guest;
   if (guest !== "macos" && guest !== "windows" && guest !== "linux") {
@@ -86,8 +103,23 @@ async function runParallelsScript(params: {
   scriptPath: string;
   mode: KovaParallelsMode;
   provider: KovaParallelsProvider;
+  binaryPath: string;
 }) {
-  const env = { ...process.env };
+  const env = Object.fromEntries(
+    parallelsForwardedEnvKeys.flatMap((key) => {
+      const value = process.env[key];
+      return value ? [[key, value]] : [];
+    }),
+  ) as NodeJS.ProcessEnv;
+  const providerEnvVar = parallelsProviderEnvVar[params.provider];
+  const providerEnvValue = process.env[providerEnvVar];
+  if (providerEnvValue) {
+    env[providerEnvVar] = providerEnvValue;
+  }
+  const binaryDir = path.dirname(params.binaryPath);
+  env.PATH = [binaryDir, env.PATH, "/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"]
+    .filter(Boolean)
+    .join(":");
   const child = spawn(
     "/bin/bash",
     [params.scriptPath, "--mode", params.mode, "--provider", params.provider, "--json"],
@@ -298,6 +330,7 @@ export const parallelsBackend: KovaBackend = {
       scriptPath,
       mode,
       provider,
+      binaryPath: availability.binaryPath,
     });
 
     const externalRunDir = await extractParallelsRunDir(hostLogPath);
