@@ -1,4 +1,4 @@
-import { runQaAdapter } from "../adapters/qa.js";
+import { resolveKovaBackend } from "../backends/registry.js";
 import type { KovaRunTarget } from "../backends/types.js";
 import { createKovaRunId } from "../lib/run-id.js";
 import { renderArtifactSummary } from "../report.js";
@@ -42,9 +42,11 @@ export async function runCommand(repoRoot: string, args: string[]) {
     throw new Error(`unsupported kova run target: ${String(options.target ?? "")}`);
   }
 
-  const artifact = await runQaAdapter({
+  const backend = resolveKovaBackend(options.target);
+  const artifact = await backend.run({
     repoRoot,
     runId: createKovaRunId(),
+    target: options.target,
     providerMode: options.providerMode,
     scenarioIds: options.scenarioIds.length > 0 ? options.scenarioIds : undefined,
   });
