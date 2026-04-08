@@ -168,4 +168,65 @@ describe("kova reporting", () => {
 
     await expect(resolveLatestRunId(repoRoot)).resolves.toBe("kova_test_003");
   });
+
+  it("ignores incomplete run directories when falling back without an index", async () => {
+    const repoRoot = await createTempRepo();
+    const runsDir = path.join(repoRoot, ".artifacts", "kova", "runs");
+    await fs.mkdir(path.join(runsDir, "kova_test_004"), { recursive: true });
+    await fs.mkdir(path.join(runsDir, "kova_test_005"), { recursive: true });
+    await fs.writeFile(
+      path.join(runsDir, "kova_test_004", "run.json"),
+      `${JSON.stringify(
+        {
+          schemaVersion: 1,
+          runId: "kova_test_004",
+          selection: {
+            command: "run",
+            target: "qa",
+          },
+          scenario: {
+            id: "qa",
+            title: "QA suite",
+            category: "behavior",
+            capabilities: [],
+          },
+          backend: {
+            kind: "host",
+          },
+          environment: {
+            os: "darwin",
+            arch: "arm64",
+            nodeVersion: "v24.0.0",
+            gitDirty: false,
+          },
+          status: "completed",
+          verdict: "pass",
+          classification: {
+            domain: "product",
+            reason: "ok",
+          },
+          timing: {
+            startedAt: "2026-04-08T11:00:00.000Z",
+            finishedAt: "2026-04-08T11:00:05.000Z",
+            durationMs: 5000,
+          },
+          counts: {
+            total: 1,
+            passed: 1,
+            failed: 0,
+          },
+          scenarioResults: [],
+          evidence: {
+            sourceArtifactPaths: [],
+          },
+          notes: [],
+        },
+        null,
+        2,
+      )}\n`,
+      "utf8",
+    );
+
+    await expect(resolveLatestRunId(repoRoot)).resolves.toBe("kova_test_004");
+  });
 });

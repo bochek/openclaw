@@ -11,7 +11,18 @@ export async function resolveLatestRunId(repoRoot: string) {
   }
   const runsDir = resolveKovaRunsDir(repoRoot);
   const entries = await fs.readdir(runsDir).catch(() => []);
-  const runIds = entries.toSorted((left, right) => left.localeCompare(right));
+  const completedRunIds: string[] = [];
+  for (const runId of entries.toSorted((left, right) => left.localeCompare(right))) {
+    const runPath = path.join(resolveKovaRunDir(repoRoot, runId), "run.json");
+    const exists = await fs
+      .access(runPath)
+      .then(() => true)
+      .catch(() => false);
+    if (exists) {
+      completedRunIds.push(runId);
+    }
+  }
+  const runIds = completedRunIds;
   return runIds.at(-1);
 }
 
