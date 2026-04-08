@@ -760,6 +760,34 @@ export function renderArtifactDiff(
   ]);
 }
 
+function renderMissingBackendInstructions(artifact: KovaRunArtifact) {
+  if (
+    artifact.backend.id !== "multipass" ||
+    artifact.verdict !== "blocked" ||
+    artifact.execution.availability !== "missing"
+  ) {
+    return [];
+  }
+
+  const installHint =
+    artifact.environment.os === "darwin"
+      ? "Install Multipass: brew install --cask multipass"
+      : artifact.environment.os === "win32"
+        ? "Install Multipass: winget install Canonical.Multipass"
+        : artifact.environment.os === "linux"
+          ? "Install Multipass: sudo snap install multipass"
+          : "Install Multipass: https://multipass.run/install";
+
+  return block(
+    "Next Steps",
+    bulletList([
+      installHint,
+      "Install guide: https://multipass.run/install",
+      "Rerun: pnpm kova run qa --backend multipass",
+    ]),
+  );
+}
+
 export function renderArtifactSummary(artifact: KovaRunArtifact) {
   const backendLabel = artifact.backend.id ?? artifact.backend.kind;
   const backendTitle = artifact.backend.title ?? backendLabel;
@@ -901,6 +929,7 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
       "Artifacts",
       artifactLines.length > 0 ? artifactLines : [muted("No artifact paths recorded.")],
     ),
+    renderMissingBackendInstructions(artifact),
     ...(notes.keyed.length > 0 ? [block("Context", keyValueBlock(keyedContext))] : []),
     ...(notes.plain.length > 0 ? [block("Notes", bulletList(notes.plain))] : []),
   ]);

@@ -62,6 +62,9 @@ Run QA inside Multipass:
 pnpm kova run qa --backend multipass
 ```
 
+If Multipass is not installed, Kova records a blocked run and prints install
+guidance instead of failing with an opaque error.
+
 Run judged character evaluation across live models:
 
 ```bash

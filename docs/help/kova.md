@@ -169,6 +169,9 @@ Run QA inside Multipass:
 pnpm kova run qa --backend multipass
 ```
 
+If Multipass is not installed, Kova records a blocked run and prints install
+instructions so you can fix the host and rerun the same command.
+
 Inspect the latest recorded run:
 
 ```bash

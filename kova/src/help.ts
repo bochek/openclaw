@@ -110,6 +110,7 @@ export function renderRunHelp() {
       "QA uses the host backend by default.",
       "Character eval uses the host backend and live-frontier model lanes.",
       "Multipass without --scenario runs the curated QA core subset.",
+      "If Multipass is missing, Kova prints install guidance in the blocked run output.",
       "Guest, mode, and provider axes apply only to the parallels target.",
     ]),
     relatedBlock(["kova list targets", "kova list scenarios qa", "kova report latest"]),
