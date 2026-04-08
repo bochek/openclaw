@@ -470,6 +470,11 @@ describe("active-memory plugin", () => {
   });
 
   it("uses a canonical agent session key when only sessionId is available", async () => {
+    hoisted.sessionStore["agent:main:telegram:direct:12345"] = {
+      sessionId: "session-a",
+      updatedAt: 25,
+    };
+
     await hooks.before_prompt_build(
       { prompt: "what wings should i order? session id only", messages: [] },
       {
@@ -481,7 +486,7 @@ describe("active-memory plugin", () => {
     );
 
     expect(runEmbeddedPiAgent.mock.calls.at(-1)?.[0]?.sessionKey).toMatch(
-      /^agent:main:active-memory:[a-f0-9]{12}$/,
+      /^agent:main:telegram:direct:12345:active-memory:[a-f0-9]{12}$/,
     );
   });
 

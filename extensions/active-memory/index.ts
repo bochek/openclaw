@@ -225,6 +225,54 @@ function resolveSafeTranscriptDir(baseSessionsDir: string, transcriptDir: string
   return candidate;
 }
 
+function resolveCanonicalSessionKeyFromSessionId(params: {
+  api: OpenClawPluginApi;
+  agentId: string;
+  sessionId?: string;
+}): string | undefined {
+  const sessionId = params.sessionId?.trim();
+  if (!sessionId) {
+    return undefined;
+  }
+  try {
+    const storePath = params.api.runtime.agent.session.resolveStorePath(
+      params.api.config.session?.store,
+      {
+        agentId: params.agentId,
+      },
+    );
+    const store = params.api.runtime.agent.session.loadSessionStore(storePath);
+    let bestMatch:
+      | {
+          sessionKey: string;
+          updatedAt: number;
+        }
+      | undefined;
+    for (const [sessionKey, entry] of Object.entries(store)) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+      const candidateSessionId =
+        typeof (entry as { sessionId?: unknown }).sessionId === "string"
+          ? (entry as { sessionId?: string }).sessionId?.trim()
+          : "";
+      if (!candidateSessionId || candidateSessionId !== sessionId) {
+        continue;
+      }
+      const updatedAt =
+        typeof (entry as { updatedAt?: unknown }).updatedAt === "number"
+          ? (entry as { updatedAt?: number }).updatedAt ?? 0
+          : 0;
+      if (!bestMatch || updatedAt > bestMatch.updatedAt) {
+        bestMatch = { sessionKey, updatedAt };
+      }
+    }
+    return bestMatch?.sessionKey?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function normalizePluginConfig(pluginConfig: unknown): ResolvedActiveRecallPluginConfig {
   const raw = (
     pluginConfig && typeof pluginConfig === "object" ? pluginConfig : {}
@@ -881,14 +929,21 @@ async function runRecallSidecar(params: {
     return { rawReply: "NONE" };
   }
   const sidecarSessionId = `active-memory-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`;
-  const sidecarScope = params.sessionKey ?? params.sessionId ?? crypto.randomUUID();
+  const parentSessionKey =
+    params.sessionKey ??
+    resolveCanonicalSessionKeyFromSessionId({
+      api: params.api,
+      agentId: params.agentId,
+      sessionId: params.sessionId,
+    });
+  const sidecarScope = parentSessionKey ?? params.sessionId ?? crypto.randomUUID();
   const sidecarSuffix = `active-memory:${crypto
     .createHash("sha1")
     .update(`${sidecarScope}:${params.query}`)
     .digest("hex")
     .slice(0, 12)}`;
-  const sidecarSessionKey = params.sessionKey
-    ? `${params.sessionKey}:${sidecarSuffix}`
+  const sidecarSessionKey = parentSessionKey
+    ? `${parentSessionKey}:${sidecarSuffix}`
     : `agent:${params.agentId}:${sidecarSuffix}`;
   const storePath = params.api.runtime.agent.session.resolveStorePath(
     params.api.config.session?.store,
