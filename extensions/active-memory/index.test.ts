@@ -299,6 +299,51 @@ describe("active-memory plugin", () => {
     ]);
   });
 
+  it("replaces stale legacy active-memory lines on a later empty run", async () => {
+    const sessionKey = "agent:main:legacy-active-memory-lines";
+    hoisted.sessionStore[sessionKey] = {
+      sessionId: "s-main",
+      updatedAt: 0,
+      pluginStatusLines: [
+        "🧩 Active Memory: ok 13.4s recent 1 mem",
+        "🔎 Active Memory Debug: Favorite desk snack: roasted almonds or cashews.",
+        "Other Plugin: keep me",
+      ],
+    };
+    runEmbeddedPiAgent.mockResolvedValueOnce({
+      payloads: [{ text: "NONE" }],
+    });
+
+    await hooks.before_prompt_build(
+      { prompt: "what's up with you?", messages: [] },
+      { agentId: "main", trigger: "user", sessionKey, messageProvider: "webchat" },
+    );
+
+    const updater = hoisted.updateSessionStore.mock.calls.at(-1)?.[1] as
+      | ((store: Record<string, Record<string, unknown>>) => void)
+      | undefined;
+    const store = {
+      [sessionKey]: {
+        sessionId: "s-main",
+        updatedAt: 0,
+        pluginStatusLines: [
+          "🧩 Active Memory: ok 13.4s recent 1 mem",
+          "🔎 Active Memory Debug: Favorite desk snack: roasted almonds or cashews.",
+          "Other Plugin: keep me",
+        ],
+      },
+    } as Record<string, Record<string, unknown>>;
+    updater?.(store);
+
+    expect(store[sessionKey]?.pluginDebugEntries).toEqual([
+      {
+        pluginId: "active-memory",
+        lines: [expect.stringContaining("🧩 Active Memory: empty")],
+      },
+    ]);
+    expect(store[sessionKey]?.pluginStatusLines).toEqual(["Other Plugin: keep me"]);
+  });
+
   it("returns nothing when the sidecar says none", async () => {
     runEmbeddedPiAgent.mockResolvedValueOnce({
       payloads: [{ text: "NONE" }],
