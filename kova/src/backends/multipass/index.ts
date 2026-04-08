@@ -11,7 +11,9 @@ import { resolveGitCommit, resolveGitDirty } from "../../lib/git.js";
 import { updateKovaRunIndex } from "../../lib/run-index.js";
 import { readKovaBackend } from "../registry.js";
 import type { KovaBackend, KovaBackendRunSelection } from "../types.js";
-import { buildMultipassPlan, renderGuestRunScript } from "./plan.js";
+import { renderGuestRunScript } from "./bootstrap.js";
+import { multipassDefaultQaScenarioIds, multipassDefaultResourceProfile } from "./defaults.js";
+import { buildMultipassPlan } from "./plan.js";
 import {
   buildQaScenarioResultsFromSummary,
   deriveQaClassification,
@@ -31,6 +33,7 @@ function createMultipassBaseArtifact(params: {
   providerMode: "mock-openai" | "live-frontier";
   gitCommit?: string;
   gitDirty: boolean;
+  scenarioMode: "explicit" | "backend-default";
 }): Pick<
   KovaRunArtifact,
   "schemaVersion" | "runId" | "selection" | "scenario" | "backend" | "environment" | "coverage"
@@ -46,6 +49,7 @@ function createMultipassBaseArtifact(params: {
       command: "run",
       target: params.selection.target,
       suite: "qa-suite",
+      scenarioMode: params.scenarioMode,
       scenarioIds:
         params.selection.scenarioIds && params.selection.scenarioIds.length > 0
           ? params.selection.scenarioIds
@@ -76,6 +80,22 @@ function createMultipassBaseArtifact(params: {
   };
 }
 
+function resolveMultipassRunSelection(selection: KovaBackendRunSelection) {
+  if (selection.scenarioIds && selection.scenarioIds.length > 0) {
+    return {
+      selection,
+      scenarioMode: "explicit" as const,
+    };
+  }
+  return {
+    selection: {
+      ...selection,
+      scenarioIds: [...multipassDefaultQaScenarioIds],
+    },
+    scenarioMode: "backend-default" as const,
+  };
+}
+
 export const multipassBackend: KovaBackend = {
   id: "multipass",
   title: "Multipass VM",
@@ -86,29 +106,37 @@ export const multipassBackend: KovaBackend = {
     return target === "qa";
   },
   async run(selection) {
+    const resolvedSelection = resolveMultipassRunSelection(selection);
     const startedAt = new Date();
-    const runDir = resolveKovaRunDir(selection.repoRoot, selection.runId);
+    const runDir = resolveKovaRunDir(
+      resolvedSelection.selection.repoRoot,
+      resolvedSelection.selection.runId,
+    );
     await ensureDir(runDir);
 
     const hostLogPath = path.join(runDir, "multipass-host.log");
     const hostGuestScriptPath = path.join(runDir, "multipass-guest-run.sh");
     const hostBootstrapLogPath = path.join(runDir, "multipass-guest-bootstrap.log");
-    const plan = buildMultipassPlan(selection, hostGuestScriptPath);
+    const plan = buildMultipassPlan(resolvedSelection.selection, hostGuestScriptPath);
     const planPath = path.join(runDir, "multipass-plan.json");
     await writeTextFile(hostGuestScriptPath, renderGuestRunScript(plan));
     await writeJsonFile(planPath, plan);
-    await writeTextFile(hostLogPath, `# Kova Multipass host log\nrunId=${selection.runId}\n\n`);
+    await writeTextFile(
+      hostLogPath,
+      `# Kova Multipass host log\nrunId=${resolvedSelection.selection.runId}\n\n`,
+    );
 
-    const providerMode = selection.providerMode ?? "mock-openai";
+    const providerMode = resolvedSelection.selection.providerMode ?? "mock-openai";
     const [gitCommit, gitDirty] = await Promise.all([
-      resolveGitCommit(selection.repoRoot),
-      resolveGitDirty(selection.repoRoot),
+      resolveGitCommit(resolvedSelection.selection.repoRoot),
+      resolveGitDirty(resolvedSelection.selection.repoRoot),
     ]);
     const baseArtifact = createMultipassBaseArtifact({
-      selection,
+      selection: resolvedSelection.selection,
       providerMode,
       gitCommit,
       gitDirty,
+      scenarioMode: resolvedSelection.scenarioMode,
     });
     const evidencePaths = [
       runDir,
@@ -148,6 +176,13 @@ export const multipassBackend: KovaBackend = {
           cleanup: {
             status: "not_needed",
           },
+          resources: {
+            profile: multipassDefaultResourceProfile.profile,
+            image: plan.image,
+            cpus: plan.cpus,
+            memory: plan.memory,
+            disk: plan.disk,
+          },
           paths: {
             artifactRoot: runDir,
             logPath: hostLogPath,
@@ -172,7 +207,7 @@ export const multipassBackend: KovaBackend = {
         ],
       });
       await writeJsonFile(path.join(runDir, "run.json"), artifact);
-      await updateKovaRunIndex(selection.repoRoot, artifact);
+      await updateKovaRunIndex(resolvedSelection.selection.repoRoot, artifact);
       return artifact;
     }
 
@@ -222,7 +257,7 @@ export const multipassBackend: KovaBackend = {
       await mountMultipassRepo({
         binaryPath: availability.binaryPath,
         logPath: hostLogPath,
-        hostRepoPath: selection.repoRoot,
+        hostRepoPath: resolvedSelection.selection.repoRoot,
         vmName: plan.vmName,
         guestMountedRepoPath: plan.guestMountedRepoPath,
       });
@@ -257,7 +292,7 @@ export const multipassBackend: KovaBackend = {
       }
 
       const scenarioResults = buildQaScenarioResultsFromSummary({
-        selectedScenarioIds: selection.scenarioIds,
+        selectedScenarioIds: resolvedSelection.selection.scenarioIds,
         summary,
       });
       await cleanupInstance();
@@ -282,6 +317,13 @@ export const multipassBackend: KovaBackend = {
           cleanup: {
             status: cleanupStatus,
             details: cleanupDetails,
+          },
+          resources: {
+            profile: multipassDefaultResourceProfile.profile,
+            image: plan.image,
+            cpus: plan.cpus,
+            memory: plan.memory,
+            disk: plan.disk,
           },
           paths: {
             artifactRoot: runDir,
@@ -310,7 +352,7 @@ export const multipassBackend: KovaBackend = {
         ],
       });
       await writeJsonFile(path.join(runDir, "run.json"), artifact);
-      await updateKovaRunIndex(selection.repoRoot, artifact);
+      await updateKovaRunIndex(resolvedSelection.selection.repoRoot, artifact);
       return artifact;
     } catch (error) {
       await appendMultipassLog(
@@ -354,6 +396,13 @@ export const multipassBackend: KovaBackend = {
             status: cleanupStatus,
             details: cleanupDetails,
           },
+          resources: {
+            profile: multipassDefaultResourceProfile.profile,
+            image: plan.image,
+            cpus: plan.cpus,
+            memory: plan.memory,
+            disk: plan.disk,
+          },
           paths: {
             artifactRoot: runDir,
             logPath: hostLogPath,
@@ -379,7 +428,7 @@ export const multipassBackend: KovaBackend = {
         ],
       });
       await writeJsonFile(path.join(runDir, "run.json"), artifact);
-      await updateKovaRunIndex(selection.repoRoot, artifact);
+      await updateKovaRunIndex(resolvedSelection.selection.repoRoot, artifact);
       return artifact;
     }
   },

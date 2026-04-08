@@ -111,6 +111,7 @@ function normalizeExecutionForDiff(execution: KovaRunArtifact["execution"]) {
     availability: execution.availability,
     binaryPath: execution.binaryPath,
     cleanup: execution.cleanup,
+    resources: execution.resources,
   };
 }
 
@@ -155,14 +156,28 @@ export function createArtifactIdentity(artifact: KovaRunArtifact) {
   const backendId = artifact.backend.id ?? artifact.backend.kind;
   const providerMode = artifact.backend.mode ?? "default";
   const suite = artifact.selection.suite ?? "";
+  const scenarioMode = artifact.selection.scenarioMode ?? "all";
   const scenarioIds = normalizeScenarioIds(artifact.selection.scenarioIds).join(",");
   return [
     `target=${artifact.selection.target}`,
     `backend=${backendId}`,
     `provider=${providerMode}`,
     `suite=${suite}`,
+    `selectionMode=${scenarioMode}`,
     `scenarios=${scenarioIds}`,
   ].join("|");
+}
+
+function describeScenarioSelection(artifact: KovaRunArtifact) {
+  const scenarioIds = artifact.selection.scenarioIds ?? [];
+  switch (artifact.selection.scenarioMode) {
+    case "backend-default":
+      return `backend default (${scenarioIds.length}): ${scenarioIds.join(", ")}`;
+    case "explicit":
+      return scenarioIds.join(", ");
+    default:
+      return "all";
+  }
 }
 
 export function classifyArtifactComparison(
@@ -675,10 +690,28 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
   const backendLabel = artifact.backend.id ?? artifact.backend.kind;
   const backendTitle = artifact.backend.title ?? backendLabel;
   const notes = splitKeyValueNotes(artifact.notes);
-  const keyedContext = notes.keyed.map(([key, value]) => [humanizeLabel(key), value] as const);
-  const selectionLabel = artifact.selection.scenarioIds?.length
-    ? artifact.selection.scenarioIds.join(", ")
-    : "all";
+  const resourceContext = [
+    artifact.execution.resources.profile
+      ? (["Resource Profile", artifact.execution.resources.profile] as const)
+      : null,
+    artifact.execution.resources.image
+      ? (["VM Image", artifact.execution.resources.image] as const)
+      : null,
+    artifact.execution.resources.cpus
+      ? (["vCPUs", String(artifact.execution.resources.cpus)] as const)
+      : null,
+    artifact.execution.resources.memory
+      ? (["Memory", artifact.execution.resources.memory] as const)
+      : null,
+    artifact.execution.resources.disk
+      ? (["Disk", artifact.execution.resources.disk] as const)
+      : null,
+  ].filter(Boolean) as Array<readonly [string, string]>;
+  const keyedContext = [
+    ...resourceContext,
+    ...notes.keyed.map(([key, value]) => [humanizeLabel(key), value] as const),
+  ];
+  const selectionLabel = describeScenarioSelection(artifact);
   const artifactLines = [
     artifact.evidence.reportPath ? `report   ${displayPath(artifact.evidence.reportPath)}` : "",
     artifact.evidence.summaryPath ? `summary  ${displayPath(artifact.evidence.summaryPath)}` : "",
@@ -720,6 +753,7 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
     block(
       "Coverage",
       keyValueBlock([
+        ["selection mode", humanizeLabel(artifact.selection.scenarioMode)],
         ["selection", selectionLabel],
         ["scenarios", artifact.coverage.scenarioIds.length],
         ["surfaces", artifact.coverage.surfaces.join(", ") || "none"],

@@ -52,6 +52,10 @@ function printHelp() {
       ]),
     ),
     block(
+      "Backend Notes",
+      bulletList(["multipass without --scenario runs the curated QA core subset"]),
+    ),
+    block(
       "Diff Baselines",
       keyValueBlock([
         ["auto", "smart baseline policy"],

@@ -89,6 +89,7 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
       command: "run",
       target: "qa",
       suite: "qa-suite",
+      scenarioMode: opts.scenarioIds && opts.scenarioIds.length > 0 ? "explicit" : "all",
       scenarioIds: opts.scenarioIds && opts.scenarioIds.length > 0 ? opts.scenarioIds : undefined,
     },
     scenario: {

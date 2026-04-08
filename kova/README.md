@@ -23,4 +23,5 @@ pnpm kova list runs
 
 - QA is the first Kova lane.
 - Host runtime and Multipass are the first backend surfaces.
+- Multipass defaults to a curated QA core subset when `--scenario` is omitted.
 - Artifacts are written under `.artifacts/kova/runs/`.

@@ -46,6 +46,15 @@ export const kovaBackendExecutionSchema = z
       .default({
         status: "unknown",
       }),
+    resources: z
+      .object({
+        profile: z.string().trim().min(1).optional(),
+        image: z.string().trim().min(1).optional(),
+        cpus: z.number().int().positive().optional(),
+        memory: z.string().trim().min(1).optional(),
+        disk: z.string().trim().min(1).optional(),
+      })
+      .default({}),
     paths: z
       .object({
         artifactRoot: z.string().trim().min(1).optional(),
@@ -64,6 +73,7 @@ export const kovaBackendExecutionSchema = z
     cleanup: {
       status: "unknown",
     },
+    resources: {},
     paths: {},
   });
 
@@ -74,6 +84,7 @@ export const kovaRunArtifactSchema = z.object({
     command: z.string().trim().min(1),
     target: z.string().trim().min(1),
     suite: z.string().trim().min(1).optional(),
+    scenarioMode: z.enum(["all", "explicit", "backend-default"]).default("all"),
     scenarioIds: z.array(z.string().trim().min(1)).min(1).optional(),
   }),
   scenario: z.object({
