@@ -25,6 +25,10 @@ export async function writeJsonFile(filePath: string, value: unknown) {
   await fs.writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
+export async function writeTextFile(filePath: string, value: string) {
+  await fs.writeFile(filePath, value, "utf8");
+}
+
 export async function readJsonFile<T>(filePath: string) {
   return JSON.parse(await fs.readFile(filePath, "utf8")) as T;
 }
