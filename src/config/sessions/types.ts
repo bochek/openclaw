@@ -103,6 +103,11 @@ export type SessionCompactionCheckpoint = {
   postCompaction: SessionCompactionTranscriptReference;
 };
 
+export type SessionPluginDebugEntry = {
+  pluginId: string;
+  lines: string[];
+};
+
 export type SessionEntry = {
   /**
    * Last delivered heartbeat payload (used to suppress duplicate heartbeat notifications).
@@ -232,8 +237,40 @@ export type SessionEntry = {
   lastThreadId?: string | number;
   skillsSnapshot?: SessionSkillSnapshot;
   systemPromptReport?: SessionSystemPromptReport;
+  /**
+   * Generic plugin-owned runtime debug entries shown in verbose status surfaces.
+   * Each plugin owns and may overwrite only its own entry between turns.
+   */
+  pluginDebugEntries?: SessionPluginDebugEntry[];
+  /**
+   * Legacy flat plugin debug lines.
+   * Prefer `pluginDebugEntries` for new writes.
+   */
+  pluginStatusLines?: string[];
   acp?: SessionAcpMeta;
 };
+
+export function resolveSessionPluginDebugLines(
+  entry: Pick<SessionEntry, "pluginDebugEntries" | "pluginStatusLines"> | undefined,
+): string[] {
+  const structured = Array.isArray(entry?.pluginDebugEntries)
+    ? entry.pluginDebugEntries.flatMap((pluginEntry) =>
+        Array.isArray(pluginEntry?.lines)
+          ? pluginEntry.lines.filter(
+              (line): line is string => typeof line === "string" && line.trim().length > 0,
+            )
+          : [],
+      )
+    : [];
+  if (structured.length > 0) {
+    return structured;
+  }
+  return Array.isArray(entry?.pluginStatusLines)
+    ? entry.pluginStatusLines.filter(
+        (line): line is string => typeof line === "string" && line.trim().length > 0,
+      )
+    : [];
+}
 
 export function normalizeSessionRuntimeModelFields(entry: SessionEntry): SessionEntry {
   const normalizedModel = normalizeOptionalString(entry.model);

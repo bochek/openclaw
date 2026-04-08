@@ -989,6 +989,117 @@ describe("runReplyAgent block streaming", () => {
   });
 });
 
+describe("runReplyAgent Active Memory inline debug", () => {
+  it("appends inline Active Memory debug payload when verbose is enabled", async () => {
+    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-active-memory-inline-"));
+    const storePath = path.join(tmp, "sessions.json");
+    const sessionKey = "main";
+    const sessionEntry: SessionEntry = {
+      sessionId: "session",
+      updatedAt: Date.now(),
+    };
+
+    await fs.writeFile(
+      storePath,
+      JSON.stringify(
+        {
+          [sessionKey]: sessionEntry,
+        },
+        null,
+        2,
+      ),
+      "utf-8",
+    );
+
+    runEmbeddedPiAgentMock.mockImplementationOnce(async () => {
+      const latest = loadSessionStore(storePath, { skipCache: true });
+      latest[sessionKey] = {
+        ...latest[sessionKey],
+        pluginDebugEntries: [
+          {
+            pluginId: "active-memory",
+            lines: [
+              "🧩 Active Memory: ok 842ms recent 2 mem",
+              "🔎 Active Memory Debug: lemon pepper wings; blue cheese",
+            ],
+          },
+        ],
+      };
+      await saveSessionStore(storePath, latest);
+      return {
+        payloads: [{ text: "Normal reply" }],
+        meta: {},
+      };
+    });
+
+    const typing = createMockTypingController();
+    const sessionCtx = {
+      Provider: "telegram",
+      OriginatingTo: "chat:1",
+      AccountId: "primary",
+      MessageSid: "msg",
+    } as unknown as TemplateContext;
+    const resolvedQueue = { mode: "interrupt" } as unknown as QueueSettings;
+    const followupRun = {
+      prompt: "hello",
+      summaryLine: "hello",
+      enqueuedAt: Date.now(),
+      run: {
+        agentId: "main",
+        sessionId: "session",
+        sessionKey,
+        messageProvider: "telegram",
+        sessionFile: "/tmp/session.jsonl",
+        workspaceDir: "/tmp",
+        config: {},
+        skillsSnapshot: {},
+        provider: "anthropic",
+        model: "claude",
+        thinkLevel: "low",
+        verboseLevel: "on",
+        elevatedLevel: "off",
+        bashElevated: {
+          enabled: false,
+          allowed: false,
+          defaultLevel: "off",
+        },
+        timeoutMs: 1_000,
+        blockReplyBreak: "message_end",
+      },
+    } as unknown as FollowupRun;
+
+    const result = await runReplyAgent({
+      commandBody: "hello",
+      followupRun,
+      queueKey: sessionKey,
+      resolvedQueue,
+      shouldSteer: false,
+      shouldFollowup: false,
+      isActive: false,
+      isStreaming: false,
+      typing,
+      sessionCtx,
+      sessionEntry,
+      sessionStore: { [sessionKey]: sessionEntry },
+      sessionKey,
+      storePath,
+      defaultModel: "anthropic/claude-opus-4-6",
+      resolvedVerboseLevel: "on",
+      isNewSession: false,
+      blockStreamingEnabled: false,
+      resolvedBlockStreamingBreak: "message_end",
+      shouldInjectGroupIntro: false,
+      typingMode: "instant",
+    });
+
+    expect(Array.isArray(result)).toBe(true);
+    expect((result as { text?: string }[]).map((payload) => payload.text)).toEqual([
+      "Normal reply",
+      "🧩 Active Memory: ok 842ms recent 2 mem\n🔎 Active Memory Debug: lemon pepper wings; blue cheese",
+    ]);
+  });
+});
+
 describe("runReplyAgent claude-cli routing", () => {
   function createRun() {
     const typing = createMockTypingController();

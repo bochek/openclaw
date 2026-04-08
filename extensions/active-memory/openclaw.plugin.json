@@ -1,0 +1,62 @@
+{
+  "id": "active-memory",
+  "name": "Active Memory",
+  "description": "Runs a bounded memory sidecar before eligible conversational replies and injects relevant memory into prompt context.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "agents": {
+        "type": "array",
+        "items": { "type": "string" }
+      },
+      "model": { "type": "string" },
+      "timeoutMs": { "type": "integer", "minimum": 250 },
+      "queryMode": {
+        "type": "string",
+        "enum": ["message", "recent", "full"]
+      },
+      "maxMemories": { "type": "integer", "minimum": 1, "maximum": 5 },
+      "maxMemoryChars": { "type": "integer", "minimum": 40, "maximum": 500 },
+      "recentUserTurns": { "type": "integer", "minimum": 0, "maximum": 4 },
+      "recentAssistantTurns": { "type": "integer", "minimum": 0, "maximum": 3 },
+      "recentUserChars": { "type": "integer", "minimum": 40, "maximum": 1000 },
+      "recentAssistantChars": { "type": "integer", "minimum": 40, "maximum": 1000 },
+      "logging": { "type": "boolean" },
+      "persistTranscripts": { "type": "boolean" },
+      "transcriptDir": { "type": "string" },
+      "requireConcreteRelevance": { "type": "boolean" },
+      "dropGenericPreferencesOnNonPreferenceTurns": { "type": "boolean" },
+      "cacheTtlMs": { "type": "integer", "minimum": 1000, "maximum": 120000 }
+    }
+  },
+  "uiHints": {
+    "agents": {
+      "label": "Target Agents",
+      "help": "Explicit agent ids that may use active memory."
+    },
+    "model": {
+      "label": "Memory Model",
+      "help": "Provider/model used for the memory sidecar."
+    },
+    "timeoutMs": {
+      "label": "Timeout (ms)"
+    },
+    "queryMode": {
+      "label": "Query Mode",
+      "help": "Choose whether the sidecar sees only the latest user message, a small recent tail, or the full conversation."
+    },
+    "logging": {
+      "label": "Enable Logging",
+      "help": "Emit active memory timing and result logs."
+    },
+    "persistTranscripts": {
+      "label": "Persist Transcripts",
+      "help": "Keep sidecar session transcripts on disk in a separate plugin-owned directory."
+    },
+    "transcriptDir": {
+      "label": "Transcript Directory",
+      "help": "Relative directory under the agent sessions folder used when transcript persistence is enabled."
+    }
+  }
+}
