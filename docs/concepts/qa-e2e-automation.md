@@ -12,6 +12,11 @@ title: "QA E2E Automation"
 The private QA stack is meant to exercise OpenClaw in a more realistic,
 channel-shaped way than a single unit test can.
 
+Kova is the top-level command surface for running and comparing recorded
+verification work across QA, character eval, and VM-backed lanes. For the full
+Kova workflow, see [Kova](/help/kova). Direct `pnpm openclaw qa ...` commands
+still exist for lane-specific development.
+
 Current pieces:
 
 - `extensions/qa-channel`: synthetic message channel with DM, channel, thread,
@@ -52,6 +57,14 @@ pnpm qa:lab:watch
 rebuilds that bundle on change, and the browser auto-reloads when the QA Lab
 asset hash changes.
 
+For recorded QA verification through Kova, run a scenario directly:
+
+```bash
+pnpm kova run qa --scenario channel-chat-baseline
+pnpm kova report latest
+pnpm kova diff
+```
+
 ## Repo-backed seeds
 
 Seed assets live in `qa/`:
@@ -86,7 +99,7 @@ For character and style checks, run the same scenario across multiple live model
 refs and write a judged Markdown report:
 
 ```bash
-pnpm openclaw qa character-eval \
+pnpm kova run character-eval \
   --model openai/gpt-5.4,thinking=xhigh \
   --model openai/gpt-5.2,thinking=xhigh \
   --model anthropic/claude-opus-4-6,thinking=high \
@@ -101,9 +114,14 @@ pnpm openclaw qa character-eval \
   --judge-model anthropic/claude-opus-4-6,thinking=high \
   --concurrency 8 \
   --judge-concurrency 8
+  --scenario character-vibes-gollum
+  --judge-model anthropic/claude-opus-4-6,thinking=high \
+  --concurrency 8 \
+  --judge-concurrency 8 \
+  --scenario character-vibes-gollum
 ```
 
-The command runs local QA gateway child processes, not Docker. Character eval
+The Kova target runs local QA gateway child processes, not Docker. Character eval
 scenarios should set the persona through `SOUL.md`, then run ordinary user turns
 such as chat, workspace help, and small file tasks. The candidate model should
 not be told that it is being evaluated. The command preserves each full

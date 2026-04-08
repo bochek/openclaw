@@ -1575,6 +1575,7 @@
                 "pages": [
                   "help/environment",
                   "help/debugging",
+                  "help/kova",
                   "help/testing",
                   "help/scripts",
                   "debug/node-issue",

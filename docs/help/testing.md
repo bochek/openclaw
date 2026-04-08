@@ -9,7 +9,7 @@ title: "Testing"
 
 # Testing
 
-OpenClaw has three Vitest suites (unit/integration, e2e, live) and a small set of Docker runners.
+OpenClaw has three Vitest suites (unit/integration, e2e, live), a QA stack, and Kova for higher-level testing and verification workflows.
 
 This doc is a “how we test” guide:
 
@@ -27,6 +27,9 @@ Most days:
 - Direct Vitest watch loop: `pnpm test:watch`
 - Direct file targeting now routes extension/channel paths too: `pnpm test extensions/discord/src/monitor/message-handler.preflight.test.ts`
 - Docker-backed QA site: `pnpm qa:lab:up`
+- Kova QA run on the host: `pnpm kova run qa --scenario channel-chat-baseline`
+- Kova report for the latest recorded run: `pnpm kova report latest`
+- Kova baseline comparison: `pnpm kova diff`
 
 When you touch tests or want extra confidence:
 
@@ -37,6 +40,18 @@ When debugging real providers/models (requires real creds):
 
 - Live suite (models + gateway tool/image probes): `pnpm test:live`
 - Target one live file quietly: `pnpm test:live -- src/agents/models.profiles.live.test.ts`
+- Kova character-eval: `pnpm kova run character-eval --model openai/gpt-5.4 --judge-model openai/gpt-5.4 --scenario character-vibes-gollum --fast`
+
+When you need recorded verification history instead of one-off command output:
+
+- Use Kova as the top-level entry point:
+  - `pnpm kova run ...`
+  - `pnpm kova report ...`
+  - `pnpm kova diff ...`
+  - `pnpm kova list ...`
+- Use direct `pnpm openclaw qa ...` commands when you are working on a QA-specific lane or extending the underlying QA implementation itself.
+
+For the full Kova workflow and command model, see [Kova](/help/kova).
 
 Tip: when you only need one failing case, prefer narrowing live tests via the allowlist env vars described below.
 
