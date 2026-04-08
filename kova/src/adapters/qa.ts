@@ -15,6 +15,10 @@ export type KovaQaRunOptions = {
   scenarioIds?: string[];
 };
 
+function describeError(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 function deriveVerdict(failedCount: number) {
   return failedCount > 0 ? "fail" : "pass";
 }
@@ -26,8 +30,8 @@ function deriveClassification(failedCount: number) {
         reason: "one or more QA scenarios failed",
       }
     : {
-        domain: "unknown" as const,
-        reason: "all QA scenarios passed",
+        domain: "product" as const,
+        reason: "all QA scenarios passed under current selection",
       };
 }
 
@@ -64,26 +68,8 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
   const runDir = resolveKovaRunDir(opts.repoRoot, opts.runId);
   const qaOutputDir = path.join(runDir, "qa");
   await ensureDir(qaOutputDir);
-
-  const qaResult = await runQaSuite({
-    repoRoot: opts.repoRoot,
-    outputDir: qaOutputDir,
-    providerMode: opts.providerMode ?? "mock-openai",
-    scenarioIds: opts.scenarioIds,
-  });
-  const finishedAt = new Date();
-  const counts = {
-    total: qaResult.scenarios.length,
-    passed: qaResult.scenarios.filter((scenario) => scenario.status === "pass").length,
-    failed: qaResult.scenarios.filter((scenario) => scenario.status === "fail").length,
-  };
-  const scenarioResults = buildQaScenarioResults({
-    selectedScenarioIds: opts.scenarioIds,
-    qaResult,
-  });
-
-  const artifact = kovaRunArtifactSchema.parse({
-    schemaVersion: 1,
+  const baseArtifact = {
+    schemaVersion: 1 as const,
     runId: opts.runId,
     selection: {
       command: "run",
@@ -107,25 +93,79 @@ export async function runQaAdapter(opts: KovaQaRunOptions) {
       gitCommit: await resolveGitCommit(opts.repoRoot),
       gitDirty: await resolveGitDirty(opts.repoRoot),
     },
-    status: "completed",
-    verdict: deriveVerdict(counts.failed),
-    classification: deriveClassification(counts.failed),
-    timing: {
-      startedAt: startedAt.toISOString(),
-      finishedAt: finishedAt.toISOString(),
-      durationMs: finishedAt.getTime() - startedAt.getTime(),
-    },
-    counts,
-    scenarioResults,
-    evidence: {
-      reportPath: qaResult.reportPath,
-      summaryPath: qaResult.summaryPath,
-      sourceArtifactPaths: [qaResult.outputDir, qaResult.reportPath, qaResult.summaryPath],
-    },
-    notes: [`watchUrl=${qaResult.watchUrl}`, `providerMode=${opts.providerMode ?? "mock-openai"}`],
-  } satisfies KovaRunArtifact);
+  };
 
-  await writeJsonFile(path.join(runDir, "run.json"), artifact);
-  await writeJsonFile(path.join(runDir, "qa-result.json"), qaResult);
-  return artifact;
+  try {
+    const qaResult = await runQaSuite({
+      repoRoot: opts.repoRoot,
+      outputDir: qaOutputDir,
+      providerMode: opts.providerMode ?? "mock-openai",
+      scenarioIds: opts.scenarioIds,
+    });
+    const finishedAt = new Date();
+    const counts = {
+      total: qaResult.scenarios.length,
+      passed: qaResult.scenarios.filter((scenario) => scenario.status === "pass").length,
+      failed: qaResult.scenarios.filter((scenario) => scenario.status === "fail").length,
+    };
+    const scenarioResults = buildQaScenarioResults({
+      selectedScenarioIds: opts.scenarioIds,
+      qaResult,
+    });
+
+    const artifact = kovaRunArtifactSchema.parse({
+      ...baseArtifact,
+      status: "completed",
+      verdict: deriveVerdict(counts.failed),
+      classification: deriveClassification(counts.failed),
+      timing: {
+        startedAt: startedAt.toISOString(),
+        finishedAt: finishedAt.toISOString(),
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
+      },
+      counts,
+      scenarioResults,
+      evidence: {
+        reportPath: qaResult.reportPath,
+        summaryPath: qaResult.summaryPath,
+        sourceArtifactPaths: [qaResult.outputDir, qaResult.reportPath, qaResult.summaryPath],
+      },
+      notes: [
+        `watchUrl=${qaResult.watchUrl}`,
+        `providerMode=${opts.providerMode ?? "mock-openai"}`,
+      ],
+    } satisfies KovaRunArtifact);
+
+    await writeJsonFile(path.join(runDir, "run.json"), artifact);
+    await writeJsonFile(path.join(runDir, "qa-result.json"), qaResult);
+    return artifact;
+  } catch (error) {
+    const finishedAt = new Date();
+    const artifact = kovaRunArtifactSchema.parse({
+      ...baseArtifact,
+      status: "infra_failed",
+      verdict: "blocked",
+      classification: {
+        domain: "backend" as const,
+        reason: describeError(error),
+      },
+      timing: {
+        startedAt: startedAt.toISOString(),
+        finishedAt: finishedAt.toISOString(),
+        durationMs: finishedAt.getTime() - startedAt.getTime(),
+      },
+      counts: {
+        total: 0,
+        passed: 0,
+        failed: 0,
+      },
+      scenarioResults: [],
+      evidence: {
+        sourceArtifactPaths: [qaOutputDir],
+      },
+      notes: [`providerMode=${opts.providerMode ?? "mock-openai"}`],
+    } satisfies KovaRunArtifact);
+    await writeJsonFile(path.join(runDir, "run.json"), artifact);
+    throw error;
+  }
 }
