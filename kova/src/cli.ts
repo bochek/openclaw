@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { diffCommand } from "./commands/diff.js";
 import { listCommand } from "./commands/list.js";
 import { reportCommand } from "./commands/report.js";
 import { runCommand } from "./commands/run.js";
@@ -13,6 +14,7 @@ function printHelp() {
       "  kova list [inventory|runs|targets|backends [qa]|scenarios [qa]|surfaces [qa]|capabilities] [--json]",
       "  kova run qa [--backend host|multipass] [--provider-mode mock-openai|live-frontier] [--scenario <id>] [--json]",
       "  kova report [latest|<run-id>] [--json]",
+      "  kova diff [<baseline>|previous] [<candidate>|latest] [--json]",
       "",
       "Run exit codes:",
       "  0 = pass or skipped",
@@ -47,6 +49,11 @@ async function main() {
 
   if (command === "report") {
     await reportCommand(repoRoot, args);
+    return;
+  }
+
+  if (command === "diff") {
+    await diffCommand(repoRoot, args);
     return;
   }
 
