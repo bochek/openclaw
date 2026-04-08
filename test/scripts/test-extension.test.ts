@@ -211,9 +211,20 @@ describe("scripts/test-extension.mjs", () => {
 
     expect(extensionIds).toContain("slack");
     expect(extensionIds).toContain("firecrawl");
+    expect(extensionIds).toContain("device-pair");
+    expect(extensionIds).toContain("phone-control");
     expect(extensionIds).toEqual(
       [...extensionIds].toSorted((left, right) => left.localeCompare(right)),
     );
+  });
+
+  it("resolves manifest-only bundled plugins onto the default extensions config", () => {
+    const plan = resolveExtensionTestPlan({ targetArg: "device-pair", cwd: process.cwd() });
+
+    expect(plan.extensionId).toBe("device-pair");
+    expect(plan.config).toBe("vitest.extensions.config.ts");
+    expect(plan.roots).toContain(bundledPluginRoot("device-pair"));
+    expect(plan.hasTests).toBe(true);
   });
 
   it("can fail safe to all extensions when the base revision is unavailable", () => {

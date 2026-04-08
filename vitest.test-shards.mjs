@@ -44,12 +44,16 @@ export const fullSuiteVitestShards = [
     projects: ["vitest.boundary.config.ts", "vitest.tooling.config.ts"],
   },
   {
+    // Historical config name; grouped under sdk because these tests exercise
+    // dist-sensitive plugin contracts rather than source-only core behavior.
     config: "vitest.full-core-contracts.config.ts",
     group: "sdk-contracts",
     name: "core-contracts",
     projects: ["vitest.contracts.config.ts"],
   },
   {
+    // Historical config name; grouped under sdk because bundled plugin loading
+    // depends on built/plugin-packaged surfaces rather than source-only core paths.
     config: "vitest.full-core-bundled.config.ts",
     group: "sdk-extensions",
     name: "core-bundled",

@@ -70,8 +70,12 @@ function listChangedPaths(base, head = "HEAD") {
     .filter((line) => line.length > 0);
 }
 
-function hasExtensionPackage(extensionId) {
-  return fs.existsSync(path.join(repoRoot, BUNDLED_PLUGIN_ROOT_DIR, extensionId, "package.json"));
+function hasExtensionMetadata(extensionId) {
+  const extensionRoot = path.join(repoRoot, BUNDLED_PLUGIN_ROOT_DIR, extensionId);
+  return (
+    fs.existsSync(path.join(extensionRoot, "package.json")) ||
+    fs.existsSync(path.join(extensionRoot, "openclaw.plugin.json"))
+  );
 }
 
 export function listAvailableExtensionIds() {
@@ -84,7 +88,7 @@ export function listAvailableExtensionIds() {
     .readdirSync(extensionsDir, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name)
-    .filter((extensionId) => hasExtensionPackage(extensionId))
+    .filter((extensionId) => hasExtensionMetadata(extensionId))
     .toSorted((left, right) => left.localeCompare(right));
 }
 
@@ -102,14 +106,14 @@ export function detectChangedExtensionIds(changedPaths) {
     );
     if (extensionMatch) {
       const extensionId = extensionMatch[1];
-      if (hasExtensionPackage(extensionId)) {
+      if (hasExtensionMetadata(extensionId)) {
         extensionIds.add(extensionId);
       }
       continue;
     }
 
     const pairedCoreMatch = relativePath.match(/^src\/([^/]+)(?:\/|$)/);
-    if (pairedCoreMatch && hasExtensionPackage(pairedCoreMatch[1])) {
+    if (pairedCoreMatch && hasExtensionMetadata(pairedCoreMatch[1])) {
       extensionIds.add(pairedCoreMatch[1]);
     }
   }

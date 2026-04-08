@@ -54,14 +54,18 @@ function countTestFiles(rootPath) {
 }
 
 function resolveExtensionDirectory(targetArg, cwd = process.cwd()) {
+  const hasExtensionMetadata = (rootDir) =>
+    fs.existsSync(path.join(rootDir, "package.json")) ||
+    fs.existsSync(path.join(rootDir, "openclaw.plugin.json"));
+
   if (targetArg) {
     const asGiven = path.resolve(cwd, targetArg);
-    if (fs.existsSync(path.join(asGiven, "package.json"))) {
+    if (hasExtensionMetadata(asGiven)) {
       return asGiven;
     }
 
     const byName = path.join(repoRoot, BUNDLED_PLUGIN_ROOT_DIR, targetArg);
-    if (fs.existsSync(path.join(byName, "package.json"))) {
+    if (hasExtensionMetadata(byName)) {
       return byName;
     }
 
@@ -74,7 +78,7 @@ function resolveExtensionDirectory(targetArg, cwd = process.cwd()) {
   while (true) {
     if (
       normalizeRelative(path.relative(repoRoot, current)).startsWith(BUNDLED_PLUGIN_PATH_PREFIX) &&
-      fs.existsSync(path.join(current, "package.json"))
+      hasExtensionMetadata(current)
     ) {
       return current;
     }
