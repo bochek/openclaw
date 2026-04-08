@@ -1,4 +1,4 @@
-import { multipassBackend } from "./multipass.js";
+import { multipassBackend } from "./multipass/index.js";
 import { qaBackend } from "./qa.js";
 import {
   kovaRunTargets,
