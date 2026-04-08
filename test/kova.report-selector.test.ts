@@ -162,4 +162,80 @@ describe("kova report and selector regressions", () => {
     expect(hasKovaSelectorFilters(undefined)).toBe(false);
     expect(formatKovaSelectorFilters(undefined)).toBe("");
   });
+
+  it("renders build guidance for blocked qa host runs that need dist output", () => {
+    const artifact = kovaRunArtifactSchema.parse({
+      schemaVersion: 1,
+      runId: "kova_test_build_missing",
+      selection: {
+        command: "run",
+        target: "qa",
+        suite: "qa",
+        scenarioMode: "explicit",
+        scenarioIds: ["channel-chat-baseline"],
+        axes: {},
+      },
+      scenario: {
+        id: "qa",
+        title: "QA",
+        category: "qa",
+        capabilities: ["lane.qa"],
+      },
+      backend: {
+        id: "host",
+        title: "Host runtime",
+        kind: "host",
+        runner: "host",
+        binary: "node",
+      },
+      environment: {
+        os: "darwin",
+        arch: "arm64",
+        nodeVersion: "v24.13.0",
+        gitDirty: true,
+      },
+      status: "infra_failed",
+      verdict: "blocked",
+      classification: {
+        domain: "backend",
+        reason:
+          "OpenClaw build output is missing for the QA gateway (`dist/index.js`). Run `pnpm build`, then rerun the same Kova command.",
+      },
+      timing: {
+        startedAt: "2026-04-08T17:00:00.000Z",
+        finishedAt: "2026-04-08T17:00:00.010Z",
+        durationMs: 10,
+      },
+      counts: {
+        total: 0,
+        passed: 0,
+        failed: 0,
+      },
+      coverage: {
+        scenarioIds: ["channel-chat-baseline"],
+        capabilities: ["lane.qa"],
+        capabilityAreas: ["qa"],
+        surfaces: ["channel"],
+      },
+      execution: {
+        state: "failed",
+        availability: "available",
+        cleanup: {
+          status: "not_needed",
+        },
+        resources: {},
+        paths: {},
+      },
+      scenarioResults: [],
+      evidence: {
+        sourceArtifactPaths: [".artifacts/kova/runs/kova_test_build_missing/qa"],
+      },
+      notes: ["nextStep=pnpm build", "requiredArtifact=dist/index.js"],
+    });
+
+    const summary = renderArtifactSummary(artifact);
+
+    expect(summary).toContain("Build OpenClaw first: pnpm build");
+    expect(summary).toContain("Rerun: pnpm kova run qa --scenario channel-chat-baseline");
+  });
 });

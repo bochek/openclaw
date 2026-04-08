@@ -788,6 +788,27 @@ function renderMissingBackendInstructions(artifact: KovaRunArtifact) {
   );
 }
 
+function renderMissingBuildInstructions(artifact: KovaRunArtifact) {
+  const notes = splitKeyValueNotes(artifact.notes);
+  const nextStep = notes.keyed.find(([key]) => key === "nextStep")?.[1];
+  if (
+    artifact.selection.target !== "qa" ||
+    artifact.backend.id !== "host" ||
+    artifact.verdict !== "blocked" ||
+    nextStep !== "pnpm build"
+  ) {
+    return [];
+  }
+
+  return block(
+    "Next Steps",
+    bulletList([
+      "Build OpenClaw first: pnpm build",
+      "Rerun: pnpm kova run qa --scenario channel-chat-baseline",
+    ]),
+  );
+}
+
 export function renderArtifactSummary(artifact: KovaRunArtifact) {
   const backendLabel = artifact.backend.id ?? artifact.backend.kind;
   const backendTitle = artifact.backend.title ?? backendLabel;
@@ -929,6 +950,7 @@ export function renderArtifactSummary(artifact: KovaRunArtifact) {
       "Artifacts",
       artifactLines.length > 0 ? artifactLines : [muted("No artifact paths recorded.")],
     ),
+    renderMissingBuildInstructions(artifact),
     renderMissingBackendInstructions(artifact),
     ...(notes.keyed.length > 0 ? [block("Context", keyValueBlock(keyedContext))] : []),
     ...(notes.plain.length > 0 ? [block("Notes", bulletList(notes.plain))] : []),
