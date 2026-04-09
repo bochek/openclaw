@@ -1,8 +1,8 @@
+import * as fs from "node:fs";
 // IHttpServerAdapter is re-exported via the public barrel (`export * from './http'`)
 // but tsgo cannot resolve the chain. Use the dist subpath directly (type-only import).
 import type { IHttpServerAdapter } from "@microsoft/teams.apps/dist/http/index.js";
 import { fetchWithSsrFGuard } from "openclaw/plugin-sdk/ssrf-runtime";
-import * as fs from "node:fs";
 import { formatUnknownError } from "./errors.js";
 import type { MSTeamsAdapter } from "./messenger.js";
 import type { MSTeamsCredentials, MSTeamsFederatedCredentials } from "./token.js";
@@ -100,10 +100,7 @@ export async function createMSTeamsApp(
   } as ConstructorParameters<MSTeamsTeamsSdk["App"]>[0]);
 }
 
-function createFederatedApp(
-  creds: MSTeamsFederatedCredentials,
-  sdk: MSTeamsTeamsSdk,
-): MSTeamsApp {
+function createFederatedApp(creds: MSTeamsFederatedCredentials, sdk: MSTeamsTeamsSdk): MSTeamsApp {
   if (creds.useManagedIdentity) {
     return createManagedIdentityApp(creds, sdk);
   }
@@ -118,7 +115,9 @@ function createFederatedApp(
     privateKey = fs.readFileSync(creds.certificatePath, "utf-8");
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`Failed to read certificate file at '${creds.certificatePath}': ${msg}`);
+    throw new Error(`Failed to read certificate file at '${creds.certificatePath}': ${msg}`, {
+      cause: err,
+    });
   }
 
   return createCertificateApp(creds, privateKey, sdk);
@@ -162,7 +161,7 @@ function createCertificateApp(
     tenantId: creds.tenantId,
     token: tokenProvider,
     httpServerAdapter: createNoOpHttpServerAdapter(),
-  } as ConstructorParameters<MSTeamsTeamsSdk["App"]>[0]);
+  } as unknown as ConstructorParameters<MSTeamsTeamsSdk["App"]>[0]);
 }
 
 function createManagedIdentityApp(
@@ -202,7 +201,7 @@ function createManagedIdentityApp(
     tenantId: creds.tenantId,
     token: tokenProvider,
     httpServerAdapter: createNoOpHttpServerAdapter(),
-  } as ConstructorParameters<MSTeamsTeamsSdk["App"]>[0]);
+  } as unknown as ConstructorParameters<MSTeamsTeamsSdk["App"]>[0]);
 }
 
 /**
