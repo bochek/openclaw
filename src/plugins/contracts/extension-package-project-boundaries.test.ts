@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   collectExtensionsWithTsconfig,
@@ -40,6 +40,23 @@ type PackageJson = {
 
 function readJsonFile<T>(relativePath: string): T {
   return JSON.parse(readFileSync(resolve(REPO_ROOT, relativePath), "utf8")) as T;
+}
+
+function collectFilesBySuffix(rootPath: string, suffix: string): string[] {
+  const files: string[] = [];
+
+  for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
+    const entryPath = join(rootPath, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectFilesBySuffix(entryPath, suffix));
+      continue;
+    }
+    if (entry.isFile() && entry.name.endsWith(suffix)) {
+      files.push(entryPath);
+    }
+  }
+
+  return files.sort();
 }
 
 describe("opt-in extension package boundaries", () => {
@@ -95,6 +112,18 @@ describe("opt-in extension package boundaries", () => {
     expect(tsconfig.compilerOptions?.paths?.["@openclaw/plugin-sdk/*"]).toEqual([
       "../../dist/plugin-sdk/src/plugin-sdk/*.d.ts",
     ]);
+  });
+
+  it("keeps xai tests on the scoped plugin-sdk package name", () => {
+    const xaiRoot = resolve(REPO_ROOT, "extensions/xai");
+    const testFiles = collectFilesBySuffix(xaiRoot, ".test.ts");
+
+    expect(testFiles.length).toBeGreaterThan(0);
+
+    for (const filePath of testFiles) {
+      const contents = readFileSync(filePath, "utf8");
+      expect(contents).not.toContain('"openclaw/plugin-sdk/');
+    }
   });
 
   it("keeps plugin-sdk package types generated from the package build, not a hand-maintained types bridge", () => {
