@@ -87,6 +87,15 @@ function registerFailingCodexHarness(): void {
 }
 
 describe("runAgentHarnessAttemptWithFallback", () => {
+  it("falls back to the PI harness when a forced plugin harness is unavailable", async () => {
+    process.env.OPENCLAW_AGENT_RUNTIME = "codex";
+
+    const result = await runAgentHarnessAttemptWithFallback(createAttemptParams());
+
+    expect(result.sessionIdUsed).toBe("pi");
+    expect(piRunAttempt).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to the PI harness in auto mode when the selected plugin harness fails", async () => {
     process.env.OPENCLAW_AGENT_RUNTIME = "auto";
     registerFailingCodexHarness();

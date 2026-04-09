@@ -198,12 +198,22 @@ function shouldSkipLiveDiscovery(env: NodeJS.ProcessEnv = process.env): boolean 
 
 function shouldDefaultToReasoningModel(modelId: string): boolean {
   const lower = modelId.toLowerCase();
-  return lower.startsWith("gpt-5") || lower.startsWith("o1") || lower.startsWith("o3");
+  return (
+    lower.startsWith("gpt-5") ||
+    lower.startsWith("o1") ||
+    lower.startsWith("o3") ||
+    lower.startsWith("o4")
+  );
 }
 
 function isKnownXHighCodexModel(modelId: string): boolean {
   const lower = modelId.trim().toLowerCase();
-  return lower.startsWith("gpt-5") || lower.startsWith("o3") || lower.includes("codex");
+  return (
+    lower.startsWith("gpt-5") ||
+    lower.startsWith("o3") ||
+    lower.startsWith("o4") ||
+    lower.includes("codex")
+  );
 }
 
 function isModernCodexModel(modelId: string): boolean {

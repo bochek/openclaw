@@ -185,4 +185,45 @@ describe("runCodexAppServerAttempt", () => {
       ]),
     );
   });
+
+  it("does not drop turn completion notifications emitted while turn/start is in flight", async () => {
+    let notify: (notification: CodexServerNotification) => Promise<void> = async () => undefined;
+    const request = vi.fn(async (method: string) => {
+      if (method === "thread/start") {
+        return { thread: { id: "thread-1" }, model: "gpt-5.4-codex", modelProvider: "openai" };
+      }
+      if (method === "turn/start") {
+        await notify({
+          method: "turn/completed",
+          params: {
+            threadId: "thread-1",
+            turnId: "turn-1",
+            turn: { id: "turn-1", status: "completed" },
+          },
+        });
+        return { turn: { id: "turn-1", status: "completed" } };
+      }
+      return {};
+    });
+    __testing.setCodexAppServerClientFactoryForTests(
+      async () =>
+        ({
+          request,
+          addNotificationHandler: (handler: typeof notify) => {
+            notify = handler;
+            return () => undefined;
+          },
+          addRequestHandler: () => () => undefined,
+        }) as never,
+    );
+
+    await expect(
+      runCodexAppServerAttempt(
+        createParams(path.join(tempDir, "session.jsonl"), path.join(tempDir, "workspace")),
+      ),
+    ).resolves.toMatchObject({
+      aborted: false,
+      timedOut: false,
+    });
+  });
 });

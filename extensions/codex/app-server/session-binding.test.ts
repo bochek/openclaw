@@ -27,6 +27,7 @@ describe("codex app-server session binding", () => {
       cwd: tempDir,
       model: "gpt-5.4-codex",
       modelProvider: "openai",
+      dynamicToolsFingerprint: "tools-v1",
     });
 
     const binding = await readCodexAppServerBinding(sessionFile);
@@ -38,6 +39,7 @@ describe("codex app-server session binding", () => {
       cwd: tempDir,
       model: "gpt-5.4-codex",
       modelProvider: "openai",
+      dynamicToolsFingerprint: "tools-v1",
     });
     await expect(fs.stat(resolveCodexAppServerBindingPath(sessionFile))).resolves.toBeTruthy();
   });

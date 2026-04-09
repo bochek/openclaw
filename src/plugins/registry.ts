@@ -722,9 +722,18 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       });
       return;
     }
-    const existing = getRegisteredAgentHarness(id);
+    const existing =
+      registryParams.activateGlobalSideEffects === false
+        ? registry.agentHarnesses.find((entry) => entry.harness.id === id)
+        : getRegisteredAgentHarness(id);
     if (existing) {
-      const ownerDetail = existing.ownerPluginId ? ` (owner: ${existing.ownerPluginId})` : "";
+      const ownerPluginId =
+        "ownerPluginId" in existing
+          ? existing.ownerPluginId
+          : "pluginId" in existing
+            ? existing.pluginId
+            : undefined;
+      const ownerDetail = ownerPluginId ? ` (owner: ${ownerPluginId})` : "";
       pushDiagnostic({
         level: "error",
         pluginId: record.id,
@@ -738,7 +747,9 @@ export function createPluginRegistry(registryParams: PluginRegistryParams) {
       id,
       pluginId: harness.pluginId ?? record.id,
     };
-    registerGlobalAgentHarness(normalizedHarness, { ownerPluginId: record.id });
+    if (registryParams.activateGlobalSideEffects !== false) {
+      registerGlobalAgentHarness(normalizedHarness, { ownerPluginId: record.id });
+    }
     record.agentHarnessIds.push(id);
     registry.agentHarnesses.push({
       pluginId: record.id,

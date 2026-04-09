@@ -1,7 +1,8 @@
-import { log } from "../pi-embedded-runner/logger.js";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import type { AgentHarness, AgentHarnessResetParams, RegisteredAgentHarness } from "./types.js";
 
 const AGENT_HARNESS_REGISTRY_STATE = Symbol.for("openclaw.agentHarnessRegistryState");
+const log = createSubsystemLogger("agents/harness");
 
 type AgentHarnessRegistryState = {
   harnesses: Map<string, RegisteredAgentHarness>;

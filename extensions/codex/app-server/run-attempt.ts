@@ -27,6 +27,7 @@ import { createCodexDynamicToolBridge } from "./dynamic-tools.js";
 import { CodexAppServerEventProjector } from "./event-projector.js";
 import {
   isJsonObject,
+  type CodexServerNotification,
   type CodexDynamicToolCallParams,
   type CodexThreadResumeResponse,
   type CodexThreadStartResponse,
@@ -66,13 +67,14 @@ export async function runCodexAppServerAttempt(
   await fs.mkdir(effectiveWorkspace, { recursive: true });
 
   const runAbortController = new AbortController();
-  params.abortSignal?.addEventListener(
-    "abort",
-    () => {
-      runAbortController.abort(params.abortSignal?.reason ?? "upstream_abort");
-    },
-    { once: true },
-  );
+  const abortFromUpstream = () => {
+    runAbortController.abort(params.abortSignal?.reason ?? "upstream_abort");
+  };
+  if (params.abortSignal?.aborted) {
+    abortFromUpstream();
+  } else {
+    params.abortSignal?.addEventListener("abort", abortFromUpstream, { once: true });
+  }
 
   const { sessionAgentId } = resolveSessionAgentIds({
     sessionKey: params.sessionKey,
@@ -100,21 +102,21 @@ export async function runCodexAppServerAttempt(
     dynamicTools: toolBridge.specs,
   });
 
-  const turn = await client.request<CodexTurnStartResponse>("turn/start", {
-    threadId: thread.threadId,
-    input: buildUserInput(params),
-    cwd: effectiveWorkspace,
-    approvalPolicy: resolveAppServerApprovalPolicy(),
-    approvalsReviewer: resolveApprovalsReviewer(),
-    model: params.modelId,
-    effort: resolveReasoningEffort(params.thinkLevel),
-  });
-  const turnId = turn.turn.id;
-  const projector = new CodexAppServerEventProjector(params, thread.threadId, turnId);
+  let projector: CodexAppServerEventProjector | undefined;
+  let turnId: string | undefined;
+  const pendingNotifications: CodexServerNotification[] = [];
   let completed = false;
   let timedOut = false;
+  let resolveCompletion: (() => void) | undefined;
+  const completion = new Promise<void>((resolve) => {
+    resolveCompletion = resolve;
+  });
 
-  const notificationCleanup = client.addNotificationHandler(async (notification) => {
+  const handleNotification = async (notification: CodexServerNotification) => {
+    if (!projector || !turnId) {
+      pendingNotifications.push(notification);
+      return;
+    }
     await projector.handleNotification(notification);
     if (
       notification.method === "turn/completed" &&
@@ -123,8 +125,13 @@ export async function runCodexAppServerAttempt(
       completed = true;
       resolveCompletion?.();
     }
-  });
+  };
+
+  const notificationCleanup = client.addNotificationHandler(handleNotification);
   const requestCleanup = client.addRequestHandler(async (request) => {
+    if (!turnId) {
+      return undefined;
+    }
     if (request.method !== "item/tool/call") {
       if (isCodexAppServerApprovalRequest(request.method)) {
         return handleApprovalRequest({
@@ -145,31 +152,51 @@ export async function runCodexAppServerAttempt(
     return toolBridge.handleToolCall(call) as Promise<JsonValue>;
   });
 
+  let turn: CodexTurnStartResponse;
+  try {
+    turn = await client.request<CodexTurnStartResponse>("turn/start", {
+      threadId: thread.threadId,
+      input: buildUserInput(params),
+      cwd: effectiveWorkspace,
+      approvalPolicy: resolveAppServerApprovalPolicy(),
+      approvalsReviewer: resolveApprovalsReviewer(),
+      model: params.modelId,
+      effort: resolveReasoningEffort(params.thinkLevel),
+    });
+  } catch (error) {
+    notificationCleanup();
+    requestCleanup();
+    params.abortSignal?.removeEventListener("abort", abortFromUpstream);
+    throw error;
+  }
+  turnId = turn.turn.id;
+  projector = new CodexAppServerEventProjector(params, thread.threadId, turnId);
+  for (const notification of pendingNotifications.splice(0)) {
+    await handleNotification(notification);
+  }
+  const activeTurnId = turnId;
+  const activeProjector = projector;
+
   const handle = {
     kind: "embedded" as const,
     queueMessage: async (text: string) => {
       await client.request("turn/steer", {
         threadId: thread.threadId,
-        expectedTurnId: turnId,
+        expectedTurnId: activeTurnId,
         input: [{ type: "text", text }],
       });
     },
     isStreaming: () => !completed,
-    isCompacting: () => projector.isCompacting(),
+    isCompacting: () => projector?.isCompacting() ?? false,
     cancel: () => runAbortController.abort("cancelled"),
     abort: () => runAbortController.abort("aborted"),
   };
   setActiveEmbeddedRun(params.sessionId, handle, params.sessionKey);
 
-  let resolveCompletion: (() => void) | undefined;
-  const completion = new Promise<void>((resolve) => {
-    resolveCompletion = resolve;
-  });
-
   const timeout = setTimeout(
     () => {
       timedOut = true;
-      projector.markTimedOut();
+      projector?.markTimedOut();
       runAbortController.abort("timeout");
     },
     Math.max(100, params.timeoutMs),
@@ -178,20 +205,23 @@ export async function runCodexAppServerAttempt(
   const abortListener = () => {
     void client.request("turn/interrupt", {
       threadId: thread.threadId,
-      turnId,
+      turnId: activeTurnId,
     });
     resolveCompletion?.();
   };
   runAbortController.signal.addEventListener("abort", abortListener, { once: true });
+  if (runAbortController.signal.aborted) {
+    abortListener();
+  }
 
   try {
     await completion;
-    const result = projector.buildResult(toolBridge.telemetry);
+    const result = activeProjector.buildResult(toolBridge.telemetry);
     await mirrorTranscriptBestEffort({
       params,
       result,
       threadId: thread.threadId,
-      turnId,
+      turnId: activeTurnId,
     });
     return {
       ...result,
@@ -205,6 +235,7 @@ export async function runCodexAppServerAttempt(
     notificationCleanup();
     requestCleanup();
     runAbortController.signal.removeEventListener("abort", abortListener);
+    params.abortSignal?.removeEventListener("abort", abortFromUpstream);
     clearActiveEmbeddedRun(params.sessionId, handle, params.sessionKey);
   }
 }
@@ -304,31 +335,44 @@ async function startOrResumeThread(params: {
   cwd: string;
   dynamicTools: JsonValue[];
 }): Promise<CodexAppServerThreadBinding> {
+  const dynamicToolsFingerprint = fingerprintDynamicTools(params.dynamicTools);
   const binding = await readCodexAppServerBinding(params.params.sessionFile);
   if (binding?.threadId) {
-    try {
-      const response = await params.client.request<CodexThreadResumeResponse>("thread/resume", {
-        threadId: binding.threadId,
-      });
-      await writeCodexAppServerBinding(params.params.sessionFile, {
-        threadId: response.thread.id,
-        cwd: params.cwd,
-        model: params.params.modelId,
-        modelProvider: response.modelProvider ?? normalizeModelProvider(params.params.provider),
-        createdAt: binding.createdAt,
-      });
-      return {
-        ...binding,
-        threadId: response.thread.id,
-        cwd: params.cwd,
-        model: params.params.modelId,
-        modelProvider: response.modelProvider ?? normalizeModelProvider(params.params.provider),
-      };
-    } catch (error) {
-      embeddedAgentLog.warn("codex app-server thread resume failed; starting a new thread", {
-        error,
-      });
+    if (binding.dynamicToolsFingerprint !== dynamicToolsFingerprint) {
+      embeddedAgentLog.debug(
+        "codex app-server dynamic tool catalog changed; starting a new thread",
+        {
+          threadId: binding.threadId,
+        },
+      );
       await clearCodexAppServerBinding(params.params.sessionFile);
+    } else {
+      try {
+        const response = await params.client.request<CodexThreadResumeResponse>("thread/resume", {
+          threadId: binding.threadId,
+        });
+        await writeCodexAppServerBinding(params.params.sessionFile, {
+          threadId: response.thread.id,
+          cwd: params.cwd,
+          model: params.params.modelId,
+          modelProvider: response.modelProvider ?? normalizeModelProvider(params.params.provider),
+          dynamicToolsFingerprint,
+          createdAt: binding.createdAt,
+        });
+        return {
+          ...binding,
+          threadId: response.thread.id,
+          cwd: params.cwd,
+          model: params.params.modelId,
+          modelProvider: response.modelProvider ?? normalizeModelProvider(params.params.provider),
+          dynamicToolsFingerprint,
+        };
+      } catch (error) {
+        embeddedAgentLog.warn("codex app-server thread resume failed; starting a new thread", {
+          error,
+        });
+        await clearCodexAppServerBinding(params.params.sessionFile);
+      }
     }
   }
 
@@ -351,6 +395,7 @@ async function startOrResumeThread(params: {
     cwd: params.cwd,
     model: response.model ?? params.params.modelId,
     modelProvider: response.modelProvider ?? normalizeModelProvider(params.params.provider),
+    dynamicToolsFingerprint,
     createdAt,
   });
   return {
@@ -360,9 +405,30 @@ async function startOrResumeThread(params: {
     cwd: params.cwd,
     model: response.model ?? params.params.modelId,
     modelProvider: response.modelProvider ?? normalizeModelProvider(params.params.provider),
+    dynamicToolsFingerprint,
     createdAt,
     updatedAt: createdAt,
   };
+}
+
+function fingerprintDynamicTools(dynamicTools: JsonValue[]): string {
+  return JSON.stringify(dynamicTools.map(stabilizeJsonValue));
+}
+
+function stabilizeJsonValue(value: JsonValue): JsonValue {
+  if (Array.isArray(value)) {
+    return value.map(stabilizeJsonValue);
+  }
+  if (!isJsonObject(value)) {
+    return value;
+  }
+  const stable: JsonObject = {};
+  for (const [key, child] of Object.entries(value).toSorted(([left], [right]) =>
+    left.localeCompare(right),
+  )) {
+    stable[key] = stabilizeJsonValue(child);
+  }
+  return stable;
 }
 
 function buildDeveloperInstructions(params: EmbeddedRunAttemptParams): string {

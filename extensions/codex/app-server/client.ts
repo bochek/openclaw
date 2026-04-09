@@ -2,7 +2,6 @@ import { spawn } from "node:child_process";
 import { createInterface, type Interface as ReadlineInterface } from "node:readline";
 import { embeddedAgentLog, OPENCLAW_VERSION } from "openclaw/plugin-sdk/agent-harness";
 import {
-  coerceJsonObject,
   isRpcResponse,
   type CodexServerNotification,
   type JsonObject,
@@ -255,26 +254,39 @@ export class CodexAppServerClient {
       pending.reject(error);
     }
     this.pending.clear();
+    clearSharedClientIfCurrent(this);
   }
 }
 
+let sharedClient: CodexAppServerClient | undefined;
 let sharedClientPromise: Promise<CodexAppServerClient> | undefined;
 
 export async function getSharedCodexAppServerClient(): Promise<CodexAppServerClient> {
   sharedClientPromise ??= (async () => {
     const client = CodexAppServerClient.start();
+    sharedClient = client;
     await client.initialize();
     return client;
   })();
   try {
     return await sharedClientPromise;
   } catch (error) {
+    sharedClient = undefined;
     sharedClientPromise = undefined;
     throw error;
   }
 }
 
 export function resetSharedCodexAppServerClientForTests(): void {
+  sharedClient = undefined;
+  sharedClientPromise = undefined;
+}
+
+function clearSharedClientIfCurrent(client: CodexAppServerClient): void {
+  if (sharedClient !== client) {
+    return;
+  }
+  sharedClient = undefined;
   sharedClientPromise = undefined;
 }
 
@@ -488,8 +500,4 @@ function formatExitValue(value: unknown): string {
     return String(value);
   }
   return "unknown";
-}
-
-export function jsonObjectFromUnknown(value: unknown): JsonObject | undefined {
-  return coerceJsonObject(value);
 }

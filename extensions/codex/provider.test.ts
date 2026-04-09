@@ -80,6 +80,23 @@ describe("codex provider", () => {
     });
   });
 
+  it("treats o4 ids as reasoning-capable Codex models", () => {
+    const provider = buildCodexProvider();
+
+    const model = provider.resolveDynamicModel?.({
+      provider: "codex",
+      modelId: "o4-mini",
+      modelRegistry: { find: () => null },
+    } as never);
+
+    expect(model).toMatchObject({
+      id: "o4-mini",
+      reasoning: true,
+      compat: { supportsReasoningEffort: true },
+    });
+    expect(provider.supportsXHighThinking?.({ provider: "codex", modelId: "o4-mini" })).toBe(true);
+  });
+
   it("declares synthetic auth because the harness owns Codex credentials", () => {
     const provider = buildCodexProvider();
 

@@ -8,6 +8,7 @@ export type CodexAppServerThreadBinding = {
   cwd: string;
   model?: string;
   modelProvider?: string;
+  dynamicToolsFingerprint?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -42,6 +43,10 @@ export async function readCodexAppServerBinding(
       cwd: typeof parsed.cwd === "string" ? parsed.cwd : "",
       model: typeof parsed.model === "string" ? parsed.model : undefined,
       modelProvider: typeof parsed.modelProvider === "string" ? parsed.modelProvider : undefined,
+      dynamicToolsFingerprint:
+        typeof parsed.dynamicToolsFingerprint === "string"
+          ? parsed.dynamicToolsFingerprint
+          : undefined,
       createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : new Date().toISOString(),
       updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date().toISOString(),
     };
@@ -68,6 +73,7 @@ export async function writeCodexAppServerBinding(
     cwd: binding.cwd,
     model: binding.model,
     modelProvider: binding.modelProvider,
+    dynamicToolsFingerprint: binding.dynamicToolsFingerprint,
     createdAt: binding.createdAt ?? now,
     updatedAt: now,
   };

@@ -1,5 +1,5 @@
+import { createSubsystemLogger } from "../../logging/subsystem.js";
 import type { CompactEmbeddedPiSessionParams } from "../pi-embedded-runner/compact.js";
-import { log } from "../pi-embedded-runner/logger.js";
 import type {
   EmbeddedRunAttemptParams,
   EmbeddedRunAttemptResult,
@@ -9,6 +9,8 @@ import type { EmbeddedPiCompactResult } from "../pi-embedded-runner/types.js";
 import { createPiAgentHarness } from "./builtin-pi.js";
 import { listRegisteredAgentHarnesses } from "./registry.js";
 import type { AgentHarness, AgentHarnessSupport } from "./types.js";
+
+const log = createSubsystemLogger("agents/harness");
 
 function listAvailableAgentHarnesses(): AgentHarness[] {
   return [...listRegisteredAgentHarnesses().map((entry) => entry.harness), createPiAgentHarness()];
@@ -33,6 +35,9 @@ export function selectAgentHarness(params: { provider: string; modelId?: string 
     if (forced) {
       return forced;
     }
+    log.warn("requested agent harness is not registered; falling back to embedded PI backend", {
+      requestedRuntime: runtime,
+    });
     return createPiAgentHarness();
   }
 
