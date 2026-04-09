@@ -48,6 +48,16 @@ Live-verified:
 - Provider/model metadata in agent results reported provider `codex` and bare
   Codex model ids (`gpt-5.4`, `gpt-5.2`).
 
+Targeted-verified:
+
+- Auto-mode plugin harness startup failure falls back to PI.
+- Forced `OPENCLAW_AGENT_RUNTIME=codex` harness startup failure surfaces
+  instead of replaying through PI.
+- Codex dynamic tool bridge preserves structured media URLs for `tts`,
+  `image_generate`, `video_generate`, and `music_generate`.
+- Public Plugin SDK exposes the generic `agent-harness` subpath and has no
+  Codex-specific runtime subpath.
+
 Not done yet:
 
 - Session binding generalization into `SessionEntry.harnessBindings`.
@@ -440,11 +450,12 @@ before a turn starts. Forced harness failures should surface instead of replayin
   - Codex provider catalog fallback and app-server mapping
   - bundled Codex plugin provider/harness registration
 
-Remaining targeted tests:
+Remaining useful targeted tests:
 
-- forced Codex execution path through plugin-loaded gateway
-- auto falls back to PI when Codex app-server startup fails
-- explicit Codex app-server failure does not fall back
+- narrow plugin-loaded gateway integration test that asserts selected harness
+  id without making a live model call
+- built-CLI or exported-dev-harness live smoke for Gateway + `codex/gpt-*`,
+  so future agents do not need to reassemble the Gateway websocket flow by hand
 
 ### Phase 2: Neutral Names
 
@@ -452,7 +463,7 @@ Remaining targeted tests:
 - [x] Keep PI names as compatibility exports.
 - [x] Add `api.runtime.agent.runEmbeddedAgent`.
 - [x] Keep `api.runtime.agent.runEmbeddedPiAgent`.
-- [ ] Update plugin runtime docs to prefer neutral names.
+- [x] Update plugin runtime docs to prefer neutral names.
 
 ### Phase 3: Session Binding Generalization
 
@@ -485,12 +496,20 @@ Remaining targeted tests:
   - [x] same Codex thread switching `gpt-5.4` to `gpt-5.2`
   - [x] live `codex/gpt-5.4` provider ref through plugin-loaded gateway after
         the bundled plugin move
-  - tool turn
-  - image input
-  - TTS/image/video/music tool media output
+  - [ ] tool turn
+  - [ ] image input
+  - [x] TTS/image/video/music tool media output bridge coverage
   - manual compaction
   - model switch PI to Codex
   - model switch Codex to PI
+
+Smoke-runner note:
+
+- A standalone `node --import tsx` source script currently is not a reliable
+  Gateway smoke path. It bypasses package/export wiring and can reach PI or
+  extension dependencies through paths that normal repo commands do not use.
+- Prefer repo tests, the built/dev CLI, or a small exported Gateway smoke
+  helper over ad hoc stdin scripts.
 
 ## Targeted Test Commands
 
@@ -499,6 +518,7 @@ Use targeted tests only while this refactor is in flight:
 ```sh
 pnpm test src/agents/pi-embedded-runner/run/backend.test.ts
 pnpm test src/agents/harness/registry.test.ts
+pnpm test src/agents/harness/selection.test.ts
 pnpm test extensions/codex/app-server
 pnpm test extensions/codex/index.test.ts extensions/codex/provider.test.ts
 pnpm test extensions/codex/app-server/session-binding.test.ts
