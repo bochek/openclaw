@@ -22,7 +22,7 @@ const EXTENSION_PACKAGE_BOUNDARY_BASE_CONFIG =
 type TsConfigJson = {
   extends?: unknown;
   compilerOptions?: {
-    paths?: unknown;
+    paths?: Record<string, readonly string[]>;
     rootDir?: unknown;
     outDir?: unknown;
     declaration?: unknown;
