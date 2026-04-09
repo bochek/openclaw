@@ -90,4 +90,52 @@ describe("createCodexDynamicToolBridge", () => {
     expect(bridge.telemetry.toolMediaUrls).toEqual(["/tmp/reply.opus"]);
     expect(bridge.telemetry.toolAudioAsVoice).toBe(true);
   });
+
+  it("records messaging tool side effects while returning concise text to app-server", async () => {
+    const toolResult = {
+      content: [{ type: "text", text: "Sent." }],
+      details: { messageId: "message-1" },
+    } satisfies AgentToolResult<unknown>;
+    const tool = createTool({
+      name: "message",
+      execute: vi.fn(async () => toolResult),
+    });
+    const bridge = createCodexDynamicToolBridge({
+      tools: [tool],
+      signal: new AbortController().signal,
+    });
+
+    const result = await bridge.handleToolCall({
+      threadId: "thread-1",
+      turnId: "turn-1",
+      callId: "call-1",
+      tool: "message",
+      arguments: {
+        action: "send",
+        text: "hello from Codex",
+        mediaUrl: "/tmp/reply.png",
+        provider: "telegram",
+        to: "chat-1",
+        threadId: "thread-ts-1",
+      },
+    });
+
+    expect(result).toEqual({
+      success: true,
+      contentItems: [{ type: "inputText", text: "Sent." }],
+    });
+    expect(bridge.telemetry).toMatchObject({
+      didSendViaMessagingTool: true,
+      messagingToolSentTexts: ["hello from Codex"],
+      messagingToolSentMediaUrls: ["/tmp/reply.png"],
+      messagingToolSentTargets: [
+        {
+          tool: "message",
+          provider: "telegram",
+          to: "chat-1",
+          threadId: "thread-ts-1",
+        },
+      ],
+    });
+  });
 });

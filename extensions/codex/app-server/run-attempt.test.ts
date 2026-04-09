@@ -8,6 +8,7 @@ import {
   type EmbeddedRunAttemptParams,
 } from "openclaw/plugin-sdk/agent-harness";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { CodexServerNotification } from "./protocol.js";
 import { runCodexAppServerAttempt, __testing } from "./run-attempt.js";
 
 let tempDir: string;
@@ -111,6 +112,75 @@ describe("runCodexAppServerAttempt", () => {
         {
           method: "turn/interrupt",
           params: { threadId: "thread-1", turnId: "turn-1" },
+        },
+      ]),
+    );
+  });
+
+  it("forwards image attachments to the app-server turn input", async () => {
+    const requests: Array<{ method: string; params: unknown }> = [];
+    let notify: (notification: CodexServerNotification) => Promise<void> = async () => undefined;
+    const request = vi.fn(async (method: string, params?: unknown) => {
+      requests.push({ method, params });
+      if (method === "thread/start") {
+        return { thread: { id: "thread-1" }, model: "gpt-5.4-codex", modelProvider: "openai" };
+      }
+      if (method === "turn/start") {
+        return { turn: { id: "turn-1", status: "inProgress" } };
+      }
+      return {};
+    });
+    __testing.setCodexAppServerClientFactoryForTests(
+      async () =>
+        ({
+          request,
+          addNotificationHandler: (handler: typeof notify) => {
+            notify = handler;
+            return () => undefined;
+          },
+          addRequestHandler: () => () => undefined,
+        }) as never,
+    );
+    const params = createParams(
+      path.join(tempDir, "session.jsonl"),
+      path.join(tempDir, "workspace"),
+    );
+    params.model = {
+      ...params.model,
+      input: ["text", "image"],
+    } as Model<Api>;
+    params.images = [
+      {
+        type: "image",
+        mimeType: "image/png",
+        data: "aW1hZ2UtYnl0ZXM=",
+      },
+    ];
+
+    const run = runCodexAppServerAttempt(params);
+    await vi.waitFor(() =>
+      expect(requests.some((entry) => entry.method === "turn/start")).toBe(true),
+    );
+    await notify({
+      method: "turn/completed",
+      params: {
+        threadId: "thread-1",
+        turnId: "turn-1",
+        turn: { id: "turn-1", status: "completed" },
+      },
+    });
+    await run;
+
+    expect(requests).toEqual(
+      expect.arrayContaining([
+        {
+          method: "turn/start",
+          params: expect.objectContaining({
+            input: [
+              { type: "text", text: "hello" },
+              { type: "image", url: "data:image/png;base64,aW1hZ2UtYnl0ZXM=" },
+            ],
+          }),
         },
       ]),
     );
