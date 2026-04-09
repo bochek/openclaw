@@ -1,7 +1,9 @@
-import type { AgentApprovalEventData } from "../../infra/agent-events.js";
-import type { ExecApprovalDecision } from "../../infra/exec-approvals.js";
-import type { EmbeddedRunAttemptParams } from "../pi-embedded-runner/run/types.js";
-import { callGatewayTool } from "../tools/gateway.js";
+import {
+  callGatewayTool,
+  type AgentApprovalEventData,
+  type EmbeddedRunAttemptParams,
+  type ExecApprovalDecision,
+} from "openclaw/plugin-sdk/agent-harness";
 import { isJsonObject, type JsonObject, type JsonValue } from "./protocol.js";
 
 const DEFAULT_CODEX_APPROVAL_TIMEOUT_MS = 120_000;

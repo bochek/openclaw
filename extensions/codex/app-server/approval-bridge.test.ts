@@ -1,9 +1,9 @@
+import { callGatewayTool, type EmbeddedRunAttemptParams } from "openclaw/plugin-sdk/agent-harness";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EmbeddedRunAttemptParams } from "../pi-embedded-runner/run/types.js";
-import { callGatewayTool } from "../tools/gateway.js";
 import { buildApprovalResponse, handleCodexAppServerApprovalRequest } from "./approval-bridge.js";
 
-vi.mock("../tools/gateway.js", () => ({
+vi.mock("openclaw/plugin-sdk/agent-harness", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("openclaw/plugin-sdk/agent-harness")>()),
   callGatewayTool: vi.fn(),
 }));
 
@@ -38,7 +38,7 @@ describe("Codex app-server approval bridge", () => {
         threadId: "thread-1",
         turnId: "turn-1",
         itemId: "cmd-1",
-        command: "pnpm test src/agents/codex-app-server-runner",
+        command: "pnpm test extensions/codex/app-server",
       },
       paramsForRun: params,
       threadId: "thread-1",

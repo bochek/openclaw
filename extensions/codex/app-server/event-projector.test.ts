@@ -1,6 +1,6 @@
 import type { Api, Model } from "@mariozechner/pi-ai";
+import type { EmbeddedRunAttemptParams } from "openclaw/plugin-sdk/agent-harness";
 import { describe, expect, it, vi } from "vitest";
-import type { EmbeddedRunAttemptParams } from "../pi-embedded-runner/run/types.js";
 import { CodexAppServerEventProjector } from "./event-projector.js";
 
 function createParams(): EmbeddedRunAttemptParams {

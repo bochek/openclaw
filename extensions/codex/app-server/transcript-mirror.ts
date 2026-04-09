@@ -2,8 +2,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import { SessionManager } from "@mariozechner/pi-coding-agent";
-import { emitSessionTranscriptUpdate } from "../../sessions/transcript-events.js";
-import { acquireSessionWriteLock } from "../session-write-lock.js";
+import {
+  acquireSessionWriteLock,
+  emitSessionTranscriptUpdate,
+} from "openclaw/plugin-sdk/agent-harness";
 
 export async function mirrorCodexAppServerTranscript(params: {
   sessionFile: string;

@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { log } from "../pi-embedded-runner/logger.js";
+import { embeddedAgentLog } from "openclaw/plugin-sdk/agent-harness";
 
 export type CodexAppServerThreadBinding = {
   schemaVersion: 1;
@@ -27,7 +27,7 @@ export async function readCodexAppServerBinding(
     if (isNotFound(error)) {
       return undefined;
     }
-    log.warn("failed to read codex app-server binding", { path, error });
+    embeddedAgentLog.warn("failed to read codex app-server binding", { path, error });
     return undefined;
   }
   try {
@@ -46,7 +46,7 @@ export async function readCodexAppServerBinding(
       updatedAt: typeof parsed.updatedAt === "string" ? parsed.updatedAt : new Date().toISOString(),
     };
   } catch (error) {
-    log.warn("failed to parse codex app-server binding", { path, error });
+    embeddedAgentLog.warn("failed to parse codex app-server binding", { path, error });
     return undefined;
   }
 }
@@ -82,7 +82,7 @@ export async function clearCodexAppServerBinding(sessionFile: string): Promise<v
     await fs.unlink(resolveCodexAppServerBindingPath(sessionFile));
   } catch (error) {
     if (!isNotFound(error)) {
-      log.warn("failed to clear codex app-server binding", { sessionFile, error });
+      embeddedAgentLog.warn("failed to clear codex app-server binding", { sessionFile, error });
     }
   }
 }

@@ -1,21 +1,22 @@
 import fs from "node:fs/promises";
-import { isSubagentSessionKey } from "../../routing/session-key.js";
-import { resolveUserPath } from "../../utils.js";
-import { resolveOpenClawAgentDir } from "../agent-paths.js";
-import { resolveSessionAgentIds } from "../agent-scope.js";
-import { resolveModelAuthMode } from "../model-auth.js";
-import { supportsModelTools } from "../model-tool-support.js";
-import { log } from "../pi-embedded-runner/logger.js";
-import { resolveAttemptSpawnWorkspaceDir } from "../pi-embedded-runner/run/attempt.thread-helpers.js";
-import { buildEmbeddedAttemptToolRunContext } from "../pi-embedded-runner/run/attempt.tool-run-context.js";
-import type {
-  EmbeddedRunAttemptParams,
-  EmbeddedRunAttemptResult,
-} from "../pi-embedded-runner/run/types.js";
-import { clearActiveEmbeddedRun, setActiveEmbeddedRun } from "../pi-embedded-runner/runs.js";
-import { normalizeProviderToolSchemas } from "../pi-embedded-runner/tool-schema-runtime.js";
-import { createOpenClawCodingTools } from "../pi-tools.js";
-import { resolveSandboxContext } from "../sandbox.js";
+import {
+  buildEmbeddedAttemptToolRunContext,
+  clearActiveEmbeddedRun,
+  createOpenClawCodingTools,
+  embeddedAgentLog,
+  isSubagentSessionKey,
+  normalizeProviderToolSchemas,
+  resolveAttemptSpawnWorkspaceDir,
+  resolveModelAuthMode,
+  resolveOpenClawAgentDir,
+  resolveSandboxContext,
+  resolveSessionAgentIds,
+  resolveUserPath,
+  setActiveEmbeddedRun,
+  supportsModelTools,
+  type EmbeddedRunAttemptParams,
+  type EmbeddedRunAttemptResult,
+} from "openclaw/plugin-sdk/agent-harness";
 import { handleCodexAppServerApprovalRequest } from "./approval-bridge.js";
 import {
   getSharedCodexAppServerClient,
@@ -324,7 +325,9 @@ async function startOrResumeThread(params: {
         modelProvider: response.modelProvider ?? normalizeModelProvider(params.params.provider),
       };
     } catch (error) {
-      log.warn("codex app-server thread resume failed; starting a new thread", { error });
+      embeddedAgentLog.warn("codex app-server thread resume failed; starting a new thread", {
+        error,
+      });
       await clearCodexAppServerBinding(params.params.sessionFile);
     }
   }
@@ -385,7 +388,7 @@ function buildUserInput(params: EmbeddedRunAttemptParams): CodexUserInput[] {
 }
 
 function normalizeModelProvider(provider: string): string {
-  return provider === "openai-codex" ? "openai" : provider;
+  return provider === "codex" || provider === "openai-codex" ? "openai" : provider;
 }
 
 function resolveAppServerApprovalPolicy(): "never" | "on-request" | "on-failure" | "untrusted" {
@@ -476,7 +479,7 @@ async function mirrorTranscriptBestEffort(params: {
       idempotencyScope: `codex-app-server:${params.threadId}:${params.turnId}`,
     });
   } catch (error) {
-    log.warn("failed to mirror codex app-server transcript", { error });
+    embeddedAgentLog.warn("failed to mirror codex app-server transcript", { error });
   }
 }
 

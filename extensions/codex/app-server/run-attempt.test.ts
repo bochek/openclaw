@@ -2,13 +2,12 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import type { Api, Model } from "@mariozechner/pi-ai";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { EmbeddedRunAttemptParams } from "../pi-embedded-runner/run/types.js";
 import {
-  queueEmbeddedPiMessage,
-  abortEmbeddedPiRun,
-  __testing as runsTesting,
-} from "../pi-embedded-runner/runs.js";
+  abortAgentHarnessRun,
+  queueAgentHarnessMessage,
+  type EmbeddedRunAttemptParams,
+} from "openclaw/plugin-sdk/agent-harness";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runCodexAppServerAttempt, __testing } from "./run-attempt.js";
 
 let tempDir: string;
@@ -21,12 +20,12 @@ function createParams(sessionFile: string, workspaceDir: string): EmbeddedRunAtt
     sessionFile,
     workspaceDir,
     runId: "run-1",
-    provider: "openai-codex",
+    provider: "codex",
     modelId: "gpt-5.4-codex",
     model: {
       id: "gpt-5.4-codex",
       name: "gpt-5.4-codex",
-      provider: "openai-codex",
+      provider: "codex",
       api: "openai-codex-responses",
       input: ["text"],
       reasoning: true,
@@ -49,7 +48,6 @@ describe("runCodexAppServerAttempt", () => {
 
   afterEach(async () => {
     __testing.resetCodexAppServerClientFactoryForTests();
-    runsTesting.resetActiveEmbeddedRuns();
     vi.restoreAllMocks();
     await fs.rm(tempDir, { recursive: true, force: true });
   });
@@ -82,11 +80,11 @@ describe("runCodexAppServerAttempt", () => {
       expect(requests.some((entry) => entry.method === "turn/start")).toBe(true),
     );
 
-    expect(queueEmbeddedPiMessage("session-1", "more context")).toBe(true);
+    expect(queueAgentHarnessMessage("session-1", "more context")).toBe(true);
     await vi.waitFor(() =>
       expect(requests.some((entry) => entry.method === "turn/steer")).toBe(true),
     );
-    expect(abortEmbeddedPiRun("session-1")).toBe(true);
+    expect(abortAgentHarnessRun("session-1")).toBe(true);
     await vi.waitFor(() =>
       expect(requests.some((entry) => entry.method === "turn/interrupt")).toBe(true),
     );
@@ -95,6 +93,13 @@ describe("runCodexAppServerAttempt", () => {
     expect(result.aborted).toBe(true);
     expect(requests).toEqual(
       expect.arrayContaining([
+        {
+          method: "thread/start",
+          params: expect.objectContaining({
+            model: "gpt-5.4-codex",
+            modelProvider: "openai",
+          }),
+        },
         {
           method: "turn/steer",
           params: {

@@ -1,7 +1,11 @@
 import { EventEmitter } from "node:events";
 import { PassThrough, Writable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { CodexAppServerClient } from "./client.js";
+import {
+  CodexAppServerClient,
+  listCodexAppServerModels,
+  resetSharedCodexAppServerClientForTests,
+} from "./client.js";
 
 function createClientHarness() {
   const stdout = new PassThrough();
@@ -36,6 +40,8 @@ describe("CodexAppServerClient", () => {
   const clients: CodexAppServerClient[] = [];
 
   afterEach(() => {
+    resetSharedCodexAppServerClientForTests();
+    vi.restoreAllMocks();
     for (const client of clients) {
       client.close();
     }
@@ -52,6 +58,33 @@ describe("CodexAppServerClient", () => {
 
     await expect(request).resolves.toEqual({ models: [] });
     expect(outbound.method).toBe("model/list");
+  });
+
+  it("initializes with the required client version", async () => {
+    const harness = createClientHarness();
+    clients.push(harness.client);
+
+    const initializing = harness.client.initialize();
+    const outbound = JSON.parse(harness.writes[0] ?? "{}") as {
+      id?: number;
+      method?: string;
+      params?: { clientInfo?: { name?: string; title?: string; version?: string } };
+    };
+    harness.send({ id: outbound.id, result: {} });
+
+    await expect(initializing).resolves.toBeUndefined();
+    expect(outbound).toMatchObject({
+      method: "initialize",
+      params: {
+        clientInfo: {
+          name: "openclaw",
+          title: "OpenClaw",
+          version: expect.any(String),
+        },
+      },
+    });
+    expect(outbound.params?.clientInfo?.version).not.toBe("");
+    expect(JSON.parse(harness.writes[1] ?? "{}")).toEqual({ method: "initialized" });
   });
 
   it("answers server-initiated requests with the registered handler result", async () => {
@@ -105,5 +138,54 @@ describe("CodexAppServerClient", () => {
       id: "approval-legacy",
       result: { decision: "denied" },
     });
+  });
+
+  it("lists app-server models through the typed helper", async () => {
+    const harness = createClientHarness();
+    clients.push(harness.client);
+    const startSpy = vi.spyOn(CodexAppServerClient, "start").mockReturnValue(harness.client);
+
+    const listPromise = listCodexAppServerModels({ limit: 12, timeoutMs: 1000 });
+    const initialize = JSON.parse(harness.writes[0] ?? "{}") as { id?: number };
+    harness.send({ id: initialize.id, result: {} });
+    await vi.waitFor(() => expect(harness.writes.length).toBeGreaterThanOrEqual(3));
+    const list = JSON.parse(harness.writes[2] ?? "{}") as { id?: number; method?: string };
+    expect(list.method).toBe("model/list");
+
+    harness.send({
+      id: list.id,
+      result: {
+        data: [
+          {
+            id: "gpt-5.4",
+            model: "gpt-5.4",
+            displayName: "gpt-5.4",
+            inputModalities: ["text", "image"],
+            supportedReasoningEfforts: [
+              { reasoningEffort: "low", description: "fast" },
+              { reasoningEffort: "xhigh", description: "deep" },
+            ],
+            defaultReasoningEffort: "medium",
+            isDefault: true,
+          },
+        ],
+        nextCursor: null,
+      },
+    });
+
+    await expect(listPromise).resolves.toEqual({
+      models: [
+        {
+          id: "gpt-5.4",
+          model: "gpt-5.4",
+          displayName: "gpt-5.4",
+          inputModalities: ["text", "image"],
+          supportedReasoningEfforts: ["low", "xhigh"],
+          defaultReasoningEffort: "medium",
+          isDefault: true,
+        },
+      ],
+    });
+    startSpy.mockRestore();
   });
 });

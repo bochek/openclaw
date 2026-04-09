@@ -1,7 +1,9 @@
-import type { CompactEmbeddedPiSessionParams } from "../pi-embedded-runner/compact.js";
-import { log } from "../pi-embedded-runner/logger.js";
-import { resolveEmbeddedAgentRuntime } from "../pi-embedded-runner/runtime.js";
-import type { EmbeddedPiCompactResult } from "../pi-embedded-runner/types.js";
+import {
+  embeddedAgentLog,
+  resolveEmbeddedAgentRuntime,
+  type CompactEmbeddedPiSessionParams,
+  type EmbeddedPiCompactResult,
+} from "openclaw/plugin-sdk/agent-harness";
 import { getSharedCodexAppServerClient, type CodexAppServerClient } from "./client.js";
 import { readCodexAppServerBinding } from "./session-binding.js";
 
@@ -13,15 +15,17 @@ export async function maybeCompactCodexAppServerSession(
   params: CompactEmbeddedPiSessionParams,
 ): Promise<EmbeddedPiCompactResult | undefined> {
   const runtime = resolveEmbeddedAgentRuntime();
+  const provider = params.provider?.trim().toLowerCase();
   const shouldUseCodex =
-    runtime === "codex-app-server" || (runtime === "auto" && params.provider === "openai-codex");
+    runtime === "codex" ||
+    (runtime === "auto" && (provider === "codex" || provider === "openai-codex"));
   if (!shouldUseCodex) {
     return undefined;
   }
 
   const binding = await readCodexAppServerBinding(params.sessionFile);
   if (!binding?.threadId) {
-    if (runtime === "codex-app-server") {
+    if (runtime === "codex") {
       return { ok: false, compacted: false, reason: "no codex app-server thread binding" };
     }
     return undefined;
@@ -31,7 +35,7 @@ export async function maybeCompactCodexAppServerSession(
   await client.request("thread/compact/start", {
     threadId: binding.threadId,
   });
-  log.info("started codex app-server compaction", {
+  embeddedAgentLog.info("started codex app-server compaction", {
     sessionId: params.sessionId,
     threadId: binding.threadId,
   });

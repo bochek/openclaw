@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { createInterface, type Interface as ReadlineInterface } from "node:readline";
-import { log } from "../pi-embedded-runner/logger.js";
+import { embeddedAgentLog, OPENCLAW_VERSION } from "openclaw/plugin-sdk/agent-harness";
 import {
   coerceJsonObject,
   isRpcResponse,
@@ -35,6 +35,30 @@ export type CodexServerNotificationHandler = (
   notification: CodexServerNotification,
 ) => Promise<void> | void;
 
+export type CodexAppServerModel = {
+  id: string;
+  model: string;
+  displayName?: string;
+  description?: string;
+  hidden?: boolean;
+  isDefault?: boolean;
+  inputModalities: string[];
+  supportedReasoningEfforts: string[];
+  defaultReasoningEffort?: string;
+};
+
+export type CodexAppServerModelListResult = {
+  models: CodexAppServerModel[];
+  nextCursor?: string;
+};
+
+export type CodexAppServerListModelsOptions = {
+  limit?: number;
+  cursor?: string;
+  includeHidden?: boolean;
+  timeoutMs?: number;
+};
+
 export class CodexAppServerClient {
   private readonly child: CodexAppServerTransport;
   private readonly lines: ReadlineInterface;
@@ -52,7 +76,7 @@ export class CodexAppServerClient {
     child.stderr.on("data", (chunk: Buffer | string) => {
       const text = chunk.toString("utf8").trim();
       if (text) {
-        log.debug(`codex app-server stderr: ${text}`);
+        embeddedAgentLog.debug(`codex app-server stderr: ${text}`);
       }
     });
     child.once("error", (error) =>
@@ -90,12 +114,13 @@ export class CodexAppServerClient {
       clientInfo: {
         name: "openclaw",
         title: "OpenClaw",
+        version: OPENCLAW_VERSION,
       },
       capabilities: {
         experimentalApi: true,
       },
     });
-    this.notify("initialized", {});
+    this.notify("initialized");
     this.initialized = true;
   }
 
@@ -150,7 +175,7 @@ export class CodexAppServerClient {
     try {
       parsed = JSON.parse(trimmed);
     } catch (error) {
-      log.warn("failed to parse codex app-server message", { error });
+      embeddedAgentLog.warn("failed to parse codex app-server message", { error });
       return;
     }
     if (!parsed || typeof parsed !== "object") {
@@ -216,7 +241,7 @@ export class CodexAppServerClient {
   private handleNotification(notification: CodexServerNotification): void {
     for (const handler of this.notificationHandlers) {
       Promise.resolve(handler(notification)).catch((error: unknown) => {
-        log.warn("codex app-server notification handler failed", { error });
+        embeddedAgentLog.warn("codex app-server notification handler failed", { error });
       });
     }
   }
@@ -251,6 +276,25 @@ export async function getSharedCodexAppServerClient(): Promise<CodexAppServerCli
 
 export function resetSharedCodexAppServerClientForTests(): void {
   sharedClientPromise = undefined;
+}
+
+export async function listCodexAppServerModels(
+  options: CodexAppServerListModelsOptions = {},
+): Promise<CodexAppServerModelListResult> {
+  const timeoutMs = options.timeoutMs ?? 2500;
+  return await withTimeout(
+    (async () => {
+      const client = await getSharedCodexAppServerClient();
+      const response = await client.request<JsonObject>("model/list", {
+        limit: options.limit ?? null,
+        cursor: options.cursor ?? null,
+        includeHidden: options.includeHidden ?? null,
+      });
+      return readModelListResult(response);
+    })(),
+    timeoutMs,
+    "codex app-server model/list timed out",
+  );
 }
 
 export function defaultServerRequestResponse(
@@ -296,6 +340,108 @@ export function defaultServerRequestResponse(
     };
   }
   return {};
+}
+
+function readModelListResult(value: JsonValue | undefined): CodexAppServerModelListResult {
+  if (!isJsonObjectValue(value) || !Array.isArray(value.data)) {
+    return { models: [] };
+  }
+  const models = value.data
+    .map((entry) => readCodexModel(entry))
+    .filter((entry): entry is CodexAppServerModel => entry !== undefined);
+  const nextCursor = typeof value.nextCursor === "string" ? value.nextCursor : undefined;
+  return { models, ...(nextCursor ? { nextCursor } : {}) };
+}
+
+function readCodexModel(value: unknown): CodexAppServerModel | undefined {
+  if (!isJsonObjectValue(value)) {
+    return undefined;
+  }
+  const id = readNonEmptyString(value.id);
+  const model = readNonEmptyString(value.model) ?? id;
+  if (!id || !model) {
+    return undefined;
+  }
+  return {
+    id,
+    model,
+    ...(readNonEmptyString(value.displayName)
+      ? { displayName: readNonEmptyString(value.displayName) }
+      : {}),
+    ...(readNonEmptyString(value.description)
+      ? { description: readNonEmptyString(value.description) }
+      : {}),
+    ...(typeof value.hidden === "boolean" ? { hidden: value.hidden } : {}),
+    ...(typeof value.isDefault === "boolean" ? { isDefault: value.isDefault } : {}),
+    inputModalities: readStringArray(value.inputModalities),
+    supportedReasoningEfforts: readReasoningEfforts(value.supportedReasoningEfforts),
+    ...(readNonEmptyString(value.defaultReasoningEffort)
+      ? { defaultReasoningEffort: readNonEmptyString(value.defaultReasoningEffort) }
+      : {}),
+  };
+}
+
+function readReasoningEfforts(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const efforts = value
+    .map((entry) => {
+      if (!isJsonObjectValue(entry)) {
+        return undefined;
+      }
+      return readNonEmptyString(entry.reasoningEffort);
+    })
+    .filter((entry): entry is string => entry !== undefined);
+  return [...new Set(efforts)];
+}
+
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return [
+    ...new Set(
+      value
+        .map((entry) => readNonEmptyString(entry))
+        .filter((entry): entry is string => entry !== undefined),
+    ),
+  ];
+}
+
+function readNonEmptyString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed || undefined;
+}
+
+function isJsonObjectValue(value: unknown): value is JsonObject {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return await promise;
+  }
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error(timeoutMessage)), Math.max(1, timeoutMs));
+      }),
+    ]);
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 export function isCodexAppServerApprovalRequest(method: string): boolean {

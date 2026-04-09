@@ -1,6 +1,6 @@
 import type { AgentToolResult } from "@mariozechner/pi-agent-core";
+import type { AnyAgentTool } from "openclaw/plugin-sdk/agent-harness";
 import { describe, expect, it, vi } from "vitest";
-import type { AnyAgentTool } from "../tools/common.js";
 import { createCodexDynamicToolBridge } from "./dynamic-tools.js";
 
 function createTool(overrides: Partial<AnyAgentTool>): AnyAgentTool {
