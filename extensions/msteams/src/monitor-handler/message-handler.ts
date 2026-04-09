@@ -25,12 +25,7 @@ import {
 import { isRecord } from "../attachments/shared.js";
 import type { StoredConversationReference } from "../conversation-store.js";
 import { formatUnknownError } from "../errors.js";
-import {
-  fetchChannelMessage,
-  fetchThreadReplies,
-  formatThreadContext,
-  resolveTeamGroupId,
-} from "../graph-thread.js";
+import { fetchThreadReplies, formatThreadContext, resolveTeamGroupId } from "../graph-thread.js";
 import {
   extractMSTeamsConversationMessageId,
   extractMSTeamsQuoteInfo,
@@ -40,6 +35,13 @@ import {
   translateMSTeamsDmConversationIdForGraph,
   wasMSTeamsBotMentioned,
 } from "../inbound.js";
+import {
+  fetchParentMessageCached,
+  formatParentContextEvent,
+  markParentContextInjected,
+  shouldInjectParentContext,
+  summarizeParentMessage,
+} from "../thread-parent-context.js";
 
 function extractTextFromHtmlAttachments(attachments: MSTeamsAttachmentLike[]): string {
   for (const attachment of attachments) {
@@ -557,15 +559,29 @@ export function createMSTeamsMessageHandler(deps: MSTeamsMessageHandlerDeps) {
 
     // Fetch thread history when the message is a reply inside a Teams channel thread.
     // This is a best-effort enhancement; errors are logged and do not block the reply.
+    //
+    // We also enqueue a compact `Replying to @sender: …` system event when the parent
+    // is resolvable. On brand-new thread sessions (see PR #62713), this gives the agent
+    // immediate parent context even before the fuller `[Thread history]` block is assembled.
+    // Parent fetches are cached (5 min LRU, 100 entries) and per-session deduped so
+    // consecutive replies in the same thread do not re-inject identical context.
     let threadContext: string | undefined;
     if (activity.replyToId && isChannel && teamId) {
       try {
         const graphToken = await tokenProvider.getAccessToken("https://graph.microsoft.com");
         const groupId = await resolveTeamGroupId(graphToken, teamId);
         const [parentMsg, replies] = await Promise.all([
-          fetchChannelMessage(graphToken, groupId, conversationId, activity.replyToId),
+          fetchParentMessageCached(graphToken, groupId, conversationId, activity.replyToId),
           fetchThreadReplies(graphToken, groupId, conversationId, activity.replyToId),
         ]);
+        const parentSummary = summarizeParentMessage(parentMsg);
+        if (parentSummary && shouldInjectParentContext(route.sessionKey, activity.replyToId)) {
+          core.system.enqueueSystemEvent(formatParentContextEvent(parentSummary), {
+            sessionKey: route.sessionKey,
+            contextKey: `msteams:thread-parent:${conversationId}:${activity.replyToId}`,
+          });
+          markParentContextInjected(route.sessionKey, activity.replyToId);
+        }
         const allMessages = parentMsg ? [parentMsg, ...replies] : replies;
         quoteSenderId = parentMsg?.from?.user?.id ?? parentMsg?.from?.application?.id ?? undefined;
         quoteSenderName =
