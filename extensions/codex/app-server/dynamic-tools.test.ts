@@ -14,7 +14,50 @@ function createTool(overrides: Partial<AnyAgentTool>): AnyAgentTool {
 }
 
 describe("createCodexDynamicToolBridge", () => {
-  it("preserves structured media artifacts from tool results", async () => {
+  it.each([
+    { toolName: "tts", mediaUrl: "/tmp/reply.opus", audioAsVoice: true },
+    { toolName: "image_generate", mediaUrl: "/tmp/generated.png" },
+    { toolName: "video_generate", mediaUrl: "https://media.example/video.mp4" },
+    { toolName: "music_generate", mediaUrl: "https://media.example/music.wav" },
+  ])(
+    "preserves structured media artifacts from $toolName tool results",
+    async ({ toolName, mediaUrl, audioAsVoice }) => {
+      const toolResult = {
+        content: [{ type: "text", text: "Generated media reply." }],
+        details: {
+          media: {
+            mediaUrl,
+            ...(audioAsVoice === true ? { audioAsVoice: true } : {}),
+          },
+        },
+      } satisfies AgentToolResult<unknown>;
+      const tool = createTool({
+        name: toolName,
+        execute: vi.fn(async () => toolResult),
+      });
+      const bridge = createCodexDynamicToolBridge({
+        tools: [tool],
+        signal: new AbortController().signal,
+      });
+
+      const result = await bridge.handleToolCall({
+        threadId: "thread-1",
+        turnId: "turn-1",
+        callId: "call-1",
+        tool: toolName,
+        arguments: { prompt: "hello" },
+      });
+
+      expect(result).toEqual({
+        success: true,
+        contentItems: [{ type: "inputText", text: "Generated media reply." }],
+      });
+      expect(bridge.telemetry.toolMediaUrls).toEqual([mediaUrl]);
+      expect(bridge.telemetry.toolAudioAsVoice).toBe(audioAsVoice === true);
+    },
+  );
+
+  it("preserves audio-as-voice metadata from tts results", async () => {
     const toolResult = {
       content: [{ type: "text", text: "Generated audio reply." }],
       details: {
