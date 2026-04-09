@@ -35,10 +35,14 @@ export type MSTeamsCredentials = MSTeamsSecretCredentials | MSTeamsFederatedCred
 
 function resolveAuthType(cfg?: MSTeamsConfig): "secret" | "federated" {
   const fromCfg = cfg?.authType;
-  if (fromCfg === "secret" || fromCfg === "federated") return fromCfg;
+  if (fromCfg === "secret" || fromCfg === "federated") {
+    return fromCfg;
+  }
 
   const fromEnv = process.env.MSTEAMS_AUTH_TYPE;
-  if (fromEnv === "federated") return "federated";
+  if (fromEnv === "federated") {
+    return "federated";
+  }
 
   return "secret";
 }
