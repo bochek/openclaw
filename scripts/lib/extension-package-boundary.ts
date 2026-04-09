@@ -108,7 +108,7 @@ export type ExtensionPackageBoundaryTsConfigJson = {
   extends?: unknown;
   compilerOptions?: {
     rootDir?: unknown;
-    paths?: unknown;
+    paths?: Record<string, readonly string[]>;
   };
   include?: unknown;
   exclude?: unknown;
