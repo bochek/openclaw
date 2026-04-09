@@ -743,9 +743,10 @@ async function runCanaryCheck(extensionIds) {
               [tscBin, "-p", tsconfigPath, "--noEmit"],
               120_000,
             );
-            throw new Error(
-              `${extensionId} legacy-plugin-sdk canary unexpectedly passed\n${legacyResult.stdout}${legacyResult.stderr}`,
-            );
+        throw new Error(
+          `${extensionId} legacy-plugin-sdk canary unexpectedly passed\n${legacyResult.stdout}${legacyResult.stderr}`,
+          { cause: error },
+        );
           } catch (legacyError) {
             const legacyOutput =
               legacyError instanceof Error && typeof legacyError.fullOutput === "string"

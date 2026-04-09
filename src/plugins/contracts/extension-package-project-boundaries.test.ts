@@ -56,7 +56,7 @@ function collectFilesBySuffix(rootPath: string, suffix: string): string[] {
     }
   }
 
-  return files.sort();
+  return files.toSorted();
 }
 
 describe("opt-in extension package boundaries", () => {
