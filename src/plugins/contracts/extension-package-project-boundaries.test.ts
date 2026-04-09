@@ -86,6 +86,15 @@ describe("opt-in extension package boundaries", () => {
   it("keeps xai's boundary-specific path overrides derived from the shared package boundary map", () => {
     const tsconfig = readExtensionPackageBoundaryTsconfig("xai", REPO_ROOT);
     expect(tsconfig.compilerOptions?.paths).toEqual(EXTENSION_PACKAGE_BOUNDARY_XAI_PATHS);
+    expect(tsconfig.compilerOptions?.paths?.["openclaw/plugin-sdk"]).toEqual([
+      "./.boundary-stubs/forbidden-openclaw-plugin-sdk.d.ts",
+    ]);
+    expect(tsconfig.compilerOptions?.paths?.["openclaw/plugin-sdk/*"]).toEqual([
+      "./.boundary-stubs/forbidden-openclaw-plugin-sdk-*.d.ts",
+    ]);
+    expect(tsconfig.compilerOptions?.paths?.["@openclaw/plugin-sdk/*"]).toEqual([
+      "../../dist/plugin-sdk/src/plugin-sdk/*.d.ts",
+    ]);
   });
 
   it("keeps plugin-sdk package types generated from the package build, not a hand-maintained types bridge", () => {
