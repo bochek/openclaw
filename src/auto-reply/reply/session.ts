@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import path from "node:path";
 import { resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { clearBootstrapSnapshotOnSessionRollover } from "../../agents/bootstrap-cache.js";
-import { clearCodexAppServerBinding } from "../../agents/codex-app-server-runner/session-binding.js";
+import { resetRegisteredAgentHarnessSessions } from "../../agents/harness/registry.js";
 import { disposeSessionMcpRuntime } from "../../agents/pi-bundle-mcp-tools.js";
 import { normalizeChatType } from "../../channels/chat-type.js";
 import type { OpenClawConfig } from "../../config/config.js";
@@ -701,9 +701,12 @@ export async function initSessionState(params: {
         },
       );
     });
-    if (previousSessionEntry.sessionFile) {
-      await clearCodexAppServerBinding(previousSessionEntry.sessionFile);
-    }
+    await resetRegisteredAgentHarnessSessions({
+      sessionId: previousSessionEntry.sessionId,
+      sessionKey,
+      sessionFile: previousSessionEntry.sessionFile,
+      reason: previousSessionEndReason ?? "unknown",
+    });
   }
 
   const sessionCtx: TemplateContext = {

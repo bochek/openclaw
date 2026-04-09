@@ -12,17 +12,19 @@ describe("resolveEmbeddedAgentRuntime", () => {
 
   it("accepts codex app-server aliases", () => {
     expect(resolveEmbeddedAgentRuntime({ OPENCLAW_AGENT_RUNTIME: "codex-app-server" })).toBe(
-      "codex-app-server",
+      "codex",
     );
-    expect(resolveEmbeddedAgentRuntime({ OPENCLAW_AGENT_RUNTIME: "codex" })).toBe(
-      "codex-app-server",
-    );
-    expect(resolveEmbeddedAgentRuntime({ OPENCLAW_AGENT_RUNTIME: "app-server" })).toBe(
-      "codex-app-server",
-    );
+    expect(resolveEmbeddedAgentRuntime({ OPENCLAW_AGENT_RUNTIME: "codex" })).toBe("codex");
+    expect(resolveEmbeddedAgentRuntime({ OPENCLAW_AGENT_RUNTIME: "app-server" })).toBe("codex");
   });
 
   it("accepts auto mode", () => {
     expect(resolveEmbeddedAgentRuntime({ OPENCLAW_AGENT_RUNTIME: "auto" })).toBe("auto");
+  });
+
+  it("preserves plugin harness runtime ids", () => {
+    expect(resolveEmbeddedAgentRuntime({ OPENCLAW_AGENT_RUNTIME: "custom-harness" })).toBe(
+      "custom-harness",
+    );
   });
 });

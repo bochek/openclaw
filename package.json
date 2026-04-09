@@ -317,6 +317,10 @@
       "types": "./dist/plugin-sdk/cli-backend.d.ts",
       "default": "./dist/plugin-sdk/cli-backend.js"
     },
+    "./plugin-sdk/agent-harness": {
+      "types": "./dist/plugin-sdk/agent-harness.d.ts",
+      "default": "./dist/plugin-sdk/agent-harness.js"
+    },
     "./plugin-sdk/hook-runtime": {
       "types": "./dist/plugin-sdk/hook-runtime.d.ts",
       "default": "./dist/plugin-sdk/hook-runtime.js"

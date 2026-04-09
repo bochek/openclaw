@@ -1,4 +1,4 @@
-export type EmbeddedAgentRuntime = "pi" | "codex-app-server" | "auto";
+export type EmbeddedAgentRuntime = "pi" | "auto" | (string & {});
 
 export function resolveEmbeddedAgentRuntime(
   env: NodeJS.ProcessEnv = process.env,
@@ -10,11 +10,11 @@ export function resolveEmbeddedAgentRuntime(
   if (raw === "pi") {
     return "pi";
   }
-  if (raw === "codex-app-server" || raw === "codex" || raw === "app-server") {
-    return "codex-app-server";
+  if (raw === "codex" || raw === "codex-app-server" || raw === "app-server") {
+    return "codex";
   }
   if (raw === "auto") {
     return "auto";
   }
-  return "pi";
+  return raw;
 }
