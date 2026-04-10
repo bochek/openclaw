@@ -102,6 +102,11 @@ describe("msteams thread session isolation", () => {
       mediaMaxBytes: 1024 * 1024,
       conversationStore: {
         upsert: vi.fn(async () => undefined),
+        get: vi.fn(async () => null),
+        list: vi.fn(async () => []),
+        remove: vi.fn(async () => false),
+        findPreferredDmByUserId: vi.fn(async () => null),
+        findByUserId: vi.fn(async () => null),
       } as unknown as MSTeamsMessageHandlerDeps["conversationStore"],
       pollStore: {
         recordVote: vi.fn(async () => null),
