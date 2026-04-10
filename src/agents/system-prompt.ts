@@ -8,8 +8,13 @@ import { listDeliverableMessageChannels } from "../utils/message-channel.js";
 import type { ResolvedTimeFormat } from "./date-time.js";
 import type { EmbeddedContextFile } from "./pi-embedded-helpers.js";
 import type { EmbeddedSandboxInfo } from "./pi-embedded-runner/types.js";
+import { normalizeStructuredPromptSection } from "./prompt-cache-stability.js";
 import { sanitizeForPromptLiteral } from "./sanitize-for-prompt.js";
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from "./system-prompt-cache-boundary.js";
+import type {
+  ProviderSystemPromptContribution,
+  ProviderSystemPromptSectionId,
+} from "./system-prompt-contribution.js";
 
 /**
  * Controls which hardcoded sections are included in the system prompt.
@@ -231,6 +236,39 @@ function buildWebchatCanvasSection(params: {
   ];
 }
 
+function buildExecutionBiasSection(params: { isMinimal: boolean }) {
+  if (params.isMinimal) {
+    return [];
+  }
+  return [
+    "## Execution Bias",
+    "If the user asks you to do the work, start doing it in the same turn.",
+    "Use a real tool call or concrete action first when the task is actionable; do not stop at a plan or promise-to-act reply.",
+    "Commentary-only turns are incomplete when tools are available and the next action is clear.",
+    "If the work will take multiple steps or a while to finish, send one short progress update before or while acting.",
+    "",
+  ];
+}
+
+function normalizeProviderPromptBlock(value?: string): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const normalized = normalizeStructuredPromptSection(value);
+  return normalized || undefined;
+}
+
+function buildOverridablePromptSection(params: {
+  override?: string;
+  fallback: string[];
+}): string[] {
+  const override = normalizeProviderPromptBlock(params.override);
+  if (override) {
+    return [override, ""];
+  }
+  return params.fallback;
+}
+
 function buildMessagingSection(params: {
   isMinimal: boolean;
   availableTools: Set<string>;
@@ -346,7 +384,9 @@ export function buildAgentSystemPrompt(params: {
     level: "minimal" | "extensive";
     channel: string;
   };
+  includeMemorySection?: boolean;
   memoryCitationsMode?: MemoryCitationsMode;
+  promptContribution?: ProviderSystemPromptContribution;
 }) {
   const acpEnabled = params.acpEnabled !== false;
   const sandboxedRuntime = params.sandboxInfo?.enabled === true;
@@ -459,7 +499,17 @@ export function buildAgentSystemPrompt(params: {
   const execToolName = resolveToolName("exec");
   const processToolName = resolveToolName("process");
   const extraSystemPrompt = params.extraSystemPrompt?.trim();
-  const providerDynamicSuffix: string | undefined = undefined;
+  const promptContribution = params.promptContribution;
+  const providerStablePrefix = normalizeProviderPromptBlock(promptContribution?.stablePrefix);
+  const providerDynamicSuffix = normalizeProviderPromptBlock(promptContribution?.dynamicSuffix);
+  const providerSectionOverrides = Object.fromEntries(
+    Object.entries(promptContribution?.sectionOverrides ?? {})
+      .map(([key, value]) => [
+        key,
+        normalizeProviderPromptBlock(typeof value === "string" ? value : undefined),
+      ])
+      .filter(([, value]) => Boolean(value)),
+  ) as Partial<Record<ProviderSystemPromptSectionId, string>>;
   const ownerDisplay = params.ownerDisplay === "hash" ? "hash" : "raw";
   const ownerLine = buildOwnerIdentityLine(
     params.ownerNumbers ?? [],
@@ -518,6 +568,7 @@ export function buildAgentSystemPrompt(params: {
   });
   const memorySection = buildMemorySection({
     isMinimal,
+    includeMemorySection: params.includeMemorySection,
     availableTools,
     citationsMode: params.memoryCitationsMode,
   });
@@ -572,16 +623,35 @@ export function buildAgentSystemPrompt(params: {
       : []),
     "Do not poll `subagents list` / `sessions_list` in a loop; only check status on-demand (for intervention, debugging, or when explicitly asked).",
     "",
-    "## Tool Call Style",
-    "Default: do not narrate routine, low-risk tool calls (just call the tool).",
-    "Narrate only when it helps: multi-step work, complex/challenging problems, sensitive actions (e.g., deletions), or when the user explicitly asks.",
-    "Keep narration brief and value-dense; avoid repeating obvious steps.",
-    "Use plain human language for narration unless in a technical context.",
-    "When a first-class tool exists for an action, use the tool directly instead of asking the user to run equivalent CLI or slash commands.",
-    "When exec returns approval-pending, include the concrete /approve command from tool output (with allow-once|allow-always|deny) and do not ask for a different or rotated code.",
-    "Treat allow-once as single-command only: if another elevated command needs approval, request a fresh /approve and do not claim prior approval covered it.",
-    "When approvals are required, preserve and show the full command/script exactly as provided (including chained operators like &&, ||, |, ;, or multiline shells) so the user can approve what will actually run.",
-    "",
+    ...buildOverridablePromptSection({
+      override: providerSectionOverrides.interaction_style,
+      fallback: [],
+    }),
+    ...buildOverridablePromptSection({
+      override: providerSectionOverrides.tool_call_style,
+      fallback: [
+        "## Tool Call Style",
+        "Default: do not narrate routine, low-risk tool calls (just call the tool).",
+        "Narrate only when it helps: multi-step work, complex/challenging problems, sensitive actions (e.g., deletions), or when the user explicitly asks.",
+        "Keep narration brief and value-dense; avoid repeating obvious steps.",
+        "Use plain human language for narration unless in a technical context.",
+        "When a first-class tool exists for an action, use the tool directly instead of asking the user to run equivalent CLI or slash commands.",
+        "When exec returns approval-pending, include the concrete /approve command from tool output (with allow-once|allow-always|deny) and do not ask for a different or rotated code.",
+        "Treat allow-once as single-command only: if another elevated command needs approval, request a fresh /approve and do not claim prior approval covered it.",
+        "When approvals are required, preserve and show the full command/script exactly as provided (including chained operators like &&, ||, |, ;, or multiline shells) so the user can approve what will actually run.",
+        "",
+      ],
+    }),
+    ...buildOverridablePromptSection({
+      override: providerSectionOverrides.execution_bias,
+      fallback: buildExecutionBiasSection({
+        isMinimal,
+      }),
+    }),
+    ...buildOverridablePromptSection({
+      override: providerStablePrefix,
+      fallback: [],
+    }),
     ...safetySection,
     "## OpenClaw CLI Quick Reference",
     "OpenClaw is controlled via subcommands. Do not invent commands.",

@@ -610,6 +610,24 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain(`respond with ONLY: ${SILENT_REPLY_TOKEN}`);
   });
 
+  it("reapplies provider prompt contributions", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      promptContribution: {
+        stablePrefix: "## Provider Stable\n\nStable guidance.",
+        dynamicSuffix: "## Provider Dynamic\n\nDynamic guidance.",
+        sectionOverrides: {
+          tool_call_style: "## Tool Call Style\nProvider-specific tool call guidance.",
+        },
+      },
+    });
+
+    expect(prompt).toContain("## Provider Stable\n\nStable guidance.");
+    expect(prompt).toContain("## Provider Dynamic\n\nDynamic guidance.");
+    expect(prompt).toContain("## Tool Call Style\nProvider-specific tool call guidance.");
+    expect(prompt).not.toContain("Default: do not narrate routine, low-risk tool calls");
+  });
+
   it("includes inline button style guidance when runtime supports inline buttons", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",
