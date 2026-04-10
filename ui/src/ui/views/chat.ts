@@ -1,6 +1,7 @@
 import { html, nothing, type TemplateResult } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { repeat } from "lit/directives/repeat.js";
+import { unsafeHTML } from "lit/directives/unsafe-html.js";
 import {
   CHAT_ATTACHMENT_ACCEPT,
   isSupportedChatAttachmentMimeType,
@@ -23,6 +24,7 @@ import { PinnedMessages } from "../chat/pinned-messages.ts";
 import { getPinnedMessageSummary } from "../chat/pinned-summary.ts";
 import { messageMatchesSearchQuery } from "../chat/search-match.ts";
 import { getOrCreateSessionCacheValue } from "../chat/session-cache.ts";
+import type { ChatSideResult } from "../chat/side-result.ts";
 import {
   CATEGORY_LABELS,
   SLASH_COMMANDS,
@@ -32,7 +34,9 @@ import {
 } from "../chat/slash-commands.ts";
 import { isSttSupported, startStt, stopStt } from "../chat/speech.ts";
 import { buildSidebarContent, extractToolCards, extractToolPreview } from "../chat/tool-cards.ts";
+import type { EmbedSandboxMode } from "../embed-sandbox.ts";
 import { icons } from "../icons.ts";
+import { toSanitizedMarkdownHtml } from "../markdown.ts";
 import type { SidebarContent } from "../sidebar-content.ts";
 import { detectTextDirection } from "../text-direction.ts";
 import type { GatewaySessionRow, SessionsListResult } from "../types.ts";
@@ -70,6 +74,7 @@ export type ChatProps = {
   compactionStatus?: CompactionIndicatorStatus | null;
   fallbackStatus?: FallbackIndicatorStatus | null;
   messages: unknown[];
+  sideResult?: ChatSideResult | null;
   toolMessages: unknown[];
   streamSegments: Array<{ text: string; ts: number }>;
   stream: string | null;
@@ -88,6 +93,7 @@ export type ChatProps = {
   sidebarError?: string | null;
   splitRatio?: number;
   canvasHostUrl?: string | null;
+  embedSandboxMode?: EmbedSandboxMode;
   assistantName: string;
   assistantAvatar: string | null;
   localMediaPreviewRoots?: string[];
@@ -105,6 +111,7 @@ export type ChatProps = {
   onSend: () => void;
   onAbort?: () => void;
   onQueueRemove: (id: string) => void;
+  onDismissSideResult?: () => void;
   onNewSession: () => void;
   onClearHistory?: () => void;
   agentsList: {
@@ -208,7 +215,9 @@ function appendCanvasBlockToAssistantMessage(
 function extractChatMessagePreview(toolMessage: unknown): {
   preview: Extract<NonNullable<ToolCard["preview"]>, { kind: "canvas" }>;
   text: string | null;
+  timestamp: number | null;
 } | null {
+  const normalized = normalizeMessage(toolMessage);
   const cards = extractToolCards(toolMessage, "preview");
   for (let index = cards.length - 1; index >= 0; index--) {
     const card = cards[index];
@@ -216,6 +225,7 @@ function extractChatMessagePreview(toolMessage: unknown): {
       return {
         preview: card.preview,
         text: card.outputText ?? null,
+        timestamp: normalized.timestamp ?? null,
       };
     }
   }
@@ -231,7 +241,60 @@ function extractChatMessagePreview(toolMessage: unknown): {
   if (preview?.kind !== "canvas") {
     return null;
   }
-  return { preview, text: text ?? null };
+  return { preview, text: text ?? null, timestamp: normalized.timestamp ?? null };
+}
+
+function findNearestAssistantMessageIndex(
+  items: ChatItem[],
+  toolTimestamp: number | null,
+): number | null {
+  const assistantEntries = items
+    .map((item, index) => {
+      if (item.kind !== "message") {
+        return null;
+      }
+      const message = item.message as Record<string, unknown>;
+      const role = typeof message.role === "string" ? message.role.toLowerCase() : "";
+      if (role !== "assistant") {
+        return null;
+      }
+      return {
+        index,
+        timestamp: normalizeMessage(item.message).timestamp ?? null,
+      };
+    })
+    .filter(Boolean) as Array<{ index: number; timestamp: number | null }>;
+  if (assistantEntries.length === 0) {
+    return null;
+  }
+  if (toolTimestamp == null) {
+    return assistantEntries[assistantEntries.length - 1]?.index ?? null;
+  }
+  let previous: { index: number; timestamp: number } | null = null;
+  let next: { index: number; timestamp: number } | null = null;
+  for (const entry of assistantEntries) {
+    if (entry.timestamp == null) {
+      continue;
+    }
+    if (entry.timestamp <= toolTimestamp) {
+      previous = { index: entry.index, timestamp: entry.timestamp };
+      continue;
+    }
+    next = { index: entry.index, timestamp: entry.timestamp };
+    break;
+  }
+  if (previous && next) {
+    const previousDelta = toolTimestamp - previous.timestamp;
+    const nextDelta = next.timestamp - toolTimestamp;
+    return nextDelta < previousDelta ? next.index : previous.index;
+  }
+  if (previous) {
+    return previous.index;
+  }
+  if (next) {
+    return next.index;
+  }
+  return assistantEntries[assistantEntries.length - 1]?.index ?? null;
 }
 
 interface ChatEphemeralState {
@@ -401,6 +464,43 @@ function renderFallbackIndicator(status: FallbackIndicatorStatus | null | undefi
     <div class=${className} role="status" aria-live="polite" title=${details}>
       ${icon} ${message}
     </div>
+  `;
+}
+
+function renderSideResult(
+  sideResult: ChatSideResult | null | undefined,
+  onDismiss?: () => void,
+): TemplateResult | typeof nothing {
+  if (!sideResult) {
+    return nothing;
+  }
+  return html`
+    <section
+      class=${`chat-side-result ${sideResult.isError ? "chat-side-result--error" : ""}`}
+      role="status"
+      aria-live="polite"
+      aria-label="BTW side result"
+    >
+      <div class="chat-side-result__header">
+        <div class="chat-side-result__label-row">
+          <span class="chat-side-result__label">BTW</span>
+          <span class="chat-side-result__meta">Not saved to chat history</span>
+        </div>
+        <button
+          class="btn chat-side-result__dismiss"
+          type="button"
+          aria-label="Dismiss BTW result"
+          title="Dismiss"
+          @click=${() => onDismiss?.()}
+        >
+          ${icons.x}
+        </button>
+      </div>
+      <div class="chat-side-result__question">${sideResult.question}</div>
+      <div class="chat-side-result__body" dir=${detectTextDirection(sideResult.text)}>
+        ${unsafeHTML(toSanitizedMarkdownHtml(sideResult.text))}
+      </div>
+    </section>
   `;
 }
 
@@ -1191,6 +1291,7 @@ export function renderChat(props: ChatProps) {
                 localMediaPreviewRoots: props.localMediaPreviewRoots ?? [],
                 assistantAttachmentAuthToken: props.assistantAttachmentAuthToken ?? null,
                 canvasHostUrl: props.canvasHostUrl,
+                embedSandboxMode: props.embedSandboxMode ?? "powerful",
                 contextWindow:
                   activeSession?.contextTokens ?? props.sessions?.defaults?.contextTokens ?? null,
                 onDelete: () => {
@@ -1267,6 +1368,12 @@ export function renderChat(props: ChatProps) {
           requestUpdate();
           return;
       }
+    }
+
+    if (e.key === "Escape" && props.sideResult && !vs.searchOpen) {
+      e.preventDefault();
+      props.onDismissSideResult?.();
+      return;
     }
 
     // Input history (only when input is empty)
@@ -1366,6 +1473,7 @@ export function renderChat(props: ChatProps) {
                   content: props.sidebarContent ?? null,
                   error: props.sidebarError ?? null,
                   canvasHostUrl: props.canvasHostUrl,
+                  embedSandboxMode: props.embedSandboxMode ?? "powerful",
                   onClose: props.onCloseSidebar!,
                   onViewRawText: () => {
                     if (!props.sidebarContent || !props.onOpenSidebar) {
@@ -1416,6 +1524,7 @@ export function renderChat(props: ChatProps) {
             </div>
           `
         : nothing}
+      ${renderSideResult(props.sideResult, props.onDismissSideResult)}
       ${renderFallbackIndicator(props.fallbackStatus)}
       ${renderCompactionIndicator(props.compactionStatus)}
       ${renderContextNotice(activeSession, props.sessions?.defaults?.contextTokens ?? null)}
@@ -1681,32 +1790,30 @@ function buildChatItems(props: ChatProps): Array<ChatItem | MessageGroup> {
       message: msg,
     });
   }
-  const liftedCanvasSource = [...tools]
-    .toReversed()
+  const liftedCanvasSources = tools
     .map((tool) => extractChatMessagePreview(tool))
-    .filter((entry) => Boolean(entry))
-    .find((entry) => Boolean(entry));
-  if (liftedCanvasSource) {
-    for (let i = items.length - 1; i >= 0; i--) {
-      const item = items[i];
-      if (item?.kind !== "message") {
-        continue;
-      }
-      const message = item.message as Record<string, unknown>;
-      const role = typeof message.role === "string" ? message.role.toLowerCase() : "";
-      if (role !== "assistant") {
-        continue;
-      }
-      items[i] = {
-        ...item,
-        message: appendCanvasBlockToAssistantMessage(
-          message,
-          liftedCanvasSource.preview,
-          liftedCanvasSource.text,
-        ),
-      };
-      break;
+    .filter((entry) => Boolean(entry)) as Array<{
+    preview: Extract<NonNullable<ToolCard["preview"]>, { kind: "canvas" }>;
+    text: string | null;
+    timestamp: number | null;
+  }>;
+  for (const liftedCanvasSource of liftedCanvasSources) {
+    const assistantIndex = findNearestAssistantMessageIndex(items, liftedCanvasSource.timestamp);
+    if (assistantIndex == null) {
+      continue;
     }
+    const item = items[assistantIndex];
+    if (!item || item.kind !== "message") {
+      continue;
+    }
+    items[assistantIndex] = {
+      ...item,
+      message: appendCanvasBlockToAssistantMessage(
+        item.message as Record<string, unknown>,
+        liftedCanvasSource.preview,
+        liftedCanvasSource.text,
+      ),
+    };
   }
   // Interleave stream segments and tool cards in order. Each segment
   // contains text that was streaming before the corresponding tool started.

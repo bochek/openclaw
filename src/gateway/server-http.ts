@@ -41,9 +41,11 @@ import {
   extractHookToken,
   getHookAgentPolicyError,
   getHookChannelError,
+  getHookSessionKeyPrefixError,
   type HookAgentDispatchPayload,
   type HooksConfigResolved,
   isHookAgentAllowed,
+  isSessionKeyAllowedByPrefix,
   normalizeAgentPayload,
   normalizeHookHeaders,
   resolveHookIdempotencyKey,
@@ -57,6 +59,7 @@ import {
 } from "./hooks.js";
 import { sendGatewayAuthFailure, setDefaultSecurityHeaders } from "./http-common.js";
 import {
+  type AuthorizedGatewayHttpRequest,
   authorizeGatewayHttpRequestOrReply,
   getBearerToken,
   resolveHttpBrowserOriginPolicy,
@@ -307,6 +310,7 @@ function buildPluginRequestStages(params: {
     return [];
   }
   let pluginGatewayAuthSatisfied = false;
+  let pluginGatewayRequestAuth: AuthorizedGatewayHttpRequest | undefined;
   let pluginRequestOperatorScopes: string[] | undefined;
   return [
     {
@@ -337,6 +341,7 @@ function buildPluginRequestStages(params: {
           return true;
         }
         pluginGatewayAuthSatisfied = true;
+        pluginGatewayRequestAuth = requestAuth;
         pluginRequestOperatorScopes = resolvePluginRouteRuntimeOperatorScopes(
           params.req,
           requestAuth,
@@ -352,6 +357,7 @@ function buildPluginRequestStages(params: {
         return (
           params.handlePluginRequest?.(params.req, params.res, pathContext, {
             gatewayAuthSatisfied: pluginGatewayAuthSatisfied,
+            gatewayRequestAuth: pluginGatewayRequestAuth,
             gatewayRequestOperatorScopes: pluginRequestOperatorScopes,
           }) ?? false
         );
@@ -589,6 +595,14 @@ export function createHooksRequestHandler(
         sessionKey: sessionKey.value,
         targetAgentId,
       });
+      const allowedPrefixes = hooksConfig.sessionPolicy.allowedSessionKeyPrefixes;
+      if (
+        allowedPrefixes &&
+        !isSessionKeyAllowedByPrefix(normalizedDispatchSessionKey, allowedPrefixes)
+      ) {
+        sendJson(res, 400, { ok: false, error: getHookSessionKeyPrefixError(allowedPrefixes) });
+        return true;
+      }
       const runId = dispatchAgentHook({
         ...normalized.value,
         idempotencyKey,
@@ -650,6 +664,14 @@ export function createHooksRequestHandler(
             sessionKey: sessionKey.value,
             targetAgentId,
           });
+          const allowedPrefixes = hooksConfig.sessionPolicy.allowedSessionKeyPrefixes;
+          if (
+            allowedPrefixes &&
+            !isSessionKeyAllowedByPrefix(normalizedDispatchSessionKey, allowedPrefixes)
+          ) {
+            sendJson(res, 400, { ok: false, error: getHookSessionKeyPrefixError(allowedPrefixes) });
+            return true;
+          }
           const replayKey = buildHookReplayCacheKey({
             pathKey: subPath || "mapping",
             token,

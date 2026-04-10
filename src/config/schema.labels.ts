@@ -259,6 +259,7 @@ export const FIELD_LABELS: Record<string, string> = {
     "Web Fetch Allow RFC 2544 Benchmark Range",
   "gateway.controlUi.basePath": "Control UI Base Path",
   "gateway.controlUi.root": "Control UI Assets Root",
+  "gateway.controlUi.embedSandbox": "Control UI Embed Sandbox Mode",
   "gateway.controlUi.allowedOrigins": "Control UI Allowed Origins",
   "gateway.controlUi.dangerouslyAllowHostHeaderOriginFallback":
     "Dangerously Allow Host-Header Origin Fallback",
@@ -482,6 +483,7 @@ export const FIELD_LABELS: Record<string, string> = {
   "models.providers.*.request.tls.passphrase": "Model Provider Request TLS Passphrase",
   "models.providers.*.request.tls.serverName": "Model Provider Request TLS Server Name",
   "models.providers.*.request.tls.insecureSkipVerify": "Model Provider Request TLS Skip Verify",
+  "models.providers.*.request.allowPrivateNetwork": "Model Provider Request Allow Private Network",
   "models.providers.*.models": "Model Provider Model List",
   "auth.cooldowns.billingBackoffHours": "Billing Backoff (hours)",
   "auth.cooldowns.billingBackoffHoursByProvider": "Billing Backoff Overrides",

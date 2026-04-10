@@ -165,6 +165,7 @@ function createProps(overrides: Partial<ChatProps> = {}): ChatProps {
     compactionStatus: null,
     fallbackStatus: null,
     messages: [],
+    sideResult: null,
     toolMessages: [],
     streamSegments: [],
     stream: null,
@@ -186,6 +187,7 @@ function createProps(overrides: Partial<ChatProps> = {}): ChatProps {
     onDraftChange: () => undefined,
     onSend: () => undefined,
     onQueueRemove: () => undefined,
+    onDismissSideResult: () => undefined,
     onNewSession: () => undefined,
     agentsList: null,
     currentAgentId: "",
@@ -247,6 +249,89 @@ function createOverviewProps(overrides: Partial<OverviewProps> = {}): OverviewPr
 }
 
 describe("chat view", () => {
+  it("renders BTW side results outside transcript history", () => {
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          messages: [
+            {
+              role: "assistant",
+              content: [{ type: "text", text: "Saved transcript message" }],
+              timestamp: 1,
+            },
+          ],
+          sideResult: {
+            kind: "btw",
+            runId: "btw-run-1",
+            sessionKey: "main",
+            question: "what changed?",
+            text: "The web UI now renders **BTW** separately.",
+            isError: false,
+            ts: 2,
+          },
+        }),
+      ),
+      container,
+    );
+
+    expect(container.querySelector(".chat-side-result")).not.toBeNull();
+    expect(container.textContent).toContain("BTW");
+    expect(container.textContent).toContain("what changed?");
+    expect(container.textContent).toContain("Not saved to chat history");
+    expect(container.textContent).toContain("Saved transcript message");
+    expect(container.querySelectorAll(".chat-side-result")).toHaveLength(1);
+  });
+
+  it("dismisses BTW side results from the dismiss button", () => {
+    const container = document.createElement("div");
+    const onDismissSideResult = vi.fn();
+    render(
+      renderChat(
+        createProps({
+          sideResult: {
+            kind: "btw",
+            runId: "btw-run-2",
+            sessionKey: "main",
+            question: "what changed?",
+            text: "Dismiss me",
+            isError: false,
+            ts: 3,
+          },
+          onDismissSideResult,
+        }),
+      ),
+      container,
+    );
+
+    const button = container.querySelector<HTMLButtonElement>(".chat-side-result__dismiss");
+    expect(button).not.toBeNull();
+    button?.click();
+    expect(onDismissSideResult).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders BTW errors with the error variant", () => {
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          sideResult: {
+            kind: "btw",
+            runId: "btw-run-3",
+            sessionKey: "main",
+            question: "what failed?",
+            text: "The side question could not be answered.",
+            isError: true,
+            ts: 4,
+          },
+        }),
+      ),
+      container,
+    );
+
+    expect(container.querySelector(".chat-side-result--error")).not.toBeNull();
+  });
+
   it("hides the context notice when only cumulative inputTokens exceed the limit", () => {
     const container = document.createElement("div");
     render(
@@ -1634,6 +1719,52 @@ describe("chat view", () => {
     expect(container.textContent).toContain("Raw details");
   });
 
+  it("uses isolated embed sandbox mode when configured", () => {
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          showToolCalls: false,
+          embedSandboxMode: "isolated",
+          messages: [
+            {
+              id: "assistant-canvas-isolated",
+              role: "assistant",
+              content: [{ type: "text", text: "Inline canvas result." }],
+              timestamp: Date.now(),
+            },
+          ],
+          toolMessages: [
+            {
+              id: "tool-artifact-inline-isolated",
+              role: "tool",
+              toolCallId: "call-artifact-inline-isolated",
+              toolName: "canvas_render",
+              content: JSON.stringify({
+                kind: "canvas",
+                view: {
+                  backend: "canvas",
+                  id: "cv_inline_isolated",
+                  url: "/__openclaw__/canvas/documents/cv_inline_isolated/index.html",
+                  title: "Inline demo",
+                  preferred_height: 360,
+                },
+                presentation: {
+                  target: "assistant_message",
+                },
+              }),
+              timestamp: Date.now() + 1,
+            },
+          ],
+        }),
+      ),
+      container,
+    );
+
+    const iframe = container.querySelector<HTMLIFrameElement>(".chat-tool-card__preview-frame");
+    expect(iframe?.getAttribute("sandbox")).toBe("allow-scripts");
+  });
+
   it("renders assistant_message canvas results in the assistant bubble even when tool rows are visible", () => {
     const container = document.createElement("div");
     render(
@@ -1684,6 +1815,62 @@ describe("chat view", () => {
     expect(container.textContent).toContain("canvas_render");
     expect(container.textContent).toContain("Inline canvas result.");
     expect(container.textContent).toContain("Inline demo");
+  });
+
+  it("keeps lifted canvas previews attached to the nearest assistant turn", () => {
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          showToolCalls: true,
+          messages: [
+            {
+              id: "assistant-with-canvas",
+              role: "assistant",
+              content: [{ type: "text", text: "First reply." }],
+              timestamp: 1_000,
+            },
+            {
+              id: "assistant-without-canvas",
+              role: "assistant",
+              content: [{ type: "text", text: "Later unrelated reply." }],
+              timestamp: 2_000,
+            },
+          ],
+          toolMessages: [
+            {
+              id: "tool-canvas-for-first-reply",
+              role: "tool",
+              toolCallId: "call-canvas-old",
+              toolName: "canvas_render",
+              content: JSON.stringify({
+                kind: "canvas",
+                view: {
+                  backend: "canvas",
+                  id: "cv_nearest_turn",
+                  url: "/__openclaw__/canvas/documents/cv_nearest_turn/index.html",
+                  title: "Nearest turn demo",
+                  preferred_height: 320,
+                },
+                presentation: {
+                  target: "assistant_message",
+                },
+              }),
+              timestamp: 1_001,
+            },
+          ],
+        }),
+      ),
+      container,
+    );
+
+    const assistantBubbles = Array.from(
+      container.querySelectorAll<HTMLElement>(".chat-group.assistant .chat-bubble"),
+    );
+    expect(assistantBubbles).toHaveLength(2);
+    expect(assistantBubbles[0]?.querySelector(".chat-tool-card__preview-frame")).not.toBeNull();
+    expect(assistantBubbles[1]?.querySelector(".chat-tool-card__preview-frame")).toBeNull();
+    expect(assistantBubbles[1]?.textContent).toContain("Later unrelated reply.");
   });
 
   it("does not auto-render generic view handles from non-canvas payloads", () => {
@@ -1828,6 +2015,69 @@ describe("chat view", () => {
       "/openclaw/__openclaw__/assistant-media?source=%2Ftmp%2Fopenclaw%2Ftest-doc.pdf&token=session-token",
     );
     expect(container.textContent).not.toContain("test image.png");
+    vi.unstubAllGlobals();
+  });
+
+  it("rechecks local assistant attachment availability when the auth token changes", async () => {
+    resetAssistantAttachmentAvailabilityCacheForTest();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (!url.includes("meta=1")) {
+        throw new Error(`Unexpected fetch: ${url}`);
+      }
+      return {
+        ok: true,
+        json: async () => ({ available: url.includes("token=fresh-token") }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const container = document.createElement("div");
+
+    const renderWithToken = (token: string | null) =>
+      render(
+        renderChat(
+          createProps({
+            showToolCalls: false,
+            basePath: "/openclaw",
+            assistantAttachmentAuthToken: token,
+            localMediaPreviewRoots: ["/tmp/openclaw"],
+            onRequestUpdate: () => renderWithToken(token),
+            messages: [
+              {
+                id: "assistant-local-media-auth-refresh",
+                role: "assistant",
+                content: "Local image\nMEDIA:/tmp/openclaw/test image.png",
+                timestamp: Date.now(),
+              },
+            ],
+          }),
+        ),
+        container,
+      );
+
+    renderWithToken(null);
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(container.textContent).toContain("Unavailable");
+
+    renderWithToken("fresh-token");
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/openclaw/__openclaw__/assistant-media?source=%2Ftmp%2Fopenclaw%2Ftest+image.png&meta=1",
+      expect.objectContaining({ credentials: "same-origin", method: "GET" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/openclaw/__openclaw__/assistant-media?source=%2Ftmp%2Fopenclaw%2Ftest+image.png&token=fresh-token&meta=1",
+      expect.objectContaining({ credentials: "same-origin", method: "GET" }),
+    );
+    expect(container.querySelector(".chat-message-image")).not.toBeNull();
+    expect(container.textContent).not.toContain("Unavailable");
     vi.unstubAllGlobals();
   });
 
