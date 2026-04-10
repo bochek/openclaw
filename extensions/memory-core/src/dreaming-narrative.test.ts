@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import * as configRuntimeModule from "openclaw/plugin-sdk/config-runtime";
@@ -583,7 +584,8 @@ describe("generateAndAppendDreamNarrative", () => {
     const subagent = createMockSubagent("The repository whispered of forgotten endpoints.");
     const logger = createMockLogger();
     const nowMs = Date.parse("2026-04-05T03:00:00Z");
-    const expectedSessionKey = `dreaming-narrative-light-${nowMs}`;
+    const workspaceHash = createHash("sha1").update(workspaceDir).digest("hex").slice(0, 12);
+    const expectedSessionKey = `dreaming-narrative-light-${workspaceHash}-${nowMs}`;
 
     await generateAndAppendDreamNarrative({
       subagent,
