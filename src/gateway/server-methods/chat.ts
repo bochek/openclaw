@@ -18,6 +18,7 @@ import { isAudioFileName } from "../../media/mime.js";
 import type { PromptImageOrderEntry } from "../../media/prompt-image-order.js";
 import { type SavedMedia, saveMediaBuffer } from "../../media/store.js";
 import { createChannelReplyPipeline } from "../../plugin-sdk/channel-reply-pipeline.js";
+import { resolveAssistantMessagePhase } from "../../shared/chat-message-content.js";
 import { normalizeInputProvenance, type InputProvenance } from "../../sessions/input-provenance.js";
 import { resolveSendPolicy } from "../../sessions/send-policy.js";
 import { parseAgentSessionKey } from "../../sessions/session-key-utils.js";
@@ -852,11 +853,11 @@ function shouldDropAssistantHistoryMessage(message: unknown): boolean {
   if (!message || typeof message !== "object") {
     return false;
   }
-  const entry = message as { role?: unknown; phase?: unknown };
+  const entry = message as { role?: unknown };
   if (entry.role !== "assistant") {
     return false;
   }
-  if (entry.phase === "commentary") {
+  if (resolveAssistantMessagePhase(message) === "commentary") {
     return true;
   }
   const text = extractAssistantTextForSilentCheck(message);

@@ -234,6 +234,45 @@ describe("message-normalizer", () => {
       expect(result.content).toEqual([{ type: "text", text: "Reply body" }]);
     });
 
+    it("does not restore stripped reply tags when no visible text remains", () => {
+      const result = normalizeMessage({
+        role: "assistant",
+        content: "[[reply_to_current]]",
+      });
+
+      expect(result.replyTarget).toEqual({ kind: "current" });
+      expect(result.content).toEqual([]);
+    });
+
+    it("preserves structured attachment content items", () => {
+      const result = normalizeMessage({
+        role: "assistant",
+        content: [
+          {
+            type: "attachment",
+            attachment: {
+              url: "~/Pictures/test image.png",
+              kind: "image",
+              label: "test image.png",
+              mimeType: "image/png",
+            },
+          },
+        ],
+      });
+
+      expect(result.content).toEqual([
+        {
+          type: "attachment",
+          attachment: {
+            url: "~/Pictures/test image.png",
+            kind: "image",
+            label: "test image.png",
+            mimeType: "image/png",
+          },
+        },
+      ]);
+    });
+
     it("detects tool result by toolCallId", () => {
       const result = normalizeMessage({
         role: "assistant",

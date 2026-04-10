@@ -208,7 +208,7 @@ function expandTextContent(text: string): {
     content:
       content.length > 0
         ? content
-        : parsed.text.trim().length > 0
+        : replyTarget === null && !audioAsVoice && parsed.text.trim().length > 0
           ? [{ type: "text", text: parsed.text }]
           : [],
     audioAsVoice,
@@ -254,6 +254,44 @@ export function normalizeMessage(message: unknown): NormalizedMessage {
     replyTarget = expanded.replyTarget;
   } else if (Array.isArray(m.content)) {
     content = m.content.flatMap((item: Record<string, unknown>) => {
+      if (
+        item.type === "attachment" &&
+        item.attachment &&
+        typeof item.attachment === "object" &&
+        !Array.isArray(item.attachment)
+      ) {
+        const attachment = item.attachment as {
+          url?: unknown;
+          kind?: unknown;
+          label?: unknown;
+          mimeType?: unknown;
+          isVoiceNote?: unknown;
+        };
+        if (
+          typeof attachment.url !== "string" ||
+          (attachment.kind !== "image" &&
+            attachment.kind !== "audio" &&
+            attachment.kind !== "video" &&
+            attachment.kind !== "document") ||
+          typeof attachment.label !== "string"
+        ) {
+          return [];
+        }
+        return [
+          {
+            type: "attachment" as const,
+            attachment: {
+              url: attachment.url,
+              kind: attachment.kind,
+              label: attachment.label,
+              ...(typeof attachment.mimeType === "string"
+                ? { mimeType: attachment.mimeType }
+                : {}),
+              ...(attachment.isVoiceNote === true ? { isVoiceNote: true } : {}),
+            },
+          },
+        ];
+      }
       if (
         item.type === "canvas" &&
         item.preview &&

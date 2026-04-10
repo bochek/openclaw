@@ -12,6 +12,7 @@ import {
   DEEPSEEK_CHAT_MODEL,
   DEFAULT_CHAT_MODEL_CATALOG,
 } from "../chat-model.test-helpers.ts";
+import { normalizeMessage } from "../chat/message-normalizer.ts";
 import { resetAssistantAttachmentAvailabilityCacheForTest } from "../chat/grouped-render.ts";
 import type { GatewayBrowserClient } from "../gateway.ts";
 import type { ModelCatalogEntry } from "../types.ts";
@@ -2199,6 +2200,62 @@ describe("chat view", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/openclaw/__openclaw__/assistant-media?source=%2FC%3A%2Ftmp%2Fopenclaw%2Ftest%2520image.png&meta=1",
+      expect.objectContaining({ credentials: "same-origin", method: "GET" }),
+    );
+    expect(container.textContent).not.toContain("Outside allowed folders");
+    vi.unstubAllGlobals();
+  });
+
+  it("allows tilde local assistant attachments inside home-based preview roots", async () => {
+    resetAssistantAttachmentAvailabilityCacheForTest();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (!url.includes("meta=1")) {
+        throw new Error(`Unexpected fetch: ${url}`);
+      }
+      return {
+        ok: true,
+        json: async () => ({ available: true }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          showToolCalls: false,
+          basePath: "/openclaw",
+          localMediaPreviewRoots: ["/Users/test/Pictures"],
+          onRequestUpdate: () => undefined,
+          messages: [
+            normalizeMessage({
+              id: "assistant-tilde-local-media",
+              role: "assistant",
+              content: [
+                { type: "text", text: "Home image" },
+                {
+                  type: "attachment",
+                  attachment: {
+                    url: "~/Pictures/test image.png",
+                    kind: "image",
+                    label: "test image.png",
+                    mimeType: "image/png",
+                  },
+                },
+              ],
+              timestamp: Date.now(),
+            }),
+          ],
+        }),
+      ),
+      container,
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/openclaw/__openclaw__/assistant-media?source=%7E%2FPictures%2Ftest+image.png&meta=1",
       expect.objectContaining({ credentials: "same-origin", method: "GET" }),
     );
     expect(container.textContent).not.toContain("Outside allowed folders");

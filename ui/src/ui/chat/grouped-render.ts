@@ -650,6 +650,23 @@ function normalizeLocalAttachmentPath(source: string): string | null {
   return trimmed;
 }
 
+function resolveHomeCandidatesFromRoots(localMediaPreviewRoots: readonly string[]): string[] {
+  const candidates = new Set<string>();
+  for (const root of localMediaPreviewRoots) {
+    const normalized = canonicalizeLocalPathForComparison(root.trim());
+    const unixHome = normalized.match(/^(\/Users\/[^/]+|\/home\/[^/]+)(?:\/|$)/);
+    if (unixHome?.[1]) {
+      candidates.add(unixHome[1]);
+      continue;
+    }
+    const windowsHome = normalized.match(/^([a-z]:\/Users\/[^/]+)(?:\/|$)/i);
+    if (windowsHome?.[1]) {
+      candidates.add(windowsHome[1]);
+    }
+  }
+  return [...candidates];
+}
+
 function canonicalizeLocalPathForComparison(value: string): string {
   let slashNormalized = value.replace(/\\/g, "/").replace(/\/+$/, "");
   if (/^\/[a-zA-Z]:\//.test(slashNormalized)) {
@@ -666,15 +683,25 @@ function isLocalAttachmentPreviewAllowed(
   localMediaPreviewRoots: readonly string[],
 ): boolean {
   const normalizedSource = normalizeLocalAttachmentPath(source);
-  if (!normalizedSource) {
+  const comparableSources = normalizedSource
+    ? [canonicalizeLocalPathForComparison(normalizedSource)]
+    : source.trim().startsWith("~")
+      ? resolveHomeCandidatesFromRoots(localMediaPreviewRoots).map((home) =>
+          canonicalizeLocalPathForComparison(source.trim().replace(/^~(?=$|[\\/])/, home)),
+        )
+      : [];
+  if (comparableSources.length === 0) {
     return false;
   }
-  const comparableSource = canonicalizeLocalPathForComparison(normalizedSource);
   return localMediaPreviewRoots.some((root) => {
     const normalizedRoot = canonicalizeLocalPathForComparison(root.trim());
     return (
       normalizedRoot.length > 0 &&
-      (comparableSource === normalizedRoot || comparableSource.startsWith(`${normalizedRoot}/`))
+      comparableSources.some(
+        (comparableSource) =>
+          comparableSource === normalizedRoot ||
+          comparableSource.startsWith(`${normalizedRoot}/`),
+      )
     );
   });
 }

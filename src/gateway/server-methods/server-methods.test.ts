@@ -16,7 +16,7 @@ import { validateExecApprovalRequestParams } from "../protocol/index.js";
 import { waitForAgentJob } from "./agent-job.js";
 import { injectTimestamp, timestampOptsFromConfig } from "./agent-timestamp.js";
 import { normalizeRpcAttachmentsToChatAttachments } from "./attachment-normalize.js";
-import { sanitizeChatSendMessageInput } from "./chat.js";
+import { sanitizeChatHistoryMessages, sanitizeChatSendMessageInput } from "./chat.js";
 import { createExecApprovalHandlers } from "./exec-approval.js";
 import { logsHandlers } from "./logs.js";
 
@@ -220,6 +220,47 @@ describe("injectTimestamp", () => {
     });
 
     expect(result).toMatch(/^\[Fri 2025-07-04 12:00 EDT\]/);
+  });
+});
+
+describe("sanitizeChatHistoryMessages", () => {
+  it("drops commentary-only assistant entries when phase exists only in textSignature", () => {
+    const result = sanitizeChatHistoryMessages([
+      {
+        role: "user",
+        content: [{ type: "text", text: "hello" }],
+        timestamp: 1,
+      },
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "text",
+            text: "thinking like caveman",
+            textSignature: JSON.stringify({ v: 1, id: "msg_commentary", phase: "commentary" }),
+          },
+        ],
+        timestamp: 2,
+      },
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "real reply" }],
+        timestamp: 3,
+      },
+    ]);
+
+    expect(result).toEqual([
+      {
+        role: "user",
+        content: [{ type: "text", text: "hello" }],
+        timestamp: 1,
+      },
+      {
+        role: "assistant",
+        content: [{ type: "text", text: "real reply" }],
+        timestamp: 3,
+      },
+    ]);
   });
 });
 
