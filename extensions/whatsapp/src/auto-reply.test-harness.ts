@@ -5,8 +5,8 @@ import path from "node:path";
 import { resetInboundDedupe } from "openclaw/plugin-sdk/reply-runtime";
 import { resetLogger, setLoggerOverride } from "openclaw/plugin-sdk/runtime-env";
 import { afterAll, afterEach, beforeAll, beforeEach, vi, type Mock } from "vitest";
-import { mockPinnedHostnameResolution } from "../../../src/test-helpers/ssrf.js";
 import type { WebInboundMessage, WebListenerCloseReason } from "./inbound.js";
+import { mockPinnedHostnameResolution } from "./ssrf-test-helpers.js";
 import {
   resetBaileysMocks as _resetBaileysMocks,
   resetLoadConfigMock as _resetLoadConfigMock,
