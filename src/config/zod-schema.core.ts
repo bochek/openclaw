@@ -403,6 +403,7 @@ export const ReplyToModeSchema = z.union([
   z.literal("first"),
   z.literal("all"),
   z.literal("batched"),
+  z.literal("auto"),
 ]);
 export const TypingModeSchema = z.union([
   z.literal("never"),
