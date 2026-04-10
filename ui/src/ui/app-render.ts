@@ -1761,7 +1761,7 @@ export function renderApp(state: AppViewState) {
               basePath: state.basePath ?? "",
             })
           : nothing}
-        ${renderConfigTabForActiveTab()} ${renderConfigTabForActiveTab()}
+        ${renderConfigTabForActiveTab()}
         ${state.tab === "debug"
           ? lazyRender(lazyDebug, (m) =>
               m.renderDebug({
