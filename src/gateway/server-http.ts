@@ -929,6 +929,10 @@ export function createGatewayHttpServer(opts: {
           run: () =>
             handleControlUiAssistantMediaRequest(req, res, {
               basePath: controlUiBasePath,
+              auth: resolvedAuth,
+              trustedProxies,
+              allowRealIpFallback,
+              rateLimiter,
             }),
         });
         requestStages.push({
@@ -936,7 +940,8 @@ export function createGatewayHttpServer(opts: {
           run: () =>
             handleControlUiAvatarRequest(req, res, {
               basePath: controlUiBasePath,
-              resolveAvatar: (agentId) => resolveAgentAvatar(configSnapshot, agentId),
+              resolveAvatar: (agentId) =>
+                resolveAgentAvatar(configSnapshot, agentId, { includeUiOverride: true }),
             }),
         });
         requestStages.push({
