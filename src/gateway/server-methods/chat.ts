@@ -1742,39 +1742,14 @@ export const chatHandlers: GatewayRequestHandlers = {
     }
     const rawSessionKey = p.sessionKey;
     const { cfg, entry, canonicalKey: sessionKey } = loadSessionEntry(rawSessionKey);
+    const agentId = resolveSessionAgentId({
+      sessionKey,
+      config: cfg,
+    });
     let parsedMessage = inboundMessage;
     let parsedImages: ChatImageContent[] = [];
     let imageOrder: PromptImageOrderEntry[] = [];
     let offloadedRefs: OffloadedRef[] = [];
-    if (normalizedAttachments.length > 0) {
-      const modelRef = resolveSessionModelRef(cfg, entry, undefined);
-      const supportsImages = await resolveGatewayModelSupportsImages({
-        loadGatewayModelCatalog: context.loadGatewayModelCatalog,
-        provider: modelRef.provider,
-        model: modelRef.model,
-      });
-      try {
-        const parsed = await parseMessageWithAttachments(inboundMessage, normalizedAttachments, {
-          maxBytes: 5_000_000,
-          log: context.logGateway,
-          supportsImages,
-        });
-        parsedMessage = parsed.message;
-        parsedImages = parsed.images;
-        imageOrder = parsed.imageOrder;
-        offloadedRefs = parsed.offloadedRefs;
-      } catch (err) {
-        respond(
-          false,
-          undefined,
-          errorShape(
-            err instanceof MediaOffloadError ? ErrorCodes.UNAVAILABLE : ErrorCodes.INVALID_REQUEST,
-            String(err),
-          ),
-        );
-        return;
-      }
-    }
     const timeoutMs = resolveAgentTimeoutMs({
       cfg,
       overrideMs: p.timeoutMs,
@@ -1830,6 +1805,35 @@ export const chatHandlers: GatewayRequestHandlers = {
         runId: clientRunId,
       });
       return;
+    }
+    if (normalizedAttachments.length > 0) {
+      const modelRef = resolveSessionModelRef(cfg, entry, agentId);
+      const supportsImages = await resolveGatewayModelSupportsImages({
+        loadGatewayModelCatalog: context.loadGatewayModelCatalog,
+        provider: modelRef.provider,
+        model: modelRef.model,
+      });
+      try {
+        const parsed = await parseMessageWithAttachments(inboundMessage, normalizedAttachments, {
+          maxBytes: 5_000_000,
+          log: context.logGateway,
+          supportsImages,
+        });
+        parsedMessage = parsed.message;
+        parsedImages = parsed.images;
+        imageOrder = parsed.imageOrder;
+        offloadedRefs = parsed.offloadedRefs;
+      } catch (err) {
+        respond(
+          false,
+          undefined,
+          errorShape(
+            err instanceof MediaOffloadError ? ErrorCodes.UNAVAILABLE : ErrorCodes.INVALID_REQUEST,
+            String(err),
+          ),
+        );
+        return;
+      }
     }
 
     try {
@@ -1909,10 +1913,6 @@ export const chatHandlers: GatewayRequestHandlers = {
         GatewayClientScopes: client?.connect?.scopes ?? [],
       };
 
-      const agentId = resolveSessionAgentId({
-        sessionKey,
-        config: cfg,
-      });
       const { onModelSelected, ...replyPipeline } = createChannelReplyPipeline({
         cfg,
         agentId,

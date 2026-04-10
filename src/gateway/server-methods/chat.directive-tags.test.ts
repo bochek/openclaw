@@ -14,6 +14,7 @@ import { CHAT_SEND_SESSION_KEY_MAX_LENGTH } from "../protocol/schema/primitives.
 import type { GatewayRequestContext } from "./types.js";
 
 const mockState = vi.hoisted(() => ({
+  config: {} as Record<string, unknown>,
   transcriptPath: "",
   sessionId: "sess-1",
   mainSessionKey: "main",
@@ -62,7 +63,9 @@ vi.mock("../session-utils.js", async () => {
         ? { canonicalKey: mockState.sessionEntry.canonicalKey }
         : {}),
       cfg: {
+        ...mockState.config,
         session: {
+          ...((mockState.config.session as Record<string, unknown> | undefined) ?? {}),
           mainKey: mockState.mainSessionKey,
         },
       },
@@ -249,6 +252,7 @@ function createChatContext(): Pick<
   | "chatAbortControllers"
   | "chatRunBuffers"
   | "chatDeltaSentAt"
+  | "chatDeltaLastBroadcastLen"
   | "chatAbortedRuns"
   | "removeChatRun"
   | "dedupe"
@@ -263,6 +267,7 @@ function createChatContext(): Pick<
     chatAbortControllers: new Map(),
     chatRunBuffers: new Map(),
     chatDeltaSentAt: new Map(),
+    chatDeltaLastBroadcastLen: new Map(),
     chatAbortedRuns: new Map(),
     removeChatRun: vi.fn(),
     dedupe: new Map(),
@@ -363,6 +368,7 @@ async function runNonStreamingChatSend(params: {
 
 describe("chat directive tag stripping for non-streaming final payloads", () => {
   afterEach(() => {
+    mockState.config = {};
     mockState.finalText = "[[reply_to_current]]";
     mockState.finalPayload = null;
     mockState.dispatchError = null;
@@ -1823,6 +1829,63 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
     expect(mockState.lastDispatchImageOrder).toBeUndefined();
   });
 
+  it("resolves attachment image support from the session agent model", async () => {
+    createTranscriptFixture("openclaw-chat-send-agent-scoped-text-only-attachments-");
+    mockState.finalText = "ok";
+    mockState.config = {
+      agents: {
+        list: [
+          {
+            id: "vision",
+            default: true,
+            model: "test-provider/vision-model",
+          },
+          {
+            id: "writer",
+            model: "test-provider/text-only",
+          },
+        ],
+      },
+    };
+    mockState.modelCatalog = [
+      {
+        provider: "test-provider",
+        id: "vision-model",
+        name: "Vision model",
+        input: ["text", "image"],
+      },
+      {
+        provider: "test-provider",
+        id: "text-only",
+        name: "Text only",
+        input: ["text"],
+      },
+    ];
+    const respond = vi.fn();
+    const context = createChatContext();
+
+    await runNonStreamingChatSend({
+      context,
+      respond,
+      sessionKey: "agent:writer:main",
+      idempotencyKey: "idem-agent-scoped-text-only-attachments",
+      message: "describe image",
+      requestParams: {
+        attachments: [
+          {
+            mimeType: "image/png",
+            content:
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/woAAn8B9FD5fHAAAAAASUVORK5CYII=",
+          },
+        ],
+      },
+      expectBroadcast: false,
+    });
+
+    expect(mockState.lastDispatchImages).toBeUndefined();
+    expect(mockState.lastDispatchImageOrder).toBeUndefined();
+  });
+
   it("passes imageOrder for mixed inline and offloaded chat.send attachments", async () => {
     createTranscriptFixture("openclaw-chat-send-image-order-");
     mockState.finalText = "ok";
@@ -1957,6 +2020,48 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
     await waitForAssertion(() => {
       expect(mockState.maxActiveSaveMediaCalls).toBe(1);
       expect(mockState.savedMediaCalls).toHaveLength(2);
+    });
+  });
+
+  it("does not parse or offload attachments for stop commands", async () => {
+    createTranscriptFixture("openclaw-chat-send-stop-command-attachments-");
+    mockState.savedMediaResults = [
+      { path: "/tmp/should-not-exist.png", contentType: "image/png" },
+    ];
+    const respond = vi.fn();
+    const context = createChatContext();
+    context.chatAbortControllers.set("run-same-session", {
+      controller: new AbortController(),
+      sessionId: "sess-prev",
+      sessionKey: "main",
+      startedAtMs: Date.now(),
+      expiresAtMs: Date.now() + 10_000,
+    });
+
+    await runNonStreamingChatSend({
+      context,
+      respond,
+      idempotencyKey: "idem-stop-command-attachments",
+      message: "/stop",
+      requestParams: {
+        attachments: [
+          {
+            mimeType: "image/png",
+            content:
+              "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/woAAn8B9FD5fHAAAAAASUVORK5CYII=",
+          },
+        ],
+      },
+      expectBroadcast: false,
+      waitFor: "none",
+    });
+
+    expect(mockState.savedMediaCalls).toEqual([]);
+    expect(mockState.lastDispatchImages).toBeUndefined();
+    expect(respond).toHaveBeenCalledWith(true, {
+      ok: true,
+      aborted: true,
+      runIds: ["run-same-session"],
     });
   });
 

@@ -190,7 +190,7 @@ export function extractCanvasShortcodes(text: string | undefined): {
   text: string;
   previews: CanvasPreview[];
 } {
-  if (!text?.trim() || !text.includes("[embed")) {
+  if (!text?.trim() || !text.toLowerCase().includes("[embed")) {
     return { text: text ?? "", previews: [] };
   }
   const fenceSpans = parseFenceSpans(text);
