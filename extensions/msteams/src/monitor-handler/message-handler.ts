@@ -570,10 +570,24 @@ export function createMSTeamsMessageHandler(deps: MSTeamsMessageHandlerDeps) {
       try {
         const graphToken = await tokenProvider.getAccessToken("https://graph.microsoft.com");
         const groupId = await resolveTeamGroupId(graphToken, teamId);
-        const [parentMsg, replies] = await Promise.all([
+        // Use allSettled so a failure in one fetch does not discard the other.
+        // For example, reply-fetch 403 should not throw away a successful parent fetch.
+        const [parentResult, repliesResult] = await Promise.allSettled([
           fetchParentMessageCached(graphToken, groupId, conversationId, activity.replyToId),
           fetchThreadReplies(graphToken, groupId, conversationId, activity.replyToId),
         ]);
+        const parentMsg = parentResult.status === "fulfilled" ? parentResult.value : undefined;
+        const replies = repliesResult.status === "fulfilled" ? repliesResult.value : [];
+        if (parentResult.status === "rejected") {
+          log.debug?.("failed to fetch parent message", {
+            error: formatUnknownError(parentResult.reason),
+          });
+        }
+        if (repliesResult.status === "rejected") {
+          log.debug?.("failed to fetch thread replies", {
+            error: formatUnknownError(repliesResult.reason),
+          });
+        }
         const parentSummary = summarizeParentMessage(parentMsg);
         if (parentSummary && shouldInjectParentContext(route.sessionKey, activity.replyToId)) {
           core.system.enqueueSystemEvent(formatParentContextEvent(parentSummary), {

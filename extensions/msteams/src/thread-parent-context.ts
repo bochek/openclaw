@@ -61,10 +61,6 @@ function buildParentCacheKey(groupId: string, channelId: string, parentId: strin
   return `${groupId}\u0000${channelId}\u0000${parentId}`;
 }
 
-function buildInjectedKey(sessionKey: string): string {
-  return sessionKey;
-}
-
 /**
  * Fetch a channel parent message with an LRU+TTL cache.
  *
@@ -144,7 +140,7 @@ export function formatParentContextEvent(summary: ParentContextSummary): string 
  * in the thread).
  */
 export function shouldInjectParentContext(sessionKey: string, parentId: string): boolean {
-  const key = buildInjectedKey(sessionKey);
+  const key = sessionKey;
   return injectedParents.get(key) !== parentId;
 }
 
@@ -153,7 +149,7 @@ export function shouldInjectParentContext(sessionKey: string, parentId: string):
  * replies with the same parent can short-circuit via `shouldInjectParentContext`.
  */
 export function markParentContextInjected(sessionKey: string, parentId: string): void {
-  touchLru(injectedParents, buildInjectedKey(sessionKey), parentId, INJECTED_MAX);
+  touchLru(injectedParents, sessionKey, parentId, INJECTED_MAX);
 }
 
 // Exported for test isolation.
