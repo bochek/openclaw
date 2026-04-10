@@ -138,7 +138,7 @@ export function createTeamsReplyStreamController(params: {
       if (!stream) {
         return false;
       }
-      if (stream.isFinalized) {
+      if (stream.isFinalized || stream.isFailed) {
         return false;
       }
       return streamReceivedTokens;

@@ -210,6 +210,16 @@ describe("createTeamsReplyStreamController", () => {
       expect(ctrl.isStreamActive()).toBe(false);
     });
 
+    it("returns false when the stream has failed", () => {
+      const ctrl = createController();
+
+      ctrl.onPartialReply({ text: "First segment" });
+      expect(ctrl.isStreamActive()).toBe(true);
+
+      streamInstances[0].isFailed = true;
+      expect(ctrl.isStreamActive()).toBe(false);
+    });
+
     it("returns false when conversationType is not personal", () => {
       streamInstances.length = 0;
       const ctrl = createTeamsReplyStreamController({
