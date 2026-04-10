@@ -1757,6 +1757,7 @@ export function renderApp(state: AppViewState) {
               assistantName: state.assistantName,
               assistantAvatar: state.assistantAvatar,
               localMediaPreviewRoots: state.localMediaPreviewRoots,
+              embedSandboxMode: state.embedSandboxMode,
               assistantAttachmentAuthToken: state.settings.token.trim() || null,
               basePath: state.basePath ?? "",
             })
