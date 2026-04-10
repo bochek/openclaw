@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { Socket } from "node:net";
 import type { WebSocket, WebSocketServer } from "ws";
 import { resolveCanvasHostUrl } from "../../infra/canvas-host-url.js";
 import { removeRemoteNodeInfo } from "../../infra/skills-remote.js";
@@ -59,6 +60,45 @@ const sanitizeLogValue = (value: string | undefined): string | undefined => {
   }
   return truncateUtf16Safe(cleaned, LOG_HEADER_MAX_LEN);
 };
+
+function formatSocketEndpoint(
+  address: string | undefined,
+  port: number | undefined,
+): string | undefined {
+  if (!address) {
+    return undefined;
+  }
+  if (port === undefined) {
+    return address;
+  }
+  return address.includes(":") ? `[${address}]:${port}` : `${address}:${port}`;
+}
+
+function resolveSocketAddress(socket: WebSocket): {
+  remoteAddr?: string;
+  remotePort?: number;
+  localAddr?: string;
+  localPort?: number;
+  endpoint?: string;
+} {
+  const rawSocket = (socket as WebSocket & { _socket?: Socket })._socket;
+  const remoteAddr = rawSocket?.remoteAddress;
+  const remotePort = rawSocket?.remotePort;
+  const localAddr = rawSocket?.localAddress;
+  const localPort = rawSocket?.localPort;
+  const remoteEndpoint = formatSocketEndpoint(remoteAddr, remotePort);
+  const localEndpoint = formatSocketEndpoint(localAddr, localPort);
+  return {
+    remoteAddr,
+    remotePort,
+    localAddr,
+    localPort,
+    endpoint:
+      remoteEndpoint && localEndpoint
+        ? `${remoteEndpoint}->${localEndpoint}`
+        : (remoteEndpoint ?? localEndpoint),
+  };
+}
 
 export type GatewayWsSharedHandlerParams = {
   wss: WebSocketServer;
@@ -124,8 +164,7 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
     let closed = false;
     const openedAt = Date.now();
     const connId = randomUUID();
-    const remoteAddr = (socket as WebSocket & { _socket?: { remoteAddress?: string } })._socket
-      ?.remoteAddress;
+    const { remoteAddr, remotePort, localAddr, localPort, endpoint } = resolveSocketAddress(socket);
     const preauthBudgetKey = (
       socket as WebSocket & {
         __openclawPreauthBudgetClaimed?: boolean;
@@ -156,7 +195,7 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
       localAddress: upgradeReq.socket?.localAddress,
     });
 
-    logWs("in", "open", { connId, remoteAddr });
+    logWs("in", "open", { connId, remoteAddr, remotePort, localAddr, localPort, endpoint });
     let handshakeState: "pending" | "connected" | "failed" = "pending";
     let holdsPreauthBudget = true;
     let closeCause: string | undefined;
@@ -251,6 +290,11 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
         origin: logOrigin,
         userAgent: logUserAgent,
         forwardedFor: logForwardedFor,
+        remoteAddr,
+        remotePort,
+        localAddr,
+        localPort,
+        endpoint,
         ...closeMeta,
       };
       if (!client) {
@@ -258,7 +302,7 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
           ? logWsControl.debug
           : logWsControl.warn;
         logFn(
-          `closed before connect conn=${connId} remote=${remoteAddr ?? "?"} fwd=${logForwardedFor || "n/a"} origin=${logOrigin || "n/a"} host=${logHost || "n/a"} ua=${logUserAgent || "n/a"} code=${code ?? "n/a"} reason=${logReason || "n/a"}`,
+          `closed before connect conn=${connId} peer=${endpoint ?? "n/a"} remote=${remoteAddr ?? "?"} fwd=${logForwardedFor || "n/a"} origin=${logOrigin || "n/a"} host=${logHost || "n/a"} ua=${logUserAgent || "n/a"} code=${code ?? "n/a"} reason=${logReason || "n/a"}`,
           closeContext,
         );
       }
@@ -290,6 +334,7 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
         lastFrameType,
         lastFrameMethod,
         lastFrameId,
+        endpoint,
       });
       close();
     });
@@ -300,8 +345,11 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
         handshakeState = "failed";
         setCloseCause("handshake-timeout", {
           handshakeMs: Date.now() - openedAt,
+          endpoint,
         });
-        logWsControl.warn(`handshake timeout conn=${connId} remote=${remoteAddr ?? "?"}`);
+        logWsControl.warn(
+          `handshake timeout conn=${connId} peer=${endpoint ?? "n/a"} remote=${remoteAddr ?? "?"}`,
+        );
         close();
       }
     }, handshakeTimeoutMs);
@@ -311,6 +359,10 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
       upgradeReq,
       connId,
       remoteAddr,
+      remotePort,
+      localAddr,
+      localPort,
+      endpoint,
       forwardedFor,
       realIp,
       requestHost,
@@ -319,6 +371,8 @@ export function attachGatewayWsConnectionHandler(params: AttachGatewayWsConnecti
       canvasHostUrl,
       connectNonce,
       resolvedAuth: getResolvedAuth(),
+      getRequiredSharedGatewaySessionGeneration:
+        params.getRequiredSharedGatewaySessionGeneration,
       rateLimiter,
       browserRateLimiter,
       gatewayMethods,
