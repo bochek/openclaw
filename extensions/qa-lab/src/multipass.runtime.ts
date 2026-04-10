@@ -667,8 +667,10 @@ export async function runQaMultipass(params: {
     );
   }
 
+  const hostTransferTmpRoot = path.join(resolvePreferredOpenClawTmpDir(), "qa-suite");
+  await fs.promises.mkdir(hostTransferTmpRoot, { recursive: true });
   const hostTransferDirPath = await fs.promises.mkdtemp(
-    path.join(resolvePreferredOpenClawTmpDir(), `${plan.vmName}-qa-suite-`),
+    `${hostTransferTmpRoot}${path.sep}${plan.vmName}-`,
   );
   const hostTransferScriptPath = path.join(hostTransferDirPath, "guest-run.sh");
   await writeFile(hostTransferScriptPath, renderQaMultipassGuestScript(plan), {
