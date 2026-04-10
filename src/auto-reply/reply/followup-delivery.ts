@@ -1,6 +1,7 @@
 import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
 import type { MessagingToolSend } from "../../agents/pi-embedded-runner.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import { splitByReplyToTags } from "../../utils/directive-tags.js";
 import { stripHeartbeatToken } from "../heartbeat.js";
 import type { OriginatingChannelType } from "../templating.js";
 import type { ReplyPayload } from "../types.js";
@@ -9,6 +10,7 @@ import {
   resolveOriginMessageProvider,
   resolveOriginMessageTo,
 } from "./origin-routing.js";
+import { shouldSuppressReasoningPayload } from "./reply-payloads-base.js";
 import {
   applyReplyThreading,
   filterMessagingToolDuplicates,
@@ -21,6 +23,8 @@ export function resolveFollowupDeliveryPayloads(params: {
   cfg: OpenClawConfig;
   payloads: ReplyPayload[];
   messageProvider?: string;
+  messageId?: string;
+  collectedMessageIds?: string[];
   originatingAccountId?: string;
   originatingChannel?: string;
   originatingChatType?: string | null;
@@ -51,10 +55,67 @@ export function resolveFollowupDeliveryPayloads(params: {
     }
     return [{ ...payload, text: stripped.text }];
   });
+  const nonReasoningPayloads = sanitizedPayloads.filter(
+    (payload) => !shouldSuppressReasoningPayload(payload),
+  );
+  let didMultiTagSplit = false;
+  const multiTagPayloads = nonReasoningPayloads.flatMap((payload) => {
+    const text = payload.text;
+    if (!text || !text.includes("[[")) {
+      return [payload];
+    }
+    const segments = splitByReplyToTags(text);
+    if (segments.length <= 1) {
+      return [payload];
+    }
+    didMultiTagSplit = true;
+    return segments.map((segment) => ({
+      ...payload,
+      text: segment.text,
+      replyToId: segment.replyToId,
+      replyToCurrent: segment.replyToCurrent,
+    }));
+  });
+  const hasCollectedMapping =
+    replyToMode === "auto" &&
+    params.collectedMessageIds &&
+    multiTagPayloads.length === params.collectedMessageIds.length;
+  const collectedPayloads = hasCollectedMapping
+    ? multiTagPayloads.map((payload, index) =>
+        payload.replyToId
+          ? payload
+          : {
+              ...payload,
+              replyToId: params.collectedMessageIds?.[index],
+              replyToCurrent: true,
+            },
+      )
+    : multiTagPayloads;
+  const hasMultipleExplicitTargets =
+    collectedPayloads.filter((payload) => payload.replyToId).length > 1;
+  const effectiveReplyToMode =
+    replyToMode === "auto"
+      ? hasCollectedMapping || didMultiTagSplit || hasMultipleExplicitTargets
+        ? "all"
+        : "first"
+      : replyToMode;
+  const threadingPayloads =
+    effectiveReplyToMode === "first" && replyToMode === "auto" && params.messageId
+      ? collectedPayloads.map((payload) =>
+          payload.replyToId
+            ? payload
+            : {
+                ...payload,
+                replyToId: params.messageId,
+                replyToCurrent: true,
+              },
+        )
+      : collectedPayloads;
   const replyTaggedPayloads = applyReplyThreading({
-    payloads: sanitizedPayloads,
-    replyToMode,
+    payloads: threadingPayloads,
+    replyToMode: effectiveReplyToMode,
     replyToChannel,
+    currentMessageId: params.messageId,
   });
   const dedupedPayloads = filterMessagingToolDuplicates({
     payloads: replyTaggedPayloads,
