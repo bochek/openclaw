@@ -109,6 +109,8 @@ import { createUsageAccumulator, mergeUsageIntoAccumulator } from "./usage-accum
 
 type ApiKeyInfo = ResolvedProviderAuth;
 
+const MAX_SAME_MODEL_IDLE_TIMEOUT_RETRIES = 1;
+
 /**
  * Best-effort backfill of sessionKey from sessionId when not explicitly provided.
  * The return value is normalized: whitespace-only inputs collapse to undefined, and
@@ -399,6 +401,7 @@ export async function runEmbeddedPiAgent(
       let runLoopIterations = 0;
       let overloadProfileRotations = 0;
       let planningOnlyRetryAttempts = 0;
+      let sameModelIdleTimeoutRetries = 0;
       let lastRetryFailoverReason: FailoverReason | null = null;
       let planningOnlyRetryInstruction: string | null = null;
       const ackExecutionFastPathInstruction = resolveAckExecutionFastPathInstruction({
@@ -1364,7 +1367,15 @@ export async function runEmbeddedPiAgent(
             failoverFailure,
             failoverReason: assistantFailoverReason,
             timedOut,
+            idleTimedOut,
             timedOutDuringCompaction,
+            allowSameModelIdleTimeoutRetry:
+              timedOut &&
+              idleTimedOut &&
+              !timedOutDuringCompaction &&
+              !fallbackConfigured &&
+              canRestartForLiveSwitch &&
+              sameModelIdleTimeoutRetries < MAX_SAME_MODEL_IDLE_TIMEOUT_RETRIES,
             assistantProfileFailureReason,
             lastProfileId,
             modelId,
@@ -1390,13 +1401,15 @@ export async function runEmbeddedPiAgent(
           });
           overloadProfileRotations = assistantFailoverOutcome.overloadProfileRotations;
           if (assistantFailoverOutcome.action === "retry") {
+            if (assistantFailoverOutcome.retryKind === "same_model_idle_timeout") {
+              sameModelIdleTimeoutRetries += 1;
+            }
             lastRetryFailoverReason = assistantFailoverOutcome.lastRetryFailoverReason;
             continue;
           }
           if (assistantFailoverOutcome.action === "throw") {
             throw assistantFailoverOutcome.error;
           }
-
           const usageMeta = buildUsageAgentMetaFields({
             usageAccumulator,
             lastAssistantUsage: lastAssistant?.usage as UsageLike | undefined,
