@@ -181,7 +181,7 @@ async function handleFileConsentInvoke(
               type: "message",
               attachments: [fileInfoCard],
             });
-          } catch (updateErr) {
+          } catch {
             // Non-fatal fallback: if update fails, send as new message
             await context.sendActivity({
               type: "message",

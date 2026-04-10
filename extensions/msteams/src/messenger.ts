@@ -469,23 +469,26 @@ export async function sendMSTeamsMessages(params: {
     message: MSTeamsRenderedMessage,
     messageIndex: number,
   ): Promise<string> => {
-    const activity = await buildActivity(
-      message,
-      params.conversationRef,
-      params.tokenProvider,
-      params.sharePointSiteId,
-      params.mediaMaxBytes,
-      { feedbackLoopEnabled: params.feedbackLoopEnabled },
-    );
+    let pendingUploadId: string | undefined;
+    const response = await sendWithRetry(async () => {
+      const activity = await buildActivity(
+        message,
+        params.conversationRef,
+        params.tokenProvider,
+        params.sharePointSiteId,
+        params.mediaMaxBytes,
+        { feedbackLoopEnabled: params.feedbackLoopEnabled },
+      );
 
-    // Extract and strip the internal-only pending upload tag before sending
-    const pendingUploadId =
-      typeof activity._pendingUploadId === "string" ? activity._pendingUploadId : undefined;
-    if (pendingUploadId) {
-      delete activity._pendingUploadId;
-    }
+      // Extract and strip the internal-only pending upload tag before sending.
+      pendingUploadId =
+        typeof activity._pendingUploadId === "string" ? activity._pendingUploadId : undefined;
+      if (pendingUploadId) {
+        delete activity._pendingUploadId;
+      }
 
-    const response = await sendWithRetry(async () => await ctx.sendActivity(activity), {
+      return await ctx.sendActivity(activity);
+    }, {
       messageIndex,
       messageCount: messages.length,
     });
