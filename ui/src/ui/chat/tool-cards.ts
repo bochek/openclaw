@@ -147,11 +147,12 @@ export function extractToolCards(message: unknown, prefix = "tool"): ToolCard[] 
     const kind = (typeof item.type === "string" ? item.type : "").toLowerCase();
     const isToolCall =
       ["toolcall", "tool_call", "tooluse", "tool_use"].includes(kind) ||
-      (typeof item.name === "string" && item.arguments != null);
+      (typeof item.name === "string" &&
+        (item.arguments != null || item.args != null || item.input != null));
     if (!isToolCall) {
       continue;
     }
-    const args = coerceArgs(item.arguments ?? item.args);
+    const args = coerceArgs(item.arguments ?? item.args ?? item.input);
     cards.push({
       id: resolveToolCardId(item, m, index, prefix),
       name: (item.name as string) ?? "tool",

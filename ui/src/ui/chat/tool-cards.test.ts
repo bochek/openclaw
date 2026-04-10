@@ -59,6 +59,27 @@ describe("tool-cards", () => {
     expect(cards[0]?.outputText).toBeUndefined();
   });
 
+  it("preserves tool-call input payloads from tool_use blocks", () => {
+    const cards = extractToolCards(
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "tool_use",
+            id: "call-2b",
+            name: "deck_manage",
+            input: { deck: "Example Deck", mode: "preview" },
+          },
+        ],
+      },
+      "msg:2b",
+    );
+
+    expect(cards).toHaveLength(1);
+    expect(cards[0]?.inputText).toContain('"deck": "Example Deck"');
+    expect(cards[0]?.inputText).toContain('"mode": "preview"');
+  });
+
   it("builds sidebar content with input and empty output status", () => {
     const [card] = extractToolCards(
       {

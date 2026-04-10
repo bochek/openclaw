@@ -1662,7 +1662,7 @@ export function renderChat(props: ChatProps) {
               ${icons.download}
             </button>
 
-            ${canAbort && (isBusy || props.sending)
+            ${canAbort
               ? html`
                   <button
                     class="chat-send-btn chat-send-btn--stop"
