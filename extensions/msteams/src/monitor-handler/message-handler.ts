@@ -25,7 +25,12 @@ import {
 import { isRecord } from "../attachments/shared.js";
 import type { StoredConversationReference } from "../conversation-store.js";
 import { formatUnknownError } from "../errors.js";
-import { fetchThreadReplies, formatThreadContext, resolveTeamGroupId } from "../graph-thread.js";
+import {
+  fetchThreadReplies,
+  formatThreadContext,
+  resolveTeamGroupId,
+  type GraphThreadMessage,
+} from "../graph-thread.js";
 import {
   extractMSTeamsConversationMessageId,
   extractMSTeamsQuoteInfo,
@@ -588,8 +593,29 @@ export function createMSTeamsMessageHandler(deps: MSTeamsMessageHandlerDeps) {
             error: formatUnknownError(repliesResult.reason),
           });
         }
+        const isThreadSenderAllowed = (msg: GraphThreadMessage) =>
+          groupPolicy === "allowlist"
+            ? resolveMSTeamsAllowlistMatch({
+                allowFrom: effectiveGroupAllowFrom,
+                senderId: msg.from?.user?.id ?? "",
+                senderName: msg.from?.user?.displayName,
+                allowNameMatching,
+              }).allowed
+            : true;
         const parentSummary = summarizeParentMessage(parentMsg);
-        if (parentSummary && shouldInjectParentContext(route.sessionKey, activity.replyToId)) {
+        const visibleParentMessages = parentMsg
+          ? filterSupplementalContextItems({
+              items: [parentMsg],
+              mode: contextVisibilityMode,
+              kind: "thread",
+              isSenderAllowed: isThreadSenderAllowed,
+            }).items
+          : [];
+        if (
+          parentSummary &&
+          visibleParentMessages.length > 0 &&
+          shouldInjectParentContext(route.sessionKey, activity.replyToId)
+        ) {
           core.system.enqueueSystemEvent(formatParentContextEvent(parentSummary), {
             sessionKey: route.sessionKey,
             contextKey: `msteams:thread-parent:${conversationId}:${activity.replyToId}`,
@@ -606,15 +632,7 @@ export function createMSTeamsMessageHandler(deps: MSTeamsMessageHandlerDeps) {
           items: allMessages,
           mode: contextVisibilityMode,
           kind: "thread",
-          isSenderAllowed: (msg) =>
-            groupPolicy === "allowlist"
-              ? resolveMSTeamsAllowlistMatch({
-                  allowFrom: effectiveGroupAllowFrom,
-                  senderId: msg.from?.user?.id ?? "",
-                  senderName: msg.from?.user?.displayName,
-                  allowNameMatching,
-                }).allowed
-              : true,
+          isSenderAllowed: isThreadSenderAllowed,
         });
         const formatted = formatThreadContext(threadMessages, activity.id);
         if (formatted) {

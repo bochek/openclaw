@@ -225,6 +225,42 @@ describe("msteams thread parent context injection", () => {
     expect(parentCalls).toHaveLength(1);
   });
 
+  it("does not enqueue parent context when allowlist visibility blocks the parent sender", async () => {
+    fetchChannelMessageMock.mockResolvedValue({
+      id: "thread-root-123",
+      from: { user: { displayName: "Mallory", id: "mallory-aad" } },
+      body: { content: "Blocked context", contentType: "text" },
+    });
+    const { deps, enqueueSystemEvent } = createDeps({
+      channels: {
+        msteams: {
+          groupPolicy: "allowlist",
+          groupAllowFrom: ["alice-aad"],
+          contextVisibility: "allowlist",
+          teams: {
+            "team-1": {
+              channels: {
+                [channelConversationId]: { requireMention: false },
+              },
+            },
+          },
+        },
+      },
+    } as OpenClawConfig);
+    const handler = createMSTeamsMessageHandler(deps);
+
+    await handler({
+      activity: channelActivity({
+        id: "msg-reply-1",
+        replyToId: "thread-root-123",
+        from: { id: "alice-id", aadObjectId: "alice-aad", name: "Alice" },
+      }),
+      sendActivity: vi.fn(async () => undefined),
+    } as unknown as Parameters<typeof handler>[0]);
+
+    expect(findParentSystemEventCall(enqueueSystemEvent)).toBeUndefined();
+  });
+
   it("handles Graph failure gracefully without throwing or emitting a parent event", async () => {
     fetchChannelMessageMock.mockRejectedValueOnce(new Error("graph down"));
     const { deps, enqueueSystemEvent } = createDeps(cfg);
