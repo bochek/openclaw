@@ -320,8 +320,7 @@ describeLive("gateway live (Codex harness)", () => {
           client,
           sessionKey,
           expectedToken: secondToken,
-          message:
-            `Reply with exactly ${secondToken} and nothing else. ` + `Do not repeat ${firstToken}.`,
+          message: `Reply with exactly ${secondToken} and nothing else. Do not repeat ${firstToken}.`,
         });
         logCodexLiveStep("second-turn", { secondText });
       } finally {
