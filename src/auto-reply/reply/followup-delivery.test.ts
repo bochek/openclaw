@@ -83,4 +83,20 @@ describe("resolveFollowupDeliveryPayloads", () => {
       }),
     ).toEqual([{ text: "hello world!" }]);
   });
+
+  it("splits multi-target replies for whitespace-variant reply tags", () => {
+    expect(
+      resolveFollowupDeliveryPayloads({
+        cfg: baseConfig,
+        payloads: [
+          {
+            text: "[[ reply_to : 123 ]] First answer\n[[ reply_to : 456 ]] Second answer",
+          },
+        ],
+      }),
+    ).toEqual([
+      { text: "First answer", replyToId: "123", replyToCurrent: undefined },
+      { text: "Second answer", replyToId: "456", replyToCurrent: undefined },
+    ]);
+  });
 });
