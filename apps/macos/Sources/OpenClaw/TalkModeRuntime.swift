@@ -922,7 +922,7 @@ extension TalkModeRuntime {
         self.logger
             .info(
                 "talk config provider=\(cfg.activeProvider, privacy: .public) " +
-                    "talk config voiceId=\(voiceLabel, privacy: .public) " +
+                    "voiceId=\(voiceLabel, privacy: .public) " +
                     "modelId=\(modelLabel, privacy: .public) " +
                     "apiKey=\(hasApiKey, privacy: .public) " +
                     "interrupt=\(cfg.interruptOnSpeech, privacy: .public) " +
