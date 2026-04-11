@@ -745,7 +745,7 @@ function resolveAssistantAttachmentAvailability(
     return { status: "available" };
   }
   if (!isLocalAttachmentPreviewAllowed(source, localMediaPreviewRoots)) {
-    return { status: "unavailable", reason: "Outside allowed folders" };
+    return { status: "unavailable", reason: "Outside allowed folders", checkedAt: Date.now() };
   }
   const normalizedAuthToken = authToken?.trim() ?? "";
   const cacheKey = `${basePath ?? ""}::${normalizedAuthToken}::${source}`;
@@ -759,9 +759,6 @@ function resolveAssistantAttachmentAvailability(
     } else {
       return cached;
     }
-  }
-  if (assistantAttachmentAvailabilityCache.has(cacheKey)) {
-    return cached;
   }
   assistantAttachmentAvailabilityCache.set(cacheKey, { status: "checking" });
   if (typeof fetch === "function") {

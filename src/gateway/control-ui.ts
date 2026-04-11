@@ -316,17 +316,18 @@ export async function handleControlUiAssistantMediaRequest(
     return true;
   }
 
+  let opened: Awaited<ReturnType<typeof openLocalFileSafely>> | null = null;
+  let handleClosed = false;
+  const closeOpenedHandle = async () => {
+    if (!opened || handleClosed) {
+      return;
+    }
+    handleClosed = true;
+    await opened.handle.close().catch(() => {});
+  };
   try {
     await assertLocalMediaAllowed(source, getDefaultLocalRoots());
-    const opened = await openLocalFileSafely({ filePath: source });
-    let handleClosed = false;
-    const closeHandle = async () => {
-      if (handleClosed) {
-        return;
-      }
-      handleClosed = true;
-      await opened.handle.close().catch(() => {});
-    };
+    opened = await openLocalFileSafely({ filePath: source });
     const sniffLength = Math.min(opened.stat.size, 8192);
     const sniffBuffer = sniffLength > 0 ? Buffer.allocUnsafe(sniffLength) : undefined;
     const bytesRead =
@@ -346,12 +347,12 @@ export async function handleControlUiAssistantMediaRequest(
     res.setHeader("Content-Length", String(opened.stat.size));
     const stream = opened.handle.createReadStream({ start: 0, autoClose: false });
     const finishClose = () => {
-      void closeHandle();
+      void closeOpenedHandle();
     };
     stream.once("end", finishClose);
     stream.once("close", finishClose);
     stream.once("error", () => {
-      void closeHandle();
+      void closeOpenedHandle();
       if (!res.headersSent) {
         respondControlUiNotFound(res);
       } else {
@@ -362,6 +363,7 @@ export async function handleControlUiAssistantMediaRequest(
     stream.pipe(res);
     return true;
   } catch {
+    await closeOpenedHandle();
     respondControlUiNotFound(res);
     return true;
   }

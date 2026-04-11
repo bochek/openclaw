@@ -1389,6 +1389,21 @@ export function attachGatewayWsMessageHandler(params: {
       }
       const req = parsed;
       logWs("in", "req", { connId, id: req.id, method: req.method });
+      if (client.usesSharedGatewayAuth) {
+        const requiredSharedGatewaySessionGeneration =
+          getRequiredSharedGatewaySessionGeneration?.();
+        if (
+          requiredSharedGatewaySessionGeneration !== undefined &&
+          client.sharedGatewaySessionGeneration !== requiredSharedGatewaySessionGeneration
+        ) {
+          setCloseCause("gateway-auth-rotated", {
+            authGenerationStale: true,
+            method: req.method,
+          });
+          close(4001, "gateway auth changed");
+          return;
+        }
+      }
       const respond = (
         ok: boolean,
         payload?: unknown,
