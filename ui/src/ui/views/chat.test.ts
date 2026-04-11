@@ -2210,6 +2210,107 @@ describe("chat view", () => {
     vi.unstubAllGlobals();
   });
 
+  it("allows Windows local assistant attachments when path casing differs", async () => {
+    resetAssistantAttachmentAvailabilityCacheForTest();
+    const fetchMock = vi.fn(async (url: string) => {
+      if (!url.includes("meta=1")) {
+        throw new Error(`Unexpected fetch: ${url}`);
+      }
+      return {
+        ok: true,
+        json: async () => ({ available: true }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const container = document.createElement("div");
+    render(
+      renderChat(
+        createProps({
+          showToolCalls: false,
+          basePath: "/openclaw",
+          localMediaPreviewRoots: ["c:\\users\\test\\pictures"],
+          onRequestUpdate: () => undefined,
+          messages: [
+            {
+              id: "assistant-windows-path-case-differs",
+              role: "assistant",
+              content: "Windows image\nMEDIA:C:\\Users\\Test\\Pictures\\test image.png",
+              timestamp: Date.now(),
+            },
+          ],
+        }),
+      ),
+      container,
+    );
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/openclaw/__openclaw__/assistant-media?source=C%3A%5CUsers%5CTest%5CPictures%5Ctest+image.png&meta=1",
+      expect.objectContaining({ credentials: "same-origin", method: "GET" }),
+    );
+    expect(container.textContent).not.toContain("Outside allowed folders");
+    vi.unstubAllGlobals();
+  });
+
+  it("revalidates cached unavailable local assistant attachments after retry window", async () => {
+    resetAssistantAttachmentAvailabilityCacheForTest();
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn<(url: string) => Promise<{ ok: true; json: () => Promise<{ available: boolean }> }>>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ available: false }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ available: true }),
+      });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    const container = document.createElement("div");
+
+    const renderMessage = () =>
+      render(
+        renderChat(
+          createProps({
+            showToolCalls: false,
+            basePath: "/openclaw",
+            localMediaPreviewRoots: ["/tmp/openclaw"],
+            onRequestUpdate: renderMessage,
+            messages: [
+              {
+                id: "assistant-local-media-retry-after-unavailable",
+                role: "assistant",
+                content: "Local image\nMEDIA:/tmp/openclaw/test image.png",
+                timestamp: Date.now(),
+              },
+            ],
+          }),
+        ),
+        container,
+      );
+
+    renderMessage();
+    await vi.runAllTimersAsync();
+    await Promise.resolve();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Unavailable");
+
+    vi.advanceTimersByTime(5_001);
+    renderMessage();
+    await vi.runAllTimersAsync();
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(container.querySelector(".chat-message-image")).not.toBeNull();
+    expect(container.textContent).not.toContain("Unavailable");
+
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
   it("allows tilde local assistant attachments inside home-based preview roots", async () => {
     resetAssistantAttachmentAvailabilityCacheForTest();
     const fetchMock = vi.fn(async (url: string) => {

@@ -38,9 +38,10 @@ import {
 type AssistantAttachmentAvailability =
   | { status: "checking" }
   | { status: "available" }
-  | { status: "unavailable"; reason: string };
+  | { status: "unavailable"; reason: string; checkedAt: number };
 
 const assistantAttachmentAvailabilityCache = new Map<string, AssistantAttachmentAvailability>();
+const ASSISTANT_ATTACHMENT_UNAVAILABLE_RETRY_MS = 5_000;
 
 export function resetAssistantAttachmentAvailabilityCacheForTest() {
   assistantAttachmentAvailabilityCache.clear();
@@ -673,7 +674,7 @@ function canonicalizeLocalPathForComparison(value: string): string {
     slashNormalized = slashNormalized.slice(1);
   }
   if (/^[a-zA-Z]:\//.test(slashNormalized)) {
-    return `${slashNormalized[0]?.toLowerCase() ?? ""}${slashNormalized.slice(1)}`;
+    return slashNormalized.toLowerCase();
   }
   return slashNormalized;
 }
@@ -750,6 +751,16 @@ function resolveAssistantAttachmentAvailability(
   const cacheKey = `${basePath ?? ""}::${normalizedAuthToken}::${source}`;
   const cached = assistantAttachmentAvailabilityCache.get(cacheKey);
   if (cached) {
+    if (
+      cached.status === "unavailable" &&
+      Date.now() - cached.checkedAt >= ASSISTANT_ATTACHMENT_UNAVAILABLE_RETRY_MS
+    ) {
+      assistantAttachmentAvailabilityCache.delete(cacheKey);
+    } else {
+      return cached;
+    }
+  }
+  if (assistantAttachmentAvailabilityCache.has(cacheKey)) {
     return cached;
   }
   assistantAttachmentAvailabilityCache.set(cacheKey, { status: "checking" });
@@ -770,6 +781,7 @@ function resolveAssistantAttachmentAvailability(
           assistantAttachmentAvailabilityCache.set(cacheKey, {
             status: "unavailable",
             reason: payload?.reason?.trim() || "Attachment unavailable",
+            checkedAt: Date.now(),
           });
         }
       })
@@ -777,6 +789,7 @@ function resolveAssistantAttachmentAvailability(
         assistantAttachmentAvailabilityCache.set(cacheKey, {
           status: "unavailable",
           reason: "Attachment unavailable",
+          checkedAt: Date.now(),
         });
       })
       .finally(() => {
