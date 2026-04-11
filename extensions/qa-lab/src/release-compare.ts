@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { access, lstat, mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -95,10 +95,38 @@ function sanitizeSegment(value: string) {
     .slice(0, 80);
 }
 
-function buildInstallCommandEnv() {
+type PersistedQaReleaseCompareCommandResult = Omit<QaReleaseCompareCommandResult, "stdout" | "stderr">;
+
+type PersistedQaReleaseCompareInstall = Omit<QaReleaseCompareInstall, "commandResults"> & {
+  commandResults: PersistedQaReleaseCompareCommandResult[];
+};
+
+export type PersistedQaReleaseSmokeResult = Omit<QaReleaseSmokeResult, "install"> & {
+  install: PersistedQaReleaseCompareInstall;
+};
+
+export type PersistedQaReleaseCompareResult = Omit<
+  QaReleaseCompareResult,
+  "oldInstall" | "newInstall" | "diff"
+> & {
+  oldInstall: PersistedQaReleaseCompareInstall;
+  newInstall: PersistedQaReleaseCompareInstall;
+  diff: Array<{
+    id: string;
+    diffKind: QaReleaseCompareDiffKind;
+    old: PersistedQaReleaseCompareCommandResult;
+    new: PersistedQaReleaseCompareCommandResult;
+  }>;
+};
+
+function buildInstallCommandEnv(homeDir: string) {
   return {
-    PATH: process.env.PATH ?? "",
-    HOME: process.env.HOME ?? "",
+    HOME: homeDir,
+    XDG_CONFIG_HOME: path.join(homeDir, ".config"),
+    XDG_CACHE_HOME: path.join(homeDir, ".cache"),
+    XDG_DATA_HOME: path.join(homeDir, ".local", "share"),
+    npm_config_userconfig: path.join(homeDir, ".npmrc"),
+    npm_config_cache: path.join(homeDir, ".npm-cache"),
     npm_config_ignore_scripts: "true",
     npm_config_audit: "false",
     npm_config_fund: "false",
@@ -119,7 +147,10 @@ export function redactPersistedCommandText(text: string) {
 function buildRuntimeCommandEnv(homeDir: string) {
   return {
     PATH: process.env.PATH ?? "",
-    HOME: process.env.HOME ?? "",
+    HOME: homeDir,
+    XDG_CONFIG_HOME: path.join(homeDir, ".config"),
+    XDG_CACHE_HOME: path.join(homeDir, ".cache"),
+    XDG_DATA_HOME: path.join(homeDir, ".local", "share"),
     TMPDIR: process.env.TMPDIR ?? "",
     TMP: process.env.TMP ?? "",
     TEMP: process.env.TEMP ?? "",
@@ -251,10 +282,41 @@ export function compareReleaseCompareResults(
   return "changed";
 }
 
-async function installRelease(prefixDir: string, installRef: string, cwd: string) {
+async function resolveTrustedNpmCliPath() {
+  const envOverride = process.env.OPENCLAW_QA_NPM_CLI;
+  if (envOverride) {
+    if (!path.isAbsolute(envOverride)) {
+      throw new Error("OPENCLAW_QA_NPM_CLI must be an absolute path.");
+    }
+    return envOverride;
+  }
+  const nodeDir = path.dirname(process.execPath);
+  const nodeRoot = path.dirname(nodeDir);
+  const candidates = [
+    path.join(nodeRoot, "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(nodeRoot, "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(nodeDir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
+    path.join(nodeDir, "..", "node_modules", "npm", "bin", "npm-cli.js"),
+  ];
+  for (const candidate of candidates) {
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      // try next candidate
+    }
+  }
+  throw new Error(
+    "Unable to locate a trusted npm CLI. Set OPENCLAW_QA_NPM_CLI to an absolute npm-cli.js path.",
+  );
+}
+
+async function installRelease(prefixDir: string, installRef: string, cwd: string, homeDir: string) {
+  const npmCliPath = await resolveTrustedNpmCliPath();
   await execFileAsync(
-    "npm",
+    process.execPath,
     [
+      npmCliPath,
       "install",
       "-g",
       "--prefix",
@@ -266,7 +328,7 @@ async function installRelease(prefixDir: string, installRef: string, cwd: string
     ],
     {
       cwd,
-      env: buildInstallCommandEnv(),
+      env: buildInstallCommandEnv(homeDir),
       maxBuffer: 1024 * 1024 * 20,
     },
   );
@@ -438,10 +500,19 @@ function resolveInstallRef(ref: string, repoRoot: string, allowUnsafeInstallRef 
       "Unsafe install ref blocked. Use a published version/dist-tag, `current-checkout`, or pass --allow-unsafe-install-ref.",
     );
   }
-  if (ref.endsWith(".tgz") || ref.startsWith(".") || ref.startsWith("/") || ref.startsWith("~")) {
-    return path.resolve(repoRoot, ref);
+  if (ref.endsWith(".tgz")) {
+    const resolved = path.resolve(repoRoot, ref);
+    const relative = path.relative(path.resolve(repoRoot), resolved);
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error(
+        "Unsafe install ref tarballs must stay within the repo root. External install paths are blocked.",
+      );
+    }
+    return resolved;
   }
-  return `openclaw@${ref}`;
+  throw new Error(
+    "Unsafe install ref only supports repo-contained local .tgz files. Use `current-checkout` for the working tree or a published version/dist-tag for registry installs.",
+  );
 }
 
 export function resolveQaReleaseOutputDir(params: {
@@ -466,28 +537,54 @@ export function resolveQaReleaseOutputDir(params: {
   );
 }
 
-function toPersistedCommandResult(commandResult: QaReleaseCompareCommandResult) {
+async function assertNoSymlinkPathComponents(repoRoot: string, outputDir: string) {
+  const resolvedRepoRoot = path.resolve(repoRoot);
+  const resolvedOutputDir = path.resolve(outputDir);
+  const relative = path.relative(resolvedRepoRoot, resolvedOutputDir);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("--output-dir must stay within the repo root.");
+  }
+  let current = resolvedRepoRoot;
+  const segments = relative.split(path.sep).filter(Boolean);
+  for (const segment of segments) {
+    current = path.join(current, segment);
+    try {
+      const stat = await lstat(current);
+      if (stat.isSymbolicLink()) {
+        throw new Error("--output-dir cannot traverse symlinked paths.");
+      }
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "ENOENT") {
+        continue;
+      }
+      throw error;
+    }
+  }
+}
+
+export function toPersistedCommandResult(commandResult: QaReleaseCompareCommandResult) {
   const rest = { ...commandResult };
   delete rest.stdout;
   delete rest.stderr;
-  return rest;
+  return rest satisfies PersistedQaReleaseCompareCommandResult;
 }
 
 function toPersistedInstall(install: QaReleaseCompareInstall) {
   return {
     ...install,
     commandResults: install.commandResults.map(toPersistedCommandResult),
-  };
+  } satisfies PersistedQaReleaseCompareInstall;
 }
 
-function toPersistedSmokeResult(result: QaReleaseSmokeResult) {
+export function toPersistedSmokeResult(result: QaReleaseSmokeResult) {
   return {
     ...result,
     install: toPersistedInstall(result.install),
-  };
+  } satisfies PersistedQaReleaseSmokeResult;
 }
 
-function toPersistedCompareResult(result: QaReleaseCompareResult) {
+export function toPersistedCompareResult(result: QaReleaseCompareResult) {
   return {
     ...result,
     oldInstall: toPersistedInstall(result.oldInstall),
@@ -497,7 +594,7 @@ function toPersistedCompareResult(result: QaReleaseCompareResult) {
       old: toPersistedCommandResult(entry.old),
       new: toPersistedCommandResult(entry.new),
     })),
-  };
+  } satisfies PersistedQaReleaseCompareResult;
 }
 
 async function createIsolatedInstall(params: {
@@ -518,7 +615,8 @@ async function createIsolatedInstall(params: {
     params.allowUnsafeInstallRef,
   );
 
-  await installRelease(prefixDir, installRef, params.repoRoot);
+  await mkdir(homeDir, { recursive: true });
+  await installRelease(prefixDir, installRef, params.repoRoot, homeDir);
 
   const binPath = path.join(prefixDir, "bin", "openclaw");
   await writeScenarioConfigFile(homeDir, buildScenarioConfig(params.basePort));
@@ -598,6 +696,7 @@ export async function runQaReleaseSmoke(
     outputDir: params.outputDir,
     fallbackParts: [".artifacts", "qa", "release-smoke", sanitizeSegment(params.ref)],
   });
+  await assertNoSymlinkPathComponents(params.repoRoot, outputDir);
   await mkdir(outputDir, { recursive: true });
 
   const tempRoot = await mkdtemp(path.join(tmpdir(), "openclaw-qa-release-smoke-"));
@@ -650,6 +749,7 @@ export async function runQaReleaseCompare(
       `${sanitizeSegment(params.oldRef)}-vs-${sanitizeSegment(params.newRef)}`,
     ],
   });
+  await assertNoSymlinkPathComponents(params.repoRoot, outputDir);
   await mkdir(outputDir, { recursive: true });
 
   const tempRoot = await mkdtemp(path.join(tmpdir(), "openclaw-qa-release-compare-"));

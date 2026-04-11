@@ -1,0 +1,4 @@
+interface:
+  display_name: "Experimental"
+  short_description: "Experimental menu-driven guided workflows."
+  default_prompt: "Use this skill only when the user explicitly requests experimental handling. Start with a short menu, then run an LLM-guided workflow for the selected flow."

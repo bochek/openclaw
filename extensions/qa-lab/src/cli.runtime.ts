@@ -9,7 +9,12 @@ import { runQaManualLane } from "./manual-lane.runtime.js";
 import { startQaMockOpenAiServer } from "./mock-openai-server.js";
 import { runQaMultipass } from "./multipass.runtime.js";
 import { normalizeQaThinkingLevel, type QaThinkingLevel } from "./qa-gateway-config.js";
-import { runQaReleaseCompare, runQaReleaseSmoke } from "./release-compare.js";
+import {
+  runQaReleaseCompare,
+  runQaReleaseSmoke,
+  toPersistedCompareResult,
+  toPersistedSmokeResult,
+} from "./release-compare.js";
 import {
   defaultQaModelForMode,
   normalizeQaProviderMode,
@@ -393,7 +398,10 @@ export async function runQaDockerScaffoldCommand(opts: {
   bindUiDist?: boolean;
 }) {
   const repoRoot = path.resolve(opts.repoRoot ?? process.cwd());
-  const outputDir = resolveRepoRelativeOutputDir(repoRoot, opts.outputDir);
+  const outputDir =
+    opts.outputDir && path.isAbsolute(opts.outputDir)
+      ? opts.outputDir
+      : resolveRepoRelativeOutputDir(repoRoot, opts.outputDir);
   if (!outputDir) {
     throw new Error("--output-dir is required.");
   }
@@ -475,7 +483,10 @@ export async function runQaReleaseCompareCommand(opts: {
   newRef: string;
 }) {
   const repoRoot = path.resolve(opts.repoRoot ?? process.cwd());
-  const outputDir = resolveRepoRelativeOutputDir(repoRoot, opts.outputDir);
+  const outputDir =
+    opts.outputDir && path.isAbsolute(opts.outputDir)
+      ? opts.outputDir
+      : resolveRepoRelativeOutputDir(repoRoot, opts.outputDir);
   const result = await runQaReleaseCompare({
     repoRoot,
     oldRef: opts.oldRef,
@@ -490,7 +501,7 @@ export async function runQaReleaseCompareCommand(opts: {
         : undefined,
   });
   if (opts.json) {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(toPersistedCompareResult(result), null, 2)}\n`);
     terminateOneShotQaCommandIfNeeded();
     return;
   }
@@ -510,7 +521,10 @@ export async function runQaReleaseSmokeCommand(opts: {
   ref: string;
 }) {
   const repoRoot = path.resolve(opts.repoRoot ?? process.cwd());
-  const outputDir = resolveRepoRelativeOutputDir(repoRoot, opts.outputDir);
+  const outputDir =
+    opts.outputDir && path.isAbsolute(opts.outputDir)
+      ? opts.outputDir
+      : resolveRepoRelativeOutputDir(repoRoot, opts.outputDir);
   const result = await runQaReleaseSmoke({
     repoRoot,
     ref: opts.ref,
@@ -524,7 +538,7 @@ export async function runQaReleaseSmokeCommand(opts: {
         : undefined,
   });
   if (opts.json) {
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    process.stdout.write(`${JSON.stringify(toPersistedSmokeResult(result), null, 2)}\n`);
   } else {
     process.stdout.write(`QA release smoke report: ${result.reportPath}\n`);
     process.stdout.write(`QA release smoke summary: ${result.summaryPath}\n`);
