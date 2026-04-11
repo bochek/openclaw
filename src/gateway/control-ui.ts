@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import type { OpenClawConfig } from "../config/config.js";
+import type { OpenClawConfig } from "../config/types.openclaw.js";
 import { matchBoundaryFileOpenFailure, openBoundaryFileSync } from "../infra/boundary-file-read.js";
 import {
   isPackageProvenControlUiRootSync,
@@ -313,8 +313,9 @@ export async function handleControlUiAssistantMediaRequest(
     respondControlUiNotFound(res);
     return true;
   }
-  const localRoots =
-    opts?.config ? getAgentScopedMediaLocalRoots(opts.config, opts.agentId) : getDefaultLocalRoots();
+  const localRoots = opts?.config
+    ? getAgentScopedMediaLocalRoots(opts.config, opts.agentId)
+    : getDefaultLocalRoots();
 
   if (url.searchParams.get("meta") === "1") {
     const availability = await resolveAssistantMediaAvailability(source, localRoots);
