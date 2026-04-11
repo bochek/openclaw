@@ -179,7 +179,7 @@ describe("plugins cli list", () => {
             {
               level: "error",
               message:
-                "Authorization: Bearer topsecret file:///tmp/secret-plugin/index.js https://user:pass@example.com/hook?token=abc",
+                "Authorization: Bearer topsecret file:///tmp/secret-plugin/index.js https://user:pass@example.com/hook?token=abc Cookie: session=abc ghp_abcdefghijklmnopqrstuvwxyz1234 eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature",
             },
           ],
         },
@@ -193,6 +193,9 @@ describe("plugins cli list", () => {
     expect(output).not.toContain("topsecret");
     expect(output).not.toContain("/tmp/secret-plugin");
     expect(output).not.toContain("user:pass@example.com");
+    expect(output).not.toContain("session=abc");
+    expect(output).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz1234");
+    expect(output).not.toContain("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9");
   });
 
   it("exits non-zero for non-json smoke failures", async () => {

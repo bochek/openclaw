@@ -151,10 +151,15 @@ function sanitizePluginSmokeJsonText(value: string | undefined): string | undefi
   if (!value) {
     return value;
   }
-  const redactedSecrets = redactSensitiveUrlLikeString(redactSecrets(value)).replace(
-    /((?:^|[\s"'`])(?:[A-Z0-9_]*?(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY|REFRESH_TOKEN))\s*[=:]\s*)[^\s\r\n"'`]+/gm,
-    "$1<REDACTED>",
-  );
+  const redactedSecrets = redactSensitiveUrlLikeString(redactSecrets(value))
+    .replace(
+      /((?:^|[\s"'`])(?:[A-Z0-9_]*?(?:TOKEN|SECRET|PASSWORD|API_KEY|ACCESS_KEY|REFRESH_TOKEN))\s*[=:]\s*)[^\s\r\n"'`]+/gm,
+      "$1<REDACTED>",
+    )
+    .replace(/\b(Authorization)\s*:\s*[^\r\n]+/gi, "$1: <REDACTED>")
+    .replace(/\b(Set-Cookie|Cookie)\s*:\s*[^\r\n]+/gi, "$1: <REDACTED>")
+    .replace(/\b(ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})\b/g, "<REDACTED>")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "<REDACTED>");
   const redactedUrls = redactedSecrets.replace(/\bhttps?:\/\/[^/\s"'`]+/gi, (match) =>
     match.replace(/\/\/[^/\s"'`]+@/, "//***:***@"),
   );

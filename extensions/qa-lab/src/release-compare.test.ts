@@ -265,6 +265,8 @@ describe("qa release compare", () => {
     });
 
     expect(persisted.oldInstall.installRef).toBeUndefined();
+    expect(persisted.oldInstall.requestedRef).toBe("<local-ref>");
     expect(persisted.newInstall.installRef).toBe("openclaw@2026.4.10");
+    expect(persisted.newInstall.requestedRef).toBe("2026.4.10");
   });
 });

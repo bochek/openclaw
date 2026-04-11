@@ -161,9 +161,28 @@ export function redactPersistedCommandText(text: string) {
     .replace(/\b(xox[baprs]-[A-Za-z0-9-]{10,})\b/g, "<REDACTED>");
 }
 
-function buildRuntimeCommandEnv(homeDir: string) {
+function isRepoContainedPath(candidatePath: string, repoRoot: string) {
+  const resolvedCandidate = path.resolve(candidatePath);
+  const resolvedRoot = path.resolve(repoRoot);
+  return (
+    resolvedCandidate === resolvedRoot || resolvedCandidate.startsWith(`${resolvedRoot}${path.sep}`)
+  );
+}
+
+function buildRuntimeCommandEnv(homeDir: string, repoRoot: string) {
+  const nodeDir = path.dirname(process.execPath);
+  const safePathEntries = Array.from(
+    new Set(
+      [nodeDir, ...(process.env.PATH ?? "").split(path.delimiter)].filter((entry) => {
+        if (!entry) {
+          return false;
+        }
+        return !isRepoContainedPath(entry, repoRoot) && !isRepoContainedPath(entry, process.cwd());
+      }),
+    ),
+  );
   return {
-    PATH: process.env.PATH ?? "",
+    PATH: safePathEntries.join(path.delimiter),
     HOME: homeDir,
     XDG_CONFIG_HOME: path.join(homeDir, ".config"),
     XDG_CACHE_HOME: path.join(homeDir, ".cache"),
@@ -179,6 +198,10 @@ function buildRuntimeCommandEnv(homeDir: string) {
     NO_COLOR: process.env.NO_COLOR ?? "",
     OPENCLAW_HOME: homeDir,
   };
+}
+
+function toSafeDisplayRef(requestedRef: string) {
+  return isSafeRegistryInstallRef(requestedRef) ? requestedRef : "<local-ref>";
 }
 
 function scenarioCommands(scenarioId: QaReleaseCompareScenarioId): QaReleaseCompareCommandSpec[] {
@@ -368,7 +391,7 @@ function scheduleTempRootCleanup(tempRoot: string) {
 async function readVersion(binPath: string, homeDir: string, cwd: string) {
   const { stdout } = await execFileAsync(process.execPath, [binPath, "--version"], {
     cwd,
-    env: buildRuntimeCommandEnv(homeDir),
+    env: buildRuntimeCommandEnv(homeDir, cwd),
     maxBuffer: 1024 * 1024 * 2,
   });
   return stdout.trim();
@@ -432,7 +455,7 @@ async function runReleaseCommand(params: {
   try {
     const result = await execFileAsync(process.execPath, [params.binPath, ...params.command.args], {
       cwd: params.cwd,
-      env: buildRuntimeCommandEnv(params.homeDir),
+      env: buildRuntimeCommandEnv(params.homeDir, params.cwd),
       timeout: params.timeoutMs,
       maxBuffer: 1024 * 1024 * 8,
     });
@@ -475,8 +498,8 @@ function renderMarkdownReport(result: QaReleaseCompareResult) {
   const lines = [
     `# QA Release Compare`,
     ``,
-    `- Old: \`${mdCode(result.oldInstall.requestedRef)}\` (${result.oldInstall.versionText})`,
-    `- New: \`${mdCode(result.newInstall.requestedRef)}\` (${result.newInstall.versionText})`,
+    `- Old: \`${mdCode(toSafeDisplayRef(result.oldInstall.requestedRef))}\` (${result.oldInstall.versionText})`,
+    `- New: \`${mdCode(toSafeDisplayRef(result.newInstall.requestedRef))}\` (${result.newInstall.versionText})`,
     `- Scenario: \`${result.scenarioId}\``,
     ``,
     `## Command Diff`,
@@ -499,7 +522,7 @@ function renderSmokeMarkdownReport(result: QaReleaseSmokeResult) {
   const lines = [
     `# QA Release Smoke`,
     ``,
-    `- Ref: \`${mdCode(result.install.requestedRef)}\` (${result.install.versionText})`,
+    `- Ref: \`${mdCode(toSafeDisplayRef(result.install.requestedRef))}\` (${result.install.versionText})`,
     `- Scenario: \`${result.scenarioId}\``,
     `- Classification: \`${result.classification}\``,
     ``,
@@ -609,7 +632,7 @@ function toPersistedInstall(install: QaReleaseCompareInstall) {
     : undefined;
   return {
     label: install.label,
-    requestedRef: install.requestedRef,
+    requestedRef: toSafeDisplayRef(install.requestedRef),
     ...(safeInstallRef ? { installRef: safeInstallRef } : {}),
     versionText: install.versionText,
     commandResults: install.commandResults.map(toPersistedCommandResult),
