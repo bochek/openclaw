@@ -344,6 +344,7 @@ describe("createBotFrameworkJwtValidator", () => {
 
 function makeFakeSdk() {
   const appInstances: Record<string, unknown>[] = [];
+  const FakeClient = function FakeClient() {};
   const FakeApp = class {
     opts: Record<string, unknown>;
     constructor(opts: Record<string, unknown>) {
@@ -351,7 +352,7 @@ function makeFakeSdk() {
       appInstances.push(opts);
     }
   };
-  return { sdk: { App: FakeApp as any, Client: class {} as any }, appInstances, FakeApp };
+  return { sdk: { App: FakeApp as any, Client: FakeClient as any }, appInstances, FakeApp };
 }
 
 describe("createMSTeamsApp – secret credentials", () => {
@@ -493,13 +494,14 @@ function makeFakeApp() {
 
 function makeFakeApiSdk() {
   const createFn = vi.fn().mockResolvedValue({ id: "new-activity-id" });
+  const FakeApp = function FakeApp() {};
   const FakeClient = class {
     conversations = {
       activities: (_convId: string) => ({ create: createFn }),
     };
   };
   return {
-    sdk: { App: class {} as any, Client: FakeClient as any },
+    sdk: { App: FakeApp as any, Client: FakeClient as any },
     createFn,
   };
 }
