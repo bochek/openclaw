@@ -273,6 +273,7 @@ export type HooksRequestHandler = (req: IncomingMessage, res: ServerResponse) =>
 type GatewayHttpRequestStage = {
   name: string;
   run: () => Promise<boolean> | boolean;
+  continueOnError?: boolean;
 };
 
 export async function runGatewayHttpRequestStages(
@@ -284,6 +285,9 @@ export async function runGatewayHttpRequestStages(
         return true;
       }
     } catch (err) {
+      if (!stage.continueOnError) {
+        throw err;
+      }
       // Log and skip the failing stage so subsequent stages (control-ui,
       // gateway-probes, etc.) remain reachable. A common trigger is a
       // plugin-owned route/runtime code still failing to load an optional dependency.
@@ -351,6 +355,7 @@ function buildPluginRequestStages(params: {
     },
     {
       name: "plugin-http",
+      continueOnError: true,
       run: () => {
         const pathContext =
           params.pluginPathContext ?? resolvePluginRoutePathContext(params.requestPath);

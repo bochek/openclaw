@@ -115,7 +115,11 @@ export function resolveCanvasDocumentDir(
 
 export function buildCanvasDocumentEntryUrl(documentId: string, entrypoint: string): string {
   const normalizedEntrypoint = normalizeLogicalPath(entrypoint);
-  return `${CANVAS_HOST_PATH}/${CANVAS_DOCUMENTS_DIR_NAME}/${encodeURIComponent(documentId)}/${normalizedEntrypoint}`;
+  const encodedEntrypoint = normalizedEntrypoint
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+  return `${CANVAS_HOST_PATH}/${CANVAS_DOCUMENTS_DIR_NAME}/${encodeURIComponent(documentId)}/${encodedEntrypoint}`;
 }
 
 export function buildCanvasDocumentAssetUrl(documentId: string, logicalPath: string): string {
