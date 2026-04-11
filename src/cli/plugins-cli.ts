@@ -535,7 +535,7 @@ export function registerPluginsCli(program: Command) {
       if (opts.json) {
         defaultRuntime.writeJson(buildSafePluginSmokeJsonReport(report));
         if (hasFailures) {
-          defaultRuntime.exit(1);
+          process.exitCode = 1;
         }
         return;
       }

@@ -700,6 +700,35 @@ describe("plugin status reports", () => {
     expect(report.summary.errorCount).toBe(1);
   });
 
+  it("treats plugin-scoped error diagnostics as smoke failures even when status is loaded", () => {
+    setSinglePluginLoadResult(
+      createPluginRecord({
+        id: "demo",
+        status: "loaded",
+      }),
+      {
+        diagnostics: [
+          {
+            level: "error",
+            pluginId: "demo",
+            message: "duplicate gateway registration",
+          },
+        ],
+      },
+    );
+
+    const report = buildPluginSmokeReport({ config: {} });
+
+    expect(report.classification).toBe("load_error");
+    expect(report.entries).toEqual([
+      expect.objectContaining({
+        pluginId: "demo",
+        classification: "load_error",
+      }),
+    ]);
+    expect(report.summary.errorCount).toBe(1);
+  });
+
   it("builds inspect reports for every loaded plugin", () => {
     setPluginLoadResult({
       plugins: [

@@ -315,6 +315,14 @@ function classifyPluginSmokeEntry(params: {
   plugin: PluginRegistry["plugins"][number];
   diagnostics: PluginDiagnostic[];
 }): Pick<PluginSmokeEntry, "classification" | "summary"> {
+  const errorDiagnostics = params.diagnostics.filter((entry) => entry.level === "error");
+  if (errorDiagnostics.length > 0) {
+    return classifyPluginSmokeDiagnostics({
+      diagnostics: errorDiagnostics,
+      failurePhase: params.plugin.failurePhase,
+    });
+  }
+
   if (params.plugin.status !== "error") {
     return {
       classification: "ok",
@@ -323,7 +331,7 @@ function classifyPluginSmokeEntry(params: {
   }
 
   return classifyPluginSmokeDiagnostics({
-    diagnostics: params.diagnostics,
+    diagnostics: errorDiagnostics,
     failurePhase: params.plugin.failurePhase,
   });
 }
@@ -391,7 +399,7 @@ export function buildPluginSmokeReport(
     summary: {
       pluginCount: report.plugins.length,
       loadedCount: report.plugins.filter((plugin) => plugin.status === "loaded").length,
-      errorCount: entries.filter((entry) => entry.status === "error").length,
+      errorCount: entries.filter((entry) => entry.classification !== "ok").length,
       disabledCount: report.plugins.filter((plugin) => plugin.status === "disabled").length,
     },
     entries,

@@ -12,6 +12,7 @@ import {
 describe("plugins cli list", () => {
   beforeEach(() => {
     resetPluginsCliTestState();
+    process.exitCode = undefined;
   });
 
   it("includes imported state in JSON output", async () => {
@@ -89,9 +90,10 @@ describe("plugins cli list", () => {
       diagnostics: [],
     });
 
-    await expect(runPluginsCommand(["plugins", "smoke", "--json"])).rejects.toThrow("__exit__:1");
+    await runPluginsCommand(["plugins", "smoke", "--json"]);
 
     expect(buildPluginSmokeReport).toHaveBeenCalledWith();
+    expect(process.exitCode).toBe(1);
     expect(JSON.parse(runtimeLogs[0] ?? "null")).toEqual(
       expect.objectContaining({
         classification: "packaged_entry_missing",
@@ -143,9 +145,10 @@ describe("plugins cli list", () => {
       ],
     });
 
-    await expect(runPluginsCommand(["plugins", "smoke", "--json"])).rejects.toThrow("__exit__:1");
+    await runPluginsCommand(["plugins", "smoke", "--json"]);
 
     const payload = JSON.parse(runtimeLogs[0] ?? "null");
+    expect(process.exitCode).toBe(1);
     expect(payload.workspaceDir).toBeUndefined();
     expect(payload.entries[0].diagnostics[0].source).toBeUndefined();
     expect(payload.entries[0].diagnostics[0].message).not.toContain("topsecret");
@@ -268,5 +271,33 @@ describe("plugins cli list", () => {
     expect(output).toContain("phase: load\\nphase");
     expect(output).not.toContain("\u001B[31m");
     expect(output).not.toContain("\u001B[2J");
+  });
+
+  it("sets process exit code instead of hard-exiting for failing smoke JSON", async () => {
+    buildPluginSmokeReport.mockReturnValue({
+      scenarioId: "bundled-channels",
+      classification: "load_error",
+      summary: {
+        pluginCount: 1,
+        loadedCount: 0,
+        errorCount: 1,
+        disabledCount: 0,
+      },
+      entries: [
+        {
+          pluginId: "demo",
+          pluginName: "Demo",
+          status: "error",
+          classification: "load_error",
+          summary: "plugin failed to load",
+          diagnostics: [{ level: "error", message: "plugin failed to load" }],
+        },
+      ],
+      diagnostics: [],
+    });
+
+    await runPluginsCommand(["plugins", "smoke", "--json"]);
+
+    expect(process.exitCode).toBe(1);
   });
 });

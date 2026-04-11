@@ -309,6 +309,7 @@ async function resolveTrustedNpmCliPath() {
   const nodeDir = path.dirname(process.execPath);
   const nodeRoot = path.dirname(nodeDir);
   const candidates = [
+    path.join(nodeDir, "node_modules", "npm", "bin", "npm-cli.js"),
     path.join(nodeRoot, "lib", "node_modules", "npm", "bin", "npm-cli.js"),
     path.join(nodeRoot, "node_modules", "npm", "bin", "npm-cli.js"),
     path.join(nodeDir, "..", "lib", "node_modules", "npm", "bin", "npm-cli.js"),
