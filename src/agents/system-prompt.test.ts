@@ -652,7 +652,21 @@ describe("buildAgentSystemPrompt", () => {
     });
 
     expect(prompt).toContain("channel=telegram");
-    expect(prompt).toContain("capabilities=inlineButtons");
+    expect(prompt).toContain("capabilities=inlinebuttons");
+  });
+
+  it("canonicalizes runtime provider capabilities before rendering", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      runtimeInfo: {
+        channel: "telegram",
+        capabilities: [" InlineButtons ", "voice", "inlinebuttons", "Voice"],
+      },
+    });
+
+    expect(prompt).toContain("channel=telegram");
+    expect(prompt).toContain("capabilities=inlinebuttons,voice");
+    expect(prompt).not.toContain("capabilities= InlineButtons ,voice,inlinebuttons,Voice");
   });
 
   it("includes agent id in runtime when provided", () => {
@@ -707,8 +721,18 @@ describe("buildAgentSystemPrompt", () => {
     expect(line).toContain("model=anthropic/claude");
     expect(line).toContain("default_model=anthropic/claude-opus-4-5");
     expect(line).toContain("channel=telegram");
-    expect(line).toContain("capabilities=inlineButtons");
+    expect(line).toContain("capabilities=inlinebuttons");
     expect(line).toContain("thinking=low");
+  });
+
+  it("renders extra system prompt exactly once", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      extraSystemPrompt: "Custom runtime context",
+    });
+
+    expect(prompt.match(/Custom runtime context/g)).toHaveLength(1);
+    expect(prompt.match(/## Group Chat Context/g)).toHaveLength(1);
   });
 
   it("describes sandboxed runtime and elevated when allowed", () => {
