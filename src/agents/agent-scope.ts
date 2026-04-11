@@ -68,7 +68,7 @@ export function listAgentEntries(cfg: OpenClawConfig): AgentEntry[] {
   if (!Array.isArray(list)) {
     return [];
   }
-  return list.filter((entry): entry is AgentEntry => Boolean(entry && typeof entry === "object"));
+  return list.filter((entry): entry is AgentEntry => entry !== null && typeof entry === "object");
 }
 
 export function listAgentIds(cfg: OpenClawConfig): string[] {
@@ -181,28 +181,6 @@ export function resolveAgentExecutionContract(
   }
   const agentContract = resolveAgentConfig(cfg, agentId)?.embeddedPi?.executionContract;
   return agentContract ?? defaultContract;
-}
-
-export function isStrictAgenticExecutionContractActive(params: {
-  config?: OpenClawConfig;
-  sessionKey?: string;
-  agentId?: string | null;
-  provider?: string | null;
-  modelId?: string | null;
-}): boolean {
-  const { sessionAgentId } = resolveSessionAgentIds({
-    sessionKey: params.sessionKey,
-    config: params.config,
-    agentId: params.agentId ?? undefined,
-  });
-  if (resolveAgentExecutionContract(params.config, sessionAgentId) !== "strict-agentic") {
-    return false;
-  }
-  const provider = normalizeLowercaseStringOrEmpty(params.provider ?? "");
-  if (provider !== "openai" && provider !== "openai-codex") {
-    return false;
-  }
-  return /^gpt-5(?:[.-]|$)/i.test(params.modelId?.trim() ?? "");
 }
 
 export function resolveAgentSkillsFilter(
