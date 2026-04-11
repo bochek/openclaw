@@ -1918,6 +1918,7 @@ export function renderApp(state: AppViewState) {
               assistantAvatar: state.assistantAvatar,
               localMediaPreviewRoots: state.localMediaPreviewRoots,
               embedSandboxMode: state.embedSandboxMode,
+              allowExternalEmbedUrls: state.allowExternalEmbedUrls,
               assistantAttachmentAuthToken: resolveAssistantAttachmentAuthToken(state),
               basePath: state.basePath ?? "",
             })

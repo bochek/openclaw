@@ -163,6 +163,7 @@ export class OpenClawApp extends LitElement {
   @state() assistantAgentId = bootAssistantIdentity.agentId ?? null;
   @state() localMediaPreviewRoots: string[] = [];
   @state() embedSandboxMode: "strict" | "scripts" | "trusted" = "scripts";
+  @state() allowExternalEmbedUrls = false;
   @state() serverVersion: string | null = null;
 
   @state() sessionKey = this.settings.sessionKey;

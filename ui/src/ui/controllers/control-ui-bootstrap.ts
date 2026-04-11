@@ -14,6 +14,7 @@ export type ControlUiBootstrapState = {
   serverVersion: string | null;
   localMediaPreviewRoots: string[];
   embedSandboxMode: ControlUiEmbedSandboxMode;
+  allowExternalEmbedUrls: boolean;
 };
 
 export async function loadControlUiBootstrapConfig(state: ControlUiBootstrapState) {
@@ -57,6 +58,7 @@ export async function loadControlUiBootstrapConfig(state: ControlUiBootstrapStat
         : parsed.embedSandbox === "strict"
           ? "strict"
           : "scripts";
+    state.allowExternalEmbedUrls = parsed.allowExternalEmbedUrls === true;
   } catch {
     // Ignore bootstrap failures; UI will update identity after connecting.
   }

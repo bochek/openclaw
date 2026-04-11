@@ -20,6 +20,7 @@ export type MarkdownSidebarProps = {
   onViewRawText: () => void;
   canvasHostUrl?: string | null;
   embedSandboxMode?: EmbedSandboxMode;
+  allowExternalEmbedUrls?: boolean;
 };
 
 export function renderMarkdownSidebar(props: MarkdownSidebarProps) {
@@ -52,8 +53,11 @@ export function renderMarkdownSidebar(props: MarkdownSidebarProps) {
                           content,
                           props.embedSandboxMode ?? "scripts",
                         )}
-                        src=${resolveCanvasIframeUrl(content.entryUrl, props.canvasHostUrl) ??
-                        nothing}
+                        src=${resolveCanvasIframeUrl(
+                          content.entryUrl,
+                          props.canvasHostUrl,
+                          props.allowExternalEmbedUrls ?? false,
+                        ) ?? nothing}
                         style=${content.preferredHeight
                           ? `height:${content.preferredHeight}px`
                           : ""}

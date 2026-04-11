@@ -30,6 +30,7 @@ type LifecycleHost = {
   serverVersion: string | null;
   localMediaPreviewRoots: string[];
   embedSandboxMode: "strict" | "scripts" | "trusted";
+  allowExternalEmbedUrls: boolean;
   chatHasAutoScrolled: boolean;
   chatManualRefreshInFlight: boolean;
   chatLoading: boolean;

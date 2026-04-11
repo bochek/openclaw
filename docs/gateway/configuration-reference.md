@@ -2896,6 +2896,7 @@ See [Plugins](/tools/plugin).
       basePath: "/openclaw",
       // root: "dist/control-ui",
       // embedSandbox: "scripts", // strict | scripts | trusted
+      // allowExternalEmbedUrls: false, // dangerous: allow absolute external http(s) embed URLs
       // allowedOrigins: ["https://control.example.com"], // required for non-loopback Control UI
       // dangerouslyAllowHostHeaderOriginFallback: false, // dangerous Host-header origin fallback mode
       // allowInsecureAuth: false,

@@ -79,6 +79,7 @@ export type ChatProps = {
   splitRatio?: number;
   canvasHostUrl?: string | null;
   embedSandboxMode?: EmbedSandboxMode;
+  allowExternalEmbedUrls?: boolean;
   assistantName: string;
   assistantAvatar: string | null;
   localMediaPreviewRoots?: string[];
@@ -1277,6 +1278,7 @@ export function renderChat(props: ChatProps) {
                 assistantAttachmentAuthToken: props.assistantAttachmentAuthToken ?? null,
                 canvasHostUrl: props.canvasHostUrl,
                 embedSandboxMode: props.embedSandboxMode ?? "scripts",
+                allowExternalEmbedUrls: props.allowExternalEmbedUrls ?? false,
                 contextWindow:
                   activeSession?.contextTokens ?? props.sessions?.defaults?.contextTokens ?? null,
                 onDelete: () => {
@@ -1459,6 +1461,7 @@ export function renderChat(props: ChatProps) {
                   error: props.sidebarError ?? null,
                   canvasHostUrl: props.canvasHostUrl,
                   embedSandboxMode: props.embedSandboxMode ?? "scripts",
+                  allowExternalEmbedUrls: props.allowExternalEmbedUrls ?? false,
                   onClose: props.onCloseSidebar!,
                   onViewRawText: () => {
                     if (!props.sidebarContent || !props.onOpenSidebar) {

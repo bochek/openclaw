@@ -16,6 +16,7 @@ describe("loadControlUiBootstrapConfig", () => {
         serverVersion: "2026.3.7",
         localMediaPreviewRoots: ["/tmp/openclaw"],
         embedSandbox: "scripts",
+        allowExternalEmbedUrls: true,
       }),
     });
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
@@ -27,6 +28,7 @@ describe("loadControlUiBootstrapConfig", () => {
       assistantAgentId: null,
       localMediaPreviewRoots: [],
       embedSandboxMode: "scripts" as const,
+      allowExternalEmbedUrls: false,
       serverVersion: null,
     };
 
@@ -42,6 +44,7 @@ describe("loadControlUiBootstrapConfig", () => {
     expect(state.serverVersion).toBe("2026.3.7");
     expect(state.localMediaPreviewRoots).toEqual(["/tmp/openclaw"]);
     expect(state.embedSandboxMode).toBe("scripts");
+    expect(state.allowExternalEmbedUrls).toBe(true);
 
     vi.unstubAllGlobals();
   });
@@ -57,6 +60,7 @@ describe("loadControlUiBootstrapConfig", () => {
       assistantAgentId: null,
       localMediaPreviewRoots: [],
       embedSandboxMode: "scripts" as const,
+      allowExternalEmbedUrls: false,
       serverVersion: null,
     };
 
@@ -68,6 +72,7 @@ describe("loadControlUiBootstrapConfig", () => {
     );
     expect(state.assistantName).toBe("Assistant");
     expect(state.embedSandboxMode).toBe("scripts");
+    expect(state.allowExternalEmbedUrls).toBe(false);
 
     vi.unstubAllGlobals();
   });
@@ -83,6 +88,7 @@ describe("loadControlUiBootstrapConfig", () => {
       assistantAgentId: null,
       localMediaPreviewRoots: [],
       embedSandboxMode: "scripts" as const,
+      allowExternalEmbedUrls: false,
       serverVersion: null,
     };
 

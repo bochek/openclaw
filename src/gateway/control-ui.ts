@@ -590,6 +590,7 @@ export function handleControlUiHttpRequest(
           : config?.gateway?.controlUi?.embedSandbox === "strict"
             ? "strict"
             : "scripts",
+      allowExternalEmbedUrls: config?.gateway?.controlUi?.allowExternalEmbedUrls === true,
     } satisfies ControlUiBootstrapConfig);
     return true;
   }

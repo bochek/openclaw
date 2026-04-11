@@ -11,11 +11,21 @@ function isCanvasHttpPath(pathname: string): boolean {
   );
 }
 
-function sanitizeCanvasEntryUrl(rawEntryUrl: string): string | undefined {
+function isExternalHttpUrl(entry: URL): boolean {
+  return entry.protocol === "http:" || entry.protocol === "https:";
+}
+
+function sanitizeCanvasEntryUrl(
+  rawEntryUrl: string,
+  allowExternalEmbedUrls = false,
+): string | undefined {
   try {
     const entry = new URL(rawEntryUrl, "http://localhost");
     if (entry.origin !== "http://localhost") {
-      return undefined;
+      if (!allowExternalEmbedUrls || !isExternalHttpUrl(entry)) {
+        return undefined;
+      }
+      return entry.toString();
     }
     if (!isCanvasHttpPath(entry.pathname)) {
       return undefined;
@@ -29,12 +39,13 @@ function sanitizeCanvasEntryUrl(rawEntryUrl: string): string | undefined {
 export function resolveCanvasIframeUrl(
   entryUrl: string | undefined,
   canvasHostUrl?: string | null,
+  allowExternalEmbedUrls = false,
 ): string | undefined {
   const rawEntryUrl = entryUrl?.trim();
   if (!rawEntryUrl) {
     return undefined;
   }
-  const safeEntryUrl = sanitizeCanvasEntryUrl(rawEntryUrl);
+  const safeEntryUrl = sanitizeCanvasEntryUrl(rawEntryUrl, allowExternalEmbedUrls);
   if (!safeEntryUrl) {
     return undefined;
   }

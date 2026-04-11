@@ -159,6 +159,7 @@ export function renderMessageGroup(
     assistantAttachmentAuthToken?: string | null;
     canvasHostUrl?: string | null;
     embedSandboxMode?: EmbedSandboxMode;
+    allowExternalEmbedUrls?: boolean;
     contextWindow?: number | null;
     onDelete?: () => void;
   },
@@ -700,8 +701,7 @@ function isLocalAttachmentPreviewAllowed(
       normalizedRoot.length > 0 &&
       comparableSources.some(
         (comparableSource) =>
-          comparableSource === normalizedRoot ||
-          comparableSource.startsWith(`${normalizedRoot}/`),
+          comparableSource === normalizedRoot || comparableSource.startsWith(`${normalizedRoot}/`),
       )
     );
   });
@@ -948,6 +948,7 @@ function renderInlineToolCards(
     onToggleToolExpanded?: (toolCardId: string) => void;
     canvasHostUrl?: string | null;
     embedSandboxMode?: EmbedSandboxMode;
+    allowExternalEmbedUrls?: boolean;
   },
 ) {
   return html`
@@ -961,6 +962,7 @@ function renderInlineToolCards(
           onOpenSidebar: opts.onOpenSidebar,
           canvasHostUrl: opts.canvasHostUrl,
           embedSandboxMode: opts.embedSandboxMode ?? "scripts",
+          allowExternalEmbedUrls: opts.allowExternalEmbedUrls ?? false,
         }),
       )}
     </div>
@@ -1044,6 +1046,7 @@ function renderGroupedMessage(
     localMediaPreviewRoots?: readonly string[];
     assistantAttachmentAuthToken?: string | null;
     embedSandboxMode?: EmbedSandboxMode;
+    allowExternalEmbedUrls?: boolean;
   },
   onOpenSidebar?: (content: SidebarContent) => void,
 ) {
@@ -1198,6 +1201,7 @@ function renderGroupedMessage(
                               onOpenSidebar,
                               opts.canvasHostUrl,
                               opts.embedSandboxMode ?? "scripts",
+                              opts.allowExternalEmbedUrls ?? false,
                             )
                           : renderInlineToolCards(toolCards, {
                               messageKey,
@@ -1206,6 +1210,7 @@ function renderGroupedMessage(
                               onToggleToolExpanded: opts.onToggleToolExpanded,
                               canvasHostUrl: opts.canvasHostUrl,
                               embedSandboxMode: opts.embedSandboxMode ?? "scripts",
+                              allowExternalEmbedUrls: opts.allowExternalEmbedUrls ?? false,
                             })
                         : nothing}
                     </div>
@@ -1259,6 +1264,7 @@ function renderGroupedMessage(
                   onToggleToolExpanded: opts.onToggleToolExpanded,
                   canvasHostUrl: opts.canvasHostUrl,
                   embedSandboxMode: opts.embedSandboxMode ?? "scripts",
+                  allowExternalEmbedUrls: opts.allowExternalEmbedUrls ?? false,
                 })
               : nothing}
           `}

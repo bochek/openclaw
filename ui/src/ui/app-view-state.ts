@@ -67,6 +67,7 @@ export type AppViewState = {
   assistantAgentId: string | null;
   localMediaPreviewRoots: string[];
   embedSandboxMode: EmbedSandboxMode;
+  allowExternalEmbedUrls: boolean;
   sessionKey: string;
   chatLoading: boolean;
   chatSending: boolean;

@@ -92,6 +92,11 @@ export type GatewayControlUiConfig = {
    * - trusted: allow scripts and same-origin privileges
    */
   embedSandbox?: "strict" | "scripts" | "trusted";
+  /**
+   * DANGEROUS: Allow hosted embeds to load absolute external http(s) URLs.
+   * Default off; prefer hosted /__openclaw__/canvas or /__openclaw__/a2ui content.
+   */
+  allowExternalEmbedUrls?: boolean;
   /** Allowed browser origins for Control UI/WebChat websocket connections. */
   allowedOrigins?: string[];
   /**

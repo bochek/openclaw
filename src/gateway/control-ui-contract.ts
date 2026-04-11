@@ -10,4 +10,5 @@ export type ControlUiBootstrapConfig = {
   serverVersion?: string;
   localMediaPreviewRoots?: string[];
   embedSandbox?: ControlUiEmbedSandboxMode;
+  allowExternalEmbedUrls?: boolean;
 };

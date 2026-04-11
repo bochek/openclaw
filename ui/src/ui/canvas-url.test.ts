@@ -27,6 +27,12 @@ describe("resolveCanvasIframeUrl", () => {
     expect(resolveCanvasIframeUrl("https://example.com/evil.html")).toBeUndefined();
   });
 
+  it("allows absolute external URLs only when explicitly enabled", () => {
+    expect(resolveCanvasIframeUrl("https://example.com/embed.html?x=1#y", undefined, true)).toBe(
+      "https://example.com/embed.html?x=1#y",
+    );
+  });
+
   it("rejects file URLs", () => {
     expect(resolveCanvasIframeUrl("file:///tmp/snake.html")).toBeUndefined();
   });

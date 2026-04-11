@@ -166,6 +166,10 @@ Use `trusted` only when the embedded document genuinely needs same-origin
 behavior. For most agent-generated games and interactive canvases, `scripts` is
 the safer choice.
 
+Absolute external `http(s)` embed URLs stay blocked by default. If you
+intentionally want `[embed url="https://..."]` to load third-party pages, set
+`gateway.controlUi.allowExternalEmbedUrls: true`.
+
 ## Tailnet access (recommended)
 
 ### Integrated Tailscale Serve (preferred)
