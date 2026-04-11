@@ -157,6 +157,7 @@ export function scheduleFollowupDrain(
             prompt,
             run,
             enqueuedAt: Date.now(),
+            messageId: collectedMessageIds.length === 1 ? collectedMessageIds[0] : undefined,
             collectedMessageIds: collectedMessageIds.length > 1 ? collectedMessageIds : undefined,
             ...routing,
           });
