@@ -193,7 +193,7 @@ function buildTranscriptReplyText(payloads: ReplyPayload[]): string {
         lines.push("[[reply_to_current]]");
       }
       const text = payload.text?.trim();
-      if (text) {
+      if (text && !isSuppressedControlReplyText(text)) {
         lines.push(text);
       }
       for (const mediaUrl of parts.mediaUrls) {

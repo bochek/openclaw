@@ -1790,6 +1790,24 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
     expect(extractFirstTextBlock(payload)).toBe("MEDIA:https://example.com/final.png");
   });
 
+  it("strips NO_REPLY from transcript text when final replies only carry media", async () => {
+    createTranscriptFixture("openclaw-chat-send-media-only-silent-final-");
+    mockState.finalPayload = {
+      text: "NO_REPLY",
+      mediaUrl: "https://example.com/final.png",
+    };
+    const respond = vi.fn();
+    const context = createChatContext();
+
+    const payload = await runNonStreamingChatSend({
+      context,
+      respond,
+      idempotencyKey: "idem-media-only-silent-final",
+    });
+
+    expect(extractFirstTextBlock(payload)).toBe("MEDIA:https://example.com/final.png");
+  });
+
   it("drops image attachments for text-only session models", async () => {
     createTranscriptFixture("openclaw-chat-send-text-only-attachments-");
     mockState.finalText = "ok";
