@@ -933,23 +933,14 @@ export function attachGatewayWsMessageHandler(params: {
               return replacementPending?.requestId;
             };
             if (pairing.request.silent === true) {
-              const requestedOperatorScopes = scopes.filter((scope) =>
-                scope.startsWith("operator."),
-              );
               approved = bootstrapProfileForSilentApproval
                 ? await approveBootstrapDevicePairing(
                     pairing.request.requestId,
                     bootstrapProfileForSilentApproval,
                   )
-                : requestedOperatorScopes.length > 0
-                  ? {
-                      status: "forbidden" as const,
-                      reason: requestedOperatorScopes.length > 0
-                        ? "caller-missing-scope"
-                        : "caller-scopes-required",
-                      scope: requestedOperatorScopes[0],
-                    }
-                  : await approveDevicePairing(pairing.request.requestId);
+                : await approveDevicePairing(pairing.request.requestId, {
+                    callerScopes: scopes,
+                  });
               if (approved?.status === "approved") {
                 if (bootstrapProfileForSilentApproval) {
                   handoffBootstrapProfile = bootstrapProfileForSilentApproval;

@@ -11,6 +11,7 @@ import {
   handleControlUiAvatarRequest,
   handleControlUiHttpRequest,
 } from "./control-ui.js";
+import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
 import { makeMockHttpResponse } from "./test-http-response.js";
 
 describe("handleControlUiHttpRequest", () => {
@@ -126,6 +127,18 @@ describe("handleControlUiHttpRequest", () => {
     return hardlinkPath;
   }
 
+  async function withAllowedAssistantMediaRoot<T>(params: {
+    prefix: string;
+    fn: (tmpRoot: string) => Promise<T>;
+  }) {
+    const tmpRoot = await fs.mkdtemp(path.join(resolvePreferredOpenClawTmpDir(), params.prefix));
+    try {
+      return await params.fn(tmpRoot);
+    } finally {
+      await fs.rm(tmpRoot, { recursive: true, force: true });
+    }
+  }
+
   async function withBasePathRootFixture<T>(params: {
     siblingDir: string;
     fn: (paths: { root: string; sibling: string }) => Promise<T>;
@@ -166,9 +179,9 @@ describe("handleControlUiHttpRequest", () => {
   });
 
   it("serves assistant local media through the control ui media route", async () => {
-    const tmpRoot = path.join("/tmp/openclaw", `ui-media-${Date.now()}`);
-    try {
-      await fs.mkdir(tmpRoot, { recursive: true });
+    await withAllowedAssistantMediaRoot({
+      prefix: "ui-media-",
+      fn: async (tmpRoot) => {
       const filePath = path.join(tmpRoot, "photo.png");
       await fs.writeFile(filePath, Buffer.from("not-a-real-png"));
       const { res, handled } = await runAssistantMediaRequest({
@@ -178,9 +191,8 @@ describe("handleControlUiHttpRequest", () => {
       });
       expect(handled).toBe(true);
       expect(res.statusCode).toBe(200);
-    } finally {
-      await fs.rm(tmpRoot, { recursive: true, force: true });
-    }
+      },
+    });
   });
 
   it("rejects assistant local media outside allowed preview roots", async () => {
@@ -200,9 +212,9 @@ describe("handleControlUiHttpRequest", () => {
   });
 
   it("reports assistant local media availability metadata", async () => {
-    const tmpRoot = path.join("/tmp/openclaw", `ui-media-meta-${Date.now()}`);
-    try {
-      await fs.mkdir(tmpRoot, { recursive: true });
+    await withAllowedAssistantMediaRoot({
+      prefix: "ui-media-meta-",
+      fn: async (tmpRoot) => {
       const filePath = path.join(tmpRoot, "photo.png");
       await fs.writeFile(filePath, Buffer.from("not-a-real-png"));
       const { res, handled, end } = await runAssistantMediaRequest({
@@ -213,9 +225,8 @@ describe("handleControlUiHttpRequest", () => {
       expect(handled).toBe(true);
       expect(res.statusCode).toBe(200);
       expect(JSON.parse(String(end.mock.calls[0]?.[0] ?? ""))).toEqual({ available: true });
-    } finally {
-      await fs.rm(tmpRoot, { recursive: true, force: true });
-    }
+      },
+    });
   });
 
   it("reports assistant local media availability failures with a reason", async () => {
@@ -234,9 +245,9 @@ describe("handleControlUiHttpRequest", () => {
   });
 
   it("rejects assistant local media without a valid auth token when auth is enabled", async () => {
-    const tmpRoot = path.join("/tmp/openclaw", `ui-media-auth-${Date.now()}`);
-    try {
-      await fs.mkdir(tmpRoot, { recursive: true });
+    await withAllowedAssistantMediaRoot({
+      prefix: "ui-media-auth-",
+      fn: async (tmpRoot) => {
       const filePath = path.join(tmpRoot, "photo.png");
       await fs.writeFile(filePath, Buffer.from("not-a-real-png"));
       const { res, handled, end } = await runAssistantMediaRequest({
@@ -247,15 +258,14 @@ describe("handleControlUiHttpRequest", () => {
       expect(handled).toBe(true);
       expect(res.statusCode).toBe(401);
       expect(String(end.mock.calls[0]?.[0] ?? "")).toContain("Unauthorized");
-    } finally {
-      await fs.rm(tmpRoot, { recursive: true, force: true });
-    }
+      },
+    });
   });
 
   it("rejects trusted-proxy assistant media requests from disallowed browser origins", async () => {
-    const tmpRoot = path.join("/tmp/openclaw", `ui-media-proxy-${Date.now()}`);
-    try {
-      await fs.mkdir(tmpRoot, { recursive: true });
+    await withAllowedAssistantMediaRoot({
+      prefix: "ui-media-proxy-",
+      fn: async (tmpRoot) => {
       const filePath = path.join(tmpRoot, "photo.png");
       await fs.writeFile(filePath, Buffer.from("not-a-real-png"));
       const { res, handled, end } = await runAssistantMediaRequest({
@@ -280,9 +290,8 @@ describe("handleControlUiHttpRequest", () => {
       expect(handled).toBe(true);
       expect(res.statusCode).toBe(401);
       expect(String(end.mock.calls[0]?.[0] ?? "")).toContain("Unauthorized");
-    } finally {
-      await fs.rm(tmpRoot, { recursive: true, force: true });
-    }
+      },
+    });
   });
 
   it("includes CSP hash for inline scripts in index.html", async () => {

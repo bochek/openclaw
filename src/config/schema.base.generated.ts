@@ -24098,6 +24098,11 @@ export const GENERATED_BASE_CONFIG_SCHEMA: BaseConfigSchemaResponse = {
       placeholder: "dist/control-ui",
       tags: ["network"],
     },
+    "gateway.controlUi.embedSandbox": {
+      label: "Control UI Embed Sandbox Mode",
+      help: 'Iframe sandbox policy for hosted Control UI embeds. "strict" disables scripts, "scripts" allows interactive embeds while keeping origin isolation (default), and "trusted" adds `allow-same-origin` for same-site documents that intentionally need stronger privileges.',
+      tags: ["security", "access", "advanced"],
+    },
     "gateway.controlUi.allowExternalEmbedUrls": {
       label: "Allow External Control UI Embed URLs",
       help: "DANGEROUS toggle that allows hosted embeds to load absolute external http(s) URLs. Keep this off unless your Control UI intentionally embeds trusted third-party pages; hosted /__openclaw__/canvas and /__openclaw__/a2ui documents do not need it.",

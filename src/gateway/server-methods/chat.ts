@@ -77,6 +77,7 @@ import { injectTimestamp, timestampOptsFromConfig } from "./agent-timestamp.js";
 import { setGatewayDedupeEntry } from "./agent-wait-dedupe.js";
 import { normalizeRpcAttachmentsToChatAttachments } from "./attachment-normalize.js";
 import { appendInjectedAssistantMessageToTranscript } from "./chat-transcript-inject.js";
+import { buildWebchatAudioContentBlocksFromReplyPayloads } from "./chat-webchat-media.js";
 import type {
   GatewayRequestContext,
   GatewayRequestHandlerOptions,
@@ -1205,6 +1206,7 @@ function transcriptHasIdempotencyKey(transcriptPath: string, idempotencyKey: str
 function appendAssistantTranscriptMessage(params: {
   message: string;
   label?: string;
+  content?: Array<Record<string, unknown>>;
   sessionId: string;
   storePath: string | undefined;
   sessionFile?: string;
@@ -1248,6 +1250,7 @@ function appendAssistantTranscriptMessage(params: {
     transcriptPath,
     message: params.message,
     label: params.label,
+    content: params.content,
     idempotencyKey: params.idempotencyKey,
     abortMeta: params.abortMeta,
   });
