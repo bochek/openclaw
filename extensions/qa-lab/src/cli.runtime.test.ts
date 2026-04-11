@@ -847,12 +847,12 @@ describe("qa cli runtime", () => {
       ...result,
       oldInstall: {
         ...result.oldInstall,
-        commandResults: result.oldInstall.commandResults.map((commandResult) => {
-          const rest = { ...commandResult };
-          delete rest.stdout;
-          delete rest.stderr;
-          return rest;
-        }),
+        commandResults: result.oldInstall.commandResults.map(
+          (commandResult: { stdout?: string; stderr?: string }) => {
+            const { stdout: _stdout, stderr: _stderr, ...rest } = commandResult;
+            return rest;
+          },
+        ),
       },
     }));
 

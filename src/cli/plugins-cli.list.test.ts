@@ -154,6 +154,44 @@ describe("plugins cli list", () => {
     expect(payload.diagnostics[0].message).not.toContain("sk-secret-token");
   });
 
+  it("redacts sensitive plugin smoke diagnostics in terminal output too", async () => {
+    buildPluginSmokeReport.mockReturnValue({
+      scenarioId: "bundled-channels",
+      classification: "load_error",
+      summary: {
+        pluginCount: 1,
+        loadedCount: 0,
+        errorCount: 1,
+        disabledCount: 0,
+      },
+      entries: [
+        {
+          pluginId: "telegram",
+          pluginName: "Telegram",
+          status: "error",
+          failurePhase: "path=/tmp/secret-plugin",
+          classification: "load_error",
+          summary: "file:///tmp/secret-plugin/index.js",
+          diagnostics: [
+            {
+              level: "error",
+              message:
+                "Authorization: Bearer topsecret file:///tmp/secret-plugin/index.js https://user:pass@example.com/hook?token=abc",
+            },
+          ],
+        },
+      ],
+      diagnostics: [],
+    });
+
+    await expect(runPluginsCommand(["plugins", "smoke"])).rejects.toThrow("__exit__:1");
+
+    const output = runtimeLogs.join("\n");
+    expect(output).not.toContain("topsecret");
+    expect(output).not.toContain("/tmp/secret-plugin");
+    expect(output).not.toContain("user:pass@example.com");
+  });
+
   it("exits non-zero for non-json smoke failures", async () => {
     buildPluginSmokeReport.mockReturnValue({
       scenarioId: "bundled-channels",

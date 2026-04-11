@@ -137,9 +137,11 @@ function formatInstallLines(install: PluginInstallRecord | undefined): string[] 
 
 function redactPathLikeText(value: string): string {
   return value
+    .replace(/\bfile:\/\/\/(?:[^\s"'`<>\r\n]+)/gi, "file:///<REDACTED_PATH>")
     .replace(/(?:^|[\s("'`])\/(?:[^/\s"'`)<>\r\n]+\/)*[^/\s"'`)<>\r\n]*/g, (match) =>
       match.replace(/\/(?:[^/\s"'`)<>\r\n]+\/)*[^/\s"'`)<>\r\n]*/g, "/<REDACTED_PATH>"),
     )
+    .replace(/([=:])\/(?:[^/\s"'`)<>\r\n]+\/)*[^/\s"'`)<>\r\n]*/g, "$1/<REDACTED_PATH>")
     .replace(/(?:^|[\s("'`])[A-Za-z]:\\(?:[^\\\s"'`)<>\r\n]+\\)*[^\\\s"'`)<>\r\n]*/g, (match) =>
       match.replace(/[A-Za-z]:\\(?:[^\\\s"'`)<>\r\n]+\\)*[^\\\s"'`)<>\r\n]*/g, "<REDACTED_PATH>"),
     );
@@ -561,17 +563,23 @@ export function registerPluginsCli(program: Command) {
             : entry.pluginName && entry.pluginName !== entry.pluginId
               ? `${entry.pluginName} (${entry.pluginId})`
               : entry.pluginId;
-        const label = sanitizeTerminalText(rawLabel);
-        const summary = sanitizeTerminalText(entry.summary);
+        const label = sanitizePluginSmokeJsonText(rawLabel) ?? sanitizeTerminalText(rawLabel);
+        const summary =
+          sanitizePluginSmokeJsonText(entry.summary) ?? sanitizeTerminalText(entry.summary);
         defaultRuntime.log(
           `${theme.command(label)} ${theme.error(entry.classification)} ${theme.muted(`- ${summary}`)}`,
         );
         if (entry.failurePhase) {
-          defaultRuntime.log(`  phase: ${sanitizeTerminalText(entry.failurePhase)}`);
+          defaultRuntime.log(
+            `  phase: ${sanitizePluginSmokeJsonText(entry.failurePhase) ?? sanitizeTerminalText(entry.failurePhase)}`,
+          );
         }
         for (const diagnostic of entry.diagnostics.slice(0, 3)) {
           defaultRuntime.log(
-            `  ${theme.muted(`[${diagnostic.level}]`)} ${sanitizeTerminalText(diagnostic.message)}`,
+            `  ${theme.muted(`[${diagnostic.level}]`)} ${
+              sanitizePluginSmokeJsonText(diagnostic.message) ??
+              sanitizeTerminalText(diagnostic.message)
+            }`,
           );
         }
       }

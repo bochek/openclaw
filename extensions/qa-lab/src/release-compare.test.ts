@@ -230,5 +230,41 @@ describe("qa release compare", () => {
     );
     expect(persisted.oldInstall.commandResults[0]).not.toHaveProperty("stdout");
     expect(persisted.oldInstall.commandResults[0]).not.toHaveProperty("stderr");
+    expect(persisted.oldInstall).not.toHaveProperty("prefixDir");
+    expect(persisted.oldInstall).not.toHaveProperty("homeDir");
+    expect(persisted.oldInstall).not.toHaveProperty("binPath");
+  });
+
+  it("drops local install refs from persisted compare JSON", () => {
+    const persisted = toPersistedCompareResult({
+      outputDir: "/tmp/out",
+      reportPath: "/tmp/out/report.md",
+      summaryPath: "/tmp/out/summary.json",
+      scenarioId: "bundled-channels",
+      oldInstall: {
+        label: "old",
+        requestedRef: "./dist/openclaw-old.tgz",
+        installRef: "/tmp/openclaw-old.tgz",
+        versionText: "OpenClaw 2026.4.9",
+        prefixDir: "/tmp/old-prefix",
+        homeDir: "/tmp/old-home",
+        binPath: "/tmp/old.mjs",
+        commandResults: [],
+      },
+      newInstall: {
+        label: "new",
+        requestedRef: "2026.4.10",
+        installRef: "openclaw@2026.4.10",
+        versionText: "OpenClaw 2026.4.10",
+        prefixDir: "/tmp/new-prefix",
+        homeDir: "/tmp/new-home",
+        binPath: "/tmp/new.mjs",
+        commandResults: [],
+      },
+      diff: [],
+    });
+
+    expect(persisted.oldInstall.installRef).toBeUndefined();
+    expect(persisted.newInstall.installRef).toBe("openclaw@2026.4.10");
   });
 });

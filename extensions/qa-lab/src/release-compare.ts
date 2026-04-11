@@ -1,5 +1,5 @@
 import { execFile, spawn } from "node:child_process";
-import { access, lstat, mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { access, lstat, mkdtemp, mkdir, realpath, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
@@ -110,7 +110,11 @@ type PersistedQaReleaseCompareCommandResult = Omit<
   "stdout" | "stderr"
 >;
 
-type PersistedQaReleaseCompareInstall = Omit<QaReleaseCompareInstall, "commandResults"> & {
+type PersistedQaReleaseCompareInstall = Pick<
+  QaReleaseCompareInstall,
+  "label" | "requestedRef" | "versionText"
+> & {
+  installRef?: string;
   commandResults: PersistedQaReleaseCompareCommandResult[];
 };
 
@@ -466,11 +470,12 @@ async function runReleaseCommand(params: {
 }
 
 function renderMarkdownReport(result: QaReleaseCompareResult) {
+  const mdCode = (value: string) => value.replace(/`/g, "\\`").replace(/\r?\n/g, " ");
   const lines = [
     `# QA Release Compare`,
     ``,
-    `- Old: \`${result.oldInstall.requestedRef}\` (${result.oldInstall.versionText})`,
-    `- New: \`${result.newInstall.requestedRef}\` (${result.newInstall.versionText})`,
+    `- Old: \`${mdCode(result.oldInstall.requestedRef)}\` (${result.oldInstall.versionText})`,
+    `- New: \`${mdCode(result.newInstall.requestedRef)}\` (${result.newInstall.versionText})`,
     `- Scenario: \`${result.scenarioId}\``,
     ``,
     `## Command Diff`,
@@ -489,10 +494,11 @@ function renderMarkdownReport(result: QaReleaseCompareResult) {
 }
 
 function renderSmokeMarkdownReport(result: QaReleaseSmokeResult) {
+  const mdCode = (value: string) => value.replace(/`/g, "\\`").replace(/\r?\n/g, " ");
   const lines = [
     `# QA Release Smoke`,
     ``,
-    `- Ref: \`${result.install.requestedRef}\` (${result.install.versionText})`,
+    `- Ref: \`${mdCode(result.install.requestedRef)}\` (${result.install.versionText})`,
     `- Scenario: \`${result.scenarioId}\``,
     `- Classification: \`${result.classification}\``,
     ``,
@@ -549,7 +555,7 @@ export function resolveQaReleaseOutputDir(params: {
   );
 }
 
-async function assertNoSymlinkPathComponents(repoRoot: string, outputDir: string) {
+async function createSafeOutputDir(repoRoot: string, outputDir: string) {
   const resolvedRepoRoot = path.resolve(repoRoot);
   const resolvedOutputDir = path.resolve(outputDir);
   const relative = path.relative(resolvedRepoRoot, resolvedOutputDir);
@@ -568,23 +574,43 @@ async function assertNoSymlinkPathComponents(repoRoot: string, outputDir: string
     } catch (error) {
       const nodeError = error as NodeJS.ErrnoException;
       if (nodeError.code === "ENOENT") {
+        await mkdir(current);
+        const createdStat = await lstat(current);
+        if (createdStat.isSymbolicLink()) {
+          throw new Error("--output-dir cannot traverse symlinked paths.", {
+            cause: error,
+          });
+        }
         continue;
       }
       throw error;
     }
   }
+  const [canonicalRoot, canonicalOutput] = await Promise.all([
+    realpath(resolvedRepoRoot),
+    realpath(resolvedOutputDir),
+  ]);
+  const canonicalRelative = path.relative(canonicalRoot, canonicalOutput);
+  if (canonicalRelative.startsWith("..") || path.isAbsolute(canonicalRelative)) {
+    throw new Error("--output-dir must stay within the repo root.");
+  }
+  return canonicalOutput;
 }
 
 export function toPersistedCommandResult(commandResult: QaReleaseCompareCommandResult) {
-  const rest = { ...commandResult };
-  delete rest.stdout;
-  delete rest.stderr;
+  const { stdout: _stdout, stderr: _stderr, ...rest } = commandResult;
   return rest satisfies PersistedQaReleaseCompareCommandResult;
 }
 
 function toPersistedInstall(install: QaReleaseCompareInstall) {
+  const safeInstallRef = isSafeRegistryInstallRef(install.requestedRef)
+    ? install.installRef
+    : undefined;
   return {
-    ...install,
+    label: install.label,
+    requestedRef: install.requestedRef,
+    ...(safeInstallRef ? { installRef: safeInstallRef } : {}),
+    versionText: install.versionText,
     commandResults: install.commandResults.map(toPersistedCommandResult),
   } satisfies PersistedQaReleaseCompareInstall;
 }
@@ -714,8 +740,7 @@ export async function runQaReleaseSmoke(
     outputDir: params.outputDir,
     fallbackParts: [".artifacts", "qa", "release-smoke", sanitizeSegment(params.ref)],
   });
-  await assertNoSymlinkPathComponents(params.repoRoot, outputDir);
-  await mkdir(outputDir, { recursive: true });
+  const safeOutputDir = await createSafeOutputDir(params.repoRoot, outputDir);
 
   const tempRoot = await mkdtemp(path.join(tmpdir(), "openclaw-qa-release-smoke-"));
   try {
@@ -730,15 +755,15 @@ export async function runQaReleaseSmoke(
       allowUnsafeInstallRef: params.allowUnsafeInstallRef,
     });
     const result: QaReleaseSmokeResult = {
-      outputDir,
-      reportPath: path.join(outputDir, "release-smoke-report.md"),
-      summaryPath: path.join(outputDir, "release-smoke-summary.json"),
+      outputDir: safeOutputDir,
+      reportPath: path.join(safeOutputDir, "release-smoke-report.md"),
+      summaryPath: path.join(safeOutputDir, "release-smoke-summary.json"),
       scenarioId,
       classification: summarizeInstallClassification(install),
       install,
     };
 
-    await writeCommandArtifacts(outputDir, install);
+    await writeCommandArtifacts(safeOutputDir, install);
     await writeFile(result.reportPath, renderSmokeMarkdownReport(result), "utf8");
     await writeFile(
       result.summaryPath,
@@ -768,8 +793,7 @@ export async function runQaReleaseCompare(
       `${sanitizeSegment(params.oldRef)}-vs-${sanitizeSegment(params.newRef)}`,
     ],
   });
-  await assertNoSymlinkPathComponents(params.repoRoot, outputDir);
-  await mkdir(outputDir, { recursive: true });
+  const safeOutputDir = await createSafeOutputDir(params.repoRoot, outputDir);
 
   const tempRoot = await mkdtemp(path.join(tmpdir(), "openclaw-qa-release-compare-"));
   try {
@@ -812,17 +836,17 @@ export async function runQaReleaseCompare(
     }));
 
     const result: QaReleaseCompareResult = {
-      outputDir,
-      reportPath: path.join(outputDir, "release-compare-report.md"),
-      summaryPath: path.join(outputDir, "release-compare-summary.json"),
+      outputDir: safeOutputDir,
+      reportPath: path.join(safeOutputDir, "release-compare-report.md"),
+      summaryPath: path.join(safeOutputDir, "release-compare-summary.json"),
       scenarioId,
       oldInstall,
       newInstall,
       diff,
     };
 
-    await writeCommandArtifacts(outputDir, oldInstall);
-    await writeCommandArtifacts(outputDir, newInstall);
+    await writeCommandArtifacts(safeOutputDir, oldInstall);
+    await writeCommandArtifacts(safeOutputDir, newInstall);
     await writeFile(result.reportPath, renderMarkdownReport(result), "utf8");
     await writeFile(
       result.summaryPath,
