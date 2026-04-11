@@ -89,4 +89,23 @@ describe("qa release compare", () => {
       }),
     ).toBe("ok");
   });
+
+  it("fails the smoke gate when a command reports load errors", () => {
+    expect(
+      summarizeInstallClassification({
+        commandResults: [
+          {
+            id: "plugins-smoke-json",
+            argv: [],
+            exitCode: 1,
+            timedOut: false,
+            stdout: "",
+            stderr: "",
+            classification: "load_error",
+            summary: "plugin failed to load",
+          },
+        ],
+      }),
+    ).toBe("load_error");
+  });
 });

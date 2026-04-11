@@ -249,7 +249,7 @@ function scheduleTempRootCleanup(tempRoot: string) {
     process.execPath,
     [
       "-e",
-      "const fs = require('node:fs'); fs.rmSync(process.argv[1], { recursive: true, force: true });",
+      "const fs = require('node:fs'); fs.rmSync(process.argv[2], { recursive: true, force: true });",
       tempRoot,
     ],
     {
@@ -479,6 +479,11 @@ export function summarizeInstallClassification(
   for (const result of install.commandResults) {
     if (result.classification === "packaged_entry_missing") {
       return "packaged_entry_missing";
+    }
+  }
+  for (const result of install.commandResults) {
+    if (result.classification === "load_error") {
+      return "load_error";
     }
   }
   for (const result of install.commandResults) {
