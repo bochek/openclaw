@@ -34,6 +34,7 @@ export type PluginCapabilityKind =
   | "media-understanding"
   | "image-generation"
   | "web-search"
+  | "agent-harness"
   | "channel";
 
 export type PluginInspectShape =
@@ -274,7 +275,7 @@ function classifyPluginSmokeDiagnostics(params: {
   diagnostics: PluginDiagnostic[];
   failurePhase?: PluginRegistry["plugins"][number]["failurePhase"];
 }): Pick<PluginSmokeEntry, "classification" | "summary"> {
-  const combinedDiagnostics = params.diagnostics.map((entry) => String(entry.message)).join("\n");
+  const combinedDiagnostics = params.diagnostics.map((entry) => entry.message).join("\n");
   if (
     /bundled plugin entry .* failed to open/i.test(combinedDiagnostics) ||
     (/ENOENT: no such file or directory/i.test(combinedDiagnostics) &&
@@ -406,6 +407,7 @@ function buildCapabilityEntries(plugin: PluginRegistry["plugins"][number]) {
     { kind: "media-understanding" as const, ids: plugin.mediaUnderstandingProviderIds },
     { kind: "image-generation" as const, ids: plugin.imageGenerationProviderIds },
     { kind: "web-search" as const, ids: plugin.webSearchProviderIds },
+    { kind: "agent-harness" as const, ids: plugin.agentHarnessIds },
     { kind: "channel" as const, ids: plugin.channelIds },
   ].filter((entry) => entry.ids.length > 0);
 }

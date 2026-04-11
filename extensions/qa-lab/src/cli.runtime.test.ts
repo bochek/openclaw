@@ -6,6 +6,7 @@ const {
   runQaSuiteFromRuntime,
   runQaCharacterEval,
   runQaMultipass,
+  runMatrixQaLive,
   runTelegramQaLive,
   startQaLabServer,
   writeQaDockerHarnessFiles,
@@ -18,6 +19,7 @@ const {
   runQaSuiteFromRuntime: vi.fn(),
   runQaCharacterEval: vi.fn(),
   runQaMultipass: vi.fn(),
+  runMatrixQaLive: vi.fn(),
   runTelegramQaLive: vi.fn(),
   startQaLabServer: vi.fn(),
   writeQaDockerHarnessFiles: vi.fn(),
@@ -43,7 +45,11 @@ vi.mock("./multipass.runtime.js", () => ({
   runQaMultipass,
 }));
 
-vi.mock("./telegram-live.runtime.js", () => ({
+vi.mock("./live-transports/matrix/matrix-live.runtime.js", () => ({
+  runMatrixQaLive,
+}));
+
+vi.mock("./live-transports/telegram/telegram-live.runtime.js", () => ({
   runTelegramQaLive,
 }));
 
@@ -65,8 +71,8 @@ vi.mock("./release-compare.js", () => ({
   runQaReleaseSmoke,
 }));
 
+import { resolveRepoRelativeOutputDir } from "./cli-paths.js";
 import {
-  __testing,
   runQaLabSelfCheckCommand,
   runQaDockerBuildImageCommand,
   runQaDockerScaffoldCommand,
@@ -76,8 +82,9 @@ import {
   runQaReleaseCompareCommand,
   runQaReleaseSmokeCommand,
   runQaSuiteCommand,
-  runQaTelegramCommand,
 } from "./cli.runtime.js";
+import { runQaMatrixCommand } from "./live-transports/matrix/cli.runtime.js";
+import { runQaTelegramCommand } from "./live-transports/telegram/cli.runtime.js";
 
 describe("qa cli runtime", () => {
   let stdoutWrite: ReturnType<typeof vi.spyOn>;
@@ -88,6 +95,7 @@ describe("qa cli runtime", () => {
     runQaCharacterEval.mockReset();
     runQaManualLane.mockReset();
     runQaMultipass.mockReset();
+    runMatrixQaLive.mockReset();
     runTelegramQaLive.mockReset();
     startQaLabServer.mockReset();
     writeQaDockerHarnessFiles.mockReset();
@@ -119,6 +127,13 @@ describe("qa cli runtime", () => {
       guestScriptPath: "/tmp/multipass/multipass-guest-run.sh",
       vmName: "openclaw-qa-test",
       scenarioIds: ["channel-chat-baseline"],
+    });
+    runMatrixQaLive.mockResolvedValue({
+      outputDir: "/tmp/matrix",
+      reportPath: "/tmp/matrix/report.md",
+      summaryPath: "/tmp/matrix/summary.json",
+      observedEventsPath: "/tmp/matrix/observed.json",
+      scenarios: [],
     });
     runTelegramQaLive.mockResolvedValue({
       outputDir: "/tmp/telegram",
@@ -245,13 +260,37 @@ describe("qa cli runtime", () => {
     });
   });
 
+  it("resolves matrix qa repo-root-relative paths before dispatching", async () => {
+    await runQaMatrixCommand({
+      repoRoot: "/tmp/openclaw-repo",
+      outputDir: ".artifacts/qa/matrix",
+      providerMode: "live-frontier",
+      primaryModel: "openai/gpt-5.4",
+      alternateModel: "openai/gpt-5.4",
+      fastMode: true,
+      scenarioIds: ["matrix-thread-follow-up"],
+      sutAccountId: "sut-live",
+    });
+
+    expect(runMatrixQaLive).toHaveBeenCalledWith({
+      repoRoot: path.resolve("/tmp/openclaw-repo"),
+      outputDir: path.resolve("/tmp/openclaw-repo", ".artifacts/qa/matrix"),
+      providerMode: "live-frontier",
+      primaryModel: "openai/gpt-5.4",
+      alternateModel: "openai/gpt-5.4",
+      fastMode: true,
+      scenarioIds: ["matrix-thread-follow-up"],
+      sutAccountId: "sut-live",
+    });
+  });
+
   it("rejects output dirs that escape the repo root", () => {
-    expect(() =>
-      __testing.resolveRepoRelativeOutputDir("/tmp/openclaw-repo", "../outside"),
-    ).toThrow("--output-dir must stay within the repo root.");
-    expect(() =>
-      __testing.resolveRepoRelativeOutputDir("/tmp/openclaw-repo", "/tmp/outside"),
-    ).toThrow("--output-dir must be a relative path inside the repo root.");
+    expect(() => resolveRepoRelativeOutputDir("/tmp/openclaw-repo", "../outside")).toThrow(
+      "--output-dir must stay within the repo root.",
+    );
+    expect(() => resolveRepoRelativeOutputDir("/tmp/openclaw-repo", "/tmp/outside")).toThrow(
+      "--output-dir must be a relative path inside the repo root.",
+    );
   });
 
   it("defaults telegram qa runs onto the live provider lane", async () => {
@@ -261,6 +300,20 @@ describe("qa cli runtime", () => {
     });
 
     expect(runTelegramQaLive).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoRoot: path.resolve("/tmp/openclaw-repo"),
+        providerMode: "live-frontier",
+      }),
+    );
+  });
+
+  it("defaults matrix qa runs onto the live provider lane", async () => {
+    await runQaMatrixCommand({
+      repoRoot: "/tmp/openclaw-repo",
+      scenarioIds: ["matrix-thread-follow-up"],
+    });
+
+    expect(runMatrixQaLive).toHaveBeenCalledWith(
       expect.objectContaining({
         repoRoot: path.resolve("/tmp/openclaw-repo"),
         providerMode: "live-frontier",
