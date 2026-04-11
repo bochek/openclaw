@@ -13,6 +13,7 @@ import {
   renderChatMobileToggle,
   renderChatSessionSelect,
   renderTab,
+  resolveAssistantAttachmentAuthToken,
   renderSidebarConnectionStatus,
   renderTopbarThemeModeToggle,
   switchChatSession,
@@ -1870,7 +1871,7 @@ export function renderApp(state: AppViewState) {
               assistantAvatar: state.assistantAvatar,
               localMediaPreviewRoots: state.localMediaPreviewRoots,
               embedSandboxMode: state.embedSandboxMode,
-              assistantAttachmentAuthToken: state.settings.token.trim() || null,
+              assistantAttachmentAuthToken: resolveAssistantAttachmentAuthToken(state),
               basePath: state.basePath ?? "",
             })
           : nothing}
