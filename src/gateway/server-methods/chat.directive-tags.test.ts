@@ -21,6 +21,10 @@ const mockState = vi.hoisted(() => ({
   mainSessionKey: "main",
   finalText: "[[reply_to_current]]",
   finalPayload: null as { text?: string; mediaUrl?: string } | null,
+  dispatchedReplies: [] as Array<{
+    kind: "tool" | "block" | "final";
+    payload: { text?: string; mediaUrl?: string; mediaUrls?: string[] };
+  }>,
   dispatchError: null as Error | null,
   triggerAgentRunStart: false,
   agentRunId: "run-agent-1",
@@ -88,6 +92,16 @@ vi.mock("../../auto-reply/dispatch.js", () => ({
       ctx: MsgContext;
       dispatcher: {
         sendFinalReply: (payload: { text?: string; mediaUrl?: string }) => boolean;
+        sendBlockReply: (payload: {
+          text?: string;
+          mediaUrl?: string;
+          mediaUrls?: string[];
+        }) => boolean;
+        sendToolResult: (payload: {
+          text?: string;
+          mediaUrl?: string;
+          mediaUrls?: string[];
+        }) => boolean;
         markComplete: () => void;
         waitForIdle: () => Promise<void>;
       };
@@ -106,7 +120,23 @@ vi.mock("../../auto-reply/dispatch.js", () => ({
       if (mockState.triggerAgentRunStart) {
         params.replyOptions?.onAgentRunStart?.(mockState.agentRunId);
       }
-      params.dispatcher.sendFinalReply(mockState.finalPayload ?? { text: mockState.finalText });
+      if (mockState.dispatchedReplies.length > 0) {
+        for (const reply of mockState.dispatchedReplies) {
+          if (reply.kind === "tool") {
+            params.dispatcher.sendToolResult(reply.payload);
+            continue;
+          }
+          if (reply.kind === "block") {
+            params.dispatcher.sendBlockReply(reply.payload);
+            continue;
+          }
+          params.dispatcher.sendFinalReply({
+            text: reply.payload.text ?? "",
+          });
+        }
+      } else {
+        params.dispatcher.sendFinalReply(mockState.finalPayload ?? { text: mockState.finalText });
+      }
       params.dispatcher.markComplete();
       await params.dispatcher.waitForIdle();
       return { ok: true };
@@ -370,6 +400,7 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
     mockState.config = {};
     mockState.finalText = "[[reply_to_current]]";
     mockState.finalPayload = null;
+    mockState.dispatchedReplies = [];
     mockState.dispatchError = null;
     mockState.mainSessionKey = "main";
     mockState.triggerAgentRunStart = false;
@@ -448,6 +479,60 @@ describe("chat directive tag stripping for non-streaming final payloads", () => 
 
     const register = context.registerToolEventRecipient as unknown as ReturnType<typeof vi.fn>;
     expect(register).not.toHaveBeenCalled();
+  });
+
+  it("persists agent-run audio replies emitted as media-bearing block payloads", async () => {
+    createTranscriptFixture("openclaw-chat-send-agent-audio-");
+    const transcriptDir = path.dirname(mockState.transcriptPath);
+    const audioPath = path.join(transcriptDir, "reply.mp3");
+    fs.writeFileSync(audioPath, Buffer.from([0xff, 0xfb, 0x90, 0x00]));
+    mockState.triggerAgentRunStart = true;
+    mockState.dispatchedReplies = [
+      {
+        kind: "block",
+        payload: {
+          mediaUrl: audioPath,
+          mediaUrls: [audioPath],
+        },
+      },
+    ];
+    const respond = vi.fn();
+    const context = createChatContext();
+
+    await runNonStreamingChatSend({
+      context,
+      respond,
+      idempotencyKey: "idem-agent-audio",
+      expectBroadcast: false,
+    });
+
+    const assistantUpdate = mockState.emittedTranscriptUpdates.find(
+      (update) =>
+        typeof update.message === "object" &&
+        update.message !== null &&
+        (update.message as { role?: unknown }).role === "assistant" &&
+        Array.isArray((update.message as { content?: unknown }).content) &&
+        ((update.message as { content: Array<{ type?: string }> }).content.some(
+          (block) => block?.type === "audio",
+        ) ??
+          false),
+    );
+    expect(assistantUpdate).toMatchObject({
+      message: {
+        role: "assistant",
+        idempotencyKey: "idem-agent-audio:assistant-audio",
+        content: [
+          { type: "text", text: "Audio reply" },
+          {
+            type: "audio",
+            source: {
+              type: "base64",
+              media_type: "audio/mpeg",
+            },
+          },
+        ],
+      },
+    });
   });
 
   it("chat.inject keeps message defined when directive tag is the only content", async () => {
