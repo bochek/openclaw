@@ -189,7 +189,7 @@ describe("createInboundDebouncer onEnrich", () => {
     }
   });
 
-  it("reports batched onEnrich failures through onError without rejecting the flush", async () => {
+  it("reports batched onEnrich failures and flushes the original items", async () => {
     vi.useFakeTimers();
     const onFlush = vi.fn(async () => {});
     const onError = vi.fn();
@@ -208,7 +208,11 @@ describe("createInboundDebouncer onEnrich", () => {
       await debouncer.enqueue({ key: "a", id: "2" });
       await vi.advanceTimersByTimeAsync(10);
 
-      expect(onFlush).not.toHaveBeenCalled();
+      expect(onFlush).toHaveBeenCalledTimes(1);
+      expect(onFlush).toHaveBeenCalledWith([
+        { key: "a", id: "1" },
+        { key: "a", id: "2" },
+      ]);
       expect(onError).toHaveBeenCalledTimes(1);
       expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(Error);
       expect(onError.mock.calls[0]?.[1]).toEqual([
@@ -220,7 +224,7 @@ describe("createInboundDebouncer onEnrich", () => {
     }
   });
 
-  it("reports queued onEnrich failures through onError without rejecting enqueue", async () => {
+  it("reports queued onEnrich failures and flushes the original item", async () => {
     const onFlush = vi.fn(async (items: Array<{ key: string; id: string; debounce: boolean }>) => {
       if (items[0]?.id === "1") {
         await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -247,6 +251,8 @@ describe("createInboundDebouncer onEnrich", () => {
     const second = debouncer.enqueue({ key: "a", id: "2", debounce: false });
     await expect(second).resolves.toBeUndefined();
 
+    expect(onFlush).toHaveBeenCalledTimes(2);
+    expect(onFlush.mock.calls[1]?.[0]).toEqual([{ key: "a", id: "2", debounce: false }]);
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError.mock.calls[0]?.[0]).toBeInstanceOf(Error);
     expect(onError.mock.calls[0]?.[1]).toEqual([{ key: "a", id: "2", debounce: false }]);
