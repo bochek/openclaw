@@ -19,6 +19,16 @@ import {
 } from "./reply-payloads.js";
 import { resolveReplyToMode } from "./reply-threading.js";
 
+function resolveCollectedAutoReplyTargetIds(params: {
+  replyToMode: ReturnType<typeof resolveReplyToMode>;
+  collectedMessageIds?: string[];
+}): Set<string> | undefined {
+  if (params.replyToMode !== "auto") {
+    return undefined;
+  }
+  return params.collectedMessageIds?.length ? new Set(params.collectedMessageIds) : undefined;
+}
+
 export function resolveFollowupDeliveryPayloads(params: {
   cfg: OpenClawConfig;
   payloads: ReplyPayload[];
@@ -43,6 +53,10 @@ export function resolveFollowupDeliveryPayloads(params: {
     params.originatingAccountId,
     params.originatingChatType,
   );
+  const collectedAutoReplyTargetIds = resolveCollectedAutoReplyTargetIds({
+    replyToMode,
+    collectedMessageIds: params.collectedMessageIds,
+  });
   const sanitizedPayloads = params.payloads.flatMap((payload) => {
     const text = payload.text;
     if (!text || !text.includes("HEARTBEAT_OK")) {
@@ -59,23 +73,36 @@ export function resolveFollowupDeliveryPayloads(params: {
     (payload) => !shouldSuppressReasoningPayload(payload),
   );
   let didMultiTagSplit = false;
-  const multiTagPayloads = nonReasoningPayloads.flatMap((payload) => {
-    const text = payload.text;
-    if (!text || !text.includes("[[")) {
-      return [payload];
-    }
-    const segments = splitByReplyToTags(text);
-    if (segments.length <= 1) {
-      return [payload];
-    }
-    didMultiTagSplit = true;
-    return segments.map((segment) => ({
-      ...payload,
-      text: segment.text,
-      replyToId: segment.replyToId,
-      replyToCurrent: segment.replyToCurrent,
-    }));
-  });
+  const multiTagPayloads = nonReasoningPayloads
+    .flatMap((payload) => {
+      const text = payload.text;
+      if (!text || !text.includes("[[")) {
+        return [payload];
+      }
+      const segments = splitByReplyToTags(text);
+      if (segments.length <= 1) {
+        return [payload];
+      }
+      didMultiTagSplit = true;
+      return segments.map((segment) => ({
+        ...payload,
+        text: segment.text,
+        replyToId: segment.replyToId,
+        replyToCurrent: segment.replyToCurrent,
+      }));
+    })
+    .map((payload) => {
+      if (!payload.replyToId || !collectedAutoReplyTargetIds) {
+        return payload;
+      }
+      return collectedAutoReplyTargetIds.has(payload.replyToId)
+        ? payload
+        : {
+            ...payload,
+            replyToId: undefined,
+            replyToCurrent: false,
+          };
+    });
   const hasCollectedMapping =
     replyToMode === "auto" &&
     params.collectedMessageIds &&
@@ -117,8 +144,21 @@ export function resolveFollowupDeliveryPayloads(params: {
     replyToChannel,
     currentMessageId: params.messageId,
   });
+  const validatedReplyTaggedPayloads =
+    replyToMode === "auto" && collectedAutoReplyTargetIds
+      ? replyTaggedPayloads.map((payload) => {
+          if (!payload.replyToId || collectedAutoReplyTargetIds.has(payload.replyToId)) {
+            return payload;
+          }
+          return {
+            ...payload,
+            replyToId: undefined,
+            replyToCurrent: false,
+          };
+        })
+      : replyTaggedPayloads;
   const dedupedPayloads = filterMessagingToolDuplicates({
-    payloads: replyTaggedPayloads,
+    payloads: validatedReplyTaggedPayloads,
     sentTexts: params.sentTexts ?? [],
   });
   const mediaFilteredPayloads = filterMessagingToolMediaDuplicates({

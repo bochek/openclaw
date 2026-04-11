@@ -100,15 +100,19 @@ export function createInboundDebouncer<T>(params: InboundDebounceCreateParams<T>
     try {
       if (params.onEnrich && items.length > 1) {
         const nextItems: T[] = [];
+        let fellBackToOriginal = false;
         for (const item of items) {
           const enriched = tryEnrichItem(item, "batched");
           if (!enriched.ok) {
             reportError(enriched.error, items);
-            return;
+            fellBackToOriginal = true;
+            break;
           }
           nextItems.push(enriched.item);
         }
-        enrichedItems = nextItems;
+        if (!fellBackToOriginal) {
+          enrichedItems = nextItems;
+        }
       }
       await params.onFlush(enrichedItems);
     } catch (err) {
@@ -209,9 +213,9 @@ export function createInboundDebouncer<T>(params: InboundDebounceCreateParams<T>
             const enriched = tryEnrichItem(item, "queued");
             if (!enriched.ok) {
               reportError(enriched.error, [item]);
-              return;
+            } else {
+              item = enriched.item;
             }
-            item = enriched.item;
           }
           // Reserve the keyed immediate slot before forcing the pending buffer
           // to flush so fire-and-forget callers cannot be overtaken.
@@ -231,9 +235,9 @@ export function createInboundDebouncer<T>(params: InboundDebounceCreateParams<T>
             const enriched = tryEnrichItem(item, "queued");
             if (!enriched.ok) {
               reportError(enriched.error, [item]);
-              return;
+            } else {
+              item = enriched.item;
             }
-            item = enriched.item;
           }
           await enqueueKeyTask(key, async () => {
             await runFlush([item]);
