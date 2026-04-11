@@ -4,16 +4,9 @@ import {
 } from "../../plugins/runtime-channel-state.js";
 import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { CHAT_CHANNEL_ORDER } from "../registry.js";
+import type { ChannelPlugin } from "./types.plugin.js";
 
-export type LoadedChannelPlugin = {
-  id: string;
-  meta: {
-    order?: number;
-  };
-  capabilities?: {
-    nativeCommands?: boolean;
-  };
-};
+export type LoadedChannelPlugin = ChannelPlugin;
 
 type CachedChannelPlugins = {
   registryVersion: number;
@@ -30,6 +23,20 @@ const EMPTY_CHANNEL_PLUGIN_CACHE: CachedChannelPlugins = {
 };
 
 let cachedChannelPlugins = EMPTY_CHANNEL_PLUGIN_CACHE;
+
+function isLoadedChannelPlugin(
+  plugin: {
+    id?: string | null;
+    meta?: {
+      order?: number;
+    } | null;
+    capabilities?: {
+      nativeCommands?: boolean;
+    } | null;
+  } | null,
+): plugin is LoadedChannelPlugin {
+  return Boolean(normalizeOptionalString(plugin?.id));
+}
 
 function dedupeChannels(channels: LoadedChannelPlugin[]): LoadedChannelPlugin[] {
   const seen = new Set<string>();
@@ -56,8 +63,9 @@ function resolveCachedChannelPlugins(): CachedChannelPlugins {
   const channelPlugins: LoadedChannelPlugin[] = [];
   if (registry && Array.isArray(registry.channels)) {
     for (const entry of registry.channels) {
-      if (entry?.plugin) {
-        channelPlugins.push(entry.plugin);
+      const plugin = entry?.plugin ?? null;
+      if (isLoadedChannelPlugin(plugin)) {
+        channelPlugins.push(plugin);
       }
     }
   }

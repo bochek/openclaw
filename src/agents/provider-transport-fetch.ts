@@ -58,7 +58,7 @@ function buildManagedResponse(response: Response, release: () => Promise<void>):
 
 function resolveModelRequestPolicy(model: Model<Api>) {
   const debugProxy = resolveDebugProxySettings();
-  const allowExplicitDebugProxy =
+  const explicitDebugProxyUrl =
     debugProxy.enabled &&
     debugProxy.proxyUrl &&
     (() => {
@@ -67,15 +67,16 @@ function resolveModelRequestPolicy(model: Model<Api>) {
       } catch {
         return false;
       }
-    })();
+    })()
+      ? debugProxy.proxyUrl
+      : undefined;
   const request = mergeModelProviderRequestOverrides(getModelProviderRequestTransport(model), {
-    proxy:
-      allowExplicitDebugProxy && debugProxy.proxyUrl
-        ? {
-            mode: "explicit-proxy",
-            url: debugProxy.proxyUrl,
-          }
-        : undefined,
+    proxy: explicitDebugProxyUrl
+      ? {
+          mode: "explicit-proxy",
+          url: explicitDebugProxyUrl,
+        }
+      : undefined,
   });
   return resolveProviderRequestPolicyConfig({
     provider: model.provider,

@@ -66,4 +66,32 @@ describe("listChannelPlugins", () => {
     expect(getChannelPlugin("beta")?.meta.label).toBe("beta");
     expect(listChannelPlugins().map((plugin) => plugin.id)).toEqual(["beta"]);
   });
+
+  it("ignores malformed runtime channel entries and preserves native command metadata", () => {
+    const registry = createEmptyPluginRegistry();
+    registry.channels = [
+      {
+        pluginId: "missing-id",
+        plugin: {
+          id: undefined,
+          meta: { label: "missing-id" },
+          capabilities: { nativeCommands: true },
+        } as never,
+        source: "test",
+      },
+      {
+        pluginId: "dockable",
+        plugin: {
+          id: "dockable",
+          meta: { label: "dockable" },
+          capabilities: { nativeCommands: true },
+        } as never,
+        source: "test",
+      },
+    ];
+    setActivePluginRegistry(registry);
+
+    expect(listChannelPlugins().map((plugin) => plugin.id)).toEqual(["dockable"]);
+    expect(getChannelPlugin("dockable")?.capabilities.nativeCommands).toBe(true);
+  });
 });
