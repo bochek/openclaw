@@ -125,6 +125,25 @@ describe("resolveFollowupDeliveryPayloads", () => {
     ]);
   });
 
+  it("fills missing collected ids after accounting for explicit auto-mode targets", () => {
+    expect(
+      resolveFollowupDeliveryPayloads({
+        cfg: autoWhatsappConfig,
+        messageProvider: "whatsapp",
+        collectedMessageIds: ["collected-A", "collected-B"],
+        payloads: [{ text: "[[reply_to:collected-B]] First answer" }, { text: "Second answer" }],
+      }),
+    ).toEqual([
+      {
+        text: "First answer",
+        replyToId: "collected-B",
+        replyToCurrent: true,
+        replyToTag: true,
+      },
+      { text: "Second answer", replyToId: "collected-A", replyToCurrent: true },
+    ]);
+  });
+
   it("strips collected auto-mode targets that were not supplied by the queue", () => {
     expect(
       resolveFollowupDeliveryPayloads({
@@ -133,6 +152,8 @@ describe("resolveFollowupDeliveryPayloads", () => {
         collectedMessageIds: ["collected-1", "collected-2"],
         payloads: [{ text: "[[reply_to:not-allowed]] reply" }],
       }),
-    ).toEqual([{ text: "reply", replyToId: undefined, replyToTag: true, replyToCurrent: false }]);
+    ).toEqual([
+      { text: "reply", replyToId: "collected-1", replyToTag: true, replyToCurrent: true },
+    ]);
   });
 });

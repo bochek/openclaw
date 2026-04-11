@@ -965,6 +965,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
               type: "string",
               const: "batched",
             },
+            {
+              type: "string",
+              const: "auto",
+            },
           ],
         },
         dmPolicy: {
@@ -2128,6 +2132,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                   {
                     type: "string",
                     const: "batched",
+                  },
+                  {
+                    type: "string",
+                    const: "auto",
                   },
                 ],
               },
@@ -4567,6 +4575,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
               type: "string",
               const: "batched",
             },
+            {
+              type: "string",
+              const: "auto",
+            },
           ],
         },
         actions: {
@@ -4944,6 +4956,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                   {
                     type: "string",
                     const: "batched",
+                  },
+                  {
+                    type: "string",
+                    const: "auto",
                   },
                 ],
               },
@@ -10807,6 +10823,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
               type: "string",
               const: "batched",
             },
+            {
+              type: "string",
+              const: "auto",
+            },
           ],
         },
         replyToModeByChatType: {
@@ -10830,6 +10850,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                   type: "string",
                   const: "batched",
                 },
+                {
+                  type: "string",
+                  const: "auto",
+                },
               ],
             },
             group: {
@@ -10850,6 +10874,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                   type: "string",
                   const: "batched",
                 },
+                {
+                  type: "string",
+                  const: "auto",
+                },
               ],
             },
             channel: {
@@ -10869,6 +10897,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                 {
                   type: "string",
                   const: "batched",
+                },
+                {
+                  type: "string",
+                  const: "auto",
                 },
               ],
             },
@@ -11020,6 +11052,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                 {
                   type: "string",
                   const: "batched",
+                },
+                {
+                  type: "string",
+                  const: "auto",
                 },
               ],
             },
@@ -11716,6 +11752,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                     type: "string",
                     const: "batched",
                   },
+                  {
+                    type: "string",
+                    const: "auto",
+                  },
                 ],
               },
               replyToModeByChatType: {
@@ -11739,6 +11779,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                         type: "string",
                         const: "batched",
                       },
+                      {
+                        type: "string",
+                        const: "auto",
+                      },
                     ],
                   },
                   group: {
@@ -11759,6 +11803,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                         type: "string",
                         const: "batched",
                       },
+                      {
+                        type: "string",
+                        const: "auto",
+                      },
                     ],
                   },
                   channel: {
@@ -11778,6 +11826,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                       {
                         type: "string",
                         const: "batched",
+                      },
+                      {
+                        type: "string",
+                        const: "auto",
                       },
                     ],
                   },
@@ -11929,6 +11981,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                       {
                         type: "string",
                         const: "batched",
+                      },
+                      {
+                        type: "string",
+                        const: "auto",
                       },
                     ],
                   },
@@ -12432,6 +12488,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
             {
               type: "string",
               const: "batched",
+            },
+            {
+              type: "string",
+              const: "auto",
             },
           ],
         },
@@ -13465,6 +13525,10 @@ export const GENERATED_BUNDLED_CHANNEL_CONFIG_METADATA = [
                   {
                     type: "string",
                     const: "batched",
+                  },
+                  {
+                    type: "string",
+                    const: "auto",
                   },
                 ],
               },

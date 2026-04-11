@@ -29,6 +29,93 @@ function resolveCollectedAutoReplyTargetIds(params: {
   return params.collectedMessageIds?.length ? new Set(params.collectedMessageIds) : undefined;
 }
 
+function assignMissingCollectedReplyIds(params: {
+  payloads: ReplyPayload[];
+  collectedMessageIds: string[];
+}): ReplyPayload[] {
+  const availableIds = [...params.collectedMessageIds];
+  const seenExplicitIds = new Set<string>();
+
+  for (const payload of params.payloads) {
+    const explicitId = payload.replyToId;
+    if (!explicitId || seenExplicitIds.has(explicitId)) {
+      continue;
+    }
+    seenExplicitIds.add(explicitId);
+    const availableIndex = availableIds.indexOf(explicitId);
+    if (availableIndex >= 0) {
+      availableIds.splice(availableIndex, 1);
+    }
+  }
+
+  return params.payloads.map((payload) => {
+    if (payload.replyToId) {
+      return payload;
+    }
+    const fallbackId = availableIds.shift();
+    return fallbackId
+      ? {
+          ...payload,
+          replyToId: fallbackId,
+          replyToCurrent: true,
+        }
+      : payload;
+  });
+}
+
+function reconcileCollectedReplyTargets(params: {
+  payloads: ReplyPayload[];
+  collectedMessageIds: string[];
+}): ReplyPayload[] {
+  const remainingIds = [...params.collectedMessageIds];
+  const keep = Array.from({ length: params.payloads.length }, () => false);
+
+  const reserveId = (id: string) => {
+    const index = remainingIds.indexOf(id);
+    if (index < 0) {
+      return false;
+    }
+    remainingIds.splice(index, 1);
+    return true;
+  };
+
+  for (const [index, payload] of params.payloads.entries()) {
+    if (payload.replyToTag !== true || !payload.replyToId) {
+      continue;
+    }
+    if (reserveId(payload.replyToId)) {
+      keep[index] = true;
+    }
+  }
+
+  for (const [index, payload] of params.payloads.entries()) {
+    if (keep[index] || !payload.replyToId) {
+      continue;
+    }
+    if (reserveId(payload.replyToId)) {
+      keep[index] = true;
+    }
+  }
+
+  return params.payloads.map((payload, index) => {
+    if (keep[index]) {
+      return payload;
+    }
+    const fallbackId = remainingIds.shift();
+    return fallbackId
+      ? {
+          ...payload,
+          replyToId: fallbackId,
+          replyToCurrent: true,
+        }
+      : {
+          ...payload,
+          replyToId: undefined,
+          replyToCurrent: false,
+        };
+  });
+}
+
 export function resolveFollowupDeliveryPayloads(params: {
   cfg: OpenClawConfig;
   payloads: ReplyPayload[];
@@ -108,15 +195,10 @@ export function resolveFollowupDeliveryPayloads(params: {
     params.collectedMessageIds &&
     multiTagPayloads.length === params.collectedMessageIds.length;
   const collectedPayloads = hasCollectedMapping
-    ? multiTagPayloads.map((payload, index) =>
-        payload.replyToId
-          ? payload
-          : {
-              ...payload,
-              replyToId: params.collectedMessageIds?.[index],
-              replyToCurrent: true,
-            },
-      )
+    ? assignMissingCollectedReplyIds({
+        payloads: multiTagPayloads,
+        collectedMessageIds: params.collectedMessageIds ?? [],
+      })
     : multiTagPayloads;
   const hasMultipleExplicitTargets =
     collectedPayloads.filter((payload) => payload.replyToId).length > 1;
@@ -146,15 +228,18 @@ export function resolveFollowupDeliveryPayloads(params: {
   });
   const validatedReplyTaggedPayloads =
     replyToMode === "auto" && collectedAutoReplyTargetIds
-      ? replyTaggedPayloads.map((payload) => {
-          if (!payload.replyToId || collectedAutoReplyTargetIds.has(payload.replyToId)) {
-            return payload;
-          }
-          return {
-            ...payload,
-            replyToId: undefined,
-            replyToCurrent: false,
-          };
+      ? reconcileCollectedReplyTargets({
+          payloads: replyTaggedPayloads.map((payload) => {
+            if (!payload.replyToId || collectedAutoReplyTargetIds.has(payload.replyToId)) {
+              return payload;
+            }
+            return {
+              ...payload,
+              replyToId: undefined,
+              replyToCurrent: false,
+            };
+          }),
+          collectedMessageIds: [...collectedAutoReplyTargetIds],
         })
       : replyTaggedPayloads;
   const dedupedPayloads = filterMessagingToolDuplicates({
