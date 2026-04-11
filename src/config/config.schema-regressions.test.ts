@@ -147,6 +147,25 @@ describe("config schema regressions", () => {
     expect(res.ok).toBe(true);
   });
 
+  it("accepts agents.defaults.startupContext overrides", () => {
+    const res = validateConfigObject({
+      agents: {
+        defaults: {
+          startupContext: {
+            enabled: true,
+            applyOn: ["new"],
+            dailyMemoryDays: 3,
+            maxFileBytes: 8192,
+            maxFileChars: 1000,
+            maxTotalChars: 2500,
+          },
+        },
+      },
+    });
+
+    expect(res.ok).toBe(true);
+  });
+
   it("accepts safe iMessage remoteHost", () => {
     const res = IMessageConfigSchema.safeParse({
       remoteHost: "bot@gateway-host",

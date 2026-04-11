@@ -44,6 +44,7 @@ import { buildReplyPromptBodies } from "./prompt-prelude.js";
 import { resolveActiveRunQueueAction } from "./queue-policy.js";
 import { resolveQueueSettings } from "./queue/settings-runtime.js";
 import { buildBareSessionResetPrompt } from "./session-reset-prompt.js";
+import { buildSessionStartupContextPrelude, shouldApplyStartupContext } from "./startup-context.js";
 import { drainFormattedSystemEvents } from "./session-system-events.js";
 import { resolveTypingMode } from "./typing-mode.js";
 import { resolveRunTypingPolicy } from "./typing-policy.js";
@@ -302,6 +303,14 @@ export async function runPreparedReply(
   const isBareSessionReset =
     isNewSession &&
     ((baseBodyTrimmedRaw.length === 0 && rawBodyTrimmed.length > 0) || isBareNewOrReset);
+  const startupAction = rawBodyTrimmed === "/reset" ? "reset" : "new";
+  const startupContextPrelude = isBareSessionReset &&
+    shouldApplyStartupContext({ cfg, action: startupAction })
+    ? await buildSessionStartupContextPrelude({
+        workspaceDir,
+        cfg,
+      })
+    : null;
   const baseBodyFinal = isBareSessionReset ? buildBareSessionResetPrompt(cfg) : baseBody;
   const envelopeOptions = resolveEnvelopeFormatOptions(cfg);
   const inboundUserContext = buildInboundUserContextPrefix(
@@ -316,7 +325,7 @@ export async function runPreparedReply(
     envelopeOptions,
   );
   const baseBodyForPrompt = isBareSessionReset
-    ? baseBodyFinal
+    ? [startupContextPrelude, baseBodyFinal].filter(Boolean).join("\n\n")
     : [inboundUserContext, baseBodyFinal].filter(Boolean).join("\n\n");
   const baseBodyTrimmed = baseBodyForPrompt.trim();
   const hasMediaAttachment = Boolean(

@@ -56,6 +56,17 @@ export const AgentDefaultsSchema = z
       .union([z.literal("off"), z.literal("once"), z.literal("always")])
       .optional(),
     userTimezone: z.string().optional(),
+    startupContext: z
+      .object({
+        enabled: z.boolean().optional(),
+        applyOn: z.array(z.union([z.literal("new"), z.literal("reset")])).optional(),
+        dailyMemoryDays: z.number().int().positive().optional(),
+        maxFileBytes: z.number().int().positive().optional(),
+        maxFileChars: z.number().int().positive().optional(),
+        maxTotalChars: z.number().int().positive().optional(),
+      })
+      .strict()
+      .optional(),
     timeFormat: z.union([z.literal("auto"), z.literal("12"), z.literal("24")]).optional(),
     envelopeTimezone: z.string().optional(),
     envelopeTimestamp: z.union([z.literal("on"), z.literal("off")]).optional(),
