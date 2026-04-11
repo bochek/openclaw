@@ -974,7 +974,7 @@ function messageContainsToolHistoryContent(message: unknown): boolean {
   });
 }
 
-function augmentChatHistoryWithCanvasBlocks(messages: unknown[]): unknown[] {
+export function augmentChatHistoryWithCanvasBlocks(messages: unknown[]): unknown[] {
   if (messages.length === 0) {
     return messages;
   }
@@ -1011,6 +1011,9 @@ function augmentChatHistoryWithCanvasBlocks(messages: unknown[]): unknown[] {
           changed = true;
         }
       }
+      continue;
+    }
+    if (!messageContainsToolHistoryContent(entry)) {
       continue;
     }
     const toolName =
