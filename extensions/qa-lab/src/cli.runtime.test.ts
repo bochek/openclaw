@@ -700,6 +700,7 @@ describe("qa cli runtime", () => {
       outputDir: path.resolve("/tmp/openclaw-repo", ".artifacts/qa-release-compare"),
       scenarioId: "bundled-channels",
       keepTemp: true,
+      allowUnsafeInstallRef: undefined,
       timeoutMs: 45_000,
       oldRef: "2026.4.7",
       newRef: "2026.4.8",
@@ -747,6 +748,7 @@ describe("qa cli runtime", () => {
       outputDir: path.resolve("/tmp/openclaw-repo", ".artifacts/qa-release-smoke"),
       scenarioId: "bundled-channels",
       keepTemp: true,
+      allowUnsafeInstallRef: undefined,
       timeoutMs: 15_000,
       ref: "2026.4.8",
     });
@@ -783,6 +785,31 @@ describe("qa cli runtime", () => {
     });
 
     expect(process.exitCode).toBe(1);
+  });
+
+  it("passes unsafe install ref opt-in through to qa release commands", async () => {
+    await runQaReleaseCompareCommand({
+      repoRoot: "/tmp/openclaw-repo",
+      oldRef: "./dist/openclaw-old.tgz",
+      newRef: "./dist/openclaw-new.tgz",
+      allowUnsafeInstallRef: true,
+    });
+    await runQaReleaseSmokeCommand({
+      repoRoot: "/tmp/openclaw-repo",
+      ref: "./dist/openclaw-new.tgz",
+      allowUnsafeInstallRef: true,
+    });
+
+    expect(runQaReleaseCompare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowUnsafeInstallRef: true,
+      }),
+    );
+    expect(runQaReleaseSmoke).toHaveBeenCalledWith(
+      expect.objectContaining({
+        allowUnsafeInstallRef: true,
+      }),
+    );
   });
 
   it("resolves docker up paths relative to the explicit repo root", async () => {

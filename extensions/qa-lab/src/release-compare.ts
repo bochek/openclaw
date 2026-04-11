@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
+import { resolveRepoRelativeOutputDir } from "./cli-paths.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -55,6 +56,7 @@ export type QaReleaseCompareParams = {
   outputDir?: string;
   keepTemp?: boolean;
   timeoutMs?: number;
+  allowUnsafeInstallRef?: boolean;
 };
 
 export type QaReleaseCompareResult = {
@@ -93,6 +95,16 @@ function sanitizeSegment(value: string) {
     .slice(0, 80);
 }
 
+function buildInstallCommandEnv() {
+  return {
+    PATH: process.env.PATH ?? "",
+    HOME: process.env.HOME ?? "",
+    npm_config_ignore_scripts: "true",
+    npm_config_audit: "false",
+    npm_config_fund: "false",
+  };
+}
+
 function scenarioCommands(scenarioId: QaReleaseCompareScenarioId): QaReleaseCompareCommandSpec[] {
   switch (scenarioId) {
     case "bundled-channels":
@@ -104,6 +116,7 @@ function scenarioCommands(scenarioId: QaReleaseCompareScenarioId): QaReleaseComp
         { id: "models-status", args: ["models", "status"] },
       ];
   }
+  return [];
 }
 
 function buildScenarioConfig(basePort: number) {
@@ -143,6 +156,7 @@ function summarizeClassification(
     case "error":
       return "command failed";
   }
+  return "command failed";
 }
 
 export function classifyReleaseCompareCommandOutput(
@@ -210,10 +224,24 @@ export function compareReleaseCompareResults(
 }
 
 async function installRelease(prefixDir: string, installRef: string, cwd: string) {
-  await execFileAsync("npm", ["install", "-g", "--prefix", prefixDir, installRef], {
-    cwd,
-    maxBuffer: 1024 * 1024 * 20,
-  });
+  await execFileAsync(
+    "npm",
+    [
+      "install",
+      "-g",
+      "--prefix",
+      prefixDir,
+      "--ignore-scripts",
+      "--no-audit",
+      "--no-fund",
+      installRef,
+    ],
+    {
+      cwd,
+      env: buildInstallCommandEnv(),
+      maxBuffer: 1024 * 1024 * 20,
+    },
+  );
 }
 
 function scheduleTempRootCleanup(tempRoot: string) {
@@ -364,14 +392,37 @@ async function writeCommandArtifacts(outputDir: string, install: QaReleaseCompar
   }
 }
 
-function resolveInstallRef(ref: string, repoRoot: string) {
+function isSafeRegistryInstallRef(ref: string) {
+  return /^(?:latest|beta|next|canary|stable|v?\d[\w.+-]*)$/i.test(ref);
+}
+
+function resolveInstallRef(ref: string, repoRoot: string, allowUnsafeInstallRef = false) {
   if (ref === "current-checkout") {
     return repoRoot;
+  }
+  if (isSafeRegistryInstallRef(ref)) {
+    return `openclaw@${ref}`;
+  }
+  if (!allowUnsafeInstallRef) {
+    throw new Error(
+      "Unsafe install ref blocked. Use a published version/dist-tag, `current-checkout`, or pass --allow-unsafe-install-ref.",
+    );
   }
   if (ref.endsWith(".tgz") || ref.startsWith(".") || ref.startsWith("/") || ref.startsWith("~")) {
     return path.resolve(repoRoot, ref);
   }
   return `openclaw@${ref}`;
+}
+
+function resolveQaReleaseOutputDir(params: {
+  repoRoot: string;
+  outputDir?: string;
+  fallbackParts: string[];
+}) {
+  return (
+    resolveRepoRelativeOutputDir(params.repoRoot, params.outputDir) ??
+    path.join(params.repoRoot, ...params.fallbackParts)
+  );
 }
 
 async function createIsolatedInstall(params: {
@@ -382,10 +433,15 @@ async function createIsolatedInstall(params: {
   scenarioId: QaReleaseCompareScenarioId;
   timeoutMs: number;
   basePort: number;
+  allowUnsafeInstallRef?: boolean;
 }) {
   const prefixDir = path.join(params.tempRoot, `${params.label}-prefix`);
   const homeDir = path.join(params.tempRoot, `${params.label}-home`);
-  const installRef = resolveInstallRef(params.requestedRef, params.repoRoot);
+  const installRef = resolveInstallRef(
+    params.requestedRef,
+    params.repoRoot,
+    params.allowUnsafeInstallRef,
+  );
 
   await installRelease(prefixDir, installRef, params.repoRoot);
 
@@ -450,15 +506,18 @@ export type QaReleaseSmokeParams = {
   outputDir?: string;
   keepTemp?: boolean;
   timeoutMs?: number;
+  allowUnsafeInstallRef?: boolean;
 };
 
 export async function runQaReleaseSmoke(
   params: QaReleaseSmokeParams,
 ): Promise<QaReleaseSmokeResult> {
   const scenarioId = params.scenarioId ?? "bundled-channels";
-  const outputDir =
-    params.outputDir ??
-    path.join(params.repoRoot, ".artifacts", "qa", "release-smoke", sanitizeSegment(params.ref));
+  const outputDir = resolveQaReleaseOutputDir({
+    repoRoot: params.repoRoot,
+    outputDir: params.outputDir,
+    fallbackParts: [".artifacts", "qa", "release-smoke", sanitizeSegment(params.ref)],
+  });
   await mkdir(outputDir, { recursive: true });
 
   const tempRoot = await mkdtemp(path.join(tmpdir(), "openclaw-qa-release-smoke-"));
@@ -471,6 +530,7 @@ export async function runQaReleaseSmoke(
       scenarioId,
       timeoutMs: params.timeoutMs ?? DEFAULT_RELEASE_COMPARE_TIMEOUT_MS,
       basePort: 20000 + Math.floor(Math.random() * 10000),
+      allowUnsafeInstallRef: params.allowUnsafeInstallRef,
     });
     const result: QaReleaseSmokeResult = {
       outputDir,
@@ -496,15 +556,16 @@ export async function runQaReleaseCompare(
   params: QaReleaseCompareParams,
 ): Promise<QaReleaseCompareResult> {
   const scenarioId = params.scenarioId ?? "bundled-channels";
-  const outputDir =
-    params.outputDir ??
-    path.join(
-      params.repoRoot,
+  const outputDir = resolveQaReleaseOutputDir({
+    repoRoot: params.repoRoot,
+    outputDir: params.outputDir,
+    fallbackParts: [
       ".artifacts",
       "qa",
       "release-compare",
       `${sanitizeSegment(params.oldRef)}-vs-${sanitizeSegment(params.newRef)}`,
-    );
+    ],
+  });
   await mkdir(outputDir, { recursive: true });
 
   const tempRoot = await mkdtemp(path.join(tmpdir(), "openclaw-qa-release-compare-"));
@@ -520,6 +581,7 @@ export async function runQaReleaseCompare(
         scenarioId,
         timeoutMs,
         basePort,
+        allowUnsafeInstallRef: params.allowUnsafeInstallRef,
       }),
       createIsolatedInstall({
         tempRoot,
@@ -529,6 +591,7 @@ export async function runQaReleaseCompare(
         scenarioId,
         timeoutMs,
         basePort: basePort + 1,
+        allowUnsafeInstallRef: params.allowUnsafeInstallRef,
       }),
     ]);
     const oldInstall = oldCommandResults;

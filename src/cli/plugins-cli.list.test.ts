@@ -189,4 +189,43 @@ describe("plugins cli list", () => {
     expect(runtimeLogs.join("\n")).toContain("1 loaded, 1 errored, 0 disabled");
     expect(runtimeLogs.join("\n")).toContain("global diagnostics");
   });
+
+  it("sanitizes smoke labels and summaries before printing to the terminal", async () => {
+    buildPluginSmokeReport.mockReturnValue({
+      scenarioId: "bundled-channels",
+      classification: "load_error",
+      summary: {
+        pluginCount: 1,
+        loadedCount: 0,
+        errorCount: 1,
+        disabledCount: 0,
+      },
+      entries: [
+        {
+          pluginId: "bad-plugin",
+          pluginName: "\u001B[31mBad Plugin",
+          status: "error",
+          failurePhase: "load\nphase",
+          classification: "load_error",
+          summary: "bad\toutput\u001B[2J",
+          diagnostics: [
+            {
+              level: "error",
+              message: "plugin failed to load",
+            },
+          ],
+        },
+      ],
+      diagnostics: [],
+    });
+
+    await expect(runPluginsCommand(["plugins", "smoke"])).rejects.toThrow("__exit__:1");
+
+    const output = runtimeLogs.join("\n");
+    expect(output).toContain("Bad Plugin (bad-plugin)");
+    expect(output).toContain("bad\\toutput");
+    expect(output).toContain("phase: load\\nphase");
+    expect(output).not.toContain("\u001B[31m");
+    expect(output).not.toContain("\u001B[2J");
+  });
 });

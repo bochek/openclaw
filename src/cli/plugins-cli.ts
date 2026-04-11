@@ -606,21 +606,23 @@ export function registerPluginsCli(program: Command) {
 
       defaultRuntime.log("");
       for (const entry of failures) {
-        const label =
+        const rawLabel =
           entry.pluginId === "__global__"
             ? "global diagnostics"
             : entry.pluginName && entry.pluginName !== entry.pluginId
               ? `${entry.pluginName} (${entry.pluginId})`
               : entry.pluginId;
+        const label = sanitizeTerminalText(rawLabel);
+        const summary = sanitizeTerminalText(entry.summary);
         defaultRuntime.log(
-          `${theme.command(label)} ${theme.error(entry.classification)} ${theme.muted(`- ${entry.summary}`)}`,
+          `${theme.command(label)} ${theme.error(entry.classification)} ${theme.muted(`- ${summary}`)}`,
         );
         if (entry.failurePhase) {
-          defaultRuntime.log(`  phase: ${entry.failurePhase}`);
+          defaultRuntime.log(`  phase: ${sanitizeTerminalText(entry.failurePhase)}`);
         }
         for (const diagnostic of entry.diagnostics.slice(0, 3)) {
           defaultRuntime.log(
-            `  ${theme.muted(`[${diagnostic.level}]`)} ${sanitizeTerminalText(String(diagnostic.message))}`,
+            `  ${theme.muted(`[${diagnostic.level}]`)} ${sanitizeTerminalText(diagnostic.message)}`,
           );
         }
       }

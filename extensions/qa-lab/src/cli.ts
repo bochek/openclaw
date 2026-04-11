@@ -130,6 +130,7 @@ async function runQaReleaseCompare(opts: {
   outputDir?: string;
   scenario?: "bundled-channels";
   keepTemp?: boolean;
+  allowUnsafeInstallRef?: boolean;
   json?: boolean;
   timeoutSeconds?: number;
   oldRef: string;
@@ -144,6 +145,7 @@ async function runQaReleaseSmoke(opts: {
   outputDir?: string;
   scenario?: "bundled-channels";
   keepTemp?: boolean;
+  allowUnsafeInstallRef?: boolean;
   json?: boolean;
   timeoutSeconds?: number;
   ref: string;
@@ -236,6 +238,11 @@ export function registerQaLabCli(program: Command) {
     .option("--output-dir <path>", "Artifact directory relative to the repo root")
     .option("--scenario <id>", "Comparison scenario", "bundled-channels")
     .option("--keep-temp", "Keep temporary install/home directories", false)
+    .option(
+      "--allow-unsafe-install-ref",
+      "Allow local paths or non-registry install refs for historical or local comparisons",
+      false,
+    )
     .option("--json", "Print the full JSON summary to stdout", false)
     .option("--timeout-seconds <count>", "Per-command timeout in seconds", (value: string) =>
       Number(value),
@@ -249,6 +256,7 @@ export function registerQaLabCli(program: Command) {
           outputDir?: string;
           scenario?: "bundled-channels";
           keepTemp?: boolean;
+          allowUnsafeInstallRef?: boolean;
           json?: boolean;
           timeoutSeconds?: number;
         },
@@ -258,6 +266,7 @@ export function registerQaLabCli(program: Command) {
           outputDir: opts.outputDir,
           scenario: opts.scenario,
           keepTemp: opts.keepTemp,
+          allowUnsafeInstallRef: opts.allowUnsafeInstallRef,
           json: opts.json,
           timeoutSeconds: opts.timeoutSeconds,
           oldRef,
@@ -273,6 +282,11 @@ export function registerQaLabCli(program: Command) {
     .option("--output-dir <path>", "Artifact directory relative to the repo root")
     .option("--scenario <id>", "Smoke scenario", "bundled-channels")
     .option("--keep-temp", "Keep temporary install/home directories", false)
+    .option(
+      "--allow-unsafe-install-ref",
+      "Allow local paths or non-registry install refs for historical or local smoke runs",
+      false,
+    )
     .option("--json", "Print the full JSON summary to stdout", false)
     .option("--timeout-seconds <count>", "Per-command timeout in seconds", (value: string) =>
       Number(value),
@@ -285,6 +299,7 @@ export function registerQaLabCli(program: Command) {
           outputDir?: string;
           scenario?: "bundled-channels";
           keepTemp?: boolean;
+          allowUnsafeInstallRef?: boolean;
           json?: boolean;
           timeoutSeconds?: number;
         },
@@ -294,6 +309,7 @@ export function registerQaLabCli(program: Command) {
           outputDir: opts.outputDir,
           scenario: opts.scenario,
           keepTemp: opts.keepTemp,
+          allowUnsafeInstallRef: opts.allowUnsafeInstallRef,
           json: opts.json,
           timeoutSeconds: opts.timeoutSeconds,
           ref,

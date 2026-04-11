@@ -468,6 +468,7 @@ export async function runQaReleaseCompareCommand(opts: {
   outputDir?: string;
   scenario?: "bundled-channels";
   keepTemp?: boolean;
+  allowUnsafeInstallRef?: boolean;
   json?: boolean;
   timeoutSeconds?: number;
   oldRef: string;
@@ -482,6 +483,7 @@ export async function runQaReleaseCompareCommand(opts: {
     scenarioId: opts.scenario ?? "bundled-channels",
     outputDir,
     keepTemp: opts.keepTemp,
+    allowUnsafeInstallRef: opts.allowUnsafeInstallRef,
     timeoutMs:
       Number.isFinite(opts.timeoutSeconds) && (opts.timeoutSeconds ?? 0) > 0
         ? Math.floor((opts.timeoutSeconds ?? 0) * 1000)
@@ -502,6 +504,7 @@ export async function runQaReleaseSmokeCommand(opts: {
   outputDir?: string;
   scenario?: "bundled-channels";
   keepTemp?: boolean;
+  allowUnsafeInstallRef?: boolean;
   json?: boolean;
   timeoutSeconds?: number;
   ref: string;
@@ -514,6 +517,7 @@ export async function runQaReleaseSmokeCommand(opts: {
     scenarioId: opts.scenario ?? "bundled-channels",
     outputDir,
     keepTemp: opts.keepTemp,
+    allowUnsafeInstallRef: opts.allowUnsafeInstallRef,
     timeoutMs:
       Number.isFinite(opts.timeoutSeconds) && (opts.timeoutSeconds ?? 0) > 0
         ? Math.floor((opts.timeoutSeconds ?? 0) * 1000)
