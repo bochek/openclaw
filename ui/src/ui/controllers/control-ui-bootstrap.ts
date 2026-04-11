@@ -52,7 +52,7 @@ export async function loadControlUiBootstrapConfig(state: ControlUiBootstrapStat
       ? parsed.localMediaPreviewRoots.filter((value): value is string => typeof value === "string")
       : [];
     state.embedSandboxMode =
-      parsed.embedSandbox === "trusted" || parsed.embedSandbox === "powerful"
+      parsed.embedSandbox === "trusted"
         ? "trusted"
         : parsed.embedSandbox === "strict"
           ? "strict"

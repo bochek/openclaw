@@ -9,6 +9,7 @@ import {
   GATEWAY_CLIENT_MODES,
   GATEWAY_CLIENT_NAMES,
 } from "../protocol/client-info.js";
+import type { ModelCatalogEntry } from "../../agents/model-catalog.types.js";
 import { ErrorCodes } from "../protocol/index.js";
 import { CHAT_SEND_SESSION_KEY_MAX_LENGTH } from "../protocol/schema/primitives.js";
 import type { GatewayRequestContext } from "./types.js";
@@ -27,9 +28,7 @@ const mockState = vi.hoisted(() => ({
   lastDispatchCtx: undefined as MsgContext | undefined,
   lastDispatchImages: undefined as Array<{ mimeType: string; data: string }> | undefined,
   lastDispatchImageOrder: undefined as string[] | undefined,
-  modelCatalog: null as
-    | Array<{ provider: string; id: string; name?: string; input?: string[] }>
-    | null,
+  modelCatalog: null as ModelCatalogEntry[] | null,
   emittedTranscriptUpdates: [] as Array<{
     sessionFile: string;
     sessionKey?: string;
@@ -65,7 +64,7 @@ vi.mock("../session-utils.js", async () => {
       cfg: {
         ...mockState.config,
         session: {
-          ...((mockState.config.session as Record<string, unknown> | undefined) ?? {}),
+          ...(mockState.config.session as Record<string, unknown> | undefined),
           mainKey: mockState.mainSessionKey,
         },
       },
@@ -88,7 +87,7 @@ vi.mock("../../auto-reply/dispatch.js", () => ({
     async (params: {
       ctx: MsgContext;
       dispatcher: {
-        sendFinalReply: (payload: { text: string }) => boolean;
+        sendFinalReply: (payload: { text?: string; mediaUrl?: string }) => boolean;
         markComplete: () => void;
         waitForIdle: () => Promise<void>;
       };

@@ -339,7 +339,6 @@ function buildPluginRequestStages(params: {
           trustedProxies: params.trustedProxies,
           allowRealIpFallback: params.allowRealIpFallback,
           rateLimiter: params.rateLimiter,
-          browserOriginPolicy: resolveHttpBrowserOriginPolicy(params.req),
         });
         if (!requestAuth) {
           return true;
@@ -792,7 +791,7 @@ export function createGatewayHttpServer(opts: {
     });
 
     // Don't interfere with WebSocket upgrades; ws handles the 'upgrade' event.
-    if (String(req.headers.upgrade ?? "").toLowerCase() === "websocket") {
+    if ((req.headers.upgrade ?? "").toLowerCase() === "websocket") {
       return;
     }
 

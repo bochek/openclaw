@@ -2,6 +2,7 @@ import type { IncomingMessage } from "node:http";
 import os from "node:os";
 import type { WebSocket } from "ws";
 import { loadConfig } from "../../../config/config.js";
+import type { ResolvedGatewayAuth } from "../../auth.js";
 import {
   getBoundDeviceBootstrapProfile,
   getDeviceBootstrapTokenProfile,
@@ -943,7 +944,10 @@ export function attachGatewayWsMessageHandler(params: {
                 : requestedOperatorScopes.length > 0
                   ? {
                       status: "forbidden" as const,
-                      missingScope: requestedOperatorScopes[0] ?? "callerScopes-required",
+                      reason: requestedOperatorScopes.length > 0
+                        ? "caller-missing-scope"
+                        : "caller-scopes-required",
+                      scope: requestedOperatorScopes[0],
                     }
                   : await approveDevicePairing(pairing.request.requestId);
               if (approved?.status === "approved") {

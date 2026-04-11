@@ -1798,9 +1798,7 @@ export function renderApp(state: AppViewState) {
               error: state.lastError,
               sessions: state.sessionsResult,
               focusMode: chatFocus,
-              autoExpandToolCalls: state.onboarding
-                ? false
-                : state.settings.chatAutoExpandToolCalls,
+              autoExpandToolCalls: false,
               onRefresh: () => {
                 state.chatSideResult = null;
                 state.resetToolStream();

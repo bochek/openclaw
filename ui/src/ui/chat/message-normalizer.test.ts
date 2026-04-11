@@ -368,7 +368,7 @@ describe("message-normalizer", () => {
         content: [{ type: "tool_use", name: "test", arguments: { foo: "bar" } }],
       });
 
-      expect(result.content[0].args).toEqual({ foo: "bar" });
+      expect((result.content[0] as { args?: unknown }).args).toEqual({ foo: "bar" });
     });
 
     it("handles input field for anthropic tool_use blocks", () => {
@@ -377,7 +377,7 @@ describe("message-normalizer", () => {
         content: [{ type: "tool_use", name: "Bash", input: { command: "pwd" } }],
       });
 
-      expect(result.content[0].args).toEqual({ command: "pwd" });
+      expect((result.content[0] as { args?: unknown }).args).toEqual({ command: "pwd" });
     });
 
     it("preserves top-level sender labels", () => {

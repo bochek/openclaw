@@ -40,7 +40,7 @@ export function renderMarkdownSidebar(props: MarkdownSidebarProps) {
                 View Raw Text
               </button>
             `
-          : props.content
+          : content
             ? content.kind === "canvas"
               ? html`
                   <div class="chat-tool-card__preview" data-kind="canvas">
@@ -69,12 +69,7 @@ export function renderMarkdownSidebar(props: MarkdownSidebarProps) {
                   </div>
                 `
               : html`<div class="sidebar-markdown">
-                  ${unsafeHTML(
-                    toSanitizedMarkdownHtml(content.content, {
-                      expandJsonBlocks: true,
-                      disableTruncation: true,
-                    }),
-                  )}
+                  ${unsafeHTML(toSanitizedMarkdownHtml(content.content))}
                 </div>`
             : html` <div class="muted">No content available</div> `}
       </div>

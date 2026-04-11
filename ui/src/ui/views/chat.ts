@@ -2,10 +2,7 @@ import { html, nothing, type TemplateResult } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { repeat } from "lit/directives/repeat.js";
 import { unsafeHTML } from "lit/directives/unsafe-html.js";
-import type {
-  CompactionStatus as CompactionIndicatorStatus,
-  FallbackStatus as FallbackIndicatorStatus,
-} from "../app-tool-stream.ts";
+import type { CompactionStatus, FallbackStatus } from "../app-tool-stream.ts";
 import {
   CHAT_ATTACHMENT_ACCEPT,
   isSupportedChatAttachmentMimeType,
@@ -50,22 +47,6 @@ import { agentLogoUrl, resolveAgentAvatarUrl } from "./agents-utils.ts";
 import { renderMarkdownSidebar } from "./markdown-sidebar.ts";
 import "../components/resizable-divider.ts";
 
-export type CompactionIndicatorStatus = {
-  active: boolean;
-  startedAt: number | null;
-  completedAt: number | null;
-};
-
-export type FallbackIndicatorStatus = {
-  phase?: "active" | "cleared";
-  selected: string;
-  active: string;
-  previous?: string;
-  reason?: string;
-  attempts: string[];
-  occurredAt: number;
-};
-
 export type ChatProps = {
   sessionKey: string;
   onSessionKeyChange: (next: string) => void;
@@ -75,8 +56,8 @@ export type ChatProps = {
   loading: boolean;
   sending: boolean;
   canAbort?: boolean;
-  compactionStatus?: CompactionIndicatorStatus | null;
-  fallbackStatus?: FallbackIndicatorStatus | null;
+  compactionStatus?: CompactionStatus | null;
+  fallbackStatus?: FallbackStatus | null;
   messages: unknown[];
   sideResult?: ChatSideResult | null;
   toolMessages: unknown[];
@@ -405,11 +386,11 @@ function syncToolCardExpansionState(
   lastAutoExpandPrefBySession.set(sessionKey, autoExpandToolCalls);
 }
 
-function renderCompactionIndicator(status: CompactionIndicatorStatus | null | undefined) {
+function renderCompactionIndicator(status: CompactionStatus | null | undefined) {
   if (!status) {
     return nothing;
   }
-  if (status.active) {
+  if (status.phase === "active" || status.phase === "retrying") {
     return html`
       <div
         class="compaction-indicator compaction-indicator--active"
@@ -437,7 +418,7 @@ function renderCompactionIndicator(status: CompactionIndicatorStatus | null | un
   return nothing;
 }
 
-function renderFallbackIndicator(status: FallbackIndicatorStatus | null | undefined) {
+function renderFallbackIndicator(status: FallbackStatus | null | undefined) {
   if (!status) {
     return nothing;
   }

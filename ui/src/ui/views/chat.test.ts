@@ -199,6 +199,7 @@ function createProps(overrides: Partial<ChatProps> = {}): ChatProps {
 
 function createOverviewProps(overrides: Partial<OverviewProps> = {}): OverviewProps {
   return {
+    warnQueryToken: false,
     connected: false,
     hello: null,
     settings: {
@@ -578,7 +579,8 @@ describe("chat view", () => {
       renderChat(
         createProps({
           compactionStatus: {
-            active: true,
+            phase: "active",
+            runId: "run-1",
             startedAt: Date.now(),
             completedAt: null,
           },
@@ -599,7 +601,8 @@ describe("chat view", () => {
       renderChat(
         createProps({
           compactionStatus: {
-            active: false,
+            phase: "complete",
+            runId: "run-1",
             startedAt: 900,
             completedAt: 900,
           },
@@ -621,7 +624,8 @@ describe("chat view", () => {
       renderChat(
         createProps({
           compactionStatus: {
-            active: false,
+            phase: "complete",
+            runId: "run-1",
             startedAt: 0,
             completedAt: 0,
           },

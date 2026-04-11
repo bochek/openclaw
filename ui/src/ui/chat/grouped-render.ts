@@ -1054,8 +1054,12 @@ function renderGroupedMessage(
 
   const normalizedMessage = normalizeMessage(message);
   const extractedText = normalizedMessage.content
-    .filter((item): item is Extract<MessageContentItem, { type: "text" }> => item.type === "text")
-    .map((item) => item.text ?? "")
+    .reduce<string[]>((lines, item) => {
+      if (item.type === "text" && typeof item.text === "string") {
+        lines.push(item.text);
+      }
+      return lines;
+    }, [])
     .join("\n")
     .trim();
   const assistantAttachments = normalizedMessage.content.filter(

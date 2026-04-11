@@ -265,8 +265,7 @@ describe("handleControlUiHttpRequest", () => {
           mode: "trusted-proxy",
           allowTailscale: false,
           trustedProxy: {
-            userHeaders: ["x-forwarded-user"],
-            allowedOrigins: ["https://control.example.com"],
+            userHeader: "x-forwarded-user",
           },
         },
         trustedProxies: ["10.0.0.1"],
