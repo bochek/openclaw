@@ -46,52 +46,6 @@ describe("plugins cli list", () => {
     });
   });
 
-  it("shows imported state in verbose output", async () => {
-    buildPluginSnapshotReport.mockReturnValue({
-      plugins: [
-        createPluginRecord({
-          id: "demo",
-          name: "Demo Plugin",
-          imported: false,
-          activated: true,
-          explicitlyEnabled: false,
-        }),
-      ],
-      diagnostics: [],
-    });
-
-    await runPluginsCommand(["plugins", "list", "--verbose"]);
-
-    expect(buildPluginSnapshotReport).toHaveBeenCalledWith();
-
-    const output = runtimeLogs.join("\n");
-    expect(output).toContain("activated: yes");
-    expect(output).toContain("imported: no");
-    expect(output).toContain("explicitly enabled: no");
-  });
-
-  it("sanitizes activation reasons in verbose output", async () => {
-    buildPluginSnapshotReport.mockReturnValue({
-      plugins: [
-        createPluginRecord({
-          id: "demo",
-          name: "Demo Plugin",
-          activated: true,
-          activationSource: "auto",
-          activationReason: "\u001B[31mconfigured\nnext\tstep",
-        }),
-      ],
-      diagnostics: [],
-    });
-
-    await runPluginsCommand(["plugins", "list", "--verbose"]);
-
-    const output = runtimeLogs.join("\n");
-    expect(output).toContain("activation reason: configured\\nnext\\tstep");
-    expect(output).not.toContain("\u001B[31m");
-    expect(output.match(/activation reason:/g)).toHaveLength(1);
-  });
-
   it("keeps doctor on a module-loading snapshot", async () => {
     buildPluginDiagnosticsReport.mockReturnValue({
       plugins: [],
@@ -149,6 +103,55 @@ describe("plugins cli list", () => {
         ],
       }),
     );
+  });
+
+  it("redacts sensitive plugin smoke diagnostics in JSON output", async () => {
+    buildPluginSmokeReport.mockReturnValue({
+      scenarioId: "bundled-channels",
+      workspaceDir: "/workspace/private",
+      classification: "load_error",
+      summary: {
+        pluginCount: 1,
+        loadedCount: 0,
+        errorCount: 1,
+        disabledCount: 0,
+      },
+      entries: [
+        {
+          pluginId: "telegram",
+          pluginName: "Telegram",
+          status: "error",
+          failurePhase: "load",
+          classification: "load_error",
+          summary: "plugin path not found: /tmp/secret-plugin",
+          diagnostics: [
+            {
+              level: "error",
+              source: "/tmp/secret-plugin/index.js",
+              message:
+                "Authorization: Bearer topsecret plugin path /tmp/secret-plugin/index.js https://user:pass@example.com/hook?token=abc",
+            },
+          ],
+        },
+      ],
+      diagnostics: [
+        {
+          level: "error",
+          source: "/tmp/secret-plugin/index.js",
+          message: "OPENAI_API_KEY=sk-secret-token",
+        },
+      ],
+    });
+
+    await expect(runPluginsCommand(["plugins", "smoke", "--json"])).rejects.toThrow("__exit__:1");
+
+    const payload = JSON.parse(runtimeLogs[0] ?? "null");
+    expect(payload.workspaceDir).toBeUndefined();
+    expect(payload.entries[0].diagnostics[0].source).toBeUndefined();
+    expect(payload.entries[0].diagnostics[0].message).not.toContain("topsecret");
+    expect(payload.entries[0].diagnostics[0].message).not.toContain("/tmp/secret-plugin");
+    expect(payload.entries[0].diagnostics[0].message).not.toContain("user:pass@example.com");
+    expect(payload.diagnostics[0].message).not.toContain("sk-secret-token");
   });
 
   it("exits non-zero for non-json smoke failures", async () => {

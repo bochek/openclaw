@@ -8,6 +8,15 @@ import { resolveRepoRelativeOutputDir } from "./cli-paths.js";
 const execFileAsync = promisify(execFile);
 
 const DEFAULT_RELEASE_COMPARE_TIMEOUT_MS = 20_000;
+const QA_RELEASE_COMPARE_CLASSIFICATIONS = new Set<QaReleaseCompareClassification>([
+  "ok",
+  "packaged_entry_missing",
+  "plugin_validation_error",
+  "load_error",
+  "command_missing",
+  "timeout",
+  "error",
+]);
 
 type QaReleaseCompareScenarioId = "bundled-channels";
 
@@ -96,7 +105,10 @@ function sanitizeSegment(value: string) {
     .slice(0, 80);
 }
 
-type PersistedQaReleaseCompareCommandResult = Omit<QaReleaseCompareCommandResult, "stdout" | "stderr">;
+type PersistedQaReleaseCompareCommandResult = Omit<
+  QaReleaseCompareCommandResult,
+  "stdout" | "stderr"
+>;
 
 type PersistedQaReleaseCompareInstall = Omit<QaReleaseCompareInstall, "commandResults"> & {
   commandResults: PersistedQaReleaseCompareCommandResult[];
@@ -234,10 +246,15 @@ export function classifyReleaseCompareCommandOutput(
   if (commandId === "plugins-smoke-json") {
     try {
       const parsed = JSON.parse(stdout) as {
-        classification?: QaReleaseCompareClassification;
+        classification?: string;
       };
-      if (parsed.classification) {
-        return parsed.classification;
+      if (
+        parsed.classification &&
+        QA_RELEASE_COMPARE_CLASSIFICATIONS.has(
+          parsed.classification as QaReleaseCompareClassification,
+        )
+      ) {
+        return parsed.classification as QaReleaseCompareClassification;
       }
     } catch {
       // fall through to text heuristics
@@ -301,9 +318,7 @@ async function resolveTrustedNpmCliPath() {
       // try next candidate
     }
   }
-  throw new Error(
-    "Unable to locate a trusted npm CLI near the current Node installation.",
-  );
+  throw new Error("Unable to locate a trusted npm CLI near the current Node installation.");
 }
 
 async function installRelease(prefixDir: string, installRef: string, cwd: string, homeDir: string) {
@@ -501,13 +516,8 @@ async function writeCommandArtifacts(outputDir: string, install: QaReleaseCompar
   for (const commandResult of install.commandResults) {
     const baseName = sanitizeSegment(commandResult.id) || "command";
     await writeFile(
-      path.join(commandsDir, `${baseName}.stdout.txt`),
-      redactPersistedCommandText(commandResult.stdout),
-      "utf8",
-    );
-    await writeFile(
-      path.join(commandsDir, `${baseName}.stderr.txt`),
-      redactPersistedCommandText(commandResult.stderr),
+      path.join(commandsDir, `${baseName}.json`),
+      `${JSON.stringify(toPersistedCommandResult(commandResult), null, 2)}\n`,
       "utf8",
     );
   }

@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -87,6 +89,7 @@ import {
   runQaManualLaneCommand,
   runQaReleaseCompareCommand,
   runQaReleaseSmokeCommand,
+  runQaParityReportCommand,
   runQaSuiteCommand,
 } from "./cli.runtime.js";
 import { runQaMatrixCommand } from "./live-transports/matrix/cli.runtime.js";
@@ -382,6 +385,28 @@ describe("qa cli runtime", () => {
     );
   });
 
+  it("expands the agentic parity pack onto the suite scenario list", async () => {
+    await runQaSuiteCommand({
+      repoRoot: "/tmp/openclaw-repo",
+      parityPack: "agentic",
+      scenarioIds: ["channel-chat-baseline"],
+    });
+
+    expect(runQaSuiteFromRuntime).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoRoot: path.resolve("/tmp/openclaw-repo"),
+        scenarioIds: [
+          "channel-chat-baseline",
+          "approval-turn-tool-followthrough",
+          "model-switch-tool-continuity",
+          "source-docs-discovery-report",
+          "image-understanding-attachment",
+          "compaction-retry-mutating-tool",
+        ],
+      }),
+    );
+  });
+
   it("rejects unknown suite CLI auth modes", async () => {
     await expect(
       runQaSuiteCommand({
@@ -389,6 +414,40 @@ describe("qa cli runtime", () => {
         cliAuthMode: "magic",
       }),
     ).rejects.toThrow("--cli-auth-mode must be one of auto, api-key, subscription");
+  });
+
+  it("sets a failing exit code when the parity gate fails", async () => {
+    const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "qa-parity-"));
+    const priorExitCode = process.exitCode;
+    process.exitCode = undefined;
+
+    try {
+      await fs.writeFile(
+        path.join(repoRoot, "candidate.json"),
+        JSON.stringify({
+          scenarios: [{ name: "Approval turn tool followthrough", status: "pass" }],
+        }),
+        "utf8",
+      );
+      await fs.writeFile(
+        path.join(repoRoot, "baseline.json"),
+        JSON.stringify({
+          scenarios: [{ name: "Approval turn tool followthrough", status: "pass" }],
+        }),
+        "utf8",
+      );
+
+      await runQaParityReportCommand({
+        repoRoot,
+        candidateSummary: "candidate.json",
+        baselineSummary: "baseline.json",
+      });
+
+      expect(process.exitCode).toBe(1);
+    } finally {
+      process.exitCode = priorExitCode;
+      await fs.rm(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it("resolves character eval paths and passes model refs through", async () => {
@@ -678,6 +737,30 @@ describe("qa cli runtime", () => {
       imageName: undefined,
       usePrebuiltImage: true,
     });
+  });
+
+  it("rejects absolute docker scaffold output dirs outside the repo root", async () => {
+    await expect(
+      runQaDockerScaffoldCommand({
+        repoRoot: "/tmp/openclaw-repo",
+        outputDir: "/tmp/outside",
+      }),
+    ).rejects.toThrow("--output-dir must be a relative path inside the repo root.");
+  });
+
+  it("rejects docker scaffold output dirs that traverse repo symlinks", async () => {
+    const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), "qa-docker-symlink-"));
+    try {
+      await fs.symlink("/tmp", path.join(repoRoot, "linked"));
+      await expect(
+        runQaDockerScaffoldCommand({
+          repoRoot,
+          outputDir: "linked/scaffold",
+        }),
+      ).rejects.toThrow("--output-dir cannot traverse symlinked paths.");
+    } finally {
+      await fs.rm(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it("passes the explicit repo root into docker image builds", async () => {

@@ -1,4 +1,11 @@
+import fs from "node:fs/promises";
 import path from "node:path";
+import {
+  buildQaAgenticParityComparison,
+  renderQaAgenticParityMarkdownReport,
+  type QaParitySuiteSummary,
+} from "./agentic-parity-report.js";
+import { resolveQaParityPackScenarioIds } from "./agentic-parity.js";
 import { runQaCharacterEval, type QaCharacterModelOptions } from "./character-eval.js";
 import { resolveRepoRelativeOutputDir } from "./cli-paths.js";
 import { buildQaDockerHarnessImage, writeQaDockerHarnessFiles } from "./docker-harness.js";
@@ -27,6 +34,31 @@ type InterruptibleServer = {
   baseUrl: string;
   stop(): Promise<void>;
 };
+
+async function assertNoSymlinkPathComponents(repoRoot: string, outputDir: string) {
+  const resolvedRepoRoot = path.resolve(repoRoot);
+  const resolvedOutputDir = path.resolve(outputDir);
+  const relative = path.relative(resolvedRepoRoot, resolvedOutputDir);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("--output-dir must stay within the repo root.");
+  }
+  let current = resolvedRepoRoot;
+  for (const segment of relative.split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    try {
+      const stat = await fs.lstat(current);
+      if (stat.isSymbolicLink()) {
+        throw new Error("--output-dir cannot traverse symlinked paths.");
+      }
+    } catch (error) {
+      const nodeError = error as NodeJS.ErrnoException;
+      if (nodeError.code === "ENOENT") {
+        continue;
+      }
+      throw error;
+    }
+  }
+}
 
 function resolveQaManualLaneModels(opts: {
   providerMode: QaProviderMode;
@@ -219,6 +251,7 @@ export async function runQaSuiteCommand(opts: {
   alternateModel?: string;
   fastMode?: boolean;
   cliAuthMode?: string;
+  parityPack?: string;
   scenarioIds?: string[];
   concurrency?: number;
   image?: string;
@@ -228,6 +261,10 @@ export async function runQaSuiteCommand(opts: {
 }) {
   const repoRoot = path.resolve(opts.repoRoot ?? process.cwd());
   const runner = (opts.runner ?? "host").trim().toLowerCase();
+  const scenarioIds = resolveQaParityPackScenarioIds({
+    parityPack: opts.parityPack,
+    scenarioIds: opts.scenarioIds,
+  });
   if (runner !== "host" && runner !== "multipass") {
     throw new Error(`--runner must be one of host or multipass, got "${opts.runner}".`);
   }
@@ -253,7 +290,7 @@ export async function runQaSuiteCommand(opts: {
       primaryModel: opts.primaryModel,
       alternateModel: opts.alternateModel,
       fastMode: opts.fastMode,
-      scenarioIds: opts.scenarioIds,
+      scenarioIds,
       ...(opts.concurrency !== undefined
         ? { concurrency: parseQaPositiveIntegerOption("--concurrency", opts.concurrency) }
         : {}),
@@ -277,7 +314,7 @@ export async function runQaSuiteCommand(opts: {
     alternateModel: opts.alternateModel,
     fastMode: opts.fastMode,
     ...(claudeCliAuthMode ? { claudeCliAuthMode } : {}),
-    scenarioIds: opts.scenarioIds,
+    scenarioIds,
     ...(opts.concurrency !== undefined
       ? { concurrency: parseQaPositiveIntegerOption("--concurrency", opts.concurrency) }
       : {}),
@@ -287,6 +324,48 @@ export async function runQaSuiteCommand(opts: {
   process.stdout.write(`QA suite summary: ${result.summaryPath}\n`);
 }
 
+export async function runQaParityReportCommand(opts: {
+  repoRoot?: string;
+  candidateSummary: string;
+  baselineSummary: string;
+  candidateLabel?: string;
+  baselineLabel?: string;
+  outputDir?: string;
+}) {
+  const repoRoot = path.resolve(opts.repoRoot ?? process.cwd());
+  const outputDir =
+    resolveRepoRelativeOutputDir(repoRoot, opts.outputDir) ??
+    path.join(repoRoot, ".artifacts", "qa-e2e", `parity-${Date.now().toString(36)}`);
+  await fs.mkdir(outputDir, { recursive: true });
+
+  const candidateSummaryPath = path.resolve(repoRoot, opts.candidateSummary);
+  const baselineSummaryPath = path.resolve(repoRoot, opts.baselineSummary);
+  const candidateSummary = JSON.parse(
+    await fs.readFile(candidateSummaryPath, "utf8"),
+  ) as QaParitySuiteSummary;
+  const baselineSummary = JSON.parse(
+    await fs.readFile(baselineSummaryPath, "utf8"),
+  ) as QaParitySuiteSummary;
+
+  const comparison = buildQaAgenticParityComparison({
+    candidateLabel: opts.candidateLabel?.trim() || "openai/gpt-5.4",
+    baselineLabel: opts.baselineLabel?.trim() || "anthropic/claude-opus-4-6",
+    candidateSummary,
+    baselineSummary,
+  });
+  const report = renderQaAgenticParityMarkdownReport(comparison);
+  const reportPath = path.join(outputDir, "qa-agentic-parity-report.md");
+  const summaryPath = path.join(outputDir, "qa-agentic-parity-summary.json");
+  await fs.writeFile(reportPath, report, "utf8");
+  await fs.writeFile(summaryPath, `${JSON.stringify(comparison, null, 2)}\n`, "utf8");
+
+  process.stdout.write(`QA parity report: ${reportPath}\n`);
+  process.stdout.write(`QA parity summary: ${summaryPath}\n`);
+  process.stdout.write(`QA parity verdict: ${comparison.pass ? "pass" : "fail"}\n`);
+  if (!comparison.pass) {
+    process.exitCode = 1;
+  }
+}
 export async function runQaCharacterEvalCommand(opts: {
   repoRoot?: string;
   outputDir?: string;
@@ -398,13 +477,11 @@ export async function runQaDockerScaffoldCommand(opts: {
   bindUiDist?: boolean;
 }) {
   const repoRoot = path.resolve(opts.repoRoot ?? process.cwd());
-  const outputDir =
-    opts.outputDir && path.isAbsolute(opts.outputDir)
-      ? opts.outputDir
-      : resolveRepoRelativeOutputDir(repoRoot, opts.outputDir);
+  const outputDir = resolveRepoRelativeOutputDir(repoRoot, opts.outputDir);
   if (!outputDir) {
     throw new Error("--output-dir is required.");
   }
+  await assertNoSymlinkPathComponents(repoRoot, outputDir);
   const result = await writeQaDockerHarnessFiles({
     outputDir,
     repoRoot,
