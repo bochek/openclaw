@@ -13,7 +13,7 @@ import { formatToolOutputForSidebar, getTruncatedPreview } from "./tool-helpers.
 export type ToolPreview = NonNullable<ToolCard["preview"]>;
 
 function resolveCanvasPreviewSandbox(preview: ToolPreview): string {
-  return resolveEmbedSandbox(preview.kind === "canvas" ? "powerful" : "powerful");
+  return resolveEmbedSandbox(preview.kind === "canvas" ? "scripts" : "scripts");
 }
 
 function normalizeContent(content: unknown): Array<Record<string, unknown>> {
@@ -295,7 +295,7 @@ export function renderToolPreview(
           height: preview.preferredHeight,
           sandbox:
             preview.kind === "canvas"
-              ? resolveEmbedSandbox(options?.embedSandboxMode ?? "powerful")
+              ? resolveEmbedSandbox(options?.embedSandboxMode ?? "scripts")
               : resolveCanvasPreviewSandbox(preview),
         })}
       </div>
@@ -427,7 +427,7 @@ export function renderToolCard(
                 card,
                 opts.onOpenSidebar,
                 opts.canvasHostUrl,
-                opts.embedSandboxMode ?? "powerful",
+                opts.embedSandboxMode ?? "scripts",
               )}
             </div>
           `
@@ -440,7 +440,7 @@ export function renderExpandedToolCardContent(
   card: ToolCard,
   onOpenSidebar?: (content: SidebarContent) => void,
   canvasHostUrl?: string | null,
-  embedSandboxMode: EmbedSandboxMode = "powerful",
+  embedSandboxMode: EmbedSandboxMode = "scripts",
 ) {
   const display = resolveToolDisplay({ name: card.name, args: card.args });
   const detail = formatToolDetail(display);
@@ -510,7 +510,7 @@ export function renderToolCardSidebar(
   card: ToolCard,
   onOpenSidebar?: (content: SidebarContent) => void,
   canvasHostUrl?: string | null,
-  embedSandboxMode: EmbedSandboxMode = "powerful",
+  embedSandboxMode: EmbedSandboxMode = "scripts",
 ) {
   return renderToolCard(card, {
     expanded: false,

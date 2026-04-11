@@ -50,7 +50,7 @@ export function renderMarkdownSidebar(props: MarkdownSidebarProps) {
                         title=${content.title?.trim() || "Render preview"}
                         sandbox=${resolveSidebarCanvasSandbox(
                           content,
-                          props.embedSandboxMode ?? "powerful",
+                          props.embedSandboxMode ?? "scripts",
                         )}
                         src=${resolveCanvasIframeUrl(content.entryUrl, props.canvasHostUrl) ??
                         nothing}

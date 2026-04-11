@@ -1295,7 +1295,7 @@ export function renderChat(props: ChatProps) {
                 localMediaPreviewRoots: props.localMediaPreviewRoots ?? [],
                 assistantAttachmentAuthToken: props.assistantAttachmentAuthToken ?? null,
                 canvasHostUrl: props.canvasHostUrl,
-                embedSandboxMode: props.embedSandboxMode ?? "powerful",
+                embedSandboxMode: props.embedSandboxMode ?? "scripts",
                 contextWindow:
                   activeSession?.contextTokens ?? props.sessions?.defaults?.contextTokens ?? null,
                 onDelete: () => {
@@ -1477,7 +1477,7 @@ export function renderChat(props: ChatProps) {
                   content: props.sidebarContent ?? null,
                   error: props.sidebarError ?? null,
                   canvasHostUrl: props.canvasHostUrl,
-                  embedSandboxMode: props.embedSandboxMode ?? "powerful",
+                  embedSandboxMode: props.embedSandboxMode ?? "scripts",
                   onClose: props.onCloseSidebar!,
                   onViewRawText: () => {
                     if (!props.sidebarContent || !props.onOpenSidebar) {

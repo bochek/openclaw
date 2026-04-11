@@ -950,7 +950,7 @@ function renderInlineToolCards(
             : () => undefined,
           onOpenSidebar: opts.onOpenSidebar,
           canvasHostUrl: opts.canvasHostUrl,
-          embedSandboxMode: opts.embedSandboxMode ?? "powerful",
+          embedSandboxMode: opts.embedSandboxMode ?? "scripts",
         }),
       )}
     </div>
@@ -1183,7 +1183,7 @@ function renderGroupedMessage(
                               singleToolCard,
                               onOpenSidebar,
                               opts.canvasHostUrl,
-                              opts.embedSandboxMode ?? "powerful",
+                              opts.embedSandboxMode ?? "scripts",
                             )
                           : renderInlineToolCards(toolCards, {
                               messageKey,
@@ -1191,7 +1191,7 @@ function renderGroupedMessage(
                               isToolExpanded: opts.isToolExpanded,
                               onToggleToolExpanded: opts.onToggleToolExpanded,
                               canvasHostUrl: opts.canvasHostUrl,
-                              embedSandboxMode: opts.embedSandboxMode ?? "powerful",
+                              embedSandboxMode: opts.embedSandboxMode ?? "scripts",
                             })
                         : nothing}
                     </div>
@@ -1219,7 +1219,7 @@ function renderGroupedMessage(
                     onOpenSidebar,
                     rawText: block.rawText ?? null,
                     canvasHostUrl: opts.canvasHostUrl,
-                    embedSandboxMode: opts.embedSandboxMode ?? "powerful",
+                    embedSandboxMode: opts.embedSandboxMode ?? "scripts",
                   })}
                   ${block.rawText ? renderRawOutputToggle(block.rawText) : nothing}`,
                 )}`
@@ -1244,7 +1244,7 @@ function renderGroupedMessage(
                   isToolExpanded: opts.isToolExpanded,
                   onToggleToolExpanded: opts.onToggleToolExpanded,
                   canvasHostUrl: opts.canvasHostUrl,
-                  embedSandboxMode: opts.embedSandboxMode ?? "powerful",
+                  embedSandboxMode: opts.embedSandboxMode ?? "scripts",
                 })
               : nothing}
           `}

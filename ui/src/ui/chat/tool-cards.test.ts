@@ -2,7 +2,12 @@
 
 import { render } from "lit";
 import { describe, expect, it, vi } from "vitest";
-import { buildToolCardSidebarContent, extractToolCards, renderToolCard } from "./tool-cards.ts";
+import {
+  buildToolCardSidebarContent,
+  extractToolCards,
+  renderToolCard,
+  renderToolPreview,
+} from "./tool-cards.ts";
 
 describe("tool-cards", () => {
   it("pretty-prints structured args and pairs tool output onto the same card", () => {
@@ -159,6 +164,29 @@ describe("tool-cards", () => {
     );
 
     expect(card?.preview).toBeUndefined();
+  });
+
+  it("renders trusted canvas previews with same-origin only when explicitly requested", () => {
+    const container = document.createElement("div");
+    render(
+      renderToolPreview(
+        {
+          kind: "canvas",
+          surface: "assistant_message",
+          render: "url",
+          viewId: "cv_inline",
+          url: "/__openclaw__/canvas/documents/cv_inline/index.html",
+          title: "Inline demo",
+          preferredHeight: 420,
+        },
+        "chat_message",
+        { embedSandboxMode: "trusted" },
+      ),
+      container,
+    );
+
+    const iframe = container.querySelector<HTMLIFrameElement>(".chat-tool-card__preview-frame");
+    expect(iframe?.getAttribute("sandbox")).toBe("allow-scripts allow-same-origin");
   });
 
   it("does not extract inline-html canvas payloads into canvas previews", () => {

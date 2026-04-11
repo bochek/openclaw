@@ -3,5 +3,13 @@ import type { ControlUiEmbedSandboxMode } from "../../../src/gateway/control-ui-
 export type EmbedSandboxMode = ControlUiEmbedSandboxMode;
 
 export function resolveEmbedSandbox(mode: EmbedSandboxMode | null | undefined): string {
-  return mode === "isolated" ? "allow-scripts" : "allow-scripts allow-same-origin";
+  switch (mode) {
+    case "strict":
+      return "";
+    case "trusted":
+      return "allow-scripts allow-same-origin";
+    case "scripts":
+    default:
+      return "allow-scripts";
+  }
 }

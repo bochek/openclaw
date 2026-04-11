@@ -680,7 +680,11 @@ export const OpenClawSchema = z
             enabled: z.boolean().optional(),
             basePath: z.string().optional(),
             root: z.string().optional(),
-            embedSandbox: z.union([z.literal("powerful"), z.literal("isolated")]).optional(),
+            embedSandbox: z.union([
+              z.literal("strict"),
+              z.literal("scripts"),
+              z.literal("trusted"),
+            ]).optional(),
             allowedOrigins: z.array(z.string()).optional(),
             dangerouslyAllowHostHeaderOriginFallback: z.boolean().optional(),
             allowInsecureAuth: z.boolean().optional(),

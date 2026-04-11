@@ -1730,20 +1730,20 @@ describe("chat view", () => {
 
     const iframe = container.querySelector<HTMLIFrameElement>(".chat-tool-card__preview-frame");
     expect(iframe).not.toBeNull();
-    expect(iframe?.getAttribute("sandbox")).toBe("allow-scripts allow-same-origin");
+    expect(iframe?.getAttribute("sandbox")).toBe("allow-scripts");
     expect(iframe?.getAttribute("src")).toBe("/__openclaw__/canvas/documents/cv_inline/index.html");
     expect(container.textContent).toContain("Inline canvas result.");
     expect(container.textContent).toContain("Inline demo");
     expect(container.textContent).toContain("Raw details");
   });
 
-  it("uses isolated embed sandbox mode when configured", () => {
+  it("uses trusted embed sandbox mode when configured", () => {
     const container = document.createElement("div");
     render(
       renderChat(
         createProps({
           showToolCalls: false,
-          embedSandboxMode: "isolated",
+          embedSandboxMode: "trusted",
           messages: [
             {
               id: "assistant-canvas-isolated",
@@ -1780,7 +1780,7 @@ describe("chat view", () => {
     );
 
     const iframe = container.querySelector<HTMLIFrameElement>(".chat-tool-card__preview-frame");
-    expect(iframe?.getAttribute("sandbox")).toBe("allow-scripts");
+    expect(iframe?.getAttribute("sandbox")).toBe("allow-scripts allow-same-origin");
   });
 
   it("renders assistant_message canvas results in the assistant bubble even when tool rows are visible", () => {

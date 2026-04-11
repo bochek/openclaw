@@ -583,7 +583,11 @@ export function handleControlUiHttpRequest(
       serverVersion: resolveRuntimeServiceVersion(process.env),
       localMediaPreviewRoots: [...getDefaultLocalRoots()],
       embedSandbox:
-        config?.gateway?.controlUi?.embedSandbox === "isolated" ? "isolated" : "powerful",
+        config?.gateway?.controlUi?.embedSandbox === "trusted"
+          ? "trusted"
+          : config?.gateway?.controlUi?.embedSandbox === "strict"
+            ? "strict"
+            : "scripts",
     } satisfies ControlUiBootstrapConfig);
     return true;
   }

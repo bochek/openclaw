@@ -87,9 +87,11 @@ export type GatewayControlUiConfig = {
   root?: string;
   /**
    * Embed sandbox mode for hosted Control UI previews.
-   * "powerful" keeps same-origin iframe behavior; "isolated" removes same-origin.
+   * - strict: no script execution inside embeds
+   * - scripts: allow scripts while keeping embeds origin-isolated (default)
+   * - trusted: allow scripts and same-origin privileges
    */
-  embedSandbox?: "powerful" | "isolated";
+  embedSandbox?: "strict" | "scripts" | "trusted";
   /** Allowed browser origins for Control UI/WebChat websocket connections. */
   allowedOrigins?: string[];
   /**

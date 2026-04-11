@@ -15,7 +15,7 @@ describe("loadControlUiBootstrapConfig", () => {
         assistantAgentId: "main",
         serverVersion: "2026.3.7",
         localMediaPreviewRoots: ["/tmp/openclaw"],
-        embedSandbox: "isolated",
+        embedSandbox: "scripts",
       }),
     });
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
@@ -26,7 +26,7 @@ describe("loadControlUiBootstrapConfig", () => {
       assistantAvatar: null,
       assistantAgentId: null,
       localMediaPreviewRoots: [],
-      embedSandboxMode: "powerful" as const,
+      embedSandboxMode: "scripts" as const,
       serverVersion: null,
     };
 
@@ -41,7 +41,7 @@ describe("loadControlUiBootstrapConfig", () => {
     expect(state.assistantAgentId).toBe("main");
     expect(state.serverVersion).toBe("2026.3.7");
     expect(state.localMediaPreviewRoots).toEqual(["/tmp/openclaw"]);
-    expect(state.embedSandboxMode).toBe("isolated");
+    expect(state.embedSandboxMode).toBe("scripts");
 
     vi.unstubAllGlobals();
   });
@@ -56,7 +56,7 @@ describe("loadControlUiBootstrapConfig", () => {
       assistantAvatar: null,
       assistantAgentId: null,
       localMediaPreviewRoots: [],
-      embedSandboxMode: "powerful" as const,
+      embedSandboxMode: "scripts" as const,
       serverVersion: null,
     };
 
@@ -67,7 +67,7 @@ describe("loadControlUiBootstrapConfig", () => {
       expect.objectContaining({ method: "GET" }),
     );
     expect(state.assistantName).toBe("Assistant");
-    expect(state.embedSandboxMode).toBe("powerful");
+    expect(state.embedSandboxMode).toBe("scripts");
 
     vi.unstubAllGlobals();
   });
@@ -82,7 +82,7 @@ describe("loadControlUiBootstrapConfig", () => {
       assistantAvatar: null,
       assistantAgentId: null,
       localMediaPreviewRoots: [],
-      embedSandboxMode: "powerful" as const,
+      embedSandboxMode: "scripts" as const,
       serverVersion: null,
     };
 

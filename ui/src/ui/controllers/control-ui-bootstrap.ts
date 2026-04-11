@@ -51,7 +51,12 @@ export async function loadControlUiBootstrapConfig(state: ControlUiBootstrapStat
     state.localMediaPreviewRoots = Array.isArray(parsed.localMediaPreviewRoots)
       ? parsed.localMediaPreviewRoots.filter((value): value is string => typeof value === "string")
       : [];
-    state.embedSandboxMode = parsed.embedSandbox === "isolated" ? "isolated" : "powerful";
+    state.embedSandboxMode =
+      parsed.embedSandbox === "trusted" || parsed.embedSandbox === "powerful"
+        ? "trusted"
+        : parsed.embedSandbox === "strict"
+          ? "strict"
+          : "scripts";
   } catch {
     // Ignore bootstrap failures; UI will update identity after connecting.
   }
