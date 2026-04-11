@@ -20,6 +20,7 @@ type QaReleaseCompareClassification =
   | "ok"
   | "packaged_entry_missing"
   | "plugin_validation_error"
+  | "load_error"
   | "command_missing"
   | "timeout"
   | "error";
@@ -171,11 +172,10 @@ function scenarioCommands(scenarioId: QaReleaseCompareScenarioId): QaReleaseComp
         { id: "plugins-smoke-json", args: ["plugins", "smoke", "--json"] },
         { id: "doctor", args: ["doctor", "--non-interactive"] },
         { id: "status", args: ["status"] },
-        { id: "health", args: ["health"] },
         { id: "models-status", args: ["models", "status"] },
       ];
   }
-  return [];
+  throw new Error(`Unknown QA release scenario: ${String(scenarioId)}`);
 }
 
 function buildScenarioConfig(basePort: number) {
@@ -208,6 +208,8 @@ function summarizeClassification(
     }
     case "plugin_validation_error":
       return "plugin validation or register/activate failure";
+    case "load_error":
+      return "plugin load failed";
     case "command_missing":
       return "command missing in this release";
     case "timeout":
@@ -283,13 +285,6 @@ export function compareReleaseCompareResults(
 }
 
 async function resolveTrustedNpmCliPath() {
-  const envOverride = process.env.OPENCLAW_QA_NPM_CLI;
-  if (envOverride) {
-    if (!path.isAbsolute(envOverride)) {
-      throw new Error("OPENCLAW_QA_NPM_CLI must be an absolute path.");
-    }
-    return envOverride;
-  }
   const nodeDir = path.dirname(process.execPath);
   const nodeRoot = path.dirname(nodeDir);
   const candidates = [
@@ -307,7 +302,7 @@ async function resolveTrustedNpmCliPath() {
     }
   }
   throw new Error(
-    "Unable to locate a trusted npm CLI. Set OPENCLAW_QA_NPM_CLI to an absolute npm-cli.js path.",
+    "Unable to locate a trusted npm CLI near the current Node installation.",
   );
 }
 
@@ -351,7 +346,7 @@ function scheduleTempRootCleanup(tempRoot: string) {
 }
 
 async function readVersion(binPath: string, homeDir: string, cwd: string) {
-  const { stdout } = await execFileAsync(binPath, ["--version"], {
+  const { stdout } = await execFileAsync(process.execPath, [binPath, "--version"], {
     cwd,
     env: buildRuntimeCommandEnv(homeDir),
     maxBuffer: 1024 * 1024 * 2,
@@ -369,6 +364,40 @@ async function writeScenarioConfigFile(homeDir: string, config: object) {
   );
 }
 
+async function resolveRepoContainedTarballPath(repoRoot: string, ref: string) {
+  const resolved = path.resolve(repoRoot, ref);
+  const stat = await lstat(resolved);
+  if (stat.isSymbolicLink()) {
+    throw new Error("Unsafe install ref tarball cannot be a symlink.");
+  }
+  const canonical = await import("node:fs/promises").then(({ realpath }) => realpath(resolved));
+  const relative = path.relative(path.resolve(repoRoot), canonical);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error("Unsafe install ref tarballs must stay within the repo root.");
+  }
+  return canonical;
+}
+
+async function resolveInstallRef(ref: string, repoRoot: string, allowUnsafeInstallRef = false) {
+  if (ref === "current-checkout") {
+    return repoRoot;
+  }
+  if (isSafeRegistryInstallRef(ref)) {
+    return `openclaw@${ref}`;
+  }
+  if (!allowUnsafeInstallRef) {
+    throw new Error(
+      "Unsafe install ref blocked. Use a published version/dist-tag, `current-checkout`, or pass --allow-unsafe-install-ref.",
+    );
+  }
+  if (ref.endsWith(".tgz")) {
+    return resolveRepoContainedTarballPath(repoRoot, ref);
+  }
+  throw new Error(
+    "Unsafe install ref only supports repo-contained local .tgz files. Use `current-checkout` for the working tree or a published version/dist-tag for registry installs.",
+  );
+}
+
 async function runReleaseCommand(params: {
   binPath: string;
   homeDir: string;
@@ -381,7 +410,7 @@ async function runReleaseCommand(params: {
   let stderr = "";
   let timedOut = false;
   try {
-    const result = await execFileAsync(params.binPath, params.command.args, {
+    const result = await execFileAsync(process.execPath, [params.binPath, ...params.command.args], {
       cwd: params.cwd,
       env: buildRuntimeCommandEnv(params.homeDir),
       timeout: params.timeoutMs,
@@ -488,33 +517,6 @@ function isSafeRegistryInstallRef(ref: string) {
   return /^(?:latest|beta|next|canary|stable|v?\d[\w.+-]*)$/i.test(ref);
 }
 
-function resolveInstallRef(ref: string, repoRoot: string, allowUnsafeInstallRef = false) {
-  if (ref === "current-checkout") {
-    return repoRoot;
-  }
-  if (isSafeRegistryInstallRef(ref)) {
-    return `openclaw@${ref}`;
-  }
-  if (!allowUnsafeInstallRef) {
-    throw new Error(
-      "Unsafe install ref blocked. Use a published version/dist-tag, `current-checkout`, or pass --allow-unsafe-install-ref.",
-    );
-  }
-  if (ref.endsWith(".tgz")) {
-    const resolved = path.resolve(repoRoot, ref);
-    const relative = path.relative(path.resolve(repoRoot), resolved);
-    if (relative.startsWith("..") || path.isAbsolute(relative)) {
-      throw new Error(
-        "Unsafe install ref tarballs must stay within the repo root. External install paths are blocked.",
-      );
-    }
-    return resolved;
-  }
-  throw new Error(
-    "Unsafe install ref only supports repo-contained local .tgz files. Use `current-checkout` for the working tree or a published version/dist-tag for registry installs.",
-  );
-}
-
 export function resolveQaReleaseOutputDir(params: {
   repoRoot: string;
   outputDir?: string;
@@ -609,7 +611,7 @@ async function createIsolatedInstall(params: {
 }) {
   const prefixDir = path.join(params.tempRoot, `${params.label}-prefix`);
   const homeDir = path.join(params.tempRoot, `${params.label}-home`);
-  const installRef = resolveInstallRef(
+  const installRef = await resolveInstallRef(
     params.requestedRef,
     params.repoRoot,
     params.allowUnsafeInstallRef,
@@ -618,7 +620,7 @@ async function createIsolatedInstall(params: {
   await mkdir(homeDir, { recursive: true });
   await installRelease(prefixDir, installRef, params.repoRoot, homeDir);
 
-  const binPath = path.join(prefixDir, "bin", "openclaw");
+  const binPath = path.join(prefixDir, "lib", "node_modules", "openclaw", "openclaw.mjs");
   await writeScenarioConfigFile(homeDir, buildScenarioConfig(params.basePort));
   const versionText = await readVersion(binPath, homeDir, params.repoRoot);
   const commands = scenarioCommands(params.scenarioId);
@@ -674,6 +676,11 @@ export function summarizeInstallClassification(
       return "error";
     }
   }
+  for (const result of install.commandResults) {
+    if (result.classification === "command_missing" && result.id !== "plugins-smoke-json") {
+      return "command_missing";
+    }
+  }
   return "ok";
 }
 
@@ -691,6 +698,7 @@ export async function runQaReleaseSmoke(
   params: QaReleaseSmokeParams,
 ): Promise<QaReleaseSmokeResult> {
   const scenarioId = params.scenarioId ?? "bundled-channels";
+  scenarioCommands(scenarioId);
   const outputDir = resolveQaReleaseOutputDir({
     repoRoot: params.repoRoot,
     outputDir: params.outputDir,
@@ -739,6 +747,7 @@ export async function runQaReleaseCompare(
   params: QaReleaseCompareParams,
 ): Promise<QaReleaseCompareResult> {
   const scenarioId = params.scenarioId ?? "bundled-channels";
+  scenarioCommands(scenarioId);
   const outputDir = resolveQaReleaseOutputDir({
     repoRoot: params.repoRoot,
     outputDir: params.outputDir,

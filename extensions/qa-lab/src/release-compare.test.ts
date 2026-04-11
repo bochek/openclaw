@@ -4,7 +4,9 @@ import {
   compareReleaseCompareResults,
   redactPersistedCommandText,
   resolveQaReleaseOutputDir,
+  runQaReleaseSmoke,
   summarizeInstallClassification,
+  toPersistedCompareResult,
 } from "./release-compare.js";
 
 describe("qa release compare", () => {
@@ -111,6 +113,35 @@ describe("qa release compare", () => {
     ).toBe("load_error");
   });
 
+  it("fails the smoke gate when required commands are missing", () => {
+    expect(
+      summarizeInstallClassification({
+        commandResults: [
+          {
+            id: "status",
+            argv: ["status"],
+            exitCode: 1,
+            timedOut: false,
+            stdout: "",
+            stderr: "error: unknown command 'status'",
+            classification: "command_missing",
+            summary: "command missing in this release",
+          },
+        ],
+      }),
+    ).toBe("command_missing");
+  });
+
+  it("rejects unknown scenarios instead of running zero smoke commands", async () => {
+    await expect(
+      runQaReleaseSmoke({
+        repoRoot: "/tmp/openclaw-repo",
+        ref: "2026.4.10",
+        scenarioId: "typo-scenario" as never,
+      }),
+    ).rejects.toThrow("Unknown QA release scenario: typo-scenario");
+  });
+
   it("accepts repo-contained absolute output dirs after CLI normalization", () => {
     expect(
       resolveQaReleaseOutputDir({
@@ -136,6 +167,55 @@ describe("qa release compare", () => {
         "OPENAI_API_KEY=<REDACTED>",
         "SLACK_BOT_TOKEN=<REDACTED>",
       ].join("\n"),
+    );
+  });
+
+  it("omits raw stdout and stderr from persisted compare JSON", () => {
+    expect(
+      toPersistedCompareResult({
+        outputDir: "/tmp/out",
+        reportPath: "/tmp/out/report.md",
+        summaryPath: "/tmp/out/summary.json",
+        scenarioId: "bundled-channels",
+        oldInstall: {
+          label: "old",
+          requestedRef: "2026.4.9",
+          installRef: "openclaw@2026.4.9",
+          versionText: "OpenClaw 2026.4.9",
+          prefixDir: "/tmp/old-prefix",
+          homeDir: "/tmp/old-home",
+          binPath: "/tmp/old.mjs",
+          commandResults: [
+            {
+              id: "doctor",
+              argv: ["doctor"],
+              exitCode: 1,
+              timedOut: false,
+              stdout: "secret-out",
+              stderr: "secret-err",
+              classification: "error",
+              summary: "command failed",
+            },
+          ],
+        },
+        newInstall: {
+          label: "new",
+          requestedRef: "2026.4.10",
+          installRef: "openclaw@2026.4.10",
+          versionText: "OpenClaw 2026.4.10",
+          prefixDir: "/tmp/new-prefix",
+          homeDir: "/tmp/new-home",
+          binPath: "/tmp/new.mjs",
+          commandResults: [],
+        },
+        diff: [],
+      }).oldInstall.commandResults[0],
+    ).toEqual(
+      expect.objectContaining({
+        id: "doctor",
+        classification: "error",
+        summary: "command failed",
+      }),
     );
   });
 });

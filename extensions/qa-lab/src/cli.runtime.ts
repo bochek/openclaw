@@ -468,7 +468,7 @@ function terminateOneShotQaCommandIfNeeded() {
   if (process.env.VITEST) {
     return;
   }
-  process.exit(process.exitCode ?? 0);
+  // Let Node flush stdout/stderr naturally for machine-readable consumers.
 }
 
 export async function runQaReleaseCompareCommand(opts: {
