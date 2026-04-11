@@ -4,10 +4,11 @@ import {
   resolveEffectiveToolFsRootExpansionAllowed,
   resolveEffectiveToolFsWorkspaceOnly,
 } from "../agents/tool-fs-policy.js";
-import type { OpenClawConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
+import type { OpenClawConfig } from "../config/types.js";
 import { safeFileURLToPath } from "../infra/local-file-access.js";
 import { resolvePreferredOpenClawTmpDir } from "../infra/tmp-openclaw-dir.js";
+import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { resolveConfigDir, resolveUserPath } from "../utils.js";
 
 type BuildMediaLocalRootsOptions = {
@@ -34,14 +35,16 @@ export function buildMediaLocalRoots(
   const resolvedStateDir = path.resolve(stateDir);
   const resolvedConfigDir = path.resolve(configDir);
   const preferredTmpDir = options.preferredTmpDir ?? resolveCachedPreferredTmpDir();
-  return [
-    preferredTmpDir,
-    path.join(resolvedConfigDir, "media"),
-    path.join(resolvedStateDir, "media"),
-    path.join(resolvedStateDir, "canvas"),
-    path.join(resolvedStateDir, "workspace"),
-    path.join(resolvedStateDir, "sandboxes"),
-  ];
+  return Array.from(
+    new Set([
+      preferredTmpDir,
+      path.join(resolvedConfigDir, "media"),
+      path.join(resolvedStateDir, "media"),
+      path.join(resolvedStateDir, "canvas"),
+      path.join(resolvedStateDir, "workspace"),
+      path.join(resolvedStateDir, "sandboxes"),
+    ]),
+  );
 }
 
 export function getDefaultMediaLocalRoots(): readonly string[] {
@@ -53,10 +56,11 @@ export function getAgentScopedMediaLocalRoots(
   agentId?: string,
 ): readonly string[] {
   const roots = buildMediaLocalRoots(resolveStateDir(), resolveConfigDir());
-  if (!agentId?.trim()) {
+  const normalizedAgentId = normalizeOptionalString(agentId);
+  if (!normalizedAgentId) {
     return roots;
   }
-  const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
+  const workspaceDir = resolveAgentWorkspaceDir(cfg, normalizedAgentId);
   if (!workspaceDir) {
     return roots;
   }
