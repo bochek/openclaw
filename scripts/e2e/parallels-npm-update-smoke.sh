@@ -65,6 +65,9 @@ LINUX_UPDATE_STATUS="skip"
 MACOS_UPDATE_VERSION="skip"
 WINDOWS_UPDATE_VERSION="skip"
 LINUX_UPDATE_VERSION="skip"
+MACOS_UPDATE_PERMISSION_STATUS="skip"
+WINDOWS_UPDATE_PERMISSION_STATUS="skip"
+LINUX_UPDATE_PERMISSION_STATUS="skip"
 MACOS_UPDATE_CHANNELS_STATUS="skip"
 WINDOWS_UPDATE_CHANNELS_STATUS="skip"
 LINUX_UPDATE_CHANNELS_STATUS="skip"
@@ -1358,6 +1361,7 @@ PY
 run_macos_update() {
   local update_target="$1"
   local expected_needle="$2"
+  MACOS_UPDATE_PERMISSION_STATUS="fail"
   MACOS_UPDATE_CHANNELS_STATUS="fail"
   MACOS_UPDATE_DASHBOARD_STATUS="fail"
   MACOS_UPDATE_AGENT_STATUS="fail"
@@ -1398,6 +1402,25 @@ if [ -n "$expected_needle" ]; then
   esac
 fi
 /opt/homebrew/bin/openclaw update status --json
+root="\$(/opt/homebrew/bin/npm root -g)"
+check_path() {
+  local path="\$1"
+  [ -e "\$path" ] || return 0
+  local perm perm_oct
+  perm="$(/usr/bin/stat -f '%OLp' "\$path")"
+  perm_oct=\$((8#\$perm))
+  if (( perm_oct & 0002 )); then
+    echo "world-writable install artifact: \$path (\$perm)" >&2
+    exit 1
+  fi
+}
+check_path "\$root/openclaw"
+check_path "\$root/openclaw/extensions"
+if [ -d "\$root/openclaw/extensions" ]; then
+  while IFS= read -r -d '' extension_dir; do
+    check_path "\$extension_dir"
+  done < <(/usr/bin/find "\$root/openclaw/extensions" -mindepth 1 -maxdepth 1 -type d -print0)
+fi
 /opt/homebrew/bin/openclaw models set "$MODEL_ID"
 # Same-guest npm upgrades can leave launchd holding the old gateway process or
 # module graph briefly; wait for a fresh RPC-ready restart before the agent turn.
@@ -1447,6 +1470,7 @@ fi
 /opt/homebrew/bin/openclaw agent --agent main --session-id parallels-npm-update-macos-$expected_needle --message "Reply with exact ASCII text OK only." --json
 EOF
   macos_desktop_user_exec /bin/bash /tmp/openclaw-main-update.sh
+  MACOS_UPDATE_PERMISSION_STATUS="pass"
   MACOS_UPDATE_CHANNELS_STATUS="pass"
   MACOS_UPDATE_DASHBOARD_STATUS="pass"
   MACOS_UPDATE_AGENT_STATUS="pass"
@@ -1491,6 +1515,7 @@ run_windows_update() {
 run_linux_update() {
   local update_target="$1"
   local expected_needle="$2"
+  LINUX_UPDATE_PERMISSION_STATUS="fail"
   LINUX_UPDATE_CHANNELS_STATUS="fail"
   LINUX_UPDATE_DASHBOARD_STATUS="fail"
   LINUX_UPDATE_AGENT_STATUS="fail"
@@ -1531,6 +1556,25 @@ if [ -n "$expected_needle" ]; then
   esac
 fi
 openclaw update status --json
+root="\$(npm root -g)"
+check_path() {
+  local path="\$1"
+  [ -e "\$path" ] || return 0
+  local perm perm_oct
+  perm="\$(stat -c '%a' "\$path")"
+  perm_oct=\$((8#\$perm))
+  if (( perm_oct & 0002 )); then
+    echo "world-writable install artifact: \$path (\$perm)" >&2
+    exit 1
+  fi
+}
+check_path "\$root/openclaw"
+check_path "\$root/openclaw/extensions"
+if [ -d "\$root/openclaw/extensions" ]; then
+  while IFS= read -r -d '' extension_dir; do
+    check_path "\$extension_dir"
+  done < <(find "\$root/openclaw/extensions" -mindepth 1 -maxdepth 1 -type d -print0)
+fi
 openclaw models set "$MODEL_ID"
 # Linux update validation should prove the manual gateway comes back too, not
 # just that local agent mode still works with the provider key in env.
@@ -1574,6 +1618,7 @@ fi
 openclaw agent --local --agent main --session-id parallels-npm-update-linux-$expected_needle --message "Reply with exact ASCII text OK only." --json
 EOF
   prlctl exec "$LINUX_VM" /usr/bin/env "$API_KEY_ENV=$API_KEY_VALUE" /bin/bash /tmp/openclaw-main-update.sh
+  LINUX_UPDATE_PERMISSION_STATUS="pass"
   LINUX_UPDATE_CHANNELS_STATUS="pass"
   LINUX_UPDATE_DASHBOARD_STATUS="pass"
   LINUX_UPDATE_AGENT_STATUS="pass"
@@ -1635,6 +1680,7 @@ summary = {
         "macos": {
             "status": os.environ["SUMMARY_MACOS_UPDATE_STATUS"],
             "version": os.environ["SUMMARY_MACOS_UPDATE_VERSION"],
+            "permissions": os.environ["SUMMARY_MACOS_UPDATE_PERMISSION_STATUS"],
             "channels": os.environ["SUMMARY_MACOS_UPDATE_CHANNELS_STATUS"],
             "dashboard": os.environ["SUMMARY_MACOS_UPDATE_DASHBOARD_STATUS"],
             "agent": os.environ["SUMMARY_MACOS_UPDATE_AGENT_STATUS"],
@@ -1643,6 +1689,7 @@ summary = {
         "windows": {
             "status": os.environ["SUMMARY_WINDOWS_UPDATE_STATUS"],
             "version": os.environ["SUMMARY_WINDOWS_UPDATE_VERSION"],
+            "permissions": os.environ["SUMMARY_WINDOWS_UPDATE_PERMISSION_STATUS"],
             "channels": os.environ["SUMMARY_WINDOWS_UPDATE_CHANNELS_STATUS"],
             "dashboard": os.environ["SUMMARY_WINDOWS_UPDATE_DASHBOARD_STATUS"],
             "agent": os.environ["SUMMARY_WINDOWS_UPDATE_AGENT_STATUS"],
@@ -1652,6 +1699,7 @@ summary = {
             "status": os.environ["SUMMARY_LINUX_UPDATE_STATUS"],
             "version": os.environ["SUMMARY_LINUX_UPDATE_VERSION"],
             "mode": "local-with-provider-env",
+            "permissions": os.environ["SUMMARY_LINUX_UPDATE_PERMISSION_STATUS"],
             "channels": os.environ["SUMMARY_LINUX_UPDATE_CHANNELS_STATUS"],
             "dashboard": os.environ["SUMMARY_LINUX_UPDATE_DASHBOARD_STATUS"],
             "agent": os.environ["SUMMARY_LINUX_UPDATE_AGENT_STATUS"],
@@ -1811,6 +1859,9 @@ SUMMARY_LINUX_UPDATE_STATUS="$LINUX_UPDATE_STATUS" \
 SUMMARY_MACOS_UPDATE_VERSION="$MACOS_UPDATE_VERSION" \
 SUMMARY_WINDOWS_UPDATE_VERSION="$WINDOWS_UPDATE_VERSION" \
 SUMMARY_LINUX_UPDATE_VERSION="$LINUX_UPDATE_VERSION" \
+SUMMARY_MACOS_UPDATE_PERMISSION_STATUS="$MACOS_UPDATE_PERMISSION_STATUS" \
+SUMMARY_WINDOWS_UPDATE_PERMISSION_STATUS="$WINDOWS_UPDATE_PERMISSION_STATUS" \
+SUMMARY_LINUX_UPDATE_PERMISSION_STATUS="$LINUX_UPDATE_PERMISSION_STATUS" \
 SUMMARY_MACOS_UPDATE_CHANNELS_STATUS="$MACOS_UPDATE_CHANNELS_STATUS" \
 SUMMARY_WINDOWS_UPDATE_CHANNELS_STATUS="$WINDOWS_UPDATE_CHANNELS_STATUS" \
 SUMMARY_LINUX_UPDATE_CHANNELS_STATUS="$LINUX_UPDATE_CHANNELS_STATUS" \
@@ -1835,11 +1886,11 @@ else
     "$WINDOWS_FRESH_STATUS" "$WINDOWS_FRESH_VERSION" "$WINDOWS_FRESH_GATEWAY_STATUS" "$WINDOWS_FRESH_CHANNELS_STATUS" "$WINDOWS_FRESH_DASHBOARD_STATUS" "$WINDOWS_FRESH_AGENT_STATUS" "$WINDOWS_FRESH_DISCORD_STATUS"
   printf '  fresh linux: %s (%s) gateway=%s channels=%s dashboard=%s agent=%s discord=%s\n' \
     "$LINUX_FRESH_STATUS" "$LINUX_FRESH_VERSION" "$LINUX_FRESH_GATEWAY_STATUS" "$LINUX_FRESH_CHANNELS_STATUS" "$LINUX_FRESH_DASHBOARD_STATUS" "$LINUX_FRESH_AGENT_STATUS" "$LINUX_FRESH_DISCORD_STATUS"
-  printf '  update macOS: %s (%s) channels=%s dashboard=%s agent=%s discord=%s\n' \
-    "$MACOS_UPDATE_STATUS" "$MACOS_UPDATE_VERSION" "$MACOS_UPDATE_CHANNELS_STATUS" "$MACOS_UPDATE_DASHBOARD_STATUS" "$MACOS_UPDATE_AGENT_STATUS" "$MACOS_UPDATE_DISCORD_STATUS"
-  printf '  update windows: %s (%s) channels=%s dashboard=%s agent=%s discord=%s\n' \
-    "$WINDOWS_UPDATE_STATUS" "$WINDOWS_UPDATE_VERSION" "$WINDOWS_UPDATE_CHANNELS_STATUS" "$WINDOWS_UPDATE_DASHBOARD_STATUS" "$WINDOWS_UPDATE_AGENT_STATUS" "$WINDOWS_UPDATE_DISCORD_STATUS"
-  printf '  update linux: %s (%s) channels=%s dashboard=%s agent=%s discord=%s\n' \
-    "$LINUX_UPDATE_STATUS" "$LINUX_UPDATE_VERSION" "$LINUX_UPDATE_CHANNELS_STATUS" "$LINUX_UPDATE_DASHBOARD_STATUS" "$LINUX_UPDATE_AGENT_STATUS" "$LINUX_UPDATE_DISCORD_STATUS"
+  printf '  update macOS: %s (%s) permissions=%s channels=%s dashboard=%s agent=%s discord=%s\n' \
+    "$MACOS_UPDATE_STATUS" "$MACOS_UPDATE_VERSION" "$MACOS_UPDATE_PERMISSION_STATUS" "$MACOS_UPDATE_CHANNELS_STATUS" "$MACOS_UPDATE_DASHBOARD_STATUS" "$MACOS_UPDATE_AGENT_STATUS" "$MACOS_UPDATE_DISCORD_STATUS"
+  printf '  update windows: %s (%s) permissions=%s channels=%s dashboard=%s agent=%s discord=%s\n' \
+    "$WINDOWS_UPDATE_STATUS" "$WINDOWS_UPDATE_VERSION" "$WINDOWS_UPDATE_PERMISSION_STATUS" "$WINDOWS_UPDATE_CHANNELS_STATUS" "$WINDOWS_UPDATE_DASHBOARD_STATUS" "$WINDOWS_UPDATE_AGENT_STATUS" "$WINDOWS_UPDATE_DISCORD_STATUS"
+  printf '  update linux: %s (%s) permissions=%s channels=%s dashboard=%s agent=%s discord=%s\n' \
+    "$LINUX_UPDATE_STATUS" "$LINUX_UPDATE_VERSION" "$LINUX_UPDATE_PERMISSION_STATUS" "$LINUX_UPDATE_CHANNELS_STATUS" "$LINUX_UPDATE_DASHBOARD_STATUS" "$LINUX_UPDATE_AGENT_STATUS" "$LINUX_UPDATE_DISCORD_STATUS"
   printf '  summary: %s\n' "$RUN_DIR/summary.json"
 fi
