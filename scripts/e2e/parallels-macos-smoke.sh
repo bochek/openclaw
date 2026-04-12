@@ -1593,6 +1593,7 @@ run_fresh_main_lane() {
   phase_run "fresh.install-main" "$(install_main_timeout)" install_main_tgz "$host_ip" "openclaw-main-fresh.tgz"
   FRESH_MAIN_VERSION="$(extract_last_version "$(phase_log_path fresh.install-main)")"
   phase_run "fresh.verify-main-version" "$TIMEOUT_VERIFY_S" verify_target_version
+  FRESH_PERMISSION_STATUS="fail"
   phase_run "fresh.verify-bundle-permissions" "$TIMEOUT_PERMISSION_S" verify_bundle_permissions
   FRESH_PERMISSION_STATUS="pass"
   phase_run "fresh.onboard-ref" "$TIMEOUT_ONBOARD_S" run_ref_onboard
