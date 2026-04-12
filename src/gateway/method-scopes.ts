@@ -137,6 +137,8 @@ const METHOD_SCOPE_GROUPS: Record<OperatorScope, readonly string[]> = {
     "sessions.abort",
     "sessions.compaction.branch",
     "doctor.memory.backfillDreamDiary",
+    "doctor.memory.dedupeDreamDiary",
+    "doctor.memory.repairDreamingArtifacts",
     "doctor.memory.resetDreamDiary",
     "doctor.memory.resetGroundedShortTerm",
     "push.test",
