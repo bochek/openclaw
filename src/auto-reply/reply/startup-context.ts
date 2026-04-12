@@ -78,6 +78,15 @@ function formatDateStamp(nowMs: number, timezone: string): string {
   return new Date(nowMs).toISOString().slice(0, 10);
 }
 
+function shiftDateStampByCalendarDays(stamp: string, offsetDays: number): string {
+  const [yearRaw, monthRaw, dayRaw] = stamp.split("-").map((part) => Number.parseInt(part, 10));
+  if (!yearRaw || !monthRaw || !dayRaw) {
+    return stamp;
+  }
+  const shifted = new Date(Date.UTC(yearRaw, monthRaw - 1, dayRaw - offsetDays));
+  return shifted.toISOString().slice(0, 10);
+}
+
 function trimStartupMemoryContent(content: string, maxChars: number): string {
   const trimmed = content.trim();
   if (trimmed.length <= maxChars) {
@@ -88,6 +97,49 @@ function trimStartupMemoryContent(content: string, maxChars: number): string {
 
 function escapeQuotedStartupMemory(content: string): string {
   return content.replaceAll("```", "\\`\\`\\`");
+}
+
+function formatStartupMemoryBlock(relativePath: string, content: string): string {
+  return [
+    `[Untrusted daily memory: ${relativePath}]`,
+    "BEGIN_QUOTED_NOTES",
+    "```text",
+    escapeQuotedStartupMemory(content),
+    "```",
+    "END_QUOTED_NOTES",
+  ].join("\n");
+}
+
+function fitStartupMemoryBlock(params: {
+  relativePath: string;
+  content: string;
+  maxChars: number;
+}): string | null {
+  if (params.maxChars <= 0) {
+    return null;
+  }
+  const fullBlock = formatStartupMemoryBlock(params.relativePath, params.content);
+  if (fullBlock.length <= params.maxChars) {
+    return fullBlock;
+  }
+
+  let low = 0;
+  let high = params.content.length;
+  let best: string | null = null;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    const candidate = formatStartupMemoryBlock(
+      params.relativePath,
+      trimStartupMemoryContent(params.content, mid),
+    );
+    if (candidate.length <= params.maxChars) {
+      best = candidate;
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  return best;
 }
 
 async function readFromFd(params: { fd: number; maxFileBytes: number }): Promise<string> {
@@ -147,8 +199,9 @@ export async function buildSessionStartupContextPrelude(params: {
   const timezone = resolveUserTimezone(params.cfg?.agents?.defaults?.userTimezone);
   const limits = resolveStartupContextLimits(params.cfg);
   const dailyPaths: string[] = [];
+  const todayStamp = formatDateStamp(nowMs, timezone);
   for (let offset = 0; offset < limits.dailyMemoryDays; offset += 1) {
-    const stamp = formatDateStamp(nowMs - offset * 24 * 60 * 60 * 1000, timezone);
+    const stamp = shiftDateStampByCalendarDays(todayStamp, offset);
     dailyPaths.push(`memory/${stamp}.md`);
   }
   const loaded: Array<{ relativePath: string; content: string }> = [];
@@ -175,14 +228,18 @@ export async function buildSessionStartupContextPrelude(params: {
   const sections: string[] = [];
   let totalChars = 0;
   for (const entry of loaded) {
-    const block = [
-      `[Untrusted daily memory: ${entry.relativePath}]`,
-      "BEGIN_QUOTED_NOTES",
-      "```text",
-      escapeQuotedStartupMemory(entry.content),
-      "```",
-      "END_QUOTED_NOTES",
-    ].join("\n");
+    const remainingChars = limits.maxTotalChars - totalChars;
+    const block = fitStartupMemoryBlock({
+      relativePath: entry.relativePath,
+      content: entry.content,
+      maxChars: remainingChars,
+    });
+    if (!block) {
+      if (sections.length > 0) {
+        sections.push("...[additional startup memory truncated]...");
+      }
+      break;
+    }
     if (sections.length > 0 && totalChars + block.length > limits.maxTotalChars) {
       sections.push("...[additional startup memory truncated]...");
       break;

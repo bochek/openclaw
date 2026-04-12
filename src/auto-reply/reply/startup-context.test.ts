@@ -108,6 +108,62 @@ describe("buildSessionStartupContextPrelude", () => {
 
     expect(prelude).toContain("[Untrusted daily memory: memory/2026-04-11.md]");
   });
+
+  it("steps daily memory by calendar day across DST boundaries", async () => {
+    const workspaceDir = await makeWorkspace();
+    await fs.writeFile(
+      path.join(workspaceDir, "memory", "2026-03-09.md"),
+      "today after spring forward",
+      "utf-8",
+    );
+    await fs.writeFile(
+      path.join(workspaceDir, "memory", "2026-03-08.md"),
+      "yesterday before spring forward",
+      "utf-8",
+    );
+
+    const prelude = await buildSessionStartupContextPrelude({
+      workspaceDir,
+      cfg: {
+        agents: { defaults: { userTimezone: "America/New_York" } },
+      } as OpenClawConfig,
+      nowMs: Date.UTC(2026, 2, 9, 4, 30, 0),
+    });
+
+    expect(prelude).toContain("[Untrusted daily memory: memory/2026-03-09.md]");
+    expect(prelude).toContain("[Untrusted daily memory: memory/2026-03-08.md]");
+    expect(prelude).not.toContain("[Untrusted daily memory: memory/2026-03-07.md]");
+  });
+
+  it("enforces maxTotalChars even for the first loaded file", async () => {
+    const workspaceDir = await makeWorkspace();
+    await fs.writeFile(
+      path.join(workspaceDir, "memory", "2026-04-11.md"),
+      "x".repeat(500),
+      "utf-8",
+    );
+
+    const prelude = await buildSessionStartupContextPrelude({
+      workspaceDir,
+      cfg: {
+        agents: {
+          defaults: {
+            userTimezone: "America/Chicago",
+            startupContext: {
+              maxFileChars: 500,
+              maxTotalChars: 180,
+            },
+          },
+        },
+      } as OpenClawConfig,
+      nowMs: Date.UTC(2026, 3, 11, 18, 0, 0),
+    });
+
+    expect(prelude).toContain("[Untrusted daily memory: memory/2026-04-11.md]");
+    expect(prelude).toContain("...[truncated]...");
+    const firstBlock = prelude?.slice(prelude.indexOf("[Untrusted daily memory:"));
+    expect(firstBlock?.length).toBeLessThanOrEqual(180);
+  });
 });
 
 describe("shouldApplyStartupContext", () => {
