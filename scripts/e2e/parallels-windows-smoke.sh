@@ -2438,12 +2438,16 @@ run_fresh_main_lane() {
   phase_run "fresh.verify-bundle-permissions" "$TIMEOUT_VERIFY_S" verify_bundle_permissions || return $?
   FRESH_PERMISSION_STATUS="pass"
   phase_run "fresh.onboard-ref" "$TIMEOUT_ONBOARD_PHASE_S" run_ref_onboard || return $?
+  FRESH_GATEWAY_STATUS="fail"
   phase_run "fresh.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway_reachable || return $?
   FRESH_GATEWAY_STATUS="pass"
+  FRESH_CHANNELS_STATUS="fail"
   phase_run "fresh.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe || return $?
   FRESH_CHANNELS_STATUS="pass"
+  FRESH_DASHBOARD_STATUS="fail"
   phase_run "fresh.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load || return $?
   FRESH_DASHBOARD_STATUS="pass"
+  FRESH_AGENT_STATUS="fail"
   phase_run "fresh.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn || return $?
   FRESH_AGENT_STATUS="pass"
   if discord_smoke_enabled; then
@@ -2495,12 +2499,16 @@ run_upgrade_lane() {
   phase_run "upgrade.gateway-stop" "$TIMEOUT_GATEWAY_S" stop_gateway || return $?
   phase_run "upgrade.onboard-ref" "$TIMEOUT_ONBOARD_PHASE_S" run_ref_onboard || return $?
   phase_run "upgrade.gateway-restart" "$TIMEOUT_GATEWAY_S" restart_gateway || return $?
+  UPGRADE_GATEWAY_STATUS="fail"
   phase_run "upgrade.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway_reachable || return $?
   UPGRADE_GATEWAY_STATUS="pass"
+  UPGRADE_CHANNELS_STATUS="fail"
   phase_run "upgrade.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe || return $?
   UPGRADE_CHANNELS_STATUS="pass"
+  UPGRADE_DASHBOARD_STATUS="fail"
   phase_run "upgrade.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load || return $?
   UPGRADE_DASHBOARD_STATUS="pass"
+  UPGRADE_AGENT_STATUS="fail"
   phase_run "upgrade.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn || return $?
   UPGRADE_AGENT_STATUS="pass"
   if discord_smoke_enabled; then
