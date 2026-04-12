@@ -1168,9 +1168,9 @@ else
     printf '  baseline-install-version: %s\n' "$INSTALL_VERSION"
   fi
   printf '  daemon: %s\n' "$DAEMON_STATUS"
-  printf '  fresh-main: %s (%s) permissions=%s channels=%s dashboard=%s discord=%s\n' "$FRESH_MAIN_STATUS" "$FRESH_MAIN_VERSION" "$FRESH_PERMISSION_STATUS" "$FRESH_CHANNELS_STATUS" "$FRESH_DASHBOARD_STATUS" "$FRESH_DISCORD_STATUS"
+  printf '  fresh-main: %s (%s) gateway=%s permissions=%s channels=%s dashboard=%s agent=%s discord=%s\n' "$FRESH_MAIN_STATUS" "$FRESH_MAIN_VERSION" "$FRESH_GATEWAY_STATUS" "$FRESH_PERMISSION_STATUS" "$FRESH_CHANNELS_STATUS" "$FRESH_DASHBOARD_STATUS" "$FRESH_AGENT_STATUS" "$FRESH_DISCORD_STATUS"
   printf '  latest->main precheck: %s (%s)\n' "$UPGRADE_PRECHECK_STATUS" "$LATEST_INSTALLED_VERSION"
-  printf '  latest->main: %s (%s) permissions=%s channels=%s dashboard=%s discord=%s\n' "$UPGRADE_STATUS" "$UPGRADE_MAIN_VERSION" "$UPGRADE_PERMISSION_STATUS" "$UPGRADE_CHANNELS_STATUS" "$UPGRADE_DASHBOARD_STATUS" "$UPGRADE_DISCORD_STATUS"
+  printf '  latest->main: %s (%s) gateway=%s permissions=%s channels=%s dashboard=%s agent=%s discord=%s\n' "$UPGRADE_STATUS" "$UPGRADE_MAIN_VERSION" "$UPGRADE_GATEWAY_STATUS" "$UPGRADE_PERMISSION_STATUS" "$UPGRADE_CHANNELS_STATUS" "$UPGRADE_DASHBOARD_STATUS" "$UPGRADE_AGENT_STATUS" "$UPGRADE_DISCORD_STATUS"
   printf '  logs: %s\n' "$RUN_DIR"
   printf '  summary: %s\n' "$SUMMARY_JSON_PATH"
 fi
