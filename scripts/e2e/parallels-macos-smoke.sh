@@ -1321,6 +1321,10 @@ EOF
 )"
 }
 
+verify_channels_probe() {
+  guest_current_user_exec "$GUEST_OPENCLAW_BIN" channels status --probe --json
+}
+
 resolve_dashboard_url() {
   local dashboard_url
   dashboard_url="$(
@@ -1730,6 +1734,7 @@ run_fresh_main_lane() {
   phase_run "fresh.gateway-start" "$TIMEOUT_GATEWAY_S" start_manual_gateway_if_needed
   phase_run "fresh.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway
   FRESH_GATEWAY_STATUS="pass"
+  phase_run "fresh.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe
   phase_run "fresh.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load
   FRESH_DASHBOARD_STATUS="pass"
   phase_run "fresh.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn
@@ -1772,6 +1777,7 @@ run_upgrade_lane() {
   phase_run "upgrade.gateway-start" "$TIMEOUT_GATEWAY_S" start_manual_gateway_if_needed
   phase_run "upgrade.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway
   UPGRADE_GATEWAY_STATUS="pass"
+  phase_run "upgrade.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe
   phase_run "upgrade.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load
   UPGRADE_DASHBOARD_STATUS="pass"
   phase_run "upgrade.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn

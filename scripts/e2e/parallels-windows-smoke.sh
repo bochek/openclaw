@@ -2338,6 +2338,10 @@ verify_turn() {
     agent --agent main --message "Reply with exact ASCII text OK only." --json
 }
 
+verify_channels_probe() {
+  guest_run_openclaw "" "" channels status --probe --json
+}
+
 verify_dashboard_load() {
   guest_powershell "$(cat <<'EOF'
 $dashboardUrl = 'http://127.0.0.1:18789/'
@@ -2562,6 +2566,7 @@ run_fresh_main_lane() {
   phase_run "fresh.onboard-ref" "$TIMEOUT_ONBOARD_PHASE_S" run_ref_onboard || return $?
   phase_run "fresh.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway_reachable || return $?
   FRESH_GATEWAY_STATUS="pass"
+  phase_run "fresh.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe || return $?
   phase_run "fresh.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load || return $?
   FRESH_DASHBOARD_STATUS="pass"
   phase_run "fresh.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn || return $?
@@ -2614,6 +2619,7 @@ run_upgrade_lane() {
   phase_run "upgrade.gateway-restart" "$TIMEOUT_GATEWAY_S" restart_gateway || return $?
   phase_run "upgrade.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway_reachable || return $?
   UPGRADE_GATEWAY_STATUS="pass"
+  phase_run "upgrade.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe || return $?
   phase_run "upgrade.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load || return $?
   UPGRADE_DASHBOARD_STATUS="pass"
   phase_run "upgrade.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn || return $?

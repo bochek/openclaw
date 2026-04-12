@@ -846,6 +846,10 @@ EOF
   guest_exec bash -lc "$cmd"
 }
 
+verify_channels_probe() {
+  guest_exec openclaw channels status --probe --json
+}
+
 configure_discord_smoke() {
   local guilds_json cmd
   guilds_json="$(
@@ -1142,6 +1146,7 @@ run_fresh_main_lane() {
   phase_run "fresh.gateway-start" "$TIMEOUT_GATEWAY_S" start_gateway_background
   phase_run "fresh.gateway-status" "$TIMEOUT_VERIFY_S" show_gateway_status_compat
   FRESH_GATEWAY_STATUS="pass"
+  phase_run "fresh.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe
   phase_run "fresh.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load
   FRESH_DASHBOARD_STATUS="pass"
   phase_run "fresh.first-local-agent-turn" "$TIMEOUT_AGENT_S" verify_local_turn
@@ -1195,6 +1200,7 @@ run_upgrade_lane() {
   phase_run "upgrade.gateway-start" "$TIMEOUT_GATEWAY_S" start_gateway_background
   phase_run "upgrade.gateway-status" "$TIMEOUT_VERIFY_S" show_gateway_status_compat
   UPGRADE_GATEWAY_STATUS="pass"
+  phase_run "upgrade.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe
   phase_run "upgrade.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load
   UPGRADE_DASHBOARD_STATUS="pass"
   phase_run "upgrade.first-local-agent-turn" "$TIMEOUT_AGENT_S" verify_local_turn
