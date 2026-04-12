@@ -35,6 +35,7 @@ TIMEOUT_SNAPSHOT_S=180
 TIMEOUT_BOOTSTRAP_S=600
 TIMEOUT_INSTALL_S=1200
 TIMEOUT_VERIFY_S=90
+TIMEOUT_PERMISSION_S=60
 TIMEOUT_ONBOARD_S=180
 TIMEOUT_AGENT_S=180
 TIMEOUT_GATEWAY_S=90
@@ -685,6 +686,35 @@ verify_local_turn() {
     --json
 }
 
+verify_bundle_permissions() {
+  local cmd
+  cmd="$(cat <<'EOF'
+set -eu
+set -o pipefail
+root="$(npm root -g)"
+check_path() {
+  local path="$1"
+  [ -e "$path" ] || return 0
+  local perm perm_oct
+  perm="$(stat -c '%a' "$path")"
+  perm_oct=$((8#$perm))
+  if (( perm_oct & 0002 )); then
+    echo "world-writable install artifact: $path ($perm)" >&2
+    exit 1
+  fi
+}
+check_path "$root/openclaw"
+check_path "$root/openclaw/extensions"
+if [ -d "$root/openclaw/extensions" ]; then
+  while IFS= read -r -d '' extension_dir; do
+    check_path "$extension_dir"
+  done < <(find "$root/openclaw/extensions" -mindepth 1 -maxdepth 1 -type d -print0)
+fi
+EOF
+)"
+  guest_exec bash -lc "$cmd"
+}
+
 verify_dashboard_load() {
   local cmd
   cmd="$(cat <<'EOF'
@@ -833,6 +863,7 @@ run_fresh_main_lane() {
   phase_run "fresh.install-main" "$TIMEOUT_INSTALL_S" install_main_tgz "$host_ip" "openclaw-main-fresh.tgz"
   FRESH_MAIN_VERSION="$(extract_last_version "$(phase_log_path fresh.install-main)")"
   phase_run "fresh.verify-main-version" "$TIMEOUT_VERIFY_S" verify_target_version
+  phase_run "fresh.verify-bundle-permissions" "$TIMEOUT_PERMISSION_S" verify_bundle_permissions
   phase_run "fresh.onboard-ref" "$TIMEOUT_ONBOARD_S" run_ref_onboard
   phase_run "fresh.gateway-start" "$TIMEOUT_GATEWAY_S" start_gateway_background
   phase_run "fresh.gateway-status" "$TIMEOUT_VERIFY_S" show_gateway_status_compat
@@ -879,6 +910,7 @@ run_upgrade_lane() {
   phase_run "upgrade.update-main" "$TIMEOUT_INSTALL_S" run_main_package_update "$host_ip"
   UPGRADE_MAIN_VERSION="$(extract_last_version "$(phase_log_path upgrade.update-main)")"
   phase_run "upgrade.verify-main-version" "$TIMEOUT_VERIFY_S" verify_target_version
+  phase_run "upgrade.verify-bundle-permissions" "$TIMEOUT_PERMISSION_S" verify_bundle_permissions
   phase_run "upgrade.onboard-ref" "$TIMEOUT_ONBOARD_S" run_ref_onboard
   phase_run "upgrade.gateway-start" "$TIMEOUT_GATEWAY_S" start_gateway_background
   phase_run "upgrade.gateway-status" "$TIMEOUT_VERIFY_S" show_gateway_status_compat
