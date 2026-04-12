@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT_DIR/scripts/e2e/lib/parallels-macos-common.sh"
+source "$ROOT_DIR/scripts/e2e/lib/parallels-discord-common.sh"
 
 VM_NAME="macOS Tahoe"
 SNAPSHOT_HINT="macOS 26.3.1 latest"
@@ -320,72 +321,14 @@ upgrade_summary_label() {
   printf 'latest->dev'
 }
 
-discord_api_request() {
-  local method="$1"
-  local path="$2"
-  local payload="${3:-}"
-  local url="https://discord.com/api/v10$path"
-  if [[ -n "$payload" ]]; then
-    curl -fsS -X "$method" \
-      -H "Authorization: Bot $DISCORD_TOKEN_VALUE" \
-      -H "Content-Type: application/json" \
-      --data "$payload" \
-      "$url"
-    return
-  fi
-  curl -fsS -X "$method" \
-    -H "Authorization: Bot $DISCORD_TOKEN_VALUE" \
-    "$url"
-}
-
-json_contains_string() {
-  local needle="$1"
-  python3 - "$needle" <<'PY'
-import json
-import sys
-
-needle = sys.argv[1]
-try:
-    payload = json.load(sys.stdin)
-except Exception:
-    raise SystemExit(1)
-
-def contains(value):
-    if isinstance(value, str):
-        return needle in value
-    if isinstance(value, list):
-        return any(contains(item) for item in value)
-    if isinstance(value, dict):
-        return any(contains(item) for item in value.values())
-    return False
-
-raise SystemExit(0 if contains(payload) else 1)
-PY
-}
-
-discord_delete_message_id_file() {
-  local path="$1"
-  [[ -f "$path" ]] || return 0
-  [[ -s "$path" ]] || return 0
-  discord_smoke_enabled || return 0
-
-  local message_id
-  message_id="$(tr -d '\r\n' <"$path")"
-  [[ -n "$message_id" ]] || return 0
-
-  set +e
-  discord_api_request DELETE "/channels/$DISCORD_CHANNEL_ID/messages/$message_id" >/dev/null
-  set -e
-}
-
 cleanup_discord_smoke_messages() {
   discord_smoke_enabled || return 0
   [[ -d "$RUN_DIR" ]] || return 0
-
-  discord_delete_message_id_file "$RUN_DIR/fresh.discord-sent-message-id"
-  discord_delete_message_id_file "$RUN_DIR/fresh.discord-host-message-id"
-  discord_delete_message_id_file "$RUN_DIR/upgrade.discord-sent-message-id"
-  discord_delete_message_id_file "$RUN_DIR/upgrade.discord-host-message-id"
+  cleanup_discord_message_files \
+    "$RUN_DIR/fresh.discord-sent-message-id" \
+    "$RUN_DIR/fresh.discord-host-message-id" \
+    "$RUN_DIR/upgrade.discord-sent-message-id" \
+    "$RUN_DIR/upgrade.discord-host-message-id"
 }
 
 resolve_snapshot_info() {
@@ -1410,27 +1353,7 @@ EOF
 
 configure_discord_smoke() {
   local guilds_json script
-  guilds_json="$(
-    DISCORD_GUILD_ID="$DISCORD_GUILD_ID" DISCORD_CHANNEL_ID="$DISCORD_CHANNEL_ID" python3 - <<'PY'
-import json
-import os
-
-print(
-    json.dumps(
-        {
-            os.environ["DISCORD_GUILD_ID"]: {
-                "channels": {
-                    os.environ["DISCORD_CHANNEL_ID"]: {
-                        "allow": True,
-                        "requireMention": False,
-                    }
-                }
-            }
-        }
-    )
-)
-PY
-  )"
+  guilds_json="$(build_discord_guilds_json)"
   script="$(cat <<EOF
 cat >/tmp/openclaw-discord-token <<'__OPENCLAW_TOKEN__'
 $DISCORD_TOKEN_VALUE
@@ -1456,73 +1379,6 @@ rm -f /tmp/openclaw-discord-token /tmp/openclaw-discord-guilds.json
 EOF
 )"
   guest_current_user_sh "$script"
-}
-
-discord_message_id_from_send_log() {
-  local path="$1"
-  python3 - "$path" <<'PY'
-import json
-import pathlib
-import sys
-
-payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
-message_id = payload.get("payload", {}).get("messageId")
-if not message_id:
-    message_id = payload.get("payload", {}).get("result", {}).get("messageId")
-if not message_id:
-    raise SystemExit("messageId missing from send output")
-print(message_id)
-PY
-}
-
-wait_for_discord_host_visibility() {
-  local nonce="$1"
-  local response
-  local deadline=$((SECONDS + TIMEOUT_DISCORD_S))
-  while (( SECONDS < deadline )); do
-    set +e
-    response="$(discord_api_request GET "/channels/$DISCORD_CHANNEL_ID/messages?limit=20")"
-    local rc=$?
-    set -e
-    if [[ $rc -eq 0 ]] && [[ -n "$response" ]] && printf '%s' "$response" | json_contains_string "$nonce"; then
-      return 0
-    fi
-    sleep 2
-  done
-  return 1
-}
-
-post_host_discord_message() {
-  local nonce="$1"
-  local id_file="$2"
-  local payload response
-  payload="$(
-    NONCE="$nonce" python3 - <<'PY'
-import json
-import os
-
-print(
-    json.dumps(
-        {
-            "content": f"parallels-macos-smoke-inbound-{os.environ['NONCE']}",
-            "flags": 4096,
-        }
-    )
-)
-PY
-  )"
-  response="$(discord_api_request POST "/channels/$DISCORD_CHANNEL_ID/messages" "$payload")"
-  printf '%s' "$response" | python3 - "$id_file" <<'PY'
-import json
-import pathlib
-import sys
-
-payload = json.load(sys.stdin)
-message_id = payload.get("id")
-if not isinstance(message_id, str) or not message_id:
-    raise SystemExit("host Discord post missing message id")
-pathlib.Path(sys.argv[1]).write_text(f"{message_id}\n", encoding="utf-8")
-PY
 }
 
 wait_for_guest_discord_readback() {
