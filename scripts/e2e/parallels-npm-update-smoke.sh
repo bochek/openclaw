@@ -831,7 +831,14 @@ $(parallels_windows_permission_helpers_ps)
   }
   Write-ProgressLog $version
   Write-ProgressLog 'update.status'
-  Invoke-Logged 'openclaw update status' { & $openclaw update status --json }
+  $statusJson = Invoke-CaptureLogged 'openclaw update status' { & $openclaw update status --json }
+  $status = $statusJson | ConvertFrom-Json
+  if ($status.update.installKind -ne 'package') {
+    throw "expected package installKind after update, got $($status.update.installKind)"
+  }
+  if ($status.update.packageManager -ne 'npm') {
+    throw "expected npm packageManager after update, got $($status.update.packageManager)"
+  }
   Write-ProgressLog 'update.permissions'
   Assert-NonBroadWritableInstall
   Write-ProgressLog 'update.permissions.ok'
@@ -1518,7 +1525,10 @@ if [ -n "$expected_needle" ]; then
       ;;
   esac
 fi
-/opt/homebrew/bin/openclaw update status --json
+status_json="$(/opt/homebrew/bin/openclaw update status --json)"
+printf '%s\n' "$status_json"
+printf '%s\n' "$status_json" | grep -F '"installKind": "package"'
+printf '%s\n' "$status_json" | grep -F '"packageManager": "npm"'
 $(parallels_macos_permission_check_snippet)
 printf '==> update.permissions.ok\n'
 /opt/homebrew/bin/openclaw models set "$MODEL_ID"
@@ -1671,7 +1681,10 @@ if [ -n "$expected_needle" ]; then
       ;;
   esac
 fi
-openclaw update status --json
+status_json="$(openclaw update status --json)"
+printf '%s\n' "$status_json"
+printf '%s\n' "$status_json" | grep -F '"installKind": "package"'
+printf '%s\n' "$status_json" | grep -F '"packageManager": "npm"'
 $(parallels_linux_permission_check_snippet)
 printf '==> update.permissions.ok\n'
 openclaw models set "$MODEL_ID"

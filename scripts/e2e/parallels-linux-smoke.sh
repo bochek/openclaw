@@ -661,8 +661,12 @@ install_main_tgz() {
 run_main_package_update() {
   local host_ip="$1"
   local tgz_url="http://$host_ip:$HOST_PORT/$(basename "$MAIN_TGZ_PATH")"
+  local status_json
   guest_exec openclaw update --tag "$tgz_url" --yes --json
-  guest_exec openclaw update status --json
+  status_json="$(guest_exec openclaw update status --json)"
+  printf '%s\n' "$status_json"
+  printf '%s\n' "$status_json" | grep -F '"installKind": "package"'
+  printf '%s\n' "$status_json" | grep -F '"packageManager": "npm"'
   guest_exec openclaw --version
 }
 
