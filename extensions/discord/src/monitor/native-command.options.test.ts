@@ -74,6 +74,7 @@ function createNativeCommand(
 type CommandOption = NonNullable<
   ReturnType<typeof import("./native-command.js").createDiscordNativeCommand>["options"]
 >[number];
+type CommandAutocomplete = (interaction: never) => Promise<unknown>;
 
 function findOption(
   command: ReturnType<typeof import("./native-command.js").createDiscordNativeCommand>,
@@ -113,11 +114,11 @@ function requireAutocomplete(option: CommandOption, errorMessage: string) {
   if (typeof autocomplete !== "function") {
     throw new Error(errorMessage);
   }
-  return autocomplete as (interaction: unknown) => Promise<unknown>;
+  return autocomplete as CommandAutocomplete;
 }
 
 async function runAutocomplete(
-  autocomplete: (interaction: unknown) => Promise<unknown>,
+  autocomplete: CommandAutocomplete,
   params: {
     userId: string;
     username?: string;
