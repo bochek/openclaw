@@ -178,6 +178,42 @@ PY
   fi
 }
 
+persist_macos_update_status() {
+  parallels_write_update_status_summary \
+    "$RUN_DIR" \
+    "macos" \
+    "$MACOS_UPDATE_GATEWAY_STATUS" \
+    "$MACOS_UPDATE_PERMISSION_STATUS" \
+    "$MACOS_UPDATE_CHANNELS_STATUS" \
+    "$MACOS_UPDATE_DASHBOARD_STATUS" \
+    "$MACOS_UPDATE_AGENT_STATUS" \
+    "$MACOS_UPDATE_DISCORD_STATUS"
+}
+
+persist_windows_update_status() {
+  parallels_write_update_status_summary \
+    "$RUN_DIR" \
+    "windows" \
+    "$WINDOWS_UPDATE_GATEWAY_STATUS" \
+    "$WINDOWS_UPDATE_PERMISSION_STATUS" \
+    "$WINDOWS_UPDATE_CHANNELS_STATUS" \
+    "$WINDOWS_UPDATE_DASHBOARD_STATUS" \
+    "$WINDOWS_UPDATE_AGENT_STATUS" \
+    "$WINDOWS_UPDATE_DISCORD_STATUS"
+}
+
+persist_linux_update_status() {
+  parallels_write_update_status_summary \
+    "$RUN_DIR" \
+    "linux" \
+    "$LINUX_UPDATE_GATEWAY_STATUS" \
+    "$LINUX_UPDATE_PERMISSION_STATUS" \
+    "$LINUX_UPDATE_CHANNELS_STATUS" \
+    "$LINUX_UPDATE_DASHBOARD_STATUS" \
+    "$LINUX_UPDATE_AGENT_STATUS" \
+    "$LINUX_UPDATE_DISCORD_STATUS"
+}
+
 summary_has_activity() {
   [[ "$MACOS_FRESH_STATUS" != "skip" ]] && return 0
   [[ "$WINDOWS_FRESH_STATUS" != "skip" ]] && return 0
@@ -1542,6 +1578,7 @@ EOF
   MACOS_UPDATE_CHANNELS_STATUS="pass"
   MACOS_UPDATE_DASHBOARD_STATUS="pass"
   MACOS_UPDATE_AGENT_STATUS="pass"
+  persist_macos_update_status
   if discord_smoke_enabled; then
     MACOS_UPDATE_DISCORD_STATUS="fail"
     printf '==> update.discord-config\n'
@@ -1549,16 +1586,8 @@ EOF
     printf '==> update.discord-roundtrip\n'
     run_macos_update_discord_smoke
     MACOS_UPDATE_DISCORD_STATUS="pass"
+    persist_macos_update_status
   fi
-  parallels_write_update_status_summary \
-    "$RUN_DIR" \
-    "macos" \
-    "$MACOS_UPDATE_GATEWAY_STATUS" \
-    "$MACOS_UPDATE_PERMISSION_STATUS" \
-    "$MACOS_UPDATE_CHANNELS_STATUS" \
-    "$MACOS_UPDATE_DASHBOARD_STATUS" \
-    "$MACOS_UPDATE_AGENT_STATUS" \
-    "$MACOS_UPDATE_DISCORD_STATUS"
 }
 
 run_windows_update() {
@@ -1583,6 +1612,7 @@ run_windows_update() {
   WINDOWS_UPDATE_CHANNELS_STATUS="pass"
   WINDOWS_UPDATE_DASHBOARD_STATUS="pass"
   WINDOWS_UPDATE_AGENT_STATUS="pass"
+  persist_windows_update_status
   if discord_smoke_enabled; then
     WINDOWS_UPDATE_DISCORD_STATUS="fail"
     printf '==> update.discord-config\n'
@@ -1590,16 +1620,8 @@ run_windows_update() {
     printf '==> update.discord-roundtrip\n'
     run_windows_update_discord_smoke
     WINDOWS_UPDATE_DISCORD_STATUS="pass"
+    persist_windows_update_status
   fi
-  parallels_write_update_status_summary \
-    "$RUN_DIR" \
-    "windows" \
-    "$WINDOWS_UPDATE_GATEWAY_STATUS" \
-    "$WINDOWS_UPDATE_PERMISSION_STATUS" \
-    "$WINDOWS_UPDATE_CHANNELS_STATUS" \
-    "$WINDOWS_UPDATE_DASHBOARD_STATUS" \
-    "$WINDOWS_UPDATE_AGENT_STATUS" \
-    "$WINDOWS_UPDATE_DISCORD_STATUS"
 }
 
 run_linux_update() {
@@ -1701,6 +1723,7 @@ EOF
   LINUX_UPDATE_CHANNELS_STATUS="pass"
   LINUX_UPDATE_DASHBOARD_STATUS="pass"
   LINUX_UPDATE_AGENT_STATUS="pass"
+  persist_linux_update_status
   if discord_smoke_enabled; then
     LINUX_UPDATE_DISCORD_STATUS="fail"
     printf '==> update.discord-config\n'
@@ -1708,16 +1731,8 @@ EOF
     printf '==> update.discord-roundtrip\n'
     run_linux_update_discord_smoke
     LINUX_UPDATE_DISCORD_STATUS="pass"
+    persist_linux_update_status
   fi
-  parallels_write_update_status_summary \
-    "$RUN_DIR" \
-    "linux" \
-    "$LINUX_UPDATE_GATEWAY_STATUS" \
-    "$LINUX_UPDATE_PERMISSION_STATUS" \
-    "$LINUX_UPDATE_CHANNELS_STATUS" \
-    "$LINUX_UPDATE_DASHBOARD_STATUS" \
-    "$LINUX_UPDATE_AGENT_STATUS" \
-    "$LINUX_UPDATE_DISCORD_STATUS"
 }
 
 write_summary_json() {
