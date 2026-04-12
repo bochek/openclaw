@@ -854,6 +854,20 @@ print(matches[-1] if matches else "")
 PY
 }
 
+fill_missing_version_from_log() {
+  local var_name="$1"
+  local log_path="$2"
+  local current_value="${!var_name:-}"
+  if [[ -n "$current_value" && "$current_value" != "skip" ]]; then
+    return 0
+  fi
+  local fallback_version
+  fallback_version="$(extract_last_version "$log_path")"
+  if [[ -n "$fallback_version" ]]; then
+    printf -v "$var_name" '%s' "$fallback_version"
+  fi
+}
+
 guest_powershell() {
   local script="$1"
   local encoded
@@ -1739,6 +1753,9 @@ parallels_seed_fresh_child_summary "LINUX_FRESH"
 parallels_load_fresh_child_summary MACOS_FRESH "$RUN_DIR/macos-fresh.log"
 parallels_load_fresh_child_summary WINDOWS_FRESH "$RUN_DIR/windows-fresh.log"
 parallels_load_fresh_child_summary LINUX_FRESH "$RUN_DIR/linux-fresh.log"
+fill_missing_version_from_log MACOS_FRESH_VERSION "$RUN_DIR/macos-fresh.log"
+fill_missing_version_from_log WINDOWS_FRESH_VERSION "$RUN_DIR/windows-fresh.log"
+fill_missing_version_from_log LINUX_FRESH_VERSION "$RUN_DIR/linux-fresh.log"
 
 [[ "$MACOS_FRESH_STATUS" == "pass" ]] || die "macOS fresh baseline failed"
 [[ "$WINDOWS_FRESH_STATUS" == "pass" ]] || die "Windows fresh baseline failed"
@@ -1795,6 +1812,9 @@ wait_job "Linux update" "$linux_update_pid" "$RUN_DIR/linux-update.log" && LINUX
 MACOS_UPDATE_VERSION="$(extract_last_version "$RUN_DIR/macos-update.log")"
 WINDOWS_UPDATE_VERSION="$(extract_last_version "$RUN_DIR/windows-update.log")"
 LINUX_UPDATE_VERSION="$(extract_last_version "$RUN_DIR/linux-update.log")"
+fill_missing_version_from_log MACOS_UPDATE_VERSION "$RUN_DIR/macos-update.log"
+fill_missing_version_from_log WINDOWS_UPDATE_VERSION "$RUN_DIR/windows-update.log"
+fill_missing_version_from_log LINUX_UPDATE_VERSION "$RUN_DIR/linux-update.log"
 parallels_load_update_status_summary "MACOS_UPDATE" "$(parallels_update_status_path "$RUN_DIR" macos)"
 parallels_load_update_status_summary "WINDOWS_UPDATE" "$(parallels_update_status_path "$RUN_DIR" windows)"
 parallels_load_update_status_summary "LINUX_UPDATE" "$(parallels_update_status_path "$RUN_DIR" linux)"
