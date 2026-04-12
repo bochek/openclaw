@@ -150,7 +150,7 @@ export function mergeOrphanedTrailingUserPrompt(params: {
   }
 
   const orphanText = extractUserMessagePlainText(params.leafMessage.content);
-  if (!orphanText || params.prompt.includes(orphanText)) {
+  if (!orphanText || orphanText.length < 4 || params.prompt.includes(orphanText)) {
     return { prompt: params.prompt, merged: false };
   }
 
