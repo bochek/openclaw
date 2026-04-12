@@ -120,7 +120,7 @@ describe("resolveMSTeamsInboundMedia graph fallback trigger", () => {
     vi.mocked(extractMSTeamsHtmlAttachmentIds).mockReturnValueOnce(["att-0"]);
     vi.mocked(downloadMSTeamsGraphMedia).mockClear();
     vi.mocked(downloadMSTeamsGraphMedia).mockResolvedValue({ media: [] });
-    const log = { debug: vi.fn() };
+    const log = { debug: vi.fn(), warn: vi.fn() };
 
     await resolveMSTeamsInboundMedia({
       ...baseParams,
@@ -134,9 +134,9 @@ describe("resolveMSTeamsInboundMedia graph fallback trigger", () => {
     });
 
     const call = vi.mocked(downloadMSTeamsGraphMedia).mock.calls[0]?.[0];
-    // The monitor handler's logger is forwarded so graph.ts can report
-    // message fetch failures instead of swallowing them (#51749).
-    expect(call?.log).toBe(log);
+    // The monitor handler's logger is forwarded so graph.ts can surface fetch
+    // failures through the current attachment logger seam.
+    expect(call?.logger).toBe(log);
     expect(log.debug).toHaveBeenCalledWith(
       "graph media fetch empty",
       expect.objectContaining({ attachmentIdCount: 1 }),
