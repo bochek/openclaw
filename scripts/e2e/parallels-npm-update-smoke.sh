@@ -47,6 +47,9 @@ LINUX_FRESH_VERSION="skip"
 MACOS_FRESH_GATEWAY_STATUS="skip"
 WINDOWS_FRESH_GATEWAY_STATUS="skip"
 LINUX_FRESH_GATEWAY_STATUS="skip"
+MACOS_FRESH_CHANNELS_STATUS="skip"
+WINDOWS_FRESH_CHANNELS_STATUS="skip"
+LINUX_FRESH_CHANNELS_STATUS="skip"
 MACOS_FRESH_DASHBOARD_STATUS="skip"
 WINDOWS_FRESH_DASHBOARD_STATUS="skip"
 LINUX_FRESH_DASHBOARD_STATUS="skip"
@@ -869,6 +872,7 @@ fields = {
     "STATUS": fresh.get("status", "skip"),
     "VERSION": fresh.get("version", "skip"),
     "GATEWAY_STATUS": fresh.get("gateway", "skip"),
+    "CHANNELS_STATUS": fresh.get("channels", "skip"),
     "DASHBOARD_STATUS": fresh.get("dashboard", "skip"),
     "AGENT_STATUS": fresh.get("agent", "skip"),
     "DISCORD_STATUS": fresh.get("discord", "skip"),
@@ -1603,6 +1607,7 @@ summary = {
             "status": os.environ["SUMMARY_MACOS_FRESH_STATUS"],
             "version": os.environ["SUMMARY_MACOS_FRESH_VERSION"],
             "gateway": os.environ["SUMMARY_MACOS_FRESH_GATEWAY_STATUS"],
+            "channels": os.environ["SUMMARY_MACOS_FRESH_CHANNELS_STATUS"],
             "dashboard": os.environ["SUMMARY_MACOS_FRESH_DASHBOARD_STATUS"],
             "agent": os.environ["SUMMARY_MACOS_FRESH_AGENT_STATUS"],
             "discord": os.environ["SUMMARY_MACOS_FRESH_DISCORD_STATUS"],
@@ -1611,6 +1616,7 @@ summary = {
             "status": os.environ["SUMMARY_WINDOWS_FRESH_STATUS"],
             "version": os.environ["SUMMARY_WINDOWS_FRESH_VERSION"],
             "gateway": os.environ["SUMMARY_WINDOWS_FRESH_GATEWAY_STATUS"],
+            "channels": os.environ["SUMMARY_WINDOWS_FRESH_CHANNELS_STATUS"],
             "dashboard": os.environ["SUMMARY_WINDOWS_FRESH_DASHBOARD_STATUS"],
             "agent": os.environ["SUMMARY_WINDOWS_FRESH_AGENT_STATUS"],
             "discord": os.environ["SUMMARY_WINDOWS_FRESH_DISCORD_STATUS"],
@@ -1619,6 +1625,7 @@ summary = {
             "status": os.environ["SUMMARY_LINUX_FRESH_STATUS"],
             "version": os.environ["SUMMARY_LINUX_FRESH_VERSION"],
             "gateway": os.environ["SUMMARY_LINUX_FRESH_GATEWAY_STATUS"],
+            "channels": os.environ["SUMMARY_LINUX_FRESH_CHANNELS_STATUS"],
             "dashboard": os.environ["SUMMARY_LINUX_FRESH_DASHBOARD_STATUS"],
             "agent": os.environ["SUMMARY_LINUX_FRESH_AGENT_STATUS"],
             "discord": os.environ["SUMMARY_LINUX_FRESH_DISCORD_STATUS"],
@@ -1786,6 +1793,9 @@ SUMMARY_LINUX_FRESH_VERSION="$LINUX_FRESH_VERSION" \
 SUMMARY_MACOS_FRESH_GATEWAY_STATUS="$MACOS_FRESH_GATEWAY_STATUS" \
 SUMMARY_WINDOWS_FRESH_GATEWAY_STATUS="$WINDOWS_FRESH_GATEWAY_STATUS" \
 SUMMARY_LINUX_FRESH_GATEWAY_STATUS="$LINUX_FRESH_GATEWAY_STATUS" \
+SUMMARY_MACOS_FRESH_CHANNELS_STATUS="$MACOS_FRESH_CHANNELS_STATUS" \
+SUMMARY_WINDOWS_FRESH_CHANNELS_STATUS="$WINDOWS_FRESH_CHANNELS_STATUS" \
+SUMMARY_LINUX_FRESH_CHANNELS_STATUS="$LINUX_FRESH_CHANNELS_STATUS" \
 SUMMARY_MACOS_FRESH_DASHBOARD_STATUS="$MACOS_FRESH_DASHBOARD_STATUS" \
 SUMMARY_WINDOWS_FRESH_DASHBOARD_STATUS="$WINDOWS_FRESH_DASHBOARD_STATUS" \
 SUMMARY_LINUX_FRESH_DASHBOARD_STATUS="$LINUX_FRESH_DASHBOARD_STATUS" \
@@ -1819,12 +1829,12 @@ if [[ "$JSON_OUTPUT" -eq 1 ]]; then
   cat "$RUN_DIR/summary.json"
 else
   say "Run dir: $RUN_DIR"
-  printf '  fresh macOS: %s (%s) gateway=%s dashboard=%s agent=%s discord=%s\n' \
-    "$MACOS_FRESH_STATUS" "$MACOS_FRESH_VERSION" "$MACOS_FRESH_GATEWAY_STATUS" "$MACOS_FRESH_DASHBOARD_STATUS" "$MACOS_FRESH_AGENT_STATUS" "$MACOS_FRESH_DISCORD_STATUS"
-  printf '  fresh windows: %s (%s) gateway=%s dashboard=%s agent=%s discord=%s\n' \
-    "$WINDOWS_FRESH_STATUS" "$WINDOWS_FRESH_VERSION" "$WINDOWS_FRESH_GATEWAY_STATUS" "$WINDOWS_FRESH_DASHBOARD_STATUS" "$WINDOWS_FRESH_AGENT_STATUS" "$WINDOWS_FRESH_DISCORD_STATUS"
-  printf '  fresh linux: %s (%s) gateway=%s dashboard=%s agent=%s discord=%s\n' \
-    "$LINUX_FRESH_STATUS" "$LINUX_FRESH_VERSION" "$LINUX_FRESH_GATEWAY_STATUS" "$LINUX_FRESH_DASHBOARD_STATUS" "$LINUX_FRESH_AGENT_STATUS" "$LINUX_FRESH_DISCORD_STATUS"
+  printf '  fresh macOS: %s (%s) gateway=%s channels=%s dashboard=%s agent=%s discord=%s\n' \
+    "$MACOS_FRESH_STATUS" "$MACOS_FRESH_VERSION" "$MACOS_FRESH_GATEWAY_STATUS" "$MACOS_FRESH_CHANNELS_STATUS" "$MACOS_FRESH_DASHBOARD_STATUS" "$MACOS_FRESH_AGENT_STATUS" "$MACOS_FRESH_DISCORD_STATUS"
+  printf '  fresh windows: %s (%s) gateway=%s channels=%s dashboard=%s agent=%s discord=%s\n' \
+    "$WINDOWS_FRESH_STATUS" "$WINDOWS_FRESH_VERSION" "$WINDOWS_FRESH_GATEWAY_STATUS" "$WINDOWS_FRESH_CHANNELS_STATUS" "$WINDOWS_FRESH_DASHBOARD_STATUS" "$WINDOWS_FRESH_AGENT_STATUS" "$WINDOWS_FRESH_DISCORD_STATUS"
+  printf '  fresh linux: %s (%s) gateway=%s channels=%s dashboard=%s agent=%s discord=%s\n' \
+    "$LINUX_FRESH_STATUS" "$LINUX_FRESH_VERSION" "$LINUX_FRESH_GATEWAY_STATUS" "$LINUX_FRESH_CHANNELS_STATUS" "$LINUX_FRESH_DASHBOARD_STATUS" "$LINUX_FRESH_AGENT_STATUS" "$LINUX_FRESH_DISCORD_STATUS"
   printf '  update macOS: %s (%s) channels=%s dashboard=%s agent=%s discord=%s\n' \
     "$MACOS_UPDATE_STATUS" "$MACOS_UPDATE_VERSION" "$MACOS_UPDATE_CHANNELS_STATUS" "$MACOS_UPDATE_DASHBOARD_STATUS" "$MACOS_UPDATE_AGENT_STATUS" "$MACOS_UPDATE_DISCORD_STATUS"
   printf '  update windows: %s (%s) channels=%s dashboard=%s agent=%s discord=%s\n' \
