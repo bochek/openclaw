@@ -624,6 +624,8 @@ try {
   # an explicit start only if the RPC endpoint never returns.
   Write-ProgressLog 'update.restart-gateway'
   Restart-GatewayWithRecovery -OpenClawPath $openclaw
+  Write-ProgressLog 'update.channels-status'
+  Invoke-Logged 'openclaw channels status' { & $openclaw channels status --probe --json }
   Write-ProgressLog 'update.dashboard'
   Wait-DashboardReady
   Write-ProgressLog 'update.agent-turn'
@@ -1033,6 +1035,7 @@ if [ "\$gateway_ready" != "1" ]; then
   tail -n 120 /tmp/openclaw-parallels-npm-update-macos-gateway.log 2>/dev/null || true
 fi
 /opt/homebrew/bin/openclaw gateway status --deep --require-rpc
+/opt/homebrew/bin/openclaw channels status --probe --json
 dashboard_ready=0
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   if curl -fsSL --connect-timeout 2 --max-time 5 http://127.0.0.1:18789/ >/tmp/openclaw-parallels-npm-update-macos-dashboard.html 2>/dev/null; then
@@ -1131,6 +1134,7 @@ if [ "\$gateway_ready" != "1" ]; then
   exit 1
 fi
 openclaw gateway status --deep --require-rpc
+openclaw channels status --probe --json
 dashboard_ready=0
 for _ in 1 2 3 4 5 6 7 8 9 10; do
   if curl -fsSL --connect-timeout 2 --max-time 5 http://127.0.0.1:18789/ >/tmp/openclaw-parallels-npm-update-linux-dashboard.html 2>/dev/null; then
