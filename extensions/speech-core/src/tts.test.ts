@@ -240,6 +240,26 @@ describe("speech-core native voice-note routing", () => {
     }
   });
 
+  it("keeps allowText=false from synthesizing hidden [[tts:text]] content", async () => {
+    const cfg = createTtsConfig("openclaw-speech-core-tts-allowtext-disabled", {
+      auto: "tagged",
+      modelOverrides: { enabled: true, allowText: false },
+    });
+    const payload: ReplyPayload = {
+      text: "[[tts:text]]This hidden text should not synthesize when allowText is false.[[/tts:text]]",
+    };
+
+    const result = await maybeApplyTtsToPayload({
+      payload,
+      cfg,
+      channel: "slack",
+      kind: "final",
+    });
+
+    expect(result).toEqual({ text: undefined });
+    expect(synthesizeMock).not.toHaveBeenCalled();
+  });
+
   it("keeps visible text when tagged TTS also includes explicit spoken text", async () => {
     const cfg = createTtsConfig("openclaw-speech-core-tts-visible-text-test", { auto: "tagged" });
     const payload: ReplyPayload = {

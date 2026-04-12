@@ -222,9 +222,6 @@ function asProviderConfigMap(value: unknown): Record<string, unknown> {
 }
 
 function resolveRawProviderConfig(raw: TtsConfig = {}, providerId: string): SpeechProviderConfig {
-  if (!raw) {
-    return {};
-  }
   const rawProviders = asProviderConfigMap(raw.providers);
   const direct = rawProviders[providerId] ?? (raw as Record<string, unknown>)[providerId];
   return asProviderConfig(direct);
