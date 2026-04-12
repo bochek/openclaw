@@ -68,7 +68,7 @@ describe("buildInboundMetaSystemPrompt", () => {
     } as TemplateContext);
 
     const payload = parseInboundMetaPayload(prompt);
-    expect(payload["schema"]).toBe("openclaw.inbound_meta.v1");
+    expect(payload["schema"]).toBe("openclaw.inbound_meta.v2");
     expect(payload["chat_id"]).toBe("telegram:5494292670");
     expect(payload["account_id"]).toBe("work");
     expect(payload["channel"]).toBe("telegram");
@@ -445,5 +445,42 @@ describe("buildInboundUserContextPrefix", () => {
 
     const conversationInfo = parseConversationInfoPayload(text);
     expect(conversationInfo["sender"]).toBe("user@example.com");
+  });
+
+  it("strips null bytes from serialized untrusted metadata blocks", () => {
+    const text = buildInboundUserContextPrefix({
+      ChatType: "group",
+      MessageSid: "msg-\0-123",
+      ReplyToId: "reply-\0-122",
+      SenderName: "Ali\0ce",
+      SenderUsername: "ali\0ce",
+      SenderId: "id-\0-9",
+      ThreadStarterBody: "thread\0 starter",
+      ReplyToSender: "Qu\0oter",
+      ReplyToBody: "quoted\0 body",
+      ForwardedFrom: "forward\0er",
+      ForwardedFromTitle: "tit\0le",
+      InboundHistory: [{ sender: "hist\0ory", body: "body\0 text", timestamp: 1 }],
+    } as TemplateContext);
+
+    expect(text).not.toContain("\0");
+
+    const conversationInfo = parseConversationInfoPayload(text);
+    expect(conversationInfo["message_id"]).toBe("msg--123");
+    expect(conversationInfo["reply_to_id"]).toBe("reply--122");
+    expect(conversationInfo["sender"]).toBe("Alice");
+
+    const senderInfo = parseSenderInfoPayload(text);
+    expect(senderInfo["name"]).toBe("Alice");
+    expect(senderInfo["username"]).toBe("alice");
+    expect(senderInfo["id"]).toBe("id--9");
+
+    expect(text).toContain('"body": "thread starter"');
+    expect(text).toContain('"sender_label": "Quoter"');
+    expect(text).toContain('"body": "quoted body"');
+    expect(text).toContain('"from": "forwarder"');
+    expect(text).toContain('"title": "title"');
+    expect(text).toContain('"sender": "history"');
+    expect(text).toContain('"body": "body text"');
   });
 });
