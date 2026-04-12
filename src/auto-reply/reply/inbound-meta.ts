@@ -29,6 +29,15 @@ function sanitizePromptBody(value: unknown): string | undefined {
   return sanitized || undefined;
 }
 
+function formatUntrustedJsonBlock(label: string, payload: unknown): string {
+  return [
+    label,
+    "BEGIN_UNTRUSTED_JSON",
+    JSON.stringify(payload, null, 2),
+    "END_UNTRUSTED_JSON",
+  ].join("\n");
+}
+
 function formatConversationTimestamp(
   value: unknown,
   envelope?: EnvelopeFormatOptions,
@@ -151,7 +160,10 @@ export function buildInboundUserContextPrefix(
     group_channel: normalizePromptMetadataString(ctx.GroupChannel),
     group_space: normalizePromptMetadataString(ctx.GroupSpace),
     thread_label: normalizePromptMetadataString(ctx.ThreadLabel),
-    topic_id: ctx.MessageThreadId != null ? String(ctx.MessageThreadId) : undefined,
+    topic_id:
+      ctx.MessageThreadId != null
+        ? (normalizePromptMetadataString(String(ctx.MessageThreadId)) ?? undefined)
+        : undefined,
     is_forum: ctx.IsForum === true ? true : undefined,
     is_group_chat: !isDirect ? true : undefined,
     was_mentioned: ctx.WasMentioned === true ? true : undefined,
@@ -165,12 +177,7 @@ export function buildInboundUserContextPrefix(
   };
   if (Object.values(conversationInfo).some((v) => v !== undefined)) {
     blocks.push(
-      [
-        "Conversation info (untrusted metadata):",
-        "```json",
-        JSON.stringify(conversationInfo, null, 2),
-        "```",
-      ].join("\n"),
+      formatUntrustedJsonBlock("Conversation info (untrusted metadata):", conversationInfo),
     );
   }
 
@@ -189,47 +196,32 @@ export function buildInboundUserContextPrefix(
     e164: normalizePromptMetadataString(ctx.SenderE164),
   };
   if (senderInfo?.label) {
-    blocks.push(
-      ["Sender (untrusted metadata):", "```json", JSON.stringify(senderInfo, null, 2), "```"].join(
-        "\n",
-      ),
-    );
+    blocks.push(formatUntrustedJsonBlock("Sender (untrusted metadata):", senderInfo));
   }
 
   const threadStarterBody = sanitizePromptBody(ctx.ThreadStarterBody);
   if (threadStarterBody) {
     blocks.push(
-      [
-        "Thread starter (untrusted, for context):",
-        "```json",
-        JSON.stringify({ body: threadStarterBody }, null, 2),
-        "```",
-      ].join("\n"),
+      formatUntrustedJsonBlock("Thread starter (untrusted, for context):", {
+        body: threadStarterBody,
+      }),
     );
   }
 
   const replyToBody = sanitizePromptBody(ctx.ReplyToBody);
   if (replyToBody) {
     blocks.push(
-      [
-        "Replied message (untrusted, for context):",
-        "```json",
-        JSON.stringify(
-          {
-            sender_label: normalizePromptMetadataString(ctx.ReplyToSender),
-            is_quote: ctx.ReplyToIsQuote === true ? true : undefined,
-            body: replyToBody,
-          },
-          null,
-          2,
-        ),
-        "```",
-      ].join("\n"),
+      formatUntrustedJsonBlock("Replied message (untrusted, for context):", {
+        sender_label: normalizePromptMetadataString(ctx.ReplyToSender),
+        is_quote: ctx.ReplyToIsQuote === true ? true : undefined,
+        body: replyToBody,
+      }),
     );
   }
 
+  const forwardedFrom = normalizePromptMetadataString(ctx.ForwardedFrom);
   const forwardedContext = {
-    from: normalizePromptMetadataString(ctx.ForwardedFrom),
+    from: forwardedFrom,
     type: normalizePromptMetadataString(ctx.ForwardedFromType),
     username: normalizePromptMetadataString(ctx.ForwardedFromUsername),
     title: normalizePromptMetadataString(ctx.ForwardedFromTitle),
@@ -237,33 +229,22 @@ export function buildInboundUserContextPrefix(
     chat_type: normalizePromptMetadataString(ctx.ForwardedFromChatType),
     date_ms: typeof ctx.ForwardedDate === "number" ? ctx.ForwardedDate : undefined,
   };
-  if (Object.values(forwardedContext).some((value) => value !== undefined)) {
+  if (forwardedFrom) {
     blocks.push(
-      [
-        "Forwarded message context (untrusted metadata):",
-        "```json",
-        JSON.stringify(forwardedContext, null, 2),
-        "```",
-      ].join("\n"),
+      formatUntrustedJsonBlock("Forwarded message context (untrusted metadata):", forwardedContext),
     );
   }
 
   if (Array.isArray(ctx.InboundHistory) && ctx.InboundHistory.length > 0) {
     blocks.push(
-      [
+      formatUntrustedJsonBlock(
         "Chat history since last reply (untrusted, for context):",
-        "```json",
-        JSON.stringify(
-          ctx.InboundHistory.map((entry) => ({
-            sender: sanitizePromptBody(entry.sender),
-            timestamp_ms: entry.timestamp,
-            body: sanitizePromptBody(entry.body),
-          })),
-          null,
-          2,
-        ),
-        "```",
-      ].join("\n"),
+        ctx.InboundHistory.map((entry) => ({
+          sender: sanitizePromptBody(entry.sender),
+          timestamp_ms: entry.timestamp,
+          body: sanitizePromptBody(entry.body),
+        })),
+      ),
     );
   }
 
