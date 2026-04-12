@@ -957,6 +957,20 @@ PY
   fi
 }
 
+seed_fresh_child_summary() {
+  local prefix="$1"
+  local discord_status="skip"
+  if discord_smoke_enabled; then
+    discord_status="fail"
+  fi
+  eval "${prefix}_GATEWAY_STATUS='fail'"
+  eval "${prefix}_PERMISSION_STATUS='fail'"
+  eval "${prefix}_CHANNELS_STATUS='fail'"
+  eval "${prefix}_DASHBOARD_STATUS='fail'"
+  eval "${prefix}_AGENT_STATUS='fail'"
+  eval "${prefix}_DISCORD_STATUS='${discord_status}'"
+}
+
 update_status_path() {
   local os_name="$1"
   printf '%s/%s-update-status.json\n' "$RUN_DIR" "$os_name"
@@ -1964,6 +1978,9 @@ wait_job "macOS fresh" "$macos_fresh_pid" "$RUN_DIR/macos-fresh.log" && MACOS_FR
 wait_job "Windows fresh" "$windows_fresh_pid" "$RUN_DIR/windows-fresh.log" && WINDOWS_FRESH_STATUS="pass" || WINDOWS_FRESH_STATUS="fail"
 wait_job "Linux fresh" "$linux_fresh_pid" "$RUN_DIR/linux-fresh.log" && LINUX_FRESH_STATUS="pass" || LINUX_FRESH_STATUS="fail"
 
+seed_fresh_child_summary "MACOS_FRESH"
+seed_fresh_child_summary "WINDOWS_FRESH"
+seed_fresh_child_summary "LINUX_FRESH"
 load_fresh_child_summary MACOS_FRESH "$RUN_DIR/macos-fresh.log"
 load_fresh_child_summary WINDOWS_FRESH "$RUN_DIR/windows-fresh.log"
 load_fresh_child_summary LINUX_FRESH "$RUN_DIR/linux-fresh.log"
