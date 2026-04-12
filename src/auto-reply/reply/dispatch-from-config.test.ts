@@ -122,14 +122,17 @@ const ttsMocks = vi.hoisted(() => {
         payload: ReplyPayload;
         kind: "tool" | "block" | "final";
       };
-      if (
-        state.synthesizeFinalAudio &&
-        params.kind === "final" &&
-        typeof params.payload?.text === "string" &&
-        params.payload.text.trim()
-      ) {
+      const sourceText = typeof params.payload?.text === "string" ? params.payload.text : "";
+      const explicitTtsMatch = sourceText.match(/\[\[tts:text\]\]([\s\S]*?)\[\[\/tts:text\]\]/i);
+      const cleanedText = sourceText
+        .replace(/\[\[tts:text\]\]([\s\S]*?)\[\[\/tts:text\]\]/gi, "")
+        .replace(/\[\[tts\]\]/gi, "")
+        .trim();
+      const spokenText = explicitTtsMatch?.[1]?.trim() || cleanedText;
+      if (state.synthesizeFinalAudio && params.kind === "final" && spokenText) {
         return {
           ...params.payload,
+          text: cleanedText || undefined,
           mediaUrl: "https://example.com/tts-synth.opus",
           audioAsVoice: true,
         };
@@ -1920,6 +1923,35 @@ describe("dispatchReplyFromConfig", () => {
     const finalPayload = (dispatcher.sendFinalReply as ReturnType<typeof vi.fn>).mock
       .calls[0]?.[0] as ReplyPayload | undefined;
     expect(finalPayload?.mediaUrl).toBe("https://example.com/tts-synth.opus");
+    expect(finalPayload?.text).toBeUndefined();
+  });
+
+  it("queues media-only final replies when tagged TTS strips all visible text", async () => {
+    setNoAbort();
+    ttsMocks.state.synthesizeFinalAudio = true;
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "whatsapp",
+      Surface: "whatsapp",
+      SessionKey: "agent:main:whatsapp:+1555",
+      BodyForAgent: "send audio only",
+    });
+
+    const result = await dispatchReplyFromConfig({
+      ctx,
+      cfg: emptyConfig,
+      dispatcher,
+      replyResolver: async () =>
+        ({
+          text: "[[tts:text]]This tagged reply should be delivered as audio only.[[/tts:text]]",
+        }) satisfies ReplyPayload,
+    });
+
+    const finalPayload = (dispatcher.sendFinalReply as ReturnType<typeof vi.fn>).mock
+      .calls[0]?.[0] as ReplyPayload | undefined;
+    expect(result.queuedFinal).toBe(true);
+    expect(finalPayload?.mediaUrl).toBe("https://example.com/tts-synth.opus");
+    expect(finalPayload?.audioAsVoice).toBe(true);
     expect(finalPayload?.text).toBeUndefined();
   });
 

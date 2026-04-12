@@ -43,10 +43,6 @@ export function parseTtsDirectives(
   policy: SpeechModelOverridePolicy,
   options?: ParseTtsDirectiveOptions,
 ): TtsDirectiveParseResult {
-  if (!policy.enabled) {
-    return { cleanedText: text, overrides: {}, warnings: [], hasDirective: false };
-  }
-
   const providers = resolveDirectiveProviders(options);
   const overrides: TtsDirectiveOverrides = {};
   const warnings: string[] = [];
@@ -56,7 +52,7 @@ export function parseTtsDirectives(
   const blockRegex = /\[\[tts:text\]\]([\s\S]*?)\[\[\/tts:text\]\]/gi;
   cleanedText = cleanedText.replace(blockRegex, (_match, inner: string) => {
     hasDirective = true;
-    if (policy.allowText && overrides.ttsText == null) {
+    if (overrides.ttsText == null) {
       overrides.ttsText = inner.trim();
     }
     return "";
@@ -65,6 +61,9 @@ export function parseTtsDirectives(
   const directiveRegex = /\[\[tts:([^\]]+)\]\]/gi;
   cleanedText = cleanedText.replace(directiveRegex, (_match, body: string) => {
     hasDirective = true;
+    if (!policy.enabled) {
+      return "";
+    }
     const tokens = body.split(/\s+/).filter(Boolean);
     for (const token of tokens) {
       const eqIndex = token.indexOf("=");
@@ -121,6 +120,12 @@ export function parseTtsDirectives(
         continue;
       }
     }
+    return "";
+  });
+
+  const bareDirectiveRegex = /\[\[tts\]\]/gi;
+  cleanedText = cleanedText.replace(bareDirectiveRegex, () => {
+    hasDirective = true;
     return "";
   });
 

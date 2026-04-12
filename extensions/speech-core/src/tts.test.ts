@@ -50,17 +50,21 @@ vi.mock("../api.js", async () => {
   };
 });
 
-const { _test, maybeApplyTtsToPayload } = await import("./tts.js");
+const { _test, buildTtsSystemPromptHint, maybeApplyTtsToPayload } = await import("./tts.js");
 
 const nativeVoiceNoteChannels = ["discord", "feishu", "matrix", "telegram", "whatsapp"] as const;
 
-function createTtsConfig(prefsName: string): OpenClawConfig {
+function createTtsConfig(
+  prefsName: string,
+  overrides?: Partial<NonNullable<OpenClawConfig["messages"]>["tts"]>,
+): OpenClawConfig {
   return {
     messages: {
       tts: {
         enabled: true,
         provider: "mock",
         prefsPath: `/tmp/${prefsName}.json`,
+        ...overrides,
       },
     },
   };
@@ -136,5 +140,142 @@ describe("speech-core native voice-note routing", () => {
         rmSync(mediaDir, { recursive: true, force: true });
       }
     }
+  });
+
+  it("supports bare [[tts]] tags in tagged mode by speaking the remaining visible text", async () => {
+    const cfg = createTtsConfig("openclaw-speech-core-tts-bare-tag-test", { auto: "tagged" });
+    const payload: ReplyPayload = {
+      text: "[[tts]] This bare tag should now synthesize from visible text alone.",
+    };
+
+    let mediaDir: string | undefined;
+    try {
+      const result = await maybeApplyTtsToPayload({
+        payload,
+        cfg,
+        channel: "slack",
+        kind: "final",
+      });
+
+      expect(result.text).toBe("This bare tag should now synthesize from visible text alone.");
+      expect(result.mediaUrl).toMatch(/voice-\d+\.ogg$/);
+      expect(synthesizeMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "This bare tag should now synthesize from visible text alone.",
+        }),
+      );
+
+      mediaDir = result.mediaUrl ? path.dirname(result.mediaUrl) : undefined;
+    } finally {
+      if (mediaDir) {
+        rmSync(mediaDir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("synthesizes directive-only tagged replies into media-only payloads", async () => {
+    const cfg = createTtsConfig("openclaw-speech-core-tts-directive-only-test", {
+      auto: "tagged",
+    });
+    const payload: ReplyPayload = {
+      text: "[[tts:text]]This tagged reply should be delivered as audio only.[[/tts:text]]",
+    };
+
+    let mediaDir: string | undefined;
+    try {
+      const result = await maybeApplyTtsToPayload({
+        payload,
+        cfg,
+        channel: "slack",
+        kind: "final",
+      });
+
+      expect(result.text).toBeUndefined();
+      expect(result.mediaUrl).toMatch(/voice-\d+\.ogg$/);
+      expect(synthesizeMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "This tagged reply should be delivered as audio only.",
+        }),
+      );
+
+      mediaDir = result.mediaUrl ? path.dirname(result.mediaUrl) : undefined;
+    } finally {
+      if (mediaDir) {
+        rmSync(mediaDir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("still honors explicit [[tts:text]] blocks when model override directives are disabled", async () => {
+    const cfg = createTtsConfig("openclaw-speech-core-tts-directive-text-disabled-overrides", {
+      auto: "tagged",
+      modelOverrides: { enabled: false },
+    });
+    const payload: ReplyPayload = {
+      text: "[[tts:text]]This explicit spoken text should still synthesize.[[/tts:text]]",
+    };
+
+    let mediaDir: string | undefined;
+    try {
+      const result = await maybeApplyTtsToPayload({
+        payload,
+        cfg,
+        channel: "slack",
+        kind: "final",
+      });
+
+      expect(result.text).toBeUndefined();
+      expect(result.mediaUrl).toMatch(/voice-\d+\.ogg$/);
+      expect(synthesizeMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "This explicit spoken text should still synthesize.",
+        }),
+      );
+
+      mediaDir = result.mediaUrl ? path.dirname(result.mediaUrl) : undefined;
+    } finally {
+      if (mediaDir) {
+        rmSync(mediaDir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("keeps visible text when tagged TTS also includes explicit spoken text", async () => {
+    const cfg = createTtsConfig("openclaw-speech-core-tts-visible-text-test", { auto: "tagged" });
+    const payload: ReplyPayload = {
+      text: "Visible reply text.\n[[tts:text]]Spoken audio content that should still synthesize.[[/tts:text]]",
+    };
+
+    let mediaDir: string | undefined;
+    try {
+      const result = await maybeApplyTtsToPayload({
+        payload,
+        cfg,
+        channel: "slack",
+        kind: "final",
+      });
+
+      expect(result.text).toBe("Visible reply text.");
+      expect(result.mediaUrl).toMatch(/voice-\d+\.ogg$/);
+      expect(synthesizeMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: "Spoken audio content that should still synthesize.",
+        }),
+      );
+
+      mediaDir = result.mediaUrl ? path.dirname(result.mediaUrl) : undefined;
+    } finally {
+      if (mediaDir) {
+        rmSync(mediaDir, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it("advertises the supported bare tag and explicit text block syntax in tagged mode", () => {
+    const cfg = createTtsConfig("openclaw-speech-core-tts-hint-test", { auto: "tagged" });
+
+    expect(buildTtsSystemPromptHint(cfg)).toContain(
+      "Only use TTS when you include a [[tts]] tag or a [[tts:text]]...[[/tts:text]] block.",
+    );
   });
 });
