@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT_DIR/scripts/e2e/lib/parallels-macos-common.sh"
 source "$ROOT_DIR/scripts/e2e/lib/parallels-discord-common.sh"
 source "$ROOT_DIR/scripts/e2e/lib/parallels-permissions-common.sh"
+source "$ROOT_DIR/scripts/e2e/lib/parallels-summary-common.sh"
 source "$ROOT_DIR/scripts/e2e/lib/parallels-windows-common.sh"
 
 MACOS_VM="macOS Tahoe"
@@ -853,180 +854,6 @@ print(matches[-1] if matches else "")
 PY
 }
 
-load_fresh_child_summary() {
-  local prefix="$1"
-  local log_path="$2"
-  [[ -f "$log_path" ]] || return 0
-
-  local assignments
-  set +e
-  assignments="$(
-    PREFIX="$prefix" "$PYTHON_BIN" - "$log_path" <<'PY'
-import json
-import os
-import pathlib
-import shlex
-import sys
-
-prefix = os.environ["PREFIX"]
-text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").strip()
-if not text:
-    raise SystemExit(0)
-
-try:
-    payload = json.loads(text)
-except Exception:
-    decoder = json.JSONDecoder()
-    payload = None
-    for index, char in enumerate(text):
-        if char != "{":
-            continue
-        try:
-            candidate, _ = decoder.raw_decode(text[index:])
-        except Exception:
-            continue
-        if isinstance(candidate, dict) and isinstance(candidate.get("freshMain"), dict):
-            payload = candidate
-    if payload is None:
-        raise SystemExit(0)
-
-fresh = payload.get("freshMain")
-if not isinstance(fresh, dict):
-    raise SystemExit(0)
-
-fields = {
-    "STATUS": fresh.get("status", "skip"),
-    "VERSION": fresh.get("version", "skip"),
-    "GATEWAY_STATUS": fresh.get("gateway", "skip"),
-    "PERMISSION_STATUS": fresh.get("permissions", "skip"),
-    "CHANNELS_STATUS": fresh.get("channels", "skip"),
-    "DASHBOARD_STATUS": fresh.get("dashboard", "skip"),
-    "AGENT_STATUS": fresh.get("agent", "skip"),
-    "DISCORD_STATUS": fresh.get("discord", "skip"),
-}
-
-for key, value in fields.items():
-    if not isinstance(value, str):
-        value = "skip"
-    print(f"{prefix}_{key}={shlex.quote(value)}")
-PY
-  )"
-  local rc=$?
-  set -e
-  if [[ $rc -eq 0 && -n "$assignments" ]]; then
-    eval "$assignments"
-  fi
-}
-
-seed_fresh_child_summary() {
-  local prefix="$1"
-  local discord_status="skip"
-  if discord_smoke_enabled; then
-    discord_status="fail"
-  fi
-  eval "${prefix}_GATEWAY_STATUS='fail'"
-  eval "${prefix}_PERMISSION_STATUS='fail'"
-  eval "${prefix}_CHANNELS_STATUS='fail'"
-  eval "${prefix}_DASHBOARD_STATUS='fail'"
-  eval "${prefix}_AGENT_STATUS='fail'"
-  eval "${prefix}_DISCORD_STATUS='${discord_status}'"
-}
-
-update_status_path() {
-  local os_name="$1"
-  printf '%s/%s-update-status.json\n' "$RUN_DIR" "$os_name"
-}
-
-write_update_status_summary() {
-  local os_name="$1"
-  local gateway_status="$2"
-  local permission_status="$3"
-  local channels_status="$4"
-  local dashboard_status="$5"
-  local agent_status="$6"
-  local discord_status="$7"
-  local status_path
-  status_path="$(update_status_path "$os_name")"
-  UPDATE_STATUS_PATH="$status_path" \
-  UPDATE_GATEWAY_STATUS="$gateway_status" \
-  UPDATE_PERMISSION_STATUS="$permission_status" \
-  UPDATE_CHANNELS_STATUS="$channels_status" \
-  UPDATE_DASHBOARD_STATUS="$dashboard_status" \
-  UPDATE_AGENT_STATUS="$agent_status" \
-  UPDATE_DISCORD_STATUS="$discord_status" \
-    "$PYTHON_BIN" - <<'PY'
-import json
-import os
-
-payload = {
-    "gateway": os.environ["UPDATE_GATEWAY_STATUS"],
-    "permissions": os.environ["UPDATE_PERMISSION_STATUS"],
-    "channels": os.environ["UPDATE_CHANNELS_STATUS"],
-    "dashboard": os.environ["UPDATE_DASHBOARD_STATUS"],
-    "agent": os.environ["UPDATE_AGENT_STATUS"],
-    "discord": os.environ["UPDATE_DISCORD_STATUS"],
-}
-with open(os.environ["UPDATE_STATUS_PATH"], "w", encoding="utf-8") as handle:
-    json.dump(payload, handle, indent=2, sort_keys=True)
-PY
-}
-
-seed_update_status_summary() {
-  local os_name="$1"
-  local discord_status="skip"
-  if discord_smoke_enabled; then
-    discord_status="fail"
-  fi
-  write_update_status_summary "$os_name" "fail" "fail" "fail" "fail" "fail" "$discord_status"
-}
-
-load_update_status_summary() {
-  local prefix="$1"
-  local status_path="$2"
-  [[ -f "$status_path" ]] || return 0
-
-  local assignments
-  set +e
-  assignments="$(
-    PREFIX="$prefix" "$PYTHON_BIN" - "$status_path" <<'PY'
-import json
-import os
-import pathlib
-import shlex
-import sys
-
-prefix = os.environ["PREFIX"]
-text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").strip()
-if not text:
-    raise SystemExit(0)
-
-try:
-    payload = json.loads(text)
-except Exception:
-    raise SystemExit(0)
-
-fields = {
-    "GATEWAY_STATUS": payload.get("gateway", "skip"),
-    "PERMISSION_STATUS": payload.get("permissions", "skip"),
-    "CHANNELS_STATUS": payload.get("channels", "skip"),
-    "DASHBOARD_STATUS": payload.get("dashboard", "skip"),
-    "AGENT_STATUS": payload.get("agent", "skip"),
-    "DISCORD_STATUS": payload.get("discord", "skip"),
-}
-
-for key, value in fields.items():
-    if not isinstance(value, str):
-        value = "skip"
-    print(f"{prefix}_{key}={shlex.quote(value)}")
-PY
-  )"
-  local rc=$?
-  set -e
-  if [[ $rc -eq 0 && -n "$assignments" ]]; then
-    eval "$assignments"
-  fi
-}
-
 guest_powershell() {
   local script="$1"
   local encoded
@@ -1599,7 +1426,8 @@ EOF
     run_macos_update_discord_smoke
     MACOS_UPDATE_DISCORD_STATUS="pass"
   fi
-  write_update_status_summary \
+  parallels_write_update_status_summary \
+    "$RUN_DIR" \
     "macos" \
     "$MACOS_UPDATE_GATEWAY_STATUS" \
     "$MACOS_UPDATE_PERMISSION_STATUS" \
@@ -1639,7 +1467,8 @@ run_windows_update() {
     run_windows_update_discord_smoke
     WINDOWS_UPDATE_DISCORD_STATUS="pass"
   fi
-  write_update_status_summary \
+  parallels_write_update_status_summary \
+    "$RUN_DIR" \
     "windows" \
     "$WINDOWS_UPDATE_GATEWAY_STATUS" \
     "$WINDOWS_UPDATE_PERMISSION_STATUS" \
@@ -1751,7 +1580,8 @@ EOF
     run_linux_update_discord_smoke
     LINUX_UPDATE_DISCORD_STATUS="pass"
   fi
-  write_update_status_summary \
+  parallels_write_update_status_summary \
+    "$RUN_DIR" \
     "linux" \
     "$LINUX_UPDATE_GATEWAY_STATUS" \
     "$LINUX_UPDATE_PERMISSION_STATUS" \
@@ -1903,12 +1733,12 @@ wait_job "macOS fresh" "$macos_fresh_pid" "$RUN_DIR/macos-fresh.log" && MACOS_FR
 wait_job "Windows fresh" "$windows_fresh_pid" "$RUN_DIR/windows-fresh.log" && WINDOWS_FRESH_STATUS="pass" || WINDOWS_FRESH_STATUS="fail"
 wait_job "Linux fresh" "$linux_fresh_pid" "$RUN_DIR/linux-fresh.log" && LINUX_FRESH_STATUS="pass" || LINUX_FRESH_STATUS="fail"
 
-seed_fresh_child_summary "MACOS_FRESH"
-seed_fresh_child_summary "WINDOWS_FRESH"
-seed_fresh_child_summary "LINUX_FRESH"
-load_fresh_child_summary MACOS_FRESH "$RUN_DIR/macos-fresh.log"
-load_fresh_child_summary WINDOWS_FRESH "$RUN_DIR/windows-fresh.log"
-load_fresh_child_summary LINUX_FRESH "$RUN_DIR/linux-fresh.log"
+parallels_seed_fresh_child_summary "MACOS_FRESH"
+parallels_seed_fresh_child_summary "WINDOWS_FRESH"
+parallels_seed_fresh_child_summary "LINUX_FRESH"
+parallels_load_fresh_child_summary MACOS_FRESH "$RUN_DIR/macos-fresh.log"
+parallels_load_fresh_child_summary WINDOWS_FRESH "$RUN_DIR/windows-fresh.log"
+parallels_load_fresh_child_summary LINUX_FRESH "$RUN_DIR/linux-fresh.log"
 
 [[ "$MACOS_FRESH_STATUS" == "pass" ]] || die "macOS fresh baseline failed"
 [[ "$WINDOWS_FRESH_STATUS" == "pass" ]] || die "Windows fresh baseline failed"
@@ -1939,9 +1769,9 @@ say "Run same-guest openclaw update to $UPDATE_TARGET_EFFECTIVE"
 ensure_vm_running_for_update "$MACOS_VM"
 ensure_vm_running_for_update "$WINDOWS_VM"
 ensure_vm_running_for_update "$LINUX_VM"
-seed_update_status_summary "macos"
-seed_update_status_summary "windows"
-seed_update_status_summary "linux"
+parallels_seed_update_status_summary "$RUN_DIR" "macos"
+parallels_seed_update_status_summary "$RUN_DIR" "windows"
+parallels_seed_update_status_summary "$RUN_DIR" "linux"
 run_macos_update "$UPDATE_TARGET_EFFECTIVE" "$UPDATE_EXPECTED_NEEDLE" >"$RUN_DIR/macos-update.log" 2>&1 &
 macos_update_pid=$!
 run_windows_update "$UPDATE_TARGET_EFFECTIVE" "$UPDATE_EXPECTED_NEEDLE" "$windows_update_script_url" >"$RUN_DIR/windows-update.log" 2>&1 &
@@ -1965,9 +1795,9 @@ wait_job "Linux update" "$linux_update_pid" "$RUN_DIR/linux-update.log" && LINUX
 MACOS_UPDATE_VERSION="$(extract_last_version "$RUN_DIR/macos-update.log")"
 WINDOWS_UPDATE_VERSION="$(extract_last_version "$RUN_DIR/windows-update.log")"
 LINUX_UPDATE_VERSION="$(extract_last_version "$RUN_DIR/linux-update.log")"
-load_update_status_summary "MACOS_UPDATE" "$(update_status_path macos)"
-load_update_status_summary "WINDOWS_UPDATE" "$(update_status_path windows)"
-load_update_status_summary "LINUX_UPDATE" "$(update_status_path linux)"
+parallels_load_update_status_summary "MACOS_UPDATE" "$(parallels_update_status_path "$RUN_DIR" macos)"
+parallels_load_update_status_summary "WINDOWS_UPDATE" "$(parallels_update_status_path "$RUN_DIR" windows)"
+parallels_load_update_status_summary "LINUX_UPDATE" "$(parallels_update_status_path "$RUN_DIR" linux)"
 
 SUMMARY_PACKAGE_SPEC="$PACKAGE_SPEC" \
 SUMMARY_UPDATE_TARGET="$UPDATE_TARGET_EFFECTIVE" \
