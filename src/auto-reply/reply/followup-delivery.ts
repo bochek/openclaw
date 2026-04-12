@@ -1,6 +1,6 @@
+import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
 import type { MessagingToolSend } from "../../agents/pi-embedded-messaging.types.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
-import { resolveSendableOutboundReplyParts } from "openclaw/plugin-sdk/reply-payload";
 import { splitByReplyToTags } from "../../utils/directive-tags.js";
 import { stripHeartbeatToken } from "../heartbeat.js";
 import type { OriginatingChannelType } from "../templating.js";
@@ -150,7 +150,7 @@ export function resolveFollowupDeliveryPayloads(params: {
       return [payload];
     }
     const stripped = stripHeartbeatToken(text, { mode: "message" });
-    const hasMedia = hasReplyPayloadMedia(payload);
+    const hasMedia = resolveSendableOutboundReplyParts(payload).hasMedia;
     if (stripped.shouldSkip && !hasMedia) {
       return [];
     }
