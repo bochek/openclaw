@@ -600,6 +600,7 @@ run_main_package_update() {
   local host_ip="$1"
   local tgz_url="http://$host_ip:$HOST_PORT/$(basename "$MAIN_TGZ_PATH")"
   guest_exec openclaw update --tag "$tgz_url" --yes --json
+  guest_exec openclaw update status --json
   guest_exec openclaw --version
 }
 
