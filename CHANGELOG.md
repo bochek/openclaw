@@ -24,7 +24,7 @@ Docs: https://docs.openclaw.ai
 - Gateway/plugins: always send a non-empty `idempotencyKey` for plugin subagent runs, so dreaming narrative jobs stop failing gateway schema validation. (#65354) Thanks @CodeForgeNet and @vincentkoc.
 - Cron/isolated sessions: persist the right transcript path for each isolated run, including fresh session rollovers, so cron runs stop appending to stale session files. Thanks @samrusani and @vincentkoc.
 - Dreaming/cron: wake managed dreaming jobs immediately instead of waiting for the next heartbeat, so scheduled dreaming runs start when the cron fires. (#65053) Thanks @l0cka and @vincentkoc.
-- Memory/wiki: preserve Unicode letters and digits in wiki slugs and contradiction clustering, so non-ASCII titles and notes stop collapsing into ASCII-only fallback keys. (#64742) Thanks @zhouhe-xydt and @vincentkoc.
+- Memory/wiki: preserve Unicode letters, digits, and combining marks in wiki slugs and contradiction clustering, and cap Unicode filename segments to safe byte lengths so non-ASCII titles stop collapsing or overflowing path limits. (#64742) Thanks @zhouhe-xydt and @vincentkoc.
 
 ## 2026.4.11
 
