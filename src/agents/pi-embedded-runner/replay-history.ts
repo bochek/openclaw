@@ -28,12 +28,12 @@ import {
   sanitizeToolUseResultPairing,
   stripToolResultDetails,
 } from "../session-transcript-repair.js";
+import { sanitizeToolCallIdsForCloudCodeAssist } from "../tool-call-id.js";
 import type { TranscriptPolicy } from "../transcript-policy.js";
 import {
   resolveTranscriptPolicy,
   shouldAllowProviderOwnedThinkingReplay,
 } from "../transcript-policy.js";
-import { sanitizeToolCallIdsForCloudCodeAssist } from "../tool-call-id.js";
 import {
   makeZeroUsageSnapshot,
   normalizeUsage,
@@ -428,14 +428,24 @@ export async function sanitizeSessionHistory(params: {
     allowedToolNames: params.allowedToolNames,
     allowProviderOwnedThinkingReplay,
   });
+  const isOpenAIResponsesApi =
+    params.modelApi === "openai-responses" ||
+    params.modelApi === "openai-codex-responses" ||
+    params.modelApi === "azure-openai-responses";
+  // OpenAI's fc_* pairing downgrade must run before generic tool-id sanitization,
+  // otherwise strict sanitization removes the "|" separator that the downgrade
+  // logic needs in order to strip orphaned function-call ids.
+  const openAISafeToolCalls = isOpenAIResponsesApi
+    ? downgradeOpenAIFunctionCallReasoningPairs(downgradeOpenAIReasoningBlocks(sanitizedToolCalls))
+    : sanitizedToolCalls;
   const sanitizedToolIds =
     policy.sanitizeToolCallIds && policy.toolCallIdMode
-      ? sanitizeToolCallIdsForCloudCodeAssist(sanitizedToolCalls, policy.toolCallIdMode, {
+      ? sanitizeToolCallIdsForCloudCodeAssist(openAISafeToolCalls, policy.toolCallIdMode, {
           preserveNativeAnthropicToolUseIds: policy.preserveNativeAnthropicToolUseIds,
           preserveReplaySafeThinkingToolCallIds: allowProviderOwnedThinkingReplay,
           allowedToolNames: params.allowedToolNames,
         })
-      : sanitizedToolCalls;
+      : openAISafeToolCalls;
   const repairedTools = policy.repairToolUseResultPairing
     ? sanitizeToolUseResultPairing(sanitizedToolIds, {
         erroredAssistantResultPolicy: "drop",
@@ -445,11 +455,6 @@ export async function sanitizeSessionHistory(params: {
   const sanitizedCompactionUsage = ensureAssistantUsageSnapshots(
     stripStaleAssistantUsageBeforeLatestCompaction(sanitizedToolResults),
   );
-
-  const isOpenAIResponsesApi =
-    params.modelApi === "openai-responses" ||
-    params.modelApi === "openai-codex-responses" ||
-    params.modelApi === "azure-openai-responses";
   const hasSnapshot = Boolean(params.provider || params.modelApi || params.modelId);
   const priorSnapshot = hasSnapshot ? readLastModelSnapshot(params.sessionManager) : null;
   const modelChanged = priorSnapshot
@@ -460,11 +465,6 @@ export async function sanitizeSessionHistory(params: {
         modelId: params.modelId,
       })
     : false;
-  const sanitizedOpenAI = isOpenAIResponsesApi
-    ? downgradeOpenAIFunctionCallReasoningPairs(
-        downgradeOpenAIReasoningBlocks(sanitizedCompactionUsage),
-      )
-    : sanitizedCompactionUsage;
   const provider = params.provider?.trim();
   const providerSanitized =
     provider && provider.length > 0
@@ -482,13 +482,13 @@ export async function sanitizeSessionHistory(params: {
             modelApi: params.modelApi,
             model: params.model,
             sessionId: params.sessionId,
-            messages: sanitizedOpenAI,
+            messages: sanitizedCompactionUsage,
             allowedToolNames: params.allowedToolNames,
             sessionState: createProviderReplaySessionState(params.sessionManager),
           },
         })
       : undefined;
-  const sanitizedWithProvider = providerSanitized ?? sanitizedOpenAI;
+  const sanitizedWithProvider = providerSanitized ?? sanitizedCompactionUsage;
 
   if (hasSnapshot && (!priorSnapshot || modelChanged)) {
     appendModelSnapshot(params.sessionManager, {
