@@ -45,17 +45,20 @@ TIMEOUT_ONBOARD_S=240
 TIMEOUT_ONBOARD_PHASE_S=$((TIMEOUT_ONBOARD_S + 60))
 TIMEOUT_GATEWAY_S=120
 TIMEOUT_AGENT_S=180
+TIMEOUT_DASHBOARD_S=60
 
 FRESH_MAIN_STATUS="skip"
 FRESH_MAIN_VERSION="skip"
 FRESH_GATEWAY_STATUS="skip"
 FRESH_AGENT_STATUS="skip"
+FRESH_DASHBOARD_STATUS="skip"
 UPGRADE_STATUS="skip"
 UPGRADE_PRECHECK_STATUS="skip"
 LATEST_INSTALLED_VERSION="skip"
 UPGRADE_MAIN_VERSION="skip"
 UPGRADE_GATEWAY_STATUS="skip"
 UPGRADE_AGENT_STATUS="skip"
+UPGRADE_DASHBOARD_STATUS="skip"
 
 say() {
   printf '==> %s\n' "$*"
@@ -754,6 +757,7 @@ summary = {
         "version": os.environ["SUMMARY_FRESH_MAIN_VERSION"],
         "gateway": os.environ["SUMMARY_FRESH_GATEWAY_STATUS"],
         "agent": os.environ["SUMMARY_FRESH_AGENT_STATUS"],
+        "dashboard": os.environ["SUMMARY_FRESH_DASHBOARD_STATUS"],
     },
     "upgrade": {
         "precheck": os.environ["SUMMARY_UPGRADE_PRECHECK_STATUS"],
@@ -762,6 +766,7 @@ summary = {
         "mainVersion": os.environ["SUMMARY_UPGRADE_MAIN_VERSION"],
         "gateway": os.environ["SUMMARY_UPGRADE_GATEWAY_STATUS"],
         "agent": os.environ["SUMMARY_UPGRADE_AGENT_STATUS"],
+        "dashboard": os.environ["SUMMARY_UPGRADE_DASHBOARD_STATUS"],
     },
 }
 with open(sys.argv[1], "w", encoding="utf-8") as handle:
@@ -2226,6 +2231,30 @@ verify_turn() {
     agent --agent main --message "Reply with exact ASCII text OK only." --json
 }
 
+verify_dashboard_load() {
+  guest_powershell "$(cat <<'EOF'
+$dashboardUrl = 'http://127.0.0.1:18789/'
+$deadline = [DateTime]::UtcNow.AddSeconds(30)
+$dashboardReady = $false
+while ([DateTime]::UtcNow -lt $deadline) {
+  try {
+    $response = Invoke-WebRequest -Uri $dashboardUrl -UseBasicParsing -TimeoutSec 5
+    $content = [string]$response.Content
+    if ($content.Contains('<title>OpenClaw Control</title>') -and $content.Contains('<openclaw-app></openclaw-app>')) {
+      $dashboardReady = $true
+      break
+    }
+  } catch {
+  }
+  Start-Sleep -Seconds 1
+}
+if (-not $dashboardReady) {
+  throw "dashboard HTML did not become ready at $dashboardUrl"
+}
+EOF
+)"
+}
+
 capture_latest_ref_failure() {
   set +e
   run_ref_onboard
@@ -2264,6 +2293,8 @@ run_fresh_main_lane() {
   phase_run "fresh.onboard-ref" "$TIMEOUT_ONBOARD_PHASE_S" run_ref_onboard || return $?
   phase_run "fresh.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway_reachable || return $?
   FRESH_GATEWAY_STATUS="pass"
+  phase_run "fresh.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load || return $?
+  FRESH_DASHBOARD_STATUS="pass"
   phase_run "fresh.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn || return $?
   FRESH_AGENT_STATUS="pass"
 }
@@ -2308,6 +2339,8 @@ run_upgrade_lane() {
   phase_run "upgrade.gateway-restart" "$TIMEOUT_GATEWAY_S" restart_gateway || return $?
   phase_run "upgrade.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway_reachable || return $?
   UPGRADE_GATEWAY_STATUS="pass"
+  phase_run "upgrade.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load || return $?
+  UPGRADE_DASHBOARD_STATUS="pass"
   phase_run "upgrade.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn || return $?
   UPGRADE_AGENT_STATUS="pass"
 }
@@ -2377,12 +2410,14 @@ SUMMARY_JSON_PATH="$(
   SUMMARY_FRESH_MAIN_VERSION="$FRESH_MAIN_VERSION" \
   SUMMARY_FRESH_GATEWAY_STATUS="$FRESH_GATEWAY_STATUS" \
   SUMMARY_FRESH_AGENT_STATUS="$FRESH_AGENT_STATUS" \
+  SUMMARY_FRESH_DASHBOARD_STATUS="$FRESH_DASHBOARD_STATUS" \
   SUMMARY_UPGRADE_PRECHECK_STATUS="$UPGRADE_PRECHECK_STATUS" \
   SUMMARY_UPGRADE_STATUS="$UPGRADE_STATUS" \
   SUMMARY_LATEST_INSTALLED_VERSION="$LATEST_INSTALLED_VERSION" \
   SUMMARY_UPGRADE_MAIN_VERSION="$UPGRADE_MAIN_VERSION" \
   SUMMARY_UPGRADE_GATEWAY_STATUS="$UPGRADE_GATEWAY_STATUS" \
   SUMMARY_UPGRADE_AGENT_STATUS="$UPGRADE_AGENT_STATUS" \
+  SUMMARY_UPGRADE_DASHBOARD_STATUS="$UPGRADE_DASHBOARD_STATUS" \
   write_summary_json
 )"
 
@@ -2399,9 +2434,9 @@ else
   if [[ -n "$INSTALL_VERSION" ]]; then
     printf '  baseline-install-version: %s\n' "$INSTALL_VERSION"
   fi
-  printf '  fresh-main: %s (%s)\n' "$FRESH_MAIN_STATUS" "$FRESH_MAIN_VERSION"
+  printf '  fresh-main: %s (%s) dashboard=%s\n' "$FRESH_MAIN_STATUS" "$FRESH_MAIN_VERSION" "$FRESH_DASHBOARD_STATUS"
   printf '  %s precheck: %s (%s)\n' "$(upgrade_summary_label)" "$UPGRADE_PRECHECK_STATUS" "$LATEST_INSTALLED_VERSION"
-  printf '  %s: %s (%s)\n' "$(upgrade_summary_label)" "$UPGRADE_STATUS" "$UPGRADE_MAIN_VERSION"
+  printf '  %s: %s (%s) dashboard=%s\n' "$(upgrade_summary_label)" "$UPGRADE_STATUS" "$UPGRADE_MAIN_VERSION" "$UPGRADE_DASHBOARD_STATUS"
   printf '  logs: %s\n' "$RUN_DIR"
   printf '  summary: %s\n' "$SUMMARY_JSON_PATH"
 fi

@@ -37,16 +37,19 @@ TIMEOUT_VERIFY_S=90
 TIMEOUT_ONBOARD_S=180
 TIMEOUT_AGENT_S=180
 TIMEOUT_GATEWAY_S=90
+TIMEOUT_DASHBOARD_S=60
 
 FRESH_MAIN_STATUS="skip"
 FRESH_MAIN_VERSION="skip"
 FRESH_GATEWAY_STATUS="skip"
 FRESH_AGENT_STATUS="skip"
+FRESH_DASHBOARD_STATUS="skip"
 UPGRADE_STATUS="skip"
 LATEST_INSTALLED_VERSION="skip"
 UPGRADE_MAIN_VERSION="skip"
 UPGRADE_GATEWAY_STATUS="skip"
 UPGRADE_AGENT_STATUS="skip"
+UPGRADE_DASHBOARD_STATUS="skip"
 DAEMON_STATUS="systemd-user-unavailable"
 
 say() {
@@ -675,6 +678,32 @@ verify_local_turn() {
     --json
 }
 
+verify_dashboard_load() {
+  local cmd
+  cmd="$(cat <<'EOF'
+set -eu
+deadline=$((SECONDS + 30))
+dashboard_ready=0
+while [ $SECONDS -lt $deadline ]; do
+  if curl -fsSL --connect-timeout 2 --max-time 5 http://127.0.0.1:18789/ >/tmp/openclaw-dashboard-smoke.html 2>/dev/null; then
+    if grep -F '<title>OpenClaw Control</title>' /tmp/openclaw-dashboard-smoke.html >/dev/null; then
+      if grep -F '<openclaw-app></openclaw-app>' /tmp/openclaw-dashboard-smoke.html >/dev/null; then
+        dashboard_ready=1
+        break
+      fi
+    fi
+  fi
+  sleep 1
+done
+[ "$dashboard_ready" = "1" ] || {
+  echo "dashboard HTML did not become ready at http://127.0.0.1:18789/" >&2
+  exit 1
+}
+EOF
+)"
+  guest_exec bash -lc "$cmd"
+}
+
 phase_log_path() {
   printf '%s/%s.log\n' "$RUN_DIR" "$1"
 }
@@ -770,6 +799,7 @@ summary = {
         "version": os.environ["SUMMARY_FRESH_MAIN_VERSION"],
         "gateway": os.environ["SUMMARY_FRESH_GATEWAY_STATUS"],
         "agent": os.environ["SUMMARY_FRESH_AGENT_STATUS"],
+        "dashboard": os.environ["SUMMARY_FRESH_DASHBOARD_STATUS"],
     },
     "upgrade": {
         "status": os.environ["SUMMARY_UPGRADE_STATUS"],
@@ -777,6 +807,7 @@ summary = {
         "mainVersion": os.environ["SUMMARY_UPGRADE_MAIN_VERSION"],
         "gateway": os.environ["SUMMARY_UPGRADE_GATEWAY_STATUS"],
         "agent": os.environ["SUMMARY_UPGRADE_AGENT_STATUS"],
+        "dashboard": os.environ["SUMMARY_UPGRADE_DASHBOARD_STATUS"],
     },
 }
 with open(sys.argv[1], "w", encoding="utf-8") as handle:
@@ -798,6 +829,8 @@ run_fresh_main_lane() {
   phase_run "fresh.gateway-start" "$TIMEOUT_GATEWAY_S" start_gateway_background
   phase_run "fresh.gateway-status" "$TIMEOUT_VERIFY_S" show_gateway_status_compat
   FRESH_GATEWAY_STATUS="pass"
+  phase_run "fresh.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load
+  FRESH_DASHBOARD_STATUS="pass"
   phase_run "fresh.first-local-agent-turn" "$TIMEOUT_AGENT_S" verify_local_turn
   FRESH_AGENT_STATUS="pass"
 }
@@ -817,6 +850,8 @@ run_upgrade_lane() {
   phase_run "upgrade.gateway-start" "$TIMEOUT_GATEWAY_S" start_gateway_background
   phase_run "upgrade.gateway-status" "$TIMEOUT_VERIFY_S" show_gateway_status_compat
   UPGRADE_GATEWAY_STATUS="pass"
+  phase_run "upgrade.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load
+  UPGRADE_DASHBOARD_STATUS="pass"
   phase_run "upgrade.first-local-agent-turn" "$TIMEOUT_AGENT_S" verify_local_turn
   UPGRADE_AGENT_STATUS="pass"
 }
@@ -889,11 +924,13 @@ SUMMARY_JSON_PATH="$(
   SUMMARY_FRESH_MAIN_VERSION="$FRESH_MAIN_VERSION" \
   SUMMARY_FRESH_GATEWAY_STATUS="$FRESH_GATEWAY_STATUS" \
   SUMMARY_FRESH_AGENT_STATUS="$FRESH_AGENT_STATUS" \
+  SUMMARY_FRESH_DASHBOARD_STATUS="$FRESH_DASHBOARD_STATUS" \
   SUMMARY_UPGRADE_STATUS="$UPGRADE_STATUS" \
   SUMMARY_LATEST_INSTALLED_VERSION="$LATEST_INSTALLED_VERSION" \
   SUMMARY_UPGRADE_MAIN_VERSION="$UPGRADE_MAIN_VERSION" \
   SUMMARY_UPGRADE_GATEWAY_STATUS="$UPGRADE_GATEWAY_STATUS" \
   SUMMARY_UPGRADE_AGENT_STATUS="$UPGRADE_AGENT_STATUS" \
+  SUMMARY_UPGRADE_DASHBOARD_STATUS="$UPGRADE_DASHBOARD_STATUS" \
   write_summary_json
 )"
 
@@ -908,8 +945,8 @@ else
     printf '  baseline-install-version: %s\n' "$INSTALL_VERSION"
   fi
   printf '  daemon: %s\n' "$DAEMON_STATUS"
-  printf '  fresh-main: %s (%s)\n' "$FRESH_MAIN_STATUS" "$FRESH_MAIN_VERSION"
-  printf '  latest->main: %s (%s)\n' "$UPGRADE_STATUS" "$UPGRADE_MAIN_VERSION"
+  printf '  fresh-main: %s (%s) dashboard=%s\n' "$FRESH_MAIN_STATUS" "$FRESH_MAIN_VERSION" "$FRESH_DASHBOARD_STATUS"
+  printf '  latest->main: %s (%s) dashboard=%s\n' "$UPGRADE_STATUS" "$UPGRADE_MAIN_VERSION" "$UPGRADE_DASHBOARD_STATUS"
   printf '  logs: %s\n' "$RUN_DIR"
   printf '  summary: %s\n' "$SUMMARY_JSON_PATH"
 fi
