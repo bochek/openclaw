@@ -1052,7 +1052,9 @@ describe("gateway agent handler", () => {
     expect(mocks.performGatewaySessionReset).toHaveBeenCalledTimes(1);
     const call = readLastAgentCommandCall();
     // Message is now dynamically built with current date — check key substrings
-    expect(call?.message).toContain("Run your Session Startup sequence");
+    expect(call?.message).toContain(
+      "If runtime-provided startup context is included for this first turn",
+    );
     expect(call?.message).toContain("Current time:");
     expect(call?.message).not.toBe(BARE_SESSION_RESET_PROMPT);
     expect(call?.sessionId).toBe("reset-session-id");
@@ -1062,11 +1064,7 @@ describe("gateway agent handler", () => {
     await withTempDir({ prefix: "openclaw-gateway-reset-startup-" }, async (workspaceDir) => {
       await fs.mkdir(`${workspaceDir}/memory`, { recursive: true });
       await fs.writeFile(`${workspaceDir}/memory/2026-01-28.md`, "today gateway note", "utf-8");
-      await fs.writeFile(
-        `${workspaceDir}/memory/2026-01-27.md`,
-        "yesterday gateway note",
-        "utf-8",
-      );
+      await fs.writeFile(`${workspaceDir}/memory/2026-01-27.md`, "yesterday gateway note", "utf-8");
       setupNewYorkTimeConfig("2026-01-28T20:30:00.000Z");
       mocks.loadConfigReturn = {
         agents: {
@@ -1094,9 +1092,9 @@ describe("gateway agent handler", () => {
       await waitForAssertion(() => expect(mocks.agentCommand).toHaveBeenCalled());
       const call = readLastAgentCommandCall();
       expect(call?.message).toContain("[Startup context loaded by runtime]");
-      expect(call?.message).toContain("[memory/2026-01-28.md]");
+      expect(call?.message).toContain("[Untrusted daily memory: memory/2026-01-28.md]");
       expect(call?.message).toContain("today gateway note");
-      expect(call?.message).toContain("[memory/2026-01-27.md]");
+      expect(call?.message).toContain("[Untrusted daily memory: memory/2026-01-27.md]");
       expect(call?.message).toContain("yesterday gateway note");
       resetTimeConfig();
     });

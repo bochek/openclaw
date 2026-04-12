@@ -313,9 +313,9 @@ describe("trigger handling", () => {
       expect(text).toBe("hello");
       const prompt = runEmbeddedPiAgentMock.mock.calls.at(-1)?.[0]?.prompt ?? "";
       expect(prompt).toContain("[Startup context loaded by runtime]");
-      expect(prompt).toContain(`[memory/${todayStamp}.md]`);
+      expect(prompt).toContain(`[Untrusted daily memory: memory/${todayStamp}.md]`);
       expect(prompt).toContain("today startup note");
-      expect(prompt).toContain(`[memory/${yesterdayStamp}.md]`);
+      expect(prompt).toContain(`[Untrusted daily memory: memory/${yesterdayStamp}.md]`);
       expect(prompt).toContain("yesterday startup note");
     });
   });
