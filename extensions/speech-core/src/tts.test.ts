@@ -295,7 +295,7 @@ describe("speech-core native voice-note routing", () => {
     const cfg = createTtsConfig("openclaw-speech-core-tts-hint-test", { auto: "tagged" });
 
     expect(buildTtsSystemPromptHint(cfg)).toContain(
-      "Only use TTS when you include a [[tts]] tag or a [[tts:text]]...[[/tts:text]] block.",
+      "Only use TTS when you either prefix visible text with [[tts]] or wrap spoken-only text as [[tts:text]]your spoken text here[[/tts:text]].",
     );
   });
 });

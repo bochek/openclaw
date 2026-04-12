@@ -386,13 +386,13 @@ export function buildTtsSystemPromptHint(cfg: OpenClawConfig): string | undefine
     autoMode === "inbound"
       ? "Only use TTS when the user's last message includes audio/voice."
       : autoMode === "tagged"
-        ? "Only use TTS when you include a [[tts]] tag or a [[tts:text]]...[[/tts:text]] block."
+        ? "Only use TTS when you either prefix visible text with [[tts]] or wrap spoken-only text as [[tts:text]]your spoken text here[[/tts:text]]."
         : undefined;
   return [
     "Voice (TTS) is enabled.",
     autoHint,
     `Keep spoken text ≤${maxLength} chars to avoid auto-summary (summary ${summarize}).`,
-    "Use [[tts:...]] and optional [[tts:text]]...[[/tts:text]] to control voice/expressiveness.",
+    "Use [[tts:key=value]] for voice/provider overrides, and use [[tts:text]]your spoken text here[[/tts:text]] when the spoken text should differ from the visible reply.",
   ]
     .filter(Boolean)
     .join("\n");
