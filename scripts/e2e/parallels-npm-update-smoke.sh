@@ -1881,6 +1881,12 @@ emit_summary() {
     cat "$RUN_DIR/summary.json"
   else
     say "Run dir: $RUN_DIR"
+    printf '  package-spec: %s\n' "$PACKAGE_SPEC"
+    printf '  update-target: %s\n' "${UPDATE_TARGET_EFFECTIVE:-${UPDATE_TARGET:-skip}}"
+    if [[ -n "$UPDATE_EXPECTED_NEEDLE" ]]; then
+      printf '  update-expected: %s\n' "$UPDATE_EXPECTED_NEEDLE"
+    fi
+    printf '  provider: %s\n' "$PROVIDER"
     printf '  fresh macOS: %s (%s) gateway=%s permissions=%s channels=%s dashboard=%s agent=%s discord=%s\n' \
       "$MACOS_FRESH_STATUS" "$MACOS_FRESH_VERSION" "$MACOS_FRESH_GATEWAY_STATUS" "$MACOS_FRESH_PERMISSION_STATUS" "$MACOS_FRESH_CHANNELS_STATUS" "$MACOS_FRESH_DASHBOARD_STATUS" "$MACOS_FRESH_AGENT_STATUS" "$MACOS_FRESH_DISCORD_STATUS"
     printf '  fresh windows: %s (%s) gateway=%s permissions=%s channels=%s dashboard=%s agent=%s discord=%s\n' \
