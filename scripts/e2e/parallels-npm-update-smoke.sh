@@ -957,6 +957,101 @@ PY
   fi
 }
 
+update_status_path() {
+  local os_name="$1"
+  printf '%s/%s-update-status.json\n' "$RUN_DIR" "$os_name"
+}
+
+write_update_status_summary() {
+  local os_name="$1"
+  local gateway_status="$2"
+  local permission_status="$3"
+  local channels_status="$4"
+  local dashboard_status="$5"
+  local agent_status="$6"
+  local discord_status="$7"
+  local status_path
+  status_path="$(update_status_path "$os_name")"
+  UPDATE_STATUS_PATH="$status_path" \
+  UPDATE_GATEWAY_STATUS="$gateway_status" \
+  UPDATE_PERMISSION_STATUS="$permission_status" \
+  UPDATE_CHANNELS_STATUS="$channels_status" \
+  UPDATE_DASHBOARD_STATUS="$dashboard_status" \
+  UPDATE_AGENT_STATUS="$agent_status" \
+  UPDATE_DISCORD_STATUS="$discord_status" \
+    "$PYTHON_BIN" - <<'PY'
+import json
+import os
+
+payload = {
+    "gateway": os.environ["UPDATE_GATEWAY_STATUS"],
+    "permissions": os.environ["UPDATE_PERMISSION_STATUS"],
+    "channels": os.environ["UPDATE_CHANNELS_STATUS"],
+    "dashboard": os.environ["UPDATE_DASHBOARD_STATUS"],
+    "agent": os.environ["UPDATE_AGENT_STATUS"],
+    "discord": os.environ["UPDATE_DISCORD_STATUS"],
+}
+with open(os.environ["UPDATE_STATUS_PATH"], "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+PY
+}
+
+seed_update_status_summary() {
+  local os_name="$1"
+  local discord_status="skip"
+  if discord_smoke_enabled; then
+    discord_status="fail"
+  fi
+  write_update_status_summary "$os_name" "fail" "fail" "fail" "fail" "fail" "$discord_status"
+}
+
+load_update_status_summary() {
+  local prefix="$1"
+  local status_path="$2"
+  [[ -f "$status_path" ]] || return 0
+
+  local assignments
+  set +e
+  assignments="$(
+    PREFIX="$prefix" "$PYTHON_BIN" - "$status_path" <<'PY'
+import json
+import os
+import pathlib
+import shlex
+import sys
+
+prefix = os.environ["PREFIX"]
+text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").strip()
+if not text:
+    raise SystemExit(0)
+
+try:
+    payload = json.loads(text)
+except Exception:
+    raise SystemExit(0)
+
+fields = {
+    "GATEWAY_STATUS": payload.get("gateway", "skip"),
+    "PERMISSION_STATUS": payload.get("permissions", "skip"),
+    "CHANNELS_STATUS": payload.get("channels", "skip"),
+    "DASHBOARD_STATUS": payload.get("dashboard", "skip"),
+    "AGENT_STATUS": payload.get("agent", "skip"),
+    "DISCORD_STATUS": payload.get("discord", "skip"),
+}
+
+for key, value in fields.items():
+    if not isinstance(value, str):
+        value = "skip"
+    print(f"{prefix}_{key}={shlex.quote(value)}")
+PY
+  )"
+  local rc=$?
+  set -e
+  if [[ $rc -eq 0 && -n "$assignments" ]]; then
+    eval "$assignments"
+  fi
+}
+
 guest_powershell() {
   local script="$1"
   local encoded
@@ -1547,6 +1642,14 @@ EOF
     run_macos_update_discord_smoke
     MACOS_UPDATE_DISCORD_STATUS="pass"
   fi
+  write_update_status_summary \
+    "macos" \
+    "$MACOS_UPDATE_GATEWAY_STATUS" \
+    "$MACOS_UPDATE_PERMISSION_STATUS" \
+    "$MACOS_UPDATE_CHANNELS_STATUS" \
+    "$MACOS_UPDATE_DASHBOARD_STATUS" \
+    "$MACOS_UPDATE_AGENT_STATUS" \
+    "$MACOS_UPDATE_DISCORD_STATUS"
 }
 
 run_windows_update() {
@@ -1579,6 +1682,14 @@ run_windows_update() {
     run_windows_update_discord_smoke
     WINDOWS_UPDATE_DISCORD_STATUS="pass"
   fi
+  write_update_status_summary \
+    "windows" \
+    "$WINDOWS_UPDATE_GATEWAY_STATUS" \
+    "$WINDOWS_UPDATE_PERMISSION_STATUS" \
+    "$WINDOWS_UPDATE_CHANNELS_STATUS" \
+    "$WINDOWS_UPDATE_DASHBOARD_STATUS" \
+    "$WINDOWS_UPDATE_AGENT_STATUS" \
+    "$WINDOWS_UPDATE_DISCORD_STATUS"
 }
 
 run_linux_update() {
@@ -1701,6 +1812,14 @@ EOF
     run_linux_update_discord_smoke
     LINUX_UPDATE_DISCORD_STATUS="pass"
   fi
+  write_update_status_summary \
+    "linux" \
+    "$LINUX_UPDATE_GATEWAY_STATUS" \
+    "$LINUX_UPDATE_PERMISSION_STATUS" \
+    "$LINUX_UPDATE_CHANNELS_STATUS" \
+    "$LINUX_UPDATE_DASHBOARD_STATUS" \
+    "$LINUX_UPDATE_AGENT_STATUS" \
+    "$LINUX_UPDATE_DISCORD_STATUS"
 }
 
 write_summary_json() {
@@ -1878,6 +1997,9 @@ say "Run same-guest openclaw update to $UPDATE_TARGET_EFFECTIVE"
 ensure_vm_running_for_update "$MACOS_VM"
 ensure_vm_running_for_update "$WINDOWS_VM"
 ensure_vm_running_for_update "$LINUX_VM"
+seed_update_status_summary "macos"
+seed_update_status_summary "windows"
+seed_update_status_summary "linux"
 run_macos_update "$UPDATE_TARGET_EFFECTIVE" "$UPDATE_EXPECTED_NEEDLE" >"$RUN_DIR/macos-update.log" 2>&1 &
 macos_update_pid=$!
 run_windows_update "$UPDATE_TARGET_EFFECTIVE" "$UPDATE_EXPECTED_NEEDLE" "$windows_update_script_url" >"$RUN_DIR/windows-update.log" 2>&1 &
@@ -1901,6 +2023,9 @@ wait_job "Linux update" "$linux_update_pid" "$RUN_DIR/linux-update.log" && LINUX
 MACOS_UPDATE_VERSION="$(extract_last_version "$RUN_DIR/macos-update.log")"
 WINDOWS_UPDATE_VERSION="$(extract_last_version "$RUN_DIR/windows-update.log")"
 LINUX_UPDATE_VERSION="$(extract_last_version "$RUN_DIR/linux-update.log")"
+load_update_status_summary "MACOS_UPDATE" "$(update_status_path macos)"
+load_update_status_summary "WINDOWS_UPDATE" "$(update_status_path windows)"
+load_update_status_summary "LINUX_UPDATE" "$(update_status_path linux)"
 
 SUMMARY_PACKAGE_SPEC="$PACKAGE_SPEC" \
 SUMMARY_UPDATE_TARGET="$UPDATE_TARGET_EFFECTIVE" \
