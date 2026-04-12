@@ -1994,6 +1994,63 @@ verify_version_contains() {
   esac
 }
 
+verify_bundle_permissions() {
+  guest_powershell "$(cat <<'EOF'
+$broadSidValues = @(
+  ([Security.Principal.SecurityIdentifier]::new([Security.Principal.WellKnownSidType]::WorldSid, $null)).Value,
+  ([Security.Principal.SecurityIdentifier]::new([Security.Principal.WellKnownSidType]::BuiltinUsersSid, $null)).Value,
+  ([Security.Principal.SecurityIdentifier]::new([Security.Principal.WellKnownSidType]::AuthenticatedUserSid, $null)).Value
+)
+$writeMask =
+  [Security.AccessControl.FileSystemRights]::Write -bor
+  [Security.AccessControl.FileSystemRights]::Modify -bor
+  [Security.AccessControl.FileSystemRights]::FullControl -bor
+  [Security.AccessControl.FileSystemRights]::CreateFiles -bor
+  [Security.AccessControl.FileSystemRights]::CreateDirectories -bor
+  [Security.AccessControl.FileSystemRights]::AppendData -bor
+  [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+  [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+  [Security.AccessControl.FileSystemRights]::Delete -bor
+  [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+  [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+  [Security.AccessControl.FileSystemRights]::TakeOwnership
+
+function Assert-NonBroadWritablePath {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path)) {
+    return
+  }
+
+  $acl = Get-Acl -LiteralPath $Path
+  foreach ($rule in $acl.Access) {
+    if ($rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow) {
+      continue
+    }
+    try {
+      $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+    } catch {
+      continue
+    }
+    if ($broadSidValues -notcontains $sid) {
+      continue
+    }
+    if (($rule.FileSystemRights -band $writeMask) -ne 0) {
+      throw "broad writable install artifact: $Path ($($rule.IdentityReference.Value): $($rule.FileSystemRights))"
+    }
+  }
+}
+
+$root = (& npm.cmd root -g).Trim()
+Assert-NonBroadWritablePath -Path (Join-Path $root 'openclaw')
+Assert-NonBroadWritablePath -Path (Join-Path $root 'openclaw\\extensions')
+Get-ChildItem -LiteralPath (Join-Path $root 'openclaw\\extensions') -Directory -ErrorAction SilentlyContinue |
+  ForEach-Object {
+    Assert-NonBroadWritablePath -Path $_.FullName
+  }
+EOF
+)"
+}
+
 write_onboard_runner_script() {
   WINDOWS_ONBOARD_SCRIPT_PATH="$MAIN_TGZ_DIR/openclaw-onboard-$PROVIDER.ps1"
   cat >"$WINDOWS_ONBOARD_SCRIPT_PATH" <<EOF
@@ -2425,6 +2482,9 @@ run_fresh_main_lane() {
   fi
   FRESH_MAIN_VERSION="$(extract_last_version "$(phase_log_path "$install_log_phase")")"
   phase_run "fresh.verify-main-version" "$TIMEOUT_VERIFY_S" verify_target_version || return $?
+  FRESH_PERMISSION_STATUS="fail"
+  phase_run "fresh.verify-bundle-permissions" "$TIMEOUT_VERIFY_S" verify_bundle_permissions || return $?
+  FRESH_PERMISSION_STATUS="pass"
   phase_run "fresh.onboard-ref" "$TIMEOUT_ONBOARD_PHASE_S" run_ref_onboard || return $?
   phase_run "fresh.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway_reachable || return $?
   FRESH_GATEWAY_STATUS="pass"
@@ -2474,6 +2534,9 @@ run_upgrade_lane() {
   phase_run "upgrade.update-dev" "$TIMEOUT_INSTALL_S" run_dev_channel_update "$host_ip" || return $?
   UPGRADE_MAIN_VERSION="$(extract_last_version "$(phase_log_path upgrade.update-dev)")"
   phase_run "upgrade.verify-dev-channel" "$TIMEOUT_VERIFY_S" verify_dev_channel_update || return $?
+  UPGRADE_PERMISSION_STATUS="fail"
+  phase_run "upgrade.verify-bundle-permissions" "$TIMEOUT_VERIFY_S" verify_bundle_permissions || return $?
+  UPGRADE_PERMISSION_STATUS="pass"
   # Stop the old managed gateway before ref-mode onboard rewrites config and
   # gateway auth. Restarting first can leave the old token alive and make the
   # onboard health probe fail against a stale daemon.

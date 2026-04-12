@@ -590,6 +590,60 @@ function Wait-DashboardReady {
   throw "dashboard HTML did not become ready at $DashboardUrl"
 }
 
+function Assert-NonBroadWritableInstall {
+  $broadSidValues = @(
+    ([Security.Principal.SecurityIdentifier]::new([Security.Principal.WellKnownSidType]::WorldSid, $null)).Value,
+    ([Security.Principal.SecurityIdentifier]::new([Security.Principal.WellKnownSidType]::BuiltinUsersSid, $null)).Value,
+    ([Security.Principal.SecurityIdentifier]::new([Security.Principal.WellKnownSidType]::AuthenticatedUserSid, $null)).Value
+  )
+  $writeMask =
+    [Security.AccessControl.FileSystemRights]::Write -bor
+    [Security.AccessControl.FileSystemRights]::Modify -bor
+    [Security.AccessControl.FileSystemRights]::FullControl -bor
+    [Security.AccessControl.FileSystemRights]::CreateFiles -bor
+    [Security.AccessControl.FileSystemRights]::CreateDirectories -bor
+    [Security.AccessControl.FileSystemRights]::AppendData -bor
+    [Security.AccessControl.FileSystemRights]::WriteAttributes -bor
+    [Security.AccessControl.FileSystemRights]::WriteExtendedAttributes -bor
+    [Security.AccessControl.FileSystemRights]::Delete -bor
+    [Security.AccessControl.FileSystemRights]::DeleteSubdirectoriesAndFiles -bor
+    [Security.AccessControl.FileSystemRights]::ChangePermissions -bor
+    [Security.AccessControl.FileSystemRights]::TakeOwnership
+
+  function Assert-NonBroadWritablePath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+      return
+    }
+
+    $acl = Get-Acl -LiteralPath $Path
+    foreach ($rule in $acl.Access) {
+      if ($rule.AccessControlType -ne [Security.AccessControl.AccessControlType]::Allow) {
+        continue
+      }
+      try {
+        $sid = $rule.IdentityReference.Translate([Security.Principal.SecurityIdentifier]).Value
+      } catch {
+        continue
+      }
+      if ($broadSidValues -notcontains $sid) {
+        continue
+      }
+      if (($rule.FileSystemRights -band $writeMask) -ne 0) {
+        throw "broad writable install artifact: $Path ($($rule.IdentityReference.Value): $($rule.FileSystemRights))"
+      }
+    }
+  }
+
+  $root = (& npm.cmd root -g).Trim()
+  Assert-NonBroadWritablePath -Path (Join-Path $root 'openclaw')
+  Assert-NonBroadWritablePath -Path (Join-Path $root 'openclaw\\extensions')
+  Get-ChildItem -LiteralPath (Join-Path $root 'openclaw\\extensions') -Directory -ErrorAction SilentlyContinue |
+    ForEach-Object {
+      Assert-NonBroadWritablePath -Path $_.FullName
+    }
+}
+
 function Stop-OpenClawGatewayProcesses {
   Write-ProgressLog 'update.stop-old-gateway'
   $patterns = @(
@@ -691,6 +745,8 @@ try {
   Write-ProgressLog $version
   Write-ProgressLog 'update.status'
   Invoke-Logged 'openclaw update status' { & $openclaw update status --json }
+  Write-ProgressLog 'update.permissions'
+  Assert-NonBroadWritableInstall
   Write-ProgressLog 'update.set-model'
   Invoke-Logged 'openclaw models set' { & $openclaw models set $ModelId }
   # Windows can keep the old hashed dist modules alive across in-place global npm upgrades.
@@ -1498,6 +1554,7 @@ run_windows_update() {
   local expected_needle="$2"
   local script_url="$3"
   WINDOWS_UPDATE_GATEWAY_STATUS="fail"
+  WINDOWS_UPDATE_PERMISSION_STATUS="fail"
   WINDOWS_UPDATE_CHANNELS_STATUS="fail"
   WINDOWS_UPDATE_DASHBOARD_STATUS="fail"
   WINDOWS_UPDATE_AGENT_STATUS="fail"
@@ -1510,6 +1567,7 @@ run_windows_update() {
     "$API_KEY_ENV" \
     "$API_KEY_VALUE"
   WINDOWS_UPDATE_GATEWAY_STATUS="pass"
+  WINDOWS_UPDATE_PERMISSION_STATUS="pass"
   WINDOWS_UPDATE_CHANNELS_STATUS="pass"
   WINDOWS_UPDATE_DASHBOARD_STATUS="pass"
   WINDOWS_UPDATE_AGENT_STATUS="pass"
