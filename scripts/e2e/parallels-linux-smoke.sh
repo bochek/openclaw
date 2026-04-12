@@ -19,6 +19,7 @@ INSTALL_VERSION=""
 TARGET_PACKAGE_SPEC=""
 JSON_OUTPUT=0
 KEEP_SERVER=0
+CHECK_LATEST_REF=1
 SNAPSHOT_ID=""
 SNAPSHOT_STATE=""
 SNAPSHOT_NAME=""
@@ -45,6 +46,7 @@ FRESH_GATEWAY_STATUS="skip"
 FRESH_AGENT_STATUS="skip"
 FRESH_DASHBOARD_STATUS="skip"
 UPGRADE_STATUS="skip"
+UPGRADE_PRECHECK_STATUS="skip"
 LATEST_INSTALLED_VERSION="skip"
 UPGRADE_MAIN_VERSION="skip"
 UPGRADE_GATEWAY_STATUS="skip"
@@ -113,6 +115,7 @@ Options:
   --target-package-spec <npm-spec>
                              Install this npm package tarball instead of packing current main.
                              Example: openclaw@2026.3.13-beta.1
+  --skip-latest-ref-check    Skip latest-release ref-mode precheck.
   --keep-server              Leave temp host HTTP server running.
   --json                     Print machine-readable JSON summary.
   -h, --help                 Show help.
@@ -169,6 +172,10 @@ while [[ $# -gt 0 ]]; do
     --target-package-spec)
       TARGET_PACKAGE_SPEC="$2"
       shift 2
+      ;;
+    --skip-latest-ref-check)
+      CHECK_LATEST_REF=0
+      shift
       ;;
     --keep-server)
       KEEP_SERVER=1
@@ -802,6 +809,7 @@ summary = {
         "dashboard": os.environ["SUMMARY_FRESH_DASHBOARD_STATUS"],
     },
     "upgrade": {
+        "precheck": os.environ["SUMMARY_UPGRADE_PRECHECK_STATUS"],
         "status": os.environ["SUMMARY_UPGRADE_STATUS"],
         "latestVersionInstalled": os.environ["SUMMARY_LATEST_INSTALLED_VERSION"],
         "mainVersion": os.environ["SUMMARY_UPGRADE_MAIN_VERSION"],
@@ -835,6 +843,22 @@ run_fresh_main_lane() {
   FRESH_AGENT_STATUS="pass"
 }
 
+capture_latest_ref_failure() {
+  set +e
+  run_ref_onboard
+  local rc=$?
+  set -e
+  if [[ $rc -eq 0 ]]; then
+    say "Latest release ref-mode onboard passed"
+    return 0
+  fi
+  warn "Latest release ref-mode onboard failed pre-upgrade"
+  set +e
+  show_gateway_status_compat || true
+  set -e
+  return 1
+}
+
 run_upgrade_lane() {
   local snapshot_id="$1"
   local host_ip="$2"
@@ -843,6 +867,15 @@ run_upgrade_lane() {
   phase_run "upgrade.install-latest" "$TIMEOUT_INSTALL_S" install_latest_release
   LATEST_INSTALLED_VERSION="$(extract_last_version "$(phase_log_path upgrade.install-latest)")"
   phase_run "upgrade.verify-latest-version" "$TIMEOUT_VERIFY_S" verify_version_contains "$LATEST_VERSION"
+  if [[ "$CHECK_LATEST_REF" -eq 1 ]]; then
+    if phase_run "upgrade.latest-ref-precheck" "$TIMEOUT_ONBOARD_S" capture_latest_ref_failure; then
+      UPGRADE_PRECHECK_STATUS="latest-ref-pass"
+    else
+      UPGRADE_PRECHECK_STATUS="latest-ref-fail"
+    fi
+  else
+    UPGRADE_PRECHECK_STATUS="skipped"
+  fi
   phase_run "upgrade.update-main" "$TIMEOUT_INSTALL_S" run_main_package_update "$host_ip"
   UPGRADE_MAIN_VERSION="$(extract_last_version "$(phase_log_path upgrade.update-main)")"
   phase_run "upgrade.verify-main-version" "$TIMEOUT_VERIFY_S" verify_target_version
@@ -925,6 +958,7 @@ SUMMARY_JSON_PATH="$(
   SUMMARY_FRESH_GATEWAY_STATUS="$FRESH_GATEWAY_STATUS" \
   SUMMARY_FRESH_AGENT_STATUS="$FRESH_AGENT_STATUS" \
   SUMMARY_FRESH_DASHBOARD_STATUS="$FRESH_DASHBOARD_STATUS" \
+  SUMMARY_UPGRADE_PRECHECK_STATUS="$UPGRADE_PRECHECK_STATUS" \
   SUMMARY_UPGRADE_STATUS="$UPGRADE_STATUS" \
   SUMMARY_LATEST_INSTALLED_VERSION="$LATEST_INSTALLED_VERSION" \
   SUMMARY_UPGRADE_MAIN_VERSION="$UPGRADE_MAIN_VERSION" \
@@ -946,6 +980,7 @@ else
   fi
   printf '  daemon: %s\n' "$DAEMON_STATUS"
   printf '  fresh-main: %s (%s) dashboard=%s\n' "$FRESH_MAIN_STATUS" "$FRESH_MAIN_VERSION" "$FRESH_DASHBOARD_STATUS"
+  printf '  latest->main precheck: %s (%s)\n' "$UPGRADE_PRECHECK_STATUS" "$LATEST_INSTALLED_VERSION"
   printf '  latest->main: %s (%s) dashboard=%s\n' "$UPGRADE_STATUS" "$UPGRADE_MAIN_VERSION" "$UPGRADE_DASHBOARD_STATUS"
   printf '  logs: %s\n' "$RUN_DIR"
   printf '  summary: %s\n' "$SUMMARY_JSON_PATH"
