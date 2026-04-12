@@ -463,6 +463,10 @@ curl "https://api.telegram.org/bot<bot_token>/getUpdates"
     - `[[reply_to_current]]` replies to the triggering message
     - `[[reply_to:<id>]]` replies to a specific Telegram message ID
 
+    Canonical harness contract: [Rich Output Protocol](/reference/rich-output-protocol)
+
+    Use the start-of-message form as the canonical contract even though the parser is more permissive. Keep reply tags out of code samples and literal examples unless quoted or fenced.
+
     `channels.telegram.replyToMode` controls handling:
 
     - `off` (default)
@@ -590,6 +594,8 @@ curl "https://api.telegram.org/bot<bot_token>/getUpdates"
     - default: audio file behavior
     - tag `[[audio_as_voice]]` in agent reply to force voice-note send
 
+    Canonical harness contract: [Rich Output Protocol](/reference/rich-output-protocol)
+
     Message action example:
 
 ```json5
@@ -625,6 +631,8 @@ curl "https://api.telegram.org/bot<bot_token>/getUpdates"
     Inbound sticker handling:
 
     - static WEBP: downloaded and processed (placeholder `<media:sticker>`)
+
+    Placeholder markers such as `<media:sticker>` are inbound harness context, not assistant-output directives. See [Rich Output Protocol](/reference/rich-output-protocol).
     - animated TGS: skipped
     - video WEBM: skipped
 

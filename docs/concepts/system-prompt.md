@@ -30,6 +30,7 @@ The prompt is intentionally compact and uses fixed sections:
 
 - **Tooling**: structured-tool source-of-truth reminder plus runtime tool-use guidance.
 - **Safety**: short guardrail reminder to avoid power-seeking behavior or bypassing oversight.
+- **Harness Syntax**: centralized rules for harness-injected markers and assistant-output control syntax such as `MEDIA:`, reply/audio tags, special tokens, and reasoning/final wrappers.
 - **Skills** (when available): tells the model how to load skill instructions on demand.
 - **OpenClaw Self-Update**: how to inspect config safely with
   `config.schema.lookup`, patch config with `config.patch`, replace the full
@@ -42,7 +43,6 @@ The prompt is intentionally compact and uses fixed sections:
 - **Workspace Files (injected)**: indicates bootstrap files are included below.
 - **Sandbox** (when enabled): indicates sandboxed runtime, sandbox paths, and whether elevated exec is available.
 - **Current Date & Time**: user-local time, timezone, and time format.
-- **Reply Tags**: optional reply tag syntax for supported providers.
 - **Heartbeats**: heartbeat prompt and ack behavior, when heartbeats are enabled for the default agent.
 - **Runtime**: host, OS, node, model, repo root (when detected), thinking level (one line).
 - **Reasoning**: current visibility level + /reasoning toggle hint.
@@ -73,6 +73,39 @@ On channels with native approval cards/buttons, the runtime prompt now tells the
 agent to rely on that native approval UI first. It should only include a manual
 `/approve` command when the tool result says chat approvals are unavailable or
 manual approval is the only path.
+
+## Harness Syntax
+
+The system prompt now includes a centralized **Harness Syntax** section for the
+parser-sensitive syntax that OpenClaw injects into context or interprets from
+assistant output.
+
+This section is the core contract for:
+
+- inbound harness annotations such as `[media attached: ...]`,
+  `[Image: source: ...]`, and `<media:image>`
+- outbound attachment directives such as `MEDIA:<path-or-url>`
+- reply/audio tags such as `[[reply_to_current]]`, `[[reply_to:<id>]]`, and
+  `[[audio_as_voice]]`
+- exact control tokens such as `NO_REPLY` and `HEARTBEAT_OK`
+- reasoning/final wrappers such as `<think>...</think>` and
+  `<final>...</final>`
+
+Important rules summarized:
+
+- Inbound harness annotations are **read-only context**, not syntax to echo
+  back as directives.
+- `MEDIA:` is outbound-only metadata. It must be the first non-whitespace token
+  on its own line, with one `MEDIA:` line per attachment.
+- Reply/audio tags are assistant-output metadata. The canonical contract is to
+  place at most one reply tag at the very start of the message.
+- `NO_REPLY` and `HEARTBEAT_OK` are exact control tokens, not ordinary prose.
+- `<think>` / `<final>` wrappers should only be emitted when the runtime
+  explicitly asks for that contract. Otherwise they may be stripped,
+  sanitized, or suppress content outside `<final>`.
+
+For the detailed syntax reference, see
+[Rich Output Protocol](/reference/rich-output-protocol).
 
 ## Prompt modes
 

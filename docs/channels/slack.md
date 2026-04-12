@@ -436,6 +436,10 @@ Manual reply tags are supported:
 - `[[reply_to_current]]`
 - `[[reply_to:<id>]]`
 
+Canonical harness contract: [Rich Output Protocol](/reference/rich-output-protocol)
+
+Use the start-of-message form as the canonical contract even though the parser is more permissive. Keep reply tags out of code samples and literal examples unless quoted or fenced.
+
 Note: `replyToMode="off"` disables **all** reply threading in Slack, including explicit `[[reply_to_*]]` tags. This differs from Telegram, where explicit tags are still honored in `"off"` mode. The difference reflects the platform threading models: Slack threads hide messages from the channel, while Telegram replies remain visible in the main chat flow.
 
 ## Ack reactions

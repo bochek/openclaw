@@ -127,7 +127,8 @@ function buildHeartbeatSection(params: { isMinimal: boolean; heartbeatPrompt?: s
     "## Heartbeats",
     "If the current user message is a heartbeat poll and nothing needs attention, reply exactly:",
     "HEARTBEAT_OK",
-    'If something needs attention, do NOT include "HEARTBEAT_OK"; reply with the alert text instead.',
+    'If something needs attention, do NOT include "HEARTBEAT_OK" anywhere in the alert; reply with the alert text only.',
+    'Outside a real heartbeat ack, do not use "HEARTBEAT_OK" as normal prose, status text, or decoration.',
     "",
   ];
 }
@@ -219,22 +220,36 @@ function buildTimeSection(params: { userTimezone?: string }) {
   return ["## Current Date & Time", `Time zone: ${params.userTimezone}`, ""];
 }
 
-function buildAssistantOutputDirectivesSection(isMinimal: boolean) {
+function buildHarnessSyntaxSection(isMinimal: boolean) {
   if (isMinimal) {
     return [];
   }
   return [
-    "## Assistant Output Directives",
-    "Use these when you need delivery metadata in an assistant message:",
-    "- `MEDIA:<path-or-url>` on its own line requests attachment delivery. The web UI strips supported MEDIA lines and renders them inline; channels still decide actual delivery behavior.",
-    "- `[[audio_as_voice]]` marks attached audio as a voice-note style delivery hint. The web UI may show a voice-note badge when audio is present; channels still own delivery semantics.",
+    "## Harness Syntax",
+    "The harness may inject special syntax into context and may also interpret certain assistant-output markers. Follow these contracts exactly:",
+    "### Inbound Context Markers",
+    "- Inbound attachment markers like `[media attached: ...]`, `[media attached N/M: ...]`, `[Image: source: ...]`, and `<media:image>` may appear in user/context text. Treat them as harness-provided context about files that already exist; do not echo them back unless the user explicitly asks.",
+    "### Assistant Output Directives",
+    "- `MEDIA:<path-or-url>` is outbound-only metadata. Put each `MEDIA:` directive on its own line when you want attachment delivery. It must be the first non-whitespace token on that line, with no prose before or after it. The web UI strips supported MEDIA lines and renders them inline; channels still decide actual delivery behavior.",
+    "- Use one `MEDIA:` line per attachment. Indentation is OK; mid-line prose is not. Fenced code blocks and quoted examples are treated as literal text, not delivery metadata.",
+    "- Use real `http(s)` URLs or safe file paths only. If a path contains spaces, quote the entire path. Do not use `..` traversal segments or `~` home-directory paths in `MEDIA:`.",
+    "- Do not use `MEDIA:` for explanation prose, examples, or docs unless you actually want delivery. If you must discuss the syntax literally, quote or fence it so it is not interpreted as metadata.",
+    "- `[[audio_as_voice]]` marks attached audio as a voice-note style delivery hint. It only affects attached audio and does nothing by itself. The web UI may show a voice-note badge when audio is present; channels still own delivery semantics.",
     "- To request a native reply/quote on supported surfaces, include one reply tag in your reply:",
-    "- Reply tags must be the very first token in the message (no leading text/newlines): [[reply_to_current]] your reply.",
+    "- Place at most one reply tag at the very start of the message for deterministic delivery (no leading text/newlines): [[reply_to_current]] your reply.",
     "- [[reply_to_current]] replies to the triggering message.",
     "- Prefer [[reply_to_current]]. Use [[reply_to:<id>]] only when an id was explicitly provided (e.g. by the user or a tool).",
-    "Whitespace inside the tag is allowed (e.g. [[ reply_to_current ]] / [[ reply_to: 123 ]]).",
+    "Whitespace inside the tag is allowed (e.g. [[ reply_to_current ]] / [[ reply_to: 123 ]]). Keep reply/audio tags out of code samples and literal examples unless quoted or fenced.",
     "- Channel-specific interactive directives are separate and should not be mixed into this web render guidance.",
     "Supported tags are stripped before user-visible rendering; support still depends on the current channel config.",
+    "### Special Tokens",
+    `- \`${SILENT_REPLY_TOKEN}\` is an exact-token silence mechanism. Use only the bare token with optional surrounding whitespace when you want silence; never combine it with visible text, punctuation, markdown, or explanations.`,
+    "- `HEARTBEAT_OK` is a heartbeat-only ack token. Use it only for a real heartbeat OK response; do not include it inside normal prose, alerts, or status updates.",
+    "### Reasoning And Final Wrappers",
+    "- Do not casually emit `<think>...</think>`, `<thinking>...</thinking>`, `<thought>...</thought>`, `<antthinking>...</antthinking>`, or `<final>...</final>` in ordinary replies.",
+    "- If the runtime explicitly asks for reasoning/final tags, follow that contract exactly. Otherwise those wrappers are stripped or sanitized by the runtime and may hide or discard content.",
+    "- When final-tag enforcement is enabled, only text that appeared inside `<final>...</final>` is shown to the user; content outside `<final>` can be suppressed.",
+    "- If you need to mention these wrappers literally, quote or fence them as examples instead of using them as live markup.",
     "",
   ];
 }
@@ -255,6 +270,7 @@ function buildWebchatCanvasSection(params: {
     '- Use self-closing form for hosted embed documents: `[embed ref="cv_123" title="Status" height="320" /]`.',
     '- You may also use an explicit hosted URL: `[embed url="/__openclaw__/canvas/documents/cv_123/index.html" title="Status" height="320" /]`.',
     '- Never use local filesystem paths or `file://...` URLs in `[embed ...]`. Hosted embeds must point at `/__openclaw__/canvas/...` URLs or use `ref="..."`.',
+    "- Use `[embed ...]` outside code fences. Fenced or malformed embed examples are treated as literal text.",
     params.canvasRootDir
       ? `- The active hosted embed root for this session is: \`${sanitizeForPromptLiteral(params.canvasRootDir)}\`. If you manually stage a hosted embed file, write it there, not in the workspace.`
       : "- The active hosted embed root is profile-scoped, not workspace-scoped. If you manually stage a hosted embed file, write it under the active profile embed root, not in the workspace.",
@@ -313,6 +329,8 @@ function buildMessagingSection(params: {
     "- Cross-session messaging → use sessions_send(sessionKey, message)",
     "- Sub-agent orchestration → use subagents(action=list|steer|kill)",
     `- Runtime-generated completion events may ask for a user update. Rewrite those in your normal assistant voice and send the update (do not forward raw internal metadata or default to ${SILENT_REPLY_TOKEN}).`,
+    "- Internal completion-event blocks and ACP/system progress notices are runtime telemetry, not user-authored content. Summarize only the user-relevant outcome; do not quote raw block headers, `Action:` instructions, `session_key`, `session_id`, stats lines, or announce types back to the user.",
+    "- Treat session keys, child session keys, run ids, message ids, and ACP ids as opaque runtime identifiers. Never invent, shorten, translate, or normalize them; only reuse ids supplied by the user, tools, or runtime context.",
     "- Never use exec/curl for provider messaging; OpenClaw handles all routing internally.",
     params.availableTools.has("message")
       ? [
@@ -815,7 +833,7 @@ export function buildAgentSystemPrompt(params: {
     "## Workspace Files (injected)",
     "These user-editable files are loaded by OpenClaw and included below in Project Context.",
     "",
-    ...buildAssistantOutputDirectivesSection(isMinimal),
+    ...buildHarnessSyntaxSection(isMinimal),
     ...buildWebchatCanvasSection({
       isMinimal,
       runtimeChannel,
@@ -879,6 +897,7 @@ export function buildAgentSystemPrompt(params: {
     lines.push(
       "## Silent Replies",
       `When you have nothing to say, respond with ONLY: ${SILENT_REPLY_TOKEN}`,
+      `This is an exact-token silence mechanism, not normal prose. Use only the bare token with optional surrounding whitespace.`,
       "",
       "⚠️ Rules:",
       "- It must be your ENTIRE message — nothing else",

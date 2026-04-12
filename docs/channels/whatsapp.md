@@ -250,6 +250,8 @@ When the linked self number is also present in `allowFrom`, WhatsApp self-chat s
     - `<media:document>`
     - `<media:sticker>`
 
+    These placeholders are inbound harness context, not assistant-output directives. See [Rich Output Protocol](/reference/rich-output-protocol).
+
     Location and contact payloads are normalized into textual context before routing.
 
   </Accordion>

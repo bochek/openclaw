@@ -163,10 +163,39 @@ describe("buildAgentSystemPrompt", () => {
       workspaceDir: "/tmp/openclaw",
     });
 
-    expect(prompt).toContain("## Assistant Output Directives");
+    expect(prompt).toContain("## Harness Syntax");
+    expect(prompt).toContain("### Inbound Context Markers");
+    expect(prompt).toContain("### Assistant Output Directives");
+    expect(prompt).toContain(
+      "Inbound attachment markers like `[media attached: ...]`, `[media attached N/M: ...]`, `[Image: source: ...]`, and `<media:image>` may appear in user/context text.",
+    );
+    expect(prompt).toContain("`MEDIA:<path-or-url>` is outbound-only metadata.");
+    expect(prompt).toContain(
+      "It must be the first non-whitespace token on that line, with no prose before or after it.",
+    );
+    expect(prompt).toContain(
+      "Use one `MEDIA:` line per attachment. Indentation is OK; mid-line prose is not.",
+    );
+    expect(prompt).toContain(
+      "If a path contains spaces, quote the entire path. Do not use `..` traversal segments or `~` home-directory paths in `MEDIA:`.",
+    );
+    expect(prompt).toContain(
+      "If you must discuss the syntax literally, quote or fence it so it is not interpreted as metadata.",
+    );
+    expect(prompt).toContain(
+      "`[[audio_as_voice]]` marks attached audio as a voice-note style delivery hint. It only affects attached audio and does nothing by itself.",
+    );
     expect(prompt).toContain("[[reply_to_current]]");
+    expect(prompt).toContain("Place at most one reply tag at the very start");
+    expect(prompt).toContain("Keep reply/audio tags out of code samples and literal examples");
     expect(prompt).not.toContain("Tags are stripped before sending");
     expect(prompt).toContain("Supported tags are stripped before user-visible rendering");
+    expect(prompt).toContain("### Special Tokens");
+    expect(prompt).toContain("`NO_REPLY` is an exact-token silence mechanism.");
+    expect(prompt).toContain("`HEARTBEAT_OK` is a heartbeat-only ack token.");
+    expect(prompt).toContain("### Reasoning And Final Wrappers");
+    expect(prompt).toContain("Do not casually emit `<think>...</think>`");
+    expect(prompt).toContain("When final-tag enforcement is enabled");
   });
 
   it("omits the heartbeat section when no heartbeat prompt is provided", () => {
@@ -177,8 +206,21 @@ describe("buildAgentSystemPrompt", () => {
     });
 
     expect(prompt).not.toContain("## Heartbeats");
-    expect(prompt).not.toContain("HEARTBEAT_OK");
+    expect(prompt).not.toContain("If the current user message is a heartbeat poll");
     expect(prompt).not.toContain("Read HEARTBEAT.md");
+  });
+
+  it("tightens heartbeat ack guidance when enabled", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      promptMode: "full",
+      heartbeatPrompt: "ping",
+    });
+
+    expect(prompt).toContain('do NOT include "HEARTBEAT_OK" anywhere in the alert');
+    expect(prompt).toContain(
+      'Outside a real heartbeat ack, do not use "HEARTBEAT_OK" as normal prose, status text, or decoration.',
+    );
   });
 
   it("includes safety guardrails in full prompts", () => {
@@ -234,6 +276,21 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("Runtime-generated completion events may ask for a user update.");
     expect(prompt).toContain("Rewrite those in your normal assistant voice");
     expect(prompt).toContain("do not forward raw internal metadata");
+    expect(prompt).toContain("Internal completion-event blocks and ACP/system progress notices");
+    expect(prompt).toContain("do not quote raw block headers");
+    expect(prompt).toContain(
+      "Treat session keys, child session keys, run ids, message ids, and ACP ids as opaque runtime identifiers.",
+    );
+  });
+
+  it("documents silent replies as exact-token-only behavior", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+    });
+
+    expect(prompt).toContain("## Silent Replies");
+    expect(prompt).toContain("This is an exact-token silence mechanism, not normal prose.");
+    expect(prompt).toContain("Use only the bare token with optional surrounding whitespace.");
   });
 
   it("does not include embed guidance in the default global prompt", () => {
@@ -263,6 +320,7 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain(
       "Never use local filesystem paths or `file://...` URLs in `[embed ...]`.",
     );
+    expect(prompt).toContain("Use `[embed ...]` outside code fences.");
     expect(prompt).toContain(
       "The active hosted embed root for this session is: `/Users/example/.openclaw-dev/canvas`.",
     );
