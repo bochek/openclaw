@@ -29,6 +29,11 @@ CURRENT_HEAD_SHORT=""
 UPDATE_TARGET_EFFECTIVE=""
 UPDATE_EXPECTED_NEEDLE=""
 API_KEY_VALUE=""
+DISCORD_TOKEN_ENV=""
+DISCORD_TOKEN_VALUE=""
+DISCORD_GUILD_ID=""
+DISCORD_CHANNEL_ID=""
+DISCORD_FRESH_ARGS=()
 PROGRESS_INTERVAL_S=15
 PROGRESS_STALE_S=60
 
@@ -107,6 +112,9 @@ Options:
   --api-key-env <var>        Host env var name for provider API key.
                              Default: OPENAI_API_KEY for openai, ANTHROPIC_API_KEY for anthropic
   --openai-api-key-env <var> Alias for --api-key-env (backward compatible)
+  --discord-token-env <var>  Host env var name for Discord bot token.
+  --discord-guild-id <id>    Discord guild ID for smoke roundtrip.
+  --discord-channel-id <id>  Discord channel ID for smoke roundtrip.
   --json                     Print machine-readable JSON summary.
   -h, --help                 Show help.
 EOF
@@ -131,6 +139,18 @@ while [[ $# -gt 0 ]]; do
       ;;
     --api-key-env|--openai-api-key-env)
       API_KEY_ENV="$2"
+      shift 2
+      ;;
+    --discord-token-env)
+      DISCORD_TOKEN_ENV="$2"
+      shift 2
+      ;;
+    --discord-guild-id)
+      DISCORD_GUILD_ID="$2"
+      shift 2
+      ;;
+    --discord-channel-id)
+      DISCORD_CHANNEL_ID="$2"
       shift 2
       ;;
     --json)
@@ -173,6 +193,18 @@ esac
 
 API_KEY_VALUE="${!API_KEY_ENV:-}"
 [[ -n "$API_KEY_VALUE" ]] || die "$API_KEY_ENV is required"
+if [[ -n "$DISCORD_TOKEN_ENV" || -n "$DISCORD_GUILD_ID" || -n "$DISCORD_CHANNEL_ID" ]]; then
+  [[ -n "$DISCORD_TOKEN_ENV" ]] || die "--discord-token-env is required when Discord smoke args are set"
+  [[ -n "$DISCORD_GUILD_ID" ]] || die "--discord-guild-id is required when Discord smoke args are set"
+  [[ -n "$DISCORD_CHANNEL_ID" ]] || die "--discord-channel-id is required when Discord smoke args are set"
+  DISCORD_TOKEN_VALUE="${!DISCORD_TOKEN_ENV:-}"
+  [[ -n "$DISCORD_TOKEN_VALUE" ]] || die "$DISCORD_TOKEN_ENV is required for Discord smoke"
+  DISCORD_FRESH_ARGS=(
+    --discord-token-env "$DISCORD_TOKEN_ENV"
+    --discord-guild-id "$DISCORD_GUILD_ID"
+    --discord-channel-id "$DISCORD_CHANNEL_ID"
+  )
+fi
 resolve_python_bin
 
 resolve_linux_vm_name() {
@@ -1176,10 +1208,16 @@ fi
 
 say "Run fresh npm baseline: $PACKAGE_SPEC"
 say "Run dir: $RUN_DIR"
+if [[ -n "$DISCORD_TOKEN_VALUE" ]]; then
+  say "Discord smoke: guild=$DISCORD_GUILD_ID channel=$DISCORD_CHANNEL_ID"
+else
+  say "Discord smoke: disabled"
+fi
 bash "$ROOT_DIR/scripts/e2e/parallels-macos-smoke.sh" \
   --mode fresh \
   --provider "$PROVIDER" \
   --api-key-env "$API_KEY_ENV" \
+  "${DISCORD_FRESH_ARGS[@]}" \
   --target-package-spec "$PACKAGE_SPEC" \
   --json >"$RUN_DIR/macos-fresh.log" 2>&1 &
 macos_fresh_pid=$!
@@ -1188,6 +1226,7 @@ bash "$ROOT_DIR/scripts/e2e/parallels-windows-smoke.sh" \
   --mode fresh \
   --provider "$PROVIDER" \
   --api-key-env "$API_KEY_ENV" \
+  "${DISCORD_FRESH_ARGS[@]}" \
   --target-package-spec "$PACKAGE_SPEC" \
   --json >"$RUN_DIR/windows-fresh.log" 2>&1 &
 windows_fresh_pid=$!
@@ -1196,6 +1235,7 @@ bash "$ROOT_DIR/scripts/e2e/parallels-linux-smoke.sh" \
   --mode fresh \
   --provider "$PROVIDER" \
   --api-key-env "$API_KEY_ENV" \
+  "${DISCORD_FRESH_ARGS[@]}" \
   --target-package-spec "$PACKAGE_SPEC" \
   --json >"$RUN_DIR/linux-fresh.log" 2>&1 &
 linux_fresh_pid=$!
