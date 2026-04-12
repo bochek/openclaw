@@ -117,6 +117,7 @@ refresh_fresh_summary_state() {
 
   parallels_seed_fresh_child_summary "$prefix"
   parallels_load_fresh_child_summary "$prefix" "$log_path"
+  parallels_backfill_fresh_child_summary_from_log "$prefix" "$log_path"
   fill_missing_version_from_log "${prefix}_VERSION" "$log_path"
 }
 

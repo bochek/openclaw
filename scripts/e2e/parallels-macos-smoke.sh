@@ -1579,25 +1579,31 @@ run_fresh_main_lane() {
   FRESH_PERMISSION_STATUS="fail"
   phase_run "fresh.verify-bundle-permissions" "$TIMEOUT_PERMISSION_S" verify_bundle_permissions
   FRESH_PERMISSION_STATUS="pass"
+  say "fresh.permissions.ok"
   phase_run "fresh.onboard-ref" "$TIMEOUT_ONBOARD_S" run_ref_onboard
   phase_run "fresh.gateway-start" "$TIMEOUT_GATEWAY_S" start_manual_gateway_if_needed
   FRESH_GATEWAY_STATUS="fail"
   phase_run "fresh.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway
   FRESH_GATEWAY_STATUS="pass"
+  say "fresh.gateway.ok"
   FRESH_CHANNELS_STATUS="fail"
   phase_run "fresh.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe
   FRESH_CHANNELS_STATUS="pass"
+  say "fresh.channels.ok"
   FRESH_DASHBOARD_STATUS="fail"
   phase_run "fresh.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load
   FRESH_DASHBOARD_STATUS="pass"
+  say "fresh.dashboard.ok"
   FRESH_AGENT_STATUS="fail"
   phase_run "fresh.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn
   FRESH_AGENT_STATUS="pass"
+  say "fresh.agent.ok"
   if discord_smoke_enabled; then
     FRESH_DISCORD_STATUS="fail"
     phase_run "fresh.discord-config" "$TIMEOUT_GATEWAY_S" configure_discord_smoke
     phase_run "fresh.discord-roundtrip" "$TIMEOUT_DISCORD_S" run_discord_roundtrip_smoke "fresh"
     FRESH_DISCORD_STATUS="pass"
+    say "fresh.discord.ok"
   fi
 }
 
@@ -1624,6 +1630,7 @@ run_upgrade_lane() {
     phase_run "upgrade.verify-main-version" "$TIMEOUT_VERIFY_S" verify_target_version
     phase_run "upgrade.verify-bundle-permissions" "$TIMEOUT_PERMISSION_S" verify_bundle_permissions
     UPGRADE_PERMISSION_STATUS="pass"
+    say "upgrade.permissions.ok"
   else
     phase_run "upgrade.update-dev" "$TIMEOUT_UPDATE_DEV_S" run_dev_channel_update
     UPGRADE_MAIN_VERSION="$(extract_last_version "$(phase_log_path upgrade.update-dev)")"
@@ -1631,26 +1638,32 @@ run_upgrade_lane() {
     UPGRADE_PERMISSION_STATUS="fail"
     phase_run "upgrade.verify-bundle-permissions" "$TIMEOUT_PERMISSION_S" verify_bundle_permissions
     UPGRADE_PERMISSION_STATUS="pass"
+    say "upgrade.permissions.ok"
   fi
   phase_run "upgrade.onboard-ref" "$TIMEOUT_ONBOARD_S" run_ref_onboard
   phase_run "upgrade.gateway-start" "$TIMEOUT_GATEWAY_S" start_manual_gateway_if_needed
   UPGRADE_GATEWAY_STATUS="fail"
   phase_run "upgrade.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway
   UPGRADE_GATEWAY_STATUS="pass"
+  say "upgrade.gateway.ok"
   UPGRADE_CHANNELS_STATUS="fail"
   phase_run "upgrade.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe
   UPGRADE_CHANNELS_STATUS="pass"
+  say "upgrade.channels.ok"
   UPGRADE_DASHBOARD_STATUS="fail"
   phase_run "upgrade.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load
   UPGRADE_DASHBOARD_STATUS="pass"
+  say "upgrade.dashboard.ok"
   UPGRADE_AGENT_STATUS="fail"
   phase_run "upgrade.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn
   UPGRADE_AGENT_STATUS="pass"
+  say "upgrade.agent.ok"
   if discord_smoke_enabled; then
     UPGRADE_DISCORD_STATUS="fail"
     phase_run "upgrade.discord-config" "$TIMEOUT_GATEWAY_S" configure_discord_smoke
     phase_run "upgrade.discord-roundtrip" "$TIMEOUT_DISCORD_S" run_discord_roundtrip_smoke "upgrade"
     UPGRADE_DISCORD_STATUS="pass"
+    say "upgrade.discord.ok"
   fi
 }
 

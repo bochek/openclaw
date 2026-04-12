@@ -79,6 +79,43 @@ PY
   fi
 }
 
+parallels_backfill_fresh_child_summary_from_log() {
+  local prefix="$1"
+  local log_path="$2"
+  [[ -f "$log_path" ]] || return 0
+
+  local assignments
+  set +e
+  assignments="$(
+    PREFIX="$prefix" "$PYTHON_BIN" - "$log_path" <<'PY'
+import os
+import pathlib
+import shlex
+import sys
+
+prefix = os.environ["PREFIX"]
+text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace")
+field_map = {
+    "GATEWAY_STATUS": "fresh.gateway.ok",
+    "PERMISSION_STATUS": "fresh.permissions.ok",
+    "CHANNELS_STATUS": "fresh.channels.ok",
+    "DASHBOARD_STATUS": "fresh.dashboard.ok",
+    "AGENT_STATUS": "fresh.agent.ok",
+    "DISCORD_STATUS": "fresh.discord.ok",
+}
+
+for key, marker in field_map.items():
+    if f"==> {marker}" in text:
+        print(f"{prefix}_{key}={shlex.quote('pass')}")
+PY
+  )"
+  local rc=$?
+  set -e
+  if [[ $rc -eq 0 && -n "$assignments" ]]; then
+    eval "$assignments"
+  fi
+}
+
 parallels_update_status_path() {
   local run_dir="$1"
   local os_name="$2"

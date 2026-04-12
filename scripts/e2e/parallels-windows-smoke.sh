@@ -2437,24 +2437,30 @@ run_fresh_main_lane() {
   FRESH_PERMISSION_STATUS="fail"
   phase_run "fresh.verify-bundle-permissions" "$TIMEOUT_VERIFY_S" verify_bundle_permissions || return $?
   FRESH_PERMISSION_STATUS="pass"
+  say "fresh.permissions.ok"
   phase_run "fresh.onboard-ref" "$TIMEOUT_ONBOARD_PHASE_S" run_ref_onboard || return $?
   FRESH_GATEWAY_STATUS="fail"
   phase_run "fresh.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway_reachable || return $?
   FRESH_GATEWAY_STATUS="pass"
+  say "fresh.gateway.ok"
   FRESH_CHANNELS_STATUS="fail"
   phase_run "fresh.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe || return $?
   FRESH_CHANNELS_STATUS="pass"
+  say "fresh.channels.ok"
   FRESH_DASHBOARD_STATUS="fail"
   phase_run "fresh.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load || return $?
   FRESH_DASHBOARD_STATUS="pass"
+  say "fresh.dashboard.ok"
   FRESH_AGENT_STATUS="fail"
   phase_run "fresh.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn || return $?
   FRESH_AGENT_STATUS="pass"
+  say "fresh.agent.ok"
   if discord_smoke_enabled; then
     FRESH_DISCORD_STATUS="fail"
     phase_run "fresh.discord-config" "$TIMEOUT_GATEWAY_S" configure_discord_smoke || return $?
     phase_run "fresh.discord-roundtrip" "$TIMEOUT_DISCORD_S" run_discord_roundtrip_smoke "fresh" || return $?
     FRESH_DISCORD_STATUS="pass"
+    say "fresh.discord.ok"
   fi
 }
 
@@ -2493,6 +2499,7 @@ run_upgrade_lane() {
   UPGRADE_PERMISSION_STATUS="fail"
   phase_run "upgrade.verify-bundle-permissions" "$TIMEOUT_VERIFY_S" verify_bundle_permissions || return $?
   UPGRADE_PERMISSION_STATUS="pass"
+  say "upgrade.permissions.ok"
   # Stop the old managed gateway before ref-mode onboard rewrites config and
   # gateway auth. Restarting first can leave the old token alive and make the
   # onboard health probe fail against a stale daemon.
@@ -2502,20 +2509,25 @@ run_upgrade_lane() {
   UPGRADE_GATEWAY_STATUS="fail"
   phase_run "upgrade.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway_reachable || return $?
   UPGRADE_GATEWAY_STATUS="pass"
+  say "upgrade.gateway.ok"
   UPGRADE_CHANNELS_STATUS="fail"
   phase_run "upgrade.channels-status" "$TIMEOUT_VERIFY_S" verify_channels_probe || return $?
   UPGRADE_CHANNELS_STATUS="pass"
+  say "upgrade.channels.ok"
   UPGRADE_DASHBOARD_STATUS="fail"
   phase_run "upgrade.dashboard-load" "$TIMEOUT_DASHBOARD_S" verify_dashboard_load || return $?
   UPGRADE_DASHBOARD_STATUS="pass"
+  say "upgrade.dashboard.ok"
   UPGRADE_AGENT_STATUS="fail"
   phase_run "upgrade.first-agent-turn" "$TIMEOUT_AGENT_S" verify_turn || return $?
   UPGRADE_AGENT_STATUS="pass"
+  say "upgrade.agent.ok"
   if discord_smoke_enabled; then
     UPGRADE_DISCORD_STATUS="fail"
     phase_run "upgrade.discord-config" "$TIMEOUT_GATEWAY_S" configure_discord_smoke || return $?
     phase_run "upgrade.discord-roundtrip" "$TIMEOUT_DISCORD_S" run_discord_roundtrip_smoke "upgrade" || return $?
     UPGRADE_DISCORD_STATUS="pass"
+    say "upgrade.discord.ok"
   fi
 }
 
