@@ -61,6 +61,9 @@ die() {
 }
 
 cleanup() {
+  if command -v cleanup_discord_smoke_messages >/dev/null 2>&1; then
+    cleanup_discord_smoke_messages
+  fi
   if [[ -n "${SERVER_PID:-}" ]]; then
     kill "$SERVER_PID" >/dev/null 2>&1 || true
   fi
@@ -96,6 +99,191 @@ PY
   done
 
   die "Python 3.10+ is required"
+}
+
+ps_single_quote() {
+  printf "%s" "$1" | sed "s/'/''/g"
+}
+
+ps_array_literal() {
+  local arg quoted parts=()
+  for arg in "$@"; do
+    quoted="$(ps_single_quote "$arg")"
+    parts+=("'$quoted'")
+  done
+  local joined=""
+  local part
+  for part in "${parts[@]}"; do
+    if [[ -n "$joined" ]]; then
+      joined+=", "
+    fi
+    joined+="$part"
+  done
+  printf '@(%s)' "$joined"
+}
+
+discord_smoke_enabled() {
+  [[ -n "$DISCORD_TOKEN_VALUE" && -n "$DISCORD_GUILD_ID" && -n "$DISCORD_CHANNEL_ID" ]]
+}
+
+discord_api_request() {
+  local method="$1"
+  local path="$2"
+  local payload="${3:-}"
+  local url="https://discord.com/api/v10$path"
+  if [[ -n "$payload" ]]; then
+    curl -fsS -X "$method" \
+      -H "Authorization: Bot $DISCORD_TOKEN_VALUE" \
+      -H "Content-Type: application/json" \
+      --data "$payload" \
+      "$url"
+    return
+  fi
+  curl -fsS -X "$method" \
+    -H "Authorization: Bot $DISCORD_TOKEN_VALUE" \
+    "$url"
+}
+
+json_contains_string() {
+  local needle="$1"
+  "$PYTHON_BIN" - "$needle" <<'PY'
+import json
+import sys
+
+needle = sys.argv[1]
+try:
+    payload = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(1)
+
+def contains(value):
+    if isinstance(value, str):
+        return needle in value
+    if isinstance(value, list):
+        return any(contains(item) for item in value)
+    if isinstance(value, dict):
+        return any(contains(item) for item in value.values())
+    return False
+
+raise SystemExit(0 if contains(payload) else 1)
+PY
+}
+
+build_discord_guilds_json() {
+  DISCORD_GUILD_ID="$DISCORD_GUILD_ID" DISCORD_CHANNEL_ID="$DISCORD_CHANNEL_ID" "$PYTHON_BIN" - <<'PY'
+import json
+import os
+
+print(
+    json.dumps(
+        {
+            os.environ["DISCORD_GUILD_ID"]: {
+                "channels": {
+                    os.environ["DISCORD_CHANNEL_ID"]: {
+                        "allow": True,
+                        "requireMention": False,
+                    }
+                }
+            }
+        }
+    )
+)
+PY
+}
+
+discord_message_id_from_send_log() {
+  local path="$1"
+  "$PYTHON_BIN" - "$path" <<'PY'
+import json
+import pathlib
+import sys
+
+payload = json.loads(pathlib.Path(sys.argv[1]).read_text())
+message_id = payload.get("payload", {}).get("messageId")
+if not message_id:
+    message_id = payload.get("payload", {}).get("result", {}).get("messageId")
+if not message_id:
+    raise SystemExit("messageId missing from send output")
+print(message_id)
+PY
+}
+
+wait_for_discord_host_visibility() {
+  local nonce="$1"
+  local response
+  local deadline=$((SECONDS + 180))
+  while (( SECONDS < deadline )); do
+    set +e
+    response="$(discord_api_request GET "/channels/$DISCORD_CHANNEL_ID/messages?limit=20")"
+    local rc=$?
+    set -e
+    if [[ $rc -eq 0 ]] && [[ -n "$response" ]] && printf '%s' "$response" | json_contains_string "$nonce"; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
+post_host_discord_message() {
+  local nonce="$1"
+  local prefix="$2"
+  local id_file="$3"
+  local payload response
+  payload="$(
+    NONCE="$nonce" PREFIX="$prefix" "$PYTHON_BIN" - <<'PY'
+import json
+import os
+
+print(
+    json.dumps(
+        {
+            "content": f"{os.environ['PREFIX']}-inbound-{os.environ['NONCE']}",
+            "flags": 4096,
+        }
+    )
+)
+PY
+  )"
+  response="$(discord_api_request POST "/channels/$DISCORD_CHANNEL_ID/messages" "$payload")"
+  printf '%s' "$response" | "$PYTHON_BIN" - "$id_file" <<'PY'
+import json
+import pathlib
+import sys
+
+payload = json.load(sys.stdin)
+message_id = payload.get("id")
+if not isinstance(message_id, str) or not message_id:
+    raise SystemExit("host Discord post missing message id")
+pathlib.Path(sys.argv[1]).write_text(f"{message_id}\n", encoding="utf-8")
+PY
+}
+
+discord_delete_message_id_file() {
+  local path="$1"
+  [[ -f "$path" ]] || return 0
+  [[ -s "$path" ]] || return 0
+  discord_smoke_enabled || return 0
+
+  local message_id
+  message_id="$(tr -d '\r\n' <"$path")"
+  [[ -n "$message_id" ]] || return 0
+
+  set +e
+  discord_api_request DELETE "/channels/$DISCORD_CHANNEL_ID/messages/$message_id" >/dev/null
+  set -e
+}
+
+cleanup_discord_smoke_messages() {
+  discord_smoke_enabled || return 0
+  [[ -d "$RUN_DIR" ]] || return 0
+
+  discord_delete_message_id_file "$RUN_DIR/macos-update.discord-sent-message-id"
+  discord_delete_message_id_file "$RUN_DIR/macos-update.discord-host-message-id"
+  discord_delete_message_id_file "$RUN_DIR/windows-update.discord-sent-message-id"
+  discord_delete_message_id_file "$RUN_DIR/windows-update.discord-host-message-id"
+  discord_delete_message_id_file "$RUN_DIR/linux-update.discord-sent-message-id"
+  discord_delete_message_id_file "$RUN_DIR/linux-update.discord-host-message-id"
 }
 
 usage() {
@@ -821,6 +1009,31 @@ macos_desktop_user_exec() {
   parallels_macos_desktop_user_exec "$MACOS_VM" "$API_KEY_ENV" "$API_KEY_VALUE" "$@"
 }
 
+guest_run_windows_openclaw() {
+  local env_name="${1:-}"
+  local env_value="${2:-}"
+  shift 2
+
+  local args_literal env_name_q env_value_q
+  args_literal="$(ps_array_literal "$@")"
+  env_name_q="$(ps_single_quote "$env_name")"
+  env_value_q="$(ps_single_quote "$env_value")"
+
+  guest_powershell "$(cat <<EOF
+\$openclaw = Join-Path \$env:APPDATA 'npm\openclaw.cmd'
+\$args = $args_literal
+if ('${env_name_q}' -ne '') {
+  Set-Item -Path ('Env:' + '${env_name_q}') -Value '${env_value_q}'
+}
+\$output = & \$openclaw @args 2>&1
+if (\$null -ne \$output) {
+  \$output | ForEach-Object { \$_ }
+}
+exit \$LASTEXITCODE
+EOF
+)"
+}
+
 guest_powershell_poll() {
   local timeout_s="$1"
   local script="$2"
@@ -836,6 +1049,251 @@ print(base64.b64encode(payload).decode("ascii"))
 PY
   )"
   host_timeout_exec "$timeout_s" prlctl exec "$WINDOWS_VM" --current-user powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand "$encoded"
+}
+
+configure_macos_update_discord() {
+  local guilds_json
+  guilds_json="$(build_discord_guilds_json)"
+  cat <<EOF | prlctl exec "$MACOS_VM" /usr/bin/tee /tmp/openclaw-discord-update.sh >/dev/null
+set -euo pipefail
+export PATH=/opt/homebrew/bin:/opt/homebrew/opt/node/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin
+if [ -z "\${HOME:-}" ]; then export HOME="/Users/\$(id -un)"; fi
+cat >/tmp/openclaw-discord-token <<'__OPENCLAW_TOKEN__'
+$DISCORD_TOKEN_VALUE
+__OPENCLAW_TOKEN__
+cat >/tmp/openclaw-discord-guilds.json <<'__OPENCLAW_GUILDS__'
+$guilds_json
+__OPENCLAW_GUILDS__
+stop_openclaw_gateway_processes() {
+  /opt/homebrew/bin/openclaw gateway stop >/dev/null 2>&1 || true
+  /usr/bin/pkill -9 -f openclaw-gateway || true
+  /usr/bin/pkill -9 -f 'openclaw gateway run' || true
+  /usr/bin/pkill -9 -f 'openclaw.mjs gateway' || true
+  for pid in \$(/usr/sbin/lsof -tiTCP:18789 -sTCP:LISTEN 2>/dev/null || true); do
+    /bin/kill -9 "\$pid" 2>/dev/null || true
+  done
+}
+token="\$(tr -d '\n' </tmp/openclaw-discord-token)"
+guilds_json="\$(cat /tmp/openclaw-discord-guilds.json)"
+/opt/homebrew/bin/openclaw config set channels.discord.token "\$token"
+/opt/homebrew/bin/openclaw config set channels.discord.enabled true
+/opt/homebrew/bin/openclaw config set channels.discord.groupPolicy allowlist
+/opt/homebrew/bin/openclaw config set channels.discord.guilds "\$guilds_json" --strict-json
+/opt/homebrew/bin/openclaw gateway restart >/dev/null 2>&1 || true
+gateway_ready=0
+for _ in 1 2 3 4 5 6 7 8; do
+  if /opt/homebrew/bin/openclaw gateway status --deep --require-rpc >/dev/null 2>&1; then
+    gateway_ready=1
+    break
+  fi
+  sleep 2
+done
+if [ "\$gateway_ready" != "1" ]; then
+  stop_openclaw_gateway_processes
+  /opt/homebrew/bin/openclaw gateway run --bind loopback --port 18789 --force >/tmp/openclaw-parallels-npm-update-macos-discord-gateway.log 2>&1 </dev/null &
+  for _ in 1 2 3 4 5 6 7 8; do
+    if /opt/homebrew/bin/openclaw gateway status --deep --require-rpc >/dev/null 2>&1; then
+      gateway_ready=1
+      break
+    fi
+    sleep 2
+  done
+fi
+[ "\$gateway_ready" = "1" ] || {
+  tail -n 120 /tmp/openclaw-parallels-npm-update-macos-discord-gateway.log 2>/dev/null || true
+  echo "macOS Discord gateway did not become RPC-ready after config" >&2
+  exit 1
+}
+/opt/homebrew/bin/openclaw channels status --probe --json
+rm -f /tmp/openclaw-discord-token /tmp/openclaw-discord-guilds.json
+EOF
+  macos_desktop_user_exec /bin/bash /tmp/openclaw-discord-update.sh
+}
+
+configure_windows_update_discord() {
+  local guilds_json restart_rc gateway_ready=0
+  guilds_json="$(build_discord_guilds_json)"
+  guest_run_windows_openclaw "" "" config set channels.discord.token "$DISCORD_TOKEN_VALUE"
+  guest_run_windows_openclaw "" "" config set channels.discord.enabled true
+  guest_run_windows_openclaw "" "" config set channels.discord.groupPolicy allowlist
+  guest_run_windows_openclaw "" "" config set channels.discord.guilds "$guilds_json" --strict-json
+  set +e
+  guest_run_windows_openclaw "" "" gateway restart >/dev/null 2>&1
+  restart_rc=$?
+  set -e
+  if [[ $restart_rc -ne 0 ]]; then
+    warn "windows update discord gateway restart returned rc=$restart_rc; relying on readiness probe"
+  fi
+  for _ in 1 2 3 4 5 6 7 8; do
+    if guest_run_windows_openclaw "" "" gateway status --deep --require-rpc >/dev/null 2>&1; then
+      gateway_ready=1
+      break
+    fi
+    sleep 2
+  done
+  [[ "$gateway_ready" == "1" ]] || die "Windows Discord gateway did not become RPC-ready after config"
+  guest_run_windows_openclaw "" "" channels status --probe --json
+}
+
+configure_linux_update_discord() {
+  local guilds_json
+  guilds_json="$(build_discord_guilds_json)"
+  cat <<EOF | prlctl exec "$LINUX_VM" /usr/bin/tee /tmp/openclaw-discord-update.sh >/dev/null
+set -euo pipefail
+export HOME=/root
+cd "\$HOME"
+cat >/tmp/openclaw-discord-token <<'__OPENCLAW_TOKEN__'
+$DISCORD_TOKEN_VALUE
+__OPENCLAW_TOKEN__
+cat >/tmp/openclaw-discord-guilds.json <<'__OPENCLAW_GUILDS__'
+$guilds_json
+__OPENCLAW_GUILDS__
+stop_openclaw_gateway_processes() {
+  openclaw gateway stop >/dev/null 2>&1 || true
+  pkill -9 -f openclaw-gateway || true
+  pkill -9 -f 'openclaw gateway run' || true
+  pkill -9 -f 'openclaw.mjs gateway' || true
+  if command -v fuser >/dev/null 2>&1; then
+    fuser -k 18789/tcp >/dev/null 2>&1 || true
+  fi
+  if command -v lsof >/dev/null 2>&1; then
+    for pid in \$(lsof -tiTCP:18789 -sTCP:LISTEN 2>/dev/null || true); do
+      kill -9 "\$pid" 2>/dev/null || true
+    done
+  fi
+}
+token="\$(tr -d '\n' </tmp/openclaw-discord-token)"
+guilds_json="\$(cat /tmp/openclaw-discord-guilds.json)"
+openclaw config set channels.discord.token "\$token"
+openclaw config set channels.discord.enabled true
+openclaw config set channels.discord.groupPolicy allowlist
+openclaw config set channels.discord.guilds "\$guilds_json" --strict-json
+stop_openclaw_gateway_processes
+api_key_value="\$(printenv ${API_KEY_ENV})"
+[ -n "\$api_key_value" ] || {
+  echo "${API_KEY_ENV} is required in the Linux Discord update environment" >&2
+  exit 1
+}
+setsid sh -lc 'exec env OPENCLAW_HOME=/root OPENCLAW_STATE_DIR=/root/.openclaw OPENCLAW_CONFIG_PATH=/root/.openclaw/openclaw.json ${API_KEY_ENV}="'"\$api_key_value"'" openclaw gateway run --bind loopback --port 18789 --force >/tmp/openclaw-parallels-npm-update-linux-discord-gateway.log 2>&1' >/dev/null 2>&1 < /dev/null &
+gateway_ready=0
+for _ in 1 2 3 4 5 6 7 8; do
+  if openclaw gateway status --deep --require-rpc >/dev/null 2>&1; then
+    gateway_ready=1
+    break
+  fi
+  sleep 2
+done
+[ "\$gateway_ready" = "1" ] || {
+  tail -n 120 /tmp/openclaw-parallels-npm-update-linux-discord-gateway.log 2>/dev/null || true
+  echo "Linux Discord gateway did not become RPC-ready after config" >&2
+  exit 1
+}
+openclaw channels status --probe --json
+rm -f /tmp/openclaw-discord-token /tmp/openclaw-discord-guilds.json
+EOF
+  prlctl exec "$LINUX_VM" /usr/bin/env "$API_KEY_ENV=$API_KEY_VALUE" /bin/bash /tmp/openclaw-discord-update.sh
+}
+
+wait_for_macos_update_discord_readback() {
+  local nonce="$1"
+  local response
+  local deadline=$((SECONDS + 180))
+  while (( SECONDS < deadline )); do
+    set +e
+    response="$(macos_desktop_user_exec /opt/homebrew/bin/openclaw message read --channel discord --target "channel:$DISCORD_CHANNEL_ID" --limit 20 --json)"
+    local rc=$?
+    set -e
+    if [[ $rc -eq 0 ]] && [[ -n "$response" ]] && printf '%s' "$response" | json_contains_string "$nonce"; then
+      return 0
+    fi
+    sleep 3
+  done
+  return 1
+}
+
+wait_for_windows_update_discord_readback() {
+  local nonce="$1"
+  local response
+  local deadline=$((SECONDS + 180))
+  while (( SECONDS < deadline )); do
+    set +e
+    response="$(guest_run_windows_openclaw "" "" message read --channel discord --target "channel:$DISCORD_CHANNEL_ID" --limit 20 --json)"
+    local rc=$?
+    set -e
+    if [[ $rc -eq 0 ]] && [[ -n "$response" ]] && printf '%s' "$response" | json_contains_string "$nonce"; then
+      return 0
+    fi
+    sleep 3
+  done
+  return 1
+}
+
+wait_for_linux_update_discord_readback() {
+  local nonce="$1"
+  local response
+  local deadline=$((SECONDS + 180))
+  while (( SECONDS < deadline )); do
+    set +e
+    response="$(prlctl exec "$LINUX_VM" openclaw message read --channel discord --target "channel:$DISCORD_CHANNEL_ID" --limit 20 --json)"
+    local rc=$?
+    set -e
+    if [[ $rc -eq 0 ]] && [[ -n "$response" ]] && printf '%s' "$response" | json_contains_string "$nonce"; then
+      return 0
+    fi
+    sleep 3
+  done
+  return 1
+}
+
+run_macos_update_discord_smoke() {
+  local nonce outbound_nonce inbound_nonce outbound_message outbound_log sent_id_file host_id_file
+  nonce="$(date +%s)-$RANDOM"
+  outbound_nonce="macos-update-out-$nonce"
+  inbound_nonce="macos-update-in-$nonce"
+  outbound_message="parallels-npm-update-macos-outbound-$outbound_nonce"
+  outbound_log="$RUN_DIR/macos-update.discord-send.json"
+  sent_id_file="$RUN_DIR/macos-update.discord-sent-message-id"
+  host_id_file="$RUN_DIR/macos-update.discord-host-message-id"
+
+  macos_desktop_user_exec /opt/homebrew/bin/openclaw message send --channel discord --target "channel:$DISCORD_CHANNEL_ID" --message "$outbound_message" --silent --json >"$outbound_log"
+  discord_message_id_from_send_log "$outbound_log" >"$sent_id_file"
+  wait_for_discord_host_visibility "$outbound_nonce"
+  post_host_discord_message "$inbound_nonce" "parallels-npm-update-macos" "$host_id_file"
+  wait_for_macos_update_discord_readback "$inbound_nonce"
+}
+
+run_windows_update_discord_smoke() {
+  local nonce outbound_nonce inbound_nonce outbound_message outbound_log sent_id_file host_id_file
+  nonce="$(date +%s)-$RANDOM"
+  outbound_nonce="windows-update-out-$nonce"
+  inbound_nonce="windows-update-in-$nonce"
+  outbound_message="parallels-npm-update-windows-outbound-$outbound_nonce"
+  outbound_log="$RUN_DIR/windows-update.discord-send.json"
+  sent_id_file="$RUN_DIR/windows-update.discord-sent-message-id"
+  host_id_file="$RUN_DIR/windows-update.discord-host-message-id"
+
+  guest_run_windows_openclaw "" "" message send --channel discord --target "channel:$DISCORD_CHANNEL_ID" --message "$outbound_message" --silent --json >"$outbound_log"
+  discord_message_id_from_send_log "$outbound_log" >"$sent_id_file"
+  wait_for_discord_host_visibility "$outbound_nonce"
+  post_host_discord_message "$inbound_nonce" "parallels-npm-update-windows" "$host_id_file"
+  wait_for_windows_update_discord_readback "$inbound_nonce"
+}
+
+run_linux_update_discord_smoke() {
+  local nonce outbound_nonce inbound_nonce outbound_message outbound_log sent_id_file host_id_file
+  nonce="$(date +%s)-$RANDOM"
+  outbound_nonce="linux-update-out-$nonce"
+  inbound_nonce="linux-update-in-$nonce"
+  outbound_message="parallels-npm-update-linux-outbound-$outbound_nonce"
+  outbound_log="$RUN_DIR/linux-update.discord-send.json"
+  sent_id_file="$RUN_DIR/linux-update.discord-sent-message-id"
+  host_id_file="$RUN_DIR/linux-update.discord-host-message-id"
+
+  prlctl exec "$LINUX_VM" openclaw message send --channel discord --target "channel:$DISCORD_CHANNEL_ID" --message "$outbound_message" --silent --json >"$outbound_log"
+  discord_message_id_from_send_log "$outbound_log" >"$sent_id_file"
+  wait_for_discord_host_visibility "$outbound_nonce"
+  post_host_discord_message "$inbound_nonce" "parallels-npm-update-linux" "$host_id_file"
+  wait_for_linux_update_discord_readback "$inbound_nonce"
 }
 
 run_windows_script_via_log() {
@@ -1055,6 +1513,12 @@ fi
 /opt/homebrew/bin/openclaw agent --agent main --session-id parallels-npm-update-macos-$expected_needle --message "Reply with exact ASCII text OK only." --json
 EOF
   macos_desktop_user_exec /bin/bash /tmp/openclaw-main-update.sh
+  if discord_smoke_enabled; then
+    printf '==> update.discord-config\n'
+    configure_macos_update_discord
+    printf '==> update.discord-roundtrip\n'
+    run_macos_update_discord_smoke
+  fi
 }
 
 run_windows_update() {
@@ -1069,6 +1533,12 @@ run_windows_update() {
     "$MODEL_ID" \
     "$API_KEY_ENV" \
     "$API_KEY_VALUE"
+  if discord_smoke_enabled; then
+    printf '==> update.discord-config\n'
+    configure_windows_update_discord
+    printf '==> update.discord-roundtrip\n'
+    run_windows_update_discord_smoke
+  fi
 }
 
 run_linux_update() {
@@ -1154,6 +1624,12 @@ fi
 openclaw agent --local --agent main --session-id parallels-npm-update-linux-$expected_needle --message "Reply with exact ASCII text OK only." --json
 EOF
   prlctl exec "$LINUX_VM" /usr/bin/env "$API_KEY_ENV=$API_KEY_VALUE" /bin/bash /tmp/openclaw-main-update.sh
+  if discord_smoke_enabled; then
+    printf '==> update.discord-config\n'
+    configure_linux_update_discord
+    printf '==> update.discord-roundtrip\n'
+    run_linux_update_discord_smoke
+  fi
 }
 
 write_summary_json() {
