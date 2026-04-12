@@ -164,6 +164,7 @@ marker_map = {
     "update.channels.ok": "CHANNELS_STATUS",
     "update.dashboard.ok": "DASHBOARD_STATUS",
     "update.agent.ok": "AGENT_STATUS",
+    "update.discord.ok": "DISCORD_STATUS",
 }
 
 for marker, key in marker_map.items():
@@ -1586,6 +1587,7 @@ EOF
     printf '==> update.discord-roundtrip\n'
     run_macos_update_discord_smoke
     MACOS_UPDATE_DISCORD_STATUS="pass"
+    printf '==> update.discord.ok\n'
     persist_macos_update_status
   fi
 }
@@ -1620,6 +1622,7 @@ run_windows_update() {
     printf '==> update.discord-roundtrip\n'
     run_windows_update_discord_smoke
     WINDOWS_UPDATE_DISCORD_STATUS="pass"
+    printf '==> update.discord.ok\n'
     persist_windows_update_status
   fi
 }
@@ -1731,6 +1734,7 @@ EOF
     printf '==> update.discord-roundtrip\n'
     run_linux_update_discord_smoke
     LINUX_UPDATE_DISCORD_STATUS="pass"
+    printf '==> update.discord.ok\n'
     persist_linux_update_status
   fi
 }
