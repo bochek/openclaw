@@ -164,6 +164,40 @@ describe("buildSessionStartupContextPrelude", () => {
     const firstBlock = prelude?.slice(prelude.indexOf("[Untrusted daily memory:"));
     expect(firstBlock?.length).toBeLessThanOrEqual(180);
   });
+
+  it("keeps the truncation marker inside the maxTotalChars budget", async () => {
+    const workspaceDir = await makeWorkspace();
+    await fs.writeFile(
+      path.join(workspaceDir, "memory", "2026-04-11.md"),
+      "x".repeat(500),
+      "utf-8",
+    );
+    await fs.writeFile(
+      path.join(workspaceDir, "memory", "2026-04-10.md"),
+      "second file that should not fit",
+      "utf-8",
+    );
+
+    const prelude = await buildSessionStartupContextPrelude({
+      workspaceDir,
+      cfg: {
+        agents: {
+          defaults: {
+            userTimezone: "America/Chicago",
+            startupContext: {
+              maxFileChars: 500,
+              maxTotalChars: 180,
+            },
+          },
+        },
+      } as OpenClawConfig,
+      nowMs: Date.UTC(2026, 3, 11, 18, 0, 0),
+    });
+
+    const firstBlock = prelude?.slice(prelude.indexOf("[Untrusted daily memory:"));
+    expect(firstBlock?.length).toBeLessThanOrEqual(180);
+    expect(firstBlock).not.toContain("...[additional startup memory truncated]...");
+  });
 });
 
 describe("shouldApplyStartupContext", () => {

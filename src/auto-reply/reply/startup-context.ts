@@ -12,6 +12,7 @@ const STARTUP_MEMORY_FILE_MAX_BYTES_CAP = 64 * 1024;
 const STARTUP_MEMORY_FILE_MAX_CHARS_CAP = 10_000;
 const STARTUP_MEMORY_TOTAL_MAX_CHARS_CAP = 50_000;
 const STARTUP_MEMORY_DAILY_DAYS_CAP = 14;
+const STARTUP_MEMORY_TRUNCATION_MARKER = "...[additional startup memory truncated]...";
 
 export function shouldApplyStartupContext(params: {
   cfg?: OpenClawConfig;
@@ -108,6 +109,18 @@ function formatStartupMemoryBlock(relativePath: string, content: string): string
     "```",
     "END_QUOTED_NOTES",
   ].join("\n");
+}
+
+function appendStartupMemoryTruncationMarker(params: {
+  sections: string[];
+  remainingChars: number;
+}): void {
+  if (
+    params.sections.length > 0 &&
+    params.remainingChars >= STARTUP_MEMORY_TRUNCATION_MARKER.length
+  ) {
+    params.sections.push(STARTUP_MEMORY_TRUNCATION_MARKER);
+  }
 }
 
 function fitStartupMemoryBlock(params: {
@@ -235,13 +248,14 @@ export async function buildSessionStartupContextPrelude(params: {
       maxChars: remainingChars,
     });
     if (!block) {
-      if (sections.length > 0) {
-        sections.push("...[additional startup memory truncated]...");
-      }
+      appendStartupMemoryTruncationMarker({ sections, remainingChars });
       break;
     }
     if (sections.length > 0 && totalChars + block.length > limits.maxTotalChars) {
-      sections.push("...[additional startup memory truncated]...");
+      appendStartupMemoryTruncationMarker({
+        sections,
+        remainingChars: limits.maxTotalChars - totalChars,
+      });
       break;
     }
     sections.push(block);
