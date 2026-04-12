@@ -64,6 +64,8 @@ LATEST_INSTALLED_VERSION="skip"
 UPGRADE_MAIN_VERSION="skip"
 FRESH_GATEWAY_STATUS="skip"
 UPGRADE_GATEWAY_STATUS="skip"
+FRESH_PERMISSION_STATUS="skip"
+UPGRADE_PERMISSION_STATUS="skip"
 FRESH_CHANNELS_STATUS="skip"
 UPGRADE_CHANNELS_STATUS="skip"
 FRESH_AGENT_STATUS="skip"
@@ -1541,6 +1543,7 @@ summary = {
         "status": os.environ["SUMMARY_FRESH_MAIN_STATUS"],
         "version": os.environ["SUMMARY_FRESH_MAIN_VERSION"],
         "gateway": os.environ["SUMMARY_FRESH_GATEWAY_STATUS"],
+        "permissions": os.environ["SUMMARY_FRESH_PERMISSION_STATUS"],
         "channels": os.environ["SUMMARY_FRESH_CHANNELS_STATUS"],
         "agent": os.environ["SUMMARY_FRESH_AGENT_STATUS"],
         "dashboard": os.environ["SUMMARY_FRESH_DASHBOARD_STATUS"],
@@ -1554,6 +1557,7 @@ summary = {
         "devVersion": os.environ["SUMMARY_UPGRADE_MAIN_VERSION"],
         "mainVersion": os.environ["SUMMARY_UPGRADE_MAIN_VERSION"],
         "gateway": os.environ["SUMMARY_UPGRADE_GATEWAY_STATUS"],
+        "permissions": os.environ["SUMMARY_UPGRADE_PERMISSION_STATUS"],
         "channels": os.environ["SUMMARY_UPGRADE_CHANNELS_STATUS"],
         "agent": os.environ["SUMMARY_UPGRADE_AGENT_STATUS"],
         "dashboard": os.environ["SUMMARY_UPGRADE_DASHBOARD_STATUS"],
@@ -1590,6 +1594,7 @@ run_fresh_main_lane() {
   FRESH_MAIN_VERSION="$(extract_last_version "$(phase_log_path fresh.install-main)")"
   phase_run "fresh.verify-main-version" "$TIMEOUT_VERIFY_S" verify_target_version
   phase_run "fresh.verify-bundle-permissions" "$TIMEOUT_PERMISSION_S" verify_bundle_permissions
+  FRESH_PERMISSION_STATUS="pass"
   phase_run "fresh.onboard-ref" "$TIMEOUT_ONBOARD_S" run_ref_onboard
   phase_run "fresh.gateway-start" "$TIMEOUT_GATEWAY_S" start_manual_gateway_if_needed
   phase_run "fresh.gateway-status" "$TIMEOUT_GATEWAY_S" verify_gateway
@@ -1629,6 +1634,7 @@ run_upgrade_lane() {
     UPGRADE_MAIN_VERSION="$(extract_last_version "$(phase_log_path upgrade.install-main)")"
     phase_run "upgrade.verify-main-version" "$TIMEOUT_VERIFY_S" verify_target_version
     phase_run "upgrade.verify-bundle-permissions" "$TIMEOUT_PERMISSION_S" verify_bundle_permissions
+    UPGRADE_PERMISSION_STATUS="pass"
   else
     phase_run "upgrade.update-dev" "$TIMEOUT_UPDATE_DEV_S" run_dev_channel_update
     UPGRADE_MAIN_VERSION="$(extract_last_version "$(phase_log_path upgrade.update-dev)")"
@@ -1726,6 +1732,7 @@ SUMMARY_JSON_PATH="$(
   SUMMARY_FRESH_MAIN_STATUS="$FRESH_MAIN_STATUS" \
   SUMMARY_FRESH_MAIN_VERSION="$FRESH_MAIN_VERSION" \
   SUMMARY_FRESH_GATEWAY_STATUS="$FRESH_GATEWAY_STATUS" \
+  SUMMARY_FRESH_PERMISSION_STATUS="$FRESH_PERMISSION_STATUS" \
   SUMMARY_FRESH_CHANNELS_STATUS="$FRESH_CHANNELS_STATUS" \
   SUMMARY_FRESH_AGENT_STATUS="$FRESH_AGENT_STATUS" \
   SUMMARY_FRESH_DASHBOARD_STATUS="$FRESH_DASHBOARD_STATUS" \
@@ -1735,6 +1742,7 @@ SUMMARY_JSON_PATH="$(
   SUMMARY_LATEST_INSTALLED_VERSION="$LATEST_INSTALLED_VERSION" \
   SUMMARY_UPGRADE_MAIN_VERSION="$UPGRADE_MAIN_VERSION" \
   SUMMARY_UPGRADE_GATEWAY_STATUS="$UPGRADE_GATEWAY_STATUS" \
+  SUMMARY_UPGRADE_PERMISSION_STATUS="$UPGRADE_PERMISSION_STATUS" \
   SUMMARY_UPGRADE_CHANNELS_STATUS="$UPGRADE_CHANNELS_STATUS" \
   SUMMARY_UPGRADE_AGENT_STATUS="$UPGRADE_AGENT_STATUS" \
   SUMMARY_UPGRADE_DASHBOARD_STATUS="$UPGRADE_DASHBOARD_STATUS" \
@@ -1753,9 +1761,9 @@ else
   if [[ -n "$INSTALL_VERSION" ]]; then
     printf '  baseline-install-version: %s\n' "$INSTALL_VERSION"
   fi
-  printf '  fresh-main: %s (%s) channels=%s discord=%s\n' "$FRESH_MAIN_STATUS" "$FRESH_MAIN_VERSION" "$FRESH_CHANNELS_STATUS" "$FRESH_DISCORD_STATUS"
+  printf '  fresh-main: %s (%s) permissions=%s channels=%s discord=%s\n' "$FRESH_MAIN_STATUS" "$FRESH_MAIN_VERSION" "$FRESH_PERMISSION_STATUS" "$FRESH_CHANNELS_STATUS" "$FRESH_DISCORD_STATUS"
   printf '  latest precheck: %s (%s)\n' "$UPGRADE_PRECHECK_STATUS" "$LATEST_INSTALLED_VERSION"
-  printf '  %s: %s (%s) channels=%s discord=%s\n' "$(upgrade_summary_label)" "$UPGRADE_STATUS" "$UPGRADE_MAIN_VERSION" "$UPGRADE_CHANNELS_STATUS" "$UPGRADE_DISCORD_STATUS"
+  printf '  %s: %s (%s) permissions=%s channels=%s discord=%s\n' "$(upgrade_summary_label)" "$UPGRADE_STATUS" "$UPGRADE_MAIN_VERSION" "$UPGRADE_PERMISSION_STATUS" "$UPGRADE_CHANNELS_STATUS" "$UPGRADE_DISCORD_STATUS"
   printf '  logs: %s\n' "$RUN_DIR"
   printf '  summary: %s\n' "$SUMMARY_JSON_PATH"
 fi
