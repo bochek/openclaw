@@ -55,21 +55,21 @@ fresh = payload.get("freshMain")
 if not isinstance(fresh, dict):
     raise SystemExit(0)
 
-fields = {
-    "STATUS": fresh.get("status", "skip"),
-    "VERSION": fresh.get("version", "skip"),
-    "GATEWAY_STATUS": fresh.get("gateway", "skip"),
-    "PERMISSION_STATUS": fresh.get("permissions", "skip"),
-    "CHANNELS_STATUS": fresh.get("channels", "skip"),
-    "DASHBOARD_STATUS": fresh.get("dashboard", "skip"),
-    "AGENT_STATUS": fresh.get("agent", "skip"),
-    "DISCORD_STATUS": fresh.get("discord", "skip"),
+field_map = {
+    "STATUS": "status",
+    "VERSION": "version",
+    "GATEWAY_STATUS": "gateway",
+    "PERMISSION_STATUS": "permissions",
+    "CHANNELS_STATUS": "channels",
+    "DASHBOARD_STATUS": "dashboard",
+    "AGENT_STATUS": "agent",
+    "DISCORD_STATUS": "discord",
 }
 
-for key, value in fields.items():
-    if not isinstance(value, str):
-        value = "skip"
-    print(f"{prefix}_{key}={shlex.quote(value)}")
+for key, source_key in field_map.items():
+    value = fresh.get(source_key)
+    if isinstance(value, str):
+        print(f"{prefix}_{key}={shlex.quote(value)}")
 PY
   )"
   local rc=$?
@@ -155,19 +155,19 @@ try:
 except Exception:
     raise SystemExit(0)
 
-fields = {
-    "GATEWAY_STATUS": payload.get("gateway", "skip"),
-    "PERMISSION_STATUS": payload.get("permissions", "skip"),
-    "CHANNELS_STATUS": payload.get("channels", "skip"),
-    "DASHBOARD_STATUS": payload.get("dashboard", "skip"),
-    "AGENT_STATUS": payload.get("agent", "skip"),
-    "DISCORD_STATUS": payload.get("discord", "skip"),
+field_map = {
+    "GATEWAY_STATUS": "gateway",
+    "PERMISSION_STATUS": "permissions",
+    "CHANNELS_STATUS": "channels",
+    "DASHBOARD_STATUS": "dashboard",
+    "AGENT_STATUS": "agent",
+    "DISCORD_STATUS": "discord",
 }
 
-for key, value in fields.items():
-    if not isinstance(value, str):
-        value = "skip"
-    print(f"{prefix}_{key}={shlex.quote(value)}")
+for key, source_key in field_map.items():
+    value = payload.get(source_key)
+    if isinstance(value, str):
+        print(f"{prefix}_{key}={shlex.quote(value)}")
 PY
   )"
   local rc=$?
