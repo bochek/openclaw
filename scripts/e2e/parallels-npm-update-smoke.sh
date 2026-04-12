@@ -40,6 +40,21 @@ PROGRESS_STALE_S=60
 MACOS_FRESH_STATUS="skip"
 WINDOWS_FRESH_STATUS="skip"
 LINUX_FRESH_STATUS="skip"
+MACOS_FRESH_VERSION="skip"
+WINDOWS_FRESH_VERSION="skip"
+LINUX_FRESH_VERSION="skip"
+MACOS_FRESH_GATEWAY_STATUS="skip"
+WINDOWS_FRESH_GATEWAY_STATUS="skip"
+LINUX_FRESH_GATEWAY_STATUS="skip"
+MACOS_FRESH_DASHBOARD_STATUS="skip"
+WINDOWS_FRESH_DASHBOARD_STATUS="skip"
+LINUX_FRESH_DASHBOARD_STATUS="skip"
+MACOS_FRESH_AGENT_STATUS="skip"
+WINDOWS_FRESH_AGENT_STATUS="skip"
+LINUX_FRESH_AGENT_STATUS="skip"
+MACOS_FRESH_DISCORD_STATUS="skip"
+WINDOWS_FRESH_DISCORD_STATUS="skip"
+LINUX_FRESH_DISCORD_STATUS="skip"
 MACOS_UPDATE_STATUS="skip"
 WINDOWS_UPDATE_STATUS="skip"
 LINUX_UPDATE_STATUS="skip"
@@ -972,6 +987,57 @@ print(matches[-1] if matches else "")
 PY
 }
 
+load_fresh_child_summary() {
+  local prefix="$1"
+  local log_path="$2"
+  [[ -f "$log_path" ]] || return 0
+
+  local assignments
+  set +e
+  assignments="$(
+    PREFIX="$prefix" "$PYTHON_BIN" - "$log_path" <<'PY'
+import json
+import os
+import pathlib
+import shlex
+import sys
+
+prefix = os.environ["PREFIX"]
+text = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace").strip()
+if not text:
+    raise SystemExit(0)
+
+try:
+    payload = json.loads(text)
+except Exception:
+    raise SystemExit(0)
+
+fresh = payload.get("freshMain")
+if not isinstance(fresh, dict):
+    raise SystemExit(0)
+
+fields = {
+    "STATUS": fresh.get("status", "skip"),
+    "VERSION": fresh.get("version", "skip"),
+    "GATEWAY_STATUS": fresh.get("gateway", "skip"),
+    "DASHBOARD_STATUS": fresh.get("dashboard", "skip"),
+    "AGENT_STATUS": fresh.get("agent", "skip"),
+    "DISCORD_STATUS": fresh.get("discord", "skip"),
+}
+
+for key, value in fields.items():
+    if not isinstance(value, str):
+        value = "skip"
+    print(f"{prefix}_{key}={shlex.quote(value)}")
+PY
+  )"
+  local rc=$?
+  set -e
+  if [[ $rc -eq 0 && -n "$assignments" ]]; then
+    eval "$assignments"
+  fi
+}
+
 guest_powershell() {
   local script="$1"
   local encoded
@@ -1684,9 +1750,30 @@ summary = {
     "currentHead": os.environ["SUMMARY_CURRENT_HEAD"],
     "runDir": os.environ["SUMMARY_RUN_DIR"],
     "fresh": {
-        "macos": {"status": os.environ["SUMMARY_MACOS_FRESH_STATUS"]},
-        "windows": {"status": os.environ["SUMMARY_WINDOWS_FRESH_STATUS"]},
-        "linux": {"status": os.environ["SUMMARY_LINUX_FRESH_STATUS"]},
+        "macos": {
+            "status": os.environ["SUMMARY_MACOS_FRESH_STATUS"],
+            "version": os.environ["SUMMARY_MACOS_FRESH_VERSION"],
+            "gateway": os.environ["SUMMARY_MACOS_FRESH_GATEWAY_STATUS"],
+            "dashboard": os.environ["SUMMARY_MACOS_FRESH_DASHBOARD_STATUS"],
+            "agent": os.environ["SUMMARY_MACOS_FRESH_AGENT_STATUS"],
+            "discord": os.environ["SUMMARY_MACOS_FRESH_DISCORD_STATUS"],
+        },
+        "windows": {
+            "status": os.environ["SUMMARY_WINDOWS_FRESH_STATUS"],
+            "version": os.environ["SUMMARY_WINDOWS_FRESH_VERSION"],
+            "gateway": os.environ["SUMMARY_WINDOWS_FRESH_GATEWAY_STATUS"],
+            "dashboard": os.environ["SUMMARY_WINDOWS_FRESH_DASHBOARD_STATUS"],
+            "agent": os.environ["SUMMARY_WINDOWS_FRESH_AGENT_STATUS"],
+            "discord": os.environ["SUMMARY_WINDOWS_FRESH_DISCORD_STATUS"],
+        },
+        "linux": {
+            "status": os.environ["SUMMARY_LINUX_FRESH_STATUS"],
+            "version": os.environ["SUMMARY_LINUX_FRESH_VERSION"],
+            "gateway": os.environ["SUMMARY_LINUX_FRESH_GATEWAY_STATUS"],
+            "dashboard": os.environ["SUMMARY_LINUX_FRESH_DASHBOARD_STATUS"],
+            "agent": os.environ["SUMMARY_LINUX_FRESH_AGENT_STATUS"],
+            "discord": os.environ["SUMMARY_LINUX_FRESH_DISCORD_STATUS"],
+        },
     },
     "update": {
         "macos": {
@@ -1777,6 +1864,10 @@ wait_job "macOS fresh" "$macos_fresh_pid" "$RUN_DIR/macos-fresh.log" && MACOS_FR
 wait_job "Windows fresh" "$windows_fresh_pid" "$RUN_DIR/windows-fresh.log" && WINDOWS_FRESH_STATUS="pass" || WINDOWS_FRESH_STATUS="fail"
 wait_job "Linux fresh" "$linux_fresh_pid" "$RUN_DIR/linux-fresh.log" && LINUX_FRESH_STATUS="pass" || LINUX_FRESH_STATUS="fail"
 
+load_fresh_child_summary MACOS_FRESH "$RUN_DIR/macos-fresh.log"
+load_fresh_child_summary WINDOWS_FRESH "$RUN_DIR/windows-fresh.log"
+load_fresh_child_summary LINUX_FRESH "$RUN_DIR/linux-fresh.log"
+
 [[ "$MACOS_FRESH_STATUS" == "pass" ]] || die "macOS fresh baseline failed"
 [[ "$WINDOWS_FRESH_STATUS" == "pass" ]] || die "Windows fresh baseline failed"
 [[ "$LINUX_FRESH_STATUS" == "pass" ]] || die "Linux fresh baseline failed"
@@ -1840,6 +1931,21 @@ SUMMARY_RUN_DIR="$RUN_DIR" \
 SUMMARY_MACOS_FRESH_STATUS="$MACOS_FRESH_STATUS" \
 SUMMARY_WINDOWS_FRESH_STATUS="$WINDOWS_FRESH_STATUS" \
 SUMMARY_LINUX_FRESH_STATUS="$LINUX_FRESH_STATUS" \
+SUMMARY_MACOS_FRESH_VERSION="$MACOS_FRESH_VERSION" \
+SUMMARY_WINDOWS_FRESH_VERSION="$WINDOWS_FRESH_VERSION" \
+SUMMARY_LINUX_FRESH_VERSION="$LINUX_FRESH_VERSION" \
+SUMMARY_MACOS_FRESH_GATEWAY_STATUS="$MACOS_FRESH_GATEWAY_STATUS" \
+SUMMARY_WINDOWS_FRESH_GATEWAY_STATUS="$WINDOWS_FRESH_GATEWAY_STATUS" \
+SUMMARY_LINUX_FRESH_GATEWAY_STATUS="$LINUX_FRESH_GATEWAY_STATUS" \
+SUMMARY_MACOS_FRESH_DASHBOARD_STATUS="$MACOS_FRESH_DASHBOARD_STATUS" \
+SUMMARY_WINDOWS_FRESH_DASHBOARD_STATUS="$WINDOWS_FRESH_DASHBOARD_STATUS" \
+SUMMARY_LINUX_FRESH_DASHBOARD_STATUS="$LINUX_FRESH_DASHBOARD_STATUS" \
+SUMMARY_MACOS_FRESH_AGENT_STATUS="$MACOS_FRESH_AGENT_STATUS" \
+SUMMARY_WINDOWS_FRESH_AGENT_STATUS="$WINDOWS_FRESH_AGENT_STATUS" \
+SUMMARY_LINUX_FRESH_AGENT_STATUS="$LINUX_FRESH_AGENT_STATUS" \
+SUMMARY_MACOS_FRESH_DISCORD_STATUS="$MACOS_FRESH_DISCORD_STATUS" \
+SUMMARY_WINDOWS_FRESH_DISCORD_STATUS="$WINDOWS_FRESH_DISCORD_STATUS" \
+SUMMARY_LINUX_FRESH_DISCORD_STATUS="$LINUX_FRESH_DISCORD_STATUS" \
 SUMMARY_MACOS_UPDATE_STATUS="$MACOS_UPDATE_STATUS" \
 SUMMARY_WINDOWS_UPDATE_STATUS="$WINDOWS_UPDATE_STATUS" \
 SUMMARY_LINUX_UPDATE_STATUS="$LINUX_UPDATE_STATUS" \
@@ -1864,7 +1970,12 @@ if [[ "$JSON_OUTPUT" -eq 1 ]]; then
   cat "$RUN_DIR/summary.json"
 else
   say "Run dir: $RUN_DIR"
-  printf '  fresh macOS/windows/linux: %s / %s / %s\n' "$MACOS_FRESH_STATUS" "$WINDOWS_FRESH_STATUS" "$LINUX_FRESH_STATUS"
+  printf '  fresh macOS: %s (%s) gateway=%s dashboard=%s agent=%s discord=%s\n' \
+    "$MACOS_FRESH_STATUS" "$MACOS_FRESH_VERSION" "$MACOS_FRESH_GATEWAY_STATUS" "$MACOS_FRESH_DASHBOARD_STATUS" "$MACOS_FRESH_AGENT_STATUS" "$MACOS_FRESH_DISCORD_STATUS"
+  printf '  fresh windows: %s (%s) gateway=%s dashboard=%s agent=%s discord=%s\n' \
+    "$WINDOWS_FRESH_STATUS" "$WINDOWS_FRESH_VERSION" "$WINDOWS_FRESH_GATEWAY_STATUS" "$WINDOWS_FRESH_DASHBOARD_STATUS" "$WINDOWS_FRESH_AGENT_STATUS" "$WINDOWS_FRESH_DISCORD_STATUS"
+  printf '  fresh linux: %s (%s) gateway=%s dashboard=%s agent=%s discord=%s\n' \
+    "$LINUX_FRESH_STATUS" "$LINUX_FRESH_VERSION" "$LINUX_FRESH_GATEWAY_STATUS" "$LINUX_FRESH_DASHBOARD_STATUS" "$LINUX_FRESH_AGENT_STATUS" "$LINUX_FRESH_DISCORD_STATUS"
   printf '  update macOS: %s (%s) channels=%s dashboard=%s agent=%s discord=%s\n' \
     "$MACOS_UPDATE_STATUS" "$MACOS_UPDATE_VERSION" "$MACOS_UPDATE_CHANNELS_STATUS" "$MACOS_UPDATE_DASHBOARD_STATUS" "$MACOS_UPDATE_AGENT_STATUS" "$MACOS_UPDATE_DISCORD_STATUS"
   printf '  update windows: %s (%s) channels=%s dashboard=%s agent=%s discord=%s\n' \
