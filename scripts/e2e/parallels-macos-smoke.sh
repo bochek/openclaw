@@ -1630,6 +1630,7 @@ run_upgrade_lane() {
     UPGRADE_PRECHECK_STATUS="skipped"
   fi
   if upgrade_uses_host_tgz; then
+    UPGRADE_PERMISSION_STATUS="fail"
     phase_run "upgrade.install-main" "$(install_main_timeout)" install_main_tgz "$host_ip" "openclaw-main-upgrade.tgz"
     UPGRADE_MAIN_VERSION="$(extract_last_version "$(phase_log_path upgrade.install-main)")"
     phase_run "upgrade.verify-main-version" "$TIMEOUT_VERIFY_S" verify_target_version
@@ -1639,6 +1640,9 @@ run_upgrade_lane() {
     phase_run "upgrade.update-dev" "$TIMEOUT_UPDATE_DEV_S" run_dev_channel_update
     UPGRADE_MAIN_VERSION="$(extract_last_version "$(phase_log_path upgrade.update-dev)")"
     phase_run "upgrade.verify-dev-channel" "$TIMEOUT_VERIFY_S" verify_dev_channel_update
+    UPGRADE_PERMISSION_STATUS="fail"
+    phase_run "upgrade.verify-bundle-permissions" "$TIMEOUT_PERMISSION_S" verify_bundle_permissions
+    UPGRADE_PERMISSION_STATUS="pass"
   fi
   phase_run "upgrade.onboard-ref" "$TIMEOUT_ONBOARD_S" run_ref_onboard
   phase_run "upgrade.gateway-start" "$TIMEOUT_GATEWAY_S" start_manual_gateway_if_needed
