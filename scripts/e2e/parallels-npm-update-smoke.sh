@@ -457,6 +457,31 @@ function Wait-GatewayRpcReady {
   }
 }
 
+function Wait-DashboardReady {
+  param(
+    [string]$DashboardUrl = 'http://127.0.0.1:18789/',
+    [int]$Attempts = 15,
+    [int]$SleepSeconds = 2
+  )
+
+  for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
+    Write-ProgressLog "update.dashboard.attempt-$attempt"
+    try {
+      $response = Invoke-WebRequest -Uri $DashboardUrl -UseBasicParsing -TimeoutSec 5
+      $content = [string]$response.Content
+      if ($content.Contains('<title>OpenClaw Control</title>') -and $content.Contains('<openclaw-app></openclaw-app>')) {
+        return
+      }
+    } catch {
+    }
+    if ($attempt -lt $Attempts) {
+      Start-Sleep -Seconds $SleepSeconds
+    }
+  }
+
+  throw "dashboard HTML did not become ready at $DashboardUrl"
+}
+
 function Stop-OpenClawGatewayProcesses {
   Write-ProgressLog 'update.stop-old-gateway'
   $patterns = @(
@@ -567,6 +592,8 @@ try {
   # an explicit start only if the RPC endpoint never returns.
   Write-ProgressLog 'update.restart-gateway'
   Restart-GatewayWithRecovery -OpenClawPath $openclaw
+  Write-ProgressLog 'update.dashboard'
+  Wait-DashboardReady
   Write-ProgressLog 'update.agent-turn'
   Invoke-CaptureLogged 'openclaw agent' { & $openclaw agent --agent main --session-id $SessionId --message 'Reply with exact ASCII text OK only.' --json } | Out-Null
   $exitCode = $LASTEXITCODE
@@ -974,6 +1001,22 @@ if [ "\$gateway_ready" != "1" ]; then
   tail -n 120 /tmp/openclaw-parallels-npm-update-macos-gateway.log 2>/dev/null || true
 fi
 /opt/homebrew/bin/openclaw gateway status --deep --require-rpc
+dashboard_ready=0
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -fsSL --connect-timeout 2 --max-time 5 http://127.0.0.1:18789/ >/tmp/openclaw-parallels-npm-update-macos-dashboard.html 2>/dev/null; then
+    if grep -F '<title>OpenClaw Control</title>' /tmp/openclaw-parallels-npm-update-macos-dashboard.html >/dev/null; then
+      if grep -F '<openclaw-app></openclaw-app>' /tmp/openclaw-parallels-npm-update-macos-dashboard.html >/dev/null; then
+        dashboard_ready=1
+        break
+      fi
+    fi
+  fi
+  sleep 2
+done
+if [ "\$dashboard_ready" != "1" ]; then
+  echo "macOS dashboard did not become ready after update" >&2
+  exit 1
+fi
 /opt/homebrew/bin/openclaw agent --agent main --session-id parallels-npm-update-macos-$expected_needle --message "Reply with exact ASCII text OK only." --json
 EOF
   macos_desktop_user_exec /bin/bash /tmp/openclaw-main-update.sh
@@ -1056,6 +1099,22 @@ if [ "\$gateway_ready" != "1" ]; then
   exit 1
 fi
 openclaw gateway status --deep --require-rpc
+dashboard_ready=0
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  if curl -fsSL --connect-timeout 2 --max-time 5 http://127.0.0.1:18789/ >/tmp/openclaw-parallels-npm-update-linux-dashboard.html 2>/dev/null; then
+    if grep -F '<title>OpenClaw Control</title>' /tmp/openclaw-parallels-npm-update-linux-dashboard.html >/dev/null; then
+      if grep -F '<openclaw-app></openclaw-app>' /tmp/openclaw-parallels-npm-update-linux-dashboard.html >/dev/null; then
+        dashboard_ready=1
+        break
+      fi
+    fi
+  fi
+  sleep 2
+done
+if [ "\$dashboard_ready" != "1" ]; then
+  echo "Linux dashboard did not become ready after update" >&2
+  exit 1
+fi
 openclaw agent --local --agent main --session-id parallels-npm-update-linux-$expected_needle --message "Reply with exact ASCII text OK only." --json
 EOF
   prlctl exec "$LINUX_VM" /usr/bin/env "$API_KEY_ENV=$API_KEY_VALUE" /bin/bash /tmp/openclaw-main-update.sh
