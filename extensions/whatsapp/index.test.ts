@@ -1,12 +1,19 @@
 import fs from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { listBundledPluginPackArtifacts } from "../../scripts/lib/bundled-plugin-build-entries.mjs";
 import { assertBundledChannelEntries } from "../../test/helpers/bundled-channel-entry.ts";
-import { importFreshModule } from "../../test/helpers/import-fresh.ts";
+import {
+  defineWhatsAppBundledChannelEntry,
+  defineWhatsAppBundledChannelSetupEntry,
+} from "./assembly.js";
 import { whatsappAssembly } from "./assembly.js";
 import entry from "./index.js";
+import * as lightRuntimeAssembly from "./light-runtime-api.js";
+import * as runtimeAssembly from "./runtime-api.js";
 import setupEntry from "./setup-entry.js";
-import * as runtimeAssembly from "./src/runtime-api.js";
+import { whatsappPlugin } from "./src/channel.js";
+import { whatsappSetupPlugin } from "./src/channel.setup.js";
+import { getWhatsAppRuntime } from "./src/runtime.js";
 
 describe("whatsapp bundled entries", () => {
   assertBundledChannelEntries({
@@ -31,7 +38,7 @@ describe("whatsapp bundled entries", () => {
     expect(indexSource).toContain("defineWhatsAppBundledChannelEntry(import.meta.url)");
     expect(setupEntrySource).toContain("defineWhatsAppBundledChannelSetupEntry(import.meta.url)");
     expect(runtimeApiSource).toContain('from "./src/runtime-api.js"');
-    expect(lightRuntimeApiSource).toContain('from "./src/runtime-api.js"');
+    expect(lightRuntimeApiSource).toContain('from "./src/light-runtime-api.js"');
     expect(entry.id).toBe(whatsappAssembly.id);
     expect(entry.name).toBe(whatsappAssembly.name);
     expect(packageJson.openclaw.extensions).toEqual([...whatsappAssembly.package.entrySources]);
@@ -49,33 +56,28 @@ describe("whatsapp bundled entries", () => {
     }
   });
 
-  it("keeps heavy runtime imports cold while loading the setup plugin", async () => {
-    const loadHeavyRuntime = vi.fn();
+  it("exercises the real bundled entry sidecars for plugin load and runtime registration", () => {
+    const runtime = { logger: "runtime" };
+    const entryContract = defineWhatsAppBundledChannelEntry(import.meta.url);
+    const setupEntryContract = defineWhatsAppBundledChannelSetupEntry(import.meta.url);
 
-    vi.doMock("./src/runtime-api.js", () => {
-      loadHeavyRuntime();
-      return {
-        whatsappSetupWizard: {},
-      };
-    });
+    expect(entryContract.loadChannelPlugin()).toBe(whatsappPlugin);
+    entryContract.setChannelRuntime?.(runtime as never);
+    expect(setupEntryContract.loadSetupPlugin()).toBe(whatsappSetupPlugin);
+    expect(getWhatsAppRuntime()).toBe(runtime);
+  });
 
-    try {
-      const { default: freshSetupEntry } = await importFreshModule<
-        typeof import("./setup-entry.js")
-      >(import.meta.url, "./setup-entry.js?scope=whatsapp-setup-cold");
-
-      await freshSetupEntry.loadSetupPlugin();
-
-      expect(loadHeavyRuntime).not.toHaveBeenCalled();
-    } finally {
-      vi.doUnmock("./src/runtime-api.js");
-      vi.resetModules();
+  it("keeps gateway startup and login exports on the shared heavy runtime assembly surface", () => {
+    for (const exportName of whatsappAssembly.runtime.heavyExportNames) {
+      expect(runtimeAssembly).toHaveProperty(exportName);
     }
   });
 
-  it("keeps gateway startup and login exports on the shared runtime assembly surface", () => {
-    for (const exportName of whatsappAssembly.runtime.sharedExportNames) {
-      expect(runtimeAssembly).toHaveProperty(exportName);
+  it("keeps the light runtime assembly on the lightweight surface only", () => {
+    for (const exportName of whatsappAssembly.runtime.lightExportNames) {
+      expect(lightRuntimeAssembly).toHaveProperty(exportName);
     }
+    expect(lightRuntimeAssembly).not.toHaveProperty("monitorWebChannel");
+    expect(lightRuntimeAssembly).not.toHaveProperty("startWebLoginWithQr");
   });
 });

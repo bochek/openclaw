@@ -40,8 +40,8 @@ vi.mock("./login.js", () => ({
   loginWeb: hoisted.loginWeb,
 }));
 
-vi.mock("./setup-finalize.js", async () => {
-  const actual = await vi.importActual<typeof import("./setup-finalize.js")>("./setup-finalize.js");
+vi.mock("./setup-status.js", async () => {
+  const actual = await vi.importActual<typeof import("./setup-status.js")>("./setup-status.js");
   return {
     ...actual,
     detectWhatsAppLinked: hoisted.detectWhatsAppLinked,
@@ -132,12 +132,12 @@ async function runSeparatePhoneFlow(params: { selectValues: string[]; textValues
 describe("whatsapp setup wizard", () => {
   beforeEach(() => {
     hoisted.detectWhatsAppLinked.mockReset();
-    hoisted.detectWhatsAppLinked.mockResolvedValue(false);
     hoisted.loginWeb.mockReset();
     hoisted.pathExists.mockReset();
     hoisted.pathExists.mockResolvedValue(false);
     hoisted.resolveWhatsAppAuthDir.mockReset();
     hoisted.resolveWhatsAppAuthDir.mockReturnValue({ authDir: "/tmp/openclaw-whatsapp-test" });
+    hoisted.detectWhatsAppLinked.mockImplementation(async () => await hoisted.pathExists());
   });
 
   it("applies owner allowlist when forceAllowFrom is enabled", async () => {

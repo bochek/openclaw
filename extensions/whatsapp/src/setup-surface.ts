@@ -1,7 +1,7 @@
 import type { ChannelSetupWizard } from "openclaw/plugin-sdk/setup";
 import { DEFAULT_ACCOUNT_ID, setSetupChannelEnabled } from "openclaw/plugin-sdk/setup";
 import { listWhatsAppAccountIds } from "./accounts.js";
-import { detectWhatsAppLinked, finalizeWhatsAppSetup } from "./setup-finalize.js";
+import { detectWhatsAppLinked } from "./setup-status.js";
 
 const channel = "whatsapp" as const;
 
@@ -43,7 +43,9 @@ export const whatsappSetupWizard: ChannelSetupWizard = {
   resolveShouldPromptAccountIds: ({ shouldPromptAccountIds }) => shouldPromptAccountIds,
   credentials: [],
   finalize: async ({ cfg, accountId, forceAllowFrom, prompter, runtime }) =>
-    await finalizeWhatsAppSetup({ cfg, accountId, forceAllowFrom, prompter, runtime }),
+    await (
+      await import("./setup-finalize.js")
+    ).finalizeWhatsAppSetup({ cfg, accountId, forceAllowFrom, prompter, runtime }),
   disable: (cfg) => setSetupChannelEnabled(cfg, channel, false),
   onAccountRecorded: (accountId, options) => {
     options?.onAccountId?.(channel, accountId);

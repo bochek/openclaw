@@ -1,6 +1,7 @@
 import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/routing";
 import type { RuntimeEnv } from "openclaw/plugin-sdk/runtime-env";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { importFreshModule } from "../../../test/helpers/import-fresh.ts";
 import { createQueuedWizardPrompter } from "../../../test/helpers/plugins/setup-wizard.js";
 import { whatsappApprovalAuth } from "./approval-auth.js";
 import { whatsappPlugin } from "./channel.js";
@@ -255,5 +256,59 @@ describe("whatsapp setup wizard", () => {
     });
 
     expect(result).toEqual({ ok: true, reason: "ok" });
+  });
+
+  it("keeps setup wizard status and finalize off the heavy runtime assembly", async () => {
+    const loadHeavyRuntime = vi.fn();
+    const delegatedResolveConfigured = vi.fn(async () => true);
+    const delegatedFinalize = vi.fn(async () => ({ cfg: { channels: { whatsapp: {} } } }));
+
+    vi.doMock("./setup-surface.js", () => ({
+      whatsappSetupWizard: {
+        channel: "whatsapp",
+        status: {
+          configuredLabel: "linked",
+          unconfiguredLabel: "not linked",
+          configuredHint: "linked",
+          unconfiguredHint: "not linked",
+          configuredScore: 5,
+          unconfiguredScore: 4,
+          resolveConfigured: delegatedResolveConfigured,
+          resolveStatusLines: async () => ["WhatsApp: linked"],
+        },
+        credentials: [],
+        finalize: delegatedFinalize,
+      },
+    }));
+
+    vi.doMock("./runtime-api.js", () => {
+      loadHeavyRuntime();
+      return {};
+    });
+
+    const freshAssembly = await importFreshModule<typeof import("../assembly.js")>(
+      import.meta.url,
+      "../assembly.js?scope=whatsapp-setup-cold",
+    );
+    const wizard = freshAssembly.whatsappSetupWizardProxy;
+
+    expect(loadHeavyRuntime).not.toHaveBeenCalled();
+    expect(await wizard.status.resolveConfigured?.({ cfg: {} })).toBe(true);
+    expect(loadHeavyRuntime).not.toHaveBeenCalled();
+    expect(delegatedResolveConfigured).toHaveBeenCalledWith({ cfg: {} });
+
+    await wizard.finalize?.({
+      cfg: {},
+      accountId: DEFAULT_ACCOUNT_ID,
+      forceAllowFrom: false,
+      prompter: {} as never,
+      runtime: {} as never,
+    });
+
+    expect(loadHeavyRuntime).not.toHaveBeenCalled();
+    expect(delegatedFinalize).toHaveBeenCalled();
+
+    vi.doUnmock("./setup-surface.js");
+    vi.doUnmock("./runtime-api.js");
   });
 });

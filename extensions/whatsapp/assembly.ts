@@ -8,6 +8,7 @@ import {
 } from "openclaw/plugin-sdk/setup-runtime";
 
 type WhatsAppRuntimeAssembly = typeof import("./src/runtime-api.js");
+type WhatsAppSetupSurface = typeof import("./src/setup-surface.js");
 
 export const whatsappAssembly = {
   id: "whatsapp",
@@ -50,7 +51,7 @@ export const whatsappAssembly = {
     ],
   },
   runtime: {
-    sharedExportNames: [
+    heavyExportNames: [
       "getActiveWebListener",
       "getWebAuthAgeMs",
       "logWebSelfId",
@@ -60,22 +61,42 @@ export const whatsappAssembly = {
       "startWebLoginWithQr",
       "waitForWebLogin",
       "webAuthExists",
-      "whatsappSetupWizard",
+      "loginWeb",
+      "setWhatsAppRuntime",
+    ],
+    lightExportNames: [
+      "createWhatsAppLoginTool",
+      "formatError",
+      "getActiveWebListener",
+      "getStatusCode",
+      "getWebAuthAgeMs",
+      "logWebSelfId",
+      "logoutWeb",
+      "pickWebChannel",
+      "readWebSelfId",
+      "WA_WEB_AUTH_DIR",
+      "webAuthExists",
     ],
   },
 } as const;
 
 let runtimeAssemblyPromise: Promise<WhatsAppRuntimeAssembly> | null = null;
+let setupSurfacePromise: Promise<WhatsAppSetupSurface> | null = null;
 
 export function loadWhatsAppChannelRuntime(): Promise<WhatsAppRuntimeAssembly> {
   runtimeAssemblyPromise ??= import("./src/runtime-api.js");
   return runtimeAssemblyPromise;
 }
 
+export function loadWhatsAppSetupSurface(): Promise<WhatsAppSetupSurface> {
+  setupSurfacePromise ??= import("./src/setup-surface.js");
+  return setupSurfacePromise;
+}
+
 export const whatsappSetupWizardProxy = createDelegatedSetupWizardProxy({
   channel: whatsappAssembly.id,
   loadWizard: async (): Promise<ChannelSetupWizard> =>
-    (await loadWhatsAppChannelRuntime()).whatsappSetupWizard,
+    (await loadWhatsAppSetupSurface()).whatsappSetupWizard,
   status: {
     configuredLabel: "linked",
     unconfiguredLabel: "not linked",

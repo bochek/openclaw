@@ -61,7 +61,6 @@ export * from "./media.js";
 export * from "./send.js";
 export { formatError, getStatusCode } from "./session-errors.js";
 export * from "./session.js";
-export { whatsappSetupWizard } from "./setup-surface.js";
 export { setWhatsAppRuntime } from "./runtime.js";
 
 export type OpenClawConfig = RuntimeOpenClawConfig;

@@ -1,9 +1,7 @@
-import path from "node:path";
 import {
   DEFAULT_ACCOUNT_ID,
   normalizeAllowFromEntries,
   normalizeE164,
-  pathExists,
   splitSetupEntries,
   type DmPolicy,
   type OpenClawConfig,
@@ -15,8 +13,8 @@ import {
   resolveWhatsAppAccount,
   resolveWhatsAppAuthDir,
 } from "./accounts.js";
-import { loginWeb } from "./login.js";
 import { whatsappSetupAdapter } from "./setup-core.js";
+import { detectWhatsAppLinked } from "./setup-status.js";
 
 type SetupPrompter = Parameters<NonNullable<ChannelSetupWizard["finalize"]>>[0]["prompter"];
 type SetupRuntime = Parameters<NonNullable<ChannelSetupWizard["finalize"]>>[0]["runtime"];
@@ -98,15 +96,6 @@ function setWhatsAppSelfChatMode(
   selfChatMode: boolean,
 ): OpenClawConfig {
   return mergeWhatsAppConfig(cfg, accountId, { selfChatMode });
-}
-
-export async function detectWhatsAppLinked(
-  cfg: OpenClawConfig,
-  accountId: string,
-): Promise<boolean> {
-  const { authDir } = resolveWhatsAppAuthDir({ cfg, accountId });
-  const credsPath = path.join(authDir, "creds.json");
-  return await pathExists(credsPath);
 }
 
 async function promptWhatsAppOwnerAllowFrom(params: {
@@ -370,7 +359,7 @@ export async function finalizeWhatsAppSetup(params: {
   });
   if (wantsLink) {
     try {
-      await loginWeb(false, undefined, params.runtime, accountId);
+      await (await import("./login.js")).loginWeb(false, undefined, params.runtime, accountId);
     } catch (error) {
       params.runtime.error(`WhatsApp login failed: ${String(error)}`);
       await params.prompter.note(
