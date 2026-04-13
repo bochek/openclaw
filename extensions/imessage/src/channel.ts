@@ -238,6 +238,10 @@ export const imessagePlugin: ChannelPlugin<ResolvedIMessageAccount, IMessageProb
       },
     },
     security: imessageSecurityAdapter,
+    threading: {
+      resolveReplyToMode: () => "off",
+      allowExplicitReplyTagsWhenOff: false,
+    },
     outbound: {
       base: {
         deliveryMode: "direct",

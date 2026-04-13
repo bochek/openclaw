@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { imessagePlugin } from "../../../extensions/imessage/src/channel.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { setActivePluginRegistry } from "../../plugins/runtime.js";
-import { createTestRegistry } from "../../test-utils/channel-plugins.js";
 import {
+  createChannelTestPluginBase,
+  createTestRegistry,
+} from "../../test-utils/channel-plugins.js";
+import {
+  createReplyToModeFilterForChannel,
   resolveConfiguredReplyToMode,
   resolveReplyToMode,
   resolveReplyToModeWithThreading,
@@ -100,6 +105,35 @@ describe("resolveReplyToMode", () => {
         },
       ),
     ).toBe("first");
+  });
+
+  it("lets plugin threading override the legacy default for imessage", () => {
+    setActivePluginRegistry(
+      createTestRegistry([{ pluginId: "imessage", plugin: imessagePlugin, source: "test" }]),
+    );
+
+    expect(
+      resolveReplyToModeWithThreading(emptyCfg, imessagePlugin.threading, {
+        channel: "imessage",
+        accountId: "default",
+        chatType: "direct",
+      }),
+    ).toBe("off");
+  });
+
+  it("honors per-channel opt-out for explicit reply tags when off", () => {
+    const imessagePlugin = {
+      ...createChannelTestPluginBase({ id: "imessage", label: "iMessage" }),
+      threading: {
+        allowExplicitReplyTagsWhenOff: false,
+      },
+    };
+    setActivePluginRegistry(
+      createTestRegistry([{ pluginId: "imessage", plugin: imessagePlugin, source: "test" }]),
+    );
+
+    const filter = createReplyToModeFilterForChannel("off", "imessage");
+    expect(filter({ text: "hi", replyToId: "1", replyToTag: true }).replyToId).toBeUndefined();
   });
 });
 
