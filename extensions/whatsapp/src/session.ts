@@ -16,6 +16,7 @@ import {
   resolveWebCredsBackupPath,
   resolveWebCredsPath,
 } from "./auth-store.js";
+import { renderQrTerminal } from "./qr-terminal.js";
 import { formatError, getStatusCode } from "./session-errors.js";
 import {
   BufferJSON,
@@ -39,10 +40,6 @@ export {
 
 const LOGGED_OUT_STATUS = DisconnectReason?.loggedOut ?? 401;
 
-async function loadQrTerminal() {
-  return await import("@vincentkoc/qrcode-tui");
-}
-
 export async function writeCredsJsonAtomically(authDir: string, creds: unknown): Promise<void> {
   const credsPath = resolveWebCredsPath(authDir);
   const tempPath = path.join(authDir, `.creds.${process.pid}.${Date.now()}.tmp`);
@@ -58,7 +55,6 @@ export async function writeCredsJsonAtomically(authDir: string, creds: unknown):
     throw err;
   }
 }
-
 // Per-authDir queues so multi-account creds saves don't block each other.
 const credsSaveQueues = new Map<string, Promise<void>>();
 const CREDS_SAVE_FLUSH_TIMEOUT_MS = 15_000;
@@ -116,8 +112,7 @@ async function safeSaveCreds(
 }
 
 async function printTerminalQr(qr: string): Promise<void> {
-  const { renderTerminal } = await loadQrTerminal();
-  const output = await renderTerminal(qr, { small: true });
+  const output = await renderQrTerminal(qr, { small: true });
   process.stdout.write(output.endsWith("\n") ? output : `${output}\n`);
 }
 

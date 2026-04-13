@@ -5,8 +5,7 @@
   "type": "module",
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.60.0",
-    "@sinclair/typebox": "0.34.49",
-    "@vincentkoc/qrcode-tui": "^0.2.1"
+    "@sinclair/typebox": "0.34.49"
   },
   "devDependencies": {
     "@openclaw/plugin-sdk": "workspace:*",
