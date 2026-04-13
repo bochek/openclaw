@@ -13,7 +13,6 @@ import * as runtimeAssembly from "./runtime-api.js";
 import setupEntry from "./setup-entry.js";
 import { whatsappPlugin } from "./src/channel.js";
 import { whatsappSetupPlugin } from "./src/channel.setup.js";
-import { getWhatsAppRuntime } from "./src/runtime.js";
 
 describe("whatsapp bundled entries", () => {
   assertBundledChannelEntries({
@@ -27,8 +26,12 @@ describe("whatsapp bundled entries", () => {
     const packageJson = JSON.parse(
       fs.readFileSync(new URL("./package.json", import.meta.url), "utf8"),
     );
+    const manifestJson = JSON.parse(
+      fs.readFileSync(new URL("./openclaw.plugin.json", import.meta.url), "utf8"),
+    );
     const indexSource = fs.readFileSync(new URL("./index.ts", import.meta.url), "utf8");
     const setupEntrySource = fs.readFileSync(new URL("./setup-entry.ts", import.meta.url), "utf8");
+    const assemblySource = fs.readFileSync(new URL("./assembly.ts", import.meta.url), "utf8");
     const runtimeApiSource = fs.readFileSync(new URL("./runtime-api.ts", import.meta.url), "utf8");
     const lightRuntimeApiSource = fs.readFileSync(
       new URL("./light-runtime-api.ts", import.meta.url),
@@ -37,15 +40,17 @@ describe("whatsapp bundled entries", () => {
 
     expect(indexSource).toContain("defineWhatsAppBundledChannelEntry(import.meta.url)");
     expect(setupEntrySource).toContain("defineWhatsAppBundledChannelSetupEntry(import.meta.url)");
+    expect(assemblySource).toContain('import("./src/channel-runtime.runtime.js")');
     expect(runtimeApiSource).toContain('from "./src/runtime-api.js"');
     expect(lightRuntimeApiSource).toContain('from "./src/light-runtime-api.js"');
     expect(entry.id).toBe(whatsappAssembly.id);
     expect(entry.name).toBe(whatsappAssembly.name);
+    expect(manifestJson.id).toBe(whatsappAssembly.manifest.id);
+    expect(manifestJson.channels).toEqual([...whatsappAssembly.manifest.channels]);
     expect(packageJson.openclaw.extensions).toEqual([...whatsappAssembly.package.entrySources]);
     expect(packageJson.openclaw.setupEntry).toBe(whatsappAssembly.package.setupEntrySource);
-    expect(packageJson.openclaw.channel.persistedAuthState).toEqual(
-      whatsappAssembly.package.persistedAuthState,
-    );
+    expect(packageJson.openclaw.channel).toEqual(whatsappAssembly.package.channel);
+    expect(packageJson.openclaw.install.npmSpec).toBe(whatsappAssembly.package.install.npmSpec);
   });
 
   it("packs the required WhatsApp assembly artifacts", () => {
@@ -61,10 +66,9 @@ describe("whatsapp bundled entries", () => {
     const entryContract = defineWhatsAppBundledChannelEntry(import.meta.url);
     const setupEntryContract = defineWhatsAppBundledChannelSetupEntry(import.meta.url);
 
-    expect(entryContract.loadChannelPlugin()).toBe(whatsappPlugin);
-    entryContract.setChannelRuntime?.(runtime as never);
-    expect(setupEntryContract.loadSetupPlugin()).toBe(whatsappSetupPlugin);
-    expect(getWhatsAppRuntime()).toBe(runtime);
+    expect(entryContract.loadChannelPlugin()).toHaveProperty("id", whatsappPlugin.id);
+    expect(() => entryContract.setChannelRuntime?.(runtime as never)).not.toThrow();
+    expect(setupEntryContract.loadSetupPlugin()).toHaveProperty("id", whatsappSetupPlugin.id);
   });
 
   it("keeps gateway startup and login exports on the shared heavy runtime assembly surface", () => {

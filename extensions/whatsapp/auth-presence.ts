@@ -13,6 +13,16 @@ type WhatsAppAuthPresenceParams =
     }
   | OpenClawConfig;
 
+function resolveLegacyChannelAuthDir(cfg: OpenClawConfig): string | undefined {
+  const channels = cfg.channels as Record<string, unknown> | undefined;
+  const channel = channels?.whatsapp;
+  if (!channel || typeof channel !== "object") {
+    return undefined;
+  }
+  const authDir = (channel as Record<string, unknown>).authDir;
+  return typeof authDir === "string" ? authDir : undefined;
+}
+
 function addAccountAuthDirs(
   authDirs: Set<string>,
   accountId: string,
@@ -36,7 +46,13 @@ function listWhatsAppAuthDirs(
   const channel = cfg.channels?.whatsapp;
   const authDirs = new Set<string>([oauthDir, path.join(accountsRoot, DEFAULT_ACCOUNT_ID)]);
 
-  addAccountAuthDirs(authDirs, DEFAULT_ACCOUNT_ID, undefined, accountsRoot, env);
+  addAccountAuthDirs(
+    authDirs,
+    DEFAULT_ACCOUNT_ID,
+    resolveLegacyChannelAuthDir(cfg),
+    accountsRoot,
+    env,
+  );
 
   if (channel?.defaultAccount?.trim()) {
     addAccountAuthDirs(

@@ -1,27 +1,13 @@
 import type { ChannelSetupWizard } from "openclaw/plugin-sdk/setup";
-import { DEFAULT_ACCOUNT_ID, setSetupChannelEnabled } from "openclaw/plugin-sdk/setup";
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk/setup";
 import { listWhatsAppAccountIds } from "./accounts.js";
+import { whatsappSetupWizardContract } from "./setup-contract.js";
 import { detectWhatsAppLinked } from "./setup-status.js";
 
-const channel = "whatsapp" as const;
-
 export const whatsappSetupWizard: ChannelSetupWizard = {
-  channel,
+  ...whatsappSetupWizardContract,
   status: {
-    configuredLabel: "linked",
-    unconfiguredLabel: "not linked",
-    configuredHint: "linked",
-    unconfiguredHint: "not linked",
-    configuredScore: 5,
-    unconfiguredScore: 4,
-    resolveConfigured: async ({ cfg, accountId }) => {
-      for (const resolvedAccountId of accountId ? [accountId] : listWhatsAppAccountIds(cfg)) {
-        if (await detectWhatsAppLinked(cfg, resolvedAccountId)) {
-          return true;
-        }
-      }
-      return false;
-    },
+    ...whatsappSetupWizardContract.status,
     resolveStatusLines: async ({ cfg, accountId, configured }) => {
       const linkedAccountId = (
         await Promise.all(
@@ -40,14 +26,8 @@ export const whatsappSetupWizard: ChannelSetupWizard = {
       return [`${label}: ${configured ? "linked" : "not linked"}`];
     },
   },
-  resolveShouldPromptAccountIds: ({ shouldPromptAccountIds }) => shouldPromptAccountIds,
-  credentials: [],
   finalize: async ({ cfg, accountId, forceAllowFrom, prompter, runtime }) =>
     await (
       await import("./setup-finalize.js")
     ).finalizeWhatsAppSetup({ cfg, accountId, forceAllowFrom, prompter, runtime }),
-  disable: (cfg) => setSetupChannelEnabled(cfg, channel, false),
-  onAccountRecorded: (accountId, options) => {
-    options?.onAccountId?.(channel, accountId);
-  },
 };

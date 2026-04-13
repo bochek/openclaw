@@ -6,14 +6,19 @@ import {
   createDelegatedSetupWizardProxy,
   type ChannelSetupWizard,
 } from "openclaw/plugin-sdk/setup-runtime";
+import { whatsappSetupWizardContract } from "./src/setup-contract.js";
 
-type WhatsAppRuntimeAssembly = typeof import("./src/runtime-api.js");
+type WhatsAppRuntimeAssembly = typeof import("./src/channel-runtime.runtime.js");
 type WhatsAppSetupSurface = typeof import("./src/setup-surface.js");
 
 export const whatsappAssembly = {
   id: "whatsapp",
   name: "WhatsApp",
   description: "WhatsApp channel plugin",
+  manifest: {
+    id: "whatsapp",
+    channels: ["whatsapp"],
+  },
   entry: {
     plugin: {
       specifier: "./channel-plugin-api.js",
@@ -33,9 +38,22 @@ export const whatsappAssembly = {
   package: {
     entrySources: ["./index.ts"],
     setupEntrySource: "./setup-entry.ts",
-    persistedAuthState: {
-      specifier: "./auth-presence",
-      exportName: "hasAnyWhatsAppAuth",
+    channel: {
+      id: "whatsapp",
+      label: "WhatsApp",
+      selectionLabel: "WhatsApp (QR link)",
+      detailLabel: "WhatsApp Web",
+      docsPath: "/channels/whatsapp",
+      docsLabel: "whatsapp",
+      blurb: "works with your own number; recommend a separate phone + eSIM.",
+      systemImage: "message",
+      persistedAuthState: {
+        specifier: "./auth-presence",
+        exportName: "hasAnyWhatsAppAuth",
+      },
+    },
+    install: {
+      npmSpec: "@openclaw/whatsapp",
     },
     packagedArtifacts: [
       "assembly.js",
@@ -44,6 +62,7 @@ export const whatsappAssembly = {
       "index.js",
       "light-runtime-api.js",
       "login-qr-runtime.js",
+      "openclaw.plugin.json",
       "package.json",
       "runtime-api.js",
       "setup-entry.js",
@@ -84,7 +103,7 @@ let runtimeAssemblyPromise: Promise<WhatsAppRuntimeAssembly> | null = null;
 let setupSurfacePromise: Promise<WhatsAppSetupSurface> | null = null;
 
 export function loadWhatsAppChannelRuntime(): Promise<WhatsAppRuntimeAssembly> {
-  runtimeAssemblyPromise ??= import("./src/runtime-api.js");
+  runtimeAssemblyPromise ??= import("./src/channel-runtime.runtime.js");
   return runtimeAssemblyPromise;
 }
 
@@ -94,33 +113,15 @@ export function loadWhatsAppSetupSurface(): Promise<WhatsAppSetupSurface> {
 }
 
 export const whatsappSetupWizardProxy = createDelegatedSetupWizardProxy({
-  channel: whatsappAssembly.id,
+  channel: whatsappSetupWizardContract.channel,
   loadWizard: async (): Promise<ChannelSetupWizard> =>
     (await loadWhatsAppSetupSurface()).whatsappSetupWizard,
-  status: {
-    configuredLabel: "linked",
-    unconfiguredLabel: "not linked",
-    configuredHint: "linked",
-    unconfiguredHint: "not linked",
-    configuredScore: 5,
-    unconfiguredScore: 4,
-  },
-  resolveShouldPromptAccountIds: (params) => params.shouldPromptAccountIds,
-  credentials: [],
+  status: whatsappSetupWizardContract.status,
+  resolveShouldPromptAccountIds: whatsappSetupWizardContract.resolveShouldPromptAccountIds,
+  credentials: whatsappSetupWizardContract.credentials,
   delegateFinalize: true,
-  disable: (cfg) => ({
-    ...cfg,
-    channels: {
-      ...cfg.channels,
-      whatsapp: {
-        ...cfg.channels?.whatsapp,
-        enabled: false,
-      },
-    },
-  }),
-  onAccountRecorded: (accountId, options) => {
-    options?.onAccountId?.(whatsappAssembly.id, accountId);
-  },
+  disable: whatsappSetupWizardContract.disable,
+  onAccountRecorded: whatsappSetupWizardContract.onAccountRecorded,
 });
 
 export function defineWhatsAppBundledChannelEntry(importMetaUrl: string) {

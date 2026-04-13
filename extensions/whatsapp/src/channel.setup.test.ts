@@ -300,6 +300,7 @@ describe("whatsapp setup wizard", () => {
     await wizard.finalize?.({
       cfg: {},
       accountId: DEFAULT_ACCOUNT_ID,
+      credentialValues: {},
       forceAllowFrom: false,
       prompter: {} as never,
       runtime: {} as never,
@@ -310,5 +311,31 @@ describe("whatsapp setup wizard", () => {
 
     vi.doUnmock("./setup-surface.js");
     vi.doUnmock("./runtime-api.js");
+  });
+
+  it("keeps host-facing setup entry wrappers off the heavy runtime assembly", async () => {
+    const loadHeavyRuntime = vi.fn();
+
+    vi.doMock("../runtime-api.js", () => {
+      loadHeavyRuntime();
+      return {};
+    });
+
+    const freshSetupEntry = await importFreshModule<typeof import("../setup-entry.js")>(
+      import.meta.url,
+      "../setup-entry.js?scope=whatsapp-setup-entry-cold",
+    );
+    const freshSetupPluginApi = await importFreshModule<typeof import("../setup-plugin-api.js")>(
+      import.meta.url,
+      "../setup-plugin-api.js?scope=whatsapp-setup-plugin-api-cold",
+    );
+
+    expect(loadHeavyRuntime).not.toHaveBeenCalled();
+    expect(freshSetupEntry.default.loadSetupPlugin()).toHaveProperty("id", "whatsapp");
+    expect(loadHeavyRuntime).not.toHaveBeenCalled();
+    expect(freshSetupPluginApi.whatsappSetupPlugin).toHaveProperty("id", "whatsapp");
+    expect(loadHeavyRuntime).not.toHaveBeenCalled();
+
+    vi.doUnmock("../runtime-api.js");
   });
 });
