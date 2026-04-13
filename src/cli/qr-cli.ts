@@ -24,17 +24,12 @@ type QrCliOptions = {
 };
 
 async function loadQrTerminal() {
-  const mod = await import("qrcode-terminal");
-  return mod.default ?? mod;
+  return await import("@vincentkoc/qrcode-tui");
 }
 
 async function renderQrAscii(data: string): Promise<string> {
-  const qrcode = await loadQrTerminal();
-  return new Promise((resolve) => {
-    qrcode.generate(data, { small: true }, (output: string) => {
-      resolve(output);
-    });
-  });
+  const { renderTerminal } = await loadQrTerminal();
+  return await renderTerminal(data, { small: true });
 }
 
 function readDevicePairPublicUrlFromConfig(cfg: OpenClawConfig): string | undefined {

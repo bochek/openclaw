@@ -6,7 +6,7 @@
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.60.0",
     "@sinclair/typebox": "0.34.49",
-    "qrcode-terminal": "^0.12.0"
+    "@vincentkoc/qrcode-tui": "^0.2.1"
   },
   "devDependencies": {
     "@openclaw/plugin-sdk": "workspace:*",

@@ -8,5 +8,5 @@ IMAGE_NAME="${OPENCLAW_QR_SMOKE_IMAGE:-openclaw-qr-smoke}"
 echo "Building Docker image..."
 run_logged qr-import-build docker build -t "$IMAGE_NAME" -f "$ROOT_DIR/scripts/e2e/Dockerfile.qr-import" "$ROOT_DIR"
 
-echo "Running qrcode-terminal import smoke..."
-run_logged qr-import-run docker run --rm -t "$IMAGE_NAME" node -e "import('qrcode-terminal').then((m)=>m.default.generate('qr-smoke',{small:true}))"
+echo "Running qrcode-tui import smoke..."
+run_logged qr-import-run docker run --rm -t "$IMAGE_NAME" node -e "import('@vincentkoc/qrcode-tui').then(async (m)=>{process.stdout.write(await m.renderTerminal('qr-smoke',{small:true}))})"
