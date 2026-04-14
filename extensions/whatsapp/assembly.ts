@@ -8,7 +8,7 @@ import {
 } from "openclaw/plugin-sdk/setup-runtime";
 import { whatsappSetupWizardContract } from "./src/setup-contract.js";
 
-type WhatsAppRuntimeAssembly = typeof import("./src/channel-runtime.runtime.js");
+type WhatsAppRuntimeAssembly = typeof import("./src/channel.runtime.js");
 type WhatsAppSetupSurface = typeof import("./src/setup-surface.js");
 
 export const whatsappAssembly = {
@@ -103,7 +103,7 @@ let runtimeAssemblyPromise: Promise<WhatsAppRuntimeAssembly> | null = null;
 let setupSurfacePromise: Promise<WhatsAppSetupSurface> | null = null;
 
 export function loadWhatsAppChannelRuntime(): Promise<WhatsAppRuntimeAssembly> {
-  runtimeAssemblyPromise ??= import("./src/channel-runtime.runtime.js");
+  runtimeAssemblyPromise ??= import("./src/channel.runtime.js");
   return runtimeAssemblyPromise;
 }
 

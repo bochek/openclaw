@@ -40,7 +40,7 @@ describe("whatsapp bundled entries", () => {
 
     expect(indexSource).toContain("defineWhatsAppBundledChannelEntry(import.meta.url)");
     expect(setupEntrySource).toContain("defineWhatsAppBundledChannelSetupEntry(import.meta.url)");
-    expect(assemblySource).toContain('import("./src/channel-runtime.runtime.js")');
+    expect(assemblySource).toContain('import("./src/channel.runtime.js")');
     expect(runtimeApiSource).toContain('from "./src/runtime-api.js"');
     expect(lightRuntimeApiSource).toContain('from "./src/light-runtime-api.js"');
     expect(entry.id).toBe(whatsappAssembly.id);
