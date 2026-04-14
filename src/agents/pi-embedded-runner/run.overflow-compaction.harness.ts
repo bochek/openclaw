@@ -10,6 +10,8 @@ import type {
 import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import type { FailoverReason } from "../pi-embedded-helpers/types.js";
 import type { EmbeddedRunAttemptResult } from "./run/types.js";
+type ResolveProviderIntermediateAssistantAckWithPlugin =
+  typeof import("../../plugins/provider-runtime.js").resolveProviderIntermediateAssistantAckWithPlugin;
 
 type MockCompactionResult =
   | {
@@ -68,7 +70,8 @@ export const mockedCompactDirect = mockedContextEngine.compact;
 export const mockedRunPostCompactionSideEffects = vi.fn(async () => {});
 export const mockedEnsureRuntimePluginsLoaded = vi.fn<(params?: unknown) => void>();
 export const mockedPrepareProviderRuntimeAuth = vi.fn(async () => undefined);
-export const mockedResolveProviderIntermediateAssistantAckWithPlugin = vi.fn(() => undefined);
+export const mockedResolveProviderIntermediateAssistantAckWithPlugin =
+  vi.fn<ResolveProviderIntermediateAssistantAckWithPlugin>(() => undefined);
 export const mockedRunEmbeddedAttempt =
   vi.fn<(params: unknown) => Promise<EmbeddedRunAttemptResult>>();
 export const mockedRunContextEngineMaintenance = vi.fn(async () => undefined);
