@@ -404,6 +404,52 @@ describe("resolveCommandAuthorization", () => {
       expect(auth.isAuthorizedSender).toBe(true);
     });
 
+    it("warns and falls back when channel-resolved authorization is malformed", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const auth = resolveCommandAuthorization({
+          ctx: {
+            ...makeWhatsAppContext("otheruser"),
+            ResolvedCommandAuthorization: {
+              providerId: "whatsapp",
+              ownerList: "not-an-array",
+              senderId: "otheruser",
+              senderIsOwner: true,
+              isAuthorizedSender: true,
+            } as unknown as MsgContext["ResolvedCommandAuthorization"],
+          } as MsgContext,
+          cfg: commandsAllowFromConfig,
+          commandAuthorized: false,
+        });
+
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining("malformed ResolvedCommandAuthorization"),
+        );
+        expect(auth.providerId).toBe("whatsapp");
+        expect(auth.isAuthorizedSender).toBe(false);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
+    it("backfills providerId from context when channel-resolved authorization omits it", () => {
+      const auth = resolveCommandAuthorization({
+        ctx: {
+          ...makeWhatsAppContext("otheruser"),
+          ResolvedCommandAuthorization: {
+            ownerList: ["123"],
+            senderId: "otheruser",
+            senderIsOwner: false,
+            isAuthorizedSender: false,
+          },
+        } as MsgContext,
+        cfg: commandsAllowFromConfig,
+        commandAuthorized: false,
+      });
+
+      expect(auth.providerId).toBe("whatsapp");
+    });
+
     it("uses commands.allowFrom provider-specific list over global", () => {
       const cfg = {
         commands: {

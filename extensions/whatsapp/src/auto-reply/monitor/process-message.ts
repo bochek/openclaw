@@ -48,20 +48,29 @@ type WhatsAppResolvedCommandAuthorization = {
   resolvedCommandAuthorization?: ResolvedCommandAuthorization;
 };
 
+function normalizeConfiguredWhatsAppOwnerList(params: {
+  configuredAllowFrom: Array<string | number>;
+  senderE164: string;
+  isSelfChat: boolean;
+}): string[] {
+  const ownerList = params.configuredAllowFrom
+    .map((entry) => normalizeE164(String(entry)))
+    .filter((entry): entry is string => Boolean(entry));
+  if (params.isSelfChat && !ownerList.includes(params.senderE164)) {
+    ownerList.push(params.senderE164);
+  }
+  return Array.from(new Set(ownerList));
+}
+
 async function resolveWhatsAppCommandAuthorization(params: {
   cfg: ReturnType<LoadConfigFn>;
   msg: WebInboundMsg;
 }): Promise<WhatsAppResolvedCommandAuthorization> {
   const useAccessGroups = params.cfg.commands?.useAccessGroups !== false;
-  if (!useAccessGroups) {
-    return {
-      commandAuthorized: true,
-    };
-  }
-
   const isGroup = params.msg.chatType === "group";
   const sender = getSenderIdentity(params.msg);
   const self = getSelfIdentity(params.msg);
+  const selfE164 = normalizeE164(self.e164 ?? "");
   const senderE164 = normalizeE164(
     isGroup ? (sender.e164 ?? "") : (sender.e164 ?? params.msg.from ?? ""),
   );
@@ -77,6 +86,7 @@ async function resolveWhatsAppCommandAuthorization(params: {
   const configuredAllowFrom = account.allowFrom ?? [];
   const configuredGroupAllowFrom =
     account.groupAllowFrom ?? (configuredAllowFrom.length > 0 ? configuredAllowFrom : undefined);
+  const isSelfChat = !isGroup && Boolean(selfE164) && senderE164 === selfE164;
 
   const storeAllowFrom = isGroup
     ? []
@@ -95,6 +105,9 @@ async function resolveWhatsAppCommandAuthorization(params: {
     groupAllowFrom: configuredGroupAllowFrom,
     storeAllowFrom,
     isSenderAllowed: (allowEntries) => {
+      if (!isGroup && isSelfChat) {
+        return true;
+      }
       if (allowEntries.includes("*")) {
         return true;
       }
@@ -109,22 +122,22 @@ async function resolveWhatsAppCommandAuthorization(params: {
       hasControlCommand: true,
     },
   });
-  const selfE164 = normalizeE164(self.e164 ?? "");
-  const isSelfChat = !isGroup && Boolean(selfE164) && senderE164 === selfE164;
+  const ownerList = normalizeConfiguredWhatsAppOwnerList({
+    configuredAllowFrom,
+    senderE164,
+    isSelfChat,
+  });
   return {
     commandAuthorized: access.commandAuthorized,
-    resolvedCommandAuthorization:
-      access.commandAuthorized && isSelfChat
-        ? {
-            providerId: "whatsapp",
-            ownerList: [senderE164],
-            senderId: senderE164,
-            senderIsOwner: true,
-            isAuthorizedSender: true,
-            from: params.msg.from,
-            to: params.msg.to,
-          }
-        : undefined,
+    resolvedCommandAuthorization: {
+      providerId: "whatsapp",
+      ownerList,
+      senderId: senderE164,
+      senderIsOwner: isSelfChat || ownerList.includes(senderE164),
+      isAuthorizedSender: access.commandAuthorized,
+      from: params.msg.from,
+      to: params.msg.to,
+    },
   };
 }
 

@@ -48,6 +48,27 @@ type CommandAuthContext = MsgContext & {
   ResolvedCommandAuthorization?: ResolvedCommandAuthorization;
 };
 
+function warnMalformedResolvedCommandAuthorization(reason: string) {
+  console.warn(`[command-auth] ignoring malformed ResolvedCommandAuthorization: ${reason}`);
+}
+
+function resolveDirectProviderIdFromContext(ctx: MsgContext): ChannelId | undefined {
+  const explicitMessageChannels = [ctx.Surface, ctx.OriginatingChannel, ctx.Provider]
+    .map((value) => normalizeMessageChannel(value))
+    .filter((value): value is string => Boolean(value));
+  const explicitMessageChannel = explicitMessageChannels.find(
+    (value) => value !== INTERNAL_MESSAGE_CHANNEL,
+  );
+  return (
+    normalizeAnyChannelId(explicitMessageChannel ?? undefined) ??
+    (explicitMessageChannel as ChannelId | undefined) ??
+    normalizeAnyChannelId(ctx.Provider) ??
+    normalizeAnyChannelId(ctx.Surface) ??
+    normalizeAnyChannelId(ctx.OriginatingChannel) ??
+    undefined
+  );
+}
+
 function resolveProvidedCommandAuthorization(
   ctx: MsgContext,
 ): ResolvedCommandAuthorization | undefined {
@@ -55,10 +76,22 @@ function resolveProvidedCommandAuthorization(
   if (!provided || typeof provided !== "object") {
     return undefined;
   }
+  if (!Array.isArray(provided.ownerList)) {
+    warnMalformedResolvedCommandAuthorization("ownerList must be an array");
+    return undefined;
+  }
+  if (typeof provided.senderIsOwner !== "boolean") {
+    warnMalformedResolvedCommandAuthorization("senderIsOwner must be a boolean");
+    return undefined;
+  }
+  if (typeof provided.isAuthorizedSender !== "boolean") {
+    warnMalformedResolvedCommandAuthorization("isAuthorizedSender must be a boolean");
+    return undefined;
+  }
   const from = normalizeOptionalString(provided.from ?? ctx.From) ?? "";
   const to = normalizeOptionalString(provided.to ?? ctx.To) ?? "";
   return {
-    providerId: provided.providerId,
+    providerId: provided.providerId ?? resolveDirectProviderIdFromContext(ctx),
     ownerList: normalizeStringEntries(provided.ownerList),
     senderId: normalizeOptionalString(provided.senderId) ?? undefined,
     senderIsOwner: provided.senderIsOwner,

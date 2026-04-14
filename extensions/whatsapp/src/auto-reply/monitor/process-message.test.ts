@@ -4,10 +4,6 @@ import { describe, expect, it, vi } from "vitest";
 
 const maybeSendAckReactionMock = vi.hoisted(() => vi.fn());
 const readStoreAllowFromForDmPolicyMock = vi.hoisted(() => vi.fn(async () => [] as string[]));
-const resolveDmGroupAccessWithCommandGateMock = vi.hoisted(() =>
-  vi.fn(() => ({ commandAuthorized: true })),
-);
-const shouldComputeCommandAuthorizedMock = vi.hoisted(() => vi.fn(() => true));
 
 vi.mock("../../accounts.js", () => ({
   resolveWhatsAppAccount: (params: { cfg: OpenClawConfig; accountId?: string }) => ({
@@ -57,44 +53,20 @@ vi.mock("./inbound-context.js", () => ({
   resolveVisibleWhatsAppReplyContext: () => undefined,
 }));
 
-vi.mock("./inbound-dispatch.js", () => ({
-  buildWhatsAppInboundContext: (params: {
-    combinedBody: string;
-    commandAuthorized?: boolean;
-    resolvedCommandAuthorization?: Record<string, unknown>;
-    msg: { body: string; from: string; to: string };
-    route: { sessionKey: string; accountId?: string };
-    sender: { id?: string; e164?: string; name?: string };
-  }) => ({
-    Body: params.combinedBody,
-    BodyForAgent: params.msg.body,
-    BodyForCommands: params.msg.body,
-    RawBody: params.msg.body,
-    CommandBody: params.msg.body,
-    From: params.msg.from,
-    To: params.msg.to,
-    SessionKey: params.route.sessionKey,
-    AccountId: params.route.accountId,
-    SenderName: params.sender.name,
-    SenderId: params.sender.id ?? params.sender.e164,
-    SenderE164: params.sender.e164,
-    CommandAuthorized: params.commandAuthorized,
-    ResolvedCommandAuthorization: params.resolvedCommandAuthorization,
-    Provider: "whatsapp",
-    Surface: "whatsapp",
-    OriginatingChannel: "whatsapp",
-    OriginatingTo: params.msg.from,
-  }),
-  dispatchWhatsAppBufferedReply: async (params: {
-    context: Parameters<typeof resolveCommandAuthorization>[0]["ctx"];
-    replyResolver: (
-      ctx: Parameters<typeof resolveCommandAuthorization>[0]["ctx"],
-    ) => Promise<unknown>;
-  }) => params.replyResolver(params.context),
-  resolveWhatsAppDmRouteTarget: () => undefined,
-  resolveWhatsAppResponsePrefix: () => undefined,
-  updateWhatsAppMainLastRoute: vi.fn(),
-}));
+vi.mock("./inbound-dispatch.js", async () => {
+  const actual =
+    await vi.importActual<typeof import("./inbound-dispatch.js")>("./inbound-dispatch.js");
+  return {
+    ...actual,
+    dispatchWhatsAppBufferedReply: async (params: {
+      context: Parameters<typeof resolveCommandAuthorization>[0]["ctx"];
+      replyResolver: (
+        ctx: Parameters<typeof resolveCommandAuthorization>[0]["ctx"],
+      ) => Promise<unknown>;
+    }) => params.replyResolver(params.context),
+    updateWhatsAppMainLastRoute: vi.fn(),
+  };
+});
 
 vi.mock("./last-route.js", () => ({
   trackBackgroundTask: vi.fn(),
@@ -105,31 +77,26 @@ vi.mock("./message-line.js", () => ({
   buildInboundLine: (params: { msg: { body: string } }) => params.msg.body,
 }));
 
-vi.mock("./runtime-api.js", () => ({
-  buildHistoryContextFromEntries: vi.fn(),
-  createChannelReplyPipeline: () => ({
-    onModelSelected: undefined,
-    responsePrefix: undefined,
-  }),
-  formatInboundEnvelope: vi.fn(),
-  logVerbose: vi.fn(),
-  normalizeE164: (value: string) => {
-    const digits = value.replace(/\D+/g, "");
-    return digits ? `+${digits}` : null;
-  },
-  readStoreAllowFromForDmPolicy: readStoreAllowFromForDmPolicyMock,
-  recordSessionMetaFromInbound: vi.fn(async () => undefined),
-  resolveChannelContextVisibilityMode: () => "full",
-  resolveInboundSessionEnvelopeContext: () => ({
-    storePath: "/tmp/openclaw-whatsapp-process-message-test.json",
-    envelopeOptions: undefined,
-    previousTimestamp: undefined,
-  }),
-  resolvePinnedMainDmOwnerFromAllowlist: () => null,
-  resolveDmGroupAccessWithCommandGate: resolveDmGroupAccessWithCommandGateMock,
-  shouldComputeCommandAuthorized: shouldComputeCommandAuthorizedMock,
-  shouldLogVerbose: () => false,
-}));
+vi.mock("./runtime-api.js", async () => {
+  const actual = await vi.importActual<typeof import("./runtime-api.js")>("./runtime-api.js");
+  return {
+    ...actual,
+    createChannelReplyPipeline: () => ({
+      onModelSelected: undefined,
+      responsePrefix: undefined,
+    }),
+    logVerbose: vi.fn(),
+    readStoreAllowFromForDmPolicy: readStoreAllowFromForDmPolicyMock,
+    recordSessionMetaFromInbound: vi.fn(async () => undefined),
+    resolveChannelContextVisibilityMode: () => "full",
+    resolveInboundSessionEnvelopeContext: () => ({
+      storePath: "/tmp/openclaw-whatsapp-process-message-test.json",
+      envelopeOptions: undefined,
+      previousTimestamp: undefined,
+    }),
+    shouldLogVerbose: () => false,
+  };
+});
 
 import { processMessage } from "./process-message.js";
 
@@ -142,8 +109,61 @@ function makeReplyLogger() {
   } as const;
 }
 
+function createDirectMessage(overrides: Partial<Parameters<typeof processMessage>[0]["msg"]> = {}) {
+  return {
+    id: "msg-1",
+    from: "+123",
+    to: "+123",
+    body: "/status",
+    timestamp: Date.now(),
+    chatType: "direct",
+    chatId: "direct:+123",
+    conversationId: "+123",
+    accountId: "default",
+    senderE164: "+123",
+    senderName: "Owner",
+    selfE164: "+123",
+    sendComposing: vi.fn().mockResolvedValue(undefined),
+    reply: vi.fn().mockResolvedValue(undefined),
+    sendMedia: vi.fn().mockResolvedValue(undefined),
+    ...overrides,
+  } as Parameters<typeof processMessage>[0]["msg"];
+}
+
+async function runProcessMessage(params: {
+  cfg: OpenClawConfig;
+  msg?: Partial<Parameters<typeof processMessage>[0]["msg"]>;
+  replyResolver: (
+    ctx: Parameters<typeof resolveCommandAuthorization>[0]["ctx"],
+  ) => Promise<unknown>;
+}) {
+  await processMessage({
+    cfg: params.cfg as never,
+    msg: createDirectMessage(params.msg),
+    route: {
+      agentId: "main",
+      accountId: "default",
+      sessionKey: "agent:main:whatsapp:direct:+123",
+      mainSessionKey: "agent:main:whatsapp:direct:+123",
+    } as never,
+    groupHistoryKey: "whatsapp:default:direct:+123",
+    groupHistories: new Map(),
+    groupMemberNames: new Map(),
+    connectionId: "conn",
+    verbose: false,
+    maxMediaBytes: 1024,
+    replyResolver: params.replyResolver as never,
+    replyLogger: makeReplyLogger() as never,
+    backgroundTasks: new Set(),
+    rememberSentText: vi.fn(),
+    echoHas: vi.fn(() => false),
+    echoForget: vi.fn(),
+    buildCombinedEchoKey: vi.fn(() => "echo-key"),
+  });
+}
+
 describe("processMessage", () => {
-  it("passes resolved self-chat command authorization through to core command auth", async () => {
+  it("keeps same-phone /status authorized when allowFrom excludes the linked number", async () => {
     const cfg = {
       channels: {
         whatsapp: {
@@ -162,7 +182,7 @@ describe("processMessage", () => {
         expect(ctx.CommandAuthorized).toBe(true);
         expect(ctx.ResolvedCommandAuthorization).toMatchObject({
           providerId: "whatsapp",
-          ownerList: ["+123"],
+          ownerList: ["+999", "+123"],
           senderId: "+123",
           senderIsOwner: true,
           isAuthorizedSender: true,
@@ -174,48 +194,60 @@ describe("processMessage", () => {
       },
     );
 
-    await processMessage({
+    await runProcessMessage({
       cfg,
-      msg: {
-        id: "self-status",
-        from: "+123",
-        to: "+123",
-        body: "/status",
-        timestamp: Date.now(),
-        chatType: "direct",
-        chatId: "direct:+123",
-        conversationId: "+123",
-        accountId: "default",
-        senderE164: "+123",
-        senderName: "Owner",
-        selfE164: "+123",
-        sendComposing: vi.fn().mockResolvedValue(undefined),
-        reply: vi.fn().mockResolvedValue(undefined),
-        sendMedia: vi.fn().mockResolvedValue(undefined),
-      } as never,
-      route: {
-        agentId: "main",
-        accountId: "default",
-        sessionKey: "agent:main:whatsapp:direct:+123",
-        mainSessionKey: "agent:main:whatsapp:direct:+123",
-      } as never,
-      groupHistoryKey: "whatsapp:default:direct:+123",
-      groupHistories: new Map(),
-      groupMemberNames: new Map(),
-      connectionId: "conn",
-      verbose: false,
-      maxMediaBytes: 1024,
-      replyResolver: replyResolver as never,
-      replyLogger: makeReplyLogger() as never,
-      backgroundTasks: new Set(),
-      rememberSentText: vi.fn(),
-      echoHas: vi.fn(() => false),
-      echoForget: vi.fn(),
-      buildCombinedEchoKey: vi.fn(() => "echo-key"),
+      replyResolver,
     });
 
-    expect(shouldComputeCommandAuthorizedMock).toHaveBeenCalledWith("/status", cfg);
-    expect(resolveDmGroupAccessWithCommandGateMock).toHaveBeenCalledTimes(1);
+    expect(replyResolver).toHaveBeenCalledTimes(1);
+    expect(readStoreAllowFromForDmPolicyMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps non-self /status unauthorized when sender is not in allowFrom", async () => {
+    const cfg = {
+      channels: {
+        whatsapp: {
+          allowFrom: ["+999"],
+        },
+      },
+    } as OpenClawConfig;
+    const replyResolver = vi.fn(
+      async (ctx: Parameters<typeof resolveCommandAuthorization>[0]["ctx"]) => {
+        const auth = resolveCommandAuthorization({
+          ctx,
+          cfg,
+          commandAuthorized: ctx.CommandAuthorized === true,
+        });
+
+        expect(ctx.CommandAuthorized).toBe(false);
+        expect(ctx.ResolvedCommandAuthorization).toMatchObject({
+          providerId: "whatsapp",
+          ownerList: ["+999"],
+          senderId: "+555",
+          senderIsOwner: false,
+          isAuthorizedSender: false,
+        });
+        expect(auth.senderId).toBe("+555");
+        expect(auth.senderIsOwner).toBe(false);
+        expect(auth.isAuthorizedSender).toBe(false);
+        return undefined;
+      },
+    );
+
+    await runProcessMessage({
+      cfg,
+      msg: {
+        from: "+555",
+        to: "+123",
+        conversationId: "+555",
+        chatId: "direct:+555",
+        senderE164: "+555",
+        senderName: "Other",
+        selfE164: "+123",
+      },
+      replyResolver,
+    });
+
     expect(replyResolver).toHaveBeenCalledTimes(1);
   });
 });
