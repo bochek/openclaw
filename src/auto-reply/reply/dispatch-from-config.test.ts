@@ -19,6 +19,7 @@ import {
   createTestRegistry,
 } from "../../test-utils/channel-plugins.js";
 import { createInternalHookEventPayload } from "../../test-utils/internal-hook-event-payload.js";
+import type { ResolvedCommandAuthorization } from "../command-auth.types.js";
 import type { MsgContext } from "../templating.js";
 import type { GetReplyOptions, ReplyPayload } from "../types.js";
 import type { ReplyDispatcher } from "./reply-dispatcher.js";
@@ -1392,6 +1393,55 @@ describe("dispatchReplyFromConfig", () => {
     expect(dispatcher.sendFinalReply).toHaveBeenCalledWith({
       text: "⚙️ Agent was aborted. Stopped 2 sub-agents.",
     });
+  });
+
+  it("derives CommandAuthorized from resolved command auth before hook and reply dispatch", async () => {
+    setNoAbort();
+    hookMocks.runner.hasHooks.mockImplementation(
+      (hookName?: string) => hookName === "reply_dispatch",
+    );
+    hookMocks.runner.runReplyDispatch.mockResolvedValue(undefined);
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "telegram",
+      Surface: "telegram",
+      Body: "/status",
+      CommandBody: "/status",
+      CommandAuthorized: false,
+    });
+    const resolvedCommandAuthorization = {
+      providerId: "telegram",
+      ownerList: ["telegram:123"],
+      senderIsOwner: true,
+      isAuthorizedSender: true,
+    } satisfies ResolvedCommandAuthorization;
+    const replyResolver = vi.fn(async (_ctx: MsgContext) => ({ text: "hi" }) as ReplyPayload);
+
+    await dispatchReplyFromConfig({
+      ctx,
+      cfg: emptyConfig,
+      dispatcher,
+      replyResolver,
+      replyOptions: { resolvedCommandAuthorization },
+    });
+
+    expect(mocks.tryFastAbortFromMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ctx: expect.objectContaining({ CommandAuthorized: true }),
+        resolvedCommandAuthorization,
+      }),
+    );
+    expect(hookMocks.runner.runReplyDispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ctx: expect.objectContaining({ CommandAuthorized: true }),
+      }),
+      expect.anything(),
+    );
+    expect(replyResolver).toHaveBeenCalledWith(
+      expect.objectContaining({ CommandAuthorized: true }),
+      expect.objectContaining({ resolvedCommandAuthorization }),
+      undefined,
+    );
   });
 
   it("routes ACP sessions through the runtime branch and streams block replies", async () => {

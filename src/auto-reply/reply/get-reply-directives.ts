@@ -11,6 +11,7 @@ import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalString,
 } from "../../shared/string-coerce.js";
+import type { ResolvedCommandAuthorization } from "../command-auth.types.js";
 import { shouldHandleTextCommands } from "../commands-text-routing.js";
 import type { MsgContext, TemplateContext } from "../templating.js";
 import type { ElevatedLevel, ReasoningLevel, ThinkLevel, VerboseLevel } from "../thinking.js";
@@ -138,6 +139,7 @@ export async function resolveReplyDirectives(params: {
   isGroup: boolean;
   triggerBodyNormalized: string;
   commandAuthorized: boolean;
+  resolvedCommandAuthorization?: ResolvedCommandAuthorization;
   defaultProvider: string;
   defaultModel: string;
   aliasIndex: ModelAliasIndex;
@@ -195,6 +197,7 @@ export async function resolveReplyDirectives(params: {
     isGroup,
     triggerBodyNormalized,
     commandAuthorized,
+    resolvedCommandAuthorization: params.resolvedCommandAuthorization,
   });
   const allowTextCommands = shouldHandleTextCommands({
     cfg,

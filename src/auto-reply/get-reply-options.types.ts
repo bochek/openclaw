@@ -1,5 +1,6 @@
 import type { ImageContent } from "@mariozechner/pi-ai";
 import type { PromptImageOrderEntry } from "../media/prompt-image-order.js";
+import type { ResolvedCommandAuthorization } from "./command-auth.types.js";
 import type { ReplyPayload } from "./reply-payload.js";
 import type { TypingController } from "./reply/typing.js";
 
@@ -30,6 +31,8 @@ export type ReplyThreadingPolicy = {
 };
 
 export type GetReplyOptions = {
+  /** Trusted channel-resolved command auth snapshot for this inbound turn. */
+  resolvedCommandAuthorization?: ResolvedCommandAuthorization;
   /** Override run id for agent events (defaults to random UUID). */
   runId?: string;
   /** Abort signal for the underlying agent run. */

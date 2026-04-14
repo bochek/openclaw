@@ -11,6 +11,7 @@ import {
   normalizeOptionalLowercaseString,
   normalizeOptionalString,
 } from "../../shared/string-coerce.js";
+import type { ResolvedCommandAuthorization } from "../command-auth.types.js";
 import { normalizeCommandBody } from "../commands-registry.js";
 import type { MsgContext, TemplateContext } from "../templating.js";
 import type { CommandContext } from "./commands-types.js";
@@ -159,20 +160,34 @@ export function buildFastReplyCommandContext(params: {
   isGroup: boolean;
   triggerBodyNormalized: string;
   commandAuthorized: boolean;
+  resolvedCommandAuthorization?: ResolvedCommandAuthorization;
 }): CommandContext {
-  const { ctx, cfg, agentId, sessionKey, isGroup, triggerBodyNormalized, commandAuthorized } =
-    params;
+  const {
+    ctx,
+    cfg,
+    agentId,
+    sessionKey,
+    isGroup,
+    triggerBodyNormalized,
+    commandAuthorized,
+    resolvedCommandAuthorization,
+  } = params;
   const surface = normalizeOptionalLowercaseString(ctx.Surface ?? ctx.Provider) ?? "";
   const channel = normalizeOptionalLowercaseString(ctx.Provider ?? surface) ?? "";
   const from = normalizeOptionalString(ctx.From);
   const to = normalizeOptionalString(ctx.To);
+  const auth = resolvedCommandAuthorization;
   return {
     surface,
     channel,
-    channelId: normalizeAnyChannelId(channel) ?? normalizeAnyChannelId(surface) ?? undefined,
-    ownerList: [],
-    senderIsOwner: false,
-    isAuthorizedSender: commandAuthorized,
+    channelId:
+      auth?.providerId ??
+      normalizeAnyChannelId(channel) ??
+      normalizeAnyChannelId(surface) ??
+      undefined,
+    ownerList: auth?.ownerList ?? [],
+    senderIsOwner: auth?.senderIsOwner ?? false,
+    isAuthorizedSender: auth?.isAuthorizedSender ?? commandAuthorized,
     senderId: from,
     abortKey: sessionKey ?? from ?? to,
     rawBodyNormalized: triggerBodyNormalized,

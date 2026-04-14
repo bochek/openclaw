@@ -3,7 +3,6 @@ import type {
   MediaUnderstandingOutput,
 } from "../media-understanding/types.js";
 import type { InputProvenance } from "../sessions/input-provenance.js";
-import type { ResolvedCommandAuthorization } from "./command-auth.types.js";
 import type { CommandArgs } from "./commands-args.types.js";
 import type { ReplyThreadingPolicy } from "./types.js";
 
@@ -149,7 +148,6 @@ export type MsgContext = {
   BotUsername?: string;
   WasMentioned?: boolean;
   CommandAuthorized?: boolean;
-  ResolvedCommandAuthorization?: ResolvedCommandAuthorization;
   CommandSource?: "text" | "native";
   CommandTargetSessionKey?: string;
   /**

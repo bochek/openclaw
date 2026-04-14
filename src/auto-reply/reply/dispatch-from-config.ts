@@ -48,6 +48,7 @@ import {
   shouldAttemptTtsPayload,
 } from "../../tts/tts-config.js";
 import { INTERNAL_MESSAGE_CHANNEL, normalizeMessageChannel } from "../../utils/message-channel.js";
+import { resolveEffectiveCommandAuthorized } from "../command-auth.js";
 import type { BlockReplyContext } from "../get-reply-options.types.js";
 import { getReplyPayloadMetadata, type ReplyPayload } from "../reply-payload.js";
 import type { FinalizedMsgContext } from "../templating.js";
@@ -202,11 +203,23 @@ export async function dispatchReplyFromConfig(
   params: DispatchFromConfigParams,
 ): Promise<DispatchFromConfigResult> {
   const { ctx, cfg, dispatcher } = params;
+  const resolvedCommandAuthorization = params.replyOptions?.resolvedCommandAuthorization;
+  const effectiveCommandAuthorized = resolveEffectiveCommandAuthorized({
+    commandAuthorized: ctx.CommandAuthorized,
+    resolvedCommandAuthorization,
+  });
+  const dispatchCtx =
+    effectiveCommandAuthorized === ctx.CommandAuthorized
+      ? ctx
+      : { ...ctx, CommandAuthorized: effectiveCommandAuthorized };
   const diagnosticsEnabled = isDiagnosticsEnabled(cfg);
-  const channel = normalizeLowercaseStringOrEmpty(ctx.Surface ?? ctx.Provider ?? "unknown");
-  const chatId = ctx.To ?? ctx.From;
-  const messageId = ctx.MessageSid ?? ctx.MessageSidFirst ?? ctx.MessageSidLast;
-  const sessionKey = ctx.SessionKey;
+  const channel = normalizeLowercaseStringOrEmpty(
+    dispatchCtx.Surface ?? dispatchCtx.Provider ?? "unknown",
+  );
+  const chatId = dispatchCtx.To ?? dispatchCtx.From;
+  const messageId =
+    dispatchCtx.MessageSid ?? dispatchCtx.MessageSidFirst ?? dispatchCtx.MessageSidLast;
+  const sessionKey = dispatchCtx.SessionKey;
   const startTime = diagnosticsEnabled ? Date.now() : 0;
   const canTrackSession = diagnosticsEnabled && Boolean(sessionKey);
 
@@ -563,7 +576,11 @@ export async function dispatchReplyFromConfig(
     if (!fastAbortResolver || !formatAbortReplyTextResolver) {
       throw new Error("abort runtime unavailable");
     }
-    const fastAbort = await fastAbortResolver({ ctx, cfg });
+    const fastAbort = await fastAbortResolver({
+      ctx: dispatchCtx,
+      cfg,
+      resolvedCommandAuthorization,
+    });
     if (fastAbort.handled) {
       let queuedFinal = false;
       let routedFinalCount = 0;
@@ -668,7 +685,7 @@ export async function dispatchReplyFromConfig(
     if (hookRunner?.hasHooks("reply_dispatch")) {
       const replyDispatchResult = await hookRunner.runReplyDispatch(
         {
-          ctx,
+          ctx: dispatchCtx,
           runId: params.replyOptions?.runId,
           sessionKey: acpDispatchSessionKey,
           inboundAudio,
@@ -850,7 +867,7 @@ export async function dispatchReplyFromConfig(
     const replyResolver =
       params.replyResolver ?? (await loadGetReplyFromConfigRuntime()).getReplyFromConfig;
     const replyResult = await replyResolver(
-      ctx,
+      dispatchCtx,
       {
         ...params.replyOptions,
         typingPolicy: typing.typingPolicy,
@@ -959,14 +976,14 @@ export async function dispatchReplyFromConfig(
       params.configOverride,
     );
 
-    if (ctx.AcpDispatchTailAfterReset === true) {
+    if (dispatchCtx.AcpDispatchTailAfterReset === true) {
       // Command handling prepared a trailing prompt after ACP in-place reset.
       // Route that tail through ACP now (same turn) instead of embedded dispatch.
-      ctx.AcpDispatchTailAfterReset = false;
+      dispatchCtx.AcpDispatchTailAfterReset = false;
       if (hookRunner?.hasHooks("reply_dispatch")) {
         const tailDispatchResult = await hookRunner.runReplyDispatch(
           {
-            ctx,
+            ctx: dispatchCtx,
             runId: params.replyOptions?.runId,
             sessionKey: acpDispatchSessionKey,
             inboundAudio,

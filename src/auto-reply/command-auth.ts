@@ -44,12 +44,15 @@ type OwnerAuthorizationState = {
   ownerList: string[];
 };
 
-type CommandAuthContext = MsgContext & {
-  ResolvedCommandAuthorization?: ResolvedCommandAuthorization;
-};
-
 function warnMalformedResolvedCommandAuthorization(reason: string) {
   console.warn(`[command-auth] ignoring malformed ResolvedCommandAuthorization: ${reason}`);
+}
+
+export function resolveEffectiveCommandAuthorized(params: {
+  commandAuthorized: boolean;
+  resolvedCommandAuthorization?: ResolvedCommandAuthorization;
+}): boolean {
+  return params.resolvedCommandAuthorization?.isAuthorizedSender ?? params.commandAuthorized;
 }
 
 function resolveDirectProviderIdFromContext(ctx: MsgContext): ChannelId | undefined {
@@ -69,10 +72,11 @@ function resolveDirectProviderIdFromContext(ctx: MsgContext): ChannelId | undefi
   );
 }
 
-function resolveProvidedCommandAuthorization(
-  ctx: MsgContext,
-): ResolvedCommandAuthorization | undefined {
-  const provided = (ctx as CommandAuthContext).ResolvedCommandAuthorization;
+function resolveProvidedCommandAuthorization(params: {
+  ctx: MsgContext;
+  resolvedCommandAuthorization?: ResolvedCommandAuthorization;
+}): ResolvedCommandAuthorization | undefined {
+  const { ctx, resolvedCommandAuthorization: provided } = params;
   if (!provided || typeof provided !== "object") {
     return undefined;
   }
@@ -88,16 +92,11 @@ function resolveProvidedCommandAuthorization(
     warnMalformedResolvedCommandAuthorization("isAuthorizedSender must be a boolean");
     return undefined;
   }
-  const from = normalizeOptionalString(provided.from ?? ctx.From) ?? "";
-  const to = normalizeOptionalString(provided.to ?? ctx.To) ?? "";
   return {
     providerId: provided.providerId ?? resolveDirectProviderIdFromContext(ctx),
     ownerList: normalizeStringEntries(provided.ownerList),
-    senderId: normalizeOptionalString(provided.senderId) ?? undefined,
     senderIsOwner: provided.senderIsOwner,
     isAuthorizedSender: provided.isAuthorizedSender,
-    from: from || undefined,
-    to: to || undefined,
   };
 }
 
@@ -675,21 +674,49 @@ export function resolveCommandAuthorization(params: {
   ctx: MsgContext;
   cfg: OpenClawConfig;
   commandAuthorized: boolean;
+  resolvedCommandAuthorization?: ResolvedCommandAuthorization;
 }): CommandAuthorization {
-  const { ctx, cfg, commandAuthorized } = params;
-  const provided = resolveProvidedCommandAuthorization(ctx);
-  if (provided) {
-    return provided;
-  }
-  const { providerId, hadResolutionError: providerResolutionError } = resolveProviderFromContext(
+  const { ctx, cfg, commandAuthorized, resolvedCommandAuthorization } = params;
+  const provided = resolveProvidedCommandAuthorization({
     ctx,
-    cfg,
-  );
+    resolvedCommandAuthorization,
+  });
+  const { providerId, hadResolutionError: providerResolutionError } = provided
+    ? {
+        providerId: provided.providerId ?? resolveDirectProviderIdFromContext(ctx),
+        hadResolutionError: false,
+      }
+    : resolveProviderFromContext(ctx, cfg);
   const plugin = providerId
     ? ((getLoadedChannelPluginById(providerId) as ChannelPlugin | undefined) ?? undefined)
     : undefined;
   const from = normalizeOptionalString(ctx.From) ?? "";
   const to = normalizeOptionalString(ctx.To) ?? "";
+  const senderCandidates = resolveSenderCandidates({
+    plugin,
+    providerId,
+    cfg,
+    accountId: ctx.AccountId,
+    senderId: ctx.SenderId,
+    senderE164: ctx.SenderE164,
+    from,
+    chatType: ctx.ChatType,
+  });
+
+  if (provided) {
+    const matchedSender = provided.ownerList.length
+      ? senderCandidates.find((candidate) => provided.ownerList.includes(candidate))
+      : undefined;
+    return {
+      providerId,
+      ownerList: provided.ownerList,
+      senderId: matchedSender ?? senderCandidates[0] ?? from ?? to ?? "",
+      senderIsOwner: provided.senderIsOwner,
+      isAuthorizedSender: provided.isAuthorizedSender,
+      from: from || undefined,
+      to: to || undefined,
+    };
+  }
   const commandsAllowFromConfigured = Boolean(
     cfg.commands?.allowFrom && typeof cfg.commands.allowFrom === "object",
   );
@@ -721,16 +748,6 @@ export function resolveCommandAuthorization(params: {
     contextOwnerAllowFrom: ctx.OwnerAllowFrom,
   });
 
-  const senderCandidates = resolveSenderCandidates({
-    plugin,
-    providerId,
-    cfg,
-    accountId: ctx.AccountId,
-    senderId: ctx.SenderId,
-    senderE164: ctx.SenderE164,
-    from,
-    chatType: ctx.ChatType,
-  });
   const matchedSender = ownerState.ownerList.length
     ? senderCandidates.find((candidate) => ownerState.ownerList.includes(candidate))
     : undefined;
@@ -773,7 +790,7 @@ export function resolveCommandAuthorization(params: {
   return {
     providerId,
     ownerList: ownerState.ownerList,
-    senderId: senderId || undefined,
+    senderId: senderId || from || to || "",
     senderIsOwner,
     isAuthorizedSender,
     from: from || undefined,

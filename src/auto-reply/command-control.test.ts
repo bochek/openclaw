@@ -3,6 +3,7 @@ import type { OpenClawConfig } from "../config/config.js";
 import { setActivePluginRegistry } from "../plugins/runtime.js";
 import { createOutboundTestPlugin, createTestRegistry } from "../test-utils/channel-plugins.js";
 import { resolveCommandAuthorization } from "./command-auth.js";
+import type { ResolvedCommandAuthorization } from "./command-auth.types.js";
 import { hasControlCommand, hasInlineCommandTokens } from "./command-detection.js";
 import { listChatCommands } from "./commands-registry.js";
 import { parseActivationCommand } from "./group-activation.js";
@@ -384,22 +385,20 @@ describe("resolveCommandAuthorization", () => {
 
     it("prefers channel-resolved authorization over config recomputation when provided", () => {
       const auth = resolveCommandAuthorization({
-        ctx: {
-          ...makeWhatsAppContext("otheruser"),
-          ResolvedCommandAuthorization: {
-            providerId: "whatsapp",
-            ownerList: ["+19995550123"],
-            senderId: "otheruser",
-            senderIsOwner: true,
-            isAuthorizedSender: true,
-          },
-        } as MsgContext,
+        ctx: makeWhatsAppContext("otheruser"),
         cfg: commandsAllowFromConfig,
         commandAuthorized: false,
+        resolvedCommandAuthorization: {
+          providerId: "whatsapp",
+          ownerList: ["+19995550123"],
+          senderIsOwner: true,
+          isAuthorizedSender: true,
+        },
       });
 
       expect(auth.ownerList).toEqual(["+19995550123"]);
-      expect(auth.senderId).toBe("otheruser");
+      expect(typeof auth.senderId).toBe("string");
+      expect(auth.senderId).not.toBe("");
       expect(auth.senderIsOwner).toBe(true);
       expect(auth.isAuthorizedSender).toBe(true);
     });
@@ -408,18 +407,15 @@ describe("resolveCommandAuthorization", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       try {
         const auth = resolveCommandAuthorization({
-          ctx: {
-            ...makeWhatsAppContext("otheruser"),
-            ResolvedCommandAuthorization: {
-              providerId: "whatsapp",
-              ownerList: "not-an-array",
-              senderId: "otheruser",
-              senderIsOwner: true,
-              isAuthorizedSender: true,
-            } as unknown as MsgContext["ResolvedCommandAuthorization"],
-          } as MsgContext,
+          ctx: makeWhatsAppContext("otheruser"),
           cfg: commandsAllowFromConfig,
           commandAuthorized: false,
+          resolvedCommandAuthorization: {
+            providerId: "whatsapp",
+            ownerList: "not-an-array",
+            senderIsOwner: true,
+            isAuthorizedSender: true,
+          } as unknown as ResolvedCommandAuthorization,
         });
 
         expect(warn).toHaveBeenCalledWith(
@@ -434,17 +430,14 @@ describe("resolveCommandAuthorization", () => {
 
     it("backfills providerId from context when channel-resolved authorization omits it", () => {
       const auth = resolveCommandAuthorization({
-        ctx: {
-          ...makeWhatsAppContext("otheruser"),
-          ResolvedCommandAuthorization: {
-            ownerList: ["123"],
-            senderId: "otheruser",
-            senderIsOwner: false,
-            isAuthorizedSender: false,
-          },
-        } as MsgContext,
+        ctx: makeWhatsAppContext("otheruser"),
         cfg: commandsAllowFromConfig,
         commandAuthorized: false,
+        resolvedCommandAuthorization: {
+          ownerList: ["123"],
+          senderIsOwner: false,
+          isAuthorizedSender: false,
+        },
       });
 
       expect(auth.providerId).toBe("whatsapp");

@@ -1,6 +1,7 @@
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { normalizeLowercaseStringOrEmpty } from "../../shared/string-coerce.js";
 import { resolveCommandAuthorization } from "../command-auth.js";
+import type { ResolvedCommandAuthorization } from "../command-auth.types.js";
 import { normalizeCommandBody } from "../commands-registry-normalize.js";
 import type { MsgContext } from "../templating.js";
 import type { CommandContext } from "./commands-types.js";
@@ -14,12 +15,14 @@ export function buildCommandContext(params: {
   isGroup: boolean;
   triggerBodyNormalized: string;
   commandAuthorized: boolean;
+  resolvedCommandAuthorization?: ResolvedCommandAuthorization;
 }): CommandContext {
   const { ctx, cfg, agentId, sessionKey, isGroup, triggerBodyNormalized } = params;
   const auth = resolveCommandAuthorization({
     ctx,
     cfg,
     commandAuthorized: params.commandAuthorized,
+    resolvedCommandAuthorization: params.resolvedCommandAuthorization,
   });
   const surface = normalizeLowercaseStringOrEmpty(ctx.Surface ?? ctx.Provider);
   const channel = normalizeLowercaseStringOrEmpty(ctx.Provider ?? surface);

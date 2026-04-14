@@ -13,6 +13,7 @@ import { type OpenClawConfig, loadConfig } from "../../config/config.js";
 import { defaultRuntime } from "../../runtime.js";
 import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import { normalizeStringEntries } from "../../shared/string-normalization.js";
+import { resolveEffectiveCommandAuthorized } from "../command-auth.js";
 import type { GetReplyOptions } from "../get-reply-options.types.js";
 import type { ReplyPayload } from "../reply-payload.js";
 import type { MsgContext } from "../templating.js";
@@ -177,6 +178,7 @@ export async function getReplyFromConfig(
   );
   const resolvedOpts =
     mergedSkillFilter !== undefined ? { ...opts, skillFilter: mergedSkillFilter } : opts;
+  const resolvedCommandAuthorization = resolvedOpts?.resolvedCommandAuthorization;
   const agentCfg = cfg.agents?.defaults;
   const sessionCfg = cfg.session;
   const { defaultProvider, defaultModel, aliasIndex } = resolveDefaultModel({
@@ -231,38 +233,46 @@ export async function getReplyFromConfig(
   opts?.onTypingController?.(typing);
 
   const finalized = finalizeInboundContext(ctx);
+  const commandAuthorized = resolveEffectiveCommandAuthorized({
+    commandAuthorized: finalized.CommandAuthorized,
+    resolvedCommandAuthorization,
+  });
+  const finalizedCtx =
+    commandAuthorized === finalized.CommandAuthorized
+      ? finalized
+      : { ...finalized, CommandAuthorized: commandAuthorized };
 
   if (!isFastTestEnv) {
     await applyMediaUnderstandingIfNeeded({
-      ctx: finalized,
+      ctx: finalizedCtx,
       cfg,
       agentDir,
       activeModel: { provider, model },
     });
     await applyLinkUnderstandingIfNeeded({
-      ctx: finalized,
+      ctx: finalizedCtx,
       cfg,
     });
   }
   emitPreAgentMessageHooks({
-    ctx: finalized,
+    ctx: finalizedCtx,
     cfg,
     isFastTestEnv,
   });
 
-  const commandAuthorized = finalized.CommandAuthorized;
   const sessionState = useFastTestBootstrap
     ? initFastReplySessionState({
-        ctx: finalized,
+        ctx: finalizedCtx,
         cfg,
         agentId,
         commandAuthorized,
         workspaceDir,
       })
     : await initSessionState({
-        ctx: finalized,
+        ctx: finalizedCtx,
         cfg,
         commandAuthorized,
+        resolvedCommandAuthorization,
       });
   let {
     sessionCtx,
@@ -290,7 +300,7 @@ export async function getReplyFromConfig(
       resetTriggered,
       bodyStripped,
       sessionCtx,
-      ctx: finalized,
+      ctx: finalizedCtx,
       sessionEntry,
       sessionStore,
       sessionKey,
@@ -307,14 +317,14 @@ export async function getReplyFromConfig(
       groupResolution?.channel ??
       sessionEntry.channel ??
       sessionEntry.origin?.provider ??
-      (typeof finalized.OriginatingChannel === "string"
-        ? finalized.OriginatingChannel
+      (typeof finalizedCtx.OriginatingChannel === "string"
+        ? finalizedCtx.OriginatingChannel
         : undefined) ??
-      finalized.Provider,
+      finalizedCtx.Provider,
     groupId: groupResolution?.id ?? sessionEntry.groupId,
-    groupChatType: sessionEntry.chatType ?? sessionCtx.ChatType ?? finalized.ChatType,
-    groupChannel: sessionEntry.groupChannel ?? sessionCtx.GroupChannel ?? finalized.GroupChannel,
-    groupSubject: sessionEntry.subject ?? sessionCtx.GroupSubject ?? finalized.GroupSubject,
+    groupChatType: sessionEntry.chatType ?? sessionCtx.ChatType ?? finalizedCtx.ChatType,
+    groupChannel: sessionEntry.groupChannel ?? sessionCtx.GroupChannel ?? finalizedCtx.GroupChannel,
+    groupSubject: sessionEntry.subject ?? sessionCtx.GroupSubject ?? finalizedCtx.GroupSubject,
     parentSessionKey: sessionCtx.ParentSessionKey,
   });
   const hasSessionModelOverride = Boolean(
@@ -361,6 +371,7 @@ export async function getReplyFromConfig(
       isGroup,
       triggerBodyNormalized,
       commandAuthorized,
+      resolvedCommandAuthorization,
     });
     return runPreparedReply({
       ctx,
@@ -372,13 +383,14 @@ export async function getReplyFromConfig(
       sessionCfg,
       commandAuthorized,
       command: fastCommand,
-      commandSource: finalized.BodyForCommands ?? finalized.CommandBody ?? finalized.RawBody ?? "",
+      commandSource:
+        finalizedCtx.BodyForCommands ?? finalizedCtx.CommandBody ?? finalizedCtx.RawBody ?? "",
       allowTextCommands: shouldHandleFastReplyTextCommands({
         cfg,
-        commandSource: finalized.CommandSource,
+        commandSource: finalizedCtx.CommandSource,
       }),
       directives: clearInlineDirectives(
-        finalized.BodyForCommands ?? finalized.CommandBody ?? finalized.RawBody ?? "",
+        finalizedCtx.BodyForCommands ?? finalizedCtx.CommandBody ?? finalizedCtx.RawBody ?? "",
       ),
       defaultActivation: "always",
       resolvedThinkLevel: undefined,
@@ -419,7 +431,7 @@ export async function getReplyFromConfig(
   }
 
   const directiveResult = await resolveReplyDirectives({
-    ctx: finalized,
+    ctx: finalizedCtx,
     cfg,
     agentId,
     agentDir,
@@ -435,6 +447,7 @@ export async function getReplyFromConfig(
     isGroup,
     triggerBodyNormalized,
     commandAuthorized,
+    resolvedCommandAuthorization,
     defaultProvider,
     defaultModel,
     aliasIndex,

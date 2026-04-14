@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SubagentRunRecord } from "../../agents/subagent-registry.js";
 import type { OpenClawConfig } from "../../config/config.js";
+import type { ResolvedCommandAuthorization } from "../command-auth.types.js";
 import {
   __testing as abortTesting,
   getAbortMemory,
@@ -110,6 +111,8 @@ describe("abort detection", () => {
     sessionKey: string;
     from: string;
     to: string;
+    commandAuthorized?: boolean;
+    resolvedCommandAuthorization?: ResolvedCommandAuthorization;
     targetSessionKey?: string;
     messageSid?: string;
     timestamp?: number;
@@ -118,7 +121,7 @@ describe("abort detection", () => {
       ctx: buildTestCtx({
         CommandBody: "/stop",
         RawBody: "/stop",
-        CommandAuthorized: true,
+        CommandAuthorized: params.commandAuthorized ?? true,
         SessionKey: params.sessionKey,
         Provider: "telegram",
         Surface: "telegram",
@@ -129,6 +132,7 @@ describe("abort detection", () => {
         ...(typeof params.timestamp === "number" ? { Timestamp: params.timestamp } : {}),
       }),
       cfg: params.cfg,
+      resolvedCommandAuthorization: params.resolvedCommandAuthorization,
     });
   }
 
@@ -388,6 +392,26 @@ describe("abort detection", () => {
       sessionKey: "telegram:123",
       from: "telegram:123",
       to: "telegram:123",
+    });
+
+    expect(result.handled).toBe(true);
+  });
+
+  it("fast-aborts when resolved command authorization allows the sender", async () => {
+    const { cfg } = await createAbortConfig({ commandsTextEnabled: false });
+
+    const result = await runStopCommand({
+      cfg,
+      sessionKey: "telegram:123",
+      from: "telegram:123",
+      to: "telegram:123",
+      commandAuthorized: false,
+      resolvedCommandAuthorization: {
+        providerId: "telegram",
+        ownerList: ["telegram:123"],
+        senderIsOwner: true,
+        isAuthorizedSender: true,
+      },
     });
 
     expect(result.handled).toBe(true);
