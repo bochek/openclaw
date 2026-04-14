@@ -31,6 +31,8 @@ import type {
   ProviderDefaultThinkingPolicyContext,
   ProviderFetchUsageSnapshotContext,
   ProviderFailoverErrorContext,
+  ProviderIntermediateAssistantAck,
+  ProviderIntermediateAssistantAckContext,
   ProviderNormalizeToolSchemasContext,
   ProviderNormalizeConfigContext,
   ProviderNormalizeModelIdContext,
@@ -270,6 +272,22 @@ export function transformProviderSystemPrompt(params: {
   const transformed =
     plugin?.transformSystemPrompt?.(params.context) ?? params.context.systemPrompt;
   return applyPluginTextReplacements(transformed, textTransforms?.input);
+}
+
+/**
+ * Resolve a provider-owned continuation for assistant intermediate-ack turns.
+ */
+export function resolveProviderIntermediateAssistantAckWithPlugin(params: {
+  provider: string;
+  config?: OpenClawConfig;
+  workspaceDir?: string;
+  env?: NodeJS.ProcessEnv;
+  context: ProviderIntermediateAssistantAckContext;
+}): ProviderIntermediateAssistantAck | undefined {
+  return (
+    resolveProviderRuntimePlugin(params)?.resolveIntermediateAssistantAck?.(params.context) ??
+    undefined
+  );
 }
 
 export function resolveProviderTextTransforms(params: {

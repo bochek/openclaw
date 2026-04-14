@@ -51,6 +51,7 @@ let resolveProviderBinaryThinking: typeof import("./provider-runtime.js").resolv
 let resolveProviderBuiltInModelSuppression: typeof import("./provider-runtime.js").resolveProviderBuiltInModelSuppression;
 let createProviderEmbeddingProvider: typeof import("./provider-runtime.js").createProviderEmbeddingProvider;
 let resolveProviderDefaultThinkingLevel: typeof import("./provider-runtime.js").resolveProviderDefaultThinkingLevel;
+let resolveProviderIntermediateAssistantAckWithPlugin: typeof import("./provider-runtime.js").resolveProviderIntermediateAssistantAckWithPlugin;
 let resolveProviderModernModelRef: typeof import("./provider-runtime.js").resolveProviderModernModelRef;
 let resolveProviderReasoningOutputModeWithPlugin: typeof import("./provider-runtime.js").resolveProviderReasoningOutputModeWithPlugin;
 let resolveProviderReplayPolicyWithPlugin: typeof import("./provider-runtime.js").resolveProviderReplayPolicyWithPlugin;
@@ -265,6 +266,7 @@ describe("provider-runtime", () => {
       resolveProviderBuiltInModelSuppression,
       createProviderEmbeddingProvider,
       resolveProviderDefaultThinkingLevel,
+      resolveProviderIntermediateAssistantAckWithPlugin,
       resolveProviderModernModelRef,
       resolveProviderReasoningOutputModeWithPlugin,
       resolveProviderReplayPolicyWithPlugin,
@@ -656,6 +658,9 @@ describe("provider-runtime", () => {
     );
     const inspectToolSchemas = vi.fn(() => [] as { toolName: string; violations: string[] }[]);
     const resolveReasoningOutputMode = vi.fn(() => "tagged" as const);
+    const resolveIntermediateAssistantAck = vi.fn(({ assistantText }: { assistantText: string }) =>
+      assistantText.toLowerCase().includes("let me") ? { instruction: "Continue now." } : undefined,
+    );
     const resolveSyntheticAuth = vi.fn(() => ({
       apiKey: "demo-local",
       source: "models.providers.demo (synthetic local key)",
@@ -712,6 +717,7 @@ describe("provider-runtime", () => {
           normalizeToolSchemas,
           inspectToolSchemas,
           resolveReasoningOutputMode,
+          resolveIntermediateAssistantAck,
           prepareExtraParams: ({ extraParams }) => ({
             ...extraParams,
             transport: "auto",
@@ -872,6 +878,20 @@ describe("provider-runtime", () => {
         }),
       }),
     ).toBe("tagged");
+
+    expect(
+      resolveProviderIntermediateAssistantAckWithPlugin({
+        provider: DEMO_PROVIDER_ID,
+        context: createDemoRuntimeContext({
+          prompt: "check the repo",
+          assistantText: "Let me inspect the repo.",
+          hasToolMessageInTranscript: false,
+          isFirstAssistantTurnInTranscript: true,
+        }),
+      }),
+    ).toEqual({
+      instruction: "Continue now.",
+    });
 
     expect(
       prepareProviderExtraParams({

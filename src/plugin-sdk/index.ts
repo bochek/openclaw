@@ -49,6 +49,8 @@ export type {
   PluginLogger,
   ProviderAuthContext,
   ProviderAuthResult,
+  ProviderIntermediateAssistantAck,
+  ProviderIntermediateAssistantAckContext,
   ProviderPreparedRuntimeAuth,
   RealtimeTranscriptionProviderPlugin,
   SpeechProviderPlugin,

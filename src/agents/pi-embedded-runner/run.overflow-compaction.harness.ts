@@ -68,6 +68,7 @@ export const mockedCompactDirect = mockedContextEngine.compact;
 export const mockedRunPostCompactionSideEffects = vi.fn(async () => {});
 export const mockedEnsureRuntimePluginsLoaded = vi.fn<(params?: unknown) => void>();
 export const mockedPrepareProviderRuntimeAuth = vi.fn(async () => undefined);
+export const mockedResolveProviderIntermediateAssistantAckWithPlugin = vi.fn(() => undefined);
 export const mockedRunEmbeddedAttempt =
   vi.fn<(params: unknown) => Promise<EmbeddedRunAttemptResult>>();
 export const mockedRunContextEngineMaintenance = vi.fn(async () => undefined);
@@ -215,6 +216,8 @@ export function resetRunOverflowCompactionHarnessMocks(): void {
   mockedEnsureRuntimePluginsLoaded.mockReset();
   mockedPrepareProviderRuntimeAuth.mockReset();
   mockedPrepareProviderRuntimeAuth.mockResolvedValue(undefined);
+  mockedResolveProviderIntermediateAssistantAckWithPlugin.mockReset();
+  mockedResolveProviderIntermediateAssistantAckWithPlugin.mockReturnValue(undefined);
   mockedRunEmbeddedAttempt.mockReset();
   mockedRunContextEngineMaintenance.mockReset();
   mockedRunContextEngineMaintenance.mockResolvedValue(undefined);
@@ -341,6 +344,8 @@ export async function loadRunOverflowCompactionHarness(): Promise<{
   vi.doMock("../../plugins/provider-runtime.js", () => ({
     prepareProviderRuntimeAuth: mockedPrepareProviderRuntimeAuth,
     resolveProviderCapabilitiesWithPlugin: vi.fn(() => ({})),
+    resolveProviderIntermediateAssistantAckWithPlugin:
+      mockedResolveProviderIntermediateAssistantAckWithPlugin,
     prepareProviderExtraParams: vi.fn(async () => ({})),
     wrapProviderStreamFn: vi.fn((_cfg: unknown, _model: unknown, fn: unknown) => fn),
   }));

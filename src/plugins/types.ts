@@ -1045,6 +1045,29 @@ export type ProviderTransformSystemPromptContext = ProviderSystemPromptContribut
   systemPrompt: string;
 };
 
+/**
+ * Context for provider-owned assistant-turn continuation decisions.
+ *
+ * Use this for provider-specific non-terminal assistant text that should be
+ * continued by the shared runner rather than surfaced as a completed turn.
+ */
+export type ProviderIntermediateAssistantAckContext = {
+  config?: OpenClawConfig;
+  agentDir?: string;
+  workspaceDir?: string;
+  provider: string;
+  modelId: string;
+  prompt: string;
+  assistantText: string;
+  hasToolMessageInTranscript: boolean;
+  isFirstAssistantTurnInTranscript: boolean;
+};
+
+/** Provider-owned continuation payload for assistant intermediate-ack turns. */
+export type ProviderIntermediateAssistantAck = {
+  instruction: string;
+};
+
 export type PluginTextTransformRegistration = PluginTextTransforms;
 
 /** Text-inference provider capability registered by a plugin. */
@@ -1427,6 +1450,18 @@ export type ProviderPlugin = {
    * `undefined`/`null` to leave the prompt unchanged.
    */
   transformSystemPrompt?: (ctx: ProviderTransformSystemPromptContext) => string | null | undefined;
+  /**
+   * Provider-owned assistant intermediate-ack continuation.
+   *
+   * Use this when a provider/model family sometimes emits a lightweight
+   * "I'll check that" acknowledgement instead of taking the first real action.
+   * The shared runner still owns replay safety, retry limits, and terminal
+   * lifecycle metadata; this hook only classifies the assistant text and
+   * supplies a continuation instruction when appropriate.
+   */
+  resolveIntermediateAssistantAck?: (
+    ctx: ProviderIntermediateAssistantAckContext,
+  ) => ProviderIntermediateAssistantAck | null | undefined;
   /**
    * Provider-owned bidirectional text replacements.
    *

@@ -57,6 +57,8 @@ export type {
   ProviderDefaultThinkingPolicyContext,
   ProviderDiscoveryContext,
   ProviderFetchUsageSnapshotContext,
+  ProviderIntermediateAssistantAck,
+  ProviderIntermediateAssistantAckContext,
   ProviderModernModelPolicyContext,
   ProviderNormalizeResolvedModelContext,
   ProviderNormalizeToolSchemasContext,

@@ -155,6 +155,12 @@ const installRunEmbeddedMocks = () => {
     return {
       ...actual,
       prepareProviderRuntimeAuth: vi.fn(async () => undefined),
+      resolveProviderIntermediateAssistantAckWithPlugin: vi.fn(
+        (params: { context?: { assistantText?: string } }) =>
+          params.context?.assistantText?.includes("I can take a look")
+            ? { instruction: "Continue now." }
+            : undefined,
+      ),
     };
   });
   vi.doMock("./models-config.js", async () => {
@@ -581,6 +587,52 @@ describe("runEmbeddedPiAgent", () => {
       timeoutMs: 5_000,
       agentDir,
       runId: nextRunId("planning-only-retry"),
+      enqueue: immediateEnqueue,
+    });
+
+    expect(runEmbeddedAttemptMock).toHaveBeenCalledTimes(2);
+    expect(result.payloads?.[0]).toMatchObject({ text: "done" });
+  });
+
+  it("retries an assistant intermediate acknowledgement through the provider hook", async () => {
+    const sessionFile = nextSessionFile();
+    const cfg = createEmbeddedPiRunnerOpenAiConfig(["gpt-5.4"]);
+    const sessionKey = nextSessionKey();
+
+    runEmbeddedAttemptMock
+      .mockImplementationOnce(async (params: unknown) => {
+        expect((params as { prompt?: string }).prompt).toMatch(/^ship it(?:\n\n|$)/);
+        return makeEmbeddedRunnerAttempt({
+          assistantTexts: ["I can take a look at the repo and patch the issue."],
+          lastAssistant: buildEmbeddedRunnerAssistant({
+            model: "gpt-5.4",
+            content: [{ type: "text", text: "I can take a look at the repo and patch the issue." }],
+          }),
+        });
+      })
+      .mockImplementationOnce(async (params: unknown) => {
+        expect((params as { prompt?: string }).prompt).toContain("Continue now.");
+        return makeEmbeddedRunnerAttempt({
+          assistantTexts: ["done"],
+          lastAssistant: buildEmbeddedRunnerAssistant({
+            model: "gpt-5.4",
+            content: [{ type: "text", text: "done" }],
+          }),
+        });
+      });
+
+    const result = await runEmbeddedPiAgent({
+      sessionId: "session:test",
+      sessionKey,
+      sessionFile,
+      workspaceDir,
+      config: cfg,
+      prompt: "ship it",
+      provider: "openai",
+      model: "gpt-5.4",
+      timeoutMs: 5_000,
+      agentDir,
+      runId: nextRunId("intermediate-ack-retry"),
       enqueue: immediateEnqueue,
     });
 

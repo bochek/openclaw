@@ -1,5 +1,7 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { EmbeddedPiExecutionContract } from "../../../config/types.agent-defaults.js";
+import type { OpenClawConfig } from "../../../config/types.openclaw.js";
+import { resolveProviderIntermediateAssistantAckWithPlugin } from "../../../plugins/provider-runtime.js";
 import { normalizeLowercaseStringOrEmpty } from "../../../shared/string-coerce.js";
 import { isStrictAgenticSupportedProviderModel } from "../../execution-contract.js";
 import { isLikelyMutatingToolName } from "../../tool-mutation.js";
@@ -35,6 +37,22 @@ type PlanningOnlyAttempt = Pick<
   | "didSendViaMessagingTool"
   | "lastToolError"
   | "lastAssistant"
+  | "itemLifecycle"
+  | "replayMetadata"
+  | "toolMetas"
+>;
+
+type IntermediateAckAttempt = Pick<
+  EmbeddedRunAttemptResult,
+  | "assistantTexts"
+  | "clientToolCall"
+  | "currentAttemptAssistant"
+  | "yieldDetected"
+  | "didSendDeterministicApprovalPrompt"
+  | "didSendViaMessagingTool"
+  | "lastToolError"
+  | "lastAssistant"
+  | "messagesSnapshot"
   | "itemLifecycle"
   | "replayMetadata"
   | "toolMetas"
@@ -81,6 +99,8 @@ const STRICT_AGENTIC_PLANNING_ONLY_RETRY_LIMIT = 2;
 // surfacing the existing incomplete-turn error path.
 export const DEFAULT_REASONING_ONLY_RETRY_LIMIT = 2;
 export const DEFAULT_EMPTY_RESPONSE_RETRY_LIMIT = 1;
+const DEFAULT_INTERMEDIATE_ACK_RETRY_LIMIT = 1;
+const STRICT_AGENTIC_INTERMEDIATE_ACK_RETRY_LIMIT = 2;
 const ACK_EXECUTION_NORMALIZED_SET = new Set([
   "ok",
   "okay",
@@ -137,6 +157,8 @@ export const ACK_EXECUTION_FAST_PATH_INSTRUCTION =
   "The latest user message is a short approval to proceed. Do not recap or restate the plan. Start with the first concrete tool action immediately. Keep any user-facing follow-up brief and natural.";
 export const STRICT_AGENTIC_BLOCKED_TEXT =
   "Agent stopped after repeated plan-only turns without taking a concrete action. No concrete tool action or external side effect advanced the task.";
+export const STRICT_AGENTIC_INTERMEDIATE_ACK_BLOCKED_TEXT =
+  "Agent stopped after repeated acknowledgement turns without taking a concrete action. No concrete tool action or external side effect advanced the task.";
 
 export type PlanningOnlyPlanDetails = {
   explanation: string;
@@ -470,6 +492,27 @@ function hasNonPlanToolActivity(toolMetas: PlanningOnlyAttempt["toolMetas"]): bo
   return toolMetas.some((entry) => entry.toolName !== "update_plan");
 }
 
+function hasToolMessageInTranscript(messages: readonly AgentMessage[]): boolean {
+  return messages.some((message) => message?.role === "toolResult");
+}
+
+function isFirstAssistantTurnInTranscript(params: {
+  messagesSnapshot: readonly AgentMessage[];
+  currentAssistant?: IncompleteTurnAttempt["currentAttemptAssistant"] | null;
+}): boolean {
+  const assistantMessages = params.messagesSnapshot.filter((message) => message?.role === "assistant");
+  if (assistantMessages.length === 0) {
+    return true;
+  }
+  if (!params.currentAssistant) {
+    return assistantMessages.length <= 1;
+  }
+  const currentAssistantMatches = assistantMessages.filter(
+    (message) => message === params.currentAssistant,
+  ).length;
+  return assistantMessages.length <= Math.max(1, currentAssistantMatches);
+}
+
 function hasSingleRetrySafeNonPlanTool(toolMetas: PlanningOnlyAttempt["toolMetas"]): boolean {
   const nonPlanToolNames = toolMetas
     .map((entry) => normalizeLowercaseStringOrEmpty(entry.toolName))
@@ -513,6 +556,15 @@ export function resolvePlanningOnlyRetryLimit(
   return executionContract === "strict-agentic"
     ? STRICT_AGENTIC_PLANNING_ONLY_RETRY_LIMIT
     : DEFAULT_PLANNING_ONLY_RETRY_LIMIT;
+}
+
+/** Resolve the retry budget for provider-owned intermediate-ack continuations. */
+export function resolveIntermediateAckRetryLimit(
+  executionContract?: EmbeddedPiExecutionContract,
+): number {
+  return executionContract === "strict-agentic"
+    ? STRICT_AGENTIC_INTERMEDIATE_ACK_RETRY_LIMIT
+    : DEFAULT_INTERMEDIATE_ACK_RETRY_LIMIT;
 }
 
 export function resolvePlanningOnlyRetryInstruction(params: {
@@ -575,4 +627,72 @@ export function resolvePlanningOnlyRetryInstruction(params: {
     return null;
   }
   return PLANNING_ONLY_RETRY_INSTRUCTION;
+}
+
+/** Resolve a provider-owned continuation for non-terminal assistant acknowledgements. */
+export function resolveIntermediateAckRetryInstruction(params: {
+  config?: OpenClawConfig;
+  agentDir?: string;
+  workspaceDir?: string;
+  provider?: string;
+  modelId?: string;
+  prompt?: string;
+  aborted: boolean;
+  timedOut: boolean;
+  attempt: IntermediateAckAttempt;
+}): string | null {
+  const provider = params.provider?.trim();
+  const modelId = params.modelId?.trim();
+  const prompt = typeof params.prompt === "string" ? params.prompt : "";
+  const planOnlyToolMetaCount = countPlanOnlyToolMetas(params.attempt.toolMetas);
+  if (
+    !provider ||
+    !modelId ||
+    !prompt ||
+    params.aborted ||
+    params.timedOut ||
+    params.attempt.clientToolCall ||
+    params.attempt.yieldDetected ||
+    params.attempt.didSendDeterministicApprovalPrompt ||
+    params.attempt.didSendViaMessagingTool ||
+    params.attempt.lastToolError ||
+    hasNonPlanToolActivity(params.attempt.toolMetas) ||
+    params.attempt.itemLifecycle.startedCount > planOnlyToolMetaCount ||
+    params.attempt.replayMetadata.hadPotentialSideEffects
+  ) {
+    return null;
+  }
+
+  const stopReason = params.attempt.lastAssistant?.stopReason;
+  if (stopReason && stopReason !== "stop") {
+    return null;
+  }
+
+  const assistantText = params.attempt.assistantTexts.join("\n\n").trim();
+  if (!assistantText) {
+    return null;
+  }
+  const currentAssistant = params.attempt.currentAttemptAssistant ?? params.attempt.lastAssistant;
+
+  return (
+    resolveProviderIntermediateAssistantAckWithPlugin({
+      provider,
+      config: params.config,
+      workspaceDir: params.workspaceDir,
+      context: {
+        config: params.config,
+        agentDir: params.agentDir,
+        workspaceDir: params.workspaceDir,
+        provider,
+        modelId,
+        prompt,
+        assistantText,
+        hasToolMessageInTranscript: hasToolMessageInTranscript(params.attempt.messagesSnapshot),
+        isFirstAssistantTurnInTranscript: isFirstAssistantTurnInTranscript({
+          messagesSnapshot: params.attempt.messagesSnapshot,
+          currentAssistant,
+        }),
+      },
+    })?.instruction ?? null
+  );
 }

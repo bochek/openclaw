@@ -100,11 +100,14 @@ import {
   resolveAckExecutionFastPathInstruction,
   extractPlanningOnlyPlanDetails,
   resolveEmptyResponseRetryInstruction,
+  resolveIntermediateAckRetryInstruction,
+  resolveIntermediateAckRetryLimit,
   resolveIncompleteTurnPayloadText,
   resolvePlanningOnlyRetryLimit,
   resolvePlanningOnlyRetryInstruction,
   resolveReasoningOnlyRetryInstruction,
   STRICT_AGENTIC_BLOCKED_TEXT,
+  STRICT_AGENTIC_INTERMEDIATE_ACK_BLOCKED_TEXT,
   resolveReplayInvalidFlag,
   resolveRunLivenessState,
 } from "./run/incomplete-turn.js";
@@ -446,6 +449,7 @@ export async function runEmbeddedPiAgent(
       });
       const executionContract = strictAgenticActive ? "strict-agentic" : "default";
       const maxPlanningOnlyRetryAttempts = resolvePlanningOnlyRetryLimit(executionContract);
+      const maxIntermediateAckRetryAttempts = resolveIntermediateAckRetryLimit(executionContract);
       const maxReasoningOnlyRetryAttempts = DEFAULT_REASONING_ONLY_RETRY_LIMIT;
       const maxEmptyResponseRetryAttempts = DEFAULT_EMPTY_RESPONSE_RETRY_LIMIT;
 
@@ -463,11 +467,13 @@ export async function runEmbeddedPiAgent(
       let runLoopIterations = 0;
       let overloadProfileRotations = 0;
       let planningOnlyRetryAttempts = 0;
+      let intermediateAckRetryAttempts = 0;
       let reasoningOnlyRetryAttempts = 0;
       let emptyResponseRetryAttempts = 0;
       let sameModelIdleTimeoutRetries = 0;
       let lastRetryFailoverReason: FailoverReason | null = null;
       let planningOnlyRetryInstruction: string | null = null;
+      let intermediateAckRetryInstruction: string | null = null;
       let reasoningOnlyRetryInstruction: string | null = null;
       let emptyResponseRetryInstruction: string | null = null;
       const ackExecutionFastPathInstruction = resolveAckExecutionFastPathInstruction({
@@ -653,6 +659,7 @@ export async function runEmbeddedPiAgent(
           const promptAdditions = [
             ackExecutionFastPathInstruction,
             planningOnlyRetryInstruction,
+            intermediateAckRetryInstruction,
             reasoningOnlyRetryInstruction,
             emptyResponseRetryInstruction,
           ].filter(
@@ -1683,6 +1690,17 @@ export async function runEmbeddedPiAgent(
             timedOut,
             attempt,
           });
+          const nextIntermediateAckRetryInstruction = resolveIntermediateAckRetryInstruction({
+            config: params.config,
+            agentDir,
+            workspaceDir: resolvedWorkspace,
+            provider: activeErrorContext.provider,
+            modelId: activeErrorContext.model,
+            prompt: params.prompt,
+            aborted,
+            timedOut,
+            attempt,
+          });
           const nextEmptyResponseRetryInstruction = resolveEmptyResponseRetryInstruction({
             provider: activeErrorContext.provider,
             modelId: activeErrorContext.model,
@@ -1727,10 +1745,27 @@ export async function runEmbeddedPiAgent(
                 `provider=${provider}/${modelId} contract=${executionContract} configured=${configuredExecutionContract} — retrying ` +
                 `${planningOnlyRetryAttempts}/${maxPlanningOnlyRetryAttempts} with act-now steer`,
             );
+            intermediateAckRetryInstruction = null;
             continue;
           }
           if (
             !nextPlanningOnlyRetryInstruction &&
+            nextIntermediateAckRetryInstruction &&
+            intermediateAckRetryAttempts < maxIntermediateAckRetryAttempts
+          ) {
+            intermediateAckRetryAttempts += 1;
+            intermediateAckRetryInstruction = nextIntermediateAckRetryInstruction;
+            planningOnlyRetryInstruction = null;
+            log.warn(
+              `assistant intermediate-ack detected: runId=${params.runId} sessionId=${params.sessionId} ` +
+                `provider=${activeErrorContext.provider}/${activeErrorContext.model} contract=${executionContract} configured=${configuredExecutionContract} — retrying ` +
+                `${intermediateAckRetryAttempts}/${maxIntermediateAckRetryAttempts} with continue-now steer`,
+            );
+            continue;
+          }
+          if (
+            !nextPlanningOnlyRetryInstruction &&
+            !nextIntermediateAckRetryInstruction &&
             nextReasoningOnlyRetryInstruction &&
             reasoningOnlyRetryAttempts < maxReasoningOnlyRetryAttempts
           ) {
@@ -1745,10 +1780,12 @@ export async function runEmbeddedPiAgent(
           }
           const reasoningOnlyRetriesExhausted =
             !nextPlanningOnlyRetryInstruction &&
+            !nextIntermediateAckRetryInstruction &&
             nextReasoningOnlyRetryInstruction &&
             reasoningOnlyRetryAttempts >= maxReasoningOnlyRetryAttempts;
           if (
             !nextPlanningOnlyRetryInstruction &&
+            !nextIntermediateAckRetryInstruction &&
             !nextReasoningOnlyRetryInstruction &&
             nextEmptyResponseRetryInstruction &&
             emptyResponseRetryAttempts < maxEmptyResponseRetryAttempts
@@ -1801,6 +1838,48 @@ export async function runEmbeddedPiAgent(
               payloads: [
                 {
                   text: STRICT_AGENTIC_BLOCKED_TEXT,
+                  isError: true,
+                },
+              ],
+              meta: {
+                durationMs: Date.now() - started,
+                agentMeta,
+                aborted,
+                systemPromptReport: attempt.systemPromptReport,
+                finalPromptText: attempt.finalPromptText,
+                finalAssistantVisibleText,
+                finalAssistantRawText,
+                replayInvalid,
+                livenessState,
+              },
+              didSendViaMessagingTool: attempt.didSendViaMessagingTool,
+              didSendDeterministicApprovalPrompt: attempt.didSendDeterministicApprovalPrompt,
+              messagingToolSentTexts: attempt.messagingToolSentTexts,
+              messagingToolSentMediaUrls: attempt.messagingToolSentMediaUrls,
+              messagingToolSentTargets: attempt.messagingToolSentTargets,
+              successfulCronAdds: attempt.successfulCronAdds,
+            };
+          }
+          if (
+            !incompleteTurnText &&
+            !nextPlanningOnlyRetryInstruction &&
+            nextIntermediateAckRetryInstruction &&
+            strictAgenticActive
+          ) {
+            log.warn(
+              `strict-agentic run exhausted intermediate-ack retries: runId=${params.runId} sessionId=${params.sessionId} ` +
+                `provider=${activeErrorContext.provider}/${activeErrorContext.model} configured=${configuredExecutionContract} — surfacing blocked state`,
+            );
+            const replayInvalid = resolveReplayInvalidForAttempt(null);
+            const livenessState: EmbeddedRunLivenessState = "blocked";
+            attempt.setTerminalLifecycleMeta?.({
+              replayInvalid,
+              livenessState,
+            });
+            return {
+              payloads: [
+                {
+                  text: STRICT_AGENTIC_INTERMEDIATE_ACK_BLOCKED_TEXT,
                   isError: true,
                 },
               ],

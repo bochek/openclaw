@@ -5,6 +5,7 @@ import {
   loadRunOverflowCompactionHarness,
   mockedClassifyFailoverReason,
   mockedGlobalHookRunner,
+  mockedResolveProviderIntermediateAssistantAckWithPlugin,
   mockedLog,
   mockedRunEmbeddedAttempt,
   overflowBaseRunParams,
@@ -25,6 +26,7 @@ import {
   resolvePlanningOnlyRetryInstruction,
   resolveReasoningOnlyRetryInstruction,
   STRICT_AGENTIC_BLOCKED_TEXT,
+  STRICT_AGENTIC_INTERMEDIATE_ACK_BLOCKED_TEXT,
   resolveReplayInvalidFlag,
   resolveRunLivenessState,
 } from "./run/incomplete-turn.js";
@@ -226,6 +228,45 @@ describe("runEmbeddedPiAgent incomplete-turn safety", () => {
     for (const text of payloadTexts) {
       expect(text).not.toContain("plan-only turns");
     }
+  });
+
+  it("surfaces a blocked state after repeated provider-owned intermediate acknowledgements", async () => {
+    mockedClassifyFailoverReason.mockReturnValue(null);
+    mockedResolveProviderIntermediateAssistantAckWithPlugin.mockReturnValue({
+      instruction: "Continue now.",
+    });
+    mockedRunEmbeddedAttempt.mockResolvedValue(
+      makeAttemptResult({
+        assistantTexts: ["I can take a look at the repo and patch the issue."],
+      }),
+    );
+
+    const result = await runEmbeddedPiAgent({
+      ...overflowBaseRunParams,
+      prompt: "Please inspect the repo and patch the issue.",
+      provider: "openai",
+      model: "gpt-5.4",
+      runId: "run-strict-agentic-intermediate-ack-blocked",
+      config: {
+        agents: {
+          defaults: {
+            embeddedPi: {
+              executionContract: "strict-agentic",
+            },
+          },
+          list: [{ id: "main" }],
+        },
+      } as OpenClawConfig,
+    });
+
+    expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(3);
+    expect(result.payloads).toEqual([
+      {
+        text: STRICT_AGENTIC_INTERMEDIATE_ACK_BLOCKED_TEXT,
+        isError: true,
+      },
+    ]);
+    expect(result.meta.livenessState).toBe("blocked");
   });
 
   it("detects replay-safe planning-only GPT turns", () => {
