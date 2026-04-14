@@ -1505,6 +1505,68 @@ describe("dispatchReplyFromConfig", () => {
     );
   });
 
+  it("does not trust malformed channel auth for plugin inbound-claim events", async () => {
+    setNoAbort();
+    hookMocks.runner.runInboundClaimForPluginOutcome.mockResolvedValue({
+      status: "handled",
+      result: { handled: true },
+    });
+    sessionBindingMocks.resolveByConversation.mockReturnValue({
+      bindingId: "binding-auth-invalid-1",
+      targetSessionKey: "plugin-binding:codex:auth-invalid-1",
+      targetKind: "session",
+      conversation: {
+        channel: "telegram",
+        accountId: "default",
+        conversationId: "chat:trusted",
+      },
+      status: "active",
+      boundAt: 1710000000000,
+      metadata: {
+        pluginBindingOwner: "plugin",
+        pluginId: "openclaw-codex-app-server",
+      },
+    } satisfies SessionBindingRecord);
+    const dispatcher = createDispatcher();
+    const ctx = buildTestCtx({
+      Provider: "telegram",
+      Surface: "telegram",
+      OriginatingChannel: "telegram",
+      OriginatingTo: "telegram:chat:trusted",
+      To: "telegram:chat:trusted",
+      AccountId: "default",
+      SenderId: "trusted-user",
+      CommandAuthorized: false,
+      WasMentioned: false,
+      CommandBody: "/status",
+      RawBody: "/status",
+      Body: "/status",
+      MessageSid: "msg-claim-auth-invalid-1",
+      SessionKey: "agent:main:telegram:chat:trusted",
+    });
+    const channelResolvedCommandAuthorization = {
+      ownerList: "trusted-user",
+      senderIsOwner: true,
+      isAuthorizedSender: true,
+    } as unknown as ChannelResolvedCommandAuthorization;
+
+    await dispatchReplyFromConfig({
+      ctx,
+      cfg: emptyConfig,
+      dispatcher,
+      replyResolver: vi.fn(async () => ({ text: "unused" }) as ReplyPayload),
+      replyOptions: { channelResolvedCommandAuthorization },
+    });
+
+    expect(hookMocks.runner.runInboundClaimForPluginOutcome).toHaveBeenCalledWith(
+      "openclaw-codex-app-server",
+      expect.objectContaining({
+        commandAuthorized: false,
+      }),
+      expect.anything(),
+    );
+  });
+
   it("routes ACP sessions through the runtime branch and streams block replies", async () => {
     setNoAbort();
     const runtime = createAcpRuntime([

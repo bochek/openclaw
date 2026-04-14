@@ -55,7 +55,11 @@ export function resolveEffectiveCommandAuthorized(params: {
   commandAuthorized: boolean;
   channelResolvedCommandAuthorization?: ChannelResolvedCommandAuthorization;
 }): boolean {
-  return params.channelResolvedCommandAuthorization?.isAuthorizedSender ?? params.commandAuthorized;
+  const provided = resolveProvidedChannelCommandAuthorization({
+    channelResolvedCommandAuthorization: params.channelResolvedCommandAuthorization,
+    warnOnMalformed: false,
+  });
+  return provided?.isAuthorizedSender ?? params.commandAuthorized;
 }
 
 export function resolveCommandProviderIdFromContext(params: {
@@ -67,21 +71,27 @@ export function resolveCommandProviderIdFromContext(params: {
 
 function resolveProvidedChannelCommandAuthorization(params: {
   channelResolvedCommandAuthorization?: ChannelResolvedCommandAuthorization;
+  warnOnMalformed?: boolean;
 }): ChannelResolvedCommandAuthorization | undefined {
   const { channelResolvedCommandAuthorization: provided } = params;
+  const maybeWarn = (reason: string) => {
+    if (params.warnOnMalformed !== false) {
+      warnMalformedChannelResolvedCommandAuthorization(reason);
+    }
+  };
   if (!provided || typeof provided !== "object") {
     return undefined;
   }
   if (!Array.isArray(provided.ownerList)) {
-    warnMalformedChannelResolvedCommandAuthorization("ownerList must be an array");
+    maybeWarn("ownerList must be an array");
     return undefined;
   }
   if (typeof provided.senderIsOwner !== "boolean") {
-    warnMalformedChannelResolvedCommandAuthorization("senderIsOwner must be a boolean");
+    maybeWarn("senderIsOwner must be a boolean");
     return undefined;
   }
   if (typeof provided.isAuthorizedSender !== "boolean") {
-    warnMalformedChannelResolvedCommandAuthorization("isAuthorizedSender must be a boolean");
+    maybeWarn("isAuthorizedSender must be a boolean");
     return undefined;
   }
   return {
