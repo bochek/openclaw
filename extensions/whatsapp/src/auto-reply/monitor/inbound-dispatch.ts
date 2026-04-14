@@ -1,4 +1,3 @@
-import type { ResolvedCommandAuthorization } from "openclaw/plugin-sdk/command-auth";
 import type { WebInboundMsg } from "../types.js";
 import { formatGroupMembers } from "./group-members.js";
 import type { GroupHistoryEntry } from "./inbound-context.js";
@@ -85,7 +84,6 @@ export function resolveWhatsAppResponsePrefix(params: {
 export function buildWhatsAppInboundContext(params: {
   combinedBody: string;
   commandAuthorized?: boolean;
-  resolvedCommandAuthorization?: ResolvedCommandAuthorization;
   conversationId: string;
   groupHistory?: GroupHistoryEntry[];
   groupMemberRoster?: Map<string, string>;
@@ -133,7 +131,6 @@ export function buildWhatsAppInboundContext(params: {
     SenderId: params.sender.id ?? params.sender.e164,
     SenderE164: params.sender.e164,
     CommandAuthorized: params.commandAuthorized,
-    ResolvedCommandAuthorization: params.resolvedCommandAuthorization,
     WasMentioned: params.msg.wasMentioned,
     ...(params.msg.location ? toLocationContext(params.msg.location) : {}),
     Provider: "whatsapp",

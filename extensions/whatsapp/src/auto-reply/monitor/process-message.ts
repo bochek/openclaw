@@ -1,4 +1,3 @@
-import type { ResolvedCommandAuthorization } from "openclaw/plugin-sdk/command-auth";
 import { resolveWhatsAppAccount } from "../../accounts.js";
 import { getPrimaryIdentityId, getSelfIdentity, getSenderIdentity } from "../../identity.js";
 import { newConnectionId } from "../../reconnect.js";
@@ -43,41 +42,23 @@ import {
   type resolveAgentRoute,
 } from "./runtime-api.js";
 
-type WhatsAppResolvedCommandAuthorization = {
-  commandAuthorized: boolean;
-  resolvedCommandAuthorization?: ResolvedCommandAuthorization;
-};
-
-function normalizeConfiguredWhatsAppOwnerList(params: {
-  configuredAllowFrom: Array<string | number>;
-  senderE164: string;
-  isSelfChat: boolean;
-}): string[] {
-  const ownerList = params.configuredAllowFrom
-    .map((entry) => normalizeE164(String(entry)))
-    .filter((entry): entry is string => Boolean(entry));
-  if (params.isSelfChat && !ownerList.includes(params.senderE164)) {
-    ownerList.push(params.senderE164);
-  }
-  return Array.from(new Set(ownerList));
-}
-
-async function resolveWhatsAppCommandAuthorization(params: {
+async function resolveWhatsAppCommandAuthorized(params: {
   cfg: ReturnType<LoadConfigFn>;
   msg: WebInboundMsg;
-}): Promise<WhatsAppResolvedCommandAuthorization> {
+}): Promise<boolean> {
   const useAccessGroups = params.cfg.commands?.useAccessGroups !== false;
+  if (!useAccessGroups) {
+    return true;
+  }
+
   const isGroup = params.msg.chatType === "group";
   const sender = getSenderIdentity(params.msg);
   const self = getSelfIdentity(params.msg);
-  const selfE164 = normalizeE164(self.e164 ?? "");
   const senderE164 = normalizeE164(
     isGroup ? (sender.e164 ?? "") : (sender.e164 ?? params.msg.from ?? ""),
   );
   if (!senderE164) {
-    return {
-      commandAuthorized: false,
-    };
+    return false;
   }
 
   const account = resolveWhatsAppAccount({ cfg: params.cfg, accountId: params.msg.accountId });
@@ -86,7 +67,6 @@ async function resolveWhatsAppCommandAuthorization(params: {
   const configuredAllowFrom = account.allowFrom ?? [];
   const configuredGroupAllowFrom =
     account.groupAllowFrom ?? (configuredAllowFrom.length > 0 ? configuredAllowFrom : undefined);
-  const isSelfChat = !isGroup && Boolean(selfE164) && senderE164 === selfE164;
 
   const storeAllowFrom = isGroup
     ? []
@@ -105,9 +85,6 @@ async function resolveWhatsAppCommandAuthorization(params: {
     groupAllowFrom: configuredGroupAllowFrom,
     storeAllowFrom,
     isSenderAllowed: (allowEntries) => {
-      if (!isGroup && isSelfChat) {
-        return true;
-      }
       if (allowEntries.includes("*")) {
         return true;
       }
@@ -122,23 +99,7 @@ async function resolveWhatsAppCommandAuthorization(params: {
       hasControlCommand: true,
     },
   });
-  const ownerList = normalizeConfiguredWhatsAppOwnerList({
-    configuredAllowFrom,
-    senderE164,
-    isSelfChat,
-  });
-  return {
-    commandAuthorized: access.commandAuthorized,
-    resolvedCommandAuthorization: {
-      providerId: "whatsapp",
-      ownerList,
-      senderId: senderE164,
-      senderIsOwner: isSelfChat || ownerList.includes(senderE164),
-      isAuthorizedSender: access.commandAuthorized,
-      from: params.msg.from,
-      to: params.msg.to,
-    },
-  };
+  return access.commandAuthorized;
 }
 
 function resolvePinnedMainDmRecipient(params: {
@@ -308,10 +269,9 @@ export async function processMessage(params: {
     senderE164: sender.e164 ?? undefined,
     normalizeE164,
   });
-  const resolvedCommandAuthorization = shouldComputeCommandAuthorized(params.msg.body, params.cfg)
-    ? await resolveWhatsAppCommandAuthorization({ cfg: params.cfg, msg: params.msg })
+  const commandAuthorized = shouldComputeCommandAuthorized(params.msg.body, params.cfg)
+    ? await resolveWhatsAppCommandAuthorized({ cfg: params.cfg, msg: params.msg })
     : undefined;
-  const commandAuthorized = resolvedCommandAuthorization?.commandAuthorized;
   const { onModelSelected, ...replyPipeline } = createChannelReplyPipeline({
     cfg: params.cfg,
     agentId: params.route.agentId,
@@ -336,7 +296,6 @@ export async function processMessage(params: {
     groupHistory: visibleGroupHistory,
     groupMemberRoster: params.groupMemberNames.get(params.groupHistoryKey),
     msg: params.msg,
-    resolvedCommandAuthorization: resolvedCommandAuthorization?.resolvedCommandAuthorization,
     route: params.route,
     sender: {
       id: getPrimaryIdentityId(sender) ?? undefined,
