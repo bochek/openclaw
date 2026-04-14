@@ -493,7 +493,10 @@ function hasNonPlanToolActivity(toolMetas: PlanningOnlyAttempt["toolMetas"]): bo
 }
 
 function hasToolMessageInTranscript(messages: readonly AgentMessage[]): boolean {
-  return messages.some((message) => message?.role === "toolResult");
+  return messages.some((message) => {
+    const role = (message as { role?: string } | null | undefined)?.role;
+    return role === "toolResult" || role === "tool";
+  });
 }
 
 function hasSingleRetrySafeNonPlanTool(toolMetas: PlanningOnlyAttempt["toolMetas"]): boolean {

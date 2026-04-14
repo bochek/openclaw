@@ -11,7 +11,7 @@ const INTERMEDIATE_ACK_ACTION_RE =
 const INTERMEDIATE_ACK_COMPLETION_RE =
   /\b(?:done|finished|implemented|updated|fixed|changed|ran|verified|found|here(?:'s| is)|summary|blocked)\b/i;
 const INTERMEDIATE_ACK_SUMMARY_DELIVERY_RE =
-  /\b(?:i(?:'ll| will)|let me)\s+summari(?:s|z)e\b[^:\n]{0,120}:/i;
+  /\b(?:i(?:'ll| will)|let me)\s+summari(?:s|z)e\b[^:.\n]{0,120}(?::|\.)/i;
 const OPTIONAL_OFFER_RE = /^\s*if\s+(?:you\s+want|you['’]d\s+like|helpful)\b/i;
 const WORKSPACE_MARKER_RE =
   /\b(?:file|files|repo|repository|code|codebase|project|workspace|directory|folder|path|tests?)\b/i;

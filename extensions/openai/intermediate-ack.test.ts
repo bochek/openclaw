@@ -50,6 +50,15 @@ describe("resolveOpenAIIntermediateAssistantAck", () => {
         hasToolMessageInTranscript: false,
       }),
     ).toBeUndefined();
+    expect(
+      resolveOpenAIIntermediateAssistantAck({
+        provider: "openai",
+        modelId: "gpt-5.4",
+        prompt: "Please inspect the repo and fix the failing test.",
+        assistantText: "Let me summarize the findings. The last test failed on import order.",
+        hasToolMessageInTranscript: false,
+      }),
+    ).toBeUndefined();
   });
 
   it("does not treat answer/result nouns as completion signals", () => {

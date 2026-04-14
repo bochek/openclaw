@@ -269,6 +269,39 @@ describe("runEmbeddedPiAgent incomplete-turn safety", () => {
     expect(result.meta.livenessState).toBe("blocked");
   });
 
+  it("does not retry provider-owned acknowledgements after legacy tool transcript activity", async () => {
+    mockedClassifyFailoverReason.mockReturnValue(null);
+    mockedResolveProviderIntermediateAssistantAckWithPlugin.mockImplementation((params) =>
+      params.context.hasToolMessageInTranscript ? undefined : { instruction: "Continue now." },
+    );
+    mockedRunEmbeddedAttempt.mockResolvedValueOnce(
+      makeAttemptResult({
+        assistantTexts: ["I can take a look at the repo and patch the issue."],
+        messagesSnapshot: [
+          {
+            role: "tool",
+            content: [{ type: "text", text: "previous tool output" }],
+          } as unknown as EmbeddedRunAttemptResult["messagesSnapshot"][number],
+        ],
+      }),
+    );
+
+    const result = await runEmbeddedPiAgent({
+      ...overflowBaseRunParams,
+      prompt: "Please inspect the repo and patch the issue.",
+      provider: "openai",
+      model: "gpt-5.4",
+      runId: "run-intermediate-ack-legacy-tool-transcript",
+    });
+
+    expect(mockedRunEmbeddedAttempt).toHaveBeenCalledTimes(1);
+    expect(result.meta.livenessState).not.toBe("blocked");
+    const payloadTexts = (result.payloads ?? []).map((payload) => payload.text ?? "");
+    for (const text of payloadTexts) {
+      expect(text).not.toContain("acknowledgement turns");
+    }
+  });
+
   it("detects replay-safe planning-only GPT turns", () => {
     const retryInstruction = resolvePlanningOnlyRetryInstruction({
       provider: "openai",
