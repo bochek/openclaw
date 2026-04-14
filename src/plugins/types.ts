@@ -1060,7 +1060,6 @@ export type ProviderIntermediateAssistantAckContext = {
   prompt: string;
   assistantText: string;
   hasToolMessageInTranscript: boolean;
-  isFirstAssistantTurnInTranscript: boolean;
 };
 
 /** Provider-owned continuation payload for assistant intermediate-ack turns. */

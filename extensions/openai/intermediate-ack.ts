@@ -9,7 +9,9 @@ const INTERMEDIATE_ACK_FUTURE_ACTION_RE =
 const INTERMEDIATE_ACK_ACTION_RE =
   /\b(?:inspect|check|look(?:\s+into|\s+at)?|review|read|search|find|trace|debug|fix|patch|update|change|edit|run|test|verify|compare|investigate|explore|scan|walk through|walk me through|summari(?:s|z)e|report back)\b/i;
 const INTERMEDIATE_ACK_COMPLETION_RE =
-  /\b(?:done|finished|implemented|updated|fixed|changed|ran|verified|found|here(?:'s| is)|summary|result|answer|blocked)\b/i;
+  /\b(?:done|finished|implemented|updated|fixed|changed|ran|verified|found|here(?:'s| is)|summary|blocked)\b/i;
+const INTERMEDIATE_ACK_SUMMARY_DELIVERY_RE =
+  /\b(?:i(?:'ll| will)|let me)\s+summari(?:s|z)e\b[^:\n]{0,120}:/i;
 const OPTIONAL_OFFER_RE = /^\s*if\s+(?:you\s+want|you['’]d\s+like|helpful)\b/i;
 const WORKSPACE_MARKER_RE =
   /\b(?:file|files|repo|repository|code|codebase|project|workspace|directory|folder|path|tests?)\b/i;
@@ -24,7 +26,7 @@ export const OPENAI_INTERMEDIATE_ACK_RETRY_INSTRUCTION =
 export function resolveOpenAIIntermediateAssistantAck(
   ctx: ProviderIntermediateAssistantAckContext,
 ): ProviderIntermediateAssistantAck | undefined {
-  if (ctx.hasToolMessageInTranscript || !ctx.isFirstAssistantTurnInTranscript) {
+  if (ctx.hasToolMessageInTranscript) {
     return undefined;
   }
   const assistantText = ctx.assistantText.trim();
@@ -36,7 +38,11 @@ export function resolveOpenAIIntermediateAssistantAck(
   ) {
     return undefined;
   }
-  if (OPTIONAL_OFFER_RE.test(assistantText) || INTERMEDIATE_ACK_COMPLETION_RE.test(assistantText)) {
+  if (
+    OPTIONAL_OFFER_RE.test(assistantText) ||
+    INTERMEDIATE_ACK_COMPLETION_RE.test(assistantText) ||
+    INTERMEDIATE_ACK_SUMMARY_DELIVERY_RE.test(assistantText)
+  ) {
     return undefined;
   }
   if (!INTERMEDIATE_ACK_FUTURE_ACTION_RE.test(assistantText)) {

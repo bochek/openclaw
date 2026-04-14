@@ -886,7 +886,6 @@ describe("provider-runtime", () => {
           prompt: "check the repo",
           assistantText: "Let me inspect the repo.",
           hasToolMessageInTranscript: false,
-          isFirstAssistantTurnInTranscript: true,
         }),
       }),
     ).toEqual({

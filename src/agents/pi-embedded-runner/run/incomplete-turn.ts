@@ -496,23 +496,6 @@ function hasToolMessageInTranscript(messages: readonly AgentMessage[]): boolean 
   return messages.some((message) => message?.role === "toolResult");
 }
 
-function isFirstAssistantTurnInTranscript(params: {
-  messagesSnapshot: readonly AgentMessage[];
-  currentAssistant?: IncompleteTurnAttempt["currentAttemptAssistant"] | null;
-}): boolean {
-  const assistantMessages = params.messagesSnapshot.filter((message) => message?.role === "assistant");
-  if (assistantMessages.length === 0) {
-    return true;
-  }
-  if (!params.currentAssistant) {
-    return assistantMessages.length <= 1;
-  }
-  const currentAssistantMatches = assistantMessages.filter(
-    (message) => message === params.currentAssistant,
-  ).length;
-  return assistantMessages.length <= Math.max(1, currentAssistantMatches);
-}
-
 function hasSingleRetrySafeNonPlanTool(toolMetas: PlanningOnlyAttempt["toolMetas"]): boolean {
   const nonPlanToolNames = toolMetas
     .map((entry) => normalizeLowercaseStringOrEmpty(entry.toolName))
@@ -672,7 +655,6 @@ export function resolveIntermediateAckRetryInstruction(params: {
   if (!assistantText) {
     return null;
   }
-  const currentAssistant = params.attempt.currentAttemptAssistant ?? params.attempt.lastAssistant;
 
   return (
     resolveProviderIntermediateAssistantAckWithPlugin({
@@ -688,10 +670,6 @@ export function resolveIntermediateAckRetryInstruction(params: {
         prompt,
         assistantText,
         hasToolMessageInTranscript: hasToolMessageInTranscript(params.attempt.messagesSnapshot),
-        isFirstAssistantTurnInTranscript: isFirstAssistantTurnInTranscript({
-          messagesSnapshot: params.attempt.messagesSnapshot,
-          currentAssistant,
-        }),
       },
     })?.instruction ?? null
   );
