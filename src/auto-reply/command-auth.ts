@@ -17,17 +17,8 @@ import {
   isInternalMessageChannel,
   normalizeMessageChannel,
 } from "../utils/message-channel.js";
+import type { CommandAuthorization, ResolvedCommandAuthorization } from "./command-auth.types.js";
 import type { MsgContext } from "./templating.js";
-
-export type CommandAuthorization = {
-  providerId?: ChannelId;
-  ownerList: string[];
-  senderId?: string;
-  senderIsOwner: boolean;
-  isAuthorizedSender: boolean;
-  from?: string;
-  to?: string;
-};
 
 type InferredProviderCandidate = {
   providerId: ChannelId;
@@ -52,6 +43,30 @@ type OwnerAuthorizationState = {
   explicitOwners: string[];
   ownerList: string[];
 };
+
+type CommandAuthContext = MsgContext & {
+  ResolvedCommandAuthorization?: ResolvedCommandAuthorization;
+};
+
+function resolveProvidedCommandAuthorization(
+  ctx: MsgContext,
+): ResolvedCommandAuthorization | undefined {
+  const provided = (ctx as CommandAuthContext).ResolvedCommandAuthorization;
+  if (!provided || typeof provided !== "object") {
+    return undefined;
+  }
+  const from = normalizeOptionalString(provided.from ?? ctx.From) ?? "";
+  const to = normalizeOptionalString(provided.to ?? ctx.To) ?? "";
+  return {
+    providerId: provided.providerId,
+    ownerList: normalizeStringEntries(provided.ownerList),
+    senderId: normalizeOptionalString(provided.senderId) ?? undefined,
+    senderIsOwner: provided.senderIsOwner,
+    isAuthorizedSender: provided.isAuthorizedSender,
+    from: from || undefined,
+    to: to || undefined,
+  };
+}
 
 function resolveProviderFromContext(
   ctx: MsgContext,
@@ -629,6 +644,10 @@ export function resolveCommandAuthorization(params: {
   commandAuthorized: boolean;
 }): CommandAuthorization {
   const { ctx, cfg, commandAuthorized } = params;
+  const provided = resolveProvidedCommandAuthorization(ctx);
+  if (provided) {
+    return provided;
+  }
   const { providerId, hadResolutionError: providerResolutionError } = resolveProviderFromContext(
     ctx,
     cfg,

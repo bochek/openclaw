@@ -66,10 +66,11 @@ export {
   resolveNativeCommandSessionTargets,
   type ResolveNativeCommandSessionTargetsParams,
 } from "../channels/native-command-session-targets.js";
-export {
-  resolveCommandAuthorization,
-  type CommandAuthorization,
-} from "../auto-reply/command-auth.js";
+export { resolveCommandAuthorization } from "../auto-reply/command-auth.js";
+export type {
+  CommandAuthorization,
+  ResolvedCommandAuthorization,
+} from "../auto-reply/command-auth.types.js";
 export {
   listReservedChatSlashCommandNames,
   listSkillCommandsForAgents,

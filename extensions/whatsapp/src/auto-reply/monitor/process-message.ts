@@ -1,3 +1,4 @@
+import type { ResolvedCommandAuthorization } from "openclaw/plugin-sdk/command-auth";
 import { resolveWhatsAppAccount } from "../../accounts.js";
 import { getPrimaryIdentityId, getSelfIdentity, getSenderIdentity } from "../../identity.js";
 import { newConnectionId } from "../../reconnect.js";
@@ -42,13 +43,20 @@ import {
   type resolveAgentRoute,
 } from "./runtime-api.js";
 
-async function resolveWhatsAppCommandAuthorized(params: {
+type WhatsAppResolvedCommandAuthorization = {
+  commandAuthorized: boolean;
+  resolvedCommandAuthorization?: ResolvedCommandAuthorization;
+};
+
+async function resolveWhatsAppCommandAuthorization(params: {
   cfg: ReturnType<LoadConfigFn>;
   msg: WebInboundMsg;
-}): Promise<boolean> {
+}): Promise<WhatsAppResolvedCommandAuthorization> {
   const useAccessGroups = params.cfg.commands?.useAccessGroups !== false;
   if (!useAccessGroups) {
-    return true;
+    return {
+      commandAuthorized: true,
+    };
   }
 
   const isGroup = params.msg.chatType === "group";
@@ -58,7 +66,9 @@ async function resolveWhatsAppCommandAuthorized(params: {
     isGroup ? (sender.e164 ?? "") : (sender.e164 ?? params.msg.from ?? ""),
   );
   if (!senderE164) {
-    return false;
+    return {
+      commandAuthorized: false,
+    };
   }
 
   const account = resolveWhatsAppAccount({ cfg: params.cfg, accountId: params.msg.accountId });
@@ -99,7 +109,23 @@ async function resolveWhatsAppCommandAuthorized(params: {
       hasControlCommand: true,
     },
   });
-  return access.commandAuthorized;
+  const selfE164 = normalizeE164(self.e164 ?? "");
+  const isSelfChat = !isGroup && Boolean(selfE164) && senderE164 === selfE164;
+  return {
+    commandAuthorized: access.commandAuthorized,
+    resolvedCommandAuthorization:
+      access.commandAuthorized && isSelfChat
+        ? {
+            providerId: "whatsapp",
+            ownerList: [senderE164],
+            senderId: senderE164,
+            senderIsOwner: true,
+            isAuthorizedSender: true,
+            from: params.msg.from,
+            to: params.msg.to,
+          }
+        : undefined,
+  };
 }
 
 function resolvePinnedMainDmRecipient(params: {
@@ -269,9 +295,10 @@ export async function processMessage(params: {
     senderE164: sender.e164 ?? undefined,
     normalizeE164,
   });
-  const commandAuthorized = shouldComputeCommandAuthorized(params.msg.body, params.cfg)
-    ? await resolveWhatsAppCommandAuthorized({ cfg: params.cfg, msg: params.msg })
+  const resolvedCommandAuthorization = shouldComputeCommandAuthorized(params.msg.body, params.cfg)
+    ? await resolveWhatsAppCommandAuthorization({ cfg: params.cfg, msg: params.msg })
     : undefined;
+  const commandAuthorized = resolvedCommandAuthorization?.commandAuthorized;
   const { onModelSelected, ...replyPipeline } = createChannelReplyPipeline({
     cfg: params.cfg,
     agentId: params.route.agentId,
@@ -296,6 +323,7 @@ export async function processMessage(params: {
     groupHistory: visibleGroupHistory,
     groupMemberRoster: params.groupMemberNames.get(params.groupHistoryKey),
     msg: params.msg,
+    resolvedCommandAuthorization: resolvedCommandAuthorization?.resolvedCommandAuthorization,
     route: params.route,
     sender: {
       id: getPrimaryIdentityId(sender) ?? undefined,

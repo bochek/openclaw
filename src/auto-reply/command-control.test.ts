@@ -372,6 +372,38 @@ describe("resolveCommandAuthorization", () => {
       expect(unauthorizedAuth.isAuthorizedSender).toBe(false);
     });
 
+    it("keeps the fallback recomputation path unchanged when no resolved auth is provided", () => {
+      const auth = resolveCommandAuthorization({
+        ctx: makeWhatsAppContext("otheruser"),
+        cfg: commandsAllowFromConfig,
+        commandAuthorized: true,
+      });
+
+      expect(auth.isAuthorizedSender).toBe(false);
+    });
+
+    it("prefers channel-resolved authorization over config recomputation when provided", () => {
+      const auth = resolveCommandAuthorization({
+        ctx: {
+          ...makeWhatsAppContext("otheruser"),
+          ResolvedCommandAuthorization: {
+            providerId: "whatsapp",
+            ownerList: ["+19995550123"],
+            senderId: "otheruser",
+            senderIsOwner: true,
+            isAuthorizedSender: true,
+          },
+        } as MsgContext,
+        cfg: commandsAllowFromConfig,
+        commandAuthorized: false,
+      });
+
+      expect(auth.ownerList).toEqual(["+19995550123"]);
+      expect(auth.senderId).toBe("otheruser");
+      expect(auth.senderIsOwner).toBe(true);
+      expect(auth.isAuthorizedSender).toBe(true);
+    });
+
     it("uses commands.allowFrom provider-specific list over global", () => {
       const cfg = {
         commands: {

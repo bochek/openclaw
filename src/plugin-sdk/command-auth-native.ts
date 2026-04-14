@@ -12,7 +12,5 @@ export {
   resolveControlCommandGate,
 } from "../channels/command-gating.js";
 export { resolveNativeCommandSessionTargets } from "../channels/native-command-session-targets.js";
-export {
-  resolveCommandAuthorization,
-  type CommandAuthorization,
-} from "../auto-reply/command-auth.js";
+export { resolveCommandAuthorization } from "../auto-reply/command-auth.js";
+export type { CommandAuthorization } from "../auto-reply/command-auth.types.js";
