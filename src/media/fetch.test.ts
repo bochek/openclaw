@@ -286,4 +286,47 @@ describe("fetchRemoteMedia", () => {
 
     await expectBoundedErrorBodyCase(testCase.fetchImpl);
   });
+
+  it("skips local DNS pinning for trusted explicit proxy dispatcher attempts", async () => {
+    const dispatcherPolicy = {
+      mode: "explicit-proxy" as const,
+      proxyUrl: "http://127.0.0.1:7890",
+      allowPrivateProxy: true,
+    };
+
+    await fetchRemoteMedia(
+      createFetchRemoteMediaParams({
+        url: "https://api.telegram.org/file/bot123/photos/1.jpg",
+        fetchImpl: async () => new Response("ok", { status: 200 }),
+        dispatcherAttempts: [{ dispatcherPolicy }],
+      }),
+    );
+
+    expect(fetchWithSsrFGuardMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dispatcherPolicy,
+        pinDns: false,
+      }),
+    );
+  });
+
+  it("keeps local DNS pinning for untrusted explicit proxy dispatcher attempts", async () => {
+    const dispatcherPolicy = {
+      mode: "explicit-proxy" as const,
+      proxyUrl: "http://127.0.0.1:7890",
+    };
+
+    await fetchRemoteMedia(
+      createFetchRemoteMediaParams({
+        url: "https://api.telegram.org/file/bot123/photos/1.jpg",
+        fetchImpl: async () => new Response("ok", { status: 200 }),
+        dispatcherAttempts: [{ dispatcherPolicy }],
+      }),
+    );
+
+    const guardedCall = fetchWithSsrFGuardMock.mock.calls[0]?.[0] as
+      | { pinDns?: boolean }
+      | undefined;
+    expect(guardedCall?.pinDns).toBeUndefined();
+  });
 });

@@ -26,6 +26,7 @@ Docs: https://docs.openclaw.ai
 - Browser: keep loopback CDP readiness checks reachable under strict SSRF defaults so OpenClaw can reconnect to locally started managed Chrome. (#66354) Thanks @hxy91819.
 - Agents/context engine: compact engine-owned sessions from the first tool-loop delta and preserve ingest fallback when `afterTurn` is absent, so long-running tool loops can stay bounded without dropping engine state. (#63555) Thanks @Bikkies.
 - Discord/native commands: return the real status card for native `/status` interactions instead of falling through to the synthetic `✅ Done.` ack when the generic dispatcher produces no visible reply. (#54629) Thanks @tkozzer and @vincentkoc.
+- Telegram/media: stop trusted explicit-proxy downloads from forcing a local target DNS pin before the request reaches the configured proxy, so Telegram media fetches work again in proxy-only environments. (#66245) Thanks @dawei41468 and @vincentkoc.
 
 ## 2026.4.14-beta.1
 

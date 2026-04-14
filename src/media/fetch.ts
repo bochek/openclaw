@@ -93,6 +93,13 @@ function redactMediaUrl(url: string): string {
   return redactSensitiveText(url);
 }
 
+function shouldSkipPinnedDnsForMediaAttempt(attempt: FetchDispatcherAttempt): boolean {
+  return (
+    attempt.dispatcherPolicy?.mode === "explicit-proxy" &&
+    attempt.dispatcherPolicy.allowPrivateProxy === true
+  );
+}
+
 export async function fetchRemoteMedia(options: FetchMediaOptions): Promise<FetchMediaResult> {
   const {
     url,
@@ -126,6 +133,11 @@ export async function fetchRemoteMedia(options: FetchMediaOptions): Promise<Fetc
         policy: ssrfPolicy,
         lookupFn: attempt.lookupFn ?? lookupFn,
         dispatcherPolicy: attempt.dispatcherPolicy,
+        // Operator-configured explicit proxies resolve the target hostname on
+        // the proxy hop. For those trusted routes, forcing a local pinned DNS
+        // lookup breaks media downloads in proxy-only environments without
+        // strengthening the real SSRF boundary.
+        ...(shouldSkipPinnedDnsForMediaAttempt(attempt) ? { pinDns: false } : {}),
       }),
     );
   try {
