@@ -5,8 +5,6 @@ import {
   DEFAULT_SAFE_BINS,
   SAFE_BIN_PROFILE_FIXTURES,
   SAFE_BIN_PROFILES,
-  buildLongFlagPrefixMap,
-  collectKnownLongFlags,
   renderDefaultSafeBinsDocText,
   renderSafeBinDeniedFlagsDocBullets,
   validateSafeBinArgv,
@@ -120,35 +118,32 @@ describe("exec safe bin policy token hygiene", () => {
   });
 });
 
-describe("exec safe bin policy long-option metadata", () => {
-  it("precomputes long-option prefix mappings for compiled profiles", () => {
+describe("exec safe bin policy long-option abbreviation", () => {
+  it("resolves unambiguous denied-flag abbreviations", () => {
     const sortProfile = SAFE_BIN_PROFILES.sort;
-    expect(sortProfile.knownLongFlagsSet?.has("--compress-program")).toBe(true);
-    expect(sortProfile.longFlagPrefixMap?.get("--compress-prog")).toBe("--compress-program");
-    expect(sortProfile.longFlagPrefixMap?.get("--f")).toBe(null);
+    expect(validateSafeBinArgv(["--compress-prog=sh"], sortProfile)).toBe(false);
+    expect(validateSafeBinArgv(["--compress-pr=sh"], sortProfile)).toBe(false);
   });
 
-  it("preserves behavior when profile metadata is missing and rebuilt at runtime", () => {
+  it("rejects ambiguous long-option abbreviations", () => {
     const sortProfile = SAFE_BIN_PROFILES.sort;
-    const withoutMetadata = {
-      ...sortProfile,
-      knownLongFlags: undefined,
-      knownLongFlagsSet: undefined,
-      longFlagPrefixMap: undefined,
-    };
-    expect(validateSafeBinArgv(["--compress-prog=sh"], withoutMetadata)).toBe(false);
-    expect(validateSafeBinArgv(["--totally-unknown=1"], withoutMetadata)).toBe(false);
+    // --f is ambiguous: --field-separator vs --files0-from
+    expect(validateSafeBinArgv(["--f=1"], sortProfile)).toBe(false);
   });
 
-  it("builds prefix maps from collected long flags", () => {
+  it("rejects unknown long options", () => {
     const sortProfile = SAFE_BIN_PROFILES.sort;
-    const flags = collectKnownLongFlags(
-      sortProfile.allowedValueFlags ?? new Set(),
-      sortProfile.deniedFlags ?? new Set(),
-    );
-    const prefixMap = buildLongFlagPrefixMap(flags);
-    expect(prefixMap.get("--compress-pr")).toBe("--compress-program");
-    expect(prefixMap.get("--f")).toBe(null);
+    expect(validateSafeBinArgv(["--totally-unknown=1"], sortProfile)).toBe(false);
+  });
+
+  it("accepts exact flags that are prefixes of other flags", () => {
+    const jqProfile = SAFE_BIN_PROFILES.jq;
+    // --arg is a prefix of --argjson, --argstr, --argfile but must resolve exactly
+    expect(validateSafeBinArgv(["--arg", "key", ".foo"], jqProfile, { binName: "jq" })).toBe(true);
+
+    const grepProfile = SAFE_BIN_PROFILES.grep;
+    // --exclude is a prefix of --exclude-from but must resolve exactly
+    expect(validateSafeBinArgv(["-e", "needle", "--exclude", "build"], grepProfile)).toBe(true);
   });
 });
 

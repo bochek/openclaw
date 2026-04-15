@@ -5,10 +5,6 @@ export type SafeBinProfile = {
   maxPositional?: number;
   allowedValueFlags?: ReadonlySet<string>;
   deniedFlags?: ReadonlySet<string>;
-  // Precomputed long-option metadata for GNU abbreviation resolution.
-  knownLongFlags?: readonly string[];
-  knownLongFlagsSet?: ReadonlySet<string>;
-  longFlagPrefixMap?: ReadonlyMap<string, string | null>;
 };
 
 export type SafeBinProfileFixture = {
@@ -31,59 +27,12 @@ const toFlagSet = (flags?: readonly string[]): ReadonlySet<string> => {
   return new Set(flags);
 };
 
-export function collectKnownLongFlags(
-  allowedValueFlags: ReadonlySet<string>,
-  deniedFlags: ReadonlySet<string>,
-): string[] {
-  const known = new Set<string>();
-  for (const flag of allowedValueFlags) {
-    if (flag.startsWith("--")) {
-      known.add(flag);
-    }
-  }
-  for (const flag of deniedFlags) {
-    if (flag.startsWith("--")) {
-      known.add(flag);
-    }
-  }
-  return Array.from(known);
-}
-
-export function buildLongFlagPrefixMap(
-  knownLongFlags: readonly string[],
-): ReadonlyMap<string, string | null> {
-  const prefixMap = new Map<string, string | null>();
-  for (const flag of knownLongFlags) {
-    if (!flag.startsWith("--") || flag.length <= 2) {
-      continue;
-    }
-    for (let length = 3; length <= flag.length; length += 1) {
-      const prefix = flag.slice(0, length);
-      const existing = prefixMap.get(prefix);
-      if (existing === undefined) {
-        prefixMap.set(prefix, flag);
-        continue;
-      }
-      if (existing !== flag) {
-        prefixMap.set(prefix, null);
-      }
-    }
-  }
-  return prefixMap;
-}
-
 function compileSafeBinProfile(fixture: SafeBinProfileFixture): SafeBinProfile {
-  const allowedValueFlags = toFlagSet(fixture.allowedValueFlags);
-  const deniedFlags = toFlagSet(fixture.deniedFlags);
-  const knownLongFlags = collectKnownLongFlags(allowedValueFlags, deniedFlags);
   return {
     minPositional: fixture.minPositional,
     maxPositional: fixture.maxPositional,
-    allowedValueFlags,
-    deniedFlags,
-    knownLongFlags,
-    knownLongFlagsSet: new Set(knownLongFlags),
-    longFlagPrefixMap: buildLongFlagPrefixMap(knownLongFlags),
+    allowedValueFlags: toFlagSet(fixture.allowedValueFlags),
+    deniedFlags: toFlagSet(fixture.deniedFlags),
   };
 }
 

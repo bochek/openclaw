@@ -2,8 +2,6 @@ export {
   DEFAULT_SAFE_BINS,
   SAFE_BIN_PROFILE_FIXTURES,
   SAFE_BIN_PROFILES,
-  buildLongFlagPrefixMap,
-  collectKnownLongFlags,
   normalizeSafeBinProfileFixtures,
   renderDefaultSafeBinsDocText,
   renderSafeBinDeniedFlagsDocBullets,

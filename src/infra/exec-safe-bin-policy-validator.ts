@@ -1,9 +1,5 @@
 import { parseExecArgvToken } from "./exec-command-resolution.js";
-import {
-  buildLongFlagPrefixMap,
-  collectKnownLongFlags,
-  type SafeBinProfile,
-} from "./exec-safe-bin-policy-profiles.js";
+import { type SafeBinProfile } from "./exec-safe-bin-policy-profiles.js";
 import { validateSafeBinSemantics } from "./exec-safe-bin-semantics.js";
 
 function isPathLikeToken(value: string): boolean {
@@ -42,18 +38,18 @@ function isInvalidValueToken(value: string | undefined): boolean {
   return !value || !isSafeLiteralToken(value);
 }
 
-function resolveCanonicalLongFlag(params: {
-  flag: string;
-  knownLongFlagsSet: ReadonlySet<string>;
-  longFlagPrefixMap: ReadonlyMap<string, string | null>;
-}): string | null {
-  if (!params.flag.startsWith("--") || params.flag.length <= 2) {
+function resolveCanonicalLongFlag(
+  flag: string,
+  knownLongFlags: readonly string[],
+): string | null {
+  if (!flag.startsWith("--") || flag.length <= 2) {
     return null;
   }
-  if (params.knownLongFlagsSet.has(params.flag)) {
-    return params.flag;
+  if (knownLongFlags.includes(flag)) {
+    return flag;
   }
-  return params.longFlagPrefixMap.get(params.flag) ?? null;
+  const matches = knownLongFlags.filter((f) => f.startsWith(flag));
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function consumeLongOptionToken(params: {
@@ -63,14 +59,9 @@ function consumeLongOptionToken(params: {
   inlineValue: string | undefined;
   allowedValueFlags: ReadonlySet<string>;
   deniedFlags: ReadonlySet<string>;
-  knownLongFlagsSet: ReadonlySet<string>;
-  longFlagPrefixMap: ReadonlyMap<string, string | null>;
+  knownLongFlags: readonly string[];
 }): number {
-  const canonicalFlag = resolveCanonicalLongFlag({
-    flag: params.flag,
-    knownLongFlagsSet: params.knownLongFlagsSet,
-    longFlagPrefixMap: params.longFlagPrefixMap,
-  });
+  const canonicalFlag = resolveCanonicalLongFlag(params.flag, params.knownLongFlags);
   if (!canonicalFlag) {
     return -1;
   }
@@ -134,13 +125,28 @@ function validatePositionalCount(positional: string[], profile: SafeBinProfile):
   return true;
 }
 
+function collectKnownLongFlags(
+  allowedValueFlags: ReadonlySet<string>,
+  deniedFlags: ReadonlySet<string>,
+): string[] {
+  const known = new Set<string>();
+  for (const flag of allowedValueFlags) {
+    if (flag.startsWith("--")) {
+      known.add(flag);
+    }
+  }
+  for (const flag of deniedFlags) {
+    if (flag.startsWith("--")) {
+      known.add(flag);
+    }
+  }
+  return Array.from(known);
+}
+
 function collectPositionalTokens(args: string[], profile: SafeBinProfile): string[] | null {
   const allowedValueFlags = profile.allowedValueFlags ?? NO_FLAGS;
   const deniedFlags = profile.deniedFlags ?? NO_FLAGS;
-  const knownLongFlags =
-    profile.knownLongFlags ?? collectKnownLongFlags(allowedValueFlags, deniedFlags);
-  const knownLongFlagsSet = profile.knownLongFlagsSet ?? new Set(knownLongFlags);
-  const longFlagPrefixMap = profile.longFlagPrefixMap ?? buildLongFlagPrefixMap(knownLongFlags);
+  const knownLongFlags = collectKnownLongFlags(allowedValueFlags, deniedFlags);
 
   const positional: string[] = [];
   let i = 0;
@@ -182,8 +188,7 @@ function collectPositionalTokens(args: string[], profile: SafeBinProfile): strin
         inlineValue: token.inlineValue,
         allowedValueFlags,
         deniedFlags,
-        knownLongFlagsSet,
-        longFlagPrefixMap,
+        knownLongFlags,
       });
       if (nextIndex < 0) {
         return null;
