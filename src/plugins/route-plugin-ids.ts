@@ -9,6 +9,7 @@ import {
   passesManifestOwnerBasePolicy,
 } from "./manifest-owner-policy.js";
 import { loadPluginManifestRegistry, type PluginManifestRecord } from "./manifest-registry.js";
+import { normalizeActivationRouteId } from "./route-id-normalize.js";
 
 function dedupeSortedPluginIds(values: Iterable<string>): string[] {
   return [...new Set(values)].toSorted((left, right) => left.localeCompare(right));
@@ -17,7 +18,7 @@ function dedupeSortedPluginIds(values: Iterable<string>): string[] {
 function normalizeRouteIds(routeIds: Iterable<string>): string[] {
   return dedupeSortedPluginIds(
     [...routeIds]
-      .map((routeId) => normalizeOptionalLowercaseString(routeId))
+      .map((routeId) => normalizeActivationRouteId(normalizeOptionalLowercaseString(routeId) ?? ""))
       .filter((routeId): routeId is string => Boolean(routeId)),
   );
 }
@@ -78,6 +79,7 @@ export function resolveScopedRoutePluginIds(params: {
           kind: "route",
           route: routeId,
         },
+        manifestRegistry: registry,
         config: params.config,
         workspaceDir: params.workspaceDir,
         env: params.env,

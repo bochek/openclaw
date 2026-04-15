@@ -22,6 +22,7 @@ export function loadScopedGatewayPluginHttpRouteRegistry(options?: {
     routeIds: options?.routeIds ?? [GATEWAY_PLUGIN_HTTP_ROUTE_ID],
     workspaceDir: context.workspaceDir,
     env: context.env,
+    cache: true,
   });
   if (routePluginIds.length === 0) {
     return undefined;
