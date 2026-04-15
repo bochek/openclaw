@@ -432,7 +432,7 @@ describe("loadPluginManifestRegistry", () => {
         onProviders: ["openai"],
         onCommands: ["models"],
         onChannels: ["web"],
-        onRoutes: ["gateway-webhook"],
+        onRoutes: ["gateway-plugin-http"],
         onCapabilities: ["provider", "tool"],
       },
       setup: {
@@ -460,7 +460,7 @@ describe("loadPluginManifestRegistry", () => {
       onProviders: ["openai"],
       onCommands: ["models"],
       onChannels: ["web"],
-      onRoutes: ["gateway-webhook"],
+      onRoutes: ["gateway-plugin-http"],
       onCapabilities: ["provider", "tool"],
     });
     expect(registry.plugins[0]?.setup).toEqual({

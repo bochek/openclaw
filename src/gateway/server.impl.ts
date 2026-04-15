@@ -437,6 +437,7 @@ export async function startGatewayServer(
     toolEventRecipients,
   } = await createGatewayRuntimeState({
     cfg: cfgAtStart,
+    workspaceDir: defaultWorkspaceDir,
     bindHost,
     port,
     controlUiEnabled,
@@ -454,6 +455,7 @@ export async function startGatewayServer(
     hooksConfig: () => runtimeState?.hooksConfig ?? initialHooksConfig,
     getHookClientIpConfig: () => runtimeState?.hookClientIpConfig ?? initialHookClientIpConfig,
     pluginRegistry,
+    coreGatewayHandlers,
     pinChannelRegistry: !minimalTestGateway,
     deps,
     canvasRuntime,

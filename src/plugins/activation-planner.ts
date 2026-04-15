@@ -55,7 +55,7 @@ function matchesManifestActivationTrigger(
     case "channel":
       return listActivationChannelIds(plugin).includes(normalizeCommandId(trigger.channel));
     case "route":
-      return listActivationRouteIds(plugin).includes(normalizeCommandId(trigger.route));
+      return listActivationRouteIds(plugin).includes(normalizeRouteId(trigger.route));
     case "capability":
       return hasActivationCapability(plugin, trigger.capability);
   }
@@ -89,7 +89,7 @@ function listActivationChannelIds(plugin: PluginManifestRecord): string[] {
 }
 
 function listActivationRouteIds(plugin: PluginManifestRecord): string[] {
-  return (plugin.activation?.onRoutes ?? []).map(normalizeCommandId).filter(Boolean);
+  return (plugin.activation?.onRoutes ?? []).map(normalizeRouteId).filter(Boolean);
 }
 
 function hasActivationCapability(
@@ -115,4 +115,15 @@ function hasActivationCapability(
 
 function normalizeCommandId(value: string | undefined): string {
   return normalizeOptionalLowercaseString(value) ?? "";
+}
+
+function normalizeRouteId(value: string | undefined): string {
+  const normalized = normalizeOptionalLowercaseString(value) ?? "";
+  switch (normalized) {
+    case "webhook":
+    case "gateway-webhook":
+      return "gateway-plugin-http";
+    default:
+      return normalized;
+  }
 }

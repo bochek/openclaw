@@ -429,7 +429,13 @@ function normalizeManifestActivation(value: unknown): PluginManifestActivation |
   const onProviders = normalizeTrimmedStringList(value.onProviders);
   const onCommands = normalizeTrimmedStringList(value.onCommands);
   const onChannels = normalizeTrimmedStringList(value.onChannels);
-  const onRoutes = normalizeTrimmedStringList(value.onRoutes);
+  const onRoutes = Array.from(
+    new Set(
+      normalizeTrimmedStringList(value.onRoutes).map((routeId) =>
+        normalizeManifestActivationRouteId(routeId),
+      ),
+    ),
+  );
   const onCapabilities = normalizeTrimmedStringList(value.onCapabilities).filter(
     (capability): capability is PluginManifestActivationCapability =>
       capability === "provider" ||
@@ -447,6 +453,16 @@ function normalizeManifestActivation(value: unknown): PluginManifestActivation |
   } satisfies PluginManifestActivation;
 
   return Object.keys(activation).length > 0 ? activation : undefined;
+}
+
+function normalizeManifestActivationRouteId(value: string): string {
+  switch (value.trim().toLowerCase()) {
+    case "webhook":
+    case "gateway-webhook":
+      return "gateway-plugin-http";
+    default:
+      return value;
+  }
 }
 
 function normalizeManifestSetupProviders(
