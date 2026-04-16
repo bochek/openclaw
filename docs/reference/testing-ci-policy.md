@@ -70,6 +70,40 @@ Example:
 | `pnpm test:docker:live-codex-harness`                              | Codex app-server harness compatibility                                                    | `scheduled CI`                                                                 | Non-blocking is fine                                               |
 | `test:parallels:*`                                                 | VM-specific host/guest install and upgrade smoke                                          | `manual only` unless a dedicated VM CI lane exists                             | Manual/operator lane                                               |
 
+## Known current gaps
+
+Right now, the policy above is broader than the workflows currently wired into
+GitHub Actions.
+
+These suites are expected by this page but are still missing from CI today:
+
+- `pnpm test:e2e`
+- `pnpm test:docker:onboard`
+- `pnpm test:docker:gateway-network`
+- `pnpm test:docker:mcp-channels`
+- `pnpm test:docker:plugins`
+- `pnpm test:docker:doctor-switch`
+- `pnpm test:docker:qr`
+- `pnpm test:install:e2e`
+- `pnpm test:docker:openwebui`
+- `pnpm test:live`
+- `pnpm test:docker:live-models`
+- `pnpm test:docker:live-gateway`
+- `pnpm test:docker:live-cli-backend`
+- `pnpm test:docker:live-acp-bind`
+- `pnpm test:docker:live-codex-harness`
+
+The cross-OS release lane also still needs completion:
+
+- `.github/workflows/openclaw-cross-os-release-checks-reusable.yml` exists, but
+  no workflow currently calls it, so it is not running in CI yet.
+- That reusable workflow currently points at
+  `scripts/openclaw-cross-os-release-checks.ts`, and that script is not present
+  in the repo yet.
+- `.github/workflows/openclaw-release-checks.yml` currently runs only
+  `pnpm test:live:cache`. That cache check is useful, but it does not replace
+  the broader release and scheduled coverage listed above.
+
 ## Change policy
 
 When you add or move an end-to-end or live suite:
@@ -77,6 +111,8 @@ When you add or move an end-to-end or live suite:
 1. Update this matrix in the same PR.
 2. Update the owning workflow or add the missing lane.
 3. Update any release or maintainer docs that point to the suite.
+4. If the suite appears in the "Known current gaps" list above, remove it from
+   that list in the same PR that wires it into CI.
 
 If current workflows lag behind this matrix, treat that as follow-up work to
 close rather than as permission to quietly downgrade the suite to manual-only.
