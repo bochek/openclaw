@@ -31,8 +31,14 @@ const hoisted = vi.hoisted(() => ({
   ),
   loginWeb: vi.fn(async () => {}),
   pathExists: vi.fn(async () => false),
-  readWebAuthState: vi.fn<(authDir: string) => Promise<"linked" | "not-linked" | "unstable">>(
-    async () => "not-linked",
+  readWebAuthExistsBestEffort: vi.fn<
+    (authDir: string) => Promise<{ exists: boolean; timedOut: boolean }>
+  >(async () => ({ exists: false, timedOut: false })),
+  readWebAuthExistsForDecision: vi.fn(
+    async (): Promise<{ outcome: "stable"; exists: boolean } | { outcome: "unstable" }> => ({
+      outcome: "stable",
+      exists: false,
+    }),
   ),
   resolveWhatsAppAuthDir: vi.fn<
     (params: { cfg: OpenClawConfig; accountId: string }) => { authDir: string }
@@ -75,7 +81,8 @@ vi.mock("./auth-store.js", async () => {
   const actual = await vi.importActual<typeof import("./auth-store.js")>("./auth-store.js");
   return {
     ...actual,
-    readWebAuthState: hoisted.readWebAuthState,
+    readWebAuthExistsBestEffort: hoisted.readWebAuthExistsBestEffort,
+    readWebAuthExistsForDecision: hoisted.readWebAuthExistsForDecision,
   };
 });
 
@@ -129,7 +136,10 @@ function expectFinalizeResult(result: Awaited<ReturnType<typeof runFinalizeWithH
 }
 
 async function runSeparatePhoneFlow(params: { selectValues: string[]; textValues?: string[] }) {
-  hoisted.pathExists.mockResolvedValue(true);
+  hoisted.readWebAuthExistsForDecision.mockResolvedValue({
+    outcome: "stable",
+    exists: true,
+  });
   const harness = createSeparatePhoneHarness({
     selectValues: params.selectValues,
     textValues: params.textValues,
@@ -149,8 +159,16 @@ describe("whatsapp setup wizard", () => {
     hoisted.loginWeb.mockReset();
     hoisted.pathExists.mockReset();
     hoisted.pathExists.mockResolvedValue(false);
-    hoisted.readWebAuthState.mockReset();
-    hoisted.readWebAuthState.mockResolvedValue("not-linked");
+    hoisted.readWebAuthExistsBestEffort.mockReset();
+    hoisted.readWebAuthExistsBestEffort.mockResolvedValue({
+      exists: false,
+      timedOut: false,
+    });
+    hoisted.readWebAuthExistsForDecision.mockReset();
+    hoisted.readWebAuthExistsForDecision.mockResolvedValue({
+      outcome: "stable",
+      exists: false,
+    });
     hoisted.resolveWhatsAppAuthDir.mockReset();
     hoisted.resolveWhatsAppAuthDir.mockReturnValue({ authDir: "/tmp/openclaw-whatsapp-test" });
   });
@@ -178,7 +196,10 @@ describe("whatsapp setup wizard", () => {
   });
 
   it("writes named-account DM policy and allowFrom instead of the channel root", async () => {
-    hoisted.pathExists.mockResolvedValue(true);
+    hoisted.readWebAuthExistsForDecision.mockResolvedValue({
+      outcome: "stable",
+      exists: true,
+    });
     const harness = createSeparatePhoneHarness({
       selectValues: ["separate", "open"],
     });
@@ -221,9 +242,10 @@ describe("whatsapp setup wizard", () => {
     hoisted.resolveWhatsAppAuthDir.mockImplementation(({ accountId }: { accountId: string }) => ({
       authDir: accountId === "work" ? "/tmp/work" : "/tmp/default",
     }));
-    hoisted.readWebAuthState.mockImplementation(async (authDir: string) =>
-      authDir === "/tmp/work" ? "linked" : "not-linked",
-    );
+    hoisted.readWebAuthExistsBestEffort.mockImplementation(async (authDir: string) => ({
+      exists: authDir === "/tmp/work",
+      timedOut: false,
+    }));
 
     const status = await whatsappGetStatus({
       cfg: {
@@ -246,13 +268,16 @@ describe("whatsapp setup wizard", () => {
 
     expect(status.configured).toBe(true);
     expect(status.statusLines).toEqual(["WhatsApp (work): linked"]);
-    expect(hoisted.readWebAuthState).toHaveBeenCalledWith("/tmp/default");
-    expect(hoisted.readWebAuthState).toHaveBeenCalledWith("/tmp/work");
+    expect(hoisted.readWebAuthExistsBestEffort).toHaveBeenCalledWith("/tmp/default");
+    expect(hoisted.readWebAuthExistsBestEffort).toHaveBeenCalledWith("/tmp/work");
   });
 
-  it("shows auth stabilizing when auth reads time out", async () => {
+  it("keeps setup status linked when auth reads time out", async () => {
     hoisted.resolveWhatsAppAuthDir.mockReturnValue({ authDir: "/tmp/work" });
-    hoisted.readWebAuthState.mockResolvedValue("unstable");
+    hoisted.readWebAuthExistsBestEffort.mockResolvedValueOnce({
+      exists: false,
+      timedOut: true,
+    });
 
     const status = await whatsappGetStatus({
       cfg: {
@@ -271,8 +296,8 @@ describe("whatsapp setup wizard", () => {
       },
     });
 
-    expect(status.configured).toBe(false);
-    expect(status.statusLines).toEqual(["WhatsApp (work): auth stabilizing"]);
+    expect(status.configured).toBe(true);
+    expect(status.statusLines).toEqual(["WhatsApp (work): linked"]);
   });
 
   it("uses configured defaultAccount for omitted-account finalize writes", async () => {
@@ -300,7 +325,10 @@ describe("whatsapp setup wizard", () => {
   });
 
   it("enables allowlist self-chat mode for personal-phone setup", async () => {
-    hoisted.pathExists.mockResolvedValue(true);
+    hoisted.readWebAuthExistsForDecision.mockResolvedValue({
+      outcome: "stable",
+      exists: true,
+    });
     const harness = createWhatsAppPersonalPhoneHarness(createQueuedWizardPrompter);
 
     const result = expectFinalizeResult(
@@ -313,7 +341,10 @@ describe("whatsapp setup wizard", () => {
   });
 
   it("forces wildcard allowFrom for open policy without allowFrom follow-up prompts", async () => {
-    hoisted.pathExists.mockResolvedValue(true);
+    hoisted.readWebAuthExistsForDecision.mockResolvedValue({
+      outcome: "stable",
+      exists: true,
+    });
     const harness = createSeparatePhoneHarness({
       selectValues: ["separate", "open"],
     });
@@ -329,7 +360,10 @@ describe("whatsapp setup wizard", () => {
   });
 
   it("runs WhatsApp login when not linked and user confirms linking", async () => {
-    hoisted.pathExists.mockResolvedValue(false);
+    hoisted.readWebAuthExistsForDecision.mockResolvedValue({
+      outcome: "stable",
+      exists: false,
+    });
     const harness = createWhatsAppLinkingHarness(createQueuedWizardPrompter);
     const runtime = createRuntime();
 
@@ -342,7 +376,10 @@ describe("whatsapp setup wizard", () => {
   });
 
   it("skips relink note when already linked and relink is declined", async () => {
-    hoisted.pathExists.mockResolvedValue(true);
+    hoisted.readWebAuthExistsForDecision.mockResolvedValue({
+      outcome: "stable",
+      exists: true,
+    });
     const harness = createSeparatePhoneHarness({
       selectValues: ["separate", "disabled"],
     });
@@ -356,7 +393,10 @@ describe("whatsapp setup wizard", () => {
   });
 
   it("shows follow-up login command note when not linked and linking is skipped", async () => {
-    hoisted.pathExists.mockResolvedValue(false);
+    hoisted.readWebAuthExistsForDecision.mockResolvedValue({
+      outcome: "stable",
+      exists: false,
+    });
     const harness = createSeparatePhoneHarness({
       selectValues: ["separate", "disabled"],
     });
