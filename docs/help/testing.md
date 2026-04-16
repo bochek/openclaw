@@ -348,6 +348,8 @@ Think of the suites as “increasing realism” (and increasing flakiness/cost):
   - Catch provider format changes, tool-calling quirks, auth issues, and rate limit behavior
 - Expectations:
   - Not CI-stable by design (real networks, real provider policies, quotas, outages)
+  - Keep these lanes in release or scheduled CI when they matter; "not CI-stable"
+    is not the same as "manual only"
   - Costs money / uses rate limits
   - Prefer running narrowed subsets instead of “everything”
 - Live runs source `~/.profile` to pick up missing API keys.
@@ -846,6 +848,9 @@ These Docker runners split into two buckets:
   explicitly want the larger exhaustive scan.
 - `test:docker:all` builds the live Docker image once via `test:docker:live-build`, then reuses it for the two live Docker lanes.
 - Container smoke runners: `test:docker:openwebui`, `test:docker:onboard`, `test:docker:gateway-network`, `test:docker:mcp-channels`, and `test:docker:plugins` boot one or more real containers and verify higher-level integration paths.
+- Use [Testing CI Policy](/reference/testing-ci-policy) to decide whether a
+  runner belongs in `PR CI`, `release CI`, `scheduled CI`, or `manual only`.
+  Non-blocking release or scheduled lanes still count as required CI.
 
 The live-model Docker runners also bind-mount only the needed CLI auth homes (or all supported ones when the run is not narrowed), then copy them into the container home before the run so external-CLI OAuth can refresh tokens without mutating the host auth store:
 
@@ -883,6 +888,8 @@ This lane expects a usable live model key, and `OPENCLAW_PROFILE_FILE`
 (`~/.profile` by default) is the primary way to provide it in Dockerized runs.
 Successful runs print a small JSON payload like `{ "ok": true, "model":
 "openclaw/default", ... }`.
+Keep this as release or scheduled CI coverage rather than treating it as
+manual-only just because it is slower or less stable than a normal PR lane.
 `test:docker:mcp-channels` is intentionally deterministic and does not need a
 real Telegram, Discord, or iMessage account. It boots a seeded Gateway
 container, starts a second container that spawns `openclaw mcp serve`, then
