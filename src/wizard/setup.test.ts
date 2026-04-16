@@ -448,7 +448,7 @@ describe("runSetupWizard", () => {
         runtime,
         prompter,
       ),
-    ).rejects.toThrow("Auth choice is required.");
+    ).rejects.toThrow("auth choice is required");
   });
 
   async function runTuiHatchTest(params: {
