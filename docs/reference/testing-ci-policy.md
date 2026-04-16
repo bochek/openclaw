@@ -11,23 +11,40 @@ title: "Testing CI Policy"
 This page is the source of truth for where OpenClaw end-to-end and live suites
 belong.
 
-Keep two decisions separate:
+Use this page to answer one practical question: when we have a real-world test,
+where should it run?
 
-- Should this suite run in CI at all?
-- If yes, should it block PRs or releases?
+Work through the questions in this order:
 
-A suite can be required CI even when it is intentionally non-blocking. Do not
-treat "not CI-stable" or "not in the publish workflow" as "manual only."
+1. Do we need this test to protect users from a real regression?
+2. If yes, where should it run: on PRs, before releases, on a schedule, or
+   only by hand?
+3. If it runs in CI, should it fail the lane or just report problems?
+
+The mistake to avoid is simple: a test can be important enough to run in CI
+without being important enough to block every PR or to sit inside the publish
+workflow.
+
+Example:
+
+- A live provider test may be too slow, flaky, or expensive for normal PR CI.
+- That does not make it a manual-only test.
+- It usually means the test belongs in release CI or scheduled CI instead.
 
 ## CI lanes
 
 - `PR CI`: runs on pull requests or push validation when the touched surface
-  needs it.
+  needs it. Use this for fast, high-signal checks that should catch regressions
+  before merge.
 - `Release CI`: runs before a release in a dedicated workflow lane. It may be
-  blocking or non-blocking, but it is still required CI.
+  blocking or non-blocking, but it is still required CI. Use this for important
+  install, upgrade, compatibility, and provider checks that are too heavy for
+  normal PR workflows.
 - `Scheduled CI`: runs on a timer or on-demand to catch drift in providers,
-  third-party integrations, or long-running compatibility paths.
+  third-party integrations, or long-running compatibility paths. Use this when
+  you want ongoing coverage but do not want every PR or release to wait on it.
 - `Manual only`: keep for debug, hardware-specific, or operator-driven VM work.
+  Do not put a suite here just because it is slower than a unit test.
 
 ## End-to-end and live matrix
 
@@ -62,4 +79,4 @@ When you add or move an end-to-end or live suite:
 3. Update any release or maintainer docs that point to the suite.
 
 If current workflows lag behind this matrix, treat that as follow-up work to
-close rather than as permission to reinterpret the policy.
+close rather than as permission to quietly downgrade the suite to manual-only.
