@@ -53,6 +53,9 @@ type ManagedCronJobCreate = {
   sessionTarget: "main" | "isolated";
   wakeMode: "now";
   payload: CronPayload;
+  delivery?: {
+    mode: "none";
+  };
 };
 
 type ManagedCronJobPatch = {
@@ -63,6 +66,9 @@ type ManagedCronJobPatch = {
   sessionTarget?: "main" | "isolated";
   wakeMode?: "now";
   payload?: CronPayload;
+  delivery?: {
+    mode: "none";
+  };
 };
 
 type ManagedCronJobLike = {
@@ -82,6 +88,9 @@ type ManagedCronJobLike = {
     text?: string;
     message?: string;
     lightContext?: boolean;
+  };
+  delivery?: {
+    mode?: string;
   };
   createdAtMs?: number;
 };
@@ -165,6 +174,10 @@ function buildManagedDreamingCronJob(
       kind: "agentTurn",
       message: DREAMING_SYSTEM_EVENT_TEXT,
       lightContext: true,
+    },
+    // Dreaming is a maintenance sweep, not a user-facing announce job.
+    delivery: {
+      mode: "none",
     },
   };
 }
@@ -292,6 +305,10 @@ function buildManagedDreamingPatch(
       job.payload?.lightContext !== desired.payload.lightContext);
   if (payloadNeedsUpdate) {
     patch.payload = desired.payload;
+  }
+  const deliveryMode = normalizeLowercaseStringOrEmpty(normalizeTrimmedString(job.delivery?.mode));
+  if (deliveryMode !== "none") {
+    patch.delivery = desired.delivery;
   }
 
   return Object.keys(patch).length > 0 ? patch : null;
