@@ -84,4 +84,55 @@ describe("collectWhatsAppStatusIssues", () => {
       }),
     ]);
   });
+  it("does not report a not-linked auth issue when linked state is unknown", () => {
+    const issues = collectWhatsAppStatusIssues([
+      {
+        accountId: "default",
+        enabled: true,
+      },
+    ]);
+
+    expect(issues).toEqual([]);
+  });
+
+  it("still reports runtime issues when linked state is unknown", () => {
+    const issues = collectWhatsAppStatusIssues([
+      {
+        accountId: "default",
+        enabled: true,
+        healthState: "reconnecting",
+        reconnectAttempts: 3,
+        lastError: "auth queue timed out",
+      },
+    ]);
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        channel: "whatsapp",
+        accountId: "default",
+        kind: "runtime",
+        message: "Session reconnecting (reconnectAttempts=3): auth queue timed out",
+      }),
+    ]);
+  });
+
+  it("still reports logged-out auth issues when linked state is unknown", () => {
+    const issues = collectWhatsAppStatusIssues([
+      {
+        accountId: "default",
+        enabled: true,
+        healthState: "logged-out",
+        lastError: "401",
+      },
+    ]);
+
+    expect(issues).toEqual([
+      expect.objectContaining({
+        channel: "whatsapp",
+        accountId: "default",
+        kind: "auth",
+        message: "Session logged out: 401",
+      }),
+    ]);
+  });
 });
