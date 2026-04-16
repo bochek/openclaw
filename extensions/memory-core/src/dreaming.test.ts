@@ -419,11 +419,12 @@ describe("short-term dreaming cron reconciliation", () => {
     expect(harness.addCalls).toHaveLength(1);
     expect(harness.addCalls[0]).toMatchObject({
       name: constants.MANAGED_DREAMING_CRON_NAME,
-      sessionTarget: "main",
+      sessionTarget: "isolated",
       wakeMode: "now",
       payload: {
-        kind: "systemEvent",
-        text: constants.DREAMING_SYSTEM_EVENT_TEXT,
+        kind: "agentTurn",
+        message: constants.DREAMING_SYSTEM_EVENT_TEXT,
+        lightContext: true,
       },
       schedule: {
         kind: "cron",
@@ -493,6 +494,7 @@ describe("short-term dreaming cron reconciliation", () => {
       id: "job-primary",
       patch: {
         enabled: true,
+        sessionTarget: "isolated",
         wakeMode: "now",
         schedule: desired.schedule,
         payload: desired.payload,
@@ -1240,6 +1242,58 @@ describe("gateway startup reconciliation", () => {
       clearInternalHooks();
     }
   });
+
+  it("handles managed dreaming cron triggers without a queued heartbeat event", async () => {
+    clearInternalHooks();
+    const logger = createLogger();
+    const harness = createCronHarness();
+    const onMock = vi.fn();
+    const api: DreamingPluginApiTestDouble = {
+      config: {
+        plugins: {
+          entries: {
+            "memory-core": {
+              config: {
+                dreaming: {
+                  enabled: false,
+                },
+              },
+            },
+          },
+        },
+      } as OpenClawConfig,
+      pluginConfig: {},
+      logger,
+      runtime: {},
+      registerHook: (event: string, handler: Parameters<typeof registerInternalHook>[1]) => {
+        registerInternalHook(event, handler);
+      },
+      on: onMock,
+    };
+
+    try {
+      registerShortTermPromotionDreamingForTest(api);
+      await triggerInternalHook(
+        createInternalHookEvent("gateway", "startup", "gateway:startup", {
+          cfg: api.config,
+          deps: { cron: harness.cron },
+        }),
+      );
+
+      const beforeAgentReply = getBeforeAgentReplyHandler(onMock);
+      const result = await beforeAgentReply(
+        { cleanedBody: constants.DREAMING_SYSTEM_EVENT_TEXT },
+        { trigger: "cron", workspaceDir: ".", sessionKey: "cron:memory-dreaming" },
+      );
+
+      expect(result).toEqual({
+        handled: true,
+        reason: "memory-core: short-term dreaming disabled",
+      });
+    } finally {
+      clearInternalHooks();
+    }
+  });
 });
 
 describe("short-term dreaming trigger", () => {
@@ -1389,7 +1443,7 @@ describe("short-term dreaming trigger", () => {
     expect(memoryText).toBe("");
   });
 
-  it("ignores non-heartbeat triggers", async () => {
+  it("ignores non-cron, non-heartbeat triggers", async () => {
     const logger = createLogger();
     const result = await runShortTermDreamingPromotionIfTriggered({
       cleanedBody: constants.DREAMING_SYSTEM_EVENT_TEXT,
@@ -1408,6 +1462,48 @@ describe("short-term dreaming trigger", () => {
       logger,
     });
     expect(result).toBeUndefined();
+  });
+
+  it("applies promotions when the managed dreaming isolated cron job fires", async () => {
+    const logger = createLogger();
+    const workspaceDir = await createTempWorkspace("memory-dreaming-cron-");
+    await writeDailyMemoryNote(workspaceDir, "2026-04-02", ["Move backups to S3 Glacier."]);
+
+    await recordShortTermRecalls({
+      workspaceDir,
+      query: "backup policy",
+      results: [
+        {
+          path: "memory/2026-04-02.md",
+          startLine: 1,
+          endLine: 1,
+          score: 0.9,
+          snippet: "Move backups to S3 Glacier.",
+          source: "memory",
+        },
+      ],
+    });
+
+    const result = await runShortTermDreamingPromotionIfTriggered({
+      cleanedBody: constants.DREAMING_SYSTEM_EVENT_TEXT,
+      trigger: "cron",
+      workspaceDir,
+      config: {
+        enabled: true,
+        cron: constants.DEFAULT_DREAMING_CRON_EXPR,
+        limit: 10,
+        minScore: 0,
+        minRecallCount: 0,
+        minUniqueQueries: 0,
+        recencyHalfLifeDays: constants.DEFAULT_DREAMING_RECENCY_HALF_LIFE_DAYS,
+        verboseLogging: false,
+      },
+      logger,
+    });
+
+    expect(result?.handled).toBe(true);
+    const memoryText = await fs.readFile(path.join(workspaceDir, "MEMORY.md"), "utf-8");
+    expect(memoryText).toContain("Move backups to S3 Glacier.");
   });
 
   it("skips dreaming promotion cleanly when limit is zero", async () => {
