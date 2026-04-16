@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { OpenClawConfig } from "../../../config/config.js";
 import { writeWorkspaceFile } from "../../../test-helpers/workspace.js";
 import { createHookEvent } from "../../hooks.js";
@@ -10,11 +10,6 @@ import {
   getRecentSessionContent,
   getRecentSessionContentWithResetFallback,
 } from "./transcript.js";
-
-// Avoid calling the embedded Pi agent (global command lane); keep this unit test deterministic.
-vi.mock("../../llm-slug-generator.js", () => ({
-  generateSlugViaLLM: vi.fn().mockResolvedValue("simple-math"),
-}));
 
 let handler: typeof import("./handler.js").default;
 let suiteWorkspaceRoot = "";
@@ -230,6 +225,7 @@ describe("session-memory hook", () => {
     expect(memoryContent).toContain("assistant: Hi! How can I help?");
     expect(memoryContent).toContain("user: What is 2+2?");
     expect(memoryContent).toContain("assistant: 2+2 equals 4");
+    expect(files[0]).toMatch(/^\d{4}-\d{2}-\d{2}-\d{9}\.md$/);
   });
 
   it("creates memory file with session content on /reset command", async () => {

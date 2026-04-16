@@ -168,7 +168,7 @@ openclaw hooks enable <hook-name>
 
 ### session-memory details
 
-Extracts the last 15 user/assistant messages, generates a descriptive filename slug via LLM, and saves to `<workspace>/memory/YYYY-MM-DD-slug.md`. Requires `workspace.dir` to be configured.
+Extracts the last 15 user/assistant messages and saves them to `<workspace>/memory/YYYY-MM-DD-HHMMSSmmm.md`. Requires `workspace.dir` to be configured.
 
 <a id="bootstrap-extra-files"></a>
 

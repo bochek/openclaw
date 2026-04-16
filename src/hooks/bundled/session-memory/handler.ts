@@ -2,7 +2,7 @@
  * Session memory hook handler
  *
  * Saves session context to memory when /new or /reset command is triggered
- * Creates a new dated memory file with LLM-generated slug
+ * Creates a new dated memory file with a stable timestamp filename
  */
 
 import fs from "node:fs/promises";
@@ -23,7 +23,6 @@ import {
 } from "../../../routing/session-key.js";
 import { resolveHookConfig } from "../../config.js";
 import type { HookHandler } from "../../hooks.js";
-import { generateSlugViaLLM } from "../../llm-slug-generator.js";
 import { findPreviousSessionFile, getRecentSessionContentWithResetFallback } from "./transcript.js";
 
 const log = createSubsystemLogger("hooks/session-memory");
@@ -131,7 +130,6 @@ const saveSessionToMemory: HookHandler = async (event) => {
         ? hookConfig.messages
         : 15;
 
-    let slug: string | null = null;
     let sessionContent: string | null = null;
 
     if (sessionFile) {
@@ -141,29 +139,11 @@ const saveSessionToMemory: HookHandler = async (event) => {
         length: sessionContent?.length ?? 0,
         messageCount,
       });
-
-      // Avoid calling the model provider in unit tests; keep hooks fast and deterministic.
-      const isTestEnv =
-        process.env.OPENCLAW_TEST_FAST === "1" ||
-        process.env.VITEST === "true" ||
-        process.env.VITEST === "1" ||
-        process.env.NODE_ENV === "test";
-      const allowLlmSlug = !isTestEnv && hookConfig?.llmSlug !== false;
-
-      if (sessionContent && cfg && allowLlmSlug) {
-        log.debug("Calling generateSlugViaLLM...");
-        // Use LLM to generate a descriptive slug
-        slug = await generateSlugViaLLM({ sessionContent, cfg });
-        log.debug("Generated slug", { slug });
-      }
     }
 
-    // If no slug, use timestamp
-    if (!slug) {
-      const timeSlug = now.toISOString().split("T")[1].split(".")[0].replace(/:/g, "");
-      slug = timeSlug.slice(0, 4); // HHMM
-      log.debug("Using fallback timestamp slug", { slug });
-    }
+    const [, isoTime = "000000.000Z"] = now.toISOString().split("T");
+    const slug = isoTime.replace(/[:.]/g, "").replace(/Z$/, ""); // HHMMSSmmm
+    log.debug("Using timestamp slug", { slug });
 
     // Create filename with date and slug
     const filename = `${dateStr}-${slug}.md`;

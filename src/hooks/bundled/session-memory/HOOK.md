@@ -24,8 +24,7 @@ When you run `/new` or `/reset` to start a fresh session:
 
 1. **Finds the previous session** - Uses the pre-reset session entry to locate the correct transcript
 2. **Extracts conversation** - Reads the last N user/assistant messages from the session (default: 15, configurable)
-3. **Generates descriptive slug** - Uses LLM to create a meaningful filename slug based on conversation content
-4. **Saves to memory** - Creates a new file at `<workspace>/memory/YYYY-MM-DD-slug.md`
+3. **Saves to memory** - Creates a new file at `<workspace>/memory/YYYY-MM-DD-HHMMSSmmm.md`
 
 ## Output Format
 
@@ -41,18 +40,14 @@ Memory files are created with the following format:
 
 ## Filename Examples
 
-The LLM generates descriptive slugs based on your conversation:
+Memory files use the UTC timestamp from when the hook runs:
 
-- `2026-01-16-vendor-pitch.md` - Discussion about vendor evaluation
-- `2026-01-16-api-design.md` - API architecture planning
-- `2026-01-16-bug-fix.md` - Debugging session
-- `2026-01-16-1430.md` - Fallback timestamp if slug generation fails
+- `2026-01-16-143000123.md`
+- `2026-01-16-231530045.md`
 
 ## Requirements
 
 - **Config**: `workspace.dir` must be set (automatically configured during setup)
-
-The hook uses your configured LLM provider to generate slugs, so it works with any provider (Anthropic, OpenAI, etc.).
 
 ## Configuration
 
@@ -82,8 +77,7 @@ Example configuration:
 The hook automatically:
 
 - Uses your workspace directory (`~/.openclaw/workspace` by default)
-- Uses your configured LLM for slug generation
-- Falls back to timestamp slugs if LLM is unavailable
+- Uses timestamp-based filenames to avoid rename and reindex timing issues
 
 ## Disabling
 

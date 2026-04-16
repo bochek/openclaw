@@ -279,7 +279,7 @@ Saves session context to memory when you issue `/new` or `/reset`.
 openclaw hooks enable session-memory
 ```
 
-**Output:** `~/.openclaw/workspace/memory/YYYY-MM-DD-slug.md`
+**Output:** `~/.openclaw/workspace/memory/YYYY-MM-DD-HHMMSSmmm.md`
 
 **See:** [session-memory documentation](/automation/hooks#session-memory)
 
