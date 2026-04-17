@@ -25,6 +25,15 @@ import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./copilot-dyn
 import { detectOpenAICompletionsCompat } from "./openai-completions-compat.js";
 import { flattenCompletionMessagesToStringContent } from "./openai-completions-string-content.js";
 import {
+  mapOpenAIReasoningEffortForModel,
+  resolveOpenAIReasoningEffortMap,
+} from "./openai-reasoning-compat.js";
+import {
+  normalizeOpenAIReasoningEffort,
+  type OpenAIApiReasoningEffort,
+  type OpenAIReasoningEffort,
+} from "./openai-reasoning-effort.js";
+import {
   applyOpenAIResponsesPayloadPolicy,
   resolveOpenAIResponsesPayloadPolicy,
 } from "./openai-responses-payload-policy.js";
@@ -39,8 +48,6 @@ import { transformTransportMessages } from "./transport-message-transform.js";
 import { mergeTransportMetadata, sanitizeTransportPayloadText } from "./transport-stream-shared.js";
 
 const DEFAULT_AZURE_OPENAI_API_VERSION = "2024-12-01-preview";
-
-type OpenAIReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
 
 type BaseStreamOptions = {
   temperature?: number;
@@ -99,11 +106,6 @@ type MutableAssistantOutput = {
   errorMessage?: string;
 };
 
-type OpenClawPromptContext = Context & {
-  developerPrompt?: string;
-  openclawSystemPrompt?: string;
-};
-
 export { sanitizeTransportPayloadText } from "./transport-stream-shared.js";
 
 function stringifyUnknown(value: unknown, fallback = ""): string {
@@ -127,18 +129,6 @@ function stringifyJsonLike(value: unknown, fallback = ""): string {
     return String(value);
   }
   return fallback;
-}
-
-function mergePrivilegedPromptChannels(
-  systemPrompt?: string,
-  developerPrompt?: string,
-): string | undefined {
-  const system = systemPrompt?.trim();
-  const developer = developerPrompt?.trim();
-  if (system && developer) {
-    return `${system}\n\n${developer}`;
-  }
-  return system || developer;
 }
 
 function getServiceTierCostMultiplier(serviceTier: ResponseCreateParamsStreaming["service_tier"]) {
@@ -211,7 +201,6 @@ function convertResponsesMessages(
   allowedToolCallProviders: Set<string>,
   options?: { includeSystemPrompt?: boolean; supportsDeveloperRole?: boolean },
 ): ResponseInput {
-  const openclawContext = context as OpenClawPromptContext;
   const messages: ResponseInput = [];
   const normalizeIdPart = (part: string) => {
     const sanitized = part.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -250,40 +239,11 @@ function convertResponsesMessages(
     normalizeToolCallId,
   );
   const includeSystemPrompt = options?.includeSystemPrompt ?? true;
-  const strippedSystemPrompt = openclawContext.openclawSystemPrompt
-    ? stripSystemPromptCacheBoundary(openclawContext.openclawSystemPrompt)
-    : context.systemPrompt
-      ? stripSystemPromptCacheBoundary(context.systemPrompt)
-      : undefined;
-  const strippedDeveloperPrompt = openclawContext.developerPrompt
-    ? stripSystemPromptCacheBoundary(openclawContext.developerPrompt)
-    : undefined;
-  if (includeSystemPrompt) {
-    if (options?.supportsDeveloperRole === false) {
-      const mergedPrompt = mergePrivilegedPromptChannels(
-        strippedSystemPrompt,
-        strippedDeveloperPrompt,
-      );
-      if (mergedPrompt) {
-        messages.push({
-          role: "system",
-          content: sanitizeTransportPayloadText(mergedPrompt),
-        });
-      }
-    } else {
-      if (strippedSystemPrompt) {
-        messages.push({
-          role: "system",
-          content: sanitizeTransportPayloadText(strippedSystemPrompt),
-        });
-      }
-      if (strippedDeveloperPrompt) {
-        messages.push({
-          role: "developer",
-          content: sanitizeTransportPayloadText(strippedDeveloperPrompt),
-        });
-      }
-    }
+  if (includeSystemPrompt && context.systemPrompt) {
+    messages.push({
+      role: model.reasoning && options?.supportsDeveloperRole !== false ? "developer" : "system",
+      content: sanitizeTransportPayloadText(stripSystemPromptCacheBoundary(context.systemPrompt)),
+    });
   }
   let msgIndex = 0;
   for (const msg of transformedMessages) {
@@ -786,8 +746,26 @@ function getPromptCacheRetention(
   return baseUrl?.includes("api.openai.com") ? "24h" : undefined;
 }
 
-function resolveOpenAIReasoningEffort(options: OpenAIResponsesOptions | undefined) {
-  return options?.reasoningEffort ?? options?.reasoning ?? "high";
+function resolveOpenAIReasoningEffort(
+  options: OpenAIResponsesOptions | undefined,
+): Exclude<OpenAIApiReasoningEffort, "none"> {
+  return normalizeOpenAIReasoningEffort(
+    options?.reasoningEffort ?? options?.reasoning ?? "high",
+  ) as Exclude<OpenAIApiReasoningEffort, "none">;
+}
+
+function coerceOpenAIApiReasoningEffort(effort: string): OpenAIApiReasoningEffort {
+  const normalized = normalizeOpenAIReasoningEffort(effort);
+  switch (normalized) {
+    case "none":
+    case "low":
+    case "medium":
+    case "high":
+    case "xhigh":
+      return normalized;
+    default:
+      return "high";
+  }
 }
 
 export function buildOpenAIResponsesParams(
@@ -835,8 +813,17 @@ export function buildOpenAIResponsesParams(
   }
   if (model.reasoning) {
     if (options?.reasoningEffort || options?.reasoning || options?.reasoningSummary) {
+      const requestedReasoningEffort = resolveOpenAIReasoningEffort(options);
+      const reasoningEffort = coerceOpenAIApiReasoningEffort(
+        mapOpenAIReasoningEffortForModel({
+          model,
+          effort: requestedReasoningEffort,
+        }) ?? requestedReasoningEffort,
+      );
+      const normalizedReasoningEffort: Exclude<OpenAIApiReasoningEffort, "none"> =
+        reasoningEffort === "none" ? "high" : reasoningEffort;
       params.reasoning = {
-        effort: resolveOpenAIReasoningEffort(options),
+        effort: normalizedReasoningEffort,
         summary: options?.reasoningSummary || "auto",
       };
       params.include = ["reasoning.encrypted_content"];
@@ -1066,6 +1053,7 @@ async function processOpenAICompletionsStream(
         partialArgs: string;
       }
     | null = null;
+  let pendingThinkingDelta: { signature: string; text: string } | null = null;
   const blockIndex = () => output.content.length - 1;
   const finishCurrentBlock = () => {
     if (!currentBlock) {
@@ -1079,6 +1067,33 @@ async function processOpenAICompletionsStream(
       };
       output.content[blockIndex()] = completed;
     }
+  };
+  const appendThinkingDelta = (reasoningDelta: { signature: string; text: string }) => {
+    if (!currentBlock || currentBlock.type !== "thinking") {
+      finishCurrentBlock();
+      currentBlock = {
+        type: "thinking",
+        thinking: "",
+        thinkingSignature: reasoningDelta.signature,
+      };
+      output.content.push(currentBlock);
+      stream.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
+    }
+    currentBlock.thinking += reasoningDelta.text;
+    stream.push({
+      type: "thinking_delta",
+      contentIndex: blockIndex(),
+      delta: reasoningDelta.text,
+      partial: output,
+    });
+  };
+  const flushPendingThinkingDelta = () => {
+    if (!pendingThinkingDelta) {
+      return;
+    }
+    const bufferedDelta = pendingThinkingDelta;
+    pendingThinkingDelta = null;
+    appendThinkingDelta(bufferedDelta);
   };
   for await (const chunk of responseStream) {
     output.responseId ||= chunk.id;
@@ -1104,6 +1119,7 @@ async function processOpenAICompletionsStream(
       continue;
     }
     if (choice.delta.content) {
+      flushPendingThinkingDelta();
       if (!currentBlock || currentBlock.type !== "text") {
         finishCurrentBlock();
         currentBlock = { type: "text", text: "" };
@@ -1119,26 +1135,17 @@ async function processOpenAICompletionsStream(
       });
       continue;
     }
-    const reasoningFields = ["reasoning_content", "reasoning", "reasoning_text"] as const;
-    const reasoningField = reasoningFields.find((field) => {
-      const value = (choice.delta as Record<string, unknown>)[field];
-      return typeof value === "string" && value.length > 0;
-    });
-    if (reasoningField) {
-      if (!currentBlock || currentBlock.type !== "thinking") {
-        finishCurrentBlock();
-        currentBlock = { type: "thinking", thinking: "", thinkingSignature: reasoningField };
-        output.content.push(currentBlock);
-        stream.push({ type: "thinking_start", contentIndex: blockIndex(), partial: output });
+    const reasoningDelta = getCompletionsReasoningDelta(choice.delta as Record<string, unknown>);
+    if (reasoningDelta) {
+      if (currentBlock?.type === "toolCall") {
+        if (!pendingThinkingDelta) {
+          pendingThinkingDelta = { ...reasoningDelta };
+        } else {
+          pendingThinkingDelta.text += reasoningDelta.text;
+        }
+      } else {
+        appendThinkingDelta(reasoningDelta);
       }
-      currentBlock.thinking += String((choice.delta as Record<string, unknown>)[reasoningField]);
-      stream.push({
-        type: "thinking_delta",
-        contentIndex: blockIndex(),
-        delta: String((choice.delta as Record<string, unknown>)[reasoningField]),
-        partial: output,
-      });
-      continue;
     }
     if (choice.delta.tool_calls && choice.delta.tool_calls.length > 0) {
       for (const toolCall of choice.delta.tool_calls) {
@@ -1181,10 +1188,38 @@ async function processOpenAICompletionsStream(
     }
   }
   finishCurrentBlock();
+  flushPendingThinkingDelta();
   const hasToolCalls = output.content.some((block) => block.type === "toolCall");
   if (output.stopReason === "toolUse" && !hasToolCalls) {
     output.stopReason = "stop";
   }
+}
+
+function getCompletionsReasoningDelta(delta: Record<string, unknown>): {
+  signature: string;
+  text: string;
+} | null {
+  const reasoningDetails = delta.reasoning_details;
+  if (Array.isArray(reasoningDetails)) {
+    let text = "";
+    for (const item of reasoningDetails) {
+      const detail = item as { type?: unknown; text?: unknown };
+      if (detail.type === "reasoning.text" && typeof detail.text === "string" && detail.text) {
+        text += detail.text;
+      }
+    }
+    if (text) {
+      return { signature: "reasoning_details", text };
+    }
+  }
+  const reasoningFields = ["reasoning_content", "reasoning", "reasoning_text"] as const;
+  for (const field of reasoningFields) {
+    const value = delta[field];
+    if (typeof value === "string" && value.length > 0) {
+      return { signature: field, text: value };
+    }
+  }
+  return null;
 }
 
 function detectCompat(model: OpenAIModeModel) {
@@ -1249,9 +1284,7 @@ function getCompat(model: OpenAIModeModel): {
     supportsDeveloperRole:
       (compat.supportsDeveloperRole as boolean | undefined) ?? detected.supportsDeveloperRole,
     supportsReasoningEffort,
-    reasoningEffortMap:
-      (compat.reasoningEffortMap as Record<string, string> | undefined) ??
-      detected.reasoningEffortMap,
+    reasoningEffortMap: resolveOpenAIReasoningEffortMap(model, detected.reasoningEffortMap),
     supportsUsageInStreaming:
       (compat.supportsUsageInStreaming as boolean | undefined) ?? detected.supportsUsageInStreaming,
     maxTokensField: (compat.maxTokensField as string | undefined) ?? detected.maxTokensField,
@@ -1288,7 +1321,7 @@ type OpenAIResponsesRequestParams = {
   reasoning?:
     | { effort: "none" }
     | {
-        effort: NonNullable<OpenAIResponsesOptions["reasoningEffort"]>;
+        effort: Exclude<OpenAIApiReasoningEffort, "none">;
         summary: NonNullable<OpenAIResponsesOptions["reasoningSummary"]>;
       };
   include?: string[];
@@ -1300,6 +1333,13 @@ function mapReasoningEffort(effort: string, reasoningEffortMap: Record<string, s
 
 function resolveOpenAICompletionsReasoningEffort(options: OpenAICompletionsOptions | undefined) {
   return options?.reasoningEffort ?? options?.reasoning ?? "high";
+}
+
+function mapNativeOpenAIReasoningEffort(
+  effort: string,
+  reasoningEffortMap: Record<string, string>,
+): string {
+  return normalizeOpenAIReasoningEffort(mapReasoningEffort(effort, reasoningEffortMap));
 }
 
 function convertTools(
@@ -1331,43 +1371,13 @@ export function buildOpenAICompletionsParams(
   options: OpenAICompletionsOptions | undefined,
 ) {
   const compat = getCompat(model);
-  const openclawContext = context as OpenClawPromptContext;
-  const strippedSystemPrompt = openclawContext.openclawSystemPrompt
-    ? stripSystemPromptCacheBoundary(openclawContext.openclawSystemPrompt)
-    : context.systemPrompt
-      ? stripSystemPromptCacheBoundary(context.systemPrompt)
-      : undefined;
-  const strippedDeveloperPrompt = openclawContext.developerPrompt
-    ? stripSystemPromptCacheBoundary(openclawContext.developerPrompt)
-    : undefined;
-  const completionsSystemPrompt = compat.supportsDeveloperRole
-    ? strippedSystemPrompt
-    : mergePrivilegedPromptChannels(strippedSystemPrompt, strippedDeveloperPrompt);
-  const completionsContext = completionsSystemPrompt
+  const completionsContext = context.systemPrompt
     ? {
         ...context,
-        systemPrompt: completionsSystemPrompt,
+        systemPrompt: stripSystemPromptCacheBoundary(context.systemPrompt),
       }
     : context;
   const messages = convertMessages(model as never, completionsContext, compat as never);
-  if (compat.supportsDeveloperRole && strippedSystemPrompt) {
-    const firstPrivilegedMessage = messages.find(
-      (message) =>
-        (message.role === "developer" || message.role === "system") &&
-        typeof message.content === "string" &&
-        message.content === strippedSystemPrompt,
-    );
-    if (firstPrivilegedMessage) {
-      firstPrivilegedMessage.role = "system";
-    }
-  }
-  if (compat.supportsDeveloperRole && strippedDeveloperPrompt) {
-    const insertAt = messages.findIndex((message) => message.role !== "system");
-    messages.splice(insertAt === -1 ? messages.length : insertAt, 0, {
-      role: "developer",
-      content: strippedDeveloperPrompt,
-    });
-  }
   const params: Record<string, unknown> = {
     model: model.id,
     messages: compat.requiresStringContent
@@ -1405,7 +1415,7 @@ export function buildOpenAICompletionsParams(
       effort: mapReasoningEffort(completionsReasoningEffort, compat.reasoningEffortMap),
     };
   } else if (completionsReasoningEffort && model.reasoning && compat.supportsReasoningEffort) {
-    params.reasoning_effort = mapReasoningEffort(
+    params.reasoning_effort = mapNativeOpenAIReasoningEffort(
       completionsReasoningEffort,
       compat.reasoningEffortMap,
     );

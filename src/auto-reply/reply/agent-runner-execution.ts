@@ -35,11 +35,6 @@ import {
 } from "../../config/sessions.js";
 import { logVerbose } from "../../globals.js";
 import { emitAgentEvent, registerAgentRunContext } from "../../infra/agent-events.js";
-import {
-  noteE2ETraceStopReason,
-  noteE2ETraceToolSummary,
-  recordMeasuredE2ETraceSpan,
-} from "../../infra/e2e-trace.js";
 import { formatErrorMessage } from "../../infra/errors.js";
 import { CommandLaneClearedError, GatewayDrainingError } from "../../process/command-queue.js";
 import { defaultRuntime } from "../../runtime.js";
@@ -113,90 +108,6 @@ export type AgentRunLoopResult =
       directlySentBlockKeys?: Set<string>;
     }
   | { kind: "final"; payload: ReplyPayload };
-
-type ToolTimingBucket = {
-  calls: number;
-  totalMs: number;
-  maxMs: number;
-};
-
-type ToolTimingTracker = {
-  startsByCallId: Map<string, { name: string; startedAt: number }>;
-  totalsByName: Map<string, ToolTimingBucket>;
-  totalToolDurationMs: number;
-};
-
-function createToolTimingTracker(): ToolTimingTracker {
-  return {
-    startsByCallId: new Map(),
-    totalsByName: new Map(),
-    totalToolDurationMs: 0,
-  };
-}
-
-function addToolTimingSample(tracker: ToolTimingTracker, name: string, durationMs: number) {
-  if (!Number.isFinite(durationMs) || durationMs < 0) {
-    return;
-  }
-  tracker.totalToolDurationMs += durationMs;
-  const existing = tracker.totalsByName.get(name);
-  if (existing) {
-    existing.calls += 1;
-    existing.totalMs += durationMs;
-    existing.maxMs = Math.max(existing.maxMs, durationMs);
-    return;
-  }
-  tracker.totalsByName.set(name, {
-    calls: 1,
-    totalMs: durationMs,
-    maxMs: durationMs,
-  });
-}
-
-function applyTimingTraceToRunResult(params: {
-  runResult: Awaited<ReturnType<typeof runEmbeddedPiAgent>>;
-  tracker: ToolTimingTracker;
-}) {
-  const totalDurationMs = params.runResult.meta?.durationMs;
-  if (
-    typeof totalDurationMs !== "number" ||
-    !Number.isFinite(totalDurationMs) ||
-    totalDurationMs < 0
-  ) {
-    return;
-  }
-  const toolDurationMs =
-    params.tracker.totalToolDurationMs > 0
-      ? Math.round(params.tracker.totalToolDurationMs)
-      : undefined;
-  const topSlowTools = Array.from(params.tracker.totalsByName.entries())
-    .map(([name, bucket]) => ({
-      name,
-      calls: bucket.calls,
-      totalMs: Math.round(bucket.totalMs),
-      ...(bucket.maxMs > 0 ? { maxMs: Math.round(bucket.maxMs) } : {}),
-    }))
-    .toSorted((a, b) => b.totalMs - a.totalMs || b.calls - a.calls || a.name.localeCompare(b.name))
-    .slice(0, 5);
-  const nonToolDurationMs =
-    typeof toolDurationMs === "number"
-      ? Math.max(0, Math.round(totalDurationMs - toolDurationMs))
-      : undefined;
-  params.runResult.meta.timingTrace = {
-    totalDurationMs: Math.round(totalDurationMs),
-    ...(typeof toolDurationMs === "number" ? { toolDurationMs } : {}),
-    ...(typeof nonToolDurationMs === "number" ? { nonToolDurationMs } : {}),
-    ...(topSlowTools.length > 0 ? { topSlowTools } : {}),
-  };
-  if (params.runResult.meta.toolSummary) {
-    if (typeof toolDurationMs === "number") {
-      params.runResult.meta.toolSummary.totalToolTimeMs = toolDurationMs;
-    }
-    if (topSlowTools.length > 0) {
-      params.runResult.meta.toolSummary.topSlowTools = topSlowTools;
-    }
-  }
-}
 
 type FallbackSelectionState = Pick<
   SessionEntry,
@@ -397,6 +308,14 @@ function isPureTransientRateLimitSummary(err: unknown): boolean {
       const reason = attempt.reason;
       return reason === "rate_limit" || reason === "overloaded";
     })
+  );
+}
+
+function isPureBillingSummary(err: unknown): boolean {
+  return (
+    isFallbackSummaryError(err) &&
+    err.attempts.length > 0 &&
+    err.attempts.every((attempt) => attempt.reason === "billing")
   );
 }
 
@@ -686,6 +605,15 @@ export async function runAgentTurnWithFallback(params: {
     cfg: runtimeConfig,
     sessionKey: params.sessionKey,
     workspaceDir: params.followupRun.run.workspaceDir,
+    messageProvider: params.followupRun.run.messageProvider,
+    accountId: params.followupRun.originatingAccountId ?? params.followupRun.run.agentAccountId,
+    groupId: params.followupRun.run.groupId,
+    groupChannel: params.followupRun.run.groupChannel,
+    groupSpace: params.followupRun.run.groupSpace,
+    requesterSenderId: params.followupRun.run.senderId,
+    requesterSenderName: params.followupRun.run.senderName,
+    requesterSenderUsername: params.followupRun.run.senderUsername,
+    requesterSenderE164: params.followupRun.run.senderE164,
   });
   let didNotifyAgentRunStart = false;
   const notifyAgentRunStart = () => {
@@ -718,7 +646,6 @@ export async function runAgentTurnWithFallback(params: {
   let bootstrapPromptWarningSignaturesSeen = resolveBootstrapWarningSignaturesSeen(
     params.getActiveSessionEntry()?.systemPromptReport,
   );
-  const toolTimingTracker = createToolTimingTracker();
   const persistFallbackCandidateSelection = async (
     provider: string,
     model: string,
@@ -1077,7 +1004,6 @@ export async function runAgentTurnWithFallback(params: {
                 images: params.opts?.images,
                 imageOrder: params.opts?.imageOrder,
                 abortSignal: params.replyOperation?.abortSignal ?? params.opts?.abortSignal,
-                e2eTraceContext: params.opts?.e2eTraceContext,
                 replyOperation: params.replyOperation,
                 blockReplyBreak: params.resolvedBlockStreamingBreak,
                 blockReplyChunking: params.blockReplyChunking,
@@ -1121,38 +1047,6 @@ export async function runAgentTurnWithFallback(params: {
                   if (evt.stream === "tool") {
                     const phase = readStringValue(evt.data.phase) ?? "";
                     const name = readStringValue(evt.data.name);
-                    const toolCallId = readStringValue(evt.data.toolCallId);
-                    if (name && toolCallId) {
-                      if (phase === "start") {
-                        const startedAt =
-                          typeof evt.data.startedAt === "number" &&
-                          Number.isFinite(evt.data.startedAt)
-                            ? evt.data.startedAt
-                            : Date.now();
-                        toolTimingTracker.startsByCallId.set(toolCallId, { name, startedAt });
-                      } else if (phase === "end") {
-                        const tracked = toolTimingTracker.startsByCallId.get(toolCallId);
-                        toolTimingTracker.startsByCallId.delete(toolCallId);
-                        const startedAt =
-                          typeof evt.data.startedAt === "number" &&
-                          Number.isFinite(evt.data.startedAt)
-                            ? evt.data.startedAt
-                            : tracked?.startedAt;
-                        const endedAt =
-                          typeof evt.data.endedAt === "number" && Number.isFinite(evt.data.endedAt)
-                            ? evt.data.endedAt
-                            : Date.now();
-                        const durationMs =
-                          typeof startedAt === "number" && Number.isFinite(startedAt)
-                            ? endedAt - startedAt
-                            : undefined;
-                        addToolTimingSample(
-                          toolTimingTracker,
-                          tracked?.name ?? name,
-                          durationMs ?? NaN,
-                        );
-                      }
-                    }
                     if (phase === "start" || phase === "update") {
                       await params.typingSignals.signalToolStart();
                       await params.opts?.onToolStart?.({ name, phase });
@@ -1443,7 +1337,9 @@ export async function runAgentTurnWithFallback(params: {
         continue;
       }
       const message = formatErrorMessage(err);
-      const isBilling = isBillingErrorMessage(message);
+      const isBilling = isFallbackSummaryError(err)
+        ? isPureBillingSummary(err)
+        : isBillingErrorMessage(message);
       const isContextOverflow = !isBilling && isLikelyContextOverflowError(message);
       const isCompactionFailure = !isBilling && isCompactionFailureError(message);
       const isSessionCorruption = /function call turn comes immediately after/i.test(message);
@@ -1646,19 +1542,6 @@ export async function runAgentTurnWithFallback(params: {
   // kind:"success" path — preserving streaming dedup, message_send
   // suppression, and usage/model metadata updates.
   if (runResult) {
-    applyTimingTraceToRunResult({ runResult, tracker: toolTimingTracker });
-    const topSlowTools =
-      runResult.meta?.toolSummary?.topSlowTools?.map((tool) => ({ ...tool })) ?? undefined;
-    if (typeof runResult.meta?.toolSummary?.totalToolTimeMs === "number") {
-      recordMeasuredE2ETraceSpan(params.opts?.e2eTraceContext, "agent_tools", {
-        durationMs: runResult.meta.toolSummary.totalToolTimeMs,
-      });
-    }
-    noteE2ETraceToolSummary(params.opts?.e2eTraceContext, topSlowTools);
-    noteE2ETraceStopReason(
-      params.opts?.e2eTraceContext,
-      runResult.meta?.completion?.stopReason ?? runResult.meta?.stopReason,
-    );
     const hasNonErrorContent = runResult.payloads?.some(
       (p) => !p.isError && !p.isReasoning && hasOutboundReplyContent(p, { trimText: true }),
     );

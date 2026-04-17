@@ -355,7 +355,7 @@ export function createCommandHandlers(context: CommandHandlerContext) {
         break;
       case "trace":
         if (!args) {
-          chatLog.addSystem("usage: /trace <on|off|slow|raw|e2e on|e2e off|e2e once>");
+          chatLog.addSystem("usage: /trace <on|off>");
           break;
         }
         try {

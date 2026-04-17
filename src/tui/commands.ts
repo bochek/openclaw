@@ -5,7 +5,7 @@ import type { OpenClawConfig } from "../config/types.js";
 import { normalizeLowercaseStringOrEmpty } from "../shared/string-coerce.js";
 
 const VERBOSE_LEVELS = ["on", "off"];
-const TRACE_LEVELS = ["on", "off", "slow", "raw", "e2e on", "e2e off", "e2e once"];
+const TRACE_LEVELS = ["on", "off"];
 const FAST_LEVELS = ["status", "on", "off"];
 const REASONING_LEVELS = ["on", "off"];
 const ELEVATED_LEVELS = ["on", "off", "ask", "full"];
@@ -95,7 +95,7 @@ export function getSlashCommands(options: SlashCommandOptions = {}): SlashComman
     },
     {
       name: "trace",
-      description: "Set trace on/off/slow/raw or trace e2e on/off/once",
+      description: "Set trace on/off",
       getArgumentCompletions: traceCompletions,
     },
     {
@@ -163,7 +163,7 @@ export function helpText(options: SlashCommandOptions = {}): string {
     `/think <${thinkLevels}>`,
     "/fast <status|on|off>",
     "/verbose <on|off>",
-    "/trace <on|off|slow|raw|e2e on|e2e off|e2e once>",
+    "/trace <on|off>",
     "/reasoning <on|off>",
     "/usage <off|tokens|full>",
     "/elevated <on|off|ask|full>",

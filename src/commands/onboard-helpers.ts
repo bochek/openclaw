@@ -1,5 +1,4 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { inspect } from "node:util";
 import { cancel, isCancel } from "@clack/prompts";
@@ -188,28 +187,6 @@ export function resolveNodeManagerOptions(): Array<{
   ];
 }
 
-async function pathExists(pathname: string): Promise<boolean> {
-  try {
-    await fs.access(pathname);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function resolveTrashDestination(pathname: string): Promise<string> {
-  const trashDir = path.join(os.homedir(), ".Trash");
-  await fs.mkdir(trashDir, { recursive: true });
-  const baseName = path.basename(pathname);
-  let candidate = path.join(trashDir, baseName);
-  let suffix = 1;
-  while (await pathExists(candidate)) {
-    candidate = path.join(trashDir, `${baseName}.${suffix}`);
-    suffix += 1;
-  }
-  return candidate;
-}
-
 export async function moveToTrash(pathname: string, runtime: RuntimeEnv): Promise<void> {
   if (!pathname) {
     return;
@@ -221,26 +198,8 @@ export async function moveToTrash(pathname: string, runtime: RuntimeEnv): Promis
   }
   try {
     await runCommandWithTimeout(["trash", pathname], { timeoutMs: 5000 });
-    if (!(await pathExists(pathname))) {
-      runtime.log(`Moved to Trash: ${shortenHomePath(pathname)}`);
-      return;
-    }
+    runtime.log(`Moved to Trash: ${shortenHomePath(pathname)}`);
   } catch {
-    // Fall through to a verified mv-based fallback below.
-  }
-
-  try {
-    const destination = await resolveTrashDestination(pathname);
-    await runCommandWithTimeout(["mv", pathname, destination], { timeoutMs: 5000 });
-    if (!(await pathExists(pathname))) {
-      runtime.log(`Moved to Trash: ${shortenHomePath(pathname)}`);
-      return;
-    }
-  } catch {
-    // Surface the manual action guidance below.
-  }
-
-  if (await pathExists(pathname)) {
     runtime.log(`Failed to move to Trash (manual delete): ${shortenHomePath(pathname)}`);
   }
 }

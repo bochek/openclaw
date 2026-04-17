@@ -1,8 +1,7 @@
 import { escapeRegExp } from "../../utils.js";
-import type { E2ETraceMode, NoticeLevel, ReasoningLevel, TraceLevel } from "../thinking.js";
+import type { NoticeLevel, ReasoningLevel, TraceLevel } from "../thinking.js";
 import {
   type ElevatedLevel,
-  normalizeE2ETraceMode,
   normalizeFastMode,
   normalizeElevatedLevel,
   normalizeNoticeLevel,
@@ -90,45 +89,6 @@ const extractSimpleDirective = (
     hasDirective: Boolean(match),
   };
 };
-
-export function extractE2ETraceDirective(body?: string): {
-  cleaned: string;
-  e2eTraceMode?: E2ETraceMode;
-  rawMode?: string;
-  hasDirective: boolean;
-} {
-  if (!body) {
-    return { cleaned: "", hasDirective: false };
-  }
-  const match = body.match(/(?:^|\s)\/trace\s+e2e(?=$|\s|:)/i);
-  if (!match || match.index === undefined) {
-    return { cleaned: body.trim(), hasDirective: false };
-  }
-  const start = match.index;
-  let end = match.index + match[0].length;
-  let i = end;
-  while (i < body.length && /\s/.test(body[i])) {
-    i += 1;
-  }
-  if (body[i] === ":") {
-    i += 1;
-    while (i < body.length && /\s/.test(body[i])) {
-      i += 1;
-    }
-  }
-  const argStart = i;
-  while (i < body.length && /[A-Za-z-]/.test(body[i])) {
-    i += 1;
-  }
-  const rawMode = i > argStart ? body.slice(argStart, i) : undefined;
-  end = i;
-  return {
-    cleaned: body.slice(0, start).concat(" ").concat(body.slice(end)).replace(/\s+/g, " ").trim(),
-    e2eTraceMode: normalizeE2ETraceMode(rawMode),
-    rawMode,
-    hasDirective: true,
-  };
-}
 
 export function extractThinkDirective(body?: string): {
   cleaned: string;
@@ -266,13 +226,5 @@ export function extractStatusDirective(body?: string): {
   return extractSimpleDirective(body, ["status"]);
 }
 
-export type {
-  E2ETraceMode,
-  ElevatedLevel,
-  NoticeLevel,
-  ReasoningLevel,
-  ThinkLevel,
-  TraceLevel,
-  VerboseLevel,
-};
+export type { ElevatedLevel, NoticeLevel, ReasoningLevel, ThinkLevel, TraceLevel, VerboseLevel };
 export { extractExecDirective } from "./exec/directive.js";

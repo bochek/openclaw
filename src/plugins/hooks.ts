@@ -25,8 +25,6 @@ import type {
   PluginHookReplyDispatchResult,
   PluginHookBeforeModelResolveEvent,
   PluginHookBeforeModelResolveResult,
-  PluginHookBeforePromptChannelsEvent,
-  PluginHookBeforePromptChannelsResult,
   PluginHookBeforePromptBuildEvent,
   PluginHookBeforePromptBuildResult,
   PluginHookBeforeCompactionEvent,
@@ -82,8 +80,6 @@ export type {
   PluginHookReplyDispatchContext,
   PluginHookReplyDispatchEvent,
   PluginHookReplyDispatchResult,
-  PluginHookBeforePromptChannelsEvent,
-  PluginHookBeforePromptChannelsResult,
   PluginHookBeforeModelResolveEvent,
   PluginHookBeforeModelResolveResult,
   PluginHookBeforePromptBuildEvent,
@@ -230,33 +226,6 @@ export function createHookRunner(
     // Keep the first defined override so higher-priority hooks win.
     modelOverride: firstDefined(acc?.modelOverride, next.modelOverride),
     providerOverride: firstDefined(acc?.providerOverride, next.providerOverride),
-  });
-
-  const mergeBeforePromptChannels = (
-    acc: PluginHookBeforePromptChannelsResult | undefined,
-    next: PluginHookBeforePromptChannelsResult,
-  ): PluginHookBeforePromptChannelsResult => ({
-    systemAdditions: concatOptionalTextSegments({
-      left: acc?.systemAdditions,
-      right: next.systemAdditions,
-    }),
-    developerAdditions: concatOptionalTextSegments({
-      left: acc?.developerAdditions,
-      right: next.developerAdditions,
-    }),
-    userAdditions: concatOptionalTextSegments({
-      left: acc?.userAdditions,
-      right: next.userAdditions,
-    }),
-    memorySectionTarget: firstDefined(acc?.memorySectionTarget, next.memorySectionTarget),
-    contextFileRoutes: {
-      ...acc?.contextFileRoutes,
-      ...Object.fromEntries(
-        Object.entries(next.contextFileRoutes ?? {}).filter(
-          ([pathKey]) => !acc?.contextFileRoutes?.[pathKey],
-        ),
-      ),
-    },
   });
 
   const mergeBeforePromptBuild = (
@@ -551,23 +520,6 @@ export function createHookRunner(
       event,
       ctx,
       { mergeResults: mergeBeforeModelResolve },
-    );
-  }
-
-  /**
-   * Run before_prompt_channels hook.
-   * Allows plugins to classify prompt content into system/developer/user buckets
-   * before the core prompt channels are assembled.
-   */
-  async function runBeforePromptChannels(
-    event: PluginHookBeforePromptChannelsEvent,
-    ctx: PluginHookAgentContext,
-  ): Promise<PluginHookBeforePromptChannelsResult | undefined> {
-    return runModifyingHook<"before_prompt_channels", PluginHookBeforePromptChannelsResult>(
-      "before_prompt_channels",
-      event,
-      ctx,
-      { mergeResults: mergeBeforePromptChannels },
     );
   }
 
@@ -1157,7 +1109,6 @@ export function createHookRunner(
   return {
     // Agent hooks
     runBeforeModelResolve,
-    runBeforePromptChannels,
     runBeforePromptBuild,
     runBeforeAgentStart,
     runBeforeAgentReply,

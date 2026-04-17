@@ -277,11 +277,6 @@ describe("directive behavior", () => {
     expect(disabled.text).not.toContain("may contain sensitive information");
     expect(disabled.sessionEntry.traceLevel).toBe("off");
 
-    const slow = await runDirectiveStatus("/trace slow");
-    expect(slow.text).toContain("Trace set to slow.");
-    expect(slow.text).toContain("timing breakdown");
-    expect(slow.sessionEntry.traceLevel).toBe("slow");
-
     const raw = await runDirectiveStatus("/trace raw");
     expect(raw.text).toContain("Trace set to raw.");
     expect(raw.text).toContain("may contain sensitive information");
@@ -306,44 +301,5 @@ describe("directive behavior", () => {
     expect(allowed.text).toContain("Trace enabled.");
     expect(allowed.text).toContain("may contain sensitive information");
     expect(allowed.sessionEntry.traceLevel).toBe("on");
-  });
-
-  it("shows current E2E trace mode and persists owner-only E2E directives", async () => {
-    const { text: currentText } = await runDirectiveStatus("/trace e2e", {
-      sessionEntry: { sessionId: "trace", updatedAt: Date.now(), e2eTraceMode: "on" },
-    });
-    expect(currentText).toContain("Current E2E trace mode: on");
-
-    const enabled = await runDirectiveStatus("/trace e2e on");
-    expect(enabled.text).toContain("E2E trace enabled.");
-    expect(enabled.sessionEntry.e2eTraceMode).toBe("on");
-
-    const once = await runDirectiveStatus("/trace e2e once");
-    expect(once.text).toContain("E2E trace set to once.");
-    expect(once.sessionEntry.e2eTraceMode).toBe("once");
-
-    const disabled = await runDirectiveStatus("/trace e2e off", {
-      sessionEntry: { sessionId: "trace", updatedAt: Date.now(), e2eTraceMode: "on" },
-    });
-    expect(disabled.text).toContain("E2E trace disabled.");
-    expect(disabled.sessionEntry.e2eTraceMode).toBe("off");
-  });
-
-  it("blocks /trace e2e for non-owners without delegated gateway scope", async () => {
-    const denied = await runDirectiveStatus("/trace e2e on", {
-      senderIsOwner: false,
-      gatewayClientScopes: ["operator.write"],
-    });
-    expect(denied.text).toContain("/trace is restricted to owners and gateway clients");
-    expect(denied.sessionEntry.e2eTraceMode).toBeUndefined();
-  });
-
-  it("allows /trace e2e for delegated gateway clients with operator.admin", async () => {
-    const allowed = await runDirectiveStatus("/trace e2e once", {
-      senderIsOwner: false,
-      gatewayClientScopes: ["operator.admin"],
-    });
-    expect(allowed.text).toContain("E2E trace set to once.");
-    expect(allowed.sessionEntry.e2eTraceMode).toBe("once");
   });
 });

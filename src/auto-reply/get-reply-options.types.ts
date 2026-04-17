@@ -1,5 +1,4 @@
 import type { ImageContent } from "@mariozechner/pi-ai";
-import type { E2ETraceCollector } from "../infra/e2e-trace.js";
 import type { PromptImageOrderEntry } from "../media/prompt-image-order.js";
 import type { ReplyPayload } from "./reply-payload.js";
 import type { TypingController } from "./reply/typing.js";
@@ -147,6 +146,4 @@ export type GetReplyOptions = {
   hasRepliedRef?: { value: boolean };
   /** Override agent timeout in seconds (0 = no timeout). Threads through to resolveAgentTimeoutMs. */
   timeoutOverrideSeconds?: number;
-  /** Mutable distributed E2E trace collector for gateway/control runs. */
-  e2eTraceContext?: E2ETraceCollector;
 };

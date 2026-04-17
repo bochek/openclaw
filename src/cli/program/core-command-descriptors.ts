@@ -51,11 +51,6 @@ const coreCliCommandCatalog = defineCommandDescriptorCatalog([
     hasSubcommands: false,
   },
   {
-    name: "workspace",
-    description: "Manage agent workspaces",
-    hasSubcommands: true,
-  },
-  {
     name: "message",
     description: "Send, read, and manage messages",
     hasSubcommands: true,

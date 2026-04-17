@@ -7,7 +7,6 @@ import {
 } from "./thinking.shared.js";
 import type { ThinkLevel, ThinkingCatalogEntry } from "./thinking.shared.js";
 export {
-  normalizeE2ETraceMode,
   formatXHighModelHint,
   normalizeElevatedLevel,
   normalizeFastMode,
@@ -21,7 +20,6 @@ export {
   resolveElevatedMode,
 } from "./thinking.shared.js";
 export type {
-  E2ETraceMode,
   ElevatedLevel,
   ElevatedMode,
   NoticeLevel,

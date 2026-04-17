@@ -77,11 +77,6 @@ const coreEntrySpecs: readonly CommandGroupDescriptorSpec<
         exportName: "registerBackupCommand",
       },
       {
-        commandNames: ["workspace"],
-        loadModule: () => import("./register.workspace.js"),
-        exportName: "registerWorkspaceCommand",
-      },
-      {
         commandNames: ["doctor", "dashboard", "reset", "uninstall"],
         loadModule: () => import("./register.maintenance.js"),
         exportName: "registerMaintenanceCommands",

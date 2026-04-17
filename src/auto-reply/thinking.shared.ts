@@ -5,8 +5,7 @@ import {
 
 export type ThinkLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "adaptive";
 export type VerboseLevel = "off" | "on" | "full";
-export type TraceLevel = "off" | "on" | "raw" | "slow";
-export type E2ETraceMode = "off" | "on" | "once";
+export type TraceLevel = "off" | "on" | "raw";
 export type NoticeLevel = "off" | "on" | "full";
 export type ElevatedLevel = "off" | "on" | "ask" | "full";
 export type ElevatedMode = "off" | "ask" | "full";
@@ -148,28 +147,8 @@ export function normalizeTraceLevel(raw?: string | null): TraceLevel | undefined
   if (["on", "true", "yes", "1"].includes(key)) {
     return "on";
   }
-  if (["slow", "timing", "timings"].includes(key)) {
-    return "slow";
-  }
   if (["raw", "unfiltered"].includes(key)) {
     return "raw";
-  }
-  return undefined;
-}
-
-export function normalizeE2ETraceMode(raw?: string | null): E2ETraceMode | undefined {
-  const key = normalizeOptionalLowercaseString(raw);
-  if (!key) {
-    return undefined;
-  }
-  if (["off", "false", "no", "0"].includes(key)) {
-    return "off";
-  }
-  if (["on", "true", "yes", "1"].includes(key)) {
-    return "on";
-  }
-  if (["once", "oneshot", "one-shot"].includes(key)) {
-    return "once";
   }
   return undefined;
 }

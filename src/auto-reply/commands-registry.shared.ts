@@ -713,17 +713,16 @@ export function buildBuiltinChatCommands(): ChatCommandDefinition[] {
     defineChatCommand({
       key: "trace",
       nativeName: "trace",
-      description:
-        "Toggle trace output, or use /trace e2e on|off|once for owner-only end-to-end tracing.",
+      description: "Toggle plugin trace lines.",
       textAlias: "/trace",
       category: "options",
       tier: "power",
       args: [
         {
           name: "mode",
-          description: "on, off, slow, raw, or e2e",
+          description: "on, off, or raw",
           type: "string",
-          choices: ["on", "off", "slow", "raw", "e2e"],
+          choices: ["on", "off", "raw"],
         },
       ],
       argsMenu: "auto",
@@ -832,7 +831,7 @@ export function buildBuiltinChatCommands(): ChatCommandDefinition[] {
     defineChatCommand({
       key: "models",
       nativeName: "models",
-      description: "List model providers/models or add a model.",
+      description: "List model providers or provider models.",
       textAlias: "/models",
       tier: "standard",
       argsParsing: "none",

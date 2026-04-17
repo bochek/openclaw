@@ -1,7 +1,6 @@
 import type { ExecAsk, ExecSecurity, ExecTarget } from "../../infra/exec-approvals.js";
 import { extractModelDirective } from "../model.js";
 import type {
-  E2ETraceMode,
   ElevatedLevel,
   ReasoningLevel,
   ThinkLevel,
@@ -9,7 +8,6 @@ import type {
   VerboseLevel,
 } from "./directives.js";
 import {
-  extractE2ETraceDirective,
   extractElevatedDirective,
   extractExecDirective,
   extractFastDirective,
@@ -31,9 +29,6 @@ export type InlineDirectives = {
   verboseLevel?: VerboseLevel;
   rawVerboseLevel?: string;
   hasTraceDirective: boolean;
-  hasE2ETraceDirective?: boolean;
-  e2eTraceMode?: E2ETraceMode;
-  rawE2ETraceMode?: string;
   traceLevel?: TraceLevel;
   rawTraceLevel?: string;
   hasFastDirective: boolean;
@@ -97,17 +92,11 @@ export function parseInlineDirectives(
     hasDirective: hasVerboseDirective,
   } = extractVerboseDirective(thinkCleaned);
   const {
-    cleaned: e2eTraceCleaned,
-    e2eTraceMode,
-    rawMode: rawE2ETraceMode,
-    hasDirective: hasE2ETraceDirective,
-  } = extractE2ETraceDirective(verboseCleaned);
-  const {
     cleaned: traceCleaned,
     traceLevel,
     rawLevel: rawTraceLevel,
     hasDirective: hasTraceDirective,
-  } = extractTraceDirective(e2eTraceCleaned);
+  } = extractTraceDirective(verboseCleaned);
   const {
     cleaned: fastCleaned,
     fastMode,
@@ -186,9 +175,6 @@ export function parseInlineDirectives(
     verboseLevel,
     rawVerboseLevel,
     hasTraceDirective,
-    hasE2ETraceDirective,
-    e2eTraceMode,
-    rawE2ETraceMode,
     traceLevel,
     rawTraceLevel,
     hasFastDirective,

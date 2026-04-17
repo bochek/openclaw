@@ -18,13 +18,6 @@ vi.mock("./register.backup.js", () => ({
   },
 }));
 
-vi.mock("./register.workspace.js", () => ({
-  registerWorkspaceCommand: (program: Command) => {
-    const workspace = program.command("workspace");
-    workspace.command("reset");
-  },
-}));
-
 vi.mock("./register.maintenance.js", () => ({
   registerMaintenanceCommands: (program: Command) => {
     program.command("doctor");
@@ -77,7 +70,6 @@ describe("command-registry", () => {
     expect(names).toContain("mcp");
     expect(names).toContain("agent");
     expect(names).toContain("agents");
-    expect(names).toContain("workspace");
   });
 
   it("returns only commands that support subcommands", () => {
@@ -85,7 +77,6 @@ describe("command-registry", () => {
     expect(names).toContain("config");
     expect(names).toContain("agents");
     expect(names).toContain("backup");
-    expect(names).toContain("workspace");
     expect(names).toContain("mcp");
     expect(names).toContain("sessions");
     expect(names).toContain("tasks");

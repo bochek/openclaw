@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import type { Skill } from "@mariozechner/pi-coding-agent";
 import type { ChatType } from "../../channels/chat-type.js";
 import type { ChannelId } from "../../channels/plugins/channel-id.types.js";
-import type { E2ETrace } from "../../infra/e2e-trace.js";
 import { normalizeOptionalString } from "../../shared/string-coerce.js";
 import type { DeliveryContext } from "../../utils/delivery-context.types.js";
 import type { TtsAutoMode } from "../types.tts.js";
@@ -165,7 +164,6 @@ export type SessionEntry = {
   fastMode?: boolean;
   verboseLevel?: string;
   traceLevel?: string;
-  e2eTraceMode?: string;
   reasoningLevel?: string;
   elevatedLevel?: string;
   ttsAuto?: TtsAutoMode;
@@ -257,7 +255,6 @@ export type SessionEntry = {
    * Each plugin owns and may overwrite only its own entry between turns.
    */
   pluginDebugEntries?: SessionPluginDebugEntry[];
-  lastE2ETrace?: E2ETrace;
   acp?: SessionAcpMeta;
 };
 
@@ -474,10 +471,6 @@ export type SessionSystemPromptReport = {
     chars: number;
     projectContextChars: number;
     nonProjectContextChars: number;
-  };
-  developerPrompt?: {
-    chars: number;
-    projectContextChars: number;
   };
   injectedWorkspaceFiles: Array<{
     name: string;

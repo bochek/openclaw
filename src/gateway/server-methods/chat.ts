@@ -12,15 +12,8 @@ import { createReplyDispatcher } from "../../auto-reply/reply/reply-dispatcher.j
 import type { MsgContext } from "../../auto-reply/templating.js";
 import { extractCanvasFromText } from "../../chat/canvas-render.js";
 import { resolveSessionFilePath } from "../../config/sessions.js";
-import { updateSessionStore } from "../../config/sessions.js";
-import {
-  createE2ETraceCollector,
-  endE2ETraceSpan,
-  finalizeE2ETrace,
-  formatE2ETraceForChat,
-  startE2ETraceSpan,
-} from "../../infra/e2e-trace.js";
 import { jsonUtf8Bytes } from "../../infra/json-utf8-bytes.js";
+import { getAgentScopedMediaLocalRoots } from "../../media/local-roots.js";
 import { isAudioFileName } from "../../media/mime.js";
 import type { PromptImageOrderEntry } from "../../media/prompt-image-order.js";
 import { type SavedMedia, saveMediaBuffer } from "../../media/store.js";
@@ -131,8 +124,17 @@ function isMediaBearingPayload(payload: ReplyPayload): boolean {
 
 async function buildWebchatAudioOnlyAssistantMessage(
   payloads: ReplyPayload[],
+  options?: {
+    localRoots?: readonly string[];
+    onLocalAudioAccessDenied?: (message: string) => void;
+  },
 ): Promise<{ content: Array<Record<string, unknown>>; transcriptText: string } | null> {
-  const audioBlocks = await buildWebchatAudioContentBlocksFromReplyPayloads(payloads);
+  const audioBlocks = await buildWebchatAudioContentBlocksFromReplyPayloads(payloads, {
+    localRoots: options?.localRoots,
+    onLocalAudioAccessDenied: (err) => {
+      options?.onLocalAudioAccessDenied?.(formatForLog(err));
+    },
+  });
   if (audioBlocks.length === 0) {
     return null;
   }
@@ -142,7 +144,7 @@ async function buildWebchatAudioOnlyAssistantMessage(
   };
 }
 
-export const DEFAULT_CHAT_HISTORY_TEXT_MAX_CHARS = 12_000;
+export const DEFAULT_CHAT_HISTORY_TEXT_MAX_CHARS = 8_000;
 const CHAT_HISTORY_MAX_SINGLE_MESSAGE_BYTES = 128 * 1024;
 const CHAT_HISTORY_OVERSIZED_PLACEHOLDER = "[chat.history omitted: message too large]";
 let chatHistoryPlaceholderEmitCount = 0;
@@ -244,11 +246,6 @@ function buildTranscriptReplyText(payloads: ReplyPayload[]): string {
     })
     .filter(Boolean);
   return chunks.join("\n\n").trim();
-}
-
-function resolveSenderIsOwnerFromClient(client: GatewayRequestHandlerOptions["client"]): boolean {
-  const scopes = Array.isArray(client?.connect?.scopes) ? client.connect.scopes : [];
-  return scopes.includes(ADMIN_SCOPE);
 }
 
 function resolveChatSendOriginatingRoute(params: {
@@ -1995,17 +1992,6 @@ export const chatHandlers: GatewayRequestHandlers = {
       // Only BodyForAgent gets the timestamp — Body stays raw for UI display.
       // See: https://github.com/moltbot/moltbot/issues/3658
       const stampedMessage = injectTimestamp(messageForAgent, timestampOptsFromConfig(cfg));
-      const traceAuthorizedForClient = resolveSenderIsOwnerFromClient(client);
-      const e2eTraceContext =
-        traceAuthorizedForClient && (entry?.e2eTraceMode === "on" || entry?.e2eTraceMode === "once")
-          ? createE2ETraceCollector({
-              traceId: clientRunId,
-              rootStartedAt: now,
-            })
-          : undefined;
-      if (e2eTraceContext) {
-        startE2ETraceSpan(e2eTraceContext, "gateway_ingress", { startedAt: now });
-      }
 
       const ctx: MsgContext = {
         Body: messageForAgent,
@@ -2037,79 +2023,6 @@ export const chatHandlers: GatewayRequestHandlers = {
         channel: INTERNAL_MESSAGE_CHANNEL,
       });
       const deliveredReplies: Array<{ payload: ReplyPayload; kind: "block" | "final" }> = [];
-      let queueWaitStarted = false;
-      let deliveryStarted = false;
-      const persistE2ETrace = async () => {
-        const trace = finalizeE2ETrace(e2eTraceContext);
-        if (!trace) {
-          return undefined;
-        }
-        const { storePath: latestStorePath } = loadSessionEntry(sessionKey);
-        if (latestStorePath) {
-          await updateSessionStore(latestStorePath, (store) => {
-            const current = store[sessionKey];
-            if (!current) {
-              return;
-            }
-            current.lastE2ETrace = trace;
-            if (current.e2eTraceMode === "once") {
-              current.e2eTraceMode = "off";
-            }
-            current.updatedAt = Date.now();
-            store[sessionKey] = current;
-          });
-        }
-        if (entry) {
-          entry.lastE2ETrace = trace;
-          if (entry.e2eTraceMode === "once") {
-            entry.e2eTraceMode = "off";
-          }
-        }
-        return trace;
-      };
-      const emitInjectedAssistantMessage = async (messageText: string, label?: string) => {
-        const { storePath: latestStorePath, entry: latestEntry } = loadSessionEntry(sessionKey);
-        const sessionId = latestEntry?.sessionId ?? entry?.sessionId;
-        let messageId: string | undefined;
-        let message: Record<string, unknown> | undefined;
-        if (sessionId && latestStorePath) {
-          const appended = appendAssistantTranscriptMessage({
-            message: messageText,
-            label,
-            sessionId,
-            storePath: latestStorePath,
-            sessionFile: latestEntry?.sessionFile,
-            agentId,
-            createIfMissing: true,
-          });
-          if (appended.ok) {
-            messageId = appended.messageId;
-            message = appended.message;
-          } else {
-            context.logGateway.warn(
-              `webchat transcript append failed for injected assistant message: ${appended.error ?? "unknown error"}`,
-            );
-          }
-        }
-        const effectiveMessage = (stripEnvelopeFromMessage(message) as
-          | Record<string, unknown>
-          | undefined) ?? {
-          role: "assistant",
-          content: [{ type: "text", text: messageText }],
-          timestamp: Date.now(),
-          stopReason: "stop",
-          usage: { input: 0, output: 0, totalTokens: 0 },
-        };
-        const chatPayload = {
-          runId: messageId ? `inject-${messageId}` : `inject-${clientRunId}-e2e-trace`,
-          sessionKey,
-          seq: 0,
-          state: "final" as const,
-          message: stripInlineDirectiveTagsFromMessageForDisplay(effectiveMessage),
-        };
-        context.broadcast("chat", chatPayload);
-        context.nodeSendToSession(sessionKey, "chat", chatPayload);
-      };
       let appendedWebchatAgentAudio = false;
       let userTranscriptUpdatePromise: Promise<void> | null = null;
       const emitUserTranscriptUpdate = async () => {
@@ -2176,7 +2089,12 @@ export const chatHandlers: GatewayRequestHandlers = {
         if (!agentRunStarted || appendedWebchatAgentAudio || !isMediaBearingPayload(payload)) {
           return;
         }
-        const audioMessage = await buildWebchatAudioOnlyAssistantMessage([payload]);
+        const audioMessage = await buildWebchatAudioOnlyAssistantMessage([payload], {
+          localRoots: getAgentScopedMediaLocalRoots(cfg, agentId),
+          onLocalAudioAccessDenied: (message) => {
+            context.logGateway.warn(`webchat audio embedding denied local path: ${message}`);
+          },
+        });
         if (!audioMessage) {
           return;
         }
@@ -2206,10 +2124,6 @@ export const chatHandlers: GatewayRequestHandlers = {
           context.logGateway.warn(`webchat dispatch failed: ${formatForLog(err)}`);
         },
         deliver: async (payload, info) => {
-          if (!deliveryStarted) {
-            startE2ETraceSpan(e2eTraceContext, "delivery");
-            deliveryStarted = true;
-          }
           switch (info.kind) {
             case "block":
             case "final":
@@ -2241,9 +2155,6 @@ export const chatHandlers: GatewayRequestHandlers = {
       });
 
       let agentRunStarted = false;
-      endE2ETraceSpan(e2eTraceContext, "gateway_ingress");
-      startE2ETraceSpan(e2eTraceContext, "queue_wait");
-      queueWaitStarted = true;
       void dispatchInboundMessage({
         ctx,
         cfg,
@@ -2251,14 +2162,10 @@ export const chatHandlers: GatewayRequestHandlers = {
         replyOptions: {
           runId: clientRunId,
           abortSignal: abortController.signal,
-          e2eTraceContext,
           images: parsedImages.length > 0 ? parsedImages : undefined,
           imageOrder: imageOrder.length > 0 ? imageOrder : undefined,
           onAgentRunStart: (runId) => {
             agentRunStarted = true;
-            if (queueWaitStarted) {
-              endE2ETraceSpan(e2eTraceContext, "queue_wait");
-            }
             void emitUserTranscriptUpdate();
             const connId = typeof client?.connId === "string" ? client.connId : undefined;
             const wantsToolEvents = hasGatewayClientCap(
@@ -2281,9 +2188,6 @@ export const chatHandlers: GatewayRequestHandlers = {
         },
       })
         .then(async () => {
-          if (queueWaitStarted && !agentRunStarted) {
-            endE2ETraceSpan(e2eTraceContext, "queue_wait", { status: "skipped" });
-          }
           await rewriteUserTranscriptMedia();
           if (!agentRunStarted) {
             await emitUserTranscriptUpdate();
@@ -2296,12 +2200,6 @@ export const chatHandlers: GatewayRequestHandlers = {
               .join("\n\n")
               .trim();
             if (btwReplies.length > 0 && btwText) {
-              const egressStartedAt = Date.now();
-              if (!deliveryStarted) {
-                startE2ETraceSpan(e2eTraceContext, "delivery", { startedAt: egressStartedAt });
-                deliveryStarted = true;
-              }
-              startE2ETraceSpan(e2eTraceContext, "gateway_egress", { startedAt: egressStartedAt });
               broadcastSideResult({
                 context,
                 payload: {
@@ -2319,23 +2217,7 @@ export const chatHandlers: GatewayRequestHandlers = {
                 runId: clientRunId,
                 sessionKey,
               });
-              endE2ETraceSpan(e2eTraceContext, "gateway_egress");
-              endE2ETraceSpan(e2eTraceContext, "delivery");
-              await persistE2ETrace();
             } else {
-              const egressStartedAt = Date.now();
-              if (!deliveryStarted) {
-                startE2ETraceSpan(e2eTraceContext, "delivery", { startedAt: egressStartedAt });
-                deliveryStarted = true;
-              }
-              startE2ETraceSpan(e2eTraceContext, "gateway_egress", { startedAt: egressStartedAt });
-              endE2ETraceSpan(e2eTraceContext, "gateway_egress");
-              endE2ETraceSpan(e2eTraceContext, "delivery");
-              const trace = await persistE2ETrace();
-              const traceText = formatE2ETraceForChat(trace);
-              if (traceText) {
-                deliveredReplies.push({ payload: { text: traceText }, kind: "final" });
-              }
               const combinedReply = buildTranscriptReplyText(
                 deliveredReplies
                   .filter((entry) => entry.kind === "final")
@@ -2381,19 +2263,6 @@ export const chatHandlers: GatewayRequestHandlers = {
             }
           } else {
             void emitUserTranscriptUpdate();
-            const egressStartedAt = Date.now();
-            if (!deliveryStarted) {
-              startE2ETraceSpan(e2eTraceContext, "delivery", { startedAt: egressStartedAt });
-              deliveryStarted = true;
-            }
-            startE2ETraceSpan(e2eTraceContext, "gateway_egress", { startedAt: egressStartedAt });
-            endE2ETraceSpan(e2eTraceContext, "gateway_egress");
-            endE2ETraceSpan(e2eTraceContext, "delivery");
-            const trace = await persistE2ETrace();
-            const traceText = formatE2ETraceForChat(trace);
-            if (traceAuthorizedForClient && traceText) {
-              await emitInjectedAssistantMessage(traceText, "E2E Trace");
-            }
           }
           setGatewayDedupeEntry({
             dedupe: context.dedupe,
@@ -2405,13 +2274,7 @@ export const chatHandlers: GatewayRequestHandlers = {
             },
           });
         })
-        .catch(async (err) => {
-          if (queueWaitStarted && !agentRunStarted) {
-            endE2ETraceSpan(e2eTraceContext, "queue_wait", {
-              status: "error",
-              attrs: { error: err instanceof Error ? err.name || "Error" : "error" },
-            });
-          }
+        .catch((err) => {
           void rewriteUserTranscriptMedia().catch((rewriteErr) => {
             context.logGateway.warn(
               `webchat transcript media rewrite failed after error: ${formatForLog(rewriteErr)}`,
@@ -2422,22 +2285,6 @@ export const chatHandlers: GatewayRequestHandlers = {
               `webchat user transcript update failed after error: ${formatForLog(transcriptErr)}`,
             );
           });
-          const egressStartedAt = Date.now();
-          if (!deliveryStarted) {
-            startE2ETraceSpan(e2eTraceContext, "delivery", { startedAt: egressStartedAt });
-            deliveryStarted = true;
-          }
-          startE2ETraceSpan(e2eTraceContext, "gateway_egress", { startedAt: egressStartedAt });
-          endE2ETraceSpan(e2eTraceContext, "gateway_egress", {
-            status: "error",
-            attrs: { error: err instanceof Error ? err.name || "Error" : "error" },
-          });
-          endE2ETraceSpan(e2eTraceContext, "delivery", {
-            status: "error",
-            attrs: { error: err instanceof Error ? err.name || "Error" : "error" },
-          });
-          const trace = await persistE2ETrace();
-          const traceText = formatE2ETraceForChat(trace);
           const error = errorShape(ErrorCodes.UNAVAILABLE, String(err));
           setGatewayDedupeEntry({
             dedupe: context.dedupe,
@@ -2457,7 +2304,7 @@ export const chatHandlers: GatewayRequestHandlers = {
             context,
             runId: clientRunId,
             sessionKey,
-            errorMessage: [String(err), traceText].filter(Boolean).join("\n\n"),
+            errorMessage: String(err),
           });
         })
         .finally(() => {

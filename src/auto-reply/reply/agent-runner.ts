@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { hasConfiguredModelFallbacks } from "../../agents/agent-scope.js";
+import { hasConfiguredModelFallbacks, resolveSessionAgentId } from "../../agents/agent-scope.js";
 import { resolveContextTokensForModel } from "../../agents/context.js";
 import { DEFAULT_CONTEXT_TOKENS } from "../../agents/defaults.js";
 import { resolveModelAuthMode } from "../../agents/model-auth.js";
@@ -17,7 +17,6 @@ import type { TypingMode } from "../../config/types.js";
 import { resolveSessionTranscriptCandidates } from "../../gateway/session-utils.fs.js";
 import { emitAgentEvent } from "../../infra/agent-events.js";
 import { emitDiagnosticEvent, isDiagnosticsEnabled } from "../../infra/diagnostic-events.js";
-import { endE2ETraceSpan, startE2ETraceSpan } from "../../infra/e2e-trace.js";
 import { enqueueSystemEvent } from "../../infra/system-events.js";
 import { CommandLaneClearedError, GatewayDrainingError } from "../../process/command-queue.js";
 import { normalizeOptionalString } from "../../shared/string-coerce.js";
@@ -184,12 +183,6 @@ type TraceToolSummaryView = {
   tools: string[];
   failures?: number;
   totalToolTimeMs?: number;
-  topSlowTools?: Array<{
-    name: string;
-    calls: number;
-    totalMs: number;
-    maxMs?: number;
-  }>;
 };
 
 type TraceCompletionView = {
@@ -203,18 +196,6 @@ type TraceContextManagementView = {
   lastTurnCompactions?: number;
   preflightCompactionApplied?: boolean;
   postCompactionContextInjected?: boolean;
-};
-
-type TraceTimingView = {
-  totalDurationMs: number;
-  toolDurationMs?: number;
-  nonToolDurationMs?: number;
-  topSlowTools?: Array<{
-    name: string;
-    calls: number;
-    totalMs: number;
-    maxMs?: number;
-  }>;
 };
 
 function formatTraceScalar(value: string | number | boolean | undefined): string | undefined {
@@ -495,115 +476,6 @@ function formatContextManagementTraceBlock(
     ["preflightCompactionApplied", contextManagement.preflightCompactionApplied],
     ["postCompactionContextInjected", contextManagement.postCompactionContextInjected],
   ]);
-}
-
-function formatTraceDurationMs(durationMs: number | undefined): string | undefined {
-  if (typeof durationMs !== "number" || !Number.isFinite(durationMs) || durationMs < 0) {
-    return undefined;
-  }
-  if (durationMs < 1_000) {
-    return `${Math.round(durationMs)}ms`;
-  }
-  if (durationMs < 10_000) {
-    return `${(durationMs / 1_000).toFixed(1)}s`;
-  }
-  return `${(durationMs / 1_000).toFixed(0)}s`;
-}
-
-function formatTraceDurationShare(params: {
-  partMs?: number;
-  totalMs?: number;
-}): string | undefined {
-  if (
-    typeof params.partMs !== "number" ||
-    !Number.isFinite(params.partMs) ||
-    params.partMs < 0 ||
-    typeof params.totalMs !== "number" ||
-    !Number.isFinite(params.totalMs) ||
-    params.totalMs <= 0
-  ) {
-    return undefined;
-  }
-  return `${Math.round((params.partMs / params.totalMs) * 100)}%`;
-}
-
-function buildInlineSlowTracePayload(params: {
-  entry: SessionEntry | undefined;
-  timingTrace?: TraceTimingView;
-  toolSummary?: TraceToolSummaryView;
-  executionTrace?: TraceExecutionView;
-  contextManagement?: TraceContextManagementView;
-  completion?: TraceCompletionView;
-}): ReplyPayload | undefined {
-  if (params.entry?.traceLevel !== "slow" || !params.timingTrace) {
-    return undefined;
-  }
-  const total = params.timingTrace.totalDurationMs;
-  const toolDurationMs =
-    typeof params.timingTrace.toolDurationMs === "number"
-      ? params.timingTrace.toolDurationMs
-      : params.toolSummary?.totalToolTimeMs;
-  const nonToolDurationMs =
-    typeof params.timingTrace.nonToolDurationMs === "number"
-      ? params.timingTrace.nonToolDurationMs
-      : typeof toolDurationMs === "number"
-        ? Math.max(0, total - toolDurationMs)
-        : undefined;
-  const topSlowTools = params.timingTrace.topSlowTools ?? params.toolSummary?.topSlowTools ?? [];
-  const toolLines = topSlowTools.map((tool, index) => {
-    const parts = [
-      `${index + 1}. ${tool.name}`,
-      `${formatTraceDurationMs(tool.totalMs) ?? `${tool.totalMs}ms`} total`,
-      `${tool.calls} call${tool.calls === 1 ? "" : "s"}`,
-    ];
-    const max = formatTraceDurationMs(tool.maxMs);
-    if (max) {
-      parts.push(`max ${max}`);
-    }
-    const share = formatTraceDurationShare({ partMs: tool.totalMs, totalMs: total });
-    if (share) {
-      parts.push(share);
-    }
-    return parts.join(" · ");
-  });
-  const lines = [
-    `total=${formatTraceDurationMs(total) ?? `${total}ms`}`,
-    (() => {
-      const toolTime = formatTraceDurationMs(toolDurationMs);
-      if (!toolTime) {
-        return undefined;
-      }
-      const share = formatTraceDurationShare({
-        partMs: toolDurationMs,
-        totalMs: total,
-      });
-      return `tools=${toolTime}${share ? ` (${share})` : ""}`;
-    })(),
-    (() => {
-      const nonToolTime = formatTraceDurationMs(nonToolDurationMs);
-      if (!nonToolTime) {
-        return undefined;
-      }
-      const share = formatTraceDurationShare({
-        partMs: nonToolDurationMs,
-        totalMs: total,
-      });
-      return `model+orchestration(inferred)=${nonToolTime}${share ? ` (${share})` : ""}`;
-    })(),
-    params.executionTrace?.fallbackUsed ? "fallback=yes" : undefined,
-    params.completion?.stopReason ? `stop=${params.completion.stopReason}` : undefined,
-    typeof params.contextManagement?.lastTurnCompactions === "number" &&
-    params.contextManagement.lastTurnCompactions > 0
-      ? `compactions=${params.contextManagement.lastTurnCompactions.toLocaleString()}`
-      : undefined,
-    ...(toolLines.length > 0 ? ["", "slowest tools:", ...toolLines] : []),
-  ].filter((value): value is string => typeof value === "string" && value.length > 0);
-  if (lines.length === 0) {
-    return undefined;
-  }
-  return {
-    text: `🔎 Slow Turn Breakdown:\n~~~text\n${lines.join("\n")}\n~~~`,
-  };
 }
 
 async function accumulateSessionUsageFromTranscript(params: {
@@ -901,7 +773,6 @@ function buildInlineRawTracePayload(params: {
   toolSummary?: TraceToolSummaryView;
   completion?: TraceCompletionView;
   contextManagement?: TraceContextManagementView;
-  timingTrace?: TraceTimingView;
 }): ReplyPayload | undefined {
   if (params.entry?.traceLevel !== "raw") {
     return undefined;
@@ -938,11 +809,6 @@ function buildInlineRawTracePayload(params: {
     formatToolSummaryTraceBlock(params.toolSummary),
     formatCompletionTraceBlock(params.completion),
     formatContextManagementTraceBlock(params.contextManagement),
-    formatKeyValueTraceBlock("Timing", [
-      ["totalDurationMs", params.timingTrace?.totalDurationMs],
-      ["toolDurationMs", params.timingTrace?.toolDurationMs],
-      ["nonToolDurationMs", params.timingTrace?.nonToolDurationMs],
-    ]),
   ].filter((value): value is string => Boolean(value));
   return {
     text: [
@@ -1147,7 +1013,12 @@ export async function runReplyAgent(params: {
     return undefined;
   }
 
-  followupRun.run.config = await resolveQueuedReplyExecutionConfig(followupRun.run.config);
+  followupRun.run.config = await resolveQueuedReplyExecutionConfig(followupRun.run.config, {
+    originatingChannel: sessionCtx.OriginatingChannel,
+    messageProvider: followupRun.run.messageProvider,
+    originatingAccountId: followupRun.originatingAccountId,
+    agentAccountId: followupRun.run.agentAccountId,
+  });
 
   const replyToChannel = resolveOriginMessageProvider({
     originatingChannel: sessionCtx.OriginatingChannel,
@@ -1165,6 +1036,15 @@ export async function runReplyAgent(params: {
     cfg,
     sessionKey,
     workspaceDir: followupRun.run.workspaceDir,
+    messageProvider: followupRun.run.messageProvider,
+    accountId: followupRun.originatingAccountId ?? followupRun.run.agentAccountId,
+    groupId: followupRun.run.groupId,
+    groupChannel: followupRun.run.groupChannel,
+    groupSpace: followupRun.run.groupSpace,
+    requesterSenderId: followupRun.run.senderId,
+    requesterSenderName: followupRun.run.senderName,
+    requesterSenderUsername: followupRun.run.senderUsername,
+    requesterSenderE164: followupRun.run.senderE164,
   });
   const blockReplyCoalescing =
     blockStreamingEnabled && opts?.onBlockReply
@@ -1589,7 +1469,6 @@ export async function runReplyAgent(params: {
     }
 
     // If verbose is enabled, prepend operational run notices.
-    startE2ETraceSpan(opts?.e2eTraceContext, "reply_render");
     let finalPayloads = guardedReplyPayloads;
     const verboseNotices: ReplyPayload[] = [];
 
@@ -1679,7 +1558,10 @@ export async function runReplyAgent(params: {
       // Inject post-compaction workspace context for the next agent turn
       if (sessionKey) {
         const workspaceDir = process.cwd();
-        readPostCompactionContext(workspaceDir, cfg)
+        readPostCompactionContext(workspaceDir, {
+          cfg,
+          agentId: resolveSessionAgentId({ sessionKey, config: cfg }),
+        })
           .then((contextContent) => {
             if (contextContent) {
               enqueueSystemEvent(contextContent, { sessionKey });
@@ -1755,7 +1637,6 @@ export async function runReplyAgent(params: {
               : {}),
           }
         : undefined);
-    const timingTrace = runResult.meta?.timingTrace as TraceTimingView | undefined;
     const contextManagement = {
       ...(typeof activeSessionEntry?.compactionCount === "number"
         ? { sessionCompactions: activeSessionEntry.compactionCount }
@@ -1791,9 +1672,7 @@ export async function runReplyAgent(params: {
         : undefined;
     const traceEnabledForSender =
       traceAuthorized &&
-      (activeSessionEntry?.traceLevel === "on" ||
-        activeSessionEntry?.traceLevel === "slow" ||
-        activeSessionEntry?.traceLevel === "raw");
+      (activeSessionEntry?.traceLevel === "on" || activeSessionEntry?.traceLevel === "raw");
     const shouldAppendTracePayload = verboseEnabled || traceEnabledForSender;
     let trailingPluginStatusPayload: ReplyPayload | undefined;
     if (shouldAppendTracePayload) {
@@ -1801,17 +1680,6 @@ export async function runReplyAgent(params: {
         entry: activeSessionEntry,
         includeTraceLines: traceEnabledForSender,
       });
-      const slowTracePayload =
-        traceAuthorized && activeSessionEntry?.traceLevel === "slow"
-          ? buildInlineSlowTracePayload({
-              entry: activeSessionEntry,
-              timingTrace,
-              toolSummary,
-              executionTrace,
-              contextManagement,
-              completion,
-            })
-          : undefined;
       const rawTracePayload =
         traceAuthorized && activeSessionEntry?.traceLevel === "raw"
           ? buildInlineRawTracePayload({
@@ -1831,17 +1699,12 @@ export async function runReplyAgent(params: {
               toolSummary,
               completion,
               contextManagement,
-              timingTrace,
             })
           : undefined;
-      const tracePayloadText = [
-        pluginStatusPayload?.text,
-        slowTracePayload?.text,
-        rawTracePayload?.text,
-      ]
-        .filter((value): value is string => Boolean(value))
-        .join("\n\n");
-      trailingPluginStatusPayload = tracePayloadText ? { text: tracePayloadText } : undefined;
+      trailingPluginStatusPayload =
+        pluginStatusPayload && rawTracePayload
+          ? { text: `${pluginStatusPayload.text}\n\n${rawTracePayload.text}` }
+          : (pluginStatusPayload ?? rawTracePayload);
     }
     if (prefixPayloads.length > 0) {
       finalPayloads = [...prefixPayloads, ...finalPayloads];
@@ -1853,17 +1716,12 @@ export async function runReplyAgent(params: {
       finalPayloads = appendUsageLine(finalPayloads, responseUsageLine);
     }
 
-    endE2ETraceSpan(opts?.e2eTraceContext, "reply_render");
     return finalizeWithFollowup(
       finalPayloads.length === 1 ? finalPayloads[0] : finalPayloads,
       queueKey,
       runFollowupTurn,
     );
   } catch (error) {
-    endE2ETraceSpan(opts?.e2eTraceContext, "reply_render", {
-      status: "error",
-      attrs: { error: error instanceof Error ? error.name || "Error" : "error" },
-    });
     if (
       replyOperation.result?.kind === "aborted" &&
       replyOperation.result.code === "aborted_for_restart"
