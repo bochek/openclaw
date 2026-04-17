@@ -12,7 +12,7 @@ import { resolveBuildRequirement } from "./run-node.mjs";
 const DEFAULTS = {
   outputDir: path.join(process.cwd(), ".local", "gateway-watch-regression"),
   windowMs: 10_000,
-  readyTimeoutMs: 20_000,
+  readyTimeoutMs: 5_000,
   readySettleMs: 500,
   sigkillGraceMs: 10_000,
   cpuWarnMs: 1_000,
@@ -33,6 +33,8 @@ const WATCH_GATEWAY_SKIP_ENV = {
   OPENCLAW_SKIP_CRON: "1",
   OPENCLAW_SKIP_GMAIL_WATCHER: "1",
 };
+
+const ANSI_ESCAPE_PATTERN = new RegExp(String.raw`\u001B\[[0-9;]*m`, "g");
 
 function parseArgs(argv) {
   const options = { ...DEFAULTS };
@@ -96,9 +98,50 @@ function normalizePath(filePath) {
   return filePath.replaceAll("\\", "/");
 }
 
-function listTreeEntries(rootName) {
-  const rootPath = path.join(process.cwd(), rootName);
-  if (!fs.existsSync(rootPath)) {
+function isMissingPathError(error) {
+  return (
+    Boolean(error) &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error.code === "ENOENT" || error.code === "ENOTDIR")
+  );
+}
+
+function safeReaddirSync(fsImpl, dirPath) {
+  try {
+    return fsImpl.readdirSync(dirPath, { withFileTypes: true });
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return [];
+    }
+    throw error;
+  }
+}
+
+function safeLstatSync(fsImpl, filePath) {
+  try {
+    return fsImpl.lstatSync(filePath);
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export function stripAnsi(text) {
+  return String(text ?? "").replaceAll(ANSI_ESCAPE_PATTERN, "");
+}
+
+export function hasGatewayReadyLog(text) {
+  return stripAnsi(text).includes("[gateway] ready (");
+}
+
+export function listTreeEntries(rootName, params = {}) {
+  const fsImpl = params.fs ?? fs;
+  const cwd = params.cwd ?? process.cwd();
+  const rootPath = path.join(cwd, rootName);
+  if (!fsImpl.existsSync(rootPath)) {
     return [`${rootName} (missing)`];
   }
 
@@ -109,10 +152,10 @@ function listTreeEntries(rootName) {
     if (!current) {
       continue;
     }
-    const dirents = fs.readdirSync(current, { withFileTypes: true });
+    const dirents = safeReaddirSync(fsImpl, current);
     for (const dirent of dirents) {
       const fullPath = path.join(current, dirent.name);
-      const relativePath = normalizePath(path.relative(process.cwd(), fullPath));
+      const relativePath = normalizePath(path.relative(cwd, fullPath));
       entries.push(relativePath);
       if (dirent.isDirectory()) {
         queue.push(fullPath);
@@ -135,10 +178,12 @@ function humanBytes(bytes) {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)}G`;
 }
 
-function snapshotTree(rootName) {
-  const rootPath = path.join(process.cwd(), rootName);
+export function snapshotTree(rootName, params = {}) {
+  const fsImpl = params.fs ?? fs;
+  const cwd = params.cwd ?? process.cwd();
+  const rootPath = path.join(cwd, rootName);
   const stats = {
-    exists: fs.existsSync(rootPath),
+    exists: fsImpl.existsSync(rootPath),
     files: 0,
     directories: 0,
     symlinks: 0,
@@ -156,11 +201,14 @@ function snapshotTree(rootName) {
     if (!current) {
       continue;
     }
-    const currentStats = fs.lstatSync(current);
+    const currentStats = safeLstatSync(fsImpl, current);
+    if (!currentStats) {
+      continue;
+    }
     stats.entries += 1;
     if (currentStats.isDirectory()) {
       stats.directories += 1;
-      for (const dirent of fs.readdirSync(current, { withFileTypes: true })) {
+      for (const dirent of safeReaddirSync(fsImpl, current)) {
         queue.push(path.join(current, dirent.name));
       }
       continue;
@@ -310,15 +358,33 @@ function readProcessTreeCpuMs(rootPid) {
   return totalCpuMs;
 }
 
-async function waitForGatewayReady(readText, timeoutMs) {
+async function isLoopbackPortReady(port) {
+  return await new Promise((resolve) => {
+    const socket = net.createConnection({ host: "127.0.0.1", port });
+    const finish = (ready) => {
+      socket.removeAllListeners();
+      socket.destroy();
+      resolve(ready);
+    };
+    socket.once("connect", () => finish(true));
+    socket.once("error", () => finish(false));
+  });
+}
+
+async function waitForGatewayReady(readText, port, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (/\[gateway\] ready \(/.test(readText())) {
+  while (true) {
+    if (hasGatewayReadyLog(readText())) {
       return true;
+    }
+    if (await isLoopbackPortReady(port)) {
+      return true;
+    }
+    if (Date.now() >= deadline) {
+      return false;
     }
     await sleep(100);
   }
-  return false;
 }
 
 async function allocateLoopbackPort() {
@@ -449,6 +515,7 @@ async function runTimedWatch(options, outputDir) {
 
   const readyBeforeWindow = await waitForGatewayReady(
     () => `${stdout}\n${stderr}`,
+    port,
     options.readyTimeoutMs,
   );
   if (readyBeforeWindow && options.readySettleMs > 0) {
@@ -559,11 +626,13 @@ function buildRunNodeDeps(env) {
   };
 }
 
-async function main() {
+export async function main() {
   const options = parseArgs(process.argv.slice(2));
   ensureDir(options.outputDir);
   if (!options.skipBuild) {
-    runCheckedCommand("pnpm", ["build"]);
+    // This regression only needs runtime dist artifacts; plugin-sdk d.ts output
+    // adds CI time without affecting watch startup behavior.
+    runCheckedCommand("pnpm", ["build:ci-artifacts"]);
     // The watch harness must start from a completed-build baseline. Refresh
     // the build stamp after the full build pipeline finishes so run-node does
     // not spuriously rebuild inside the bounded watch window.
@@ -697,4 +766,6 @@ async function main() {
   process.exit(0);
 }
 
-await main();
+if (import.meta.main) {
+  await main();
+}
