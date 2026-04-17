@@ -171,10 +171,19 @@ export function resolveRunnerMatrix(params) {
         ...runner,
         suite,
         suite_label: formatSuiteLabel(suite),
-        lane: suite.includes("upgrade") || suite === "dev-update" ? "upgrade" : "fresh",
       })),
     ),
   };
+}
+
+export function resolveExecutionModeForSuite(suite) {
+  if (suite === "packaged-fresh" || suite === "installer-fresh") {
+    return "fresh";
+  }
+  if (suite === "packaged-upgrade" || suite === "dev-update") {
+    return "upgrade";
+  }
+  throw new Error(`Unsupported suite "${suite}" for execution mode resolution.`);
 }
 
 export function readRunnerOverrideEnv(env = process.env) {
@@ -243,7 +252,7 @@ async function main(argv) {
   const sourceDir = args["source-dir"]?.trim() ? resolve(args["source-dir"].trim()) : "";
   const provider = args["provider"]?.trim() || "";
   const suite = args["suite"]?.trim() || "";
-  const mode = args["mode"] ?? "both";
+  const mode = args["mode"]?.trim() || (suite ? resolveExecutionModeForSuite(suite) : "both");
   const inputRef = args["ref"]?.trim() || "";
   const previousVersion = args["previous-version"]?.trim() || "";
   const baselineSpec =

@@ -19,6 +19,7 @@ import {
   packageHasScript,
   readInstalledVersion,
   readRunnerOverrideEnv,
+  resolveExecutionModeForSuite,
   resolveExplicitBaselineVersion,
   resolveDevUpdateVerificationRef,
   resolveInstalledPrefixDirFromCliPath,
@@ -121,16 +122,21 @@ describe("scripts/openclaw-cross-os-release-checks", () => {
         os_id: "windows",
         runner: "blacksmith-32vcpu-windows-2025",
         suite: "dev-update",
-        lane: "upgrade",
       }),
     );
     expect(matrix.include).toContainEqual(
       expect.objectContaining({
         os_id: "ubuntu",
         suite: "installer-fresh",
-        lane: "fresh",
       }),
     );
+  });
+
+  it("derives the execution mode from the selected suite", () => {
+    expect(resolveExecutionModeForSuite("packaged-fresh")).toBe("fresh");
+    expect(resolveExecutionModeForSuite("installer-fresh")).toBe("fresh");
+    expect(resolveExecutionModeForSuite("packaged-upgrade")).toBe("upgrade");
+    expect(resolveExecutionModeForSuite("dev-update")).toBe("upgrade");
   });
 
   it("can rebuild the Windows PATH with or without current-process entries", () => {
