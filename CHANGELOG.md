@@ -11,6 +11,7 @@ Docs: https://docs.openclaw.ai
 
 ### Fixes
 
+- Agents/bootstrap: resolve bootstrap from workspace truth instead of stale session transcript markers, keep embedded bootstrap instructions on the hidden user-context path, suppress normal `/new` and `/reset` greetings while `BOOTSTRAP.md` is still pending, and make the embedded runner read the bootstrap ritual before replying normally.
 - Agents/skills: sort prompt-facing `available_skills` entries by skill name after merging sources so `skills.load.extraDirs` order no longer changes prompt-cache prefixes. (#64198) Thanks @Bartok9.
 - Agents/context + Memory: trim default startup/skills prompt budgets, cap `memory_get` excerpts by default with explicit continuation metadata, and keep QMD reads aligned with the same bounded excerpt contract so long sessions pull less context by default without losing deterministic follow-up reads.
 - BlueBubbles/inbound: restore inbound image attachment downloads on Node 22+ by stripping incompatible bundled-undici dispatchers from the non-SSRF fetch path, accept `updated-message` webhooks carrying attachments, use event-type-aware dedup keys so attachment follow-ups are not rejected as duplicates, and retry attachment fetch from the BB API when the initial webhook arrives with an empty array. (#64105, #61861, #65430, #67510) Thanks @omarshahine.
