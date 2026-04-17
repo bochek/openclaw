@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   hasGatewayReadyLog,
   listTreeEntries,
+  resolveReadyObservation,
   snapshotTree,
   stripAnsi,
 } from "../../scripts/check-gateway-watch-regression.mjs";
@@ -22,6 +23,16 @@ describe("check-gateway-watch-regression", () => {
 
     expect(stripAnsi(line)).toContain("[gateway] ready (5 plugins: acpx; 1.8s)");
     expect(hasGatewayReadyLog(line)).toBe(true);
+  });
+
+  it("treats a buffered ready log as a successful ready observation", () => {
+    expect(
+      resolveReadyObservation(
+        false,
+        "2026-04-17T10:34:39.684-07:00 [gateway] ready (5 plugins: acpx; 3.9s)\n",
+        "",
+      ),
+    ).toBe(true);
   });
 
   it("keeps missing trees explicit in snapshot path listings", () => {

@@ -137,6 +137,10 @@ export function hasGatewayReadyLog(text) {
   return stripAnsi(text).includes("[gateway] ready (");
 }
 
+export function resolveReadyObservation(readyBeforeWindow, stdout, stderr) {
+  return readyBeforeWindow || hasGatewayReadyLog(stdout) || hasGatewayReadyLog(stderr);
+}
+
 export function listTreeEntries(rootName, params = {}) {
   const fsImpl = params.fs ?? fs;
   const cwd = params.cwd ?? process.cwd();
@@ -358,26 +362,10 @@ function readProcessTreeCpuMs(rootPid) {
   return totalCpuMs;
 }
 
-async function isLoopbackPortReady(port) {
-  return await new Promise((resolve) => {
-    const socket = net.createConnection({ host: "127.0.0.1", port });
-    const finish = (ready) => {
-      socket.removeAllListeners();
-      socket.destroy();
-      resolve(ready);
-    };
-    socket.once("connect", () => finish(true));
-    socket.once("error", () => finish(false));
-  });
-}
-
-async function waitForGatewayReady(readText, port, timeoutMs) {
+async function waitForGatewayReady(readText, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (true) {
     if (hasGatewayReadyLog(readText())) {
-      return true;
-    }
-    if (await isLoopbackPortReady(port)) {
       return true;
     }
     if (Date.now() >= deadline) {
@@ -501,7 +489,7 @@ async function runTimedWatch(options, outputDir) {
   });
 
   const exitPromise = new Promise((resolve) => {
-    child.on("exit", (code, signal) => resolve({ code, signal }));
+    child.on("close", (code, signal) => resolve({ code, signal }));
   });
 
   let watchPid = null;
@@ -513,9 +501,8 @@ async function runTimedWatch(options, outputDir) {
     await sleep(100);
   }
 
-  const readyBeforeWindow = await waitForGatewayReady(
+  let readyBeforeWindow = await waitForGatewayReady(
     () => `${stdout}\n${stderr}`,
-    port,
     options.readyTimeoutMs,
   );
   if (readyBeforeWindow && options.readySettleMs > 0) {
@@ -549,6 +536,7 @@ async function runTimedWatch(options, outputDir) {
   }
 
   const exit = (await exitPromise) ?? { code: null, signal: null };
+  readyBeforeWindow = resolveReadyObservation(readyBeforeWindow, stdout, stderr);
   fs.writeFileSync(stdoutPath, stdout, "utf8");
   fs.writeFileSync(stderrPath, stderr, "utf8");
   const timing = fs.existsSync(timeFilePath)
