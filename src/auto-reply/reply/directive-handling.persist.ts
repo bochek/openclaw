@@ -108,6 +108,14 @@ export async function persistInlineDirectives(params: {
       updated = true;
     }
     if (
+      directives.hasE2ETraceDirective &&
+      directives.e2eTraceMode &&
+      (params.senderIsOwner || delegatedTraceAllowed)
+    ) {
+      sessionEntry.e2eTraceMode = directives.e2eTraceMode;
+      updated = true;
+    }
+    if (
       directives.hasTraceDirective &&
       directives.traceLevel &&
       (params.senderIsOwner || delegatedTraceAllowed)

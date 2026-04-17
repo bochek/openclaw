@@ -79,12 +79,14 @@ export function buildSystemPromptReport(params: {
   bootstrapTruncation?: SessionSystemPromptReport["bootstrapTruncation"];
   sandbox?: SessionSystemPromptReport["sandbox"];
   systemPrompt: string;
+  developerPrompt?: string;
   bootstrapFiles: WorkspaceBootstrapFile[];
   injectedFiles: EmbeddedContextFile[];
   skillsPrompt: string;
   tools: AgentTool[];
 }): SessionSystemPromptReport {
   const systemPrompt = params.systemPrompt.trim();
+  const developerPrompt = params.developerPrompt?.trim() ?? "";
   const projectContext = extractBetween(
     systemPrompt,
     "\n# Project Context\n",
@@ -112,6 +114,14 @@ export function buildSystemPromptReport(params: {
       projectContextChars,
       nonProjectContextChars: Math.max(0, systemPrompt.length - projectContextChars),
     },
+    ...(developerPrompt
+      ? {
+          developerPrompt: {
+            chars: developerPrompt.length,
+            projectContextChars: developerPrompt.length,
+          },
+        }
+      : {}),
     injectedWorkspaceFiles: buildBootstrapInjectionStats({
       bootstrapFiles: params.bootstrapFiles,
       injectedFiles: params.injectedFiles,

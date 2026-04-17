@@ -4,6 +4,7 @@ import { addStaticTestHooks } from "./hooks.test-helpers.js";
 import { createEmptyPluginRegistry, type PluginRegistry } from "./registry.js";
 import type {
   PluginHookBeforeModelResolveResult,
+  PluginHookBeforePromptChannelsResult,
   PluginHookBeforePromptBuildResult,
 } from "./types.js";
 
@@ -15,10 +16,13 @@ describe("phase hooks merger", () => {
   });
 
   async function runPhaseHook(params: {
-    hookName: "before_model_resolve" | "before_prompt_build";
+    hookName: "before_model_resolve" | "before_prompt_channels" | "before_prompt_build";
     hooks: ReadonlyArray<{
       pluginId: string;
-      result: PluginHookBeforeModelResolveResult | PluginHookBeforePromptBuildResult;
+      result:
+        | PluginHookBeforeModelResolveResult
+        | PluginHookBeforePromptChannelsResult
+        | PluginHookBeforePromptBuildResult;
       priority?: number;
     }>;
   }) {
@@ -30,14 +34,29 @@ describe("phase hooks merger", () => {
     if (params.hookName === "before_model_resolve") {
       return await runner.runBeforeModelResolve({ prompt: "test" }, {});
     }
+    if (params.hookName === "before_prompt_channels") {
+      return await runner.runBeforePromptChannels(
+        {
+          prompt: "test",
+          promptMode: "full",
+          contextFiles: [],
+          toolNames: [],
+          includeMemorySection: true,
+        },
+        {},
+      );
+    }
     return await runner.runBeforePromptBuild({ prompt: "test", messages: [] }, {});
   }
 
   async function expectPhaseHookMerge(params: {
-    hookName: "before_model_resolve" | "before_prompt_build";
+    hookName: "before_model_resolve" | "before_prompt_channels" | "before_prompt_build";
     hooks: ReadonlyArray<{
       pluginId: string;
-      result: PluginHookBeforeModelResolveResult | PluginHookBeforePromptBuildResult;
+      result:
+        | PluginHookBeforeModelResolveResult
+        | PluginHookBeforePromptChannelsResult
+        | PluginHookBeforePromptBuildResult;
       priority?: number;
     }>;
     expected: Record<string, unknown>;
@@ -64,6 +83,49 @@ describe("phase hooks merger", () => {
       expected: {
         modelOverride: "demo-high-priority-model",
         providerOverride: "demo-provider",
+      },
+    },
+    {
+      name: "before_prompt_channels concatenates additions and preserves first route winner",
+      hookName: "before_prompt_channels" as const,
+      hooks: [
+        {
+          pluginId: "high",
+          result: {
+            systemAdditions: "system A",
+            developerAdditions: "developer A",
+            userAdditions: "user A",
+            memorySectionTarget: "user",
+            contextFileRoutes: {
+              "AGENTS.md": "developer",
+            },
+          },
+          priority: 10,
+        },
+        {
+          pluginId: "low",
+          result: {
+            systemAdditions: "system B",
+            developerAdditions: "developer B",
+            userAdditions: "user B",
+            memorySectionTarget: "system",
+            contextFileRoutes: {
+              "AGENTS.md": "user",
+              "MEMORY.md": "user",
+            },
+          },
+          priority: 1,
+        },
+      ],
+      expected: {
+        systemAdditions: "system A\n\nsystem B",
+        developerAdditions: "developer A\n\ndeveloper B",
+        userAdditions: "user A\n\nuser B",
+        memorySectionTarget: "user",
+        contextFileRoutes: {
+          "AGENTS.md": "developer",
+          "MEMORY.md": "user",
+        },
       },
     },
     {

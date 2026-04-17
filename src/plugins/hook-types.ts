@@ -16,6 +16,8 @@ import type {
   PluginHookBeforeAgentStartResult,
   PluginHookBeforeModelResolveEvent,
   PluginHookBeforeModelResolveResult,
+  PluginHookBeforePromptChannelsEvent,
+  PluginHookBeforePromptChannelsResult,
   PluginHookBeforePromptBuildEvent,
   PluginHookBeforePromptBuildResult,
 } from "./hook-before-agent-start.types.js";
@@ -35,6 +37,8 @@ export type {
   PluginHookBeforeAgentStartResult,
   PluginHookBeforeModelResolveEvent,
   PluginHookBeforeModelResolveResult,
+  PluginHookBeforePromptChannelsEvent,
+  PluginHookBeforePromptChannelsResult,
   PluginHookBeforePromptBuildEvent,
   PluginHookBeforePromptBuildResult,
 } from "./hook-before-agent-start.types.js";
@@ -54,6 +58,7 @@ export type {
 
 export type PluginHookName =
   | "before_model_resolve"
+  | "before_prompt_channels"
   | "before_prompt_build"
   | "before_agent_start"
   | "before_agent_reply"
@@ -85,6 +90,7 @@ export type PluginHookName =
 
 export const PLUGIN_HOOK_NAMES = [
   "before_model_resolve",
+  "before_prompt_channels",
   "before_prompt_build",
   "before_agent_start",
   "before_agent_reply",
@@ -126,6 +132,7 @@ export const isPluginHookName = (hookName: unknown): hookName is PluginHookName 
   typeof hookName === "string" && pluginHookNameSet.has(hookName as PluginHookName);
 
 export const PROMPT_INJECTION_HOOK_NAMES = [
+  "before_prompt_channels",
   "before_prompt_build",
   "before_agent_start",
 ] as const satisfies readonly PluginHookName[];
@@ -572,6 +579,13 @@ export type PluginHookHandlerMap = {
   ) =>
     | Promise<PluginHookBeforeModelResolveResult | void>
     | PluginHookBeforeModelResolveResult
+    | void;
+  before_prompt_channels: (
+    event: PluginHookBeforePromptChannelsEvent,
+    ctx: PluginHookAgentContext,
+  ) =>
+    | Promise<PluginHookBeforePromptChannelsResult | void>
+    | PluginHookBeforePromptChannelsResult
     | void;
   before_prompt_build: (
     event: PluginHookBeforePromptBuildEvent,

@@ -1,4 +1,5 @@
 import type { CliSessionBinding, SessionSystemPromptReport } from "../../config/sessions/types.js";
+import type { E2ETrace } from "../../infra/e2e-trace.js";
 import type { MessagingToolSend } from "../pi-embedded-messaging.types.js";
 
 export type EmbeddedPiAgentMeta = {
@@ -77,6 +78,12 @@ export type ToolSummaryTrace = {
   tools: string[];
   failures?: number;
   totalToolTimeMs?: number;
+  topSlowTools?: Array<{
+    name: string;
+    calls: number;
+    totalMs: number;
+    maxMs?: number;
+  }>;
 };
 
 export type CompletionTrace = {
@@ -92,6 +99,18 @@ export type ContextManagementTrace = {
   postCompactionContextInjected?: boolean;
 };
 
+export type TurnTimingTrace = {
+  totalDurationMs: number;
+  toolDurationMs?: number;
+  nonToolDurationMs?: number;
+  topSlowTools?: Array<{
+    name: string;
+    calls: number;
+    totalMs: number;
+    maxMs?: number;
+  }>;
+};
+
 export type EmbeddedRunLivenessState = "working" | "paused" | "blocked" | "abandoned";
 
 export type EmbeddedPiRunMeta = {
@@ -99,6 +118,8 @@ export type EmbeddedPiRunMeta = {
   agentMeta?: EmbeddedPiAgentMeta;
   aborted?: boolean;
   systemPromptReport?: SessionSystemPromptReport;
+  systemPromptText?: string;
+  developerPromptText?: string;
   finalPromptText?: string;
   finalAssistantVisibleText?: string;
   finalAssistantRawText?: string;
@@ -127,6 +148,8 @@ export type EmbeddedPiRunMeta = {
   toolSummary?: ToolSummaryTrace;
   completion?: CompletionTrace;
   contextManagement?: ContextManagementTrace;
+  timingTrace?: TurnTimingTrace;
+  e2eTrace?: E2ETrace;
 };
 
 export type EmbeddedPiRunResult = {

@@ -1,3 +1,8 @@
+import type {
+  PromptChannelRoutingEvent,
+  PromptChannelRoutingResult,
+} from "../agents/prompt-channels.types.js";
+
 // before_model_resolve hook
 export type PluginHookBeforeModelResolveEvent = {
   /** User prompt for this run. No session messages are available yet in this phase. */
@@ -10,6 +15,11 @@ export type PluginHookBeforeModelResolveResult = {
   /** Override the provider for this agent run. E.g. "ollama" */
   providerOverride?: string;
 };
+
+// before_prompt_channels hook
+export type PluginHookBeforePromptChannelsEvent = PromptChannelRoutingEvent;
+
+export type PluginHookBeforePromptChannelsResult = PromptChannelRoutingResult;
 
 // before_prompt_build hook
 export type PluginHookBeforePromptBuildEvent = {
