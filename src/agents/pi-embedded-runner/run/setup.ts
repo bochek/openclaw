@@ -1,12 +1,12 @@
 import type { OpenClawConfig } from "../../../config/types.openclaw.js";
+import type { E2ETraceCollector } from "../../../infra/e2e-trace.js";
+import { startE2ETraceSpan } from "../../../infra/e2e-trace.js";
 import type { ProviderRuntimeModel } from "../../../plugins/provider-runtime-model.types.js";
 import type { PluginHookBeforeAgentStartResult } from "../../../plugins/types.js";
 import {
   CONTEXT_WINDOW_HARD_MIN_TOKENS,
   CONTEXT_WINDOW_WARN_BELOW_TOKENS,
   evaluateContextWindowGuard,
-  formatContextWindowBlockMessage,
-  formatContextWindowWarningMessage,
   resolveContextWindowInfo,
   type ContextWindowInfo,
 } from "../../context-window-guard.js";
@@ -43,6 +43,7 @@ export async function resolveHookModelSelection(params: {
   modelId: string;
   hookRunner?: HookRunnerLike | null;
   hookContext: HookContext;
+  e2eTraceContext?: E2ETraceCollector;
 }) {
   let provider = params.provider;
   let modelId = params.modelId;
@@ -55,6 +56,9 @@ export async function resolveHookModelSelection(params: {
   //
   // Legacy compatibility: before_agent_start is also checked for override
   // fields if present. New hook takes precedence when both are set.
+  if (hookRunner?.hasHooks("before_model_resolve") || hookRunner?.hasHooks("before_agent_start")) {
+    startE2ETraceSpan(params.e2eTraceContext, "pre_turn_hooks");
+  }
   if (hookRunner?.hasHooks("before_model_resolve")) {
     try {
       modelResolveOverride = await hookRunner.runBeforeModelResolve(
@@ -128,33 +132,19 @@ export function resolveEffectiveRuntimeModel(params: {
     warnBelowTokens: CONTEXT_WINDOW_WARN_BELOW_TOKENS,
     hardMinTokens: CONTEXT_WINDOW_HARD_MIN_TOKENS,
   });
-  const runtimeBaseUrl =
-    typeof (params.runtimeModel as { baseUrl?: unknown }).baseUrl === "string"
-      ? (params.runtimeModel as { baseUrl: string }).baseUrl
-      : undefined;
   if (ctxGuard.shouldWarn) {
     log.warn(
-      formatContextWindowWarningMessage({
-        provider: params.provider,
-        modelId: params.modelId,
-        guard: ctxGuard,
-        runtimeBaseUrl,
-      }),
+      `low context window: ${params.provider}/${params.modelId} ctx=${ctxGuard.tokens} (warn<${CONTEXT_WINDOW_WARN_BELOW_TOKENS}) source=${ctxGuard.source}`,
     );
   }
   if (ctxGuard.shouldBlock) {
-    const message = formatContextWindowBlockMessage({
-      guard: ctxGuard,
-      runtimeBaseUrl,
-    });
     log.error(
-      `blocked model (context window too small): ${params.provider}/${params.modelId} ctx=${ctxGuard.tokens} (min=${CONTEXT_WINDOW_HARD_MIN_TOKENS}) source=${ctxGuard.source}; ${message}`,
+      `blocked model (context window too small): ${params.provider}/${params.modelId} ctx=${ctxGuard.tokens} (min=${CONTEXT_WINDOW_HARD_MIN_TOKENS}) source=${ctxGuard.source}`,
     );
-    throw new FailoverError(message, {
-      reason: "unknown",
-      provider: params.provider,
-      model: params.modelId,
-    });
+    throw new FailoverError(
+      `Model context window too small (${ctxGuard.tokens} tokens). Minimum is ${CONTEXT_WINDOW_HARD_MIN_TOKENS}.`,
+      { reason: "unknown", provider: params.provider, model: params.modelId },
+    );
   }
 
   return {

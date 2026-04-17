@@ -3,8 +3,13 @@ import type { AgentSession } from "@mariozechner/pi-coding-agent";
 import type { MemoryCitationsMode } from "../../config/types.memory.js";
 import type { ResolvedTimeFormat } from "../date-time.js";
 import type { EmbeddedContextFile } from "../pi-embedded-helpers.js";
+import type { PromptChannelRoutingResult } from "../prompt-channels.types.js";
 import type { ProviderSystemPromptContribution } from "../system-prompt-contribution.js";
-import { buildAgentSystemPrompt } from "../system-prompt.js";
+import {
+  buildAgentPromptChannels,
+  buildAgentSystemPrompt,
+  buildAgentUserPromptPrefix,
+} from "../system-prompt.js";
 import type { PromptMode } from "../system-prompt.types.js";
 import type { EmbeddedSandboxInfo } from "./types.js";
 import type { ReasoningLevel, ThinkLevel } from "./utils.js";
@@ -56,6 +61,7 @@ export function buildEmbeddedSystemPrompt(params: {
   includeMemorySection?: boolean;
   memoryCitationsMode?: MemoryCitationsMode;
   promptContribution?: ProviderSystemPromptContribution;
+  routing?: PromptChannelRoutingResult;
 }): string {
   return buildAgentSystemPrompt({
     workspaceDir: params.workspaceDir,
@@ -86,8 +92,90 @@ export function buildEmbeddedSystemPrompt(params: {
     includeMemorySection: params.includeMemorySection,
     memoryCitationsMode: params.memoryCitationsMode,
     promptContribution: params.promptContribution,
+    routing: params.routing,
   });
 }
+
+export function buildEmbeddedPromptChannels(params: {
+  workspaceDir: string;
+  defaultThinkLevel?: ThinkLevel;
+  reasoningLevel?: ReasoningLevel;
+  extraSystemPrompt?: string;
+  ownerNumbers?: string[];
+  ownerDisplay?: "raw" | "hash";
+  ownerDisplaySecret?: string;
+  reasoningTagHint: boolean;
+  heartbeatPrompt?: string;
+  skillsPrompt?: string;
+  docsPath?: string;
+  ttsHint?: string;
+  reactionGuidance?: {
+    level: "minimal" | "extensive";
+    channel: string;
+  };
+  workspaceNotes?: string[];
+  promptMode?: PromptMode;
+  acpEnabled?: boolean;
+  runtimeInfo: {
+    agentId?: string;
+    host: string;
+    os: string;
+    arch: string;
+    node: string;
+    model: string;
+    provider?: string;
+    capabilities?: string[];
+    channel?: string;
+    channelActions?: string[];
+    canvasRootDir?: string;
+  };
+  messageToolHints?: string[];
+  sandboxInfo?: EmbeddedSandboxInfo;
+  tools: AgentTool[];
+  modelAliasLines: string[];
+  userTimezone: string;
+  userTime?: string;
+  userTimeFormat?: ResolvedTimeFormat;
+  contextFiles?: EmbeddedContextFile[];
+  includeMemorySection?: boolean;
+  memoryCitationsMode?: MemoryCitationsMode;
+  promptContribution?: ProviderSystemPromptContribution;
+  routing?: PromptChannelRoutingResult;
+}): { systemPrompt: string; developerPrompt?: string } {
+  return buildAgentPromptChannels({
+    workspaceDir: params.workspaceDir,
+    defaultThinkLevel: params.defaultThinkLevel,
+    reasoningLevel: params.reasoningLevel,
+    extraSystemPrompt: params.extraSystemPrompt,
+    ownerNumbers: params.ownerNumbers,
+    ownerDisplay: params.ownerDisplay,
+    ownerDisplaySecret: params.ownerDisplaySecret,
+    reasoningTagHint: params.reasoningTagHint,
+    heartbeatPrompt: params.heartbeatPrompt,
+    skillsPrompt: params.skillsPrompt,
+    docsPath: params.docsPath,
+    ttsHint: params.ttsHint,
+    workspaceNotes: params.workspaceNotes,
+    reactionGuidance: params.reactionGuidance,
+    promptMode: params.promptMode,
+    acpEnabled: params.acpEnabled,
+    runtimeInfo: params.runtimeInfo,
+    messageToolHints: params.messageToolHints,
+    sandboxInfo: params.sandboxInfo,
+    toolNames: params.tools.map((tool) => tool.name),
+    modelAliasLines: params.modelAliasLines,
+    userTimezone: params.userTimezone,
+    userTime: params.userTime,
+    userTimeFormat: params.userTimeFormat,
+    contextFiles: params.contextFiles,
+    includeMemorySection: params.includeMemorySection,
+    memoryCitationsMode: params.memoryCitationsMode,
+    promptContribution: params.promptContribution,
+    routing: params.routing,
+  });
+}
+
+export { buildAgentUserPromptPrefix, buildAgentUserPromptPrefix as buildEmbeddedUserPromptPrefix };
 
 export function createSystemPromptOverride(
   systemPrompt: string,

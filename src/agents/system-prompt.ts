@@ -1,6 +1,5 @@
 import { createHmac, createHash } from "node:crypto";
 import type { ReasoningLevel, ThinkLevel } from "../auto-reply/thinking.js";
-import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { resolveChannelApprovalCapability } from "../channels/plugins/approvals.js";
 import { getChannelPlugin } from "../channels/plugins/index.js";
 import type { MemoryCitationsMode } from "../config/types.memory.js";
@@ -20,6 +19,7 @@ import {
   normalizePromptCapabilityIds,
   normalizeStructuredPromptSection,
 } from "./prompt-cache-stability.js";
+import type { PromptChannelRoutingResult, PromptChannelTarget } from "./prompt-channels.types.js";
 import { sanitizeForPromptLiteral } from "./sanitize-for-prompt.js";
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from "./system-prompt-cache-boundary.js";
 import type {
@@ -119,6 +119,77 @@ function buildProjectContextSection(params: {
   return lines;
 }
 
+function buildDeveloperContextSection(files: EmbeddedContextFile[]) {
+  if (files.length === 0) {
+    return [];
+  }
+  return [
+    "# Developer Context",
+    "",
+    "The following developer-role context files have been loaded:",
+    "",
+    ...files.flatMap((file) => [
+      `## ${file.path}`,
+      "",
+      sanitizeContextFileContentForPrompt(file.content),
+      "",
+    ]),
+  ];
+}
+
+function buildUserContextSection(files: EmbeddedContextFile[]) {
+  if (files.length === 0) {
+    return [];
+  }
+  return [
+    "# User Context",
+    "",
+    "The following user-role context files have been loaded:",
+    "",
+    ...files.flatMap((file) => [
+      `## ${file.path}`,
+      "",
+      sanitizeContextFileContentForPrompt(file.content),
+      "",
+    ]),
+  ];
+}
+
+function normalizeContextFileRoutes(
+  routes?: Record<string, PromptChannelTarget>,
+): Record<string, PromptChannelTarget> {
+  const normalized: Record<string, PromptChannelTarget> = {};
+  for (const [pathKey, target] of Object.entries(routes ?? {})) {
+    const normalizedPath = normalizeContextFilePath(pathKey);
+    if (!normalizedPath) {
+      continue;
+    }
+    normalized[normalizedPath] = target;
+  }
+  return normalized;
+}
+
+function splitPromptAdditionLines(value?: string): string[] {
+  const trimmed = value?.trim();
+  return trimmed ? [trimmed, ""] : [];
+}
+
+function mergePrivilegedPromptChannels(systemPrompt: string, developerPrompt?: string): string {
+  const system = systemPrompt.trim();
+  const developer = developerPrompt?.trim();
+  if (!developer) {
+    return system;
+  }
+  if (!system) {
+    return developer;
+  }
+  return `${system}\n\n${developer}`;
+}
+
+function buildAgentIdentityLine(_runtimeModel?: string): string {
+  return "You are a personal assistant running inside OpenClaw.";
+}
+
 function buildHeartbeatSection(params: { isMinimal: boolean; heartbeatPrompt?: string }) {
   if (params.isMinimal || !params.heartbeatPrompt) {
     return [];
@@ -179,6 +250,43 @@ function buildMemorySection(params: {
     availableTools: params.availableTools,
     citationsMode: params.citationsMode,
   });
+}
+
+export function buildAgentUserPromptPrefix(params: {
+  promptMode?: PromptMode;
+  includeMemorySection?: boolean;
+  toolNames?: string[];
+  memoryCitationsMode?: MemoryCitationsMode;
+  contextFiles?: EmbeddedContextFile[];
+  routing?: PromptChannelRoutingResult;
+}): string | undefined {
+  const promptMode = params.promptMode ?? "full";
+  const isMinimal = promptMode === "minimal" || promptMode === "none";
+  const availableTools = new Set(
+    (params.toolNames ?? []).map((tool) => normalizeLowercaseStringOrEmpty(tool)).filter(Boolean),
+  );
+  const routeMap = normalizeContextFileRoutes(params.routing?.contextFileRoutes);
+  const memorySection =
+    params.routing?.memorySectionTarget === "user"
+      ? buildMemorySection({
+          isMinimal,
+          includeMemorySection: params.includeMemorySection,
+          availableTools,
+          citationsMode: params.memoryCitationsMode,
+        })
+      : [];
+  const userContextFiles = sortContextFilesForPrompt(params.contextFiles ?? []).filter(
+    (file) => routeMap[normalizeContextFilePath(file.path)] === "user",
+  );
+  const text = [
+    ...splitPromptAdditionLines(params.routing?.userAdditions),
+    ...memorySection,
+    ...buildUserContextSection(userContextFiles),
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  return text || undefined;
 }
 
 function buildUserIdentitySection(ownerLine: string | undefined, isMinimal: boolean) {
@@ -312,7 +420,7 @@ function buildMessagingSection(params: {
     "- Reply in current session → automatically routes to the source channel (Signal, Telegram, etc.)",
     "- Cross-session messaging → use sessions_send(sessionKey, message)",
     "- Sub-agent orchestration → use subagents(action=list|steer|kill)",
-    `- Runtime-generated completion events may ask for a user update. Rewrite those in your normal assistant voice and send the update (do not forward raw internal metadata or default to ${SILENT_REPLY_TOKEN}).`,
+    "- Runtime-generated completion events may ask for a user update. Rewrite those in your normal assistant voice and send the update; do not forward raw internal metadata.",
     "- Never use exec/curl for provider messaging; OpenClaw handles all routing internally.",
     params.availableTools.has("message")
       ? [
@@ -321,7 +429,7 @@ function buildMessagingSection(params: {
           "- Use `message` for proactive sends + channel actions (polls, reactions, etc.).",
           "- For `action=send`, include `to` and `message`.",
           `- If multiple channels are configured, pass \`channel\` (${params.messageChannelOptions}).`,
-          `- If you use \`message\` (\`action=send\`) to deliver your user-visible reply, respond with ONLY: ${SILENT_REPLY_TOKEN} (avoid duplicate replies).`,
+          "- If you use `message` (`action=send`) to deliver your user-visible reply, avoid sending a second duplicate assistant reply in chat.",
           params.inlineButtonsEnabled
             ? "- Inline buttons supported. Use `action=send` with `buttons=[[{text,callback_data,style?}]]`; `style` can be `primary`, `success`, or `danger`."
             : params.runtimeChannel
@@ -426,7 +534,60 @@ export function buildAgentSystemPrompt(params: {
   includeMemorySection?: boolean;
   memoryCitationsMode?: MemoryCitationsMode;
   promptContribution?: ProviderSystemPromptContribution;
+  routing?: PromptChannelRoutingResult;
 }) {
+  const channels = buildAgentPromptChannels(params);
+  return mergePrivilegedPromptChannels(channels.systemPrompt, channels.developerPrompt);
+}
+
+export function buildAgentPromptChannels(params: {
+  workspaceDir: string;
+  defaultThinkLevel?: ThinkLevel;
+  reasoningLevel?: ReasoningLevel;
+  extraSystemPrompt?: string;
+  ownerNumbers?: string[];
+  ownerDisplay?: OwnerIdDisplay;
+  ownerDisplaySecret?: string;
+  reasoningTagHint?: boolean;
+  toolNames?: string[];
+  toolSummaries?: Record<string, string>;
+  modelAliasLines?: string[];
+  userTimezone?: string;
+  userTime?: string;
+  userTimeFormat?: ResolvedTimeFormat;
+  contextFiles?: EmbeddedContextFile[];
+  skillsPrompt?: string;
+  heartbeatPrompt?: string;
+  docsPath?: string;
+  workspaceNotes?: string[];
+  ttsHint?: string;
+  promptMode?: PromptMode;
+  acpEnabled?: boolean;
+  runtimeInfo?: {
+    agentId?: string;
+    host?: string;
+    os?: string;
+    arch?: string;
+    node?: string;
+    model?: string;
+    defaultModel?: string;
+    shell?: string;
+    channel?: string;
+    capabilities?: string[];
+    repoRoot?: string;
+    canvasRootDir?: string;
+  };
+  messageToolHints?: string[];
+  sandboxInfo?: EmbeddedSandboxInfo;
+  reactionGuidance?: {
+    level: "minimal" | "extensive";
+    channel: string;
+  };
+  includeMemorySection?: boolean;
+  memoryCitationsMode?: MemoryCitationsMode;
+  promptContribution?: ProviderSystemPromptContribution;
+  routing?: PromptChannelRoutingResult;
+}): { systemPrompt: string; developerPrompt?: string } {
   const acpEnabled = params.acpEnabled !== false;
   const sandboxedRuntime = params.sandboxInfo?.enabled === true;
   const acpSpawnRuntimeEnabled = acpEnabled && !sandboxedRuntime;
@@ -610,12 +771,6 @@ export function buildAgentSystemPrompt(params: {
     skillsPrompt,
     readToolName,
   });
-  const memorySection = buildMemorySection({
-    isMinimal,
-    includeMemorySection: params.includeMemorySection,
-    availableTools,
-    citationsMode: params.memoryCitationsMode,
-  });
   const docsSection = buildDocsSection({
     docsPath: params.docsPath,
     isMinimal,
@@ -625,12 +780,13 @@ export function buildAgentSystemPrompt(params: {
 
   // For "none" mode, return just the basic identity line
   if (promptMode === "none") {
-    return "You are a personal assistant running inside OpenClaw.";
+    return { systemPrompt: buildAgentIdentityLine(params.runtimeInfo?.model) };
   }
 
   const lines = [
-    "You are a personal assistant running inside OpenClaw.",
+    buildAgentIdentityLine(runtimeInfo?.model),
     "",
+    ...splitPromptAdditionLines(params.routing?.systemAdditions),
     "## Tooling",
     "Tool availability (filtered by policy):",
     "Tool names are case-sensitive. Call tools exactly as listed.",
@@ -711,7 +867,6 @@ export function buildAgentSystemPrompt(params: {
     "If unsure, ask the user to run `openclaw help` (or `openclaw gateway --help`) and paste the output.",
     "",
     ...skillsSection,
-    ...memorySection,
     // Skip self-update for subagent/none modes
     hasGateway && !isMinimal ? "## OpenClaw Self-Update" : "",
     hasGateway && !isMinimal
@@ -864,8 +1019,32 @@ export function buildAgentSystemPrompt(params: {
     (file) => typeof file.path === "string" && file.path.trim().length > 0,
   );
   const orderedContextFiles = sortContextFilesForPrompt(validContextFiles);
-  const stableContextFiles = orderedContextFiles.filter((file) => !isDynamicContextFile(file.path));
-  const dynamicContextFiles = orderedContextFiles.filter((file) => isDynamicContextFile(file.path));
+  const routeMap = normalizeContextFileRoutes(params.routing?.contextFileRoutes);
+  const developerContextFiles = orderedContextFiles.filter(
+    (file) => routeMap[normalizeContextFilePath(file.path)] === "developer",
+  );
+  const stableContextFiles = orderedContextFiles.filter(
+    (file) =>
+      !isDynamicContextFile(file.path) &&
+      routeMap[normalizeContextFilePath(file.path)] !== "developer" &&
+      routeMap[normalizeContextFilePath(file.path)] !== "user",
+  );
+  const dynamicContextFiles = orderedContextFiles.filter(
+    (file) =>
+      isDynamicContextFile(file.path) &&
+      routeMap[normalizeContextFilePath(file.path)] !== "developer" &&
+      routeMap[normalizeContextFilePath(file.path)] !== "user",
+  );
+  if (params.routing?.memorySectionTarget !== "user") {
+    lines.push(
+      ...buildMemorySection({
+        isMinimal,
+        includeMemorySection: params.includeMemorySection,
+        availableTools,
+        citationsMode: params.memoryCitationsMode,
+      }),
+    );
+  }
   lines.push(
     ...buildProjectContextSection({
       files: stableContextFiles,
@@ -873,24 +1052,6 @@ export function buildAgentSystemPrompt(params: {
       dynamic: false,
     }),
   );
-
-  // Skip silent replies for subagent/none modes
-  if (!isMinimal) {
-    lines.push(
-      "## Silent Replies",
-      `When you have nothing to say, respond with ONLY: ${SILENT_REPLY_TOKEN}`,
-      "",
-      "⚠️ Rules:",
-      "- It must be your ENTIRE message — nothing else",
-      `- Never append it to an actual response (never include "${SILENT_REPLY_TOKEN}" in real replies)`,
-      "- Never wrap it in markdown or code blocks",
-      "",
-      `❌ Wrong: "Here's help... ${SILENT_REPLY_TOKEN}"`,
-      `❌ Wrong: "${SILENT_REPLY_TOKEN}"`,
-      `✅ Right: ${SILENT_REPLY_TOKEN}`,
-      "",
-    );
-  }
 
   // Keep large stable prompt context above this seam so Anthropic-family
   // transports can reuse it across labs and turns. Dynamic group/session
@@ -923,7 +1084,19 @@ export function buildAgentSystemPrompt(params: {
     `Reasoning: ${reasoningLevel} (hidden unless on/stream). Toggle /reasoning; /status shows Reasoning when enabled.`,
   );
 
-  return lines.filter(Boolean).join("\n");
+  return {
+    systemPrompt: lines.filter(Boolean).join("\n"),
+    developerPrompt: (() => {
+      const developerLines = [
+        ...splitPromptAdditionLines(params.routing?.developerAdditions),
+        ...buildDeveloperContextSection(developerContextFiles),
+      ];
+      if (developerLines.length === 0) {
+        return undefined;
+      }
+      return developerLines.filter(Boolean).join("\n");
+    })(),
+  };
 }
 
 export function buildRuntimeLine(

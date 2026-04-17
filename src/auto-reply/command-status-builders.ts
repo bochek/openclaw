@@ -63,7 +63,8 @@ export function buildHelpMessage(cfg?: OpenClawConfig): string {
     "/model <id>",
     "/fast status|on|off",
     "/verbose on|off",
-    "/trace on|off|raw",
+    "/trace on|off|slow|raw",
+    "/trace e2e on|off|once",
   ];
   if (isCommandFlagEnabled(cfg, "config")) {
     optionParts.push("/config");

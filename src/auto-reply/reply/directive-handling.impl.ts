@@ -57,7 +57,11 @@ export async function handleDirectiveOnly(
     currentElevatedLevel,
   } = params;
   const delegatedTraceAllowed = (params.gatewayClientScopes ?? []).includes("operator.admin");
-  if (directives.hasTraceDirective && !params.senderIsOwner && !delegatedTraceAllowed) {
+  if (
+    (directives.hasTraceDirective || directives.hasE2ETraceDirective) &&
+    !params.senderIsOwner &&
+    !delegatedTraceAllowed
+  ) {
     return {
       text: "❌ /trace is restricted to owners and gateway clients with operator.admin scope.",
     };
@@ -158,15 +162,26 @@ export async function handleDirectiveOnly(
       text: `Unrecognized verbose level "${directives.rawVerboseLevel}". Valid levels: off, on, full.`,
     };
   }
-  if (directives.hasTraceDirective && !directives.traceLevel) {
-    if (!directives.rawTraceLevel) {
-      const level = (sessionEntry.traceLevel as "on" | "off" | "raw" | undefined) ?? "off";
+  if (directives.hasE2ETraceDirective && !directives.e2eTraceMode) {
+    if (!directives.rawE2ETraceMode) {
+      const mode = (sessionEntry.e2eTraceMode as "on" | "off" | "once" | undefined) ?? "off";
       return {
-        text: withOptions(`Current trace level: ${level}.`, "on, off, raw"),
+        text: withOptions(`Current E2E trace mode: ${mode}.`, "on, off, once"),
       };
     }
     return {
-      text: `Unrecognized trace level "${directives.rawTraceLevel}". Valid levels: off, on, raw.`,
+      text: `Unrecognized E2E trace mode "${directives.rawE2ETraceMode}". Valid modes: off, on, once.`,
+    };
+  }
+  if (directives.hasTraceDirective && !directives.traceLevel) {
+    if (!directives.rawTraceLevel) {
+      const level = (sessionEntry.traceLevel as "on" | "off" | "slow" | "raw" | undefined) ?? "off";
+      return {
+        text: withOptions(`Current trace level: ${level}.`, "on, off, slow, raw"),
+      };
+    }
+    return {
+      text: `Unrecognized trace level "${directives.rawTraceLevel}". Valid levels: off, on, slow, raw.`,
     };
   }
   if (directives.hasFastDirective && directives.fastMode === undefined) {
@@ -320,6 +335,7 @@ export async function handleDirectiveOnly(
     (directives.hasVerboseDirective &&
       Boolean(directives.verboseLevel) &&
       allowInternalVerbosePersistence) ||
+    (directives.hasE2ETraceDirective && Boolean(directives.e2eTraceMode)) ||
     (directives.hasTraceDirective && Boolean(directives.traceLevel)) ||
     (directives.hasReasoningDirective && Boolean(directives.reasoningLevel)) ||
     (directives.hasElevatedDirective && Boolean(directives.elevatedLevel)) ||
@@ -349,6 +365,9 @@ export async function handleDirectiveOnly(
       allowInternalVerbosePersistence
     ) {
       applyVerboseOverride(sessionEntry, directives.verboseLevel);
+    }
+    if (directives.hasE2ETraceDirective && directives.e2eTraceMode) {
+      sessionEntry.e2eTraceMode = directives.e2eTraceMode;
     }
     if (directives.hasTraceDirective && directives.traceLevel) {
       applyTraceOverride(sessionEntry, directives.traceLevel);
@@ -480,12 +499,29 @@ export async function handleDirectiveOnly(
     parts.push(
       directives.traceLevel === "off"
         ? formatDirectiveAck("Trace disabled.")
-        : directives.traceLevel === "raw"
+        : directives.traceLevel === "slow"
           ? formatDirectiveAck(
-              "Trace set to raw. Warning: trace output may contain sensitive information.",
+              "Trace set to slow. A turn timing breakdown will be appended to replies.",
+            )
+          : directives.traceLevel === "raw"
+            ? formatDirectiveAck(
+                "Trace set to raw. Warning: trace output may contain sensitive information.",
+              )
+            : formatDirectiveAck(
+                "Trace enabled. Warning: trace output may contain sensitive information.",
+              ),
+    );
+  }
+  if (directives.hasE2ETraceDirective && directives.e2eTraceMode) {
+    parts.push(
+      directives.e2eTraceMode === "off"
+        ? formatDirectiveAck("E2E trace disabled.")
+        : directives.e2eTraceMode === "once"
+          ? formatDirectiveAck(
+              "E2E trace set to once. The next owner-authorized gateway turn will include a full end-to-end timing trace.",
             )
           : formatDirectiveAck(
-              "Trace enabled. Warning: trace output may contain sensitive information.",
+              "E2E trace enabled. Owner-authorized gateway turns will include a full end-to-end timing trace.",
             ),
     );
   }

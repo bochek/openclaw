@@ -10,7 +10,11 @@ import {
   extractVerboseDirective,
 } from "./reply.js";
 import { parseInlineDirectives } from "./reply/directive-handling.parse.js";
-import { extractFastDirective, extractStatusDirective } from "./reply/directives.js";
+import {
+  extractE2ETraceDirective,
+  extractFastDirective,
+  extractStatusDirective,
+} from "./reply/directives.js";
 
 describe("directive parsing", () => {
   it("ignores verbose directive inside URL", () => {
@@ -49,6 +53,13 @@ describe("directive parsing", () => {
     const res = extractTraceDirective(" please /trace raw now");
     expect(res.hasDirective).toBe(true);
     expect(res.traceLevel).toBe("raw");
+  });
+
+  it("matches e2e trace directive", () => {
+    const res = extractE2ETraceDirective(" please /trace e2e once now");
+    expect(res.hasDirective).toBe(true);
+    expect(res.e2eTraceMode).toBe("once");
+    expect(res.cleaned).toBe("please now");
   });
 
   it("matches reasoning directive", () => {
