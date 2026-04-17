@@ -95,15 +95,11 @@ import {
   scrubAnthropicRefusalMagic,
 } from "./run/helpers.js";
 import {
-  DEFAULT_EMPTY_RESPONSE_RETRY_LIMIT,
-  DEFAULT_REASONING_ONLY_RETRY_LIMIT,
   resolveAckExecutionFastPathInstruction,
-  extractPlanningOnlyPlanDetails,
-  resolveEmptyResponseRetryInstruction,
   resolveIncompleteTurnPayloadText,
+  extractPlanningOnlyPlanDetails,
   resolvePlanningOnlyRetryLimit,
   resolvePlanningOnlyRetryInstruction,
-  resolveReasoningOnlyRetryInstruction,
   STRICT_AGENTIC_BLOCKED_TEXT,
   resolveReplayInvalidFlag,
   resolveRunLivenessState,
@@ -114,7 +110,6 @@ import { handleRetryLimitExhaustion } from "./run/retry-limit.js";
 import { resolveEffectiveRuntimeModel, resolveHookModelSelection } from "./run/setup.js";
 import { mergeAttemptToolMediaPayloads } from "./run/tool-media-payloads.js";
 import {
-  resolveLiveToolResultMaxChars,
   sessionLikelyHasOversizedToolResults,
   truncateOversizedToolResultsInSession,
 } from "./tool-result-truncation.js";
@@ -300,6 +295,7 @@ export async function runEmbeddedPiAgent(
         modelId,
         hookRunner,
         hookContext: hookCtx,
+        e2eTraceContext: params.e2eTraceContext,
       });
       provider = hookSelection.provider;
       modelId = hookSelection.modelId;
@@ -447,8 +443,6 @@ export async function runEmbeddedPiAgent(
       });
       const executionContract = strictAgenticActive ? "strict-agentic" : "default";
       const maxPlanningOnlyRetryAttempts = resolvePlanningOnlyRetryLimit(executionContract);
-      const maxReasoningOnlyRetryAttempts = DEFAULT_REASONING_ONLY_RETRY_LIMIT;
-      const maxEmptyResponseRetryAttempts = DEFAULT_EMPTY_RESPONSE_RETRY_LIMIT;
 
       const MAX_TIMEOUT_COMPACTION_ATTEMPTS = 2;
       const MAX_OVERFLOW_COMPACTION_ATTEMPTS = 3;
@@ -464,13 +458,9 @@ export async function runEmbeddedPiAgent(
       let runLoopIterations = 0;
       let overloadProfileRotations = 0;
       let planningOnlyRetryAttempts = 0;
-      let reasoningOnlyRetryAttempts = 0;
-      let emptyResponseRetryAttempts = 0;
       let sameModelIdleTimeoutRetries = 0;
       let lastRetryFailoverReason: FailoverReason | null = null;
       let planningOnlyRetryInstruction: string | null = null;
-      let reasoningOnlyRetryInstruction: string | null = null;
-      let emptyResponseRetryInstruction: string | null = null;
       const ackExecutionFastPathInstruction = resolveAckExecutionFastPathInstruction({
         provider,
         modelId,
@@ -654,8 +644,6 @@ export async function runEmbeddedPiAgent(
           const promptAdditions = [
             ackExecutionFastPathInstruction,
             planningOnlyRetryInstruction,
-            reasoningOnlyRetryInstruction,
-            emptyResponseRetryInstruction,
           ].filter(
             (value): value is string => typeof value === "string" && value.trim().length > 0,
           );
@@ -755,10 +743,6 @@ export async function runEmbeddedPiAgent(
             silentExpected: params.silentExpected,
             bootstrapContextMode: params.bootstrapContextMode,
             bootstrapContextRunKind: params.bootstrapContextRunKind,
-            toolsAllow: params.toolsAllow,
-            disableMessageTool: params.disableMessageTool,
-            requireExplicitMessageTarget: params.requireExplicitMessageTarget,
-            internalEvents: params.internalEvents,
             bootstrapPromptWarningSignaturesSeen,
             bootstrapPromptWarningSignature:
               bootstrapPromptWarningSignaturesSeen[bootstrapPromptWarningSignaturesSeen.length - 1],
@@ -1101,11 +1085,6 @@ export async function runEmbeddedPiAgent(
                   const truncResult = await truncateOversizedToolResultsInSession({
                     sessionFile: params.sessionFile,
                     contextWindowTokens: ctxInfo.tokens,
-                    maxCharsOverride: resolveLiveToolResultMaxChars({
-                      contextWindowTokens: ctxInfo.tokens,
-                      cfg: params.config,
-                      agentId: sessionAgentId,
-                    }),
                     sessionId: params.sessionId,
                     sessionKey: params.sessionKey,
                   });
@@ -1131,16 +1110,10 @@ export async function runEmbeddedPiAgent(
             }
             if (!toolResultTruncationAttempted) {
               const contextWindowTokens = ctxInfo.tokens;
-              const toolResultMaxChars = resolveLiveToolResultMaxChars({
-                contextWindowTokens,
-                cfg: params.config,
-                agentId: sessionAgentId,
-              });
               const hasOversized = attempt.messagesSnapshot
                 ? sessionLikelyHasOversizedToolResults({
                     messages: attempt.messagesSnapshot,
                     contextWindowTokens,
-                    maxCharsOverride: toolResultMaxChars,
                   })
                 : false;
 
@@ -1153,7 +1126,6 @@ export async function runEmbeddedPiAgent(
                 const truncResult = await truncateOversizedToolResultsInSession({
                   sessionFile: params.sessionFile,
                   contextWindowTokens,
-                  maxCharsOverride: toolResultMaxChars,
                   sessionId: params.sessionId,
                   sessionKey: params.sessionKey,
                 });
@@ -1205,6 +1177,8 @@ export async function runEmbeddedPiAgent(
                   lastTurnTotal,
                 }),
                 systemPromptReport: attempt.systemPromptReport,
+                systemPromptText: attempt.systemPromptText,
+                developerPromptText: attempt.developerPromptText,
                 finalPromptText: attempt.finalPromptText,
                 replayInvalid: resolveReplayInvalidForAttempt(),
                 livenessState: "blocked",
@@ -1260,6 +1234,8 @@ export async function runEmbeddedPiAgent(
                     lastTurnTotal,
                   }),
                   systemPromptReport: attempt.systemPromptReport,
+                  systemPromptText: attempt.systemPromptText,
+                  developerPromptText: attempt.developerPromptText,
                   finalPromptText: attempt.finalPromptText,
                   replayInvalid: resolveReplayInvalidForAttempt(),
                   livenessState: "blocked",
@@ -1299,6 +1275,8 @@ export async function runEmbeddedPiAgent(
                     lastTurnTotal,
                   }),
                   systemPromptReport: attempt.systemPromptReport,
+                  systemPromptText: attempt.systemPromptText,
+                  developerPromptText: attempt.developerPromptText,
                   finalPromptText: attempt.finalPromptText,
                   replayInvalid: resolveReplayInvalidForAttempt(),
                   livenessState: "blocked",
@@ -1669,6 +1647,8 @@ export async function runEmbeddedPiAgent(
                 agentMeta,
                 aborted,
                 systemPromptReport: attempt.systemPromptReport,
+                systemPromptText: attempt.systemPromptText,
+                developerPromptText: attempt.developerPromptText,
                 finalPromptText: attempt.finalPromptText,
                 finalAssistantVisibleText,
                 finalAssistantRawText,
@@ -1684,7 +1664,14 @@ export async function runEmbeddedPiAgent(
             };
           }
 
-          const payloadCount = payloadsWithToolMedia?.length ?? 0;
+          // Detect incomplete turns where prompt() resolved prematurely and the
+          // runner would otherwise drop an empty reply.
+          const incompleteTurnText = resolveIncompleteTurnPayloadText({
+            payloadCount: payloadsWithToolMedia?.length ?? 0,
+            aborted,
+            timedOut,
+            attempt,
+          });
           const nextPlanningOnlyRetryInstruction = resolvePlanningOnlyRetryInstruction({
             provider,
             modelId,
@@ -1693,22 +1680,8 @@ export async function runEmbeddedPiAgent(
             timedOut,
             attempt,
           });
-          const nextReasoningOnlyRetryInstruction = resolveReasoningOnlyRetryInstruction({
-            provider: activeErrorContext.provider,
-            modelId: activeErrorContext.model,
-            aborted,
-            timedOut,
-            attempt,
-          });
-          const nextEmptyResponseRetryInstruction = resolveEmptyResponseRetryInstruction({
-            provider: activeErrorContext.provider,
-            modelId: activeErrorContext.model,
-            payloadCount,
-            aborted,
-            timedOut,
-            attempt,
-          });
           if (
+            !incompleteTurnText &&
             nextPlanningOnlyRetryInstruction &&
             planningOnlyRetryAttempts < maxPlanningOnlyRetryAttempts
           ) {
@@ -1746,51 +1719,6 @@ export async function runEmbeddedPiAgent(
             );
             continue;
           }
-          if (
-            !nextPlanningOnlyRetryInstruction &&
-            nextReasoningOnlyRetryInstruction &&
-            reasoningOnlyRetryAttempts < maxReasoningOnlyRetryAttempts
-          ) {
-            reasoningOnlyRetryAttempts += 1;
-            reasoningOnlyRetryInstruction = nextReasoningOnlyRetryInstruction;
-            log.warn(
-              `reasoning-only assistant turn detected: runId=${params.runId} sessionId=${params.sessionId} ` +
-                `provider=${activeErrorContext.provider}/${activeErrorContext.model} — retrying ${reasoningOnlyRetryAttempts}/${maxReasoningOnlyRetryAttempts} ` +
-                `with visible-answer continuation`,
-            );
-            continue;
-          }
-          const reasoningOnlyRetriesExhausted =
-            !nextPlanningOnlyRetryInstruction &&
-            nextReasoningOnlyRetryInstruction &&
-            reasoningOnlyRetryAttempts >= maxReasoningOnlyRetryAttempts;
-          if (
-            !nextPlanningOnlyRetryInstruction &&
-            !nextReasoningOnlyRetryInstruction &&
-            nextEmptyResponseRetryInstruction &&
-            emptyResponseRetryAttempts < maxEmptyResponseRetryAttempts
-          ) {
-            emptyResponseRetryAttempts += 1;
-            emptyResponseRetryInstruction = nextEmptyResponseRetryInstruction;
-            log.warn(
-              `empty response detected: runId=${params.runId} sessionId=${params.sessionId} ` +
-                `provider=${activeErrorContext.provider}/${activeErrorContext.model} — retrying ${emptyResponseRetryAttempts}/${maxEmptyResponseRetryAttempts} ` +
-                `with visible-answer continuation`,
-            );
-            continue;
-          }
-          const incompleteTurnText = resolveIncompleteTurnPayloadText({
-            payloadCount,
-            aborted,
-            timedOut,
-            attempt,
-          });
-          if (reasoningOnlyRetriesExhausted && !finalAssistantVisibleText) {
-            log.warn(
-              `reasoning-only retries exhausted: runId=${params.runId} sessionId=${params.sessionId} ` +
-                `provider=${activeErrorContext.provider}/${activeErrorContext.model} attempts=${reasoningOnlyRetryAttempts}/${maxReasoningOnlyRetryAttempts} — surfacing incomplete-turn error`,
-            );
-          }
           if (!incompleteTurnText && nextPlanningOnlyRetryInstruction && strictAgenticActive) {
             log.warn(
               `strict-agentic run exhausted planning-only retries: runId=${params.runId} sessionId=${params.sessionId} ` +
@@ -1826,6 +1754,8 @@ export async function runEmbeddedPiAgent(
                 agentMeta,
                 aborted,
                 systemPromptReport: attempt.systemPromptReport,
+                systemPromptText: attempt.systemPromptText,
+                developerPromptText: attempt.developerPromptText,
                 finalPromptText: attempt.finalPromptText,
                 finalAssistantVisibleText,
                 finalAssistantRawText,
@@ -1839,64 +1769,6 @@ export async function runEmbeddedPiAgent(
               messagingToolSentTargets: attempt.messagingToolSentTargets,
               successfulCronAdds: attempt.successfulCronAdds,
             };
-          }
-          if (reasoningOnlyRetriesExhausted && !finalAssistantVisibleText) {
-            const replayInvalid = resolveReplayInvalidForAttempt(
-              "⚠️ Agent couldn't generate a response. Please try again.",
-            );
-            const livenessState = resolveRunLivenessState({
-              payloadCount: 0,
-              aborted,
-              timedOut,
-              attempt,
-              incompleteTurnText: "⚠️ Agent couldn't generate a response. Please try again.",
-            });
-            attempt.setTerminalLifecycleMeta?.({
-              replayInvalid,
-              livenessState,
-            });
-            if (lastProfileId) {
-              await maybeMarkAuthProfileFailure({
-                profileId: lastProfileId,
-                reason: resolveAuthProfileFailureReason(assistantFailoverReason),
-              });
-            }
-            return {
-              payloads: [
-                {
-                  text: "⚠️ Agent couldn't generate a response. Please try again.",
-                  isError: true,
-                },
-              ],
-              meta: {
-                durationMs: Date.now() - started,
-                agentMeta,
-                aborted,
-                systemPromptReport: attempt.systemPromptReport,
-                finalPromptText: attempt.finalPromptText,
-                finalAssistantVisibleText,
-                finalAssistantRawText,
-                replayInvalid,
-                livenessState,
-              },
-              didSendViaMessagingTool: attempt.didSendViaMessagingTool,
-              didSendDeterministicApprovalPrompt: attempt.didSendDeterministicApprovalPrompt,
-              messagingToolSentTexts: attempt.messagingToolSentTexts,
-              messagingToolSentMediaUrls: attempt.messagingToolSentMediaUrls,
-              messagingToolSentTargets: attempt.messagingToolSentTargets,
-              successfulCronAdds: attempt.successfulCronAdds,
-            };
-          }
-          if (
-            !nextPlanningOnlyRetryInstruction &&
-            !nextReasoningOnlyRetryInstruction &&
-            nextEmptyResponseRetryInstruction &&
-            emptyResponseRetryAttempts >= maxEmptyResponseRetryAttempts
-          ) {
-            log.warn(
-              `empty response retries exhausted: runId=${params.runId} sessionId=${params.sessionId} ` +
-                `provider=${activeErrorContext.provider}/${activeErrorContext.model} attempts=${emptyResponseRetryAttempts}/${maxEmptyResponseRetryAttempts} — surfacing incomplete-turn error`,
-            );
           }
           if (incompleteTurnText) {
             const replayInvalid = resolveReplayInvalidForAttempt(incompleteTurnText);
@@ -1938,6 +1810,8 @@ export async function runEmbeddedPiAgent(
                 agentMeta,
                 aborted,
                 systemPromptReport: attempt.systemPromptReport,
+                systemPromptText: attempt.systemPromptText,
+                developerPromptText: attempt.developerPromptText,
                 finalPromptText: attempt.finalPromptText,
                 finalAssistantVisibleText,
                 finalAssistantRawText,
@@ -1993,6 +1867,8 @@ export async function runEmbeddedPiAgent(
               agentMeta,
               aborted,
               systemPromptReport: attempt.systemPromptReport,
+              systemPromptText: attempt.systemPromptText,
+              developerPromptText: attempt.developerPromptText,
               finalPromptText: attempt.finalPromptText,
               finalAssistantVisibleText,
               finalAssistantRawText,

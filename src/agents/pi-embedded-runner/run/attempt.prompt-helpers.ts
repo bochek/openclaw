@@ -3,15 +3,26 @@ import type {
   ContextEnginePromptCacheInfo,
   ContextEngineRuntimeContext,
 } from "../../../context-engine/types.js";
+import type { E2ETraceCollector } from "../../../infra/e2e-trace.js";
+import {
+  endE2ETraceSpan,
+  recordMeasuredE2ETraceSpan,
+  startE2ETraceSpan,
+} from "../../../infra/e2e-trace.js";
 import type {
   PluginHookAgentContext,
   PluginHookBeforeAgentStartResult,
+  PluginHookBeforePromptChannelsResult,
   PluginHookBeforePromptBuildResult,
 } from "../../../plugins/types.js";
 import { isCronSessionKey, isSubagentSessionKey } from "../../../routing/session-key.js";
 import { joinPresentTextSegments } from "../../../shared/text/join-segments.js";
 import { resolveHeartbeatPromptForSystemPrompt } from "../../heartbeat-system-prompt.js";
 import { buildActiveMusicGenerationTaskPromptContextForSession } from "../../music-generation-task-status.js";
+import type {
+  PromptChannelRoutingEvent,
+  PromptChannelRoutingResult,
+} from "../../prompt-channels.types.js";
 import { prependSystemPromptAdditionAfterCacheBoundary } from "../../system-prompt-cache-boundary.js";
 import { resolveEffectiveToolFsWorkspaceOnly } from "../../tool-fs-policy.js";
 import { buildActiveVideoGenerationTaskPromptContextForSession } from "../../video-generation-task-status.js";
@@ -21,7 +32,13 @@ import { shouldInjectHeartbeatPromptForTrigger } from "./trigger-policy.js";
 import type { EmbeddedRunAttemptParams } from "./types.js";
 
 export type PromptBuildHookRunner = {
-  hasHooks: (hookName: "before_prompt_build" | "before_agent_start") => boolean;
+  hasHooks: (
+    hookName: "before_prompt_channels" | "before_prompt_build" | "before_agent_start",
+  ) => boolean;
+  runBeforePromptChannels?: (
+    event: PromptChannelRoutingEvent,
+    ctx: PluginHookAgentContext,
+  ) => Promise<PluginHookBeforePromptChannelsResult | undefined>;
   runBeforePromptBuild: (
     event: { prompt: string; messages: unknown[] },
     ctx: PluginHookAgentContext,
@@ -38,7 +55,12 @@ export async function resolvePromptBuildHookResult(params: {
   hookCtx: PluginHookAgentContext;
   hookRunner?: PromptBuildHookRunner | null;
   legacyBeforeAgentStartResult?: PluginHookBeforeAgentStartResult;
+  e2eTraceContext?: E2ETraceCollector;
 }): Promise<PluginHookBeforePromptBuildResult> {
+  const hookStartedAt = Date.now();
+  startE2ETraceSpan(params.e2eTraceContext, "pre_turn_hooks", {
+    startedAt: hookStartedAt,
+  });
   const promptBuildResult = params.hookRunner?.hasHooks("before_prompt_build")
     ? await params.hookRunner
         .runBeforePromptBuild(
@@ -71,6 +93,22 @@ export async function resolvePromptBuildHookResult(params: {
             return undefined;
           })
       : undefined);
+  const hookEndedAt = Date.now();
+  endE2ETraceSpan(params.e2eTraceContext, "pre_turn_hooks", {
+    endedAt: hookEndedAt,
+  });
+  const activeMemoryTag = "<active_memory_plugin>";
+  const containsActiveMemory =
+    promptBuildResult?.prependContext?.includes(activeMemoryTag) ||
+    legacyResult?.prependContext?.includes(activeMemoryTag) ||
+    promptBuildResult?.systemPrompt?.includes(activeMemoryTag) ||
+    legacyResult?.systemPrompt?.includes(activeMemoryTag);
+  if (containsActiveMemory) {
+    recordMeasuredE2ETraceSpan(params.e2eTraceContext, "active_memory", {
+      durationMs: hookEndedAt - hookStartedAt,
+      endedAt: hookEndedAt,
+    });
+  }
   return {
     systemPrompt: promptBuildResult?.systemPrompt ?? legacyResult?.systemPrompt,
     prependContext: joinPresentTextSegments([
@@ -85,6 +123,31 @@ export async function resolvePromptBuildHookResult(params: {
       promptBuildResult?.appendSystemContext,
       legacyResult?.appendSystemContext,
     ]),
+  };
+}
+
+export async function resolvePromptChannelHookResult(params: {
+  event: PromptChannelRoutingEvent;
+  hookCtx: PluginHookAgentContext;
+  hookRunner?: PromptBuildHookRunner | null;
+}): Promise<PromptChannelRoutingResult> {
+  const promptChannelPromise =
+    params.hookRunner?.hasHooks("before_prompt_channels") &&
+    params.hookRunner.runBeforePromptChannels
+      ? params.hookRunner.runBeforePromptChannels(params.event, params.hookCtx)
+      : undefined;
+  const promptChannelResult = promptChannelPromise
+    ? await promptChannelPromise.catch((hookErr: unknown) => {
+        log.warn(`before_prompt_channels hook failed: ${String(hookErr)}`);
+        return undefined;
+      })
+    : undefined;
+  return {
+    systemAdditions: promptChannelResult?.systemAdditions,
+    developerAdditions: promptChannelResult?.developerAdditions,
+    userAdditions: promptChannelResult?.userAdditions,
+    memorySectionTarget: promptChannelResult?.memorySectionTarget,
+    contextFileRoutes: promptChannelResult?.contextFileRoutes,
   };
 }
 
@@ -226,8 +289,6 @@ export function buildAfterTurnRuntimeContext(params: {
   >;
   workspaceDir: string;
   agentDir: string;
-  tokenBudget?: number;
-  currentTokenCount?: number;
   promptCache?: ContextEnginePromptCacheInfo;
 }): ContextEngineRuntimeContext {
   return {
@@ -254,16 +315,6 @@ export function buildAfterTurnRuntimeContext(params: {
       extraSystemPrompt: params.attempt.extraSystemPrompt,
       ownerNumbers: params.attempt.ownerNumbers,
     }),
-    ...(typeof params.tokenBudget === "number" &&
-      Number.isFinite(params.tokenBudget) &&
-      params.tokenBudget > 0
-      ? { tokenBudget: Math.floor(params.tokenBudget) }
-      : {}),
-    ...(typeof params.currentTokenCount === "number" &&
-      Number.isFinite(params.currentTokenCount) &&
-      params.currentTokenCount > 0
-      ? { currentTokenCount: Math.floor(params.currentTokenCount) }
-      : {}),
     ...(params.promptCache ? { promptCache: params.promptCache } : {}),
   };
 }

@@ -15,6 +15,7 @@ import {
   resolveAttemptFsWorkspaceOnly,
   resolveEmbeddedAgentStreamFn,
   resolveUnknownToolGuardThreshold,
+  resolvePromptChannelHookResult,
   resolvePromptBuildHookResult,
   resolvePromptModeForSession,
   shouldWarnOnOrphanedUserRepair,
@@ -60,9 +61,10 @@ describe("resolvePromptBuildHookResult", () => {
   function createLegacyOnlyHookRunner() {
     return {
       hasHooks: vi.fn(
-        (hookName: "before_prompt_build" | "before_agent_start") =>
+        (hookName: "before_prompt_channels" | "before_prompt_build" | "before_agent_start") =>
           hookName === "before_agent_start",
       ),
+      runBeforePromptChannels: vi.fn(async () => undefined),
       runBeforePromptBuild: vi.fn(async () => undefined),
       runBeforeAgentStart: vi.fn(async () => ({ prependContext: "from-hook" })),
     };
@@ -127,6 +129,66 @@ describe("resolvePromptBuildHookResult", () => {
     expect(result.prependContext).toBe("prompt context\n\nlegacy context");
     expect(result.prependSystemContext).toBe("prompt prepend\n\nlegacy prepend");
     expect(result.appendSystemContext).toBe("prompt append\n\nlegacy append");
+  });
+});
+
+describe("resolvePromptChannelHookResult", () => {
+  it("returns empty routing when no hook is registered", async () => {
+    const result = await resolvePromptChannelHookResult({
+      event: {
+        prompt: "hello",
+        promptMode: "full",
+        contextFiles: [],
+        toolNames: [],
+        includeMemorySection: true,
+      },
+      hookCtx: {},
+    });
+
+    expect(result).toEqual({
+      systemAdditions: undefined,
+      developerAdditions: undefined,
+      userAdditions: undefined,
+      memorySectionTarget: undefined,
+      contextFileRoutes: undefined,
+    });
+  });
+
+  it("returns routed additions from before_prompt_channels hooks", async () => {
+    const hookRunner = {
+      hasHooks: vi.fn(
+        (hookName: "before_prompt_channels") => hookName === "before_prompt_channels",
+      ),
+      runBeforePromptChannels: vi.fn(async () => ({
+        systemAdditions: "## Autonomy and Persistence\nTake action.",
+        memorySectionTarget: "user" as const,
+        contextFileRoutes: {
+          "AGENTS.md": "developer" as const,
+          "MEMORY.md": "user" as const,
+        },
+      })),
+    };
+
+    const event = {
+      prompt: "hello",
+      promptMode: "full" as const,
+      contextFiles: [{ path: "AGENTS.md", content: "agents" }],
+      toolNames: ["read"],
+      includeMemorySection: true,
+    };
+    const result = await resolvePromptChannelHookResult({
+      event,
+      hookCtx: {},
+      hookRunner: hookRunner as never,
+    });
+
+    expect(hookRunner.runBeforePromptChannels).toHaveBeenCalledWith(event, {});
+    expect(result.systemAdditions).toContain("## Autonomy and Persistence");
+    expect(result.memorySectionTarget).toBe("user");
+    expect(result.contextFileRoutes).toEqual({
+      "AGENTS.md": "developer",
+      "MEMORY.md": "user",
+    });
   });
 });
 
@@ -424,33 +486,19 @@ describe("resolveAttemptFsWorkspaceOnly", () => {
 });
 
 describe("resolveUnknownToolGuardThreshold", () => {
-  it("returns the default threshold when no loop-detection config is provided", () => {
-    expect(resolveUnknownToolGuardThreshold(undefined)).toBe(10);
-    expect(resolveUnknownToolGuardThreshold({})).toBe(10);
+  it("returns undefined when loop detection is disabled", () => {
+    expect(resolveUnknownToolGuardThreshold({ enabled: false, unknownToolThreshold: 4 })).toBe(
+      undefined,
+    );
+    expect(resolveUnknownToolGuardThreshold(undefined)).toBe(undefined);
   });
 
-  it("stays on even when tools.loopDetection.enabled is false (safety net)", () => {
-    // The unknown-tool guard has no false-positive surface — the tool is
-    // objectively not registered — so it is always on regardless of the
-    // opt-in genericRepeat/pingPong/pollNoProgress detectors.
-    expect(resolveUnknownToolGuardThreshold({ enabled: false })).toBe(10);
-    expect(resolveUnknownToolGuardThreshold({ enabled: false, unknownToolThreshold: 3 })).toBe(3);
+  it("uses the default threshold when loop detection is enabled without an override", () => {
+    expect(resolveUnknownToolGuardThreshold({ enabled: true })).toBe(10);
   });
 
   it("uses the configured threshold override when provided", () => {
     expect(resolveUnknownToolGuardThreshold({ enabled: true, unknownToolThreshold: 4 })).toBe(4);
-  });
-
-  it("falls back to the default threshold when the override is non-positive", () => {
-    expect(resolveUnknownToolGuardThreshold({ unknownToolThreshold: 0 })).toBe(10);
-    expect(resolveUnknownToolGuardThreshold({ unknownToolThreshold: -5 })).toBe(10);
-    expect(
-      resolveUnknownToolGuardThreshold({ unknownToolThreshold: Number.NaN }),
-    ).toBe(10);
-  });
-
-  it("floors fractional overrides", () => {
-    expect(resolveUnknownToolGuardThreshold({ unknownToolThreshold: 3.7 })).toBe(3);
   });
 });
 
@@ -1739,9 +1787,11 @@ describe("wrapStreamFnSanitizeMalformedToolCalls", () => {
     );
 
     const wrapped = wrapStreamFnSanitizeMalformedToolCalls(baseFn as never, new Set(["read"]));
-    const stream = wrapped({ api: "google-gemini" } as never, { messages } as never, {} as never) as
-      | FakeWrappedStream
-      | Promise<FakeWrappedStream>;
+    const stream = wrapped(
+      { api: "google-gemini" } as never,
+      { messages } as never,
+      {} as never,
+    ) as FakeWrappedStream | Promise<FakeWrappedStream>;
     await Promise.resolve(stream);
 
     expect(baseFn).toHaveBeenCalledTimes(1);
@@ -2850,8 +2900,6 @@ describe("buildAfterTurnRuntimeContext", () => {
       },
       workspaceDir: "/tmp/workspace",
       agentDir: "/tmp/agent",
-      tokenBudget: 1050000,
-      currentTokenCount: 232393,
     });
 
     expect(legacy).toMatchObject({
@@ -2860,8 +2908,6 @@ describe("buildAfterTurnRuntimeContext", () => {
       model: "gpt-5.4",
       workspaceDir: "/tmp/workspace",
       agentDir: "/tmp/agent",
-      tokenBudget: 1050000,
-      currentTokenCount: 232393,
     });
   });
 
