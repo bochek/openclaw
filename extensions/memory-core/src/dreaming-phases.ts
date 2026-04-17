@@ -1488,6 +1488,7 @@ async function runLightDreaming(params: {
   };
   logger: Logger;
   subagent?: Parameters<typeof generateAndAppendDreamNarrative>[0]["subagent"];
+  deferredNarratives?: Promise<void>[];
   nowMs?: number;
 }): Promise<void> {
   const nowMs = Number.isFinite(params.nowMs) ? (params.nowMs as number) : Date.now();
@@ -1548,7 +1549,7 @@ async function runLightDreaming(params: {
       snippets: capped.map((e) => e.snippet).filter(Boolean),
       ...(themes.length > 0 ? { themes } : {}),
     };
-    await generateAndAppendDreamNarrative({
+    const task = generateAndAppendDreamNarrative({
       subagent: params.subagent,
       workspaceDir: params.workspaceDir,
       data,
@@ -1556,6 +1557,11 @@ async function runLightDreaming(params: {
       timezone: params.config.timezone,
       logger: params.logger,
     });
+    if (params.deferredNarratives) {
+      params.deferredNarratives.push(task);
+    } else {
+      await task;
+    }
   }
 }
 
@@ -1568,6 +1574,7 @@ async function runRemDreaming(params: {
   };
   logger: Logger;
   subagent?: Parameters<typeof generateAndAppendDreamNarrative>[0]["subagent"];
+  deferredNarratives?: Promise<void>[];
   nowMs?: number;
 }): Promise<void> {
   const nowMs = Number.isFinite(params.nowMs) ? (params.nowMs as number) : Date.now();
@@ -1630,7 +1637,7 @@ async function runRemDreaming(params: {
               .filter(Boolean),
       ...(themes.length > 0 ? { themes } : {}),
     };
-    await generateAndAppendDreamNarrative({
+    const task = generateAndAppendDreamNarrative({
       subagent: params.subagent,
       workspaceDir: params.workspaceDir,
       data,
@@ -1638,6 +1645,11 @@ async function runRemDreaming(params: {
       timezone: params.config.timezone,
       logger: params.logger,
     });
+    if (params.deferredNarratives) {
+      params.deferredNarratives.push(task);
+    } else {
+      await task;
+    }
   }
 }
 
@@ -1647,6 +1659,7 @@ export async function runDreamingSweepPhases(params: {
   cfg?: OpenClawConfig;
   logger: Logger;
   subagent?: Parameters<typeof generateAndAppendDreamNarrative>[0]["subagent"];
+  deferredNarratives?: Promise<void>[];
   nowMs?: number;
 }): Promise<void> {
   const light = resolveMemoryLightDreamingConfig({
@@ -1660,6 +1673,7 @@ export async function runDreamingSweepPhases(params: {
       config: light,
       logger: params.logger,
       subagent: params.subagent,
+      deferredNarratives: params.deferredNarratives,
       nowMs: params.nowMs,
     });
   }
@@ -1675,6 +1689,7 @@ export async function runDreamingSweepPhases(params: {
       config: rem,
       logger: params.logger,
       subagent: params.subagent,
+      deferredNarratives: params.deferredNarratives,
       nowMs: params.nowMs,
     });
   }
