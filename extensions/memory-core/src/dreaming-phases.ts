@@ -1488,7 +1488,7 @@ async function runLightDreaming(params: {
   };
   logger: Logger;
   subagent?: Parameters<typeof generateAndAppendDreamNarrative>[0]["subagent"];
-  deferredNarratives?: Promise<void>[];
+  detachNarratives?: boolean;
   nowMs?: number;
 }): Promise<void> {
   const nowMs = Number.isFinite(params.nowMs) ? (params.nowMs as number) : Date.now();
@@ -1557,8 +1557,8 @@ async function runLightDreaming(params: {
       timezone: params.config.timezone,
       logger: params.logger,
     });
-    if (params.deferredNarratives) {
-      params.deferredNarratives.push(task);
+    if (params.detachNarratives) {
+      void task.catch(() => undefined);
     } else {
       await task;
     }
@@ -1574,7 +1574,7 @@ async function runRemDreaming(params: {
   };
   logger: Logger;
   subagent?: Parameters<typeof generateAndAppendDreamNarrative>[0]["subagent"];
-  deferredNarratives?: Promise<void>[];
+  detachNarratives?: boolean;
   nowMs?: number;
 }): Promise<void> {
   const nowMs = Number.isFinite(params.nowMs) ? (params.nowMs as number) : Date.now();
@@ -1645,8 +1645,8 @@ async function runRemDreaming(params: {
       timezone: params.config.timezone,
       logger: params.logger,
     });
-    if (params.deferredNarratives) {
-      params.deferredNarratives.push(task);
+    if (params.detachNarratives) {
+      void task.catch(() => undefined);
     } else {
       await task;
     }
@@ -1659,7 +1659,7 @@ export async function runDreamingSweepPhases(params: {
   cfg?: OpenClawConfig;
   logger: Logger;
   subagent?: Parameters<typeof generateAndAppendDreamNarrative>[0]["subagent"];
-  deferredNarratives?: Promise<void>[];
+  detachNarratives?: boolean;
   nowMs?: number;
 }): Promise<void> {
   const light = resolveMemoryLightDreamingConfig({
@@ -1673,7 +1673,7 @@ export async function runDreamingSweepPhases(params: {
       config: light,
       logger: params.logger,
       subagent: params.subagent,
-      deferredNarratives: params.deferredNarratives,
+      detachNarratives: params.detachNarratives,
       nowMs: params.nowMs,
     });
   }
@@ -1689,7 +1689,7 @@ export async function runDreamingSweepPhases(params: {
       config: rem,
       logger: params.logger,
       subagent: params.subagent,
-      deferredNarratives: params.deferredNarratives,
+      detachNarratives: params.detachNarratives,
       nowMs: params.nowMs,
     });
   }
