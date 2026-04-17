@@ -12,6 +12,7 @@ import {
   formatStepFailure,
   installCanaryArtifactCleanup,
   isBoundaryCompileFresh,
+  resolveBoundaryCheckSelection,
   resolveBoundaryCheckLockPath,
   resolveCanaryArtifactPaths,
   runNodeStepAsync,
@@ -165,6 +166,29 @@ describe("check-extension-package-tsc-boundary", () => {
     );
   });
 
+  it("adds the scope label when the boundary check was CI-scoped", () => {
+    expect(
+      formatBoundaryCheckSuccessSummary({
+        mode: "all",
+        scope: "scoped",
+        compileCount: 2,
+        skippedCompileCount: 0,
+        canaryCount: 1,
+        elapsedMs: 1_234,
+      }),
+    ).toBe(
+      [
+        "extension package boundary check passed",
+        "mode: all",
+        "scope: scoped",
+        "compiled plugins: 2",
+        "canary plugins: 1",
+        "elapsed: 1234ms",
+        "",
+      ].join("\n"),
+    );
+  });
+
   it("omits phase timings that never ran", () => {
     expect(
       formatBoundaryCheckSuccessSummary({
@@ -218,6 +242,50 @@ describe("check-extension-package-tsc-boundary", () => {
         limit: 2,
       }),
     ).toBe(["slowest plugin compiles:", "- slow: 900ms", "- medium: 250ms", ""].join("\n"));
+  });
+
+  it("keeps the full sweep when shared plugin-sdk paths changed", () => {
+    expect(
+      resolveBoundaryCheckSelection({
+        optInExtensionIds: ["browser", "matrix", "zalo"],
+        changedExtensionIds: ["browser"],
+        changedPaths: ["src/plugin-sdk/provider-entry.ts"],
+        resolveCanaryExtensionIds: (extensionIds: string[]) => extensionIds.slice(0, 2),
+      }),
+    ).toEqual({
+      scope: "full",
+      compileExtensionIds: ["browser", "matrix", "zalo"],
+      canaryExtensionIds: ["browser", "matrix"],
+    });
+  });
+
+  it("scopes CI compiles to changed opt-in extensions when only extension-local paths changed", () => {
+    expect(
+      resolveBoundaryCheckSelection({
+        optInExtensionIds: ["browser", "matrix", "zalo"],
+        changedExtensionIds: ["browser", "matrix"],
+        changedPaths: ["extensions/browser/src/runtime.ts", "docs/plugins/sdk-overview.md"],
+        resolveCanaryExtensionIds: (extensionIds: string[]) => extensionIds,
+      }),
+    ).toEqual({
+      scope: "scoped",
+      compileExtensionIds: ["browser", "matrix"],
+      canaryExtensionIds: ["browser", "matrix"],
+    });
+  });
+
+  it("skips the boundary sweep when no opt-in extension or shared path changed", () => {
+    expect(
+      resolveBoundaryCheckSelection({
+        optInExtensionIds: ["browser", "matrix", "zalo"],
+        changedExtensionIds: ["docs-helper"],
+        changedPaths: ["docs/reference/cli.md"],
+      }),
+    ).toEqual({
+      scope: "skip",
+      compileExtensionIds: [],
+      canaryExtensionIds: [],
+    });
   });
 
   it("treats a plugin compile as fresh only when its outputs are newer than plugin and shared sdk inputs", () => {

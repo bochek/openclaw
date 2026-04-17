@@ -70,6 +70,11 @@ function listChangedPaths(base, head = "HEAD") {
     .filter((line) => line.length > 0);
 }
 
+export function listChangedPathsForScope(params = {}) {
+  const head = params.head ?? "HEAD";
+  return listChangedPaths(resolveChangedPathsBase(params), head);
+}
+
 function hasExtensionPackage(extensionId) {
   return fs.existsSync(path.join(repoRoot, BUNDLED_PLUGIN_ROOT_DIR, extensionId, "package.json"));
 }
@@ -122,8 +127,7 @@ export function listChangedExtensionIds(params = {}) {
   const unavailableBaseBehavior = params.unavailableBaseBehavior ?? "error";
 
   try {
-    const base = resolveChangedPathsBase(params);
-    return detectChangedExtensionIds(listChangedPaths(base, head));
+    return detectChangedExtensionIds(listChangedPathsForScope({ ...params, head }));
   } catch (error) {
     if (unavailableBaseBehavior === "all") {
       return listAvailableExtensionIds();

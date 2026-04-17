@@ -28,6 +28,33 @@ const COMPILE_INPUT_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", 
 const ROOTDIR_BOUNDARY_CANARY_IMPORT_PATH =
   "../../src/plugins/contracts/rootdir-boundary-canary.ts";
 const ROOTDIR_BOUNDARY_CANARY_OUTPUT_HINT = "src/plugins/contracts/rootdir-boundary-canary.ts";
+const BOUNDARY_FULL_SWEEP_PATHS = new Set([
+  "package.json",
+  "pnpm-lock.yaml",
+  "scripts/check-extension-package-tsc-boundary.mjs",
+  "scripts/prepare-extension-package-boundary-artifacts.mjs",
+  "scripts/write-plugin-sdk-entry-dts.ts",
+  "scripts/lib/plugin-sdk-entries.mjs",
+  "scripts/lib/plugin-sdk-entrypoints.json",
+  "src/plugins/contracts/rootdir-boundary-canary.ts",
+  "src/video-generation/dashscope-compatible.ts",
+  "src/video-generation/types.ts",
+  "tsconfig.json",
+  "tsconfig.package-boundary.base.json",
+  "tsconfig.plugin-sdk.dts.json",
+]);
+const BOUNDARY_FULL_SWEEP_PREFIXES = [
+  "packages/plugin-sdk/",
+  "src/channels/plugins/",
+  "src/plugin-sdk/",
+  "src/types/",
+];
+
+function normalizeRepoPath(filePath) {
+  return String(filePath ?? "")
+    .replaceAll("\\", "/")
+    .replace(/^\.\/+/, "");
+}
 
 function parseMode(argv) {
   const modeArg = argv.find((arg) => arg.startsWith("--mode="));
@@ -85,6 +112,9 @@ export function formatBoundaryCheckSuccessSummary(params = {}) {
   const lines = ["extension package boundary check passed"];
   if (params.mode) {
     lines.push(`mode: ${params.mode}`);
+  }
+  if (params.scope) {
+    lines.push(`scope: ${params.scope}`);
   }
   if (Number.isInteger(params.compileCount)) {
     lines.push(`compiled plugins: ${params.compileCount}`);
@@ -193,6 +223,97 @@ function collectCanaryExtensionIds(extensionIds) {
       ]),
     ).values(),
   ];
+}
+
+function isBoundaryFullSweepPath(filePath) {
+  const normalizedPath = normalizeRepoPath(filePath);
+  return (
+    BOUNDARY_FULL_SWEEP_PATHS.has(normalizedPath) ||
+    BOUNDARY_FULL_SWEEP_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix))
+  );
+}
+
+function parseChangedExtensionsMatrix(rawMatrix) {
+  if (!rawMatrix || !rawMatrix.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(rawMatrix);
+    if (!Array.isArray(parsed?.include)) {
+      return [];
+    }
+    return [
+      ...new Set(
+        parsed.include
+          .map((entry) => (typeof entry?.extension === "string" ? entry.extension : ""))
+          .filter(Boolean),
+      ),
+    ].toSorted((left, right) => left.localeCompare(right));
+  } catch {
+    return [];
+  }
+}
+
+function parseChangedPathsJson(rawPaths) {
+  if (!rawPaths || !rawPaths.trim()) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(rawPaths);
+    if (!Array.isArray(parsed)) {
+      return null;
+    }
+    return [...new Set(parsed.map((entry) => normalizeRepoPath(entry)).filter(Boolean))].toSorted();
+  } catch {
+    return null;
+  }
+}
+
+export function resolveBoundaryCheckSelection(params = {}) {
+  const optInExtensionIds = Array.isArray(params.optInExtensionIds)
+    ? [...params.optInExtensionIds]
+    : [];
+  const changedPaths = params.changedPaths;
+  const changedExtensionIds = Array.isArray(params.changedExtensionIds)
+    ? [...params.changedExtensionIds]
+    : [];
+  const resolveCanaryIds = params.resolveCanaryExtensionIds ?? collectCanaryExtensionIds;
+
+  if (!Array.isArray(changedPaths) || changedPaths.length === 0) {
+    return {
+      scope: "full",
+      compileExtensionIds: optInExtensionIds,
+      canaryExtensionIds: resolveCanaryIds(optInExtensionIds),
+    };
+  }
+
+  if (changedPaths.some((filePath) => isBoundaryFullSweepPath(filePath))) {
+    return {
+      scope: "full",
+      compileExtensionIds: optInExtensionIds,
+      canaryExtensionIds: resolveCanaryIds(optInExtensionIds),
+    };
+  }
+
+  const optInExtensionIdSet = new Set(optInExtensionIds);
+  const scopedExtensionIds = changedExtensionIds
+    .filter((extensionId) => optInExtensionIdSet.has(extensionId))
+    .toSorted((left, right) => left.localeCompare(right));
+  if (scopedExtensionIds.length === 0) {
+    return {
+      scope: "skip",
+      compileExtensionIds: [],
+      canaryExtensionIds: [],
+    };
+  }
+
+  return {
+    scope: "scoped",
+    compileExtensionIds: scopedExtensionIds,
+    canaryExtensionIds: resolveCanaryIds(scopedExtensionIds),
+  };
 }
 
 function isRelevantCompileInput(filePath) {
@@ -768,7 +889,15 @@ export async function main(argv = process.argv.slice(2)) {
   const startedAt = Date.now();
   const mode = parseMode(argv);
   const optInExtensionIds = collectOptInExtensionIds();
-  const canaryExtensionIds = collectCanaryExtensionIds(optInExtensionIds);
+  const selection = resolveBoundaryCheckSelection({
+    optInExtensionIds,
+    changedExtensionIds: parseChangedExtensionsMatrix(
+      process.env.OPENCLAW_EXTENSION_BOUNDARY_CHANGED_EXTENSIONS_MATRIX,
+    ),
+    changedPaths: parseChangedPathsJson(process.env.OPENCLAW_EXTENSION_BOUNDARY_CHANGED_PATHS_JSON),
+  });
+  const compileExtensionIds = selection.compileExtensionIds;
+  const canaryExtensionIds = selection.canaryExtensionIds;
   const cleanupExtensionIds = optInExtensionIds;
   const shouldRunCanary = mode === "all" || mode === "canary";
   const releaseBoundaryLock = acquireBoundaryCheckLock();
@@ -782,16 +911,17 @@ export async function main(argv = process.argv.slice(2)) {
 
   try {
     cleanupCanaryArtifactsForExtensions(cleanupExtensionIds);
-    if (mode === "all" || mode === "compile") {
+    if ((mode === "all" || mode === "compile") && compileExtensionIds.length > 0) {
       ({ prepElapsedMs, compileCount, skippedCompileCount, compileElapsedMs, compileTimings } =
-        await runCompileCheck(optInExtensionIds));
+        await runCompileCheck(compileExtensionIds));
     }
-    if (shouldRunCanary) {
+    if (shouldRunCanary && canaryExtensionIds.length > 0) {
       ({ canaryElapsedMs } = await runCanaryCheck(canaryExtensionIds));
     }
     process.stdout.write(
       formatBoundaryCheckSuccessSummary({
         mode,
+        scope: selection.scope,
         compileCount,
         skippedCompileCount,
         canaryCount: shouldRunCanary ? canaryExtensionIds.length : 0,
