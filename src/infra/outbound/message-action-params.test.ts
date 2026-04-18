@@ -47,6 +47,27 @@ describe("message action media helpers", () => {
     expect(resolveChannelMessageToolMediaSourceParamKeysMock).not.toHaveBeenCalled();
   });
 
+  it("skips plugin media discovery for shared poll params and their snake_case aliases", () => {
+    expect(
+      resolveExtraActionMediaSourceParamKeys({
+        cfg,
+        action: "send",
+        channel: "slack",
+        args: {
+          channel: "slack",
+          target: "#C12345678",
+          message: "hi",
+          pollDurationSeconds: "60",
+          pollPublic: "true",
+          poll_question: "Ready?",
+          poll_option: ["Yes", "No"],
+          poll_public: "false",
+        },
+      }),
+    ).toEqual([]);
+    expect(resolveChannelMessageToolMediaSourceParamKeysMock).not.toHaveBeenCalled();
+  });
+
   it("discovers plugin media params when args include an extension-owned field", () => {
     expect(
       resolveExtraActionMediaSourceParamKeys({
