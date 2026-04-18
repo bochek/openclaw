@@ -9,7 +9,7 @@ import {
   resolveBootstrapTotalMaxChars,
 } from "../agents/pi-embedded-helpers.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
-import { resolveCurrentLabsModelId } from "../labs/model-overrides.js";
+import { resolveCurrentLabsModelId } from "../lab/model-overrides.js";
 import { note } from "../terminal/note.js";
 
 function formatInt(value: number): string {

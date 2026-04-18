@@ -12,9 +12,9 @@ import { openBoundaryFile } from "../infra/boundary-file-read.js";
 import { normalizeAgentId } from "../routing/session-key.js";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 
-const LABS_PLUGIN_ID = "labs";
-const LABS_MODEL_OVERRIDE_ROOT_SEGMENTS = [".openclaw", "labs", "overrides"] as const;
-const LABS_AGENT_OVERRIDE_ROOT_SEGMENTS = [".openclaw", "labs", "agents"] as const;
+const LABS_PLUGIN_ID = "lab";
+const LABS_MODEL_OVERRIDE_ROOT_SEGMENTS = [".openclaw", "lab", "overrides"] as const;
+const LABS_AGENT_OVERRIDE_ROOT_SEGMENTS = [".openclaw", "lab", "agents"] as const;
 const MAX_LABS_OVERRIDE_BYTES = 2 * 1024 * 1024;
 
 export type LabsAgentsAddendumKind = "model" | "agent";
@@ -155,8 +155,8 @@ export function isLabsAgentsOverridePath(pathValue: string): boolean {
     return false;
   }
   return (
-    (normalized.includes("/.openclaw/labs/overrides/") ||
-      normalized.includes("/.openclaw/labs/agents/")) &&
+    (normalized.includes("/.openclaw/lab/overrides/") ||
+      normalized.includes("/.openclaw/lab/agents/")) &&
     normalized.endsWith(`/${DEFAULT_AGENTS_FILENAME}`)
   );
 }

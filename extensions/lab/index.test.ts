@@ -33,7 +33,7 @@ vi.mock("../../src/gateway/session-utils.js", () => ({
   loadGatewaySessionRow: runtimeMocks.loadGatewaySessionRow,
 }));
 
-vi.mock("../../src/labs/model-overrides.js", () => ({
+vi.mock("../../src/lab/model-overrides.js", () => ({
   loadLabsModelAgentsOverride: runtimeMocks.loadLabsModelAgentsOverride,
   loadLabsAgentAgentsOverride: runtimeMocks.loadLabsAgentAgentsOverride,
   resolveCurrentLabsModelId: runtimeMocks.resolveCurrentLabsModelId,
@@ -52,7 +52,7 @@ function registerLabsCommand(params?: {
   let command: OpenClawPluginCommandDefinition | undefined;
   labsPlugin.register(
     createTestPluginApi({
-      id: "labs",
+      id: "lab",
       name: "Lab",
       source: "test",
       runtime: params?.runtime,
@@ -62,12 +62,12 @@ function registerLabsCommand(params?: {
     }),
   );
   if (!command) {
-    throw new Error("labs plugin did not register /lab");
+    throw new Error("lab plugin did not register /lab");
   }
   return command;
 }
 
-describe("labs /lab", () => {
+describe("lab /lab", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     runtimeMocks.resolveSessionAgentIds.mockReturnValue({ sessionAgentId: "reviewer" });
@@ -88,25 +88,25 @@ describe("labs /lab", () => {
     });
     runtimeMocks.resolveCurrentLabsModelId.mockReturnValue("gpt-5.4");
     runtimeMocks.resolveLabsModelAgentsOverridePath.mockReturnValue(
-      "/tmp/workspace/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+      "/tmp/workspace/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
     );
     runtimeMocks.resolveLabsAgentAgentsOverridePath.mockReturnValue(
-      "/tmp/workspace/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+      "/tmp/workspace/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
     );
     runtimeMocks.listActiveLabsAgentsOverridePaths.mockReturnValue([
-      "/tmp/workspace/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
-      "/tmp/workspace/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+      "/tmp/workspace/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
+      "/tmp/workspace/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
     ]);
     runtimeMocks.loadLabsModelAgentsOverride.mockResolvedValue({
       name: "AGENTS.md",
-      path: "/tmp/workspace/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+      path: "/tmp/workspace/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
       content: "model",
       missing: false,
       labsKind: "model",
     });
     runtimeMocks.loadLabsAgentAgentsOverride.mockResolvedValue({
       name: "AGENTS.md",
-      path: "/tmp/workspace/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+      path: "/tmp/workspace/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
       content: "agent",
       missing: false,
       labsKind: "agent",
@@ -141,15 +141,15 @@ describe("labs /lab", () => {
     expect(result?.text).toContain("agent override: present");
     expect(result?.text).toContain("checked paths:");
     expect(result?.text).toContain(
-      "- model: /tmp/workspace/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+      "- model: /tmp/workspace/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
     );
     expect(result?.text).toContain(
-      "- agent: /tmp/workspace/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+      "- agent: /tmp/workspace/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
     );
     expect(result?.text).toContain("active addenda:");
-    expect(result?.text).toContain("/tmp/workspace/.openclaw/labs/overrides/gpt-5.4/AGENTS.md");
+    expect(result?.text).toContain("/tmp/workspace/.openclaw/lab/overrides/gpt-5.4/AGENTS.md");
     expect(result?.text).toContain(
-      "/tmp/workspace/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+      "/tmp/workspace/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
     );
     expect(result?.text).toContain("truncated: no");
   });
@@ -195,7 +195,7 @@ describe("labs /lab", () => {
       config: {
         plugins: {
           entries: {
-            labs: {
+            lab: {
               enabled: false,
             },
           },
@@ -211,10 +211,10 @@ describe("labs /lab", () => {
     expect(result?.text).toContain("agent override: absent");
     expect(result?.text).toContain("checked paths:");
     expect(result?.text).toContain(
-      "- model: /tmp/workspace/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+      "- model: /tmp/workspace/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
     );
     expect(result?.text).toContain(
-      "- agent: /tmp/workspace/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+      "- agent: /tmp/workspace/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
     );
     expect(result?.text).toContain("active addenda:");
     expect(result?.text).toContain("- none");
@@ -225,7 +225,7 @@ describe("labs /lab", () => {
     runtimeMocks.loadLabsModelAgentsOverride.mockResolvedValue(null);
     runtimeMocks.loadLabsAgentAgentsOverride.mockResolvedValue({
       name: "AGENTS.md",
-      path: "/tmp/workspace/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+      path: "/tmp/workspace/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
       content: "agent",
       missing: false,
       labsKind: "agent",
@@ -298,7 +298,7 @@ describe("labs /lab", () => {
     expect(runtimeConfig).toMatchObject({
       plugins: {
         entries: {
-          labs: {
+          lab: {
             enabled: true,
             config: {
               modelOverrides: {

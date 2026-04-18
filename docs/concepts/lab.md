@@ -41,7 +41,7 @@ Notes:
 - the stored config path is still:
 
 ```toml
-[plugins.entries.labs.config.modelOverrides]
+[plugins.entries.lab.config.modelOverrides]
 enabled = true
 ```
 
@@ -53,20 +53,20 @@ instructions from the workspace into the system prompt.
 Live files:
 
 ```txt
-<workspace>/.openclaw/labs/overrides/<model-id>/AGENTS.md
-<workspace>/.openclaw/labs/agents/<agent-id>/overrides/<model-id>/AGENTS.md
+<workspace>/.openclaw/lab/overrides/<model-id>/AGENTS.md
+<workspace>/.openclaw/lab/agents/<agent-id>/overrides/<model-id>/AGENTS.md
 ```
 
 Instructional-only files:
 
 ```txt
-<workspace>/.openclaw/labs/overrides/<model-id>/defaults/*.md
+<workspace>/.openclaw/lab/overrides/<model-id>/defaults/*.md
 ```
 
 `defaults/` does **not** load into the system prompt. It exists so users have a
 safe place to start from when copying or tuning their own live overrides.
 
-See [Custom Overrides](/concepts/labs-custom-overrides) for the full path and
+See [Custom Overrides](/concepts/lab-custom-overrides) for the full path and
 precedence rules.
 
 ## Current prompt order

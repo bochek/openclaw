@@ -2,7 +2,7 @@
 title: "GPT-5.4 Tuning"
 summary: "How to tune the shipped GPT-5.4 Lab addendum and what each block actually changes"
 read_when:
-  - You want to edit `.openclaw/labs/overrides/gpt-5.4/AGENTS.md`
+  - You want to edit `.openclaw/lab/overrides/gpt-5.4/AGENTS.md`
   - You want to understand the XML-style blocks in the GPT-5.4 Lab addendum
   - You want practical tuning guidance that matches what OpenClaw actually ships
 ---
@@ -17,7 +17,7 @@ completion criteria, progress updates, and persona stability.
 In OpenClaw, these blocks live in:
 
 ```txt
-.openclaw/labs/overrides/gpt-5.4/AGENTS.md
+.openclaw/lab/overrides/gpt-5.4/AGENTS.md
 ```
 
 When Lab custom overrides are enabled, that file becomes a **prepended**
@@ -36,7 +36,7 @@ If you only want the shortest useful version:
 2. Edit the live GPT-5.4 addendum:
 
 ```txt
-.openclaw/labs/overrides/gpt-5.4/AGENTS.md
+.openclaw/lab/overrides/gpt-5.4/AGENTS.md
 ```
 
 3. Change the smallest block that matches the behavior you want.

@@ -1067,9 +1067,9 @@
                   {
                     "group": "Lab",
                     "pages": [
-                      "concepts/labs",
-                      "concepts/labs-custom-overrides",
-                      "concepts/labs-gpt54-tuning"
+                      "concepts/lab",
+                      "concepts/lab-custom-overrides",
+                      "concepts/lab-gpt54-tuning"
                     ]
                   }
                 ]

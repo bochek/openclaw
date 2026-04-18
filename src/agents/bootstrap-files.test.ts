@@ -119,7 +119,7 @@ describe("resolveBootstrapContextForRun", () => {
     expect(result.contextFiles.some((file) => file.path.endsWith("AGENTS.md"))).toBe(true);
   });
 
-  it("loads the Labs model and agent AGENTS addenda as separate context files before the root AGENTS.md", async () => {
+  it("loads the Lab model and agent AGENTS addenda as separate context files before the root AGENTS.md", async () => {
     const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-");
     await fs.writeFile(path.join(workspaceDir, "AGENTS.md"), "base repo rules", "utf8");
     await fs.writeFile(
@@ -127,16 +127,16 @@ describe("resolveBootstrapContextForRun", () => {
       "The contract near the top wins unless specifically overridden.",
       "utf8",
     );
-    await fs.mkdir(path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4"), {
+    await fs.mkdir(path.join(workspaceDir, ".openclaw", "lab", "overrides", "gpt-5.4"), {
       recursive: true,
     });
     await fs.writeFile(
-      path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4", "AGENTS.md"),
+      path.join(workspaceDir, ".openclaw", "lab", "overrides", "gpt-5.4", "AGENTS.md"),
       "gpt-5.4 addendum",
       "utf8",
     );
     await fs.mkdir(
-      path.join(workspaceDir, ".openclaw", "labs", "agents", "reviewer", "overrides", "gpt-5.4"),
+      path.join(workspaceDir, ".openclaw", "lab", "agents", "reviewer", "overrides", "gpt-5.4"),
       {
         recursive: true,
       },
@@ -145,7 +145,7 @@ describe("resolveBootstrapContextForRun", () => {
       path.join(
         workspaceDir,
         ".openclaw",
-        "labs",
+        "lab",
         "agents",
         "reviewer",
         "overrides",
@@ -156,7 +156,7 @@ describe("resolveBootstrapContextForRun", () => {
       "utf8",
     );
     await fs.mkdir(
-      path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4", "defaults"),
+      path.join(workspaceDir, ".openclaw", "lab", "overrides", "gpt-5.4", "defaults"),
       {
         recursive: true,
       },
@@ -165,7 +165,7 @@ describe("resolveBootstrapContextForRun", () => {
       path.join(
         workspaceDir,
         ".openclaw",
-        "labs",
+        "lab",
         "overrides",
         "gpt-5.4",
         "defaults",
@@ -182,7 +182,7 @@ describe("resolveBootstrapContextForRun", () => {
       config: {
         plugins: {
           entries: {
-            labs: {
+            lab: {
               enabled: true,
               config: {
                 modelOverrides: {
@@ -200,7 +200,7 @@ describe("resolveBootstrapContextForRun", () => {
     const modelAddendumPath = path.join(
       workspaceDir,
       ".openclaw",
-      "labs",
+      "lab",
       "overrides",
       "gpt-5.4",
       "AGENTS.md",
@@ -208,7 +208,7 @@ describe("resolveBootstrapContextForRun", () => {
     const agentAddendumPath = path.join(
       workspaceDir,
       ".openclaw",
-      "labs",
+      "lab",
       "agents",
       "reviewer",
       "overrides",
@@ -245,13 +245,13 @@ describe("resolveBootstrapContextForRun", () => {
     );
   });
 
-  it("keeps lightweight cron bootstrap context empty even when Labs addenda exist", async () => {
+  it("keeps lightweight cron bootstrap context empty even when Lab addenda exist", async () => {
     const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-");
-    await fs.mkdir(path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4"), {
+    await fs.mkdir(path.join(workspaceDir, ".openclaw", "lab", "overrides", "gpt-5.4"), {
       recursive: true,
     });
     await fs.writeFile(
-      path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4", "AGENTS.md"),
+      path.join(workspaceDir, ".openclaw", "lab", "overrides", "gpt-5.4", "AGENTS.md"),
       "gpt-5.4 addendum",
       "utf8",
     );
@@ -264,7 +264,7 @@ describe("resolveBootstrapContextForRun", () => {
       config: {
         plugins: {
           entries: {
-            labs: {
+            lab: {
               enabled: true,
               config: {
                 modelOverrides: {
@@ -280,14 +280,14 @@ describe("resolveBootstrapContextForRun", () => {
     expect(result.contextFiles).toEqual([]);
   });
 
-  it("keeps lightweight heartbeat bootstrap context heartbeat-only even when Labs addenda exist", async () => {
+  it("keeps lightweight heartbeat bootstrap context heartbeat-only even when Lab addenda exist", async () => {
     const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-");
     await fs.writeFile(path.join(workspaceDir, "HEARTBEAT.md"), "check inbox", "utf8");
-    await fs.mkdir(path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4"), {
+    await fs.mkdir(path.join(workspaceDir, ".openclaw", "lab", "overrides", "gpt-5.4"), {
       recursive: true,
     });
     await fs.writeFile(
-      path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4", "AGENTS.md"),
+      path.join(workspaceDir, ".openclaw", "lab", "overrides", "gpt-5.4", "AGENTS.md"),
       "gpt-5.4 addendum",
       "utf8",
     );
@@ -300,7 +300,7 @@ describe("resolveBootstrapContextForRun", () => {
       config: {
         plugins: {
           entries: {
-            labs: {
+            lab: {
               enabled: true,
               config: {
                 modelOverrides: {

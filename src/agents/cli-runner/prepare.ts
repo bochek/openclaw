@@ -116,11 +116,11 @@ export async function prepareCliRunContext(
   });
   if (bootstrapPromptWarning.warningShown) {
     const truncatedLabsFile = bootstrapAnalysis.truncatedFiles.find((file) =>
-      file.path.replace(/\\/g, "/").includes("/.openclaw/labs/"),
+      file.path.replace(/\\/g, "/").includes("/.openclaw/lab/"),
     );
     if (truncatedLabsFile) {
       cliBackendLog.warn(
-        `[labs] addendum truncated model=${modelId} path=${truncatedLabsFile.path}`,
+        `[lab] addendum truncated model=${modelId} path=${truncatedLabsFile.path}`,
       );
     }
   }

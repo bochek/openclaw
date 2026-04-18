@@ -27,7 +27,7 @@ vi.mock("../agents/pi-embedded-helpers.js", () => ({
   resolveBootstrapTotalMaxChars,
 }));
 
-vi.mock("../labs/model-overrides.js", () => ({
+vi.mock("../lab/model-overrides.js", () => ({
   resolveCurrentLabsModelId,
 }));
 

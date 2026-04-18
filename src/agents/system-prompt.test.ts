@@ -151,15 +151,15 @@ describe("buildAgentSystemPrompt", () => {
     expect(promptPrefix).toContain("Promoted From Short-Term Memory");
   });
 
-  it("keeps Labs model and agent AGENTS addenda before the root AGENTS.md in developer context", () => {
+  it("keeps Lab model and agent AGENTS addenda before the root AGENTS.md in developer context", () => {
     const channels = buildAgentPromptChannels({
       workspaceDir: "/tmp/openclaw",
       contextFiles: [
         {
-          path: "/tmp/openclaw/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
-          content: "agent labs",
+          path: "/tmp/openclaw/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+          content: "agent lab",
         },
-        { path: "/tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md", content: "labs" },
+        { path: "/tmp/openclaw/.openclaw/lab/overrides/gpt-5.4/AGENTS.md", content: "lab" },
         { path: "AGENTS.md", content: "base" },
       ],
       routing: {
@@ -172,10 +172,10 @@ describe("buildAgentSystemPrompt", () => {
     const developerPrompt = channels.developerPrompt ?? "";
     const rootIndex = developerPrompt.indexOf("## AGENTS.md");
     const modelLabsIndex = developerPrompt.indexOf(
-      "## /tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+      "## /tmp/openclaw/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
     );
     const agentLabsIndex = developerPrompt.indexOf(
-      "## /tmp/openclaw/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+      "## /tmp/openclaw/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
     );
 
     expect(modelLabsIndex).toBeGreaterThanOrEqual(0);
@@ -183,17 +183,17 @@ describe("buildAgentSystemPrompt", () => {
     expect(rootIndex).toBeGreaterThan(agentLabsIndex);
   });
 
-  it("routes the Labs model and agent AGENTS addenda with the same developer target as AGENTS.md", () => {
+  it("routes the Lab model and agent AGENTS addenda with the same developer target as AGENTS.md", () => {
     const channels = buildAgentPromptChannels({
       workspaceDir: "/tmp/openclaw",
       contextFiles: [
         { path: "AGENTS.md", content: "base guidance" },
         {
-          path: "/tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
-          content: "labs guidance",
+          path: "/tmp/openclaw/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
+          content: "lab guidance",
         },
         {
-          path: "/tmp/openclaw/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+          path: "/tmp/openclaw/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
           content: "agent guidance",
         },
       ],
@@ -205,30 +205,30 @@ describe("buildAgentSystemPrompt", () => {
     });
 
     expect(channels.systemPrompt).not.toContain(
-      "## /tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+      "## /tmp/openclaw/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
     );
     expect(channels.systemPrompt).not.toContain(
-      "## /tmp/openclaw/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+      "## /tmp/openclaw/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
     );
     expect(channels.developerPrompt).toContain(
-      "## /tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+      "## /tmp/openclaw/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
     );
     expect(channels.developerPrompt).toContain(
-      "## /tmp/openclaw/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+      "## /tmp/openclaw/.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
     );
-    expect(channels.developerPrompt).toContain("labs guidance");
+    expect(channels.developerPrompt).toContain("lab guidance");
     expect(channels.developerPrompt).toContain("agent guidance");
   });
 
-  it("prefers the root AGENTS.md route for Labs addenda when multiple AGENTS routes exist", () => {
+  it("prefers the root AGENTS.md route for Lab addenda when multiple AGENTS routes exist", () => {
     const channels = buildAgentPromptChannels({
       workspaceDir: "/tmp/openclaw",
       contextFiles: [
         { path: "AGENTS.md", content: "root guidance" },
         { path: "packages/core/AGENTS.md", content: "package guidance" },
         {
-          path: "/tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
-          content: "labs guidance",
+          path: "/tmp/openclaw/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
+          content: "lab guidance",
         },
       ],
       routing: {
@@ -243,8 +243,8 @@ describe("buildAgentSystemPrompt", () => {
         { path: "AGENTS.md", content: "root guidance" },
         { path: "packages/core/AGENTS.md", content: "package guidance" },
         {
-          path: "/tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
-          content: "labs guidance",
+          path: "/tmp/openclaw/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
+          content: "lab guidance",
         },
       ],
       routing: {
@@ -256,10 +256,10 @@ describe("buildAgentSystemPrompt", () => {
     });
 
     expect(channels.developerPrompt).toContain(
-      "## /tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+      "## /tmp/openclaw/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
     );
     expect(promptPrefix).not.toContain(
-      "## /tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+      "## /tmp/openclaw/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
     );
   });
 
@@ -300,8 +300,8 @@ describe("buildAgentSystemPrompt", () => {
       contextFiles: [
         { path: "AGENTS.md", content: "agents guidance" },
         {
-          path: "/tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
-          content: "labs guidance",
+          path: "/tmp/openclaw/.openclaw/lab/overrides/gpt-5.4/AGENTS.md",
+          content: "lab guidance",
         },
         { path: "heartbeat.md", content: "dynamic system context" },
         { path: "FINAL_REMINDER.md", content: "final reminder" },

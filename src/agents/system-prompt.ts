@@ -4,7 +4,7 @@ import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { resolveChannelApprovalCapability } from "../channels/plugins/approvals.js";
 import { getChannelPlugin } from "../channels/plugins/index.js";
 import type { MemoryCitationsMode } from "../config/types.memory.js";
-import { isLabsAgentsOverridePath } from "../labs/model-overrides.js";
+import { isLabsAgentsOverridePath } from "../lab/model-overrides.js";
 import { buildMemoryPromptSection } from "../plugins/memory-state.js";
 import type { SilentReplyMode } from "../shared/silent-reply-policy.js";
 import {
@@ -91,10 +91,10 @@ function getLabsAgentsOverrideOrder(pathValue: string): number {
   if (!isLabsAgentsOverridePath(normalized)) {
     return 2;
   }
-  if (normalized.includes("/.openclaw/labs/overrides/")) {
+  if (normalized.includes("/.openclaw/lab/overrides/")) {
     return 0;
   }
-  if (normalized.includes("/.openclaw/labs/agents/")) {
+  if (normalized.includes("/.openclaw/lab/agents/")) {
     return 1;
   }
   return 0;
@@ -1212,7 +1212,7 @@ export function buildAgentPromptChannels(params: {
   }
 
   // Keep large stable prompt context above this seam so Anthropic-family
-  // transports can reuse it across labs and turns. Dynamic group/session
+  // transports can reuse it across lab addenda and turns. Dynamic group/session
   // additions and volatile project context below it are the primary cache invalidators.
   lines.push(SYSTEM_PROMPT_CACHE_BOUNDARY);
 

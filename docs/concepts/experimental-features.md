@@ -23,7 +23,7 @@ Treat them differently from normal config:
 
 Lab is related, but slightly different: it is an **experimental feature
 umbrella** exposed through the `/lab` command surface rather than a
-`*.experimental.*` config key. See [Lab](/concepts/labs).
+`*.experimental.*` config key. See [Lab](/concepts/lab).
 
 ## Currently documented flags
 

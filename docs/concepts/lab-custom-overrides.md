@@ -38,20 +38,20 @@ Disable it:
 Model-level live addendum:
 
 ```txt
-.openclaw/labs/overrides/<model-id>/AGENTS.md
+.openclaw/lab/overrides/<model-id>/AGENTS.md
 ```
 
 Agent-level live addendum:
 
 ```txt
-.openclaw/labs/agents/<agent-id>/overrides/<model-id>/AGENTS.md
+.openclaw/lab/agents/<agent-id>/overrides/<model-id>/AGENTS.md
 ```
 
 Examples:
 
 ```txt
-.openclaw/labs/overrides/gpt-5.4/AGENTS.md
-.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md
+.openclaw/lab/overrides/gpt-5.4/AGENTS.md
+.openclaw/lab/agents/reviewer/overrides/gpt-5.4/AGENTS.md
 ```
 
 Agent ids are normalized from the active session key. The override is keyed by
@@ -62,15 +62,15 @@ the **agent id**, not by an arbitrary folder name.
 Under the same model folder, Lab can also ship instructional reference files:
 
 ```txt
-.openclaw/labs/overrides/<model-id>/defaults/<name>.md
+.openclaw/lab/overrides/<model-id>/defaults/<name>.md
 ```
 
 Examples:
 
 ```txt
-.openclaw/labs/overrides/gpt-5.4/defaults/research.md
-.openclaw/labs/overrides/gpt-5.4/defaults/memo.md
-.openclaw/labs/overrides/gpt-5.4/defaults/frontend.md
+.openclaw/lab/overrides/gpt-5.4/defaults/research.md
+.openclaw/lab/overrides/gpt-5.4/defaults/memo.md
+.openclaw/lab/overrides/gpt-5.4/defaults/frontend.md
 ```
 
 These files are **not runtime inputs**. They do not load into the prompt, do
@@ -141,5 +141,5 @@ That avoids silent drift between:
 - the repo version you intend to ship
 - the live workspace version your bot is actually loading
 
-See [GPT-5.4 Tuning](/concepts/labs-gpt54-tuning) for the current shipped
+See [GPT-5.4 Tuning](/concepts/lab-gpt54-tuning) for the current shipped
 GPT-5.4 addendum structure and tuning guidance.

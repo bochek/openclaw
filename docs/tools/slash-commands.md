@@ -170,7 +170,7 @@ commands:
 - `/lab enable custom`
 - `/lab disable custom`
 
-See [Lab](/concepts/labs).
+See [Lab](/concepts/lab).
 
 ### Dynamic skill commands
 

@@ -106,8 +106,8 @@ Bootstrap files are trimmed and appended under **Project Context** so the model 
 When Lab custom overrides are enabled, OpenClaw can also inject additional
 `AGENTS.md` addenda from:
 
-- `.openclaw/labs/overrides/<model-id>/AGENTS.md`
-- `.openclaw/labs/agents/<agent-id>/overrides/<model-id>/AGENTS.md`
+- `.openclaw/lab/overrides/<model-id>/AGENTS.md`
+- `.openclaw/lab/agents/<agent-id>/overrides/<model-id>/AGENTS.md`
 
 All of these files are **injected into the context window** on every turn unless
 a file-specific gate applies. `HEARTBEAT.md` is omitted on normal runs when

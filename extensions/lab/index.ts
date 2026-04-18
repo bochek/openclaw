@@ -17,19 +17,19 @@ import {
   resolveCurrentLabsModelId,
   resolveLabsAgentAgentsOverridePath,
   resolveLabsModelAgentsOverridePath,
-} from "../../src/labs/model-overrides.js";
+} from "../../src/lab/model-overrides.js";
 
 const LABS_FEATURES = ["custom"] as const;
 type LabsFeatureKey = (typeof LABS_FEATURES)[number];
 
 function isLabsPluginEnabled(cfg: OpenClawConfig): boolean {
-  return cfg.plugins?.entries?.labs?.enabled !== false;
+  return cfg.plugins?.entries?.lab?.enabled !== false;
 }
 
 function updateLabsModelOverridesEnabled(cfg: OpenClawConfig, enabled: boolean): OpenClawConfig {
   const entries = { ...cfg.plugins?.entries };
   const existingEntry = (
-    entries.labs && typeof entries.labs === "object" ? entries.labs : {}
+    entries.lab && typeof entries.lab === "object" ? entries.lab : {}
   ) as Record<string, unknown>;
   const existingConfig =
     existingEntry.config && typeof existingEntry.config === "object"
@@ -39,7 +39,7 @@ function updateLabsModelOverridesEnabled(cfg: OpenClawConfig, enabled: boolean):
     existingConfig.modelOverrides && typeof existingConfig.modelOverrides === "object"
       ? (existingConfig.modelOverrides as Record<string, unknown>)
       : {};
-  entries.labs = {
+  entries.lab = {
     ...existingEntry,
     enabled: true,
     config: {
@@ -152,7 +152,7 @@ function parseLabsCommand(rawArgs: string | undefined): {
 }
 
 export default definePluginEntry({
-  id: "labs",
+  id: "lab",
   name: "Lab",
   description: "Bundled incubation space for core-owned experimental agent behavior.",
   register(api) {
