@@ -49,14 +49,33 @@ describe("ChannelsSchema bundled runtime loading", () => {
     );
   });
 
+  it("skips bundled channel runtime discovery for core channel config objects", async () => {
+    const runtime = await importFreshModule<typeof import("./zod-schema.providers.js")>(
+      import.meta.url,
+      "./zod-schema.providers.js?scope=channels-core-config",
+    );
+
+    const parsed = runtime.ChannelsSchema.parse({
+      telegram: {
+        botToken: "123:ABC",
+      },
+    });
+
+    expect(parsed?.telegram).toMatchObject({
+      botToken: "123:ABC",
+    });
+    expect(listBundledPluginMetadataMock).not.toHaveBeenCalled();
+    expect(collectBundledChannelConfigsMock).not.toHaveBeenCalled();
+  });
+
   it("loads bundled channel runtime discovery only when plugin-owned channel config is present", async () => {
     listBundledPluginMetadataMock.mockReturnValueOnce([
       {
-        dirName: "discord",
+        dirName: "matrix",
         manifest: {
-          channels: ["discord"],
+          channels: ["matrix"],
           channelConfigs: {
-            discord: {
+            matrix: {
               runtime: {
                 safeParse: (value: unknown) => ({ success: true, data: value }),
               },
@@ -72,7 +91,7 @@ describe("ChannelsSchema bundled runtime loading", () => {
     );
 
     runtime.ChannelsSchema.parse({
-      discord: {},
+      matrix: {},
     });
 
     expect(listBundledPluginMetadataMock.mock.calls).toContainEqual([
@@ -87,14 +106,14 @@ describe("ChannelsSchema bundled runtime loading", () => {
   it("loads a single plugin-owned runtime surface when the manifest omits runtime metadata", async () => {
     listBundledPluginMetadataMock.mockReturnValueOnce([
       {
-        dirName: "discord",
+        dirName: "matrix",
         manifest: {
-          channels: ["discord"],
+          channels: ["matrix"],
         },
       } as unknown as BundledPluginMetadata,
     ]);
     collectBundledChannelConfigsMock.mockReturnValueOnce({
-      discord: {
+      matrix: {
         schema: {},
         runtime: {
           safeParse: (value: unknown) => ({ success: true, data: value }),
@@ -108,7 +127,7 @@ describe("ChannelsSchema bundled runtime loading", () => {
     );
 
     runtime.ChannelsSchema.parse({
-      discord: {},
+      matrix: {},
     });
 
     expect(listBundledPluginMetadataMock.mock.calls).toContainEqual([

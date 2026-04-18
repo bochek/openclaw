@@ -8,6 +8,18 @@ import { resolveLoaderPackageRoot } from "../plugins/sdk-alias.js";
 import type { ChannelsConfig } from "./types.channels.js";
 import { ChannelHeartbeatVisibilitySchema } from "./zod-schema.channels.js";
 import { ContextVisibilityModeSchema, GroupPolicySchema } from "./zod-schema.core.js";
+import {
+  BlueBubblesConfigSchema,
+  DiscordConfigSchema,
+  GoogleChatConfigSchema,
+  IMessageConfigSchema,
+  IrcConfigSchema,
+  MSTeamsConfigSchema,
+  SignalConfigSchema,
+  SlackConfigSchema,
+  TelegramConfigSchema,
+} from "./zod-schema.providers-core.js";
+import { WhatsAppConfigSchema } from "./zod-schema.providers-whatsapp.js";
 
 export * from "./zod-schema.providers-core.js";
 export * from "./zod-schema.providers-whatsapp.js";
@@ -18,6 +30,37 @@ const ChannelModelByChannelSchema = z
   .optional();
 
 let directChannelRuntimeSchemasCache: ReadonlyMap<string, ChannelConfigRuntimeSchema> | undefined;
+function createZodRuntimeSchema(schema: z.ZodType): ChannelConfigRuntimeSchema {
+  return {
+    safeParse(value) {
+      const parsed = schema.safeParse(value);
+      if (parsed.success) {
+        return parsed;
+      }
+      return {
+        success: false,
+        issues: parsed.error.issues.map((issue) => ({
+          path: issue.path,
+          message: issue.message,
+          code: issue.code,
+        })),
+      };
+    },
+  };
+}
+
+const STATIC_CHANNEL_RUNTIME_SCHEMA_BY_ID = {
+  bluebubbles: BlueBubblesConfigSchema,
+  discord: DiscordConfigSchema,
+  googlechat: GoogleChatConfigSchema,
+  imessage: IMessageConfigSchema,
+  irc: IrcConfigSchema,
+  msteams: MSTeamsConfigSchema,
+  signal: SignalConfigSchema,
+  slack: SlackConfigSchema,
+  telegram: TelegramConfigSchema,
+  whatsapp: WhatsAppConfigSchema,
+} as const satisfies Record<string, z.ZodType>;
 const OPENCLAW_PACKAGE_ROOT =
   resolveLoaderPackageRoot({
     modulePath: fileURLToPath(import.meta.url),
@@ -25,6 +68,14 @@ const OPENCLAW_PACKAGE_ROOT =
   }) ?? fileURLToPath(new URL("../..", import.meta.url));
 
 function getDirectChannelRuntimeSchema(channelId: string): ChannelConfigRuntimeSchema | undefined {
+  const staticSchema =
+    STATIC_CHANNEL_RUNTIME_SCHEMA_BY_ID[
+      channelId as keyof typeof STATIC_CHANNEL_RUNTIME_SCHEMA_BY_ID
+    ];
+  if (staticSchema) {
+    return createZodRuntimeSchema(staticSchema);
+  }
+
   if (!directChannelRuntimeSchemasCache) {
     directChannelRuntimeSchemasCache = new Map();
   }
