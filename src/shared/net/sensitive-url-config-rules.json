@@ -1,0 +1,4 @@
+{
+  "suffixes": [".baseUrl", ".httpUrl", ".cdpUrl", ".remote.url", ".request.proxy.url"],
+  "patterns": ["^mcp\\.servers\\.(?:\\*|[^.]+)\\.url$"]
+}

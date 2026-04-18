@@ -1,7 +1,12 @@
 import type { ConfigUiHint } from "../config-ui-hints-types.js";
 import { normalizeLowercaseStringOrEmpty } from "../string-coerce.js";
+import sensitiveUrlConfigRules from "./sensitive-url-config-rules.json" with { type: "json" };
 
 export const SENSITIVE_URL_HINT_TAG = "url-secret";
+const SENSITIVE_URL_CONFIG_SUFFIXES = sensitiveUrlConfigRules.suffixes;
+const SENSITIVE_URL_CONFIG_PATTERNS = sensitiveUrlConfigRules.patterns.map(
+  (pattern) => new RegExp(pattern),
+);
 
 const SENSITIVE_URL_QUERY_PARAM_NAMES = new Set([
   "token",
@@ -22,19 +27,12 @@ export function isSensitiveUrlQueryParamName(name: string): boolean {
 }
 
 export function isSensitiveUrlConfigPath(path: string): boolean {
-  if (path.endsWith(".baseUrl") || path.endsWith(".httpUrl")) {
-    return true;
+  for (const suffix of SENSITIVE_URL_CONFIG_SUFFIXES) {
+    if (path.endsWith(suffix)) {
+      return true;
+    }
   }
-  if (path.endsWith(".cdpUrl")) {
-    return true;
-  }
-  if (path.endsWith(".remote.url")) {
-    return true;
-  }
-  if (path.endsWith(".request.proxy.url")) {
-    return true;
-  }
-  return /^mcp\.servers\.(?:\*|[^.]+)\.url$/.test(path);
+  return SENSITIVE_URL_CONFIG_PATTERNS.some((pattern) => pattern.test(path));
 }
 
 export function hasSensitiveUrlHintTag(hint: Pick<ConfigUiHint, "tags"> | undefined): boolean {

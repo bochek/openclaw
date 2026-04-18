@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { promises as fs } from "node:fs";
 /**
  * Lint: detect schema URL config fields that are missing redact coverage.
  *
@@ -14,12 +15,11 @@
  *
  * That prevents regressions like the browser.cdpUrl omission from PR #67679.
  *
- * The isSensitiveUrlConfigPath rules are extracted from source instead of being
- * duplicated manually, so this lint always matches the real runtime behavior.
+ * The sensitive-path rules come from the same shared JSON data used by runtime
+ * code, so this lint stays aligned with real behavior without parsing source.
  */
-
-import { promises as fs } from "node:fs";
 import path from "node:path";
+import sensitiveUrlConfigRules from "../src/shared/net/sensitive-url-config-rules.json" with { type: "json" };
 
 // These URL-shaped field names do not carry credentials and do not need redaction.
 const SAFE_URL_PATTERNS = [
@@ -33,50 +33,19 @@ function isSafeUrlField(key) {
   return SAFE_URL_PATTERNS.some((p) => p.test(key));
 }
 
-/**
- * Extract path suffix rules for isSensitiveUrlConfigPath() directly from
- * redact-sensitive-url.ts by parsing endsWith(".xxx") calls.
- */
-function extractEndsWithRules(source) {
-  const rules = [];
-  // Match path.endsWith(".xxx") patterns.
-  const endsWithPattern = /path\.endsWith\("(\.[^"]+)"\)/g;
-  let match;
-  while ((match = endsWithPattern.exec(source)) !== null) {
-    rules.push(match[1]);
-  }
-  return rules;
-}
+const SENSITIVE_URL_CONFIG_SUFFIXES = sensitiveUrlConfigRules.suffixes;
+const SENSITIVE_URL_CONFIG_PATTERNS = sensitiveUrlConfigRules.patterns.map(
+  (pattern) => new RegExp(pattern),
+);
 
-/**
- * Extract regex rules directly from redact-sensitive-url.ts by parsing
- * /^...$/ regex literals used against config paths.
- */
-function extractRegexRules(source) {
-  const rules = [];
-  // Match /pattern/.test(path) patterns.
-  const regexPattern = /\/(\^[^/]+)\$\/\.test\(path\)/g;
-  let match;
-  while ((match = regexPattern.exec(source)) !== null) {
-    rules.push(new RegExp(match[1] + "$"));
-  }
-  return rules;
-}
-
-/**
- * Build an isSensitiveUrlConfigPath equivalent from rules extracted from source.
- */
-function buildIsSensitiveUrlConfigPath(source) {
-  const endsWithRules = extractEndsWithRules(source);
-  const regexRules = extractRegexRules(source);
-
+function buildIsSensitiveUrlConfigPath() {
   return function isSensitiveUrlConfigPath(configPath) {
-    for (const suffix of endsWithRules) {
+    for (const suffix of SENSITIVE_URL_CONFIG_SUFFIXES) {
       if (configPath.endsWith(suffix)) {
         return true;
       }
     }
-    for (const regex of regexRules) {
+    for (const regex of SENSITIVE_URL_CONFIG_PATTERNS) {
       if (regex.test(configPath)) {
         return true;
       }
@@ -87,11 +56,7 @@ function buildIsSensitiveUrlConfigPath(source) {
 
 async function run() {
   const repoRoot = path.resolve(import.meta.dirname, "..");
-
-  // Read redact-sensitive-url.ts and extract the sensitive-path rules.
-  const redactSourcePath = path.join(repoRoot, "src/shared/net/redact-sensitive-url.ts");
-  const redactSource = await fs.readFile(redactSourcePath, "utf8");
-  const isSensitiveUrlConfigPath = buildIsSensitiveUrlConfigPath(redactSource);
+  const isSensitiveUrlConfigPath = buildIsSensitiveUrlConfigPath();
 
   // Read schema.base.generated.ts and inspect its URL-shaped config fields.
   const schemaPath = path.join(repoRoot, "src/config/schema.base.generated.ts");
