@@ -162,7 +162,7 @@ Bundled plugins can add more slash commands. Current bundled commands in this re
   - `/bot-upgrade`
   - `/bot-logs`
 
-`/lab` is the entry point for Labs experimental features. Current feature
+`/lab` is the entry point for Lab experimental features. Current feature
 commands:
 
 - `/lab`
@@ -170,7 +170,7 @@ commands:
 - `/lab enable custom`
 - `/lab disable custom`
 
-See [Labs](/concepts/labs).
+See [Lab](/concepts/labs).
 
 ### Dynamic skill commands
 

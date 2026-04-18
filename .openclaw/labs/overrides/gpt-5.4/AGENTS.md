@@ -1,4 +1,4 @@
-# Labs Model Addendum: GPT-5.4
+# Lab Model Addendum: GPT-5.4
 
 These instructions supplement the root `AGENTS.md`.
 If this file conflicts with repository-specific instructions, the repository instructions win.

@@ -1,30 +1,30 @@
 ---
-title: "Labs"
+title: "Lab"
 summary: "Experimental feature umbrella for repo-owned prompt and behavior experiments"
 read_when:
-  - You see `/lab` commands and want to know what Labs controls
+  - You see `/lab` commands and want to know what Lab controls
   - You want to enable custom prompt addenda for a workspace
-  - You want to understand which Labs files are live vs. instructional
+  - You want to understand which Lab files are live vs. instructional
 ---
 
-# Labs
+# Lab
 
-Labs is OpenClaw's **experimental feature umbrella** for repo-owned agent
+Lab is OpenClaw's **experimental feature umbrella** for repo-owned agent
 behavior experiments.
 
-Right now, the first Labs feature is **custom overrides**:
+Right now, the first Lab feature is **custom overrides**:
 
 - a model-level `AGENTS.md` addendum
 - an optional higher-priority agent-specific `AGENTS.md` addendum
 - a non-runtime `defaults/` folder for shipped reference material
 
-Labs is intentionally separate from stable config because this surface is still
+Lab is intentionally separate from stable config because this surface is still
 changing. Use it when you want to tune agent behavior without pretending the
 contract is already permanent.
 
 ## Commands
 
-Use the Labs command menu from chat:
+Use the Lab command menu from chat:
 
 ```txt
 /lab
@@ -35,7 +35,7 @@ Use the Labs command menu from chat:
 
 Notes:
 
-- `/lab` is the entry point and shows the currently available Labs features.
+- `/lab` is the entry point and shows the currently available Lab features.
 - `custom` is the current feature key.
 - the user-facing name is **custom overrides**
 - the stored config path is still:
@@ -71,20 +71,20 @@ precedence rules.
 
 ## Current prompt order
 
-For the GPT-5.4 Labs path that ships in this repo, prompt ordering is:
+For the GPT-5.4 Lab path that ships in this repo, prompt ordering is:
 
 ```txt
-1. Labs model addendum
-2. Labs agent addendum
+1. Lab model addendum
+2. Lab agent addendum
 3. root AGENTS.md
 4. other prompt/context files
 5. FINAL_REMINDER.md
 ```
 
-That means Labs addenda are a **higher-priority overlay** on top of the normal
+That means Lab addenda are a **higher-priority overlay** on top of the normal
 repo `AGENTS.md`.
 
-Labs addenda are also treated like normal prompt files for:
+Lab addenda are also treated like normal prompt files for:
 
 - prompt reporting
 - truncation
@@ -96,7 +96,7 @@ They are not a hidden side channel.
 
 `/lab custom status` reports:
 
-- whether the Labs plugin is enabled
+- whether the Lab plugin is enabled
 - whether custom overrides are enabled
 - current model
 - current agent
@@ -109,12 +109,12 @@ That output is the fastest way to debug “why is my override not loading?”
 
 ## Scope and expectations
 
-Labs is for **experiments**. That means:
+Lab is for **experiments**. That means:
 
 - commands and feature names may change faster than stable config
 - prompt file structure may evolve
 - docs should describe the current shipped behavior, not promise a long-term API
 
 If you want stable workspace customization, keep using the normal workspace
-files (`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, etc.). Use Labs when you want an
+files (`AGENTS.md`, `SOUL.md`, `IDENTITY.md`, etc.). Use Lab when you want an
 explicit experimental overlay.

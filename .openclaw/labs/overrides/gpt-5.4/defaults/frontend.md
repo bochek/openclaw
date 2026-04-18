@@ -1,6 +1,6 @@
 # Frontend Example
 
-Instructional only. Not auto-loaded by Labs.
+Instructional only. Not auto-loaded by Lab.
 
 <frontend_tasks>
 When doing frontend design tasks, avoid generic, overbuilt layouts.

@@ -1,6 +1,6 @@
 # Research Example
 
-Instructional only. Not auto-loaded by Labs.
+Instructional only. Not auto-loaded by Lab.
 
 <citation_rules>
 

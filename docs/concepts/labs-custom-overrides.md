@@ -1,15 +1,15 @@
 ---
 title: "Custom Overrides"
-summary: "How Labs custom AGENTS addenda load, where they live, and how to debug them"
+summary: "How Lab custom AGENTS addenda load, where they live, and how to debug them"
 read_when:
-  - You want to enable Labs custom overrides in a workspace
+  - You want to enable Lab custom overrides in a workspace
   - You need the exact model or agent override file paths
   - `/lab custom status` says an override is absent and you want to debug it
 ---
 
 # Custom Overrides
 
-Custom overrides are the first Labs feature. They let you prepend extra
+Custom overrides are the first Lab feature. They let you prepend extra
 `AGENTS.md` instructions for a specific model and, optionally, for a specific
 agent.
 
@@ -59,7 +59,7 @@ the **agent id**, not by an arbitrary folder name.
 
 ## Instructional defaults
 
-Under the same model folder, Labs can also ship instructional reference files:
+Under the same model folder, Lab can also ship instructional reference files:
 
 ```txt
 .openclaw/labs/overrides/<model-id>/defaults/<name>.md
@@ -78,21 +78,21 @@ not appear in active addenda, and do not participate in truncation reporting.
 
 ## Prompt precedence
 
-When present, Labs addenda are prepended ahead of the normal repo `AGENTS.md`:
+When present, Lab addenda are prepended ahead of the normal repo `AGENTS.md`:
 
 ```txt
-1. model Labs addendum
-2. agent Labs addendum
+1. model Lab addendum
+2. agent Lab addendum
 3. root AGENTS.md
 4. other prompt/context files
 5. FINAL_REMINDER.md
 ```
 
-This is intentional. Labs is the higher-priority experimental overlay.
+This is intentional. Lab is the higher-priority experimental overlay.
 
 ## Truncation and budgeting
 
-Labs addenda are treated like normal prompt files:
+Lab addenda are treated like normal prompt files:
 
 - they have their own injected file entries
 - they can truncate independently
@@ -102,12 +102,12 @@ Labs addenda are treated like normal prompt files:
 Budget priority matches prompt priority:
 
 ```txt
-1. model Labs addendum
-2. agent Labs addendum
+1. model Lab addendum
+2. agent Lab addendum
 3. root AGENTS.md
 ```
 
-If truncation happens, `/lab custom status` reports it against the active Labs
+If truncation happens, `/lab custom status` reports it against the active Lab
 paths.
 
 ## What `/lab custom status` really tells you

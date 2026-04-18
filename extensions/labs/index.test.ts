@@ -53,7 +53,7 @@ function registerLabsCommand(params?: {
   labsPlugin.register(
     createTestPluginApi({
       id: "labs",
-      name: "Labs",
+      name: "Lab",
       source: "test",
       runtime: params?.runtime,
       registerCommand: (nextCommand) => {
@@ -119,7 +119,7 @@ describe("labs /lab", () => {
     vi.restoreAllMocks();
   });
 
-  it("reports Labs model override status for the active session", async () => {
+  it("reports Lab model override status for the active session", async () => {
     const command = registerLabsCommand();
     expect(command.requireAuth).toBe(true);
     const result = await command.handler({
@@ -154,7 +154,7 @@ describe("labs /lab", () => {
     expect(result?.text).toContain("truncated: no");
   });
 
-  it("shows the Labs feature menu with no args", async () => {
+  it("shows the Lab feature menu with no args", async () => {
     const command = registerLabsCommand();
     const result = await command.handler({
       args: "",
@@ -169,14 +169,14 @@ describe("labs /lab", () => {
     expect(result?.text).toContain("/lab disable custom");
   });
 
-  it("rejects unsupported Labs subcommands and points callers at feature commands", async () => {
+  it("rejects unsupported Lab subcommands and points callers at feature commands", async () => {
     const command = registerLabsCommand();
     const result = await command.handler({
       args: "on",
       config: {},
     } as never);
 
-    expect(result?.text).toContain("Unsupported Labs command: on");
+    expect(result?.text).toContain("Unsupported Lab command: on");
     expect(result?.text).toContain("/lab custom status");
     expect(result?.text).toContain("/lab enable custom");
     expect(result?.text).toContain("/lab disable custom");
@@ -292,7 +292,7 @@ describe("labs /lab", () => {
     } as never);
 
     expect(runtime.config.writeConfigFile).toHaveBeenCalledTimes(1);
-    expect(result?.text).toContain("Labs custom overrides enabled.");
+    expect(result?.text).toContain("Lab custom overrides enabled.");
     expect(result?.text).toContain("plugin: enabled");
     expect(result?.text).toContain("- custom overrides: enabled");
     expect(runtimeConfig).toMatchObject({
@@ -331,14 +331,14 @@ describe("labs /lab", () => {
     expect(runtime.config.writeConfigFile).not.toHaveBeenCalled();
   });
 
-  it("rejects unknown Labs features with the known feature list", async () => {
+  it("rejects unknown Lab features with the known feature list", async () => {
     const command = registerLabsCommand();
     const result = await command.handler({
       args: "enable mystery",
       config: {},
     } as never);
 
-    expect(result?.text).toContain("Unknown Labs feature: mystery");
+    expect(result?.text).toContain("Unknown Lab feature: mystery");
     expect(result?.text).toContain("Available features:");
     expect(result?.text).toContain("- custom overrides: enabled");
   });

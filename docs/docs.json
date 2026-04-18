@@ -1065,7 +1065,7 @@
                   "start/bootstrapping",
                   "concepts/experimental-features",
                   {
-                    "group": "Labs",
+                    "group": "Lab",
                     "pages": [
                       "concepts/labs",
                       "concepts/labs-custom-overrides",

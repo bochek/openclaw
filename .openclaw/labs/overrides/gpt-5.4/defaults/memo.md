@@ -1,6 +1,6 @@
 # Memo Example
 
-Instructional only. Not auto-loaded by Labs.
+Instructional only. Not auto-loaded by Lab.
 
 <personality_and_writing_controls>
 

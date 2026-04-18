@@ -1,15 +1,15 @@
 ---
 title: "GPT-5.4 Tuning"
-summary: "How to tune the shipped GPT-5.4 Labs addendum and what each block actually changes"
+summary: "How to tune the shipped GPT-5.4 Lab addendum and what each block actually changes"
 read_when:
   - You want to edit `.openclaw/labs/overrides/gpt-5.4/AGENTS.md`
-  - You want to understand the XML-style blocks in the GPT-5.4 Labs addendum
+  - You want to understand the XML-style blocks in the GPT-5.4 Lab addendum
   - You want practical tuning guidance that matches what OpenClaw actually ships
 ---
 
 # Tuning the GPT-5.4 Agent Addendum
 
-The shipped GPT-5.4 Labs addendum is a set of **XML-style behavior contracts**
+The shipped GPT-5.4 Lab addendum is a set of **XML-style behavior contracts**
 for Codex/GPT-5.4. Each block is a tuning knob that changes how the agent
 behaves: output shape, verbosity, ask-vs-proceed behavior, tool persistence,
 completion criteria, progress updates, and persona stability.
@@ -20,14 +20,14 @@ In OpenClaw, these blocks live in:
 .openclaw/labs/overrides/gpt-5.4/AGENTS.md
 ```
 
-When Labs custom overrides are enabled, that file becomes a **prepended**
+When Lab custom overrides are enabled, that file becomes a **prepended**
 high-priority addendum above the normal repo `AGENTS.md`.
 
 ## Quick operator guide
 
 If you only want the shortest useful version:
 
-1. Turn Labs custom overrides on:
+1. Turn Lab custom overrides on:
 
 ```txt
 /lab enable custom
@@ -76,7 +76,7 @@ Recommended first cleanups if you are maintaining this addendum:
 
 ## Prompt-file interplay
 
-The GPT-5.4 Labs addendum does not operate alone. In OpenClaw it sits inside a
+The GPT-5.4 Lab addendum does not operate alone. In OpenClaw it sits inside a
 larger prompt stack:
 
 - `IDENTITY.md` provides durable decision style, voice, boundaries, and default
@@ -86,7 +86,7 @@ larger prompt stack:
   standing preferences or local operator expectations
 - `TOOLS.md` matters whenever tool-use policy, tool boundaries, or available
   workflow patterns are defined there
-- the Labs GPT-5.4 addendum acts as a model-family-specific behavior overlay
+- the Lab GPT-5.4 addendum acts as a model-family-specific behavior overlay
 - `FINAL_REMINDER.md` is appended at the very end of the prompt and restates
   that the operating contract near the top remains the default unless something
   more specific overrides it
@@ -97,7 +97,7 @@ A practical way to think about the split:
 - use `SOUL.md` for flavor only
 - use `USER.md` for workspace- or operator-specific preference shaping
 - use `TOOLS.md` for tool behavior and usage constraints
-- use the Labs addendum for GPT-5.4-specific execution and writing behavior
+- use the Lab addendum for GPT-5.4-specific execution and writing behavior
 - use `FINAL_REMINDER.md` as the tail guard that reinforces the main operating
   contract
 
@@ -116,7 +116,7 @@ The rest of this page is the detailed reference for the shipped GPT-5.4 addendum
 
 ## What OpenClaw actually ships
 
-The current GPT-5.4 Labs addendum in this repo includes these blocks:
+The current GPT-5.4 Lab addendum in this repo includes these blocks:
 
 ```txt
 <persona_latch>
@@ -626,7 +626,7 @@ Other relevant knobs in OpenClaw include:
 - sandbox / exec policy
 - per-session directives like `/model`, `/think`, `/verbose`, `/trace`, `/reasoning`
 
-For the current Labs feature itself, the addendum is only active when:
+For the current Lab feature itself, the addendum is only active when:
 
 ```txt
 /lab enable custom

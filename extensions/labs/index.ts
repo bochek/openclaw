@@ -75,7 +75,7 @@ function buildFeatureStateLines(cfg: OpenClawConfig): string[] {
 function buildLabsMenuReply(cfg: OpenClawConfig) {
   return {
     text: [
-      "Labs",
+      "Lab",
       "",
       "Experimental feature controls for repo-owned agent experiments.",
       "",
@@ -94,7 +94,7 @@ function buildLabsMenuReply(cfg: OpenClawConfig) {
 function buildUnknownFeatureReply(feature: string, cfg: OpenClawConfig) {
   return {
     text: [
-      `Unknown Labs feature: ${feature}`,
+      `Unknown Lab feature: ${feature}`,
       "",
       "Available features:",
       ...buildFeatureStateLines(cfg),
@@ -112,7 +112,7 @@ function buildUnsupportedLabsCommandReply(cfg: OpenClawConfig, rawArgs: string |
   const detail = normalizeOptionalString(rawArgs)?.trim();
   return {
     text: [
-      detail ? `Unsupported Labs command: ${detail}` : "Unsupported Labs command.",
+      detail ? `Unsupported Lab command: ${detail}` : "Unsupported Lab command.",
       "",
       "Commands:",
       "- /lab",
@@ -153,12 +153,12 @@ function parseLabsCommand(rawArgs: string | undefined): {
 
 export default definePluginEntry({
   id: "labs",
-  name: "Labs",
+  name: "Lab",
   description: "Bundled incubation space for core-owned experimental agent behavior.",
   register(api) {
     api.registerCommand({
       name: "lab",
-      description: "Inspect or manage Labs experimental features for the active session.",
+      description: "Inspect or manage Lab experimental features for the active session.",
       acceptsArgs: true,
       requireAuth: true,
       handler: async (ctx) => {
@@ -182,7 +182,7 @@ export default definePluginEntry({
           await api.runtime.config.writeConfigFile(nextConfig);
           return {
             text: [
-              `Labs custom overrides ${enabled ? "enabled" : "disabled"}.`,
+              `Lab custom overrides ${enabled ? "enabled" : "disabled"}.`,
               "",
               `plugin: ${isLabsPluginEnabled(nextConfig) ? "enabled" : "disabled"}`,
               ...buildFeatureStateLines(nextConfig),
@@ -256,7 +256,7 @@ export default definePluginEntry({
         const pluginEnabled = isLabsPluginEnabled(ctx.config);
 
         const statusLines = [
-          "Labs",
+          "Lab",
           "",
           `plugin: ${pluginEnabled ? "enabled" : "disabled"}`,
           "features:",
