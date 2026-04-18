@@ -25,7 +25,10 @@ high-priority addendum above the normal repo `AGENTS.md`.
 
 ## Quick operator guide
 
-If you only want the shortest useful version:
+For most use cases, the shipped default behavior is already well tuned. Reach
+for these edits when you want to bias the agent for a narrower operating style.
+
+If you do want the shortest useful customization path:
 
 1. Turn Lab custom overrides on:
 
@@ -68,9 +71,10 @@ Operator defaults:
 - treat the repo copy as the source of truth, then sync the live workspace copy
   if needed for testing
 
-Recommended first cleanups if you are maintaining this addendum:
+The shipped default is meant to work well without mandatory tuning. When you do
+customize it, the safest path is still:
 
-1. Merge the duplicate `<user_updates_spec>` blocks.
+1. Keep edits small and targeted.
 2. Clarify the split between ask-vs-proceed and implementation-by-default.
 3. Keep `IDENTITY.md` as the durable contract and `SOUL.md` as flavor only.
 
@@ -134,13 +138,12 @@ The current GPT-5.4 Lab addendum in this repo includes these blocks:
 <action_safety>
 <user_updates_spec>
 <autonomy_and_persistence>
-<user_updates_spec>
 <terminal_tool_hygiene>
 ```
 
-That duplicate `<user_updates_spec>` is real today. If you publish or share this
-pattern more broadly, merging those two blocks is the cleanest structural
-cleanup.
+The current shipped addendum keeps progress-update behavior in a single
+`<user_updates_spec>` block. If you publish or share this pattern more broadly,
+keeping that guidance merged is the cleanest structure.
 
 ## Quick tuning map
 
@@ -438,11 +441,11 @@ What it controls:
 
 Important OpenClaw-specific note:
 
-- the shipped GPT-5.4 addendum currently has **two** `<user_updates_spec>`
-  blocks
-- merge them if you want one obvious place to tune progress-update behavior
+- the shipped GPT-5.4 addendum keeps progress-update rules in a single
+  `<user_updates_spec>` block
+- keep that guidance in one place if you publish or adapt this pattern
 
-Suggested merged version:
+Current shipped version:
 
 ```txt
 <user_updates_spec>
@@ -491,11 +494,12 @@ What it controls:
 Use this block to make the agent safer around local command execution without
 crippling normal development work.
 
-## Recommended cleanup before publishing
+## Recommended guidance if you publish this pattern
 
-### 1. Merge duplicate `<user_updates_spec>` blocks
+### 1. Keep the progress-update contract merged
 
-This is the clearest structural cleanup in the shipped GPT-5.4 addendum.
+The shipped addendum already keeps the update rules in one place. Preserve that
+structure if you reuse the pattern elsewhere.
 
 ### 2. Clarify follow-through vs autonomy
 
@@ -514,8 +518,9 @@ The intended model is:
 
 ## Recommended presets
 
-Most users should not have to tune every block manually. If you publish this
-surface more widely, presets are easier to reason about than fifteen separate
+Most users should not have to tune every block manually because the shipped
+default is already well tuned for most use cases. If you publish this surface
+more widely, presets are still easier to reason about than fifteen separate
 edits.
 
 ### Preset A: Fast and quiet
@@ -640,6 +645,6 @@ agent.
 If you want a cleaner public documentation version of the shipped GPT-5.4
 addendum, the strongest first improvement is still the simplest one:
 
-- merge the duplicate `<user_updates_spec>` blocks
+- keep the progress-update contract in one merged `<user_updates_spec>` block
 
 Everything else can remain modular knobs.
