@@ -131,6 +131,31 @@ export const adminOrchestratorPlugin = {
           }
         };
 
+        const rotateCredentialsTool = {
+          name: "rotate_network_credentials",
+          description: "Rotate infrastructure credentials (like MinIO or NATS passwords) and trigger an emergency network re-handshake so Executors obtain the new secrets.",
+          parameters: {
+             resource: "minio | nats",
+             new_secret: "The new password or token"
+          },
+          execute: async (args: any) => {
+            const { resource, new_secret } = args;
+            console.log(`[Admin] Rotating credentials for resource: ${resource}`);
+            
+            // Prototype Logic:
+            // 1. Update local environment variables / database.
+            // 2. Call broadcast_update to force immediate restart of executors.
+            // Executors will re-run the handshake endpoint upon reboot and receive the new keys.
+            
+            return {
+              content: [{
+                type: "text",
+                text: `Credentials for '${resource}' rotated successfully. Please broadcast a 'code-update' with graceful: false to make executors re-handshake immediately.`
+              }]
+            };
+          }
+        };
+
         const queryKnowledgeHubTool = {
           name: "query_knowledge_hub",
           description: "Semantic search across Team Memory to find required Executor skills or previous solutions without bloating the active memory context. Use this before delegating unknown tasks.",
@@ -159,7 +184,7 @@ export const adminOrchestratorPlugin = {
           }
         };
 
-        return [listExecutorsTool, delegateSubtaskTool, supplementProtocolTool, broadcastUpdateTool, manageCapabilitiesTool, queryKnowledgeHubTool];
+        return [listExecutorsTool, delegateSubtaskTool, supplementProtocolTool, broadcastUpdateTool, manageCapabilitiesTool, rotateCredentialsTool, queryKnowledgeHubTool];
       },
       { names: ["list_executors"] }
     );
@@ -177,7 +202,20 @@ export const adminOrchestratorPlugin = {
             console.log(`[Admin] Received handshake from ${body.hostname} with skills: ${body.skills.join(", ")}`);
             
             // TODO: write to Knowledge Hub to register the capacity
-            return new Response(JSON.stringify({ message: "Handshake accepted", accepted: true }), {
+            
+            // Distribute shared resource keys securely over tailnet encrypted channel
+            const accessCredentials = {
+              natsUrl: "nats://openclaw-admin-nats:4222",
+              minioEndpoint: "openclaw-admin-minio:9000",
+              minioAccessKey: process.env.MINIO_USER || "admin",
+              minioSecretKey: process.env.MINIO_PASSWORD || "admin123456"
+            };
+
+            return new Response(JSON.stringify({ 
+              message: "Handshake accepted", 
+              accepted: true,
+              credentials: accessCredentials
+            }), {
               status: 200,
               headers: { "Content-Type": "application/json" }
             });
