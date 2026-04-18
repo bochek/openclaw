@@ -1,0 +1,18 @@
+{
+  "mcps": {
+    "github-admin": {
+      "description": "Centralized GitHub MCP managed by Admin. Executors can access this via Admin Proxy.",
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "hosted_by": "admin",
+      "access": "global"
+    }
+  },
+  "skills": {
+    "local-docker": {
+      "description": "Docker container management. Required for Executors operating in infrastructure mode.",
+      "type": "docker",
+      "enabled": true
+    }
+  }
+}

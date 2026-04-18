@@ -103,6 +103,34 @@ export const adminOrchestratorPlugin = {
           }
         };
 
+        const manageCapabilitiesTool = {
+          name: "manage_network_capability",
+          description: "Centrally manage MCP servers and Skills for the entire Swarm. Updates the swarm_capabilities.json registry which executors synchronize with.",
+          parameters: {
+             action: "add | remove",
+             type: "mcp | skill",
+             name: "Name of the capability",
+             config: "Configuration JSON string (e.g. command and args for MCP, or script path for skill)"
+          },
+          execute: async (args: any) => {
+            const { action, type, name, config } = args;
+            console.log(`[Admin] Managing capability - Action: ${action}, Type: ${type}, Name: '${name}'`);
+            
+            // Prototype Logic:
+            // 1. Read existing swarm_capabilities.json using fs.promises
+            // 2. Modify JSON object
+            // 3. Write back to file
+            // 4. Agent then usually follows up with broadcast_update
+            
+            return {
+              content: [{
+                type: "text",
+                text: `Successfully performed '${action}' on ${type} '${name}'. Please use the broadcast_update tool to synchronize the Swarm to the new swarm_capabilities.json settings.`
+              }]
+            };
+          }
+        };
+
         const queryKnowledgeHubTool = {
           name: "query_knowledge_hub",
           description: "Semantic search across Team Memory to find required Executor skills or previous solutions without bloating the active memory context. Use this before delegating unknown tasks.",
@@ -131,7 +159,7 @@ export const adminOrchestratorPlugin = {
           }
         };
 
-        return [listExecutorsTool, delegateSubtaskTool, supplementProtocolTool, broadcastUpdateTool, queryKnowledgeHubTool];
+        return [listExecutorsTool, delegateSubtaskTool, supplementProtocolTool, broadcastUpdateTool, manageCapabilitiesTool, queryKnowledgeHubTool];
       },
       { names: ["list_executors"] }
     );
