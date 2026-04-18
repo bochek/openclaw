@@ -46,6 +46,7 @@ Docs: https://docs.openclaw.ai
 - Exec approvals/display: escape raw control characters (including newline and carriage return) in the shared and macOS approval-prompt command sanitizers, so trailing command payloads no longer render on hidden extra lines in the approval UI. (#68198)
 - OpenAI Codex/OAuth + Pi: keep imported Codex CLI OAuth bootstrap, Pi auth export, and runtime overlay handling aligned so Codex sessions survive refresh and health checks without leaking transient CLI state into saved auth files. Thanks @vincentkoc.
 - WhatsApp/groups: preserve per-account group activation state across scoped-session routing and legacy activation backfill. Thanks @mcaxtr.
+- WhatsApp/config: align schema validation, runtime compat, and live monitor behavior with shared default-account semantics. Thanks @mcaxtr.
 
 ## 2026.4.15
 

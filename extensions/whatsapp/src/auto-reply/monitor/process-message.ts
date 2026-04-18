@@ -159,7 +159,7 @@ export async function processMessage(params: {
   }
 
   // Send ack reaction immediately upon message receipt (post-gating)
-  maybeSendAckReaction({
+  await maybeSendAckReaction({
     cfg: params.cfg,
     msg: params.msg,
     agentId: params.route.agentId,
