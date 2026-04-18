@@ -28,6 +28,9 @@ export function isSensitiveUrlConfigPath(path: string): boolean {
   if (path.endsWith(".cdpUrl")) {
     return true;
   }
+  if (path.endsWith(".remote.url")) {
+    return true;
+  }
   if (path.endsWith(".request.proxy.url")) {
     return true;
   }
