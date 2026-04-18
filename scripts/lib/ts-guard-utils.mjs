@@ -11,7 +11,15 @@ function getTypeScript() {
   return tsCache;
 }
 
-const baseTestSuffixes = [".test.ts", ".test-utils.ts", ".test-harness.ts", ".e2e-harness.ts"];
+const baseTestSuffixes = [
+  ".test.ts",
+  ".test.js",
+  ".test.mjs",
+  ".test.cjs",
+  ".test-utils.ts",
+  ".test-harness.ts",
+  ".e2e-harness.ts",
+];
 
 export function resolveRepoRoot(importMetaUrl) {
   // Walk up from the caller's directory until we find the repo root (.git).
@@ -43,6 +51,7 @@ export async function collectTypeScriptFiles(targetPath, options = {}) {
   const extraTestSuffixes = options.extraTestSuffixes ?? [];
   const skipNodeModules = options.skipNodeModules ?? true;
   const ignoreMissing = options.ignoreMissing ?? false;
+  const fileExtensions = options.fileExtensions ?? [".ts"];
 
   let stat;
   try {
@@ -61,7 +70,7 @@ export async function collectTypeScriptFiles(targetPath, options = {}) {
   }
 
   if (stat.isFile()) {
-    if (!targetPath.endsWith(".ts")) {
+    if (!fileExtensions.some((extension) => targetPath.endsWith(extension))) {
       return [];
     }
     if (!includeTests && isTestLikeTypeScriptFile(targetPath, { extraTestSuffixes })) {
@@ -81,7 +90,7 @@ export async function collectTypeScriptFiles(targetPath, options = {}) {
       out.push(...(await collectTypeScriptFiles(entryPath, options)));
       continue;
     }
-    if (!entry.isFile() || !entryPath.endsWith(".ts")) {
+    if (!entry.isFile() || !fileExtensions.some((extension) => entryPath.endsWith(extension))) {
       continue;
     }
     if (!includeTests && isTestLikeTypeScriptFile(entryPath, { extraTestSuffixes })) {

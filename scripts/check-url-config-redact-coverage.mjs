@@ -119,10 +119,7 @@ async function run() {
 
     // Extract tags from the field body.
     const tagsMatch = body.match(/tags:\s*\[([^\]]*)\]/);
-    if (!tagsMatch) {
-      continue;
-    }
-    const tags = tagsMatch[1]
+    const tags = (tagsMatch?.[1] ?? "")
       .split(",")
       .map((t) => t.trim().replace(/"/g, "").replace(/'/g, ""))
       .filter(Boolean);

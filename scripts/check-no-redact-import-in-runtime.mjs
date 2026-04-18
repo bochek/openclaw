@@ -76,15 +76,41 @@ const BANNED_FROM_REDACT_SENSITIVE_URL = new Set([
 
 function findViolations(content, filePath) {
   const relativePath = path.relative(REPO_ROOT, filePath).replaceAll(path.sep, "/");
+  const scriptKind = filePath.endsWith(".js")
+    ? ts.ScriptKind.JS
+    : filePath.endsWith(".mjs")
+      ? ts.ScriptKind.JS
+      : filePath.endsWith(".cjs")
+        ? ts.ScriptKind.JS
+        : ts.ScriptKind.TS;
   const sourceFile = ts.createSourceFile(
     filePath,
     content,
     ts.ScriptTarget.Latest,
     true,
-    ts.ScriptKind.TS,
+    scriptKind,
   );
 
   const violations = [];
+
+  function resolveImportMode(importPath) {
+    const isRedactSnapshotImport = importPath.includes("redact-snapshot");
+    const isRedactSensitiveUrlImport = importPath.includes("redact-sensitive-url");
+    if (!isRedactSnapshotImport && !isRedactSensitiveUrlImport) {
+      return null;
+    }
+    const allowedCallsites = isRedactSnapshotImport
+      ? ALLOWED_REDACT_SNAPSHOT_CALLSITES
+      : ALLOWED_REDACT_SENSITIVE_URL_CALLSITES;
+    if (allowedCallsites.has(relativePath)) {
+      return null;
+    }
+    return isRedactSnapshotImport ? "snapshot" : "sensitive-url";
+  }
+
+  function bannedImportsForMode(mode) {
+    return mode === "snapshot" ? BANNED_FROM_REDACT_SNAPSHOT : BANNED_FROM_REDACT_SENSITIVE_URL;
+  }
 
   function visit(node) {
     if (ts.isImportDeclaration(node)) {
@@ -95,24 +121,11 @@ function findViolations(content, filePath) {
       }
 
       const importPath = moduleSpecifier.text;
-
-      const isRedactSnapshotImport = importPath.includes("redact-snapshot");
-      const isRedactSensitiveUrlImport = importPath.includes("redact-sensitive-url");
-
-      if (!isRedactSnapshotImport && !isRedactSensitiveUrlImport) {
+      const importMode = resolveImportMode(importPath);
+      if (!importMode) {
         return;
       }
-
-      const allowedCallsites = isRedactSnapshotImport
-        ? ALLOWED_REDACT_SNAPSHOT_CALLSITES
-        : ALLOWED_REDACT_SENSITIVE_URL_CALLSITES;
-      if (allowedCallsites.has(relativePath)) {
-        return;
-      }
-
-      const bannedImports = isRedactSnapshotImport
-        ? BANNED_FROM_REDACT_SNAPSHOT
-        : BANNED_FROM_REDACT_SENSITIVE_URL;
+      const bannedImports = bannedImportsForMode(importMode);
 
       const importClause = node.importClause;
       if (!importClause) {
@@ -137,6 +150,49 @@ function findViolations(content, filePath) {
       }
     }
 
+    if (ts.isExportDeclaration(node) && node.moduleSpecifier) {
+      const moduleSpecifier = node.moduleSpecifier;
+      if (!ts.isStringLiteral(moduleSpecifier)) {
+        ts.forEachChild(node, visit);
+        return;
+      }
+
+      const exportMode = resolveImportMode(moduleSpecifier.text);
+      if (!exportMode) {
+        return;
+      }
+
+      const bannedImports = bannedImportsForMode(exportMode);
+      if (!node.exportClause) {
+        const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+        violations.push(line.line + 1);
+        return;
+      }
+
+      if (ts.isNamedExports(node.exportClause)) {
+        for (const element of node.exportClause.elements) {
+          const exportedName = element.propertyName?.text ?? element.name.text;
+          if (bannedImports.has(exportedName)) {
+            const line = sourceFile.getLineAndCharacterOfPosition(element.getStart(sourceFile));
+            violations.push(line.line + 1);
+          }
+        }
+      }
+    }
+
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteral(node.arguments[0])
+    ) {
+      const importMode = resolveImportMode(node.arguments[0].text);
+      if (importMode) {
+        const line = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+        violations.push(line.line + 1);
+      }
+    }
+
     ts.forEachChild(node, visit);
   }
 
@@ -147,6 +203,7 @@ function findViolations(content, filePath) {
 runAsScript(import.meta.url, async () => {
   await runCallsiteGuard({
     sourceRoots: SOURCE_ROOTS,
+    fileExtensions: [".ts", ".js", ".mjs", ".cjs"],
     header: [
       "Config redact/restore functions must only be imported in approved display/config code.",
       "",

@@ -11,6 +11,7 @@ export async function runCallsiteGuard(params) {
   const sourceRoots = resolveSourceRoots(repoRoot, params.sourceRoots);
   const files = await collectTypeScriptFilesFromRoots(sourceRoots, {
     extraTestSuffixes: params.extraTestSuffixes,
+    fileExtensions: params.fileExtensions,
   });
   const violations = [];
 
