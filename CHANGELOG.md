@@ -8,6 +8,7 @@ Docs: https://docs.openclaw.ai
 
 - macOS/gateway: add `screen.snapshot` support for macOS app nodes, including runtime plumbing, default macOS allowlisting, and docs for monitor preview flows. (#67954) Thanks @BunsDev.
 - WhatsApp/inbound: centralize inbound policy resolution and route named-account group sessions through account-scoped keys. Thanks @mcaxtr.
+- WhatsApp/accounts: honor `accounts.default` shared defaults across runtime account resolution, setup writes, and security path guidance. Thanks @mcaxtr.
 
 ### Fixes
 
