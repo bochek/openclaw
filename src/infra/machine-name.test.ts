@@ -1,6 +1,5 @@
 import os from "node:os";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { importFreshModule } from "../../test/helpers/import-fresh.js";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const execFileMock = vi.hoisted(() => vi.fn());
 
@@ -19,12 +18,17 @@ vi.mock("node:child_process", async () => {
 const originalVitest = process.env.VITEST;
 const originalNodeEnv = process.env.NODE_ENV;
 
-async function importMachineName(scope: string) {
-  return await importFreshModule<typeof import("./machine-name.js")>(
-    import.meta.url,
-    `./machine-name.js?scope=${scope}`,
-  );
-}
+type MachineNameModule = typeof import("./machine-name.js");
+
+let machineName: MachineNameModule;
+
+beforeAll(async () => {
+  machineName = await import("./machine-name.js");
+});
+
+beforeEach(() => {
+  machineName.resetMachineDisplayNameCacheForTest();
+});
 
 afterEach(() => {
   execFileMock.mockReset();
@@ -61,7 +65,7 @@ describe("getMachineDisplayName", () => {
     },
   ])("$name", async ({ scope, hostname, expected, expectedCalls, repeatLookup }) => {
     const hostnameSpy = vi.spyOn(os, "hostname").mockReturnValue(hostname);
-    const machineName = await importMachineName(scope);
+    void scope;
 
     await expect(machineName.getMachineDisplayName()).resolves.toBe(expected);
     if (repeatLookup) {

@@ -131,6 +131,11 @@ function touchSelfPresence() {
 
 initSelfPresence();
 
+export function resetSystemPresenceForTest(): void {
+  entries.clear();
+  initSelfPresence();
+}
+
 function parsePresence(text: string): SystemPresence {
   const trimmed = text.trim();
   const pattern =

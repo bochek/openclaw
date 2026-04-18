@@ -1,14 +1,21 @@
 import os from "node:os";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { importFreshModule } from "../../test/helpers/import-fresh.js";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { withEnvAsync } from "../test-utils/env.js";
 import { VERSION as runtimeVersion } from "../version.js";
 
 vi.unmock("../version.js");
 
+type SystemPresenceModule = typeof import("./system-presence.js");
+
+let systemPresenceModule: SystemPresenceModule;
+
+beforeAll(async () => {
+  systemPresenceModule = await import("./system-presence.js");
+});
+
 async function withPresenceModule<T>(
   env: Record<string, string | undefined>,
-  run: (module: typeof import("./system-presence.js")) => Promise<T> | T,
+  run: (module: SystemPresenceModule) => Promise<T> | T,
 ): Promise<T> {
   return withEnvAsync(
     {
@@ -18,11 +25,8 @@ async function withPresenceModule<T>(
       ...env,
     },
     async () => {
-      const module = await importFreshModule<typeof import("./system-presence.js")>(
-        import.meta.url,
-        `./system-presence.js?scope=${JSON.stringify(env)}`,
-      );
-      return await run(module);
+      systemPresenceModule.resetSystemPresenceForTest();
+      return await run(systemPresenceModule);
     },
   );
 }
@@ -104,11 +108,10 @@ describe("system-presence version fallback", () => {
       vi.spyOn(os, "networkInterfaces").mockImplementation(() => {
         throw new Error("uv_interface_addresses failed");
       });
-      const module = await importFreshModule<typeof import("./system-presence.js")>(
-        import.meta.url,
-        "./system-presence.js?scope=hostname-fallback",
-      );
-      const selfEntry = module.listSystemPresence().find((entry) => entry.reason === "self");
+      systemPresenceModule.resetSystemPresenceForTest();
+      const selfEntry = systemPresenceModule
+        .listSystemPresence()
+        .find((entry) => entry.reason === "self");
       expect(selfEntry?.host).toBe("test-host");
       expect(selfEntry?.ip).toBe("test-host");
     });

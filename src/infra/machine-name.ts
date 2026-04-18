@@ -7,6 +7,10 @@ const execFileAsync = promisify(execFile);
 
 let cachedPromise: Promise<string> | null = null;
 
+export function resetMachineDisplayNameCacheForTest(): void {
+  cachedPromise = null;
+}
+
 async function tryScutil(key: "ComputerName" | "LocalHostName") {
   try {
     const { stdout } = await execFileAsync("/usr/sbin/scutil", ["--get", key], {
