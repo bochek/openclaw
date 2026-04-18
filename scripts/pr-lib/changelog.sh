@@ -186,6 +186,38 @@ function sectionTailInsertIndex(arr, subsectionIndex) {
   return insertAt;
 }
 
+function extractPrNumberFromLine(line) {
+  // 与 TS 侧 extractPrNumber 对齐：只取第一个 PR 引用作为排序键
+  const match = line.match(/(?:\(#(\d+)\)|openclaw#(\d+))/i);
+  const raw = match && (match[1] || match[2]);
+  if (!raw) {
+    return undefined;
+  }
+  const num = Number.parseInt(raw, 10);
+  return Number.isFinite(num) ? num : undefined;
+}
+
+function orderedInsertIndex(arr, subsectionIndex, nextHeading, newPr) {
+  // 无 PR 号时 fallback 到尾插，保持旧行为
+  if (newPr === undefined) {
+    return sectionTailInsertIndex(arr, subsectionIndex);
+  }
+  for (let i = subsectionIndex + 1; i < nextHeading; i += 1) {
+    const line = arr[i];
+    if (!/^- /.test(line)) {
+      continue;
+    }
+    const existing = extractPrNumberFromLine(line);
+    if (existing === undefined) {
+      continue;
+    }
+    if (existing > newPr) {
+      return i;
+    }
+  }
+  return sectionTailInsertIndex(arr, subsectionIndex);
+}
+
 ensureActiveSection(lines);
 
 const moved = [];
@@ -213,7 +245,6 @@ const nextLines = lines.filter((_, idx) => !removeIndexes.has(idx));
 
 for (const entry of moved) {
   const subsectionIndex = ensureSubsection(nextLines, entry.subsection);
-  const insertAt = sectionTailInsertIndex(nextLines, subsectionIndex);
 
   let nextHeading = nextLines.length;
   for (let i = subsectionIndex + 1; i < nextLines.length; i += 1) {
@@ -229,6 +260,9 @@ for (const entry of moved) {
   if (alreadyPresent) {
     continue;
   }
+
+  const newPr = extractPrNumberFromLine(entry.line);
+  const insertAt = orderedInsertIndex(nextLines, subsectionIndex, nextHeading, newPr);
   nextLines.splice(insertAt, 0, entry.line);
 }
 
@@ -272,18 +306,24 @@ validate_changelog_entry_for_pr() {
   local pr_pattern
   pr_pattern="(#$pr|openclaw#$pr)"
 
+  # 只验证三件事：
+  #   1. 本 PR 条目存在于 ## Unreleased 之下
+  #   2. 条目落在某个 ### 子 section 里
+  #   3. 若有 contrib 信息，同一行含 `thanks @<contrib>`
+  #
+  # 不再对整个 section 做 PR 号全局单调性检查。PR 号升序只是插入策略
+  # （由 src/infra/changelog-unreleased.ts 执行），不是存量不变式 ——
+  # 历史 CHANGELOG 是按合并时间 append 的，本来就不严格升序，
+  # 把它当硬门会让所有新 PR 都被卡住。
   local validation_output
   if ! validation_output=$(awk -v pr_pattern="$pr_pattern" '
 BEGIN {
   current_release = ""
   current_section = ""
-  file_line_count = 0
   issue_count = 0
+  pr_count = 0
 }
 {
-  changelog[FNR] = $0
-  file_line_count = FNR
-
   if ($0 ~ /^## /) {
     current_release = $0
     current_section = ""
@@ -308,36 +348,14 @@ END {
     if (pr_sections[entry_line] == "") {
       printf "CHANGELOG.md entry must be inside a subsection (### ...): line %d: %s\n", entry_line, pr_text[entry_line]
       issue_count++
-      continue
-    }
-
-    section_name = pr_sections[entry_line]
-    next_heading = file_line_count + 1
-    for (i = entry_line + 1; i <= file_line_count; i++) {
-      if (changelog[i] ~ /^### / || changelog[i] ~ /^## /) {
-        next_heading = i
-        break
-      }
-    }
-
-    for (i = entry_line + 1; i < next_heading; i++) {
-      line_text = changelog[i]
-      if (line_text ~ /^[[:space:]]*$/) {
-        continue
-      }
-      printf "CHANGELOG.md PR-linked entry must be appended at the end of section %s: line %d: %s\n", section_name, entry_line, pr_text[entry_line]
-      printf "Found existing line below it at line %d: %s\n", i, line_text
-      issue_count++
-      break
     }
   }
 
   if (issue_count > 0) {
-    print "Move this PR changelog entry to the end of its section (just before the next heading)."
     exit 1
   }
 
-  print "changelog placement validated: PR-linked entries are appended at section tail"
+  print "changelog placement validated: PR-linked entry exists under ## Unreleased in a subsection"
 }
 ' CHANGELOG.md); then
     printf '%s\n' "$validation_output"
