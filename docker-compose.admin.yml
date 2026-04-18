@@ -1,0 +1,151 @@
+# Architecture Overview for OPENCLAW ADMIN:
+# - litellm: Unified LLM Gateway & Token Tracker routing local models and cloud models
+# - mem0: Vector storage and entity extraction for Agent Personal & Team Memory
+# - postgres: Database required for unified memory and tracking
+
+services:
+  # ==========================================
+  # LITELLM — API & Token Gateway
+  # ==========================================
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: openclaw-admin-litellm
+    ports:
+      - "4000:4000"
+    environment:
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-admin-master-key}
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/litellm
+      - STORE_MODEL_IN_DB=True
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+  # ==========================================
+  # TASK TRACKING (Web UI over Markdown/CalDav)
+  # ==========================================
+  # Using Tasks.md (or similar) to provide a Kanban Web UI 
+  # that saves tasks as standard Markdown files. The Admin agent 
+  # simply reads/writes these .md files natively!
+  task-tracker:
+    image: lrusso/tasks.md:latest
+    container_name: openclaw-admin-tasks
+    ports:
+      - "8090:8080"
+    volumes:
+      - ./boards/tasks:/tasks
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+  # ==========================================
+  # RAG WIKI VALVE (Standardized Knowledge Hub)
+  # ==========================================
+  # Leaving a native hook for ready-made Docker RAGs 
+  # (like AnythingLLM, Dify, or Flowise).
+  rag-wiki:
+    image: mintplexlabs/anythingllm:master # Placeholder for the "Valve"
+    container_name: openclaw-admin-rag
+    ports:
+      - "3001:3001"
+    environment:
+      - SERVER_PORT=3001
+      - LLM_PROVIDER=openai
+      - OPENAI_BASE_URL=http://litellm:4000
+      - OPENAI_API_KEY=${LITELLM_MASTER_KEY:-sk-admin-master-key}
+    volumes:
+      - rag_wiki_data:/app/server/storage
+    depends_on:
+      - litellm
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+  # ==========================================
+  # SHARED RESOURCES: FILE EXCHANGE (MinIO)
+  # ==========================================
+  # Provides an S3-compatible API for Executors to upload/download 
+  # heavy artifacts (video, audio) without bloating task files.
+  minio:
+    image: minio/minio:latest
+    container_name: openclaw-admin-minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_USER:-admin}
+      - MINIO_ROOT_PASSWORD=${MINIO_PASSWORD:-admin123456}
+    ports:
+      - "9000:9000" # API Port (used by S3 clients)
+      - "9001:9001" # Admin UI
+    volumes:
+      - minio_data:/data
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+  # ==========================================
+  # SHARED RESOURCES: MESSAGE BROKER (NATS)
+  # ==========================================
+  # Extremely fast, lightweight pub/sub system. 
+  # Used for instant status updates between swarm agents.
+  nats:
+    image: nats:latest
+    container_name: openclaw-admin-nats
+    ports:
+      - "4222:4222" # Client port
+      - "8222:8222" # Monitoring Dashboard
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+  # ==========================================
+  # INFRASTRUCTURE DATABASES
+  # ==========================================
+  postgres:
+    image: postgres:15
+    container_name: openclaw-admin-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=litellm
+    volumes:
+      - admin_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+  # ==========================================
+  # UNIFIED UI FOR HUMANS
+  # ==========================================
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: openclaw-admin-webui
+    ports:
+      - "3000:8080"
+    environment:
+      - OPENAI_API_BASE_URL=http://litellm:4000
+      - OPENAI_API_KEY=${LITELLM_MASTER_KEY:-sk-admin-master-key}
+    depends_on:
+      - litellm
+    volumes:
+      - open_webui_data:/app/backend/data
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+volumes:
+  admin_pg_data:
+  open_webui_data:
+  rag_wiki_data:
+  minio_data:
+
+networks:
+  admin-net:
+    driver: bridge
+    name: admin-net
