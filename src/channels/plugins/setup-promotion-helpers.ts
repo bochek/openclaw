@@ -118,9 +118,16 @@ export function resolveSingleAccountKeysToMove(params: {
     return keysToMove;
   }
 
-  const namedAccountPromotionKeys =
-    resolveSetupSurface()?.namedAccountPromotionKeys ??
+  const bundledNamedAccountPromotionKeys =
     BUNDLED_NAMED_ACCOUNT_PROMOTION_FALLBACKS[params.channelKey];
+  const shouldLoadSetupSurfaceForNamedAccounts =
+    bundledNamedAccountPromotionKeys === undefined &&
+    keysToMove.some((key) => !isStaticSingleAccountPromotionKey(params.channelKey, key));
+  const namedAccountPromotionKeys =
+    bundledNamedAccountPromotionKeys ??
+    (shouldLoadSetupSurfaceForNamedAccounts
+      ? resolveSetupSurface()?.namedAccountPromotionKeys
+      : undefined);
   if (!namedAccountPromotionKeys) {
     return keysToMove;
   }

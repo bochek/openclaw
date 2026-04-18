@@ -58,6 +58,7 @@ const bundledChannelSchemaById = new Map<string, unknown>(
     (entry) => [entry.channelId, entry.schema] as const,
   ),
 );
+const bundledChannelIds = new Set(bundledChannelSchemaById.keys());
 
 function toIssueRecord(value: unknown): UnknownIssueRecord | null {
   if (!value || typeof value !== "object") {
@@ -901,7 +902,12 @@ function validateConfigObjectWithPluginsBase(
     };
   };
 
-  const allowedChannels = new Set<string>(["defaults", "modelByChannel", ...CHANNEL_IDS]);
+  const allowedChannels = new Set<string>([
+    "defaults",
+    "modelByChannel",
+    ...CHANNEL_IDS,
+    ...bundledChannelIds,
+  ]);
 
   if (config.channels && isRecord(config.channels)) {
     for (const key of Object.keys(config.channels)) {
@@ -925,7 +931,8 @@ function validateConfigObjectWithPluginsBase(
         continue;
       }
 
-      const channelSchema = ensureChannelSchemas().get(trimmed)?.schema;
+      const channelSchema =
+        bundledChannelSchemaById.get(trimmed) ?? ensureChannelSchemas().get(trimmed)?.schema;
       if (!channelSchema) {
         continue;
       }
@@ -954,6 +961,9 @@ function validateConfigObjectWithPluginsBase(
 
   const heartbeatChannelIds = new Set<string>();
   for (const channelId of CHANNEL_IDS) {
+    heartbeatChannelIds.add(normalizeLowercaseStringOrEmpty(channelId));
+  }
+  for (const channelId of bundledChannelIds) {
     heartbeatChannelIds.add(normalizeLowercaseStringOrEmpty(channelId));
   }
 
