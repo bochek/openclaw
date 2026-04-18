@@ -119,6 +119,205 @@ describe("resolveBootstrapContextForRun", () => {
     expect(result.contextFiles.some((file) => file.path.endsWith("AGENTS.md"))).toBe(true);
   });
 
+  it("loads the Labs model and agent AGENTS addenda as separate context files before the root AGENTS.md", async () => {
+    const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-");
+    await fs.writeFile(path.join(workspaceDir, "AGENTS.md"), "base repo rules", "utf8");
+    await fs.writeFile(
+      path.join(workspaceDir, "FINAL_REMINDER.md"),
+      "The contract near the top wins unless specifically overridden.",
+      "utf8",
+    );
+    await fs.mkdir(path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4"), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4", "AGENTS.md"),
+      "gpt-5.4 addendum",
+      "utf8",
+    );
+    await fs.mkdir(
+      path.join(workspaceDir, ".openclaw", "labs", "agents", "reviewer", "overrides", "gpt-5.4"),
+      {
+        recursive: true,
+      },
+    );
+    await fs.writeFile(
+      path.join(
+        workspaceDir,
+        ".openclaw",
+        "labs",
+        "agents",
+        "reviewer",
+        "overrides",
+        "gpt-5.4",
+        "AGENTS.md",
+      ),
+      "reviewer addendum",
+      "utf8",
+    );
+    await fs.mkdir(
+      path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4", "defaults"),
+      {
+        recursive: true,
+      },
+    );
+    await fs.writeFile(
+      path.join(
+        workspaceDir,
+        ".openclaw",
+        "labs",
+        "overrides",
+        "gpt-5.4",
+        "defaults",
+        "research.md",
+      ),
+      "example only",
+      "utf8",
+    );
+
+    const result = await resolveBootstrapContextForRun({
+      workspaceDir,
+      agentId: "reviewer",
+      modelId: "gpt-5.4",
+      config: {
+        plugins: {
+          entries: {
+            labs: {
+              enabled: true,
+              config: {
+                modelOverrides: {
+                  enabled: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const contextPaths = result.contextFiles.map((file) => file.path);
+    const rootAgentsPath = path.join(workspaceDir, "AGENTS.md");
+    const modelAddendumPath = path.join(
+      workspaceDir,
+      ".openclaw",
+      "labs",
+      "overrides",
+      "gpt-5.4",
+      "AGENTS.md",
+    );
+    const agentAddendumPath = path.join(
+      workspaceDir,
+      ".openclaw",
+      "labs",
+      "agents",
+      "reviewer",
+      "overrides",
+      "gpt-5.4",
+      "AGENTS.md",
+    );
+    const finalReminderPath = path.join(workspaceDir, "FINAL_REMINDER.md");
+
+    expect(contextPaths).toContain(rootAgentsPath);
+    expect(contextPaths).toContain(modelAddendumPath);
+    expect(contextPaths).toContain(agentAddendumPath);
+    expect(contextPaths).toContain(finalReminderPath);
+    expect(contextPaths.some((pathValue) => pathValue.endsWith("/defaults/research.md"))).toBe(
+      false,
+    );
+    expect(contextPaths.indexOf(modelAddendumPath)).toBeGreaterThanOrEqual(0);
+    expect(contextPaths.indexOf(agentAddendumPath)).toBeGreaterThan(
+      contextPaths.indexOf(modelAddendumPath),
+    );
+    expect(contextPaths.indexOf(rootAgentsPath)).toBeGreaterThan(
+      contextPaths.indexOf(agentAddendumPath),
+    );
+    expect(result.contextFiles.find((file) => file.path === rootAgentsPath)?.content).toBe(
+      "base repo rules",
+    );
+    expect(result.contextFiles.find((file) => file.path === modelAddendumPath)?.content).toBe(
+      "gpt-5.4 addendum",
+    );
+    expect(result.contextFiles.find((file) => file.path === agentAddendumPath)?.content).toBe(
+      "reviewer addendum",
+    );
+    expect(result.contextFiles.find((file) => file.path === finalReminderPath)?.content).toBe(
+      "The contract near the top wins unless specifically overridden.",
+    );
+  });
+
+  it("keeps lightweight cron bootstrap context empty even when Labs addenda exist", async () => {
+    const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-");
+    await fs.mkdir(path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4"), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4", "AGENTS.md"),
+      "gpt-5.4 addendum",
+      "utf8",
+    );
+
+    const result = await resolveBootstrapContextForRun({
+      workspaceDir,
+      modelId: "gpt-5.4",
+      contextMode: "lightweight",
+      runKind: "cron",
+      config: {
+        plugins: {
+          entries: {
+            labs: {
+              enabled: true,
+              config: {
+                modelOverrides: {
+                  enabled: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.contextFiles).toEqual([]);
+  });
+
+  it("keeps lightweight heartbeat bootstrap context heartbeat-only even when Labs addenda exist", async () => {
+    const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-");
+    await fs.writeFile(path.join(workspaceDir, "HEARTBEAT.md"), "check inbox", "utf8");
+    await fs.mkdir(path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4"), {
+      recursive: true,
+    });
+    await fs.writeFile(
+      path.join(workspaceDir, ".openclaw", "labs", "overrides", "gpt-5.4", "AGENTS.md"),
+      "gpt-5.4 addendum",
+      "utf8",
+    );
+
+    const result = await resolveBootstrapContextForRun({
+      workspaceDir,
+      modelId: "gpt-5.4",
+      contextMode: "lightweight",
+      runKind: "heartbeat",
+      config: {
+        plugins: {
+          entries: {
+            labs: {
+              enabled: true,
+              config: {
+                modelOverrides: {
+                  enabled: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.contextFiles.map((file) => file.path)).toEqual([
+      path.join(workspaceDir, "HEARTBEAT.md"),
+    ]);
+  });
+
   it("uses heartbeat-only bootstrap files in lightweight heartbeat mode", async () => {
     const workspaceDir = await makeTempWorkspace("openclaw-bootstrap-");
     await fs.writeFile(path.join(workspaceDir, "HEARTBEAT.md"), "check inbox", "utf8");

@@ -148,6 +148,7 @@ Dock commands are generated from channel plugins with native-command support. Cu
 
 Bundled plugins can add more slash commands. Current bundled commands in this repo:
 
+- `/lab`
 - `/dreaming [on|off|status|help]` toggles memory dreaming. See [Dreaming](/concepts/dreaming).
 - `/pair [qr|status|pending|approve|cleanup|notify]` manages device pairing/setup flow. See [Pairing](/channels/pairing).
 - `/phone status|arm <camera|screen|writes|all> [duration]|disarm` temporarily arms high-risk phone node commands.
@@ -160,6 +161,16 @@ Bundled plugins can add more slash commands. Current bundled commands in this re
   - `/bot-help`
   - `/bot-upgrade`
   - `/bot-logs`
+
+`/lab` is the entry point for Labs experimental features. Current feature
+commands:
+
+- `/lab`
+- `/lab custom status`
+- `/lab enable custom`
+- `/lab disable custom`
+
+See [Labs](/concepts/labs).
 
 ### Dynamic skill commands
 

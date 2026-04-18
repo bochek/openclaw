@@ -89,6 +89,8 @@ export async function prepareCliRunContext(
     config: params.config,
     sessionKey: params.sessionKey,
     sessionId: params.sessionId,
+    agentId: params.agentId,
+    modelId,
     warn: prepareDeps.makeBootstrapWarn({
       sessionLabel,
       workspaceDir,
@@ -112,6 +114,16 @@ export async function prepareCliRunContext(
     seenSignatures: params.bootstrapPromptWarningSignaturesSeen,
     previousSignature: params.bootstrapPromptWarningSignature,
   });
+  if (bootstrapPromptWarning.warningShown) {
+    const truncatedLabsFile = bootstrapAnalysis.truncatedFiles.find((file) =>
+      file.path.replace(/\\/g, "/").includes("/.openclaw/labs/"),
+    );
+    if (truncatedLabsFile) {
+      cliBackendLog.warn(
+        `[labs] addendum truncated model=${modelId} path=${truncatedLabsFile.path}`,
+      );
+    }
+  }
   const { defaultAgentId, sessionAgentId } = resolveSessionAgentIds({
     sessionKey: params.sessionKey,
     config: params.config,

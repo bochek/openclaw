@@ -464,6 +464,8 @@ export async function compactEmbeddedPiSessionDirect(
       config: params.config,
       sessionKey: params.sessionKey,
       sessionId: params.sessionId,
+      agentId: effectiveSkillAgentId,
+      modelId,
       warn: makeBootstrapWarn({
         sessionLabel,
         workspaceDir: effectiveWorkspace,

@@ -1,0 +1,34 @@
+{
+  "id": "labs",
+  "name": "Labs",
+  "description": "Bundled incubation space for core-owned experimental agent behavior.",
+  "enabledByDefault": true,
+  "commandAliases": [
+    {
+      "name": "labs",
+      "kind": "runtime-slash"
+    }
+  ],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "modelOverrides": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "modelOverrides.enabled": {
+      "label": "Model Overrides",
+      "help": "Enable model-specific AGENTS.md Labs addenda from .openclaw/labs/overrides/<model-id>/AGENTS.md."
+    }
+  }
+}

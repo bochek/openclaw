@@ -7,6 +7,7 @@ const resolveDefaultAgentId = vi.hoisted(() => vi.fn(() => "main"));
 const resolveBootstrapContextForRun = vi.hoisted(() => vi.fn());
 const resolveBootstrapMaxChars = vi.hoisted(() => vi.fn(() => 20_000));
 const resolveBootstrapTotalMaxChars = vi.hoisted(() => vi.fn(() => 150_000));
+const resolveCurrentLabsModelId = vi.hoisted(() => vi.fn(() => "gpt-5.4"));
 
 vi.mock("../terminal/note.js", () => ({
   note,
@@ -24,6 +25,10 @@ vi.mock("../agents/bootstrap-files.js", () => ({
 vi.mock("../agents/pi-embedded-helpers.js", () => ({
   resolveBootstrapMaxChars,
   resolveBootstrapTotalMaxChars,
+}));
+
+vi.mock("../labs/model-overrides.js", () => ({
+  resolveCurrentLabsModelId,
 }));
 
 import { noteBootstrapFileSize } from "./doctor-bootstrap-size.js";
@@ -73,5 +78,16 @@ describe("noteBootstrapFileSize", () => {
     });
     await noteBootstrapFileSize({} as OpenClawConfig);
     expect(note).not.toHaveBeenCalled();
+  });
+
+  it("forwards the default agent and resolved model into bootstrap sizing", async () => {
+    await noteBootstrapFileSize({} as OpenClawConfig);
+
+    expect(resolveBootstrapContextForRun).toHaveBeenCalledWith({
+      workspaceDir: "/tmp/workspace",
+      config: {},
+      agentId: "main",
+      modelId: "gpt-5.4",
+    });
   });
 });

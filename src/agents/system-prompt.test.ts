@@ -1,14 +1,323 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
+import { clearMemoryPluginState, registerMemoryPromptSection } from "../plugins/memory-state.js";
 import { typedCases } from "../test-utils/typed-cases.js";
 import { buildSubagentSystemPrompt } from "./subagent-system-prompt.js";
 import {
+  buildAgentPromptChannels,
   buildAgentSystemPrompt,
   buildAgentUserPromptPrefix,
   buildRuntimeLine,
 } from "./system-prompt.js";
 
 describe("buildAgentSystemPrompt", () => {
+  afterEach(() => {
+    clearMemoryPluginState();
+  });
+
+  it("keeps the OpenClaw assistant intro for GPT-5 family models", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      runtimeInfo: {
+        model: "github-copilot/gpt-5.4",
+      },
+    });
+
+    expect(prompt.startsWith("You are a personal assistant running inside OpenClaw.")).toBe(true);
+  });
+
+  it("keeps core prompts generic when no prompt-routing plugin contribution is applied", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+    });
+
+    expect(prompt).not.toContain("## Autonomy and Persistence");
+  });
+
+  it("adds silent reply guidance when direct chats do not allow silence", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      silentReplyMode: "rewrite",
+    });
+
+    expect(prompt).toContain("## Silent Replies");
+    expect(prompt).toContain(
+      "In direct 1:1 conversations, do not use NO_REPLY as the final visible reply.",
+    );
+  });
+
+  it("omits silent reply guidance when silence is allowed", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+      silentReplyMode: "allow",
+    });
+
+    expect(prompt).not.toContain("## Silent Replies");
+  });
+
+  it("keeps all context files in the system prompt when no routing contribution is applied", () => {
+    const channels = buildAgentPromptChannels({
+      workspaceDir: "/tmp/openclaw",
+      contextFiles: [
+        { path: "AGENTS.md", content: "agents guidance" },
+        { path: "notes.md", content: "normal project context" },
+        { path: "SOUL.md", content: "persona guidance" },
+        { path: "IDENTITY.md", content: "identity guidance" },
+        { path: "USER.md", content: "user guidance" },
+      ],
+    });
+
+    expect(channels.systemPrompt).toContain("## notes.md");
+    expect(channels.systemPrompt).toContain("## AGENTS.md");
+    expect(channels.systemPrompt).toContain("## SOUL.md");
+    expect(channels.systemPrompt).toContain("## IDENTITY.md");
+    expect(channels.systemPrompt).toContain("## USER.md");
+    expect(channels.developerPrompt).toBeUndefined();
+  });
+
+  it("includes base memory guidance in the system prompt when no routing contribution is applied", () => {
+    registerMemoryPromptSection(() => ["## Memory Recall", "Use memory carefully.", ""]);
+    const channels = buildAgentPromptChannels({
+      workspaceDir: "/tmp/openclaw",
+      toolNames: ["memory_search"],
+      includeMemorySection: true,
+    });
+
+    expect(channels.systemPrompt).toContain("## Memory Recall");
+  });
+
+  it("keeps the user prompt prefix empty when no routing contribution is applied", () => {
+    registerMemoryPromptSection(() => ["## Memory Recall", "Use memory carefully.", ""]);
+    const promptPrefix = buildAgentUserPromptPrefix({
+      toolNames: ["memory_search"],
+      includeMemorySection: true,
+    });
+
+    expect(promptPrefix).toBeUndefined();
+  });
+
+  it("routes developer and user context when a routing contribution is applied", () => {
+    registerMemoryPromptSection(() => ["## Memory Recall", "Use memory carefully.", ""]);
+    const channels = buildAgentPromptChannels({
+      workspaceDir: "/tmp/openclaw",
+      contextFiles: [
+        { path: "AGENTS.md", content: "agents guidance" },
+        { path: "USER.md", content: "user guidance" },
+        { path: "/tmp/openclaw/MEMORY.md", content: "Promoted From Short-Term Memory" },
+        { path: "notes.md", content: "normal project context" },
+      ],
+      routing: {
+        systemAdditions: "## Autonomy and Persistence\nTake action.",
+        contextFileRoutes: {
+          "AGENTS.md": "developer",
+          "USER.md": "developer",
+          "/tmp/openclaw/MEMORY.md": "user",
+        },
+        memorySectionTarget: "user",
+      },
+      toolNames: ["memory_search"],
+      includeMemorySection: true,
+    });
+    const promptPrefix = buildAgentUserPromptPrefix({
+      toolNames: ["memory_search"],
+      includeMemorySection: true,
+      contextFiles: [
+        { path: "AGENTS.md", content: "agents guidance" },
+        { path: "USER.md", content: "user guidance" },
+        { path: "/tmp/openclaw/MEMORY.md", content: "Promoted From Short-Term Memory" },
+        { path: "notes.md", content: "normal project context" },
+      ],
+      routing: {
+        contextFileRoutes: {
+          "AGENTS.md": "developer",
+          "USER.md": "developer",
+          "/tmp/openclaw/MEMORY.md": "user",
+        },
+        memorySectionTarget: "user",
+      },
+    });
+
+    expect(channels.systemPrompt).toContain("## Autonomy and Persistence");
+    expect(channels.systemPrompt).toContain("## notes.md");
+    expect(channels.systemPrompt).not.toContain("## AGENTS.md");
+    expect(channels.systemPrompt).not.toContain("## USER.md");
+    expect(channels.systemPrompt).not.toContain("## /tmp/openclaw/MEMORY.md");
+    expect(channels.developerPrompt).toContain("# Developer Context");
+    expect(channels.developerPrompt).toContain("## AGENTS.md");
+    expect(channels.developerPrompt).toContain("## USER.md");
+    expect(promptPrefix).toContain("# User Context");
+    expect(promptPrefix).toContain("## Memory Recall");
+    expect(promptPrefix).toContain("## /tmp/openclaw/MEMORY.md");
+    expect(promptPrefix).toContain("Promoted From Short-Term Memory");
+  });
+
+  it("keeps Labs model and agent AGENTS addenda before the root AGENTS.md in developer context", () => {
+    const channels = buildAgentPromptChannels({
+      workspaceDir: "/tmp/openclaw",
+      contextFiles: [
+        {
+          path: "/tmp/openclaw/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+          content: "agent labs",
+        },
+        { path: "/tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md", content: "labs" },
+        { path: "AGENTS.md", content: "base" },
+      ],
+      routing: {
+        contextFileRoutes: {
+          "AGENTS.md": "developer",
+        },
+      },
+    });
+
+    const developerPrompt = channels.developerPrompt ?? "";
+    const rootIndex = developerPrompt.indexOf("## AGENTS.md");
+    const modelLabsIndex = developerPrompt.indexOf(
+      "## /tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+    );
+    const agentLabsIndex = developerPrompt.indexOf(
+      "## /tmp/openclaw/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+    );
+
+    expect(modelLabsIndex).toBeGreaterThanOrEqual(0);
+    expect(agentLabsIndex).toBeGreaterThan(modelLabsIndex);
+    expect(rootIndex).toBeGreaterThan(agentLabsIndex);
+  });
+
+  it("routes the Labs model and agent AGENTS addenda with the same developer target as AGENTS.md", () => {
+    const channels = buildAgentPromptChannels({
+      workspaceDir: "/tmp/openclaw",
+      contextFiles: [
+        { path: "AGENTS.md", content: "base guidance" },
+        {
+          path: "/tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+          content: "labs guidance",
+        },
+        {
+          path: "/tmp/openclaw/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+          content: "agent guidance",
+        },
+      ],
+      routing: {
+        contextFileRoutes: {
+          "AGENTS.md": "developer",
+        },
+      },
+    });
+
+    expect(channels.systemPrompt).not.toContain(
+      "## /tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+    );
+    expect(channels.systemPrompt).not.toContain(
+      "## /tmp/openclaw/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+    );
+    expect(channels.developerPrompt).toContain(
+      "## /tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+    );
+    expect(channels.developerPrompt).toContain(
+      "## /tmp/openclaw/.openclaw/labs/agents/reviewer/overrides/gpt-5.4/AGENTS.md",
+    );
+    expect(channels.developerPrompt).toContain("labs guidance");
+    expect(channels.developerPrompt).toContain("agent guidance");
+  });
+
+  it("prefers the root AGENTS.md route for Labs addenda when multiple AGENTS routes exist", () => {
+    const channels = buildAgentPromptChannels({
+      workspaceDir: "/tmp/openclaw",
+      contextFiles: [
+        { path: "AGENTS.md", content: "root guidance" },
+        { path: "packages/core/AGENTS.md", content: "package guidance" },
+        {
+          path: "/tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+          content: "labs guidance",
+        },
+      ],
+      routing: {
+        contextFileRoutes: {
+          "packages/core/AGENTS.md": "user",
+          "AGENTS.md": "developer",
+        },
+      },
+    });
+    const promptPrefix = buildAgentUserPromptPrefix({
+      contextFiles: [
+        { path: "AGENTS.md", content: "root guidance" },
+        { path: "packages/core/AGENTS.md", content: "package guidance" },
+        {
+          path: "/tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+          content: "labs guidance",
+        },
+      ],
+      routing: {
+        contextFileRoutes: {
+          "packages/core/AGENTS.md": "user",
+          "AGENTS.md": "developer",
+        },
+      },
+    });
+
+    expect(channels.developerPrompt).toContain(
+      "## /tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+    );
+    expect(promptPrefix).not.toContain(
+      "## /tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+    );
+  });
+
+  it("keeps routed dynamic files out of the system prompt channel", () => {
+    const channels = buildAgentPromptChannels({
+      workspaceDir: "/tmp/openclaw",
+      contextFiles: [
+        { path: "heartbeat.md", content: "dynamic system context" },
+        { path: "USER.md", content: "dynamic user context" },
+      ],
+      routing: {
+        contextFileRoutes: {
+          "USER.md": "user",
+        },
+      },
+    });
+    const promptPrefix = buildAgentUserPromptPrefix({
+      contextFiles: [
+        { path: "heartbeat.md", content: "dynamic system context" },
+        { path: "USER.md", content: "dynamic user context" },
+      ],
+      routing: {
+        contextFileRoutes: {
+          "USER.md": "user",
+        },
+      },
+    });
+
+    expect(channels.systemPrompt).toContain("## heartbeat.md");
+    expect(channels.systemPrompt).not.toContain("## USER.md");
+    expect(promptPrefix).toContain("## USER.md");
+    expect(promptPrefix).toContain("dynamic user context");
+  });
+
+  it("renders FINAL_REMINDER.md after every other loaded context file", () => {
+    const channels = buildAgentPromptChannels({
+      workspaceDir: "/tmp/openclaw",
+      contextFiles: [
+        { path: "AGENTS.md", content: "agents guidance" },
+        {
+          path: "/tmp/openclaw/.openclaw/labs/overrides/gpt-5.4/AGENTS.md",
+          content: "labs guidance",
+        },
+        { path: "heartbeat.md", content: "dynamic system context" },
+        { path: "FINAL_REMINDER.md", content: "final reminder" },
+        { path: "notes.md", content: "normal project context" },
+      ],
+    });
+
+    const prompt = channels.systemPrompt;
+    expect(prompt).toContain("## FINAL_REMINDER.md");
+    expect(prompt.lastIndexOf("## FINAL_REMINDER.md")).toBeGreaterThan(
+      prompt.lastIndexOf("## heartbeat.md"),
+    );
+    expect(prompt.lastIndexOf("## FINAL_REMINDER.md")).toBeGreaterThan(
+      prompt.lastIndexOf("## notes.md"),
+    );
+  });
   it("formats owner section for plain, hash, and missing owner lists", () => {
     const cases = typedCases<{
       name: string;

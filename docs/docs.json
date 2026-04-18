@@ -1063,7 +1063,15 @@
                   "concepts/soul",
                   "concepts/oauth",
                   "start/bootstrapping",
-                  "concepts/experimental-features"
+                  "concepts/experimental-features",
+                  {
+                    "group": "Labs",
+                    "pages": [
+                      "concepts/labs",
+                      "concepts/labs-custom-overrides",
+                      "concepts/labs-gpt54-tuning"
+                    ]
+                  }
                 ]
               },
               {

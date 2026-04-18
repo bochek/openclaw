@@ -103,6 +103,12 @@ Bootstrap files are trimmed and appended under **Project Context** so the model 
 - `BOOTSTRAP.md` (only on brand-new workspaces)
 - `MEMORY.md` when present, otherwise `memory.md` as a lowercase fallback
 
+When Labs custom overrides are enabled, OpenClaw can also inject additional
+`AGENTS.md` addenda from:
+
+- `.openclaw/labs/overrides/<model-id>/AGENTS.md`
+- `.openclaw/labs/agents/<agent-id>/overrides/<model-id>/AGENTS.md`
+
 All of these files are **injected into the context window** on every turn unless
 a file-specific gate applies. `HEARTBEAT.md` is omitted on normal runs when
 heartbeats are disabled for the default agent or
@@ -124,6 +130,12 @@ content across files is capped by `agents.defaults.bootstrapTotalMaxChars`
 occurs, OpenClaw can inject a warning block in Project Context; control this with
 `agents.defaults.bootstrapPromptTruncationWarning` (`off`, `once`, `always`;
 default: `once`).
+
+Labs addenda behave like normal prompt files for budgeting, reporting, and
+truncation. The non-runtime Labs `defaults/` files do not load into the prompt.
+
+OpenClaw also appends `FINAL_REMINDER.md` at the very end of the full system
+prompt when that template exists.
 
 Sub-agent sessions only inject `AGENTS.md` and `TOOLS.md` (other bootstrap files
 are filtered out to keep the sub-agent context small).

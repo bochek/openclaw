@@ -21,6 +21,10 @@ Treat them differently from normal config:
 - If you are rolling OpenClaw out broadly, test experimental flags in a smaller
   environment before baking them into a shared baseline.
 
+Labs is related, but slightly different: it is an **experimental feature
+umbrella** exposed through the `/lab` command surface rather than a
+`*.experimental.*` config key. See [Labs](/concepts/labs).
+
 ## Currently documented flags
 
 | Surface                  | Key                                                       | Use it when                                                                                                    | More                                                                                          |

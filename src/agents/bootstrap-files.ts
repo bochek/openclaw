@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import type { AgentContextInjection } from "../config/types.agent-defaults.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { appendLabsAgentsOverrideFiles, loadLabsAgentsOverrides } from "../labs/model-overrides.js";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 import { resolveSessionAgentIds } from "./agent-scope.js";
 import { getOrLoadBootstrapFiles } from "./bootstrap-cache.js";
@@ -220,6 +221,7 @@ export async function resolveBootstrapFilesForRun(params: {
   sessionKey?: string;
   sessionId?: string;
   agentId?: string;
+  modelId?: string;
   warn?: (message: string) => void;
   contextMode?: BootstrapContextMode;
   runKind?: BootstrapContextRunKind;
@@ -232,8 +234,17 @@ export async function resolveBootstrapFilesForRun(params: {
         sessionKey: params.sessionKey,
       })
     : await loadWorkspaceBootstrapFiles(params.workspaceDir);
+  const labsOverrideFiles = await loadLabsAgentsOverrides({
+    workspaceDir: params.workspaceDir,
+    modelId: params.modelId,
+    agentId: params.agentId,
+    cfg: params.config,
+  });
   const bootstrapFiles = applyContextModeFilter({
-    files: filterBootstrapFilesForSession(rawFiles, sessionKey),
+    files: appendLabsAgentsOverrideFiles({
+      files: filterBootstrapFilesForSession(rawFiles, sessionKey),
+      overrideFiles: labsOverrideFiles,
+    }),
     contextMode: params.contextMode,
     runKind: params.runKind,
   });
@@ -258,6 +269,7 @@ export async function resolveBootstrapContextForRun(params: {
   sessionKey?: string;
   sessionId?: string;
   agentId?: string;
+  modelId?: string;
   warn?: (message: string) => void;
   contextMode?: BootstrapContextMode;
   runKind?: BootstrapContextRunKind;

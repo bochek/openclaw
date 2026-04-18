@@ -4,7 +4,9 @@ import { SILENT_REPLY_TOKEN } from "../auto-reply/tokens.js";
 import { resolveChannelApprovalCapability } from "../channels/plugins/approvals.js";
 import { getChannelPlugin } from "../channels/plugins/index.js";
 import type { MemoryCitationsMode } from "../config/types.memory.js";
+import { isLabsAgentsOverridePath } from "../labs/model-overrides.js";
 import { buildMemoryPromptSection } from "../plugins/memory-state.js";
+import type { SilentReplyMode } from "../shared/silent-reply-policy.js";
 import {
   normalizeLowercaseStringOrEmpty,
   normalizeOptionalLowercaseString,
@@ -32,6 +34,7 @@ import type {
   ProviderSystemPromptSectionId,
 } from "./system-prompt-contribution.js";
 import type { PromptMode } from "./system-prompt.types.js";
+import { DEFAULT_AGENTS_FILENAME, DEFAULT_FINAL_REMINDER_FILENAME } from "./workspace.js";
 
 /**
  * Controls which hardcoded sections are included in the system prompt.
@@ -40,6 +43,14 @@ import type { PromptMode } from "./system-prompt.types.js";
  * - "none": Just basic identity line, no sections
  */
 type OwnerIdDisplay = "raw" | "hash";
+type PromptChannelTarget = "system" | "developer" | "user";
+type PromptChannelRoutingResult = {
+  systemAdditions?: string;
+  developerAdditions?: string;
+  userAdditions?: string;
+  contextFileRoutes?: Record<string, PromptChannelTarget>;
+  memorySectionTarget?: "system" | "user";
+};
 
 const CONTEXT_FILE_ORDER = new Map<string, number>([
   ["agents.md", 10],
@@ -49,6 +60,7 @@ const CONTEXT_FILE_ORDER = new Map<string, number>([
   ["tools.md", 50],
   ["bootstrap.md", 60],
   ["memory.md", 70],
+  ["heartbeat.md", 80],
 ]);
 
 const DYNAMIC_CONTEXT_FILE_BASENAMES = new Set(["heartbeat.md"]);
@@ -67,6 +79,27 @@ function isDynamicContextFile(pathValue: string): boolean {
   return DYNAMIC_CONTEXT_FILE_BASENAMES.has(getContextFileBasename(pathValue));
 }
 
+function isFinalReminderContextFile(pathValue: string): boolean {
+  return (
+    getContextFileBasename(pathValue) ===
+    normalizeLowercaseStringOrEmpty(DEFAULT_FINAL_REMINDER_FILENAME)
+  );
+}
+
+function getLabsAgentsOverrideOrder(pathValue: string): number {
+  const normalized = normalizeContextFilePath(pathValue);
+  if (!isLabsAgentsOverridePath(normalized)) {
+    return 2;
+  }
+  if (normalized.includes("/.openclaw/labs/overrides/")) {
+    return 0;
+  }
+  if (normalized.includes("/.openclaw/labs/agents/")) {
+    return 1;
+  }
+  return 0;
+}
+
 function sanitizeContextFileContentForPrompt(content: string): string {
   // Claude Code subscription mode rejects this exact prompt-policy quote when it
   // appears in system context. The live heartbeat user turn still carries the
@@ -80,6 +113,13 @@ function sortContextFilesForPrompt(contextFiles: EmbeddedContextFile[]): Embedde
     const bPath = normalizeContextFilePath(b.path);
     const aBase = getContextFileBasename(a.path);
     const bBase = getContextFileBasename(b.path);
+    const aIsFinalReminder =
+      aBase === normalizeLowercaseStringOrEmpty(DEFAULT_FINAL_REMINDER_FILENAME);
+    const bIsFinalReminder =
+      bBase === normalizeLowercaseStringOrEmpty(DEFAULT_FINAL_REMINDER_FILENAME);
+    if (aIsFinalReminder !== bIsFinalReminder) {
+      return aIsFinalReminder ? 1 : -1;
+    }
     const aOrder = CONTEXT_FILE_ORDER.get(aBase) ?? Number.MAX_SAFE_INTEGER;
     const bOrder = CONTEXT_FILE_ORDER.get(bBase) ?? Number.MAX_SAFE_INTEGER;
     if (aOrder !== bOrder) {
@@ -87,6 +127,16 @@ function sortContextFilesForPrompt(contextFiles: EmbeddedContextFile[]): Embedde
     }
     if (aBase !== bBase) {
       return aBase.localeCompare(bBase);
+    }
+    const aLabsOrder = getLabsAgentsOverrideOrder(a.path);
+    const bLabsOrder = getLabsAgentsOverrideOrder(b.path);
+    if (aLabsOrder !== bLabsOrder) {
+      return aLabsOrder - bLabsOrder;
+    }
+    const aDepth = aPath.split("/").filter(Boolean).length;
+    const bDepth = bPath.split("/").filter(Boolean).length;
+    if (aDepth !== bDepth) {
+      return aDepth - bDepth;
     }
     return aPath.localeCompare(bPath);
   });
@@ -124,6 +174,99 @@ function buildProjectContextSection(params: {
   return lines;
 }
 
+function buildDeveloperContextSection(files: EmbeddedContextFile[]) {
+  if (files.length === 0) {
+    return [];
+  }
+  return [
+    "# Developer Context",
+    "",
+    "The following developer-role context files have been loaded:",
+    "",
+    ...files.flatMap((file) => [
+      `## ${file.path}`,
+      "",
+      sanitizeContextFileContentForPrompt(file.content),
+      "",
+    ]),
+  ];
+}
+
+function buildUserContextSection(files: EmbeddedContextFile[]) {
+  if (files.length === 0) {
+    return [];
+  }
+  return [
+    "# User Context",
+    "",
+    "The following user-role context files have been loaded:",
+    "",
+    ...files.flatMap((file) => [
+      `## ${file.path}`,
+      "",
+      sanitizeContextFileContentForPrompt(file.content),
+      "",
+    ]),
+  ];
+}
+
+function normalizeContextFileRoutes(
+  routes?: Record<string, PromptChannelTarget>,
+): Record<string, PromptChannelTarget> {
+  const normalized: Record<string, PromptChannelTarget> = {};
+  for (const [pathKey, target] of Object.entries(routes ?? {})) {
+    const normalizedPath = normalizeContextFilePath(pathKey);
+    if (!normalizedPath) {
+      continue;
+    }
+    normalized[normalizedPath] = target;
+  }
+  return normalized;
+}
+
+function resolveContextFileRouteTarget(
+  pathValue: string,
+  routes: Record<string, PromptChannelTarget>,
+): PromptChannelTarget | undefined {
+  const normalizedPath = normalizeContextFilePath(pathValue);
+  const exact = routes[normalizedPath];
+  if (exact) {
+    return exact;
+  }
+  if (!isLabsAgentsOverridePath(normalizedPath)) {
+    return undefined;
+  }
+  const rootAgentsTarget = routes[DEFAULT_AGENTS_FILENAME];
+  if (rootAgentsTarget) {
+    return rootAgentsTarget;
+  }
+  const baseName = getContextFileBasename(normalizedPath);
+  const baseNameMatch = Object.entries(routes).find(
+    ([routePath]) => getContextFileBasename(routePath) === baseName,
+  );
+  return baseNameMatch?.[1];
+}
+
+function splitPromptAdditionLines(value?: string): string[] {
+  const trimmed = value?.trim();
+  return trimmed ? [trimmed, ""] : [];
+}
+
+function mergePrivilegedPromptChannels(systemPrompt: string, developerPrompt?: string): string {
+  const system = systemPrompt.trim();
+  const developer = developerPrompt?.trim();
+  if (!developer) {
+    return system;
+  }
+  if (!system) {
+    return developer;
+  }
+  return `${system}\n\n${developer}`;
+}
+
+function buildAgentIdentityLine(_runtimeModel?: string): string {
+  return "You are a personal assistant running inside OpenClaw.";
+}
 function buildHeartbeatSection(params: { isMinimal: boolean; heartbeatPrompt?: string }) {
   if (params.isMinimal || !params.heartbeatPrompt) {
     return [];
@@ -188,30 +331,64 @@ function buildMemorySection(params: {
 
 export function buildAgentUserPromptPrefix(params: {
   bootstrapMode?: BootstrapMode;
+  toolNames?: string[];
+  includeMemorySection?: boolean;
+  memoryCitationsMode?: MemoryCitationsMode;
+  contextFiles?: EmbeddedContextFile[];
+  routing?: PromptChannelRoutingResult;
+  promptMode?: PromptMode;
 }): string | undefined {
-  if (!params.bootstrapMode || params.bootstrapMode === "none") {
-    return undefined;
-  }
-  if (params.bootstrapMode === "limited") {
-    return [
-      "[Bootstrap pending]",
-      ...buildLimitedBootstrapPromptLines({
-        introLine:
-          "Bootstrap is still pending for this workspace, but this run cannot safely complete the full BOOTSTRAP.md workflow here.",
-        nextStepLine:
-          "Typical next steps include switching to a primary interactive run with normal workspace access or having the user complete the canonical BOOTSTRAP.md deletion afterward.",
-      }),
-    ].join("\n");
-  }
-  return [
-    "[Bootstrap pending]",
-    ...buildFullBootstrapPromptLines({
-      readLine:
-        "Please read BOOTSTRAP.md from the workspace and follow it before replying normally.",
-      firstReplyLine:
-        "Your first user-visible reply for a bootstrap-pending workspace must follow BOOTSTRAP.md, not a generic greeting.",
-    }),
-  ].join("\n");
+  const bootstrapLines =
+    !params.bootstrapMode || params.bootstrapMode === "none"
+      ? []
+      : params.bootstrapMode === "limited"
+        ? [
+            "[Bootstrap pending]",
+            ...buildLimitedBootstrapPromptLines({
+              introLine:
+                "Bootstrap is still pending for this workspace, but this run cannot safely complete the full BOOTSTRAP.md workflow here.",
+              nextStepLine:
+                "Typical next steps include switching to a primary interactive run with normal workspace access or having the user complete the canonical BOOTSTRAP.md deletion afterward.",
+            }),
+          ]
+        : [
+            "[Bootstrap pending]",
+            ...buildFullBootstrapPromptLines({
+              readLine:
+                "Please read BOOTSTRAP.md from the workspace and follow it before replying normally.",
+              firstReplyLine:
+                "Your first user-visible reply for a bootstrap-pending workspace must follow BOOTSTRAP.md, not a generic greeting.",
+            }),
+          ];
+  const promptMode = params.promptMode ?? "full";
+  const isMinimal = promptMode === "minimal" || promptMode === "none";
+  const availableTools = new Set(
+    (params.toolNames ?? []).map((tool) => normalizeLowercaseStringOrEmpty(tool)).filter(Boolean),
+  );
+  const routeMap = normalizeContextFileRoutes(params.routing?.contextFileRoutes);
+  const memorySection =
+    params.routing?.memorySectionTarget === "user"
+      ? buildMemorySection({
+          isMinimal,
+          includeMemorySection: params.includeMemorySection,
+          availableTools,
+          citationsMode: params.memoryCitationsMode,
+        })
+      : [];
+  const userContextFiles = sortContextFilesForPrompt(params.contextFiles ?? []).filter(
+    (file) => resolveContextFileRouteTarget(file.path, routeMap) === "user",
+  );
+  const text = [
+    ...bootstrapLines,
+    ...(bootstrapLines.length > 0 ? [""] : []),
+    ...splitPromptAdditionLines(params.routing?.userAdditions),
+    ...memorySection,
+    ...buildUserContextSection(userContextFiles),
+  ]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+  return text || undefined;
 }
 
 function buildUserIdentitySection(ownerLine: string | undefined, isMinimal: boolean) {
@@ -306,6 +483,21 @@ function buildExecutionBiasSection(params: { isMinimal: boolean }) {
     "Use a real tool call or concrete action first when the task is actionable; do not stop at a plan or promise-to-act reply.",
     "Commentary-only turns are incomplete when tools are available and the next action is clear.",
     "If the work will take multiple steps or a while to finish, send one short progress update before or while acting.",
+    "",
+  ];
+}
+
+function buildSilentReplyGuidanceSection(params: {
+  isMinimal: boolean;
+  silentReplyMode?: SilentReplyMode;
+}) {
+  if (params.isMinimal || !params.silentReplyMode || params.silentReplyMode === "allow") {
+    return [];
+  }
+  return [
+    "## Silent Replies",
+    "In direct 1:1 conversations, do not use NO_REPLY as the final visible reply.",
+    "If you would otherwise use NO_REPLY, provide a brief visible acknowledgment instead.",
     "",
   ];
 }
@@ -450,6 +642,7 @@ export function buildAgentSystemPrompt(params: {
     canvasRootDir?: string;
   };
   messageToolHints?: string[];
+  silentReplyMode?: SilentReplyMode;
   sandboxInfo?: EmbeddedSandboxInfo;
   /** Reaction guidance for the agent (for Telegram minimal/extensive modes). */
   reactionGuidance?: {
@@ -459,7 +652,61 @@ export function buildAgentSystemPrompt(params: {
   includeMemorySection?: boolean;
   memoryCitationsMode?: MemoryCitationsMode;
   promptContribution?: ProviderSystemPromptContribution;
+  routing?: PromptChannelRoutingResult;
 }) {
+  const channels = buildAgentPromptChannels(params);
+  return mergePrivilegedPromptChannels(channels.systemPrompt, channels.developerPrompt);
+}
+
+export function buildAgentPromptChannels(params: {
+  workspaceDir: string;
+  defaultThinkLevel?: ThinkLevel;
+  reasoningLevel?: ReasoningLevel;
+  extraSystemPrompt?: string;
+  ownerNumbers?: string[];
+  ownerDisplay?: OwnerIdDisplay;
+  ownerDisplaySecret?: string;
+  reasoningTagHint?: boolean;
+  toolNames?: string[];
+  toolSummaries?: Record<string, string>;
+  modelAliasLines?: string[];
+  userTimezone?: string;
+  userTime?: string;
+  userTimeFormat?: ResolvedTimeFormat;
+  contextFiles?: EmbeddedContextFile[];
+  skillsPrompt?: string;
+  heartbeatPrompt?: string;
+  docsPath?: string;
+  workspaceNotes?: string[];
+  ttsHint?: string;
+  promptMode?: PromptMode;
+  acpEnabled?: boolean;
+  runtimeInfo?: {
+    agentId?: string;
+    host?: string;
+    os?: string;
+    arch?: string;
+    node?: string;
+    model?: string;
+    defaultModel?: string;
+    shell?: string;
+    channel?: string;
+    capabilities?: string[];
+    repoRoot?: string;
+    canvasRootDir?: string;
+  };
+  messageToolHints?: string[];
+  silentReplyMode?: SilentReplyMode;
+  sandboxInfo?: EmbeddedSandboxInfo;
+  reactionGuidance?: {
+    level: "minimal" | "extensive";
+    channel: string;
+  };
+  includeMemorySection?: boolean;
+  memoryCitationsMode?: MemoryCitationsMode;
+  promptContribution?: ProviderSystemPromptContribution;
+  routing?: PromptChannelRoutingResult;
+}): { systemPrompt: string; developerPrompt?: string } {
   const acpEnabled = params.acpEnabled !== false;
   const sandboxedRuntime = params.sandboxInfo?.enabled === true;
   const acpSpawnRuntimeEnabled = acpEnabled && !sandboxedRuntime;
@@ -658,7 +905,10 @@ export function buildAgentSystemPrompt(params: {
 
   // For "none" mode, return just the basic identity line
   if (promptMode === "none") {
-    return "You are a personal assistant running inside OpenClaw.";
+    return {
+      systemPrompt: buildAgentIdentityLine(params.runtimeInfo?.model),
+      developerPrompt: undefined,
+    };
   }
 
   const lines = [
@@ -729,10 +979,15 @@ export function buildAgentSystemPrompt(params: {
         isMinimal,
       }),
     }),
+    ...buildSilentReplyGuidanceSection({
+      isMinimal,
+      silentReplyMode: params.silentReplyMode,
+    }),
     ...buildOverridablePromptSection({
       override: providerStablePrefix,
       fallback: [],
     }),
+    ...splitPromptAdditionLines(params.routing?.systemAdditions),
     ...safetySection,
     "## OpenClaw CLI Quick Reference",
     "OpenClaw is controlled via subcommands. Do not invent commands.",
@@ -897,8 +1152,39 @@ export function buildAgentSystemPrompt(params: {
     (file) => typeof file.path === "string" && file.path.trim().length > 0,
   );
   const orderedContextFiles = sortContextFilesForPrompt(validContextFiles);
-  const stableContextFiles = orderedContextFiles.filter((file) => !isDynamicContextFile(file.path));
-  const dynamicContextFiles = orderedContextFiles.filter((file) => isDynamicContextFile(file.path));
+  const routeMap = normalizeContextFileRoutes(params.routing?.contextFileRoutes);
+  const developerContextFiles = orderedContextFiles.filter(
+    (file) =>
+      !isFinalReminderContextFile(file.path) &&
+      resolveContextFileRouteTarget(file.path, routeMap) === "developer",
+  );
+  const finalReminderFiles = orderedContextFiles.filter((file) =>
+    isFinalReminderContextFile(file.path),
+  );
+  const stableContextFiles = orderedContextFiles.filter(
+    (file) =>
+      !isFinalReminderContextFile(file.path) &&
+      !isDynamicContextFile(file.path) &&
+      resolveContextFileRouteTarget(file.path, routeMap) !== "developer" &&
+      resolveContextFileRouteTarget(file.path, routeMap) !== "user",
+  );
+  const dynamicContextFiles = orderedContextFiles.filter(
+    (file) =>
+      !isFinalReminderContextFile(file.path) &&
+      isDynamicContextFile(file.path) &&
+      resolveContextFileRouteTarget(file.path, routeMap) !== "developer" &&
+      resolveContextFileRouteTarget(file.path, routeMap) !== "user",
+  );
+  if (params.routing?.memorySectionTarget !== "user") {
+    lines.push(
+      ...buildMemorySection({
+        isMinimal,
+        includeMemorySection: params.includeMemorySection,
+        availableTools,
+        citationsMode: params.memoryCitationsMode,
+      }),
+    );
+  }
   lines.push(
     ...buildProjectContextSection({
       files: stableContextFiles,
@@ -907,8 +1193,8 @@ export function buildAgentSystemPrompt(params: {
     }),
   );
 
-  // Skip silent replies for subagent/none modes
-  if (!isMinimal) {
+  // Skip silent replies for subagent/none modes and when the caller explicitly allows silence.
+  if (!isMinimal && params.silentReplyMode !== "allow") {
     lines.push(
       "## Silent Replies",
       `When you have nothing to say, respond with ONLY: ${SILENT_REPLY_TOKEN}`,
@@ -956,7 +1242,23 @@ export function buildAgentSystemPrompt(params: {
     `Reasoning: ${reasoningLevel} (hidden unless on/stream). Toggle /reasoning; /status shows Reasoning when enabled.`,
   );
 
-  return lines.filter(Boolean).join("\n");
+  for (const file of finalReminderFiles) {
+    lines.push(`## ${file.path}`, "", sanitizeContextFileContentForPrompt(file.content), "");
+  }
+
+  return {
+    systemPrompt: lines.filter(Boolean).join("\n"),
+    developerPrompt: (() => {
+      const developerLines = [
+        ...splitPromptAdditionLines(params.routing?.developerAdditions),
+        ...buildDeveloperContextSection(developerContextFiles),
+      ];
+      if (developerLines.length === 0) {
+        return undefined;
+      }
+      return developerLines.filter(Boolean).join("\n");
+    })(),
+  };
 }
 
 export function buildRuntimeLine(

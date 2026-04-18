@@ -9,6 +9,7 @@ import {
   resolveBootstrapTotalMaxChars,
 } from "../agents/pi-embedded-helpers.js";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
+import { resolveCurrentLabsModelId } from "../labs/model-overrides.js";
 import { note } from "../terminal/note.js";
 
 function formatInt(value: number): string {
@@ -31,12 +32,19 @@ function formatCauses(causes: Array<"per-file-limit" | "total-limit">): string {
 }
 
 export async function noteBootstrapFileSize(cfg: OpenClawConfig) {
-  const workspaceDir = resolveAgentWorkspaceDir(cfg, resolveDefaultAgentId(cfg));
+  const defaultAgentId = resolveDefaultAgentId(cfg);
+  const workspaceDir = resolveAgentWorkspaceDir(cfg, defaultAgentId);
   const bootstrapMaxChars = resolveBootstrapMaxChars(cfg);
   const bootstrapTotalMaxChars = resolveBootstrapTotalMaxChars(cfg);
+  const modelId = resolveCurrentLabsModelId({
+    cfg,
+    agentId: defaultAgentId,
+  });
   const { bootstrapFiles, contextFiles } = await resolveBootstrapContextForRun({
     workspaceDir,
     config: cfg,
+    agentId: defaultAgentId,
+    modelId,
   });
   const stats = buildBootstrapInjectionStats({
     bootstrapFiles,
