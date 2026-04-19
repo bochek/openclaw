@@ -16,6 +16,12 @@ services:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-admin-master-key}
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/litellm
       - STORE_MODEL_IN_DB=True
+      - OPENROUTER_API_KEY=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
+    volumes:
+      - ./litellm_config.yaml:/app/config.yaml
+    command: ["--config", "/app/config.yaml"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,12 +36,13 @@ services:
   # that saves tasks as standard Markdown files. The Admin agent 
   # simply reads/writes these .md files natively!
   task-tracker:
-    image: lrusso/tasks.md:latest
+    image: baldissaramatheus/tasks.md:latest
     container_name: openclaw-admin-tasks
     ports:
       - "8090:8080"
     volumes:
       - ./boards/tasks:/tasks
+      - ./boards/config:/config
     networks:
       - admin-net
     restart: unless-stopped
@@ -46,17 +53,18 @@ services:
   # Leaving a native hook for ready-made Docker RAGs 
   # (like AnythingLLM, Dify, or Flowise).
   rag-wiki:
-    image: mintplexlabs/anythingllm:master # Placeholder for the "Valve"
+    image: mintplexlabs/anythingllm:master
     container_name: openclaw-admin-rag
     ports:
       - "3001:3001"
     environment:
       - SERVER_PORT=3001
+      - STORAGE_DIR=/app/server/storage
       - LLM_PROVIDER=openai
       - OPENAI_BASE_URL=http://litellm:4000
       - OPENAI_API_KEY=${LITELLM_MASTER_KEY:-sk-admin-master-key}
     volumes:
-      - rag_wiki_data:/app/server/storage
+      - ./boards/rag_data:/app/server/storage
     depends_on:
       - litellm
     networks:
@@ -127,14 +135,14 @@ services:
     image: ghcr.io/open-webui/open-webui:main
     container_name: openclaw-admin-webui
     ports:
-      - "3000:8080"
+      - "4080:8080"
     environment:
       - OPENAI_API_BASE_URL=http://litellm:4000
       - OPENAI_API_KEY=${LITELLM_MASTER_KEY:-sk-admin-master-key}
     depends_on:
       - litellm
     volumes:
-      - open_webui_data:/app/backend/data
+      - ./boards/webui_data:/app/backend/data
     networks:
       - admin-net
     restart: unless-stopped

@@ -3,7 +3,15 @@ export const adminOrchestratorPlugin = {
   name: "Admin Orchestrator",
   description: "Manages task queues via GitHub Issues and registers Executor nodes on Tailscale",
   kind: "orchestrator",
-  configSchema: {},
+  configSchema: {
+    type: "object",
+    properties: {
+      taskDir: { type: "string" },
+      natsUrl: { type: "string" },
+      minioEndpoint: { type: "string" },
+      knowledgeHubUrl: { type: "string" }
+    }
+  },
   register(api: any) {
     // 1. Tool to list available Executors
     api.registerTool(
@@ -34,10 +42,28 @@ export const adminOrchestratorPlugin = {
           },
           execute: async (args: any) => {
             const { title, description, required_skills } = args;
-            // Writes to the local volume mounted to Tasks.md Board
+            const fs = require('fs/promises');
+            const path = require('path');
+            
+            const tasksDir = path.resolve(process.cwd(), 'boards/tasks');
+            await fs.mkdir(tasksDir, { recursive: true });
+
             const taskId = Math.floor(Math.random() * 1000) + 100;
             const filename = `task-${taskId}.md`;
+            const filePath = path.join(tasksDir, filename);
             
+            const content = `---
+title: ${title}
+tags: [${required_skills.map((s: string) => `"#skill:${s}"`).join(", ")}]
+status: TODO
+---
+
+# ${title}
+
+${description}
+`;
+            
+            await fs.writeFile(filePath, content, 'utf-8');
             console.log(`[Admin] Structuring Sub-Task as Markdown file: ${filename}`);
             console.log(`[Admin] Required Skills: ${required_skills.join(", ")}`);
             
@@ -49,6 +75,7 @@ export const adminOrchestratorPlugin = {
             };
           }
         };
+
 
         const supplementProtocolTool = {
           name: "supplement_protocol",
@@ -275,32 +302,44 @@ export const adminOrchestratorPlugin = {
     if (api.registerCli) {
       api.registerCli(
         ({ program }: any) => {
-          program.command("orchestrator:watch")
+          program.command("admin-orchestrator")
+            .description("Swarm management tools")
+            .command("watch")
             .description("Start the tailnet task watcher that syncs local markdown tracking board with executor availability")
             .action(async () => {
+               const fs = require('fs/promises');
+               const path = require('path');
                console.log("=========================================");
                console.log("[Orchestrator] Starting Sub-agent watcher daemon...");
                console.log("[Orchestrator] Reading local `./boards/tasks` directory...");
                console.log("[Orchestrator] Listening for unassigned .md tasks with tags: [#skill:*]");
                console.log("=========================================\n");
                
+               const tasksDir = path.resolve(process.cwd(), 'boards/tasks');
+               
                setInterval(async () => {
-                 // Prototype loop
-                 // 1. Parse local markdown files looking for unassigned tasks
-                 // const tasks = readMarkdownTasks({ tags: "#skill:stt", status: "TODO" });
-                 
-                 // 2. Fetch available nodes
-                 // const nodes = getAvailableTailscaleNodes();
-                 
-                 // 3. Dispatch directly
-                 // if (tasks.length > 0 && nodes.has("stt")) {
-                 //    console.log(`Assigning Task ${tasks[0].filename} to Node ${nodes.get("stt").hostname}`);
-                 //    // Push Context via Tailscale MCP to the node and mark task file IN_PROGRESS
-                 // }
+                 try {
+                   await fs.mkdir(tasksDir, { recursive: true });
+                   const files = await fs.readdir(tasksDir);
+                   const mdFiles = files.filter((f: string) => f.endsWith('.md'));
+                   
+                   for (const file of mdFiles) {
+                     const content = await fs.readFile(path.join(tasksDir, file), 'utf-8');
+                     if (content.includes('status: TODO')) {
+                        console.log(`[Watcher] New task detected: ${file}`);
+                        // Example: simple tag extraction
+                        const tagMatch = content.match(/#skill:([a-zA-Z0-9_\-]+)/g);
+                        console.log(`[Watcher] Required skills: ${tagMatch ? tagMatch.join(', ') : 'none'}`);
+                        // Here you would dispatch to tailscale nodes
+                     }
+                   }
+                 } catch (err) {
+                   console.error(`[Watcher Error] ${err}`);
+                 }
                }, 10000); // 10 second polling interval for the prototype
             });
         },
-        { commands: ["orchestrator:watch"] },
+        { commands: ["admin-orchestrator"] },
       );
     }
   },

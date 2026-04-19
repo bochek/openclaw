@@ -1,0 +1,15 @@
+model_list:
+  - model_name: minimax-m2.7
+    litellm_params:
+      model: openrouter/minimax/minimax-m2.7
+      api_key: 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
+
+  - model_name: qwen3.5:9b
+    litellm_params:
+      model: openai/qwen3.5:9b
+      api_base: http://host.docker.internal:11434/v1
+      api_key: ollama
+
+litellm_settings:
+  drop_params: True
+  set_verbose: True
