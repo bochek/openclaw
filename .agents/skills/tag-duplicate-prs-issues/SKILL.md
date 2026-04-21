@@ -71,6 +71,19 @@ prtags auth status
 uvx --from pr-search-cli pr-search status
 ```
 
+## Read-Path Default
+
+For read-only GitHub operations in this workflow, use `ghr` as the default CLI.
+Treat it as a drop-in replacement for the `gh` read operations you would normally use for PRs, issues, comments, reviews, and duplicate-search evidence.
+
+Only fall back to `gh` when `ghr` is failing for a concrete reason, such as:
+
+- the mirrored object is not present yet
+- the mirror data is clearly stale or incomplete for the decision you need to make
+- the `ghr` command errors, times out, or does not expose the specific read you need
+
+When you fall back to `gh`, note that you did so and why.
+
 ## Goal
 
 For each target PR or issue:
@@ -86,7 +99,9 @@ For each target PR or issue:
 Use the tools with these boundaries:
 
 - `ghreplica` is the raw evidence source
+  - use `ghr` first for normal GitHub read operations in this workflow
   - use it for title/body/comment search, related PRs, overlapping files, overlapping ranges, and current PR or issue status
+  - resort to `gh` only when `ghr` cannot provide the needed read cleanly
 - `pr-search-cli` is candidate generation and ranking
   - use it to suggest likely duplicate PRs or issue-cluster context
   - do not treat it as final truth
@@ -168,6 +183,7 @@ If you only have wording similarity, that is not enough.
 ## Step 1: Read The Target
 
 Start by reading the target itself.
+Use `ghr` first for this step even if you would normally reach for `gh`.
 
 For a PR:
 
@@ -197,6 +213,7 @@ Record:
 ## Step 2: Search Broadly With ghreplica
 
 Use `ghreplica` first because it is the most direct evidence source.
+Do not switch to `gh` for ordinary reads unless `ghr` is missing data or failing.
 
 ### PR duplicate search
 
