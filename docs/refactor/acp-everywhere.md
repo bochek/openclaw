@@ -49,6 +49,14 @@ Before the problem statement and the mechanics, a short list of why ACP is the r
 - **Additive evolution.** New capabilities (richer plans, structured diffs, embedded terminals, provenance receipts) land as additive protocol updates behind capability flags, not as invariant-breaking schema changes.
 - **Editor/IDE-native primitives.** Cancellation, plans, thoughts, diffs, terminals, and status updates are in the protocol rather than bolted on per-harness, which is why Zed-style IDE integrations work without a custom bridge.
 
+## Design principles
+
+Three principles keep this from drifting into protocol cargo-culting or a big-bang refactor:
+
+- **Contract is the deliverable, not the wire.** The unification goal is one protocol-typed contract (`AcpRuntime`) between the spawn module and every backend. The transport those messages flow over is orthogonal to the contract — stdio, socket, and in-process direct calls are all legal. The `openclaw-pi` backend is expected to run in-process by default; no IPC cost is mandated on the hot path. Forcing stdio everywhere would be cargo-culting — what we actually want is the typed, versioned, capability-negotiated interface.
+- **Smallest slice first, with explicit parity gates.** Phases 1–3 ship one backend (`openclaw-pi`) wired through one call-site (`runAgentAttempt`) and must prove byte-for-byte parity on transcript/announce/abort/compaction/resume before Phase 4 touches subagent spawn or anything else. CLI and plugin migrations only happen after the pi + main-turn slice is demonstrably boring. A maintainer can veto continuing at the gate if parity is not clean.
+- **Capability-driven policy over hard-coded runtime strings.** Backends advertise what they can and can't do (sandbox mode and isolation grade, resume, attachments, client terminals, config-option keys, etc.). The spawn module enforces policy by matching against those capabilities rather than branching on `runtime == "acp"` / `runtime == "subagent"`. This is the reason the `sandbox="require"` / `runtime="acp"` clash (see Cons) can be resolved cleanly instead of patched with another string.
+
 ## Problem statement
 
 As OpenClaw has grown it has accumulated parallel launch and execution paths instead of converging on one. Concretely, today we have:
@@ -240,7 +248,23 @@ sequenceDiagram
 ## Cons / tradeoffs
 
 - **`AcpRuntimeEvent` must be extended.** Today it does not cover pi's full event surface (lifecycle start/end/error, reasoning deltas, compaction, usage). That is a contract change, additive but real, and it affects `acpx`, any third-party ACP runtime backend, and the outward bridge.
-- **Sandbox semantics differ.** Pi can run inside the OpenClaw sandbox; ACP backends today explicitly cannot (`docs/tools/acp-agents.md` — Sandbox compatibility). The contract needs a runtime-capability flag (`runsInSandbox`) so the pi-backed path keeps working and we don't regress sandboxed-subagent guarantees.
+- **Sandbox semantics differ.** Pi can run inside the OpenClaw sandbox; ACP backends today explicitly cannot (`docs/tools/acp-agents.md` — Sandbox compatibility). A boolean `runsInSandbox` is too coarse — different backends offer different isolation grades (host / Docker / Podman / chroot / seccomp) with different guarantees (filesystem, network, process caps). The contract should carry a structured capability that the spawn module can policy-check against:
+
+  ```ts path=null start=null
+  type SandboxCapability = {
+    mode: "host" | "docker" | "podman" | "chroot" | "seccomp" | "custom";
+    guarantees: {
+      fsIsolation: "none" | "workspace" | "fullRoot";
+      netIsolation: "none" | "restricted" | "denyAll";
+      processCaps: boolean;
+    };
+    // Optional operator hints the policy layer can match against.
+    policy?: { image?: string; setupCommand?: string };
+  };
+  ```
+
+  That lets `sandbox="require"` be a real policy predicate (for example `mode != "host" && guarantees.fsIsolation != "none"`) instead of a boolean. Without this we regress today's sandboxed-subagent guarantees and we can't express future stronger isolation (container-per-session, seccomp profiles, etc.) without another round of string-comparison plumbing.
+
 - **Announce / thread-binding migration is delicate.** Channel plugins expect exact historical announce shapes. Merging subagent-spawn and acp-spawn must preserve those bytes or we silently break agents and cron jobs that users already rely on.
 - **CLI backend features are non-trivial to move.** Session-expired retry, CLI-session reuse, bundle-MCP overlay, plugin-owned defaults. These need to come along when CLI backends become ACP backends.
 - **Migration is multi-release.** Feature flags, legacy aliases, and a period where both paths coexist are mandatory to avoid a big-bang regression.
@@ -534,10 +558,10 @@ flowchart TD
 
 ## Phasing (high level)
 
-1. Extend `AcpRuntimeEvent` / `AcpRuntime` to cover pi's full lifecycle surface; keep changes additive.
-2. Ship `openclaw-pi` backend wrapping `runEmbeddedPiAgent` + `compactEmbeddedPiSession` behind a feature flag.
-3. Route `runAgentAttempt` and cron through `AcpRuntime.runTurn` when the flag is on.
-4. Migrate `sessions_spawn runtime="subagent"` onto `openclaw-pi`, then merge `subagent-spawn.ts` and `acp-spawn.ts` into one module.
+1. Extend `AcpRuntimeEvent` / `AcpRuntime` to cover pi's full lifecycle surface; keep changes additive. Include the `SandboxCapability` shape from the Cons section on the runtime's capability descriptor.
+2. Ship `openclaw-pi` backend wrapping `runEmbeddedPiAgent` + `compactEmbeddedPiSession` behind a feature flag. Runs in-process by default — no stdio, no IPC on the hot path; that's the contract-vs-wire distinction from Design principles.
+3. Route `runAgentAttempt` and cron through `AcpRuntime.runTurn` when the flag is on. **Parity gate before Phase 4 begins:** prove byte-for-byte parity with the legacy path on (a) transcript writes, (b) announce output, (c) abort/cancel behavior, (d) compaction and resume roundtrip, (e) sandbox-policy enforcement via the new `SandboxCapability`. A maintainer can hold the RFC here if parity is not clean.
+4. **Only after the Phase 3 parity gate passes:** migrate `sessions_spawn runtime="subagent"` onto `openclaw-pi`, then merge `subagent-spawn.ts` and `acp-spawn.ts` into one module.
 5. Migrate CLI backends into ACP backends (native adapters or via `acpx`); remove `isCliProvider` branches.
 6. Move plugin `AgentHarness` entries onto `AcpRuntime`.
 7. Collapse `/subagents` and `/acp` into one `/agents …` command family (with aliases).
