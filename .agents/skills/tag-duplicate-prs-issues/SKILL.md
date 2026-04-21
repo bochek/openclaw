@@ -86,7 +86,7 @@ Use the tools with these boundaries:
 
 - `ghreplica` is the raw evidence source
   - use it for title/body/comment search, related PRs, overlapping files, overlapping ranges, and current PR or issue status
-- `pr-search` is candidate generation and ranking
+- `pr-search-cli` is candidate generation and ranking
   - use it to suggest likely duplicate PRs or issue-cluster context
   - do not treat it as final truth
 - `prtags` is the maintainer curation layer
@@ -230,18 +230,18 @@ ghr search mentions -R openclaw/openclaw --query "<subsystem phrase>" --mode fts
 
 Then inspect the candidate PRs or issues those searches uncover.
 
-## Step 3: Use pr-search As A Hint Layer
+## Step 3: Use pr-search-cli As A Hint Layer
 
-Use `pr-search` after `ghreplica`.
+Use `pr-search-cli` after `ghreplica`.
 It is good at surfacing candidates quickly, but it is not the final decision-maker.
 
 For a PR:
 
 ```bash
-pr-search -R openclaw/openclaw code similar <pr-number>
-pr-search -R openclaw/openclaw code clusters for-pr <pr-number>
-pr-search -R openclaw/openclaw issues for-pr <pr-number>
-pr-search -R openclaw/openclaw issues duplicate-prs
+uvx pr-search-cli -R openclaw/openclaw code similar <pr-number>
+uvx pr-search-cli -R openclaw/openclaw code clusters for-pr <pr-number>
+uvx pr-search-cli -R openclaw/openclaw issues for-pr <pr-number>
+uvx pr-search-cli -R openclaw/openclaw issues duplicate-prs
 ```
 
 Interpretation:
@@ -254,7 +254,7 @@ Interpretation:
 For an issue:
 
 - use `ghreplica` first to find candidate PRs or issue wording
-- if the issue has linked PRs or a likely implementation PR, run `pr-search` on those PRs
+- if the issue has linked PRs or a likely implementation PR, run `pr-search-cli` on those PRs
 - treat issue-cluster output as supporting context, not as enough by itself to call the issue a duplicate
 
 ## Step 4: Decide The Outcome
