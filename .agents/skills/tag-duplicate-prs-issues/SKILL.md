@@ -1,6 +1,6 @@
 ---
 name: tag-duplicate-prs-issues
-description: Maintainer workflow for deciding whether an OpenClaw pull request or issue is a duplicate, gathering evidence with ghreplica and pr-search-cli, grouping related work in prtags, and drafting the GitHub comment or tagging rationale. Use when Codex needs to search for duplicate PRs or issues, pick a canonical item, create or reuse a duplicate group, enforce one-group-per-target discipline, or prepare the exact maintainer-facing close/comment output.
+description: Maintainer workflow for deciding whether an OpenClaw pull request or issue is a duplicate, gathering evidence with ghreplica and pr-search-cli, grouping related work in prtags, and syncing the duplicate grouping back to GitHub through prtags. Use when Codex needs to search for duplicate PRs or issues, create or reuse a duplicate group, enforce one-group-per-target discipline, save duplicate judgments in prtags, or prepare group state for comment sync.
 ---
 
 # Tag Duplicate PRs And Issues
@@ -76,10 +76,9 @@ For each target PR or issue:
 
 1. gather duplicate evidence
 2. decide whether it is a real duplicate
-3. choose the canonical item when a duplicate cluster exists
-4. create or reuse one `prtags` group for that duplicate cluster
-5. save the maintainer judgment in `prtags`
-6. draft the GitHub comment the maintainer can post
+3. create or reuse one `prtags` group for that duplicate cluster
+4. save the maintainer judgment in `prtags`
+5. sync the group state so `prtags` can manage the GitHub comment
 
 ## Tool Roles
 
@@ -92,16 +91,14 @@ Use the tools with these boundaries:
   - do not treat it as final truth
 - `prtags` is the maintainer curation layer
   - use it to create or reuse one duplicate group
-  - use it to save the canonical item, confidence, and rationale
+  - use it to save the duplicate status, confidence, rationale, and group summary
+  - use it to sync the GitHub-facing group comment
 
 ## Working Rules
 
 - Do not call something a duplicate only because the titles are similar.
 - Do not call something a duplicate only because the same files changed.
 - A duplicate cluster should be based on the same user-facing problem, the same intent, and substantially overlapping implementation or investigation context.
-- The canonical item is the one the maintainer wants future readers to follow.
-- The canonical item does not need to be the oldest item.
-- If a newer PR or issue is the clearer or more complete path, it can be canonical.
 
 ## One-Group Rule
 
@@ -128,7 +125,7 @@ Good group shape:
 - same user-facing bug or same maintainer-facing task
 - same subsystem or code surface
 - same intended change direction
-- same likely canonical follow-up path
+- same likely duplicate-resolution path
 
 Bad group shape:
 
@@ -163,7 +160,7 @@ For issues:
 - same reproduction story or same failure mode
 - same likely fix area
 - same PRs already linked or discussed
-- same maintainers already steering toward the same canonical thread
+- same maintainers already steering toward the same duplicate grouping
 
 If you only have wording similarity, that is not enough.
 
@@ -194,7 +191,7 @@ Record:
 - proposed intent
 - subsystem
 - whether it is open, closed, or merged
-- whether there is already a likely canonical item mentioned by humans
+- whether there is already a likely duplicate thread mentioned by humans
 
 ## Step 2: Search Broadly With ghreplica
 
@@ -268,14 +265,14 @@ Choose one of these outcomes:
 - `duplicate_needs_judgment`
 - `duplicate_confirmed`
 
-Use `duplicate_confirmed` only when the evidence is strong enough that the maintainer could safely close or retag the non-canonical item.
+Use `duplicate_confirmed` only when the evidence is strong enough that the maintainer could safely close or retag the duplicate item.
 
 Use `duplicate_needs_judgment` when:
 
 - the problem looks the same but the implementation goal differs
 - the code overlap is weak
 - the issue wording is ambiguous
-- there may be two valid canonical paths
+- there may be two valid duplicate group interpretations
 - the target appears to intersect two existing duplicate groups
 
 ## Step 5: Reuse Or Create One prtags Group
@@ -300,7 +297,7 @@ prtags group get <group-id> --include-metadata
 Reuse an existing group when:
 
 - it represents the same problem
-- it already contains the canonical item or clearly related members
+- it already contains clearly related members
 - adding the target would keep the group coherent
 
 Create a new group only when no existing group clearly fits.
@@ -311,7 +308,7 @@ Create the group with a problem-based title and an intent-based description:
 prtags group create -R openclaw/openclaw \
   --kind mixed \
   --title "<problem-centered title>" \
-  --description "<same intent, subsystem, and likely canonical path>" \
+  --description "<same intent, subsystem, and duplicate-resolution path>" \
   --status open
 ```
 
@@ -334,8 +331,6 @@ Recommended target-level fields:
 ```bash
 prtags field ensure -R openclaw/openclaw --name duplicate_status --scope pull_request --type enum --enum-values not_duplicate,candidate,confirmed --filterable
 prtags field ensure -R openclaw/openclaw --name duplicate_status --scope issue --type enum --enum-values not_duplicate,candidate,confirmed --filterable
-prtags field ensure -R openclaw/openclaw --name canonical_item --scope pull_request --type text --searchable
-prtags field ensure -R openclaw/openclaw --name canonical_item --scope issue --type text --searchable
 prtags field ensure -R openclaw/openclaw --name duplicate_confidence --scope pull_request --type enum --enum-values low,medium,high --filterable
 prtags field ensure -R openclaw/openclaw --name duplicate_confidence --scope issue --type enum --enum-values low,medium,high --filterable
 prtags field ensure -R openclaw/openclaw --name duplicate_rationale --scope pull_request --type text --searchable
@@ -345,7 +340,6 @@ prtags field ensure -R openclaw/openclaw --name duplicate_rationale --scope issu
 Recommended group-level fields:
 
 ```bash
-prtags field ensure -R openclaw/openclaw --name canonical_item --scope group --type text --searchable
 prtags field ensure -R openclaw/openclaw --name duplicate_confidence --scope group --type enum --enum-values low,medium,high --filterable
 prtags field ensure -R openclaw/openclaw --name duplicate_rationale --scope group --type text --searchable
 prtags field ensure -R openclaw/openclaw --name cluster_summary --scope group --type text --searchable
@@ -358,7 +352,6 @@ For a PR:
 ```bash
 prtags annotation pr set -R openclaw/openclaw <pr-number> \
   duplicate_status=confirmed \
-  canonical_item="pr:<canonical-number>" \
   duplicate_confidence=high \
   duplicate_rationale="<same problem, same fix direction, overlapping files and comments>"
 ```
@@ -368,7 +361,6 @@ For an issue:
 ```bash
 prtags annotation issue set -R openclaw/openclaw <issue-number> \
   duplicate_status=confirmed \
-  canonical_item="issue:<canonical-number>" \
   duplicate_confidence=high \
   duplicate_rationale="<same user-visible problem and same intended fix path>"
 ```
@@ -377,7 +369,6 @@ For the group:
 
 ```bash
 prtags annotation group set <group-id> \
-  canonical_item="pr:<canonical-number>" \
   duplicate_confidence=high \
   cluster_summary="<one-sentence problem summary>" \
   duplicate_rationale="<why these items belong in one duplicate cluster>"
@@ -385,41 +376,25 @@ prtags annotation group set <group-id> \
 
 When the evidence is incomplete, set `duplicate_status=candidate` and lower the confidence.
 
-## Step 8: Draft The GitHub Comment
+## Step 8: Sync The Group Comment Through prtags
 
-Do not post the comment automatically unless the maintainer explicitly asked for that.
-Draft the exact text.
+Do not tell the agent to create a GitHub comment directly.
+`prtags` owns the outbound GitHub comment as a derived projection of group state.
 
-The comment should:
+After updating group membership and annotations, sync the group comment through `prtags`:
 
-- name the canonical item
-- explain why this was grouped as a duplicate
-- mention the shared problem and fix direction
-- mention any important difference if it exists
-- be short and decisive
-
-Example for a PR:
-
-```text
-Closing this as a duplicate of #<canonical>.
-
-These two PRs are solving the same problem in the same subsystem, and the implementation surface overlaps enough that we want one canonical thread for follow-up and review.
-
-I grouped this work in PRtags under the same duplicate cluster so future triage stays attached to one path.
+```bash
+prtags group sync-comments <group-id>
 ```
 
-Example for an issue:
+If the maintainer needs to see which groups still need attention, use:
 
-```text
-Closing this as a duplicate of #<canonical>.
-
-This report describes the same underlying problem and the same likely fix path, so we want future investigation and updates to stay on one canonical issue.
-
-I grouped the related reports in PRtags so the duplicate trail stays visible.
+```bash
+prtags group list-comment-sync-targets -R openclaw/openclaw
 ```
 
-If the item is only a likely duplicate, do not draft a close comment.
-Draft a softer maintainer note instead.
+The skill should treat the GitHub comment as a consequence of correct `prtags` group state.
+It should not treat manual comment authoring as part of the normal duplicate workflow.
 
 ## Output Format
 
@@ -428,7 +403,6 @@ Return a short maintainer report with these sections:
 ```text
 Decision: duplicate_confirmed | duplicate_needs_judgment | not_duplicate
 Target: PR #<n> | Issue #<n>
-Canonical item: PR #<n> | Issue #<n> | none
 Confidence: high | medium | low
 
 Evidence:
@@ -440,9 +414,7 @@ prtags actions:
 - reused group <group-id> | created group <group-id>
 - added members: ...
 - annotations written: ...
-
-Suggested GitHub comment:
-...
+- comment sync: triggered for <group-id> | not triggered
 ```
 
 ## Stop Conditions
@@ -450,7 +422,7 @@ Suggested GitHub comment:
 Stop and escalate instead of forcing a duplicate decision when:
 
 - the target appears to belong to two different duplicate groups
-- the likely canonical item is unclear
+- the duplicate grouping is unclear
 - the wording matches but the implementation goals differ
 - two PRs touch the same files for different reasons
 - two issues describe similar symptoms but likely different root causes
