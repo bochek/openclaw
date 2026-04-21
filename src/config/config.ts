@@ -25,6 +25,12 @@ export {
   writeConfigFile,
 } from "./io.js";
 export type { ConfigWriteNotification } from "./io.js";
+export {
+  persistEffectiveConfigLastKnownGood,
+  readEffectiveConfigLastKnownGood,
+  resolveEffectiveConfigLastKnownGoodPath,
+  restoreEffectiveConfigLastKnownGood,
+} from "./effective-config-recovery.js";
 export { ConfigMutationConflictError, mutateConfigFile, replaceConfigFile } from "./mutate.js";
 export * from "./paths.js";
 export * from "./runtime-overrides.js";

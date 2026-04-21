@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   installLaunchAgent,
@@ -19,6 +20,10 @@ import { resolveGatewayService, startGatewayService } from "./service.js";
 const WAIT_INTERVAL_MS = 200;
 const WAIT_TIMEOUT_MS = 30_000;
 const STARTUP_TIMEOUT_MS = 45_000;
+const RECOVERY_TEST_TIMEOUT_MS = 90_000;
+
+const OPENCLAW_ENTRYPOINT_PATH = fileURLToPath(new URL("../../openclaw.mjs", import.meta.url));
+const REPO_ROOT = path.dirname(OPENCLAW_ENTRYPOINT_PATH);
 
 function canRunLaunchdIntegration(): boolean {
   if (process.platform !== "darwin") {
@@ -109,6 +114,61 @@ async function waitForNotRunningRuntime(params: {
   throw new Error(
     `Timed out waiting for launchd runtime to stop (status=${lastStatus}, pid=${lastPid ?? "none"})`,
   );
+}
+
+async function waitForCondition(params: {
+  check: () => Promise<boolean>;
+  timeoutMs?: number;
+  label: string;
+}): Promise<void> {
+  const timeoutMs = params.timeoutMs ?? WAIT_TIMEOUT_MS;
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await params.check()) {
+      return;
+    }
+    await new Promise((resolve) => {
+      setTimeout(resolve, WAIT_INTERVAL_MS);
+    });
+  }
+  throw new Error(`Timed out waiting for ${params.label}`);
+}
+
+function runGatewayServiceCli(params: {
+  profile: string;
+  stateDir: string;
+  home: string;
+  args: string[];
+}): ReturnType<typeof spawnSync> {
+  return spawnSync(
+    process.execPath,
+    [OPENCLAW_ENTRYPOINT_PATH, "--profile", params.profile, ...params.args],
+    {
+      cwd: REPO_ROOT,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        HOME: params.home,
+        OPENCLAW_PROFILE: params.profile,
+        OPENCLAW_STATE_DIR: params.stateDir,
+      },
+    },
+  );
+}
+
+async function waitForExistingFile(filePath: string, timeoutMs = WAIT_TIMEOUT_MS): Promise<void> {
+  await waitForCondition({
+    timeoutMs,
+    label: path.basename(filePath),
+    check: async () => {
+      try {
+        await fs.access(filePath);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  });
 }
 
 function launchEnvOrThrow(env: GatewayServiceEnv | undefined): GatewayServiceEnv {
@@ -218,4 +278,104 @@ describeLaunchdIntegration("launchd integration", () => {
     await restartLaunchAgent({ env: launchEnv, stdout });
     await expectRuntimePidReplaced({ env: launchEnv, previousPid: before.pid });
   }, 60_000);
+
+  it(
+    "restores last-known-good config after a supervised restart with invalid effective config",
+    async () => {
+      const testId = randomUUID().slice(0, 8);
+      const home = await fs.mkdtemp(path.join(os.tmpdir(), `openclaw-launchd-recovery-${testId}-`));
+      const stateDir = path.join(home, "state");
+      const port = 19070;
+      const token = `tok_${testId}`;
+      const profile = `launchd-recovery-${testId}`;
+      const launchEnv: GatewayServiceEnv = {
+        HOME: home,
+        OPENCLAW_PROFILE: profile,
+        OPENCLAW_STATE_DIR: stateDir,
+        OPENCLAW_LAUNCHD_LABEL: `ai.openclaw.${profile}`,
+        OPENCLAW_LOG_PREFIX: `gateway-launchd-recovery-${testId}`,
+      };
+      const configPath = path.join(stateDir, "openclaw.json");
+      const lastKnownGoodPath = `${configPath}.last-known-good`;
+
+      try {
+        await fs.mkdir(stateDir, { recursive: true });
+        await fs.writeFile(
+          configPath,
+          `${JSON.stringify(
+            {
+              gateway: {
+                auth: {
+                  mode: "token",
+                  token,
+                },
+                mode: "local",
+              },
+              meta: {
+                lastTouchedVersion: "2026.4.20",
+              },
+            },
+            null,
+            2,
+          )}\n`,
+        );
+
+        const install = runGatewayServiceCli({
+          profile,
+          stateDir,
+          home,
+          args: ["gateway", "install", "--force", "--json", "--port", String(port)],
+        });
+        expect(install.status).toBe(0);
+
+        const before = await waitForRunningRuntime({
+          env: launchEnv,
+          timeoutMs: STARTUP_TIMEOUT_MS,
+        });
+        await waitForExistingFile(lastKnownGoodPath, STARTUP_TIMEOUT_MS);
+        const expectedConfig = await fs.readFile(lastKnownGoodPath, "utf8");
+
+        await fs.writeFile(configPath, '{\n  "gateway": {\n    "auth": ');
+        const restart = runGatewayServiceCli({
+          profile,
+          stateDir,
+          home,
+          args: ["gateway", "restart", "--json"],
+        });
+        expect(restart.status).toBe(0);
+        await expectRuntimePidReplaced({
+          env: launchEnv,
+          previousPid: before.pid,
+        });
+        await waitForCondition({
+          timeoutMs: STARTUP_TIMEOUT_MS,
+          label: "restored effective config",
+          check: async () => {
+            try {
+              const restoredConfig = await fs.readFile(configPath, "utf8");
+              return restoredConfig === expectedConfig;
+            } catch {
+              return false;
+            }
+          },
+        });
+
+        const restoredConfig = await fs.readFile(configPath, "utf8");
+        expect(restoredConfig).toBe(expectedConfig);
+      } finally {
+        try {
+          runGatewayServiceCli({
+            profile,
+            stateDir,
+            home,
+            args: ["gateway", "uninstall", "--json"],
+          });
+        } catch {
+          // Best-effort cleanup for the isolated recovery agent.
+        }
+        await fs.rm(home, { recursive: true, force: true });
+      }
+    },
+    RECOVERY_TEST_TIMEOUT_MS,
+  );
 });

@@ -256,7 +256,7 @@ export async function resolveGatewayProgramArguments(params: {
   runtime?: GatewayRuntimePreference;
   nodePath?: string;
 }): Promise<GatewayProgramArgs> {
-  const gatewayArgs = ["gateway", "--port", String(params.port)];
+  const gatewayArgs = ["gateway", "run", "--port", String(params.port)];
   return resolveCliProgramArguments({
     args: gatewayArgs,
     dev: params.dev,

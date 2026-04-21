@@ -292,20 +292,52 @@ describe("scheduleRestartSentinelWake", () => {
     );
   });
 
-  it("does not wake the main session when the sentinel has no sessionKey", async () => {
+  it("routes a sessionless sentinel through the main session wake and outbound path", async () => {
     mocks.consumeRestartSentinel.mockResolvedValue({
       payload: {
         message: "restart message",
       },
     } as unknown as Awaited<ReturnType<typeof mocks.consumeRestartSentinel>>);
+    mocks.loadSessionEntry.mockReturnValue({
+      cfg: {},
+      entry: {
+        deliveryContext: {
+          channel: "whatsapp",
+          to: "+15550003",
+          accountId: "acct-main",
+        },
+      },
+    });
+    mocks.deliveryContextFromSession.mockReturnValue({
+      channel: "whatsapp",
+      to: "+15550003",
+      accountId: "acct-main",
+    });
+    mocks.resolveOutboundTarget.mockReturnValue({
+      ok: true as const,
+      to: "+15550003",
+    });
 
     await scheduleRestartSentinelWake({ deps: {} as never });
 
-    expect(mocks.enqueueSystemEvent).toHaveBeenCalledWith("restart message", {
+    expect(mocks.loadSessionEntry).toHaveBeenCalledWith("agent:main:main");
+    expect(mocks.enqueueSystemEvent).toHaveBeenCalledWith(
+      "restart message",
+      expect.objectContaining({
+        sessionKey: "agent:main:main",
+      }),
+    );
+    expect(mocks.requestHeartbeatNow).toHaveBeenCalledWith({
+      reason: "wake",
       sessionKey: "agent:main:main",
     });
-    expect(mocks.requestHeartbeatNow).not.toHaveBeenCalled();
-    expect(mocks.deliverOutboundPayloads).not.toHaveBeenCalled();
+    expect(mocks.deliverOutboundPayloads).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channel: "whatsapp",
+        to: "+15550003",
+        session: { key: "agent:main:main", agentId: "agent-from-key" },
+      }),
+    );
   });
 
   it("skips outbound restart notice when no canonical delivery context survives restart", async () => {

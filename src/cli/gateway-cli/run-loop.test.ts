@@ -30,6 +30,12 @@ const abortEmbeddedPiRun = vi.fn(
 const getActiveEmbeddedRunCount = vi.fn(() => 0);
 const waitForActiveEmbeddedRuns = vi.fn(async (_timeoutMs: number) => ({ drained: true }));
 const DRAIN_TIMEOUT_LOG = "drain timeout reached; proceeding with restart";
+type ConfigSnapshotStub = {
+  path: string;
+  raw: string;
+  hash: string;
+  valid: boolean;
+};
 const loadConfig = vi.fn(() => ({
   gateway: {
     reload: {
@@ -37,6 +43,24 @@ const loadConfig = vi.fn(() => ({
     },
   },
 }));
+const readConfigFileSnapshot = vi.fn(async (): Promise<ConfigSnapshotStub | null> => null);
+const readEffectiveConfigLastKnownGood = vi.fn(
+  async (_configPath?: string): Promise<ConfigSnapshotStub | null> => null,
+);
+const restoreEffectiveConfigLastKnownGood = vi.fn(
+  async (_configPath?: string): Promise<ConfigSnapshotStub | null> => null,
+);
+const persistEffectiveConfigLastKnownGood = vi.fn(
+  async (_snapshot?: unknown): Promise<null> => null,
+);
+const resolveConfigPath = vi.fn(() => "/tmp/openclaw.json");
+const resolveConfigSnapshotHash = vi.fn(
+  (snapshot?: { hash?: string; raw?: string | null }) =>
+    snapshot?.hash ?? (typeof snapshot?.raw === "string" ? snapshot.raw : null),
+);
+const writeRestartSentinel = vi.fn<(payload?: unknown) => Promise<string>>(
+  async (_payload?: unknown) => "/tmp/restart-sentinel.json",
+);
 const gatewayLog = {
   info: vi.fn(),
   warn: vi.fn(),
@@ -75,6 +99,20 @@ vi.mock("../../agents/pi-embedded-runner/runs.js", () => ({
 
 vi.mock("../../config/config.js", () => ({
   loadConfig: () => loadConfig(),
+  readConfigFileSnapshot: () => readConfigFileSnapshot(),
+  readEffectiveConfigLastKnownGood: (configPath: string) =>
+    readEffectiveConfigLastKnownGood(configPath),
+  restoreEffectiveConfigLastKnownGood: (configPath: string) =>
+    restoreEffectiveConfigLastKnownGood(configPath),
+  persistEffectiveConfigLastKnownGood: (snapshot: unknown) =>
+    persistEffectiveConfigLastKnownGood(snapshot),
+  resolveConfigPath: () => resolveConfigPath(),
+  resolveConfigSnapshotHash: (snapshot?: { hash?: string; raw?: string | null }) =>
+    resolveConfigSnapshotHash(snapshot),
+}));
+
+vi.mock("../../infra/restart-sentinel.js", () => ({
+  writeRestartSentinel: (payload: unknown) => writeRestartSentinel(payload),
 }));
 
 vi.mock("../../logging/subsystem.js", () => ({
@@ -475,6 +513,200 @@ describe("runGatewayLoop", () => {
       expect(gatewayLog.error).toHaveBeenCalledWith(
         expect.stringContaining("failed to reacquire gateway lock for in-process restart"),
       );
+    });
+  });
+
+  it("promotes a healthy effective config snapshot to last-known-good after startup", async () => {
+    vi.clearAllMocks();
+    const snapshot = {
+      path: "/tmp/openclaw.json",
+      raw: '{ gateway: { mode: "local" } }\n',
+      hash: "hash-local",
+      valid: true,
+    };
+    readConfigFileSnapshot.mockResolvedValue(snapshot);
+
+    await withIsolatedSignals(async ({ captureSignal }) => {
+      const close = vi.fn(async () => {});
+      const { runtime, exited } = createRuntimeWithExitSignal();
+      const start = vi.fn().mockResolvedValue({
+        close,
+        getReadiness: () => ({ ready: true, failing: [], uptimeMs: 25 }),
+      });
+      const { runGatewayLoop } = await import("./run-loop.js");
+      void runGatewayLoop({
+        start: start as unknown as Parameters<typeof runGatewayLoop>[0]["start"],
+        runtime: runtime as unknown as Parameters<typeof runGatewayLoop>[0]["runtime"],
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      const sigterm = captureSignal("SIGTERM");
+      sigterm();
+
+      await expect(exited).resolves.toBe(0);
+      expect(persistEffectiveConfigLastKnownGood).toHaveBeenCalledWith(snapshot);
+      expect(restoreEffectiveConfigLastKnownGood).not.toHaveBeenCalled();
+      expect(writeRestartSentinel).not.toHaveBeenCalled();
+    });
+  });
+
+  it("restores last-known-good only after an invalid effective config startup failure", async () => {
+    vi.clearAllMocks();
+    const badSnapshot = {
+      path: "/tmp/openclaw.json",
+      raw: '{ gateway: { mode: "lan" } }\n',
+      hash: "hash-bad",
+      valid: false,
+    };
+    const goodSnapshot = {
+      path: "/tmp/openclaw.json",
+      raw: '{ gateway: { mode: "loopback" } }\n',
+      hash: "hash-good",
+      valid: true,
+    };
+    readConfigFileSnapshot
+      .mockResolvedValueOnce(badSnapshot)
+      .mockResolvedValueOnce(badSnapshot)
+      .mockResolvedValueOnce(goodSnapshot)
+      .mockResolvedValueOnce(goodSnapshot);
+    readEffectiveConfigLastKnownGood.mockResolvedValue(goodSnapshot);
+    restoreEffectiveConfigLastKnownGood.mockResolvedValue(goodSnapshot);
+
+    await withIsolatedSignals(async ({ captureSignal }) => {
+      const close = vi.fn(async () => {});
+      const { runtime, exited } = createRuntimeWithExitSignal();
+      const start = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("invalid gateway config"))
+        .mockResolvedValueOnce({
+          close,
+          getReadiness: () => ({ ready: true, failing: [], uptimeMs: 10 }),
+        });
+      const { runGatewayLoop } = await import("./run-loop.js");
+      void runGatewayLoop({
+        start: start as unknown as Parameters<typeof runGatewayLoop>[0]["start"],
+        runtime: runtime as unknown as Parameters<typeof runGatewayLoop>[0]["runtime"],
+      });
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+
+      const sigterm = captureSignal("SIGTERM");
+      sigterm();
+
+      await expect(exited).resolves.toBe(0);
+      expect(start).toHaveBeenCalledTimes(2);
+      expect(restoreEffectiveConfigLastKnownGood).toHaveBeenCalledWith("/tmp/openclaw.json");
+      expect(writeRestartSentinel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: "config-auto-recovery",
+          status: "ok",
+          message:
+            "Gateway recovered automatically after a failed config change and restored the last known good configuration.",
+          stats: expect.objectContaining({
+            reason: "startup-failure-after-config-change",
+          }),
+        }),
+      );
+      expect(gatewayLog.warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "restored last-known-good config after startup-failure-after-config-change",
+        ),
+      );
+    });
+  });
+
+  it("does not restore last-known-good after an unrelated startup failure", async () => {
+    vi.clearAllMocks();
+    const changedSnapshot = {
+      path: "/tmp/openclaw.json",
+      raw: '{ gateway: { mode: "lan" } }\n',
+      hash: "hash-bad",
+      valid: true,
+    };
+    const goodSnapshot = {
+      path: "/tmp/openclaw.json",
+      raw: '{ gateway: { mode: "loopback" } }\n',
+      hash: "hash-good",
+      valid: true,
+    };
+    readConfigFileSnapshot.mockResolvedValue(changedSnapshot);
+    readEffectiveConfigLastKnownGood.mockResolvedValue(goodSnapshot);
+
+    await withIsolatedSignals(async () => {
+      const { runtime } = createRuntimeWithExitSignal();
+      const start = vi.fn().mockRejectedValueOnce(new Error("failed to bind gateway socket"));
+      const { loopPromise } = await runLoopWithStart({ start, runtime });
+
+      await expect(loopPromise).rejects.toThrow("failed to bind gateway socket");
+      expect(restoreEffectiveConfigLastKnownGood).not.toHaveBeenCalled();
+      expect(writeRestartSentinel).not.toHaveBeenCalled();
+    });
+  });
+
+  it("restarts cleanly when SIGUSR1 arrives during readiness polling", async () => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+    const snapshot = {
+      path: "/tmp/openclaw.json",
+      raw: '{ gateway: { mode: "local" } }\n',
+      hash: "hash-local",
+      valid: true,
+    };
+    readConfigFileSnapshot.mockResolvedValue(snapshot);
+
+    await withIsolatedSignals(async ({ captureSignal }) => {
+      const closeFirst = vi.fn(async () => {});
+      const closeSecond = vi.fn(async () => {});
+      const { runtime, exited } = createRuntimeWithExitSignal();
+
+      let resolveFirst: (() => void) | null = null;
+      const startedFirst = new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      });
+      let resolveSecond: (() => void) | null = null;
+      const startedSecond = new Promise<void>((resolve) => {
+        resolveSecond = resolve;
+      });
+
+      const start = vi
+        .fn()
+        .mockImplementationOnce(async () => {
+          resolveFirst?.();
+          return {
+            close: closeFirst,
+            getReadiness: () => ({ ready: false, failing: ["discord"], uptimeMs: 10 }),
+          };
+        })
+        .mockImplementationOnce(async () => {
+          resolveSecond?.();
+          return {
+            close: closeSecond,
+            getReadiness: () => ({ ready: true, failing: [], uptimeMs: 10 }),
+          };
+        });
+
+      const { runGatewayLoop } = await import("./run-loop.js");
+      void runGatewayLoop({
+        start: start as unknown as Parameters<typeof runGatewayLoop>[0]["start"],
+        runtime: runtime as unknown as Parameters<typeof runGatewayLoop>[0]["runtime"],
+      });
+
+      await startedFirst;
+      const sigusr1 = captureSignal("SIGUSR1");
+      const sigterm = captureSignal("SIGTERM");
+
+      sigusr1();
+      await vi.advanceTimersByTimeAsync(300);
+      await startedSecond;
+
+      expect(start).toHaveBeenCalledTimes(2);
+      expect(closeFirst).toHaveBeenCalledWith({
+        reason: "gateway restarting",
+        restartExpectedMs: 1500,
+      });
+
+      sigterm();
+      await expect(exited).resolves.toBe(0);
     });
   });
 });

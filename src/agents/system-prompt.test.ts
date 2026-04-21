@@ -230,6 +230,21 @@ describe("buildAgentSystemPrompt", () => {
     expect(prompt).toContain("Do not invent commands");
   });
 
+  it("includes gateway config guidance and concrete CLI examples", () => {
+    const prompt = buildAgentSystemPrompt({
+      workspaceDir: "/tmp/openclaw",
+    });
+
+    expect(prompt).toContain("## Gateway Config Changes");
+    expect(prompt).toContain("Prefer CLI-based config mutation commands");
+    expect(prompt).toContain("openclaw config get gateway.mode");
+    expect(prompt).toContain("openclaw config set gateway.mode local");
+    expect(prompt).toContain("openclaw gateway reconfigure --set gateway.mode=local");
+    expect(prompt).toContain(
+      "Do not overwrite the effective config file with shell redirection, sed -i, ad hoc jq rewrite pipelines, or one-off scripts if a CLI path exists.",
+    );
+  });
+
   it("guides runtime completion events without exposing internal metadata", () => {
     const prompt = buildAgentSystemPrompt({
       workspaceDir: "/tmp/openclaw",

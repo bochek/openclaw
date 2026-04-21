@@ -89,6 +89,7 @@ import {
 } from "./server/health-state.js";
 import { resolveHookClientIpConfig } from "./server/hooks.js";
 import { createReadinessChecker } from "./server/readiness.js";
+import type { ReadinessChecker } from "./server/readiness.js";
 import { loadGatewayTlsRuntime } from "./server/tls.js";
 import { resolveSharedGatewaySessionGeneration } from "./server/ws-shared-generation.js";
 import { maybeSeedControlUiAllowedOriginsAtStartup } from "./startup-control-ui-origins.js";
@@ -176,6 +177,7 @@ function createGatewayAuthRateLimiters(rateLimitConfig: AuthRateLimitConfig | un
 
 export type GatewayServer = {
   close: (opts?: { reason?: string; restartExpectedMs?: number | null }) => Promise<void>;
+  getReadiness?: ReadinessChecker;
 };
 
 export type GatewayServerOptions = {
@@ -896,6 +898,7 @@ export async function startGatewayServer(
   const close = createCloseHandler();
 
   return {
+    getReadiness,
     close: async (opts) => {
       // Run gateway_stop plugin hook before shutdown
       await runGlobalGatewayStopSafely({

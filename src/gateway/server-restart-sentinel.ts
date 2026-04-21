@@ -132,7 +132,7 @@ export async function scheduleRestartSentinelWake(params: { deps: CliDeps }) {
     return;
   }
   const payload = sentinel.payload;
-  const sessionKey = payload.sessionKey?.trim();
+  const sessionKey = payload.sessionKey?.trim() || resolveMainSessionKeyFromConfig();
   const message = formatRestartSentinelMessage(payload);
   const summary = summarizeRestartSentinel(payload);
   const wakeDeliveryContext = mergeDeliveryContext(
@@ -141,12 +141,6 @@ export async function scheduleRestartSentinelWake(params: { deps: CliDeps }) {
       : payload.deliveryContext,
     undefined,
   );
-
-  if (!sessionKey) {
-    const mainSessionKey = resolveMainSessionKeyFromConfig();
-    enqueueSystemEvent(message, { sessionKey: mainSessionKey });
-    return;
-  }
 
   const { baseSessionKey, threadId: sessionThreadId } = parseSessionThreadInfo(sessionKey);
 

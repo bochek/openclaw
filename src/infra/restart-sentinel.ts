@@ -28,7 +28,7 @@ export type RestartSentinelStats = {
 };
 
 export type RestartSentinelPayload = {
-  kind: "config-apply" | "config-patch" | "update" | "restart";
+  kind: "config-apply" | "config-auto-recovery" | "config-patch" | "update" | "restart";
   status: "ok" | "error" | "skipped";
   ts: number;
   sessionKey?: string;
@@ -119,7 +119,7 @@ export async function consumeRestartSentinel(
 
 export function formatRestartSentinelMessage(payload: RestartSentinelPayload): string {
   const message = payload.message?.trim();
-  if (message && !payload.stats) {
+  if (message && (!payload.stats || payload.kind === "config-auto-recovery")) {
     return message;
   }
   const lines: string[] = [summarizeRestartSentinel(payload)];
@@ -137,6 +137,9 @@ export function formatRestartSentinelMessage(payload: RestartSentinelPayload): s
 }
 
 export function summarizeRestartSentinel(payload: RestartSentinelPayload): string {
+  if (payload.kind === "config-auto-recovery") {
+    return "Gateway auto-recovery";
+  }
   const kind = payload.kind;
   const status = payload.status;
   const mode = payload.stats?.mode ? ` (${payload.stats.mode})` : "";

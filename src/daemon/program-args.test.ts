@@ -55,6 +55,7 @@ describe("resolveGatewayProgramArguments", () => {
       process.execPath,
       indexPath,
       "gateway",
+      "run",
       "--port",
       "18789",
     ]);
@@ -79,6 +80,7 @@ describe("resolveGatewayProgramArguments", () => {
       process.execPath,
       entryPath,
       "gateway",
+      "run",
       "--port",
       "18789",
     ]);
@@ -102,6 +104,7 @@ describe("resolveGatewayProgramArguments", () => {
       process.execPath,
       entryPath,
       "gateway",
+      "run",
       "--port",
       "18789",
     ]);
@@ -126,6 +129,7 @@ describe("resolveGatewayProgramArguments", () => {
     expect(result.programArguments[1]).toBe(
       path.resolve("/Users/test/Library/pnpm/global/5/node_modules/openclaw/dist/index.js"),
     );
+    expect(result.programArguments.slice(2)).toEqual(["gateway", "run", "--port", "18789"]);
     expect(result.programArguments[1]).not.toContain("@2026.1.21-2");
   });
 
@@ -147,6 +151,7 @@ describe("resolveGatewayProgramArguments", () => {
       process.execPath,
       indexPath,
       "gateway",
+      "run",
       "--port",
       "18789",
     ]);
@@ -170,6 +175,7 @@ describe("resolveGatewayProgramArguments", () => {
       "/usr/local/bin/bun",
       repoEntryPath,
       "gateway",
+      "run",
       "--port",
       "18789",
     ]);

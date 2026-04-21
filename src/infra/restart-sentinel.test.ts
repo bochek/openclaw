@@ -33,7 +33,7 @@ describe("restart sentinel", () => {
         kind: "update" as const,
         status: "ok" as const,
         ts: Date.now(),
-        sessionKey: "agent:main:mobilechat:dm:+15555550123",
+        sessionKey: "agent:main:whatsapp:dm:+15555550123",
         stats: { mode: "git" },
       };
       const filePath = await writeRestartSentinel(payload);
@@ -82,6 +82,23 @@ describe("restart sentinel", () => {
       message: "Config updated successfully",
     };
     expect(formatRestartSentinelMessage(payload)).toBe("Config updated successfully");
+  });
+
+  it("uses the exact auto-recovery message for config recovery notices", () => {
+    const payload = {
+      kind: "config-auto-recovery" as const,
+      status: "ok" as const,
+      ts: Date.now(),
+      message:
+        "Gateway recovered automatically after a failed config change and restored the last known good configuration.",
+      stats: {
+        mode: "config-auto-recovery",
+        reason: "failed-health-check-after-config-change",
+      },
+    };
+
+    expect(formatRestartSentinelMessage(payload)).toBe(payload.message);
+    expect(summarizeRestartSentinel(payload)).toBe("Gateway auto-recovery");
   });
 
   it("formatRestartSentinelMessage falls back to summary when no message", () => {
