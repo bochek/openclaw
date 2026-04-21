@@ -40,12 +40,13 @@ curl -fsSL https://raw.githubusercontent.com/dutifuldev/ghreplica/main/scripts/i
 curl -fsSL https://raw.githubusercontent.com/dutifuldev/prtags/main/scripts/install-prtags.sh | bash
 ```
 
-Use `pr-search-cli` with `uvx`.
+Use the `pr-search-cli` project with `uvx`.
+The command itself is `pr-search`.
 Do not require a permanent install unless the maintainer explicitly wants one.
 
 ```bash
-uvx pr-search-cli status
-uvx pr-search-cli code similar 67144
+uvx --from pr-search-cli pr-search status
+uvx --from pr-search-cli pr-search code similar 67144
 ```
 
 ### Authenticate prtags
@@ -67,7 +68,7 @@ Before using this skill, make sure all three tools are available:
 ```bash
 ghr repo view openclaw/openclaw
 prtags auth status
-uvx pr-search-cli status
+uvx --from pr-search-cli pr-search status
 ```
 
 ## Goal
@@ -234,14 +235,15 @@ Then inspect the candidate PRs or issues those searches uncover.
 
 Use `pr-search-cli` after `ghreplica`.
 It is good at surfacing candidates quickly, but it is not the final decision-maker.
+Run it through the `pr-search` command.
 
 For a PR:
 
 ```bash
-uvx pr-search-cli -R openclaw/openclaw code similar <pr-number>
-uvx pr-search-cli -R openclaw/openclaw code clusters for-pr <pr-number>
-uvx pr-search-cli -R openclaw/openclaw issues for-pr <pr-number>
-uvx pr-search-cli -R openclaw/openclaw issues duplicate-prs
+uvx --from pr-search-cli pr-search -R openclaw/openclaw code similar <pr-number>
+uvx --from pr-search-cli pr-search -R openclaw/openclaw code clusters for-pr <pr-number>
+uvx --from pr-search-cli pr-search -R openclaw/openclaw issues for-pr <pr-number>
+uvx --from pr-search-cli pr-search -R openclaw/openclaw issues duplicate-prs
 ```
 
 Interpretation:
