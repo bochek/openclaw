@@ -17,7 +17,7 @@ For most users, the simplest rescue-bot setup is:
 - keep the main bot on the default profile
 - run the rescue bot on `--profile rescue`
 - use a completely separate Telegram bot for the rescue account
-- keep the rescue bot on a different base port such as `19001`
+- keep the rescue bot on a different base port such as `19789`
 
 This keeps the rescue bot isolated from the main bot so it can debug or apply
 config changes if the primary bot is down. Leave at least 20 ports between
@@ -29,7 +29,7 @@ Use this as the default path unless you have a strong reason to do something
 else:
 
 ```bash
-# Rescue bot (separate Telegram bot, separate profile, port 19001)
+# Rescue bot (separate Telegram bot, separate profile, port 19789)
 openclaw --profile rescue onboard
 openclaw --profile rescue gateway install
 ```
@@ -115,7 +115,7 @@ openclaw gateway --port 18789
 
 OPENCLAW_CONFIG_PATH=~/.openclaw/rescue.json \
 OPENCLAW_STATE_DIR=~/.openclaw-rescue \
-openclaw gateway --port 19001
+openclaw gateway --port 19789
 ```
 
 ## Quick checks
