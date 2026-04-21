@@ -174,7 +174,7 @@ flowchart LR
 ### Sequence: what changes on a normal turn
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#c0c0c0','primaryColor':'#909090','secondaryColor':'#808080','tertiaryColor':'#707070','primaryTextColor':'#000000','secondaryTextColor':'#000000','tertiaryTextColor':'#000000','noteTextColor':'#000000','lineColor':'#404040','actorLineColor':'#404040','signalColor':'#404040','actorBkg':'#808080','actorTextColor':'#000000','noteBkgColor':'#909090','stateLabelColor':'#000000','compositeBackground':'#a0a0a0'}}}%%
+%%{init: {'theme':'base','themeCSS':'svg{background:#e0e0e0;} .messageText{fill:#000000 !important;} .messageLine0,.messageLine1{stroke:#000000 !important;} text.actor{fill:#000000 !important;} .loopText,.loopText>tspan{fill:#000000 !important;} rect.actor{fill:#b0b0b0 !important;stroke:#000000 !important;}','themeVariables':{'background':'#e0e0e0','primaryColor':'#b0b0b0','secondaryColor':'#a0a0a0','tertiaryColor':'#909090','primaryTextColor':'#000000','secondaryTextColor':'#000000','tertiaryTextColor':'#000000','noteTextColor':'#000000','lineColor':'#000000','actorLineColor':'#000000','signalColor':'#000000','actorBkg':'#b0b0b0','actorTextColor':'#000000','noteBkgColor':'#d0d0d0','stateLabelColor':'#000000','compositeBackground':'#c0c0c0'}}}%%
 sequenceDiagram
     participant U as channel
     participant G as gateway RPC
@@ -196,7 +196,7 @@ sequenceDiagram
 ```
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#c0c0c0','primaryColor':'#909090','secondaryColor':'#808080','tertiaryColor':'#707070','primaryTextColor':'#000000','secondaryTextColor':'#000000','tertiaryTextColor':'#000000','noteTextColor':'#000000','lineColor':'#404040','actorLineColor':'#404040','signalColor':'#404040','actorBkg':'#808080','actorTextColor':'#000000','noteBkgColor':'#909090','stateLabelColor':'#000000','compositeBackground':'#a0a0a0'}}}%%
+%%{init: {'theme':'base','themeCSS':'svg{background:#e0e0e0;} .messageText{fill:#000000 !important;} .messageLine0,.messageLine1{stroke:#000000 !important;} text.actor{fill:#000000 !important;} .loopText,.loopText>tspan{fill:#000000 !important;} rect.actor{fill:#b0b0b0 !important;stroke:#000000 !important;}','themeVariables':{'background':'#e0e0e0','primaryColor':'#b0b0b0','secondaryColor':'#a0a0a0','tertiaryColor':'#909090','primaryTextColor':'#000000','secondaryTextColor':'#000000','tertiaryTextColor':'#000000','noteTextColor':'#000000','lineColor':'#000000','actorLineColor':'#000000','signalColor':'#000000','actorBkg':'#b0b0b0','actorTextColor':'#000000','noteBkgColor':'#d0d0d0','stateLabelColor':'#000000','compositeBackground':'#c0c0c0'}}}%%
 sequenceDiagram
     participant U as channel
     participant G as gateway RPC
@@ -402,7 +402,7 @@ That is the whole transport: a thin adapter that hands typed objects from one fu
 Inside the `openclaw-pi` server, the pi subscription system produces events on a bounded in-memory queue; `runTurn` yields them as an async iterable of `AcpRuntimeEvent`. Under loopback, that iterable is returned to the caller directly — no `JSON.stringify`, no framing. Under stdio, the same iterable is wrapped by the stdio transport, which serializes and frames.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#c0c0c0','primaryColor':'#909090','secondaryColor':'#808080','tertiaryColor':'#707070','primaryTextColor':'#000000','secondaryTextColor':'#000000','tertiaryTextColor':'#000000','noteTextColor':'#000000','lineColor':'#404040','actorLineColor':'#404040','signalColor':'#404040','actorBkg':'#808080','actorTextColor':'#000000','noteBkgColor':'#909090','stateLabelColor':'#000000','compositeBackground':'#a0a0a0'}}}%%
+%%{init: {'theme':'base','themeCSS':'svg{background:#e0e0e0;} .messageText{fill:#000000 !important;} .messageLine0,.messageLine1{stroke:#000000 !important;} text.actor{fill:#000000 !important;} .loopText,.loopText>tspan{fill:#000000 !important;} rect.actor{fill:#b0b0b0 !important;stroke:#000000 !important;}','themeVariables':{'background':'#e0e0e0','primaryColor':'#b0b0b0','secondaryColor':'#a0a0a0','tertiaryColor':'#909090','primaryTextColor':'#000000','secondaryTextColor':'#000000','tertiaryTextColor':'#000000','noteTextColor':'#000000','lineColor':'#000000','actorLineColor':'#000000','signalColor':'#000000','actorBkg':'#b0b0b0','actorTextColor':'#000000','noteBkgColor':'#d0d0d0','stateLabelColor':'#000000','compositeBackground':'#c0c0c0'}}}%%
 sequenceDiagram
     participant SM as spawn module
     participant T as transport
