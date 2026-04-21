@@ -48,16 +48,16 @@ required.
 
 ## Rescue-bot guide
 
-Run a second Gateway on the same host with its own:
+Recommended setup:
 
-- profile/config
-- state dir
-- workspace
-- base port (plus derived ports)
+- keep the main bot on the default profile
+- run the rescue bot on `--profile rescue`
+- use a completely separate Telegram bot for the rescue account
+- keep the rescue bot on a different base port such as `19001`
 
-This keeps the rescue bot isolated from the main bot so it can debug or apply config changes if the primary bot is down.
-
-Port spacing: leave at least 20 ports between base ports so the derived browser/canvas/CDP ports never collide.
+This keeps the rescue bot isolated from the main bot so it can debug or apply
+config changes if the primary bot is down. Leave at least 20 ports between
+base ports so the derived browser/canvas/CDP ports never collide.
 
 ### Recommended rescue channel/account
 
@@ -73,7 +73,32 @@ Why Telegram:
 The important part is full independence: separate bot account, separate
 credentials, separate OpenClaw profile, separate workspace, and separate port.
 
-### How rescue-bot onboarding works
+### Recommended install flow
+
+Use this as the default setup unless you have a strong reason to do something
+else:
+
+```bash
+# Main bot (default profile, port 18789)
+openclaw onboard
+openclaw gateway install
+
+# Rescue bot (separate Telegram bot, separate profile, port 19001)
+openclaw --profile rescue onboard
+openclaw --profile rescue gateway install
+```
+
+During `openclaw --profile rescue onboard`:
+
+- use the separate Telegram bot token
+- keep the `rescue` profile
+- use a base port at least 20 higher than the main bot
+- accept the default rescue workspace unless you already manage one yourself
+
+If onboarding already installed the rescue service for you, the final
+`gateway install` is not needed.
+
+### What onboarding changes
 
 `openclaw --profile rescue onboard` uses the normal onboarding flow, but it
 writes everything into a separate profile.
@@ -85,47 +110,7 @@ In practice, that means the rescue bot gets its own:
 - workspace (by default `~/.openclaw/workspace-rescue`)
 - managed service name
 
-The prompts are otherwise the same as normal onboarding. The two important
-choices are:
-
-- pick a different Gateway base port than the main bot
-- keep the rescue bot on its own profile instead of pointing it at the main
-  bot's config or workspace
-
-### Recommended install flow
-
-```bash
-# Main bot (default profile)
-openclaw onboard
-openclaw gateway install
-
-# Rescue bot (separate profile)
-openclaw --profile rescue onboard
-openclaw --profile rescue gateway install
-```
-
-During rescue-bot onboarding:
-
-- leave the profile as `rescue`
-- choose a base port at least 20 higher than the main bot's port
-- expect the default workspace name to gain a `-rescue` suffix
-- use a separate Telegram bot token for the rescue account
-- follow the rest of onboarding as usual for auth, channels, and model setup
-
-Example:
-
-```bash
-# Main bot on 18789
-openclaw onboard
-openclaw gateway install
-
-# Rescue bot on 19001
-openclaw --profile rescue onboard
-openclaw --profile rescue gateway install
-```
-
-If onboarding already installed the rescue service for you, the final
-`gateway install` is not needed.
+The prompts are otherwise the same as normal onboarding.
 
 ## Port mapping (derived)
 
