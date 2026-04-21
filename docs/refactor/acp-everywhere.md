@@ -248,9 +248,11 @@ sequenceDiagram
 ## Cons / tradeoffs
 
 - **`AcpRuntimeEvent` must be extended.** Today it does not cover pi's full event surface (lifecycle start/end/error, reasoning deltas, compaction, usage). That is a contract change, additive but real, and it affects `acpx`, any third-party ACP runtime backend, and the outward bridge.
-- **Sandbox semantics differ.** Pi can run inside the OpenClaw sandbox; ACP backends today explicitly cannot (`docs/tools/acp-agents.md` — Sandbox compatibility). A boolean `runsInSandbox` is too coarse — different backends offer different isolation grades (host / Docker / Podman / chroot / seccomp) with different guarantees (filesystem, network, process caps). The contract should carry a structured capability that the spawn module can policy-check against:
+- **Sandbox semantics differ.** Pi can run inside the OpenClaw sandbox; ACP backends today explicitly cannot (`docs/tools/acp-agents.md` — Sandbox compatibility). A boolean `runsInSandbox` is too coarse — different backends offer different isolation grades (host / Docker / Podman / chroot / seccomp) with different guarantees (filesystem, network, process caps). Also, what a backend _can_ enforce and what a particular run _requested_ are different concerns and must not share a single type. The contract separates them cleanly:
 
   ```ts path=null start=null
+  // What the backend CAN enforce. Advertised by the runtime via getCapabilities;
+  // does not change per run. Static facts about the runtime.
   type SandboxCapability = {
     mode: "host" | "docker" | "podman" | "chroot" | "seccomp" | "custom";
     guarantees: {
@@ -258,12 +260,21 @@ sequenceDiagram
       netIsolation: "none" | "restricted" | "denyAll";
       processCaps: boolean;
     };
-    // Optional operator hints the policy layer can match against.
-    policy?: { image?: string; setupCommand?: string };
+  };
+
+  // What THIS run requests. Per-spawn input the spawn module passes into
+  // ensureSession so the backend knows what the operator asked for. Not a
+  // capability — a request.
+  type SandboxPolicy = {
+    require: "any" | "host" | "sandboxed";
+    minFsIsolation?: "workspace" | "fullRoot";
+    minNetIsolation?: "restricted" | "denyAll";
+    image?: string; // operator-supplied runtime config
+    setupCommand?: string; // operator-supplied runtime config
   };
   ```
 
-  That lets `sandbox="require"` be a real policy predicate (for example `mode != "host" && guarantees.fsIsolation != "none"`) instead of a boolean. Without this we regress today's sandboxed-subagent guarantees and we can't express future stronger isolation (container-per-session, seccomp profiles, etc.) without another round of string-comparison plumbing.
+  Enforcement is a well-defined predicate `satisfies(capability, policy)` that the spawn module evaluates before starting a run (rough shape: `policy.require != "sandboxed" || capability.mode != "host"`, plus pairwise checks that `capability.guarantees` meets each `policy.min*`). That lets `sandbox="require"` be a real check instead of a boolean, keeps the capability surface stable across runs, and leaves room for stronger isolation grades (container-per-session, seccomp profiles, etc.) without another round of string-comparison plumbing. Without the split, capability and policy blur and matching gets hand-wavy fast.
 
 - **Announce / thread-binding migration is delicate.** Channel plugins expect exact historical announce shapes. Merging subagent-spawn and acp-spawn must preserve those bytes or we silently break agents and cron jobs that users already rely on.
 - **CLI backend features are non-trivial to move.** Session-expired retry, CLI-session reuse, bundle-MCP overlay, plugin-owned defaults. These need to come along when CLI backends become ACP backends.
