@@ -79,7 +79,7 @@ For each target PR or issue:
 2. decide whether it is a real duplicate
 3. create or reuse one `prtags` group for that duplicate cluster
 4. save the maintainer judgment in `prtags`
-5. sync the group state so `prtags` can manage the GitHub comment
+5. rely on normal `prtags` group writes to drive GitHub comment sync when that integration is configured
 
 ## Tool Roles
 
@@ -93,7 +93,7 @@ Use the tools with these boundaries:
 - `prtags` is the maintainer curation layer
   - use it to create or reuse one duplicate group
   - use it to save the duplicate status, confidence, rationale, and group summary
-  - use it to sync the GitHub-facing group comment
+  - use it as the source of truth for the GitHub-facing group comment
 
 ## Working Rules
 
@@ -378,12 +378,15 @@ prtags annotation group set <group-id> \
 
 When the evidence is incomplete, set `duplicate_status=candidate` and lower the confidence.
 
-## Step 8: Sync The Group Comment Through prtags
+## Step 8: Let prtags Sync The Group Comment
 
 Do not tell the agent to create a GitHub comment directly.
 `prtags` owns the outbound GitHub comment as a derived projection of group state.
 
-After updating group membership and annotations, sync the group comment through `prtags`:
+In the normal case, do not manually trigger comment sync.
+When comment sync is configured, group writes already enqueue the derived comment projection automatically.
+
+Use manual sync only as a repair or retry path:
 
 ```bash
 prtags group sync-comments <group-id>
@@ -397,6 +400,7 @@ prtags group list-comment-sync-targets -R openclaw/openclaw
 
 The skill should treat the GitHub comment as a consequence of correct `prtags` group state.
 It should not treat manual comment authoring as part of the normal duplicate workflow.
+It should also not treat `sync-comments` as a required step for every duplicate decision.
 
 ## Output Format
 
@@ -416,7 +420,7 @@ prtags actions:
 - reused group <group-id> | created group <group-id>
 - added members: ...
 - annotations written: ...
-- comment sync: triggered for <group-id> | not triggered
+- comment sync: automatic if configured | manual repair triggered for <group-id>
 ```
 
 ## Stop Conditions
