@@ -31,13 +31,13 @@ Do not rely on an old local build unless the maintainer explicitly wants to test
 `ghreplica` CLI install path:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dutifuldev/ghreplica/main/scripts/install-ghr.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dutifuldev/ghreplica/main/scripts/install-ghr.sh | bash -s -- --bin-dir "$HOME/.local/bin"
 ```
 
 `prtags` CLI install path:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dutifuldev/prtags/main/scripts/install-prtags.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dutifuldev/prtags/main/scripts/install-prtags.sh | bash -s -- --bin-dir "$HOME/.local/bin"
 ```
 
 Use the `pr-search-cli` project with `uvx`.
