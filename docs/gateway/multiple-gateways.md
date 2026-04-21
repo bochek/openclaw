@@ -31,7 +31,7 @@ else:
 ```bash
 # Rescue bot (separate Telegram bot, separate profile, port 19789)
 openclaw --profile rescue onboard
-openclaw --profile rescue gateway install
+openclaw --profile rescue gateway install --port 19789
 ```
 
 If your main bot is already running, that is usually all you need.
