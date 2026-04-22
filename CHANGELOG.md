@@ -13,6 +13,7 @@ Docs: https://docs.openclaw.ai
 
 - Discord: keep slash command follow-up chunks ephemeral when the command is configured for ephemeral replies, so long `/status` output no longer leaks fallback model or runtime details into the public channel. (#69869) thanks @gumadeiras.
 - Plugins/discovery: reject package plugin source entries that escape the package directory before explicit runtime entries or inferred built JavaScript peers can be used. (#69868) thanks @gumadeiras.
+- Doctor/plugins: keep configured channel doctor checks on read-only/setup adapters before bundled runtime-dep repair runs, so fresh packaged installs can repair missing bundled channel dependencies instead of importing the full channel runtime first.
 
 ## 2026.4.21
 
