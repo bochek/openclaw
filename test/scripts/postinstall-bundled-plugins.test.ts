@@ -765,12 +765,18 @@ describe("bundled plugin postinstall", () => {
     );
   });
 
-  it("rejects unsafe bundled runtime dependency specifiers before install", async () => {
+  it.each([
+    "file:../../tmp/grammy.tgz",
+    "../tmp/grammy",
+    "./grammy",
+    "~/grammy",
+    "C:\\tmp\\grammy",
+  ])("rejects unsafe bundled runtime dependency specifier %s before install", async (spec) => {
     const extensionsDir = await createExtensionsDir();
     const packageRoot = path.dirname(path.dirname(extensionsDir));
     await writePluginPackage(extensionsDir, "telegram", {
       dependencies: {
-        grammy: "file:../../tmp/grammy.tgz",
+        grammy: spec,
       },
     });
     const spawnSync = vi.fn();
@@ -783,7 +789,7 @@ describe("bundled plugin postinstall", () => {
         spawnSync,
         log: { log: vi.fn(), warn: vi.fn() },
       }),
-    ).toThrow("unsafe bundled runtime dependency spec for grammy: file:../../tmp/grammy.tgz");
+    ).toThrow(`unsafe bundled runtime dependency spec for grammy: ${spec}`);
     expect(spawnSync).not.toHaveBeenCalled();
   });
 

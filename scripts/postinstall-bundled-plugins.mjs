@@ -416,7 +416,18 @@ function isSafeBundledRuntimeDependencySpec(spec) {
   ) {
     return false;
   }
-  if (normalized.includes("://") || normalized.startsWith("/") || normalized.startsWith("\\")) {
+  if (
+    normalized.includes("://") ||
+    normalized.startsWith("/") ||
+    normalized.startsWith("\\") ||
+    normalized === "." ||
+    normalized.startsWith("./") ||
+    normalized === ".." ||
+    normalized.startsWith("../") ||
+    normalized === "~" ||
+    normalized.startsWith("~/") ||
+    /^[A-Za-z]:[\\/]/u.test(normalized)
+  ) {
     return false;
   }
   return true;
