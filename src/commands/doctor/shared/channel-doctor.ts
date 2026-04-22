@@ -82,12 +82,14 @@ function listChannelDoctorEntries(
     selectedIds && cfg
       ? safeListReadOnlyChannelPlugins(cfg).filter((plugin) => selectedIds.has(plugin.id))
       : [];
-  const readOnlyPluginIds = new Set(readOnlyPlugins.map((plugin) => plugin.id));
+  const readOnlyDoctorPluginIds = new Set(
+    readOnlyPlugins.filter((plugin) => plugin.doctor).map((plugin) => plugin.id),
+  );
   const plugins = selectedIds
     ? [
         ...readOnlyPlugins,
         ...[...selectedIds].flatMap((id) => {
-          if (readOnlyPluginIds.has(id)) {
+          if (readOnlyDoctorPluginIds.has(id)) {
             return [];
           }
           const loadedPlugin = safeGetLoadedChannelPlugin(id);

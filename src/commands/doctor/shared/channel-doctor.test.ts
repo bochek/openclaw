@@ -88,6 +88,41 @@ describe("channel doctor compatibility mutations", () => {
     expect(mocks.listBundledChannelSetupPlugins).not.toHaveBeenCalled();
   });
 
+  it("falls back when configured read-only channel plugin has no doctor adapter", () => {
+    const normalizeCompatibilityConfig = vi.fn(({ cfg }: { cfg: unknown }) => ({
+      config: cfg,
+      changes: ["discord"],
+    }));
+    mocks.resolveReadOnlyChannelPluginsForConfig.mockReturnValue({
+      plugins: [
+        {
+          id: "discord",
+        },
+      ],
+    });
+    mocks.getBundledChannelSetupPlugin.mockImplementation((id: string) =>
+      id === "discord"
+        ? {
+            id: "discord",
+            doctor: { normalizeCompatibilityConfig },
+          }
+        : undefined,
+    );
+
+    const result = collectChannelDoctorCompatibilityMutations({
+      channels: {
+        discord: {
+          enabled: true,
+        },
+      },
+    } as never);
+
+    expect(result).toHaveLength(1);
+    expect(normalizeCompatibilityConfig).toHaveBeenCalledTimes(1);
+    expect(mocks.getLoadedChannelPlugin).toHaveBeenCalledWith("discord");
+    expect(mocks.getBundledChannelSetupPlugin).toHaveBeenCalledWith("discord");
+  });
+
   it("keeps configured channel doctor lookup non-fatal when setup loading fails", () => {
     mocks.resolveReadOnlyChannelPluginsForConfig.mockImplementation(() => {
       throw new Error("missing runtime dep");
