@@ -395,6 +395,39 @@ function collectRuntimeDeps(packageJson) {
   };
 }
 
+function isSafeBundledRuntimeDependencySpec(spec) {
+  if (typeof spec !== "string") {
+    return false;
+  }
+  const normalized = spec.trim();
+  if (!normalized) {
+    return false;
+  }
+  const lower = normalized.toLowerCase();
+  if (
+    lower.startsWith("file:") ||
+    lower.startsWith("link:") ||
+    lower.startsWith("workspace:") ||
+    lower.startsWith("git:") ||
+    lower.startsWith("git+") ||
+    lower.startsWith("ssh:") ||
+    lower.startsWith("http:") ||
+    lower.startsWith("https:")
+  ) {
+    return false;
+  }
+  if (normalized.includes("://") || normalized.startsWith("/") || normalized.startsWith("\\")) {
+    return false;
+  }
+  return true;
+}
+
+function assertSafeBundledRuntimeDependencySpec(depName, spec) {
+  if (!isSafeBundledRuntimeDependencySpec(spec)) {
+    throw new Error(`unsafe bundled runtime dependency spec for ${depName}: ${spec}`);
+  }
+}
+
 export function discoverBundledPluginRuntimeDeps(params = {}) {
   const extensionsDir = params.extensionsDir ?? DEFAULT_EXTENSIONS_DIR;
   const pathExists = params.existsSync ?? existsSync;
@@ -425,28 +458,36 @@ export function discoverBundledPluginRuntimeDeps(params = {}) {
     if (!pathExists(packageJsonPath)) {
       continue;
     }
+    let packageJson;
     try {
-      const packageJson = readJsonFile(packageJsonPath);
-      for (const [name, version] of Object.entries(collectRuntimeDeps(packageJson))) {
-        const existing = deps.get(name);
-        if (existing) {
-          if (existing.version !== version) {
-            continue;
-          }
-          if (!existing.pluginIds.includes(pluginId)) {
-            existing.pluginIds.push(pluginId);
-          }
+      packageJson = readJsonFile(packageJsonPath);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `[postinstall] invalid bundled plugin manifest at ${packageJsonPath}: ${detail}`,
+        {
+          cause: error,
+        },
+      );
+    }
+    for (const [name, version] of Object.entries(collectRuntimeDeps(packageJson))) {
+      assertSafeBundledRuntimeDependencySpec(name, version);
+      const existing = deps.get(name);
+      if (existing) {
+        if (existing.version !== version) {
           continue;
         }
-        deps.set(name, {
-          name,
-          version,
-          sentinelPath: dependencySentinelPath(name),
-          pluginIds: [pluginId],
-        });
+        if (!existing.pluginIds.includes(pluginId)) {
+          existing.pluginIds.push(pluginId);
+        }
+        continue;
       }
-    } catch {
-      // Ignore malformed plugin manifests; runtime will surface those separately.
+      deps.set(name, {
+        name,
+        version,
+        sentinelPath: dependencySentinelPath(name),
+        pluginIds: [pluginId],
+      });
     }
   }
 
@@ -506,9 +547,11 @@ function installBundledPluginRuntimeDeps(params) {
       shell: npmRunner.shell,
       windowsVerbatimArguments: npmRunner.windowsVerbatimArguments,
     });
+    if (result.error) {
+      throw result.error;
+    }
     if (result.status !== 0) {
-      const output = [result.stderr, result.stdout].filter(Boolean).join("\n").trim();
-      throw new Error(output || "npm install failed");
+      throw new Error(`npm install failed (exit ${result.status ?? "unknown"})`);
     }
     params.log.log(
       `[postinstall] installed bundled plugin deps: ${params.missingSpecs.join(", ")}`,

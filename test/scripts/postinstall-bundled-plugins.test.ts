@@ -736,8 +736,55 @@ describe("bundled plugin postinstall", () => {
         log: { log: vi.fn(), warn: vi.fn() },
       }),
     ).toThrow(
-      "[postinstall] failed to install bundled plugin deps (grammy@1.38.4): network unavailable",
+      "[postinstall] failed to install bundled plugin deps (grammy@1.38.4): npm install failed (exit 1)",
     );
+  });
+
+  it("surfaces spawn errors from bundled runtime dep installation", async () => {
+    const extensionsDir = await createExtensionsDir();
+    const packageRoot = path.dirname(path.dirname(extensionsDir));
+    await writePluginPackage(extensionsDir, "telegram", {
+      dependencies: {
+        grammy: "1.38.4",
+      },
+    });
+    const spawnError = new Error("spawn npm ENOENT");
+    const spawnSync = vi.fn(() => ({ status: null, error: spawnError, stderr: "", stdout: "" }));
+
+    expect(() =>
+      runBundledPluginPostinstall({
+        env: { HOME: "/tmp/home" },
+        extensionsDir,
+        packageRoot,
+        npmRunner: createBareNpmRunner(["grammy@1.38.4"]),
+        spawnSync,
+        log: { log: vi.fn(), warn: vi.fn() },
+      }),
+    ).toThrow(
+      "[postinstall] failed to install bundled plugin deps (grammy@1.38.4): spawn npm ENOENT",
+    );
+  });
+
+  it("rejects unsafe bundled runtime dependency specifiers before install", async () => {
+    const extensionsDir = await createExtensionsDir();
+    const packageRoot = path.dirname(path.dirname(extensionsDir));
+    await writePluginPackage(extensionsDir, "telegram", {
+      dependencies: {
+        grammy: "file:../../tmp/grammy.tgz",
+      },
+    });
+    const spawnSync = vi.fn();
+
+    expect(() =>
+      runBundledPluginPostinstall({
+        env: { HOME: "/tmp/home" },
+        extensionsDir,
+        packageRoot,
+        spawnSync,
+        log: { log: vi.fn(), warn: vi.fn() },
+      }),
+    ).toThrow("unsafe bundled runtime dependency spec for grammy: file:../../tmp/grammy.tgz");
+    expect(spawnSync).not.toHaveBeenCalled();
   });
 
   it("prunes only bundled plugin package node_modules in source checkouts", async () => {
