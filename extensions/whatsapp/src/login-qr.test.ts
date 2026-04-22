@@ -255,7 +255,9 @@ describe("login-qr", () => {
 
   it("deduplicates initial QR rendering while the start path awaits the same image", async () => {
     const accountId = "single-flight-qr";
-    let resolveRender: ((value: string) => void) | null = null;
+    let resolveRender: (value: string) => void = () => {
+      throw new Error("Expected QR render promise to be pending");
+    };
     renderQrPngBase64Mock.mockImplementationOnce(
       () =>
         new Promise<string>((resolve) => {
@@ -274,7 +276,7 @@ describe("login-qr", () => {
 
     expect(renderQrPngBase64Mock).toHaveBeenCalledTimes(1);
 
-    resolveRender?.("encoded:qr-data");
+    resolveRender("encoded:qr-data");
     await expect(resultPromise).resolves.toEqual({
       qrDataUrl: "data:image/png;base64,encoded:qr-data",
       message: "Scan this QR in WhatsApp → Linked Devices.",
