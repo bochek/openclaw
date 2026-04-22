@@ -58,6 +58,9 @@ async function waitMs(ms: number) {
 }
 
 describe("login-qr", () => {
+  const rotatingAccountId = "rotating-qr";
+  const concurrentAccountId = "concurrent-qr";
+
   beforeEach(() => {
     vi.clearAllMocks();
     createWaSocketMock
@@ -90,10 +93,17 @@ describe("login-qr", () => {
       .mockRejectedValueOnce({ error: { output: { statusCode: 515 } } })
       .mockResolvedValueOnce(undefined);
 
-    const start = await startWebLoginWithQr({ timeoutMs: 5000 });
+    const start = await startWebLoginWithQr({
+      timeoutMs: 5000,
+      accountId: rotatingAccountId,
+    });
     expect(start.qrDataUrl).toBe("data:image/png;base64,encoded:qr-data");
 
-    const resultPromise = waitForWebLogin({ timeoutMs: 5000 });
+    const resultPromise = waitForWebLogin({
+      timeoutMs: 5000,
+      currentQrDataUrl: start.qrDataUrl,
+      accountId: rotatingAccountId,
+    });
     await flushTasks();
     await flushTasks();
 
@@ -113,7 +123,10 @@ describe("login-qr", () => {
     const start = await startWebLoginWithQr({ timeoutMs: 5000 });
     expect(start.qrDataUrl).toBe("data:image/png;base64,encoded:qr-data");
 
-    const result = await waitForWebLogin({ timeoutMs: 5000 });
+    const result = await waitForWebLogin({
+      timeoutMs: 5000,
+      currentQrDataUrl: start.qrDataUrl,
+    });
 
     expect(result).toEqual({
       connected: false,
@@ -132,7 +145,10 @@ describe("login-qr", () => {
     const start = await startWebLoginWithQr({ timeoutMs: 5000 });
     expect(start.qrDataUrl).toBe("data:image/png;base64,encoded:qr-data");
 
-    const result = await waitForWebLogin({ timeoutMs: 5000 });
+    const result = await waitForWebLogin({
+      timeoutMs: 5000,
+      currentQrDataUrl: start.qrDataUrl,
+    });
 
     expect(result).toEqual({
       connected: false,
@@ -188,7 +204,7 @@ describe("login-qr", () => {
       ) => {
         const sock = { ws: { close: vi.fn() } };
         setImmediate(() => opts?.onQr?.("qr-data"));
-        setTimeout(() => opts?.onQr?.("qr-data-2"), 20);
+        setTimeout(() => opts?.onQr?.("qr-data-2"), 100);
         return sock as never;
       },
     );
@@ -197,12 +213,63 @@ describe("login-qr", () => {
     const start = await startWebLoginWithQr({ timeoutMs: 5000 });
     expect(start.qrDataUrl).toBe("data:image/png;base64,encoded:qr-data");
 
-    const resultPromise = waitForWebLogin({ timeoutMs: 5000 });
+    const resultPromise = waitForWebLogin({
+      timeoutMs: 5000,
+      currentQrDataUrl: start.qrDataUrl,
+    });
     await flushTasks();
-    await waitMs(40);
+    await waitMs(140);
     await flushTasks();
 
     await expect(resultPromise).resolves.toEqual({
+      connected: false,
+      message: "QR refreshed. Scan the latest code in WhatsApp → Linked Devices.",
+      qrDataUrl: "data:image/png;base64,encoded:qr-data-2",
+    });
+  });
+
+  it("returns the same rotated QR to concurrent waiters that share the same current image", async () => {
+    createWaSocketMock.mockImplementationOnce(
+      async (
+        _printQr: boolean,
+        _verbose: boolean,
+        opts?: { authDir?: string; onQr?: (qr: string) => void },
+      ) => {
+        const sock = { ws: { close: vi.fn() } };
+        setImmediate(() => opts?.onQr?.("qr-data"));
+        setTimeout(() => opts?.onQr?.("qr-data-2"), 100);
+        return sock as never;
+      },
+    );
+    waitForWaConnectionMock.mockImplementation(() => new Promise(() => {}));
+
+    const start = await startWebLoginWithQr({
+      timeoutMs: 5000,
+      accountId: concurrentAccountId,
+    });
+    expect(start.qrDataUrl).toBe("data:image/png;base64,encoded:qr-data");
+
+    const waiterA = waitForWebLogin({
+      timeoutMs: 5000,
+      currentQrDataUrl: start.qrDataUrl,
+      accountId: concurrentAccountId,
+    });
+    const waiterB = waitForWebLogin({
+      timeoutMs: 5000,
+      currentQrDataUrl: start.qrDataUrl,
+      accountId: concurrentAccountId,
+    });
+
+    await flushTasks();
+    await waitMs(140);
+    await flushTasks();
+
+    await expect(waiterA).resolves.toEqual({
+      connected: false,
+      message: "QR refreshed. Scan the latest code in WhatsApp → Linked Devices.",
+      qrDataUrl: "data:image/png;base64,encoded:qr-data-2",
+    });
+    await expect(waiterB).resolves.toEqual({
       connected: false,
       message: "QR refreshed. Scan the latest code in WhatsApp → Linked Devices.",
       qrDataUrl: "data:image/png;base64,encoded:qr-data-2",

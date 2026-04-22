@@ -19,6 +19,27 @@ export function createWhatsAppLoginTool(): ChannelAgentTool {
       force: Type.Optional(Type.Boolean()),
     }),
     execute: async (_toolCallId, args) => {
+      const renderQrReply = (params: {
+        message: string;
+        qrDataUrl: string;
+        connected?: boolean;
+      }) => {
+        const text = [
+          params.message,
+          "",
+          "Open WhatsApp → Linked Devices and scan:",
+          "",
+          `![whatsapp-qr](${params.qrDataUrl})`,
+        ].join("\n");
+        return {
+          content: [{ type: "text" as const, text }],
+          details: {
+            connected: params.connected ?? false,
+            qr: true,
+          },
+        };
+      };
+
       const action = (args as { action?: string })?.action ?? "start";
       if (action === "wait") {
         const result = await waitForWebLogin({
@@ -27,6 +48,13 @@ export function createWhatsAppLoginTool(): ChannelAgentTool {
               ? (args as { timeoutMs?: number }).timeoutMs
               : undefined,
         });
+        if (result.qrDataUrl) {
+          return renderQrReply({
+            message: result.message,
+            qrDataUrl: result.qrDataUrl,
+            connected: result.connected,
+          });
+        }
         return {
           content: [{ type: "text", text: result.message }],
           details: { connected: result.connected },
@@ -56,17 +84,11 @@ export function createWhatsAppLoginTool(): ChannelAgentTool {
         };
       }
 
-      const text = [
-        result.message,
-        "",
-        "Open WhatsApp → Linked Devices and scan:",
-        "",
-        `![whatsapp-qr](${result.qrDataUrl})`,
-      ].join("\n");
-      return {
-        content: [{ type: "text", text }],
-        details: { qr: true },
-      };
+      return renderQrReply({
+        message: result.message,
+        qrDataUrl: result.qrDataUrl,
+        connected: result.connected,
+      });
     },
   };
 }

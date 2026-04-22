@@ -171,13 +171,21 @@ describe("webHandlers web.login.wait", () => {
 
     await webHandlers["web.login.wait"](
       createOptions(
-        { accountId: "default", timeoutMs: 5000 },
+        {
+          accountId: "default",
+          timeoutMs: 5000,
+          currentQrDataUrl: "data:image/png;base64,current-qr",
+        },
         {
           req: {
             type: "req",
             id: "req-2",
             method: "web.login.wait",
-            params: { accountId: "default", timeoutMs: 5000 },
+            params: {
+              accountId: "default",
+              timeoutMs: 5000,
+              currentQrDataUrl: "data:image/png;base64,current-qr",
+            },
           } as GatewayRequestHandlerOptions["req"],
           respond,
         },
@@ -187,6 +195,7 @@ describe("webHandlers web.login.wait", () => {
     expect(loginWithQrWait).toHaveBeenCalledWith({
       accountId: "default",
       timeoutMs: 5000,
+      currentQrDataUrl: "data:image/png;base64,current-qr",
     });
     expect(respond).toHaveBeenCalledWith(
       true,

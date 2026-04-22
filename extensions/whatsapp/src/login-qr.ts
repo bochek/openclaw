@@ -35,7 +35,6 @@ type ActiveLogin = {
   qr?: string;
   qrDataUrl?: string;
   qrVersion: number;
-  presentedQrVersion: number;
   connected: boolean;
   error?: string;
   errorStatus?: number;
@@ -104,7 +103,11 @@ async function ensureQrDataUrl(params: {
 }): Promise<string> {
   while (true) {
     const current = activeLogins.get(params.accountId);
-    if (current?.id === params.loginId && current.qrVersion === params.qrVersion && current.qr === params.qr) {
+    if (
+      current?.id === params.loginId &&
+      current.qrVersion === params.qrVersion &&
+      current.qr === params.qr
+    ) {
       if (current.qrDataUrl) {
         return current.qrDataUrl;
       }
@@ -275,7 +278,6 @@ export async function startWebLoginWithQr(
 
   const existing = activeLogins.get(account.accountId);
   if (existing && isLoginFresh(existing) && existing.qrDataUrl) {
-    existing.presentedQrVersion = existing.qrVersion;
     return {
       qrDataUrl: existing.qrDataUrl,
       message: "QR already active. Scan it in WhatsApp → Linked Devices.",
@@ -342,7 +344,6 @@ export async function startWebLoginWithQr(
     connected: false,
     waitPromise: Promise.resolve(),
     qrVersion: 0,
-    presentedQrVersion: 0,
     qrUpdatePromise: Promise.resolve(),
     resolveQrUpdate: null,
     verbose: Boolean(opts.verbose),
@@ -393,7 +394,6 @@ export async function startWebLoginWithQr(
     qr,
     qrVersion,
   });
-  login.presentedQrVersion = login.qrVersion;
   return {
     qrDataUrl,
     message: "Scan this QR in WhatsApp → Linked Devices.",
@@ -401,7 +401,12 @@ export async function startWebLoginWithQr(
 }
 
 export async function waitForWebLogin(
-  opts: { timeoutMs?: number; runtime?: RuntimeEnv; accountId?: string } = {},
+  opts: {
+    timeoutMs?: number;
+    runtime?: RuntimeEnv;
+    accountId?: string;
+    currentQrDataUrl?: string;
+  } = {},
 ): Promise<{ connected: boolean; message: string; qrDataUrl?: string }> {
   const runtime = opts.runtime ?? defaultRuntime;
   const cfg = loadConfig();
@@ -424,10 +429,10 @@ export async function waitForWebLogin(
   }
   const timeoutMs = Math.max(opts.timeoutMs ?? 120_000, 1000);
   const deadline = Date.now() + timeoutMs;
+  const currentQrDataUrl = opts.currentQrDataUrl;
 
   while (true) {
-    if (login.qrDataUrl && login.qrVersion > login.presentedQrVersion) {
-      login.presentedQrVersion = login.qrVersion;
+    if (login.qrDataUrl && login.qrDataUrl !== currentQrDataUrl) {
       return {
         connected: false,
         message: "QR refreshed. Scan the latest code in WhatsApp → Linked Devices.",

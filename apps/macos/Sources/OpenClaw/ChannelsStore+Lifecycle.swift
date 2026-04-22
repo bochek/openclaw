@@ -85,9 +85,12 @@ extension ChannelsStore {
                 if remainingMs == 0 {
                     break
                 }
-                let params: [String: AnyCodable] = [
+                var params: [String: AnyCodable] = [
                     "timeoutMs": AnyCodable(remainingMs),
                 ]
+                if let currentQrDataUrl = self.whatsappLoginQrDataUrl {
+                    params["currentQrDataUrl"] = AnyCodable(currentQrDataUrl)
+                }
                 let result: WhatsAppLoginWaitResult = try await GatewayConnection.shared.requestDecoded(
                     method: .webLoginWait,
                     params: params,
