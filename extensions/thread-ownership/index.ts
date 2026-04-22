@@ -20,6 +20,25 @@ type ThreadOwnershipMessageSendingResult = { cancel: true } | undefined;
 const mentionedThreads = new Map<string, number>();
 const MENTION_TTL_MS = 5 * 60 * 1000;
 
+function resolveThreadToken(value: unknown): string {
+  return typeof value === "string" || typeof value === "number" ? String(value) : "";
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function resolveSlackConversationId(value: unknown): string {
+  const raw = normalizeOptionalString(value) ?? "";
+  if (!raw) {
+    return "";
+  }
+  const trimmed = raw.trim();
+  const match = /^(?:slack:)?channel:(.+)$/i.exec(trimmed);
+  const resolved = match?.[1]?.trim() || trimmed;
+  return /^[CDGUW][A-Z0-9]+$/i.test(resolved) ? resolved.toUpperCase() : resolved;
+}
+
 function cleanExpiredMentions(): void {
   const now = Date.now();
   for (const [key, ts] of mentionedThreads) {
@@ -27,6 +46,14 @@ function cleanExpiredMentions(): void {
       mentionedThreads.delete(key);
     }
   }
+}
+
+function containsAgentNameMention(text: string, agentName: string): boolean {
+  const trimmedName = agentName.trim();
+  if (!trimmedName) {
+    return false;
+  }
+  return new RegExp(`(^|[^\\w])@${escapeRegExp(trimmedName)}(?=$|[^\\w])`, "i").test(text);
 }
 
 function resolveOwnershipAgent(config: OpenClawConfig): { id: string; name: string } {
@@ -58,9 +85,13 @@ export default definePluginEntry({
     ).replace(/\/$/, "");
 
     const abTestChannels = new Set(
-      pluginCfg.abTestChannels ??
+      (
+        pluginCfg.abTestChannels ??
         process.env.THREAD_OWNERSHIP_CHANNELS?.split(",").filter(Boolean) ??
-        [],
+        []
+      )
+        .map((entry) => resolveSlackConversationId(entry))
+        .filter(Boolean),
     );
 
     const { id: agentId, name: agentName } = resolveOwnershipAgent(api.config);
@@ -72,14 +103,20 @@ export default definePluginEntry({
       }
 
       const text = event.content ?? "";
-      const threadTs = (event.metadata?.threadTs as string) ?? "";
-      const channelId = (event.metadata?.channelId as string) ?? ctx.conversationId ?? "";
+      const threadTs =
+        resolveThreadToken(event.threadId) ||
+        resolveThreadToken(event.metadata?.threadId) ||
+        resolveThreadToken(event.metadata?.threadTs);
+      const channelId =
+        resolveSlackConversationId(ctx.conversationId) ||
+        resolveSlackConversationId(event.metadata?.channelId) ||
+        "";
       if (!threadTs || !channelId) {
         return;
       }
 
       const mentioned =
-        (agentName && text.includes(`@${agentName}`)) ||
+        containsAgentNameMention(text, agentName) ||
         (botUserId && text.includes(`<@${botUserId}>`));
       if (mentioned) {
         cleanExpiredMentions();
@@ -92,9 +129,17 @@ export default definePluginEntry({
         return undefined;
       }
 
-      const threadTs = (event.metadata?.threadTs as string) ?? "";
-      const channelId = (event.metadata?.channelId as string) ?? event.to;
-      if (!threadTs) {
+      const threadTs =
+        resolveThreadToken(event.replyToId) ||
+        resolveThreadToken(event.threadId) ||
+        resolveThreadToken(event.metadata?.threadId) ||
+        resolveThreadToken(event.metadata?.threadTs);
+      const channelId =
+        resolveSlackConversationId(ctx.conversationId) ||
+        resolveSlackConversationId(event.metadata?.channelId) ||
+        resolveSlackConversationId(event.to) ||
+        "";
+      if (!threadTs || !channelId) {
         return undefined;
       }
       if (abTestChannels.size > 0 && !abTestChannels.has(channelId)) {
