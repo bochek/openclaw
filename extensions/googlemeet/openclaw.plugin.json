@@ -1,0 +1,85 @@
+{
+  "id": "googlemeet",
+  "name": "Google Meet",
+  "description": "Experimental Google Meet media-ingest groundwork for OAuth login and meeting preflight.",
+  "uiHints": {
+    "defaults.meeting": {
+      "label": "Default Meeting",
+      "help": "Meet URL, meeting code, or spaces/{id} used when CLI commands omit a meeting."
+    },
+    "preview.enrollmentAcknowledged": {
+      "label": "Preview Acknowledged",
+      "help": "Confirms you understand the Google Meet Media API is still Developer Preview."
+    },
+    "oauth.clientId": {
+      "label": "OAuth Client ID"
+    },
+    "oauth.clientSecret": {
+      "label": "OAuth Client Secret",
+      "sensitive": true
+    },
+    "oauth.refreshToken": {
+      "label": "OAuth Refresh Token",
+      "sensitive": true
+    },
+    "oauth.accessToken": {
+      "label": "Cached Access Token",
+      "advanced": true,
+      "sensitive": true
+    },
+    "oauth.expiresAt": {
+      "label": "Cached Access Token Expiry",
+      "advanced": true,
+      "help": "Unix epoch milliseconds used only for the cached access-token fast path."
+    }
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean"
+      },
+      "defaults": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "meeting": {
+            "type": "string"
+          }
+        }
+      },
+      "preview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enrollmentAcknowledged": {
+            "type": "boolean"
+          }
+        }
+      },
+      "oauth": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "clientId": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "type": "string"
+          },
+          "refreshToken": {
+            "type": "string"
+          },
+          "accessToken": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "number"
+          }
+        }
+      }
+    }
+  },
+  "commandAliases": [{ "name": "googlemeet" }]
+}

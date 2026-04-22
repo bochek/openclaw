@@ -27,6 +27,7 @@ const packageManifestContractTests: PackageManifestContractParams[] = [
     pluginLocalRuntimeDeps: ["gaxios", "google-auth-library"],
     minHostVersionBaseline: "2026.3.22",
   },
+  { pluginId: "googlemeet", minHostVersionBaseline: "2026.3.22" },
   { pluginId: "irc", minHostVersionBaseline: "2026.3.22" },
   { pluginId: "line", minHostVersionBaseline: "2026.3.22" },
   {

@@ -1,0 +1,26 @@
+{
+  "name": "@openclaw/googlemeet",
+  "version": "2026.4.20",
+  "private": true,
+  "description": "OpenClaw Google Meet plugin",
+  "type": "module",
+  "devDependencies": {
+    "@openclaw/plugin-sdk": "workspace:*"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.4.20"
+  },
+  "peerDependenciesMeta": {
+    "openclaw": {
+      "optional": true
+    }
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "install": {
+      "minHostVersion": ">=2026.4.20"
+    }
+  }
+}
