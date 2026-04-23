@@ -2,6 +2,7 @@ import { formatErrorMessage } from "../infra/errors.js";
 import { loadCliSessionHistoryMessages } from "./cli-runner/session-history.js";
 import type { PreparedCliRunContext, RunCliAgentParams } from "./cli-runner/types.js";
 import { FailoverError, isFailoverError, resolveFailoverStatus } from "./failover-error.js";
+import { buildAgentHookConversationMessages } from "./harness/hook-history.js";
 import {
   runAgentHarnessAgentEndHook,
   runAgentHarnessLlmInputHook,
@@ -82,9 +83,13 @@ export async function runPreparedCliAgent(
   } as const;
 
   const buildAgentEndMessages = (lastAssistant?: unknown): unknown[] => [
-    ...historyMessages,
-    buildCliHookUserMessage(params.prompt),
-    ...(lastAssistant ? [lastAssistant] : []),
+    ...buildAgentHookConversationMessages({
+      historyMessages,
+      currentTurnMessages: [
+        buildCliHookUserMessage(params.prompt),
+        ...(lastAssistant ? [lastAssistant] : []),
+      ],
+    }),
   ];
 
   const buildFailedAgentEndEvent = (error: string) => ({

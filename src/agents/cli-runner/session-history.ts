@@ -6,9 +6,13 @@ import {
 } from "../../config/sessions/paths.js";
 import type { OpenClawConfig } from "../../config/types.openclaw.js";
 import { resolveSessionAgentIds } from "../agent-scope.js";
+import {
+  limitAgentHookHistoryMessages,
+  MAX_AGENT_HOOK_HISTORY_MESSAGES,
+} from "../harness/hook-history.js";
 
 export const MAX_CLI_SESSION_HISTORY_FILE_BYTES = 5 * 1024 * 1024;
-export const MAX_CLI_SESSION_HISTORY_MESSAGES = 200;
+export const MAX_CLI_SESSION_HISTORY_MESSAGES = MAX_AGENT_HOOK_HISTORY_MESSAGES;
 
 function resolveSafeCliSessionFile(params: {
   sessionId: string;
@@ -48,19 +52,10 @@ export function loadCliSessionHistoryMessages(params: {
       return [];
     }
     const entries = SessionManager.open(sessionFile).getEntries();
-    const history: unknown[] = [];
-    for (let index = entries.length - 1; index >= 0; index -= 1) {
-      const entry = entries[index];
-      if (entry?.type !== "message") {
-        continue;
-      }
-      history.push(entry.message as unknown);
-      if (history.length >= MAX_CLI_SESSION_HISTORY_MESSAGES) {
-        break;
-      }
-    }
-    history.reverse();
-    return history;
+    const history = entries.flatMap((entry) =>
+      entry?.type === "message" ? [entry.message as unknown] : [],
+    );
+    return limitAgentHookHistoryMessages(history, MAX_CLI_SESSION_HISTORY_MESSAGES);
   } catch {
     return [];
   }

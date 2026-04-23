@@ -65,6 +65,10 @@ import {
 import { DEFAULT_CONTEXT_TOKENS } from "../../defaults.js";
 import { resolveOpenClawDocsPath } from "../../docs-path.js";
 import { isTimeoutError } from "../../failover-error.js";
+import {
+  buildAgentHookConversationMessages,
+  limitAgentHookHistoryMessages,
+} from "../../harness/hook-history.js";
 import { resolveHeartbeatPromptForSystemPrompt } from "../../heartbeat-system-prompt.js";
 import { resolveImageSanitizationLimits } from "../../image-sanitization.js";
 import { buildModelAliasLines } from "../../model-alias-lines.js";
@@ -2158,6 +2162,7 @@ export async function runEmbeddedAttempt(
             );
           }
 
+          const hookHistoryMessages = limitAgentHookHistoryMessages(activeSession.messages);
           if (hookRunner?.hasHooks("llm_input")) {
             hookRunner
               .runLlmInput(
@@ -2168,7 +2173,7 @@ export async function runEmbeddedAttempt(
                   model: params.modelId,
                   systemPrompt: systemPromptText,
                   prompt: effectivePrompt,
-                  historyMessages: activeSession.messages,
+                  historyMessages: hookHistoryMessages,
                   imagesCount: imageResult.images.length,
                 },
                 {
@@ -2434,6 +2439,10 @@ export async function runEmbeddedAttempt(
         }
         messagesSnapshot = snapshotSelection.messagesSnapshot;
         sessionIdUsed = snapshotSelection.sessionIdUsed;
+        const hookAgentEndMessages = buildAgentHookConversationMessages({
+          historyMessages: messagesSnapshot.slice(0, prePromptMessageCount),
+          currentTurnMessages: messagesSnapshot.slice(prePromptMessageCount),
+        });
 
         lastAssistant = messagesSnapshot
           .slice()
@@ -2573,7 +2582,7 @@ export async function runEmbeddedAttempt(
           hookRunner
             .runAgentEnd(
               {
-                messages: messagesSnapshot,
+                messages: hookAgentEndMessages,
                 success: !aborted && !promptError,
                 error: promptError ? formatErrorMessage(promptError) : undefined,
                 durationMs: Date.now() - promptStartedAt,
