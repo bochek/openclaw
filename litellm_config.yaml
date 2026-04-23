@@ -1,8 +1,61 @@
 model_list:
+  # ==========================================
+  # PLANNER TIER — Task decomposition & DAG planning
+  # Model: MiniMax M2.7 (long context, strong reasoning)
+  # ==========================================
+  - model_name: planner
+    litellm_params:
+      model: openrouter/minimax/minimax-m2.7
+      api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      tags: ["planner", "decompose", "dag", "complex"]
+
+  # ==========================================
+  # FAST TIER — Classification, summarization, cheap tasks
+  # ==========================================
+  - model_name: fast
+    litellm_params:
+      model: openrouter/mistralai/mistral-7b-instruct
+      api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      tags: ["fast", "cheap", "classify", "summarize", "route"]
+
+  # ==========================================
+  # WORK TIER — Coding, analysis, reasoning
+  # ==========================================
+  - model_name: work
+    litellm_params:
+      model: openrouter/qwen/qwen3-235b-a22b
+      api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      tags: ["work", "code", "analysis", "reasoning"]
+
+  # ==========================================
+  # VISION TIER — Image analysis via multimodal model
+  # ==========================================
+  - model_name: vision
+    litellm_params:
+      model: openrouter/google/gemini-flash-1.5
+      api_key: os.environ/OPENROUTER_API_KEY
+    model_info:
+      tags: ["vision", "image", "multimodal"]
+
+  # ==========================================
+  # LOCAL TIER — On-device Ollama (no cost, private)
+  # ==========================================
+  - model_name: local
+    litellm_params:
+      model: openai/qwen3:14b
+      api_base: http://host.docker.internal:11434/v1
+      api_key: ollama
+    model_info:
+      tags: ["local", "private", "no-cost", "fast"]
+
+  # Legacy aliases — keep backward compat with existing code
   - model_name: minimax-m2.7
     litellm_params:
       model: openrouter/minimax/minimax-m2.7
-      api_key: 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
+      api_key: os.environ/OPENROUTER_API_KEY
 
   - model_name: qwen3.5:9b
     litellm_params:
@@ -10,6 +63,30 @@ model_list:
       api_base: http://host.docker.internal:11434/v1
       api_key: ollama
 
+router_settings:
+  routing_strategy: "latency-based-routing"
+  num_retries: 3
+  timeout: 60
+  retry_after: 5
+  # Fallback chain: if work tier fails → try local tier
+  fallbacks:
+    - work: ["local"]
+    - planner: ["work"]
+
 litellm_settings:
-  drop_params: True
-  set_verbose: True
+  drop_params: true
+  set_verbose: false
+
+  # Semantic cache via Redis
+  # Caches semantically similar queries (threshold 0.92) for 1h
+  cache: true
+  cache_params:
+    type: "redis"
+    host: "redis"
+    port: 6379
+    ttl: 3600
+    similarity_threshold: 0.92
+
+  # Langfuse observability — traces every LLM call
+  success_callback: ["langfuse"]
+  failure_callback: ["langfuse"]

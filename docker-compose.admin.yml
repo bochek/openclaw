@@ -1,11 +1,22 @@
-# Architecture Overview for OPENCLAW ADMIN:
-# - litellm: Unified LLM Gateway & Token Tracker routing local models and cloud models
-# - mem0: Vector storage and entity extraction for Agent Personal & Team Memory
-# - postgres: Database required for unified memory and tracking
+# Architecture Overview for OPENCLAW ADMIN (LLM Mesh):
+# - litellm:           Unified LLM Gateway with 5-tier routing + semantic cache
+# - redis:             Semantic cache backend for LiteLLM
+# - langfuse-server:   Open-source LLM observability (traces every call)
+# - langfuse-worker:   Background processor for Langfuse
+# - mem0:              Vector storage and entity extraction for Agent Personal & Team Memory
+# - postgres:          Shared DB for LiteLLM + Langfuse
+# - rag-wiki:          AnythingLLM RAG / Knowledge Hub
+# - minio:             S3-compatible artifact storage for executor nodes
+# - nats:              Pub/sub message broker for swarm coordination
+# - task-tracker:      Markdown Kanban board
+# - open-webui:        Human-facing chat UI
+# - prometheus:        Metrics scraping (LiteLLM + NATS)
+# - grafana:           Dashboards (cost per tier, latency, cache hit rate)
 
 services:
+
   # ==========================================
-  # LITELLM — API & Token Gateway
+  # LITELLM — API & Token Gateway (5-tier Mesh Router)
   # ==========================================
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
@@ -16,12 +27,60 @@ services:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-sk-admin-master-key}
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/litellm
       - STORE_MODEL_IN_DB=True
-      - OPENROUTER_API_KEY=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
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-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}
+      # Langfuse tracing
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-lf-pk-placeholder}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-lf-sk-placeholder}
+      - LANGFUSE_HOST=http://langfuse-server:3000
+      # Redis semantic cache
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
     volumes:
       - ./litellm_config.yaml:/app/config.yaml
-    command: ["--config", "/app/config.yaml"]
+    command: ["--config", "/app/config.yaml", "--detailed_debug"]
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+  # ==========================================
+  # REDIS — Semantic Cache Backend
+  # ==========================================
+  redis:
+    image: redis:7-alpine
+    container_name: openclaw-admin-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+  # ==========================================
+  # LANGFUSE — Open-source LLM Observability
+  # Traces every LLM call: cost, latency, tokens, model
+  # UI: http://localhost:3100
+  # ==========================================
+  langfuse-server:
+    image: langfuse/langfuse:2
+    container_name: openclaw-admin-langfuse
+    ports:
+      - "3100:3000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/langfuse
+      - NEXTAUTH_SECRET=${LANGFUSE_NEXTAUTH_SECRET:-changeme-langfuse-secret-32chars}
+      - SALT=${LANGFUSE_SALT:-changeme-langfuse-salt-16chars}
+      - NEXTAUTH_URL=http://localhost:3100
+      - LANGFUSE_ENABLE_EXPERIMENTAL_FEATURES=true
+      - TELEMETRY_ENABLED=false
     depends_on:
       postgres:
         condition: service_healthy
@@ -29,12 +88,21 @@ services:
       - admin-net
     restart: unless-stopped
 
+  langfuse-worker:
+    image: langfuse/langfuse-worker:2
+    container_name: openclaw-admin-langfuse-worker
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/langfuse
+      - SALT=${LANGFUSE_SALT:-changeme-langfuse-salt-16chars}
+    depends_on:
+      - langfuse-server
+    networks:
+      - admin-net
+    restart: unless-stopped
+
   # ==========================================
-  # TASK TRACKING (Web UI over Markdown/CalDav)
+  # TASK TRACKING (Web UI over Markdown)
   # ==========================================
-  # Using Tasks.md (or similar) to provide a Kanban Web UI 
-  # that saves tasks as standard Markdown files. The Admin agent 
-  # simply reads/writes these .md files natively!
   task-tracker:
     image: baldissaramatheus/tasks.md:latest
     container_name: openclaw-admin-tasks
@@ -48,10 +116,8 @@ services:
     restart: unless-stopped
 
   # ==========================================
-  # RAG WIKI VALVE (Standardized Knowledge Hub)
+  # RAG WIKI VALVE (Knowledge Hub)
   # ==========================================
-  # Leaving a native hook for ready-made Docker RAGs 
-  # (like AnythingLLM, Dify, or Flowise).
   rag-wiki:
     image: mintplexlabs/anythingllm:master
     container_name: openclaw-admin-rag
@@ -72,10 +138,8 @@ services:
     restart: unless-stopped
 
   # ==========================================
-  # SHARED RESOURCES: FILE EXCHANGE (MinIO)
+  # SHARED RESOURCES: FILE EXCHANGE (MinIO S3)
   # ==========================================
-  # Provides an S3-compatible API for Executors to upload/download 
-  # heavy artifacts (video, audio) without bloating task files.
   minio:
     image: minio/minio:latest
     container_name: openclaw-admin-minio
@@ -84,8 +148,8 @@ services:
       - MINIO_ROOT_USER=${MINIO_USER:-admin}
       - MINIO_ROOT_PASSWORD=${MINIO_PASSWORD:-admin123456}
     ports:
-      - "9000:9000" # API Port (used by S3 clients)
-      - "9001:9001" # Admin UI
+      - "9000:9000"  # S3 API
+      - "9001:9001"  # Admin Console
     volumes:
       - minio_data:/data
     networks:
@@ -94,21 +158,21 @@ services:
 
   # ==========================================
   # SHARED RESOURCES: MESSAGE BROKER (NATS)
+  # Pub/sub for swarm task dispatch and status updates
   # ==========================================
-  # Extremely fast, lightweight pub/sub system. 
-  # Used for instant status updates between swarm agents.
   nats:
     image: nats:latest
     container_name: openclaw-admin-nats
     ports:
-      - "4222:4222" # Client port
-      - "8222:8222" # Monitoring Dashboard
+      - "4222:4222"  # Client connections
+      - "8222:8222"  # Monitoring Dashboard
     networks:
       - admin-net
     restart: unless-stopped
 
   # ==========================================
   # INFRASTRUCTURE DATABASES
+  # Shared PostgreSQL for LiteLLM + Langfuse
   # ==========================================
   postgres:
     image: postgres:15
@@ -119,6 +183,8 @@ services:
       - POSTGRES_DB=litellm
     volumes:
       - admin_pg_data:/var/lib/postgresql/data
+      # Init script creates langfuse DB alongside litellm
+      - ./monitoring/init-db.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 5s
@@ -147,11 +213,54 @@ services:
       - admin-net
     restart: unless-stopped
 
+  # ==========================================
+  # OBSERVABILITY: PROMETHEUS
+  # Scrapes LiteLLM /metrics + NATS /metrics
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: openclaw-admin-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+  # ==========================================
+  # OBSERVABILITY: GRAFANA
+  # Dashboards: cost per tier, latency P99, cache hit rate
+  # UI: http://localhost:3200  admin/admin
+  # ==========================================
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: openclaw-admin-grafana
+    ports:
+      - "3200:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_ANALYTICS_REPORTING_ENABLED=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - admin-net
+    restart: unless-stopped
+
 volumes:
   admin_pg_data:
-  open_webui_data:
-  rag_wiki_data:
   minio_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
 
 networks:
   admin-net:
