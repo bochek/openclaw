@@ -1,0 +1,15 @@
+{
+  "id": "admin-orchestrator",
+  "name": "Admin Orchestrator",
+  "description": "OpenClaw Admin Orchestrator for managing executor networks over Tailscale",
+  "entry": "./index.ts",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "taskDir": { "type": "string" },
+      "natsUrl": { "type": "string" },
+      "minioEndpoint": { "type": "string" },
+      "knowledgeHubUrl": { "type": "string" }
+    }
+  }
+}

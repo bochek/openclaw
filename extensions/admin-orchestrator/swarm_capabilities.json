@@ -13,6 +13,12 @@
       "description": "Docker container management. Required for Executors operating in infrastructure mode.",
       "type": "docker",
       "enabled": true
+    },
+    "memory-hub": {
+      "description": "Shared Vector Memory (AnythingLLM) and Structured DB (Postgres). Used for persistent context across sessions.",
+      "type": "memory",
+      "workspace": "shared",
+      "enabled": true
     }
   }
 }

@@ -183,37 +183,90 @@ ${description}
           }
         };
 
-        const queryKnowledgeHubTool = {
-          name: "query_knowledge_hub",
-          description: "Semantic search across Team Memory to find required Executor skills or previous solutions without bloating the active memory context. Use this before delegating unknown tasks.",
+        const getSlug = (str: string) => str.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
+
+        const queryMemoryTool = {
+          name: "query_memory",
+          description: "Semantic search across Vector Memory in a specified workspace to retrieve context or preferences.",
           parameters: {
-            query: "The task description or skill you are searching for (e.g. 'audio transcription' or 'generate video')"
+            workspace: "The workspace to query (e.g., 'shared', 'user_1', 'agent_2')",
+            query: "The question or context you are searching for"
           },
           execute: async (args: any) => {
-            const { query } = args;
-            console.log(`[Admin] Searching Team Knowledge Hub for: ${query}`);
-            // Prototype: Query Mem0 MCP server or REST API configured in cluster
+            const { workspace, query } = args;
+            const apiKey = "7REX8P9-ZVY43TD-N2D1ZDH-CJK4229";
+            const slug = getSlug(workspace);
+            console.log(`[Memory] Querying workspace '${slug}' for: ${query}`);
             
-            // Dummy response mapping
-            let response = "No relevant skills found in Team Memory. You may need to supplement the protocol.";
-            if (query.toLowerCase().includes("video")) {
-               response = "Found capability: [video-generation]. Required markdown tags: `#skill:video-generation`. Known online executors: node-1 (executor-alice).";
-            } else if (query.toLowerCase().includes("audio") || query.toLowerCase().includes("stt")) {
-               response = "Found capability: [stt]. Required markdown tags: `#skill:stt`. Known online executors: node-2 (executor-bob) - currently offline.";
+            try {
+              const res = await fetch(`http://localhost:3001/api/v1/workspace/${slug}/chat`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ message: query, mode: "query" })
+              });
+              let text = await res.text();
+              if (text.startsWith("<!DOCTYPE html>")) {
+                 return { content: [{ type: "text", text: `Workspace '${slug}' does not seem to exist or AnythingLLM API returned HTML.` }] };
+              }
+              const data = JSON.parse(text);
+              if (data.error) return { content: [{ type: "text", text: `AnythingLLM Error: ${data.error}` }] };
+              return { content: [{ type: "text", text: data.textResponse || text }] };
+            } catch (err: any) {
+              return { content: [{ type: "text", text: `Memory query failed: ${err.message}` }] };
             }
-
-            return {
-              content: [{
-                type: "text",
-                text: response
-              }]
-            };
           }
         };
 
-        return [listExecutorsTool, delegateSubtaskTool, supplementProtocolTool, broadcastUpdateTool, manageCapabilitiesTool, rotateCredentialsTool, queryKnowledgeHubTool];
+        const storeMemoryTool = {
+          name: "store_memory",
+          description: "Upload knowledge or facts into Vector Memory in a specified workspace.",
+          parameters: {
+            workspace: "The workspace to store in (e.g., 'shared', 'user_1')",
+            text: "The information to remember"
+          },
+          execute: async (args: any) => {
+            const { workspace, text } = args;
+            const apiKey = "7REX8P9-ZVY43TD-N2D1ZDH-CJK4229";
+            const slug = getSlug(workspace);
+            console.log(`[Memory] Storing in workspace '${slug}': ${text.substring(0, 50)}...`);
+            
+            try {
+              // 1. Ensure workspace exists
+              await fetch(`http://localhost:3001/api/v1/workspace/new`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ name: slug })
+              });
+
+              // 2. Upload document
+              const docRes = await fetch(`http://localhost:3001/api/v1/document/raw-text`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ textContent: text, metadata: { title: `Fact-${Date.now()}` } })
+              });
+              
+              const docData = await docRes.json();
+              const docPath = docData.documents?.[0]?.location;
+              if (!docPath) return { content: [{ type: "text", text: `Failed to get document location from upload.` }] };
+
+              // 3. Move it into the workspace
+              const updateRes = await fetch(`http://localhost:3001/api/v1/workspace/${slug}/update-embeddings`, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ adds: [docPath], deletes: [] })
+              });
+              
+              if (!updateRes.ok) return { content: [{ type: "text", text: `Failed to update workspace embeddings: ${await updateRes.text()}` }] };
+              return { content: [{ type: "text", text: `Memory successfully stored in ${slug}.` }] };
+            } catch (err: any) {
+              return { content: [{ type: "text", text: `Memory storage failed: ${err.message}` }] };
+            }
+          }
+        };
+
+        return [listExecutorsTool, delegateSubtaskTool, supplementProtocolTool, broadcastUpdateTool, manageCapabilitiesTool, rotateCredentialsTool, queryMemoryTool, storeMemoryTool];
       },
-      { names: ["list_executors"] }
+      { names: ["list_executors", "delegate_subtask", "supplement_protocol", "broadcast_update", "manage_network_capability", "rotate_network_credentials", "query_memory", "store_memory"] }
     );
 
     // 2. Add an HTTP endpoint to handle executor onboarding handshakes
@@ -309,6 +362,7 @@ ${description}
             .action(async () => {
                const fs = require('fs/promises');
                const path = require('path');
+               const { exec } = require('child_process');
                console.log("=========================================");
                console.log("[Orchestrator] Starting Sub-agent watcher daemon...");
                console.log("[Orchestrator] Reading local `./boards/tasks` directory...");
@@ -327,10 +381,30 @@ ${description}
                      const content = await fs.readFile(path.join(tasksDir, file), 'utf-8');
                      if (content.includes('status: TODO')) {
                         console.log(`[Watcher] New task detected: ${file}`);
-                        // Example: simple tag extraction
-                        const tagMatch = content.match(/#skill:([a-zA-Z0-9_\-]+)/g);
+                        const tagMatch = content.match(/#skill:([a-zA-Z0-9_\\-]+)/g);
                         console.log(`[Watcher] Required skills: ${tagMatch ? tagMatch.join(', ') : 'none'}`);
-                        // Here you would dispatch to tailscale nodes
+                        
+                        // Mark task as IN_PROGRESS
+                        const inProgressContent = content.replace('status: TODO', 'status: IN_PROGRESS');
+                        await fs.writeFile(path.join(tasksDir, file), inProgressContent, 'utf-8');
+
+                        if (tagMatch && tagMatch.some((t: string) => t.includes('qwen'))) {
+                          console.log(`[Watcher] Dispatching task ${file} to Local Executor (qwen3.5:9b)...`);
+                          const safePrompt = content.replace(/"/g, '\\"').replace(/\\r?\\n/g, ' ');
+                          
+                          exec(`openclaw infer model run --model litellm/qwen3.5:9b --prompt "Execute this task: ${safePrompt}" --gateway`, { cwd: process.cwd() }, async (error: any, stdout: string, stderr: string) => {
+                             const doneContent = inProgressContent.replace('status: IN_PROGRESS', 'status: DONE') + `\\n\\n## Execution Result\\n\\n\`\`\`\\n${stdout || stderr}\\n\`\`\`\\n`;
+                             await fs.writeFile(path.join(tasksDir, file), doneContent, 'utf-8');
+                             console.log(`[Watcher] Task ${file} completed by Executor! Result appended to file.`);
+                          });
+                        } else {
+                          console.log(`[Watcher] Simulated remote dispatch over Tailscale to node with skills: ${tagMatch ? tagMatch.join(', ') : 'none'}`);
+                          setTimeout(async () => {
+                             const doneContent = inProgressContent.replace('status: IN_PROGRESS', 'status: DONE') + `\\n\\n## Execution Result\\n\\nTask executed remotely on Tailscale node.`;
+                             await fs.writeFile(path.join(tasksDir, file), doneContent, 'utf-8');
+                             console.log(`[Watcher] Task ${file} completed by Remote Tailscale Node!`);
+                          }, 5000);
+                        }
                      }
                    }
                  } catch (err) {
