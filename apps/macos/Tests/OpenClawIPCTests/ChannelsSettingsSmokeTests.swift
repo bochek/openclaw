@@ -187,4 +187,32 @@ struct ChannelsSettingsSmokeTests {
         #expect(store.whatsappLoginQrDataUrl == nil)
         #expect(store.whatsappLoginConnected == true)
     }
+
+    @Test func `whatsapp login wait budget allows one final poll`() {
+        let startedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        var didRunFinalWait = false
+
+        #expect(
+            whatsappLoginWaitRequestTimeoutMs(
+                startedAt: startedAt,
+                timeoutMs: 1_000,
+                didRunFinalWait: &didRunFinalWait,
+                now: Date(timeInterval: 0.25, since: startedAt)) == 750)
+        #expect(didRunFinalWait == false)
+
+        #expect(
+            whatsappLoginWaitRequestTimeoutMs(
+                startedAt: startedAt,
+                timeoutMs: 1_000,
+                didRunFinalWait: &didRunFinalWait,
+                now: Date(timeInterval: 1.25, since: startedAt)) == 1)
+        #expect(didRunFinalWait == true)
+
+        #expect(
+            whatsappLoginWaitRequestTimeoutMs(
+                startedAt: startedAt,
+                timeoutMs: 1_000,
+                didRunFinalWait: &didRunFinalWait,
+                now: Date(timeInterval: 1.5, since: startedAt)) == nil)
+    }
 }

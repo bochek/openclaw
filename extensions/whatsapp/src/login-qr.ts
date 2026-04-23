@@ -527,7 +527,10 @@ export async function waitForWebLogin(
     }
 
     if (result === "done") {
-      continue;
+      if (login.connected || login.error) {
+        continue;
+      }
+      return { connected: false, message: "Login ended without a connection." };
     }
 
     return { connected: false, message: "Login ended without a connection." };

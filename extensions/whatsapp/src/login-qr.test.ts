@@ -309,6 +309,53 @@ describe("login-qr", () => {
     });
   });
 
+  it("returns a terminal result when an older replaced waiter resolves without state", async () => {
+    const accountId = "replaced-login-waiter";
+    let resolveFirstConnection: () => void = () => {
+      throw new Error("Expected first login wait to be pending");
+    };
+    waitForWaConnectionMock
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            resolveFirstConnection = resolve;
+          }),
+      )
+      .mockImplementation(() => new Promise(() => {}));
+
+    const start = await startWebLoginWithQr({
+      timeoutMs: 5000,
+      accountId,
+    });
+    expect(start.qrDataUrl).toBe("data:image/png;base64,encoded:qr-data");
+
+    const waiter = waitForWebLogin({
+      timeoutMs: 1000,
+      currentQrDataUrl: start.qrDataUrl,
+      accountId,
+    });
+    await flushTasks();
+
+    const now = Date.now();
+    const dateNowSpy = vi.spyOn(Date, "now").mockReturnValue(now + 3 * 60_000 + 1000);
+    try {
+      const replacement = await startWebLoginWithQr({
+        timeoutMs: 5000,
+        accountId,
+      });
+      expect(replacement.qrDataUrl).toBe("data:image/png;base64,encoded:qr-data");
+
+      resolveFirstConnection();
+
+      await expect(waiter).resolves.toEqual({
+        connected: false,
+        message: "Login ended without a connection.",
+      });
+    } finally {
+      dateNowSpy.mockRestore();
+    }
+  });
+
   it("keeps an active login reusable while a rotated QR image renders", async () => {
     const accountId = "reuse-during-qr-render";
     let onQr: (qr: string) => void = () => {

@@ -1,6 +1,24 @@
 import Foundation
 import OpenClawProtocol
 
+func whatsappLoginWaitRequestTimeoutMs(
+    startedAt: Date,
+    timeoutMs: Int,
+    didRunFinalWait: inout Bool,
+    now: Date = Date()) -> Int?
+{
+    let elapsedMs = Int(now.timeIntervalSince(startedAt) * 1000)
+    let remainingMs = max(timeoutMs - elapsedMs, 0)
+    if remainingMs > 0 {
+        return remainingMs
+    }
+    if didRunFinalWait {
+        return nil
+    }
+    didRunFinalWait = true
+    return 1
+}
+
 extension ChannelsStore {
     func start() {
         guard !self.isPreview else { return }
@@ -78,13 +96,13 @@ extension ChannelsStore {
         self.whatsappBusy = true
         defer { self.whatsappBusy = false }
         let startedAt = Date()
+        var didRunFinalWait = false
         do {
-            while true {
-                let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1000)
-                let remainingMs = max(timeoutMs - elapsedMs, 0)
-                if remainingMs == 0 {
-                    break
-                }
+            while let remainingMs = whatsappLoginWaitRequestTimeoutMs(
+                startedAt: startedAt,
+                timeoutMs: timeoutMs,
+                didRunFinalWait: &didRunFinalWait)
+            {
                 var params: [String: AnyCodable] = [
                     "timeoutMs": AnyCodable(remainingMs),
                 ]
@@ -96,7 +114,7 @@ extension ChannelsStore {
                     params: params,
                     timeoutMs: Double(remainingMs) + 5000)
                 self.applyWhatsAppLoginWaitResult(result)
-                if result.connected || result.qrDataUrl == nil {
+                if result.connected || result.qrDataUrl == nil || didRunFinalWait {
                     break
                 }
             }
