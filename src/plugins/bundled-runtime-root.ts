@@ -4,6 +4,7 @@ import {
   ensureBundledPluginRuntimeDeps,
   resolveBundledRuntimeDependencyInstallRoot,
 } from "./bundled-runtime-deps.js";
+import { ensureOpenClawPluginSdkAlias } from "./runtime-sdk-alias.js";
 
 const bundledRuntimeDepsRetainSpecsByInstallRoot = new Map<string, readonly string[]>();
 
@@ -112,7 +113,8 @@ function prepareBundledPluginRuntimeDistMirror(params: {
 }): string {
   const sourceExtensionsRoot = path.dirname(params.pluginRoot);
   const sourceDistRoot = path.dirname(sourceExtensionsRoot);
-  const mirrorDistRoot = path.join(params.installRoot, "dist");
+  const sourceDistRootName = path.basename(sourceDistRoot);
+  const mirrorDistRoot = path.join(params.installRoot, sourceDistRootName);
   const mirrorExtensionsRoot = path.join(mirrorDistRoot, "extensions");
   fs.mkdirSync(mirrorExtensionsRoot, { recursive: true, mode: 0o755 });
   for (const entry of fs.readdirSync(sourceDistRoot, { withFileTypes: true })) {
@@ -134,6 +136,30 @@ function prepareBundledPluginRuntimeDistMirror(params: {
       }
     }
   }
+  let sdkAliasSourceRoot = mirrorDistRoot;
+  if (sourceDistRootName === "dist-runtime") {
+    const sourceCanonicalDistRoot = path.join(path.dirname(sourceDistRoot), "dist");
+    const targetCanonicalDistRoot = path.join(params.installRoot, "dist");
+    if (fs.existsSync(sourceCanonicalDistRoot)) {
+      const targetMatchesSource =
+        fs.existsSync(targetCanonicalDistRoot) &&
+        safeRealpathOrResolve(targetCanonicalDistRoot) ===
+          safeRealpathOrResolve(sourceCanonicalDistRoot);
+      if (!targetMatchesSource) {
+        fs.rmSync(targetCanonicalDistRoot, { recursive: true, force: true });
+        try {
+          fs.symlinkSync(sourceCanonicalDistRoot, targetCanonicalDistRoot, "junction");
+        } catch {
+          copyBundledPluginRuntimeRoot(sourceCanonicalDistRoot, targetCanonicalDistRoot);
+        }
+      }
+      sdkAliasSourceRoot = targetCanonicalDistRoot;
+    }
+  }
+  ensureOpenClawPluginSdkAlias({
+    aliasDistRoot: mirrorDistRoot,
+    sdkDistRoot: sdkAliasSourceRoot,
+  });
   return mirrorExtensionsRoot;
 }
 
@@ -163,5 +189,13 @@ function copyBundledPluginRuntimeRoot(sourceRoot: string, targetRoot: string): v
     } catch {
       // Readable copied files are enough for plugin loading.
     }
+  }
+}
+
+function safeRealpathOrResolve(value: string): string {
+  try {
+    return fs.realpathSync(value);
+  } catch {
+    return path.resolve(value);
   }
 }
