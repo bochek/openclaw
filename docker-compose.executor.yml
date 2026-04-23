@@ -1,0 +1,152 @@
+# OPENCLAW EXECUTOR NODE — Windows PC deployment
+#
+# Deploy this on each Windows executor PC connected via Tailscale.
+# Each node exposes its GPU capabilities as MCP SSE endpoints.
+#
+# Usage:
+#   1. Copy this file to the executor PC
+#   2. Edit executor node ID and Tailscale IP in .env
+#   3. Run: docker compose -f docker-compose.executor.yml up -d
+#   4. Register this node: POST http://admin-tailscale-ip:18789/admin/handshake
+#
+# MCP SSE available at: http://<tailscale-ip>:8020/sse
+# Monitor NATS tasks on: http://admin-tailscale-ip:8222
+
+services:
+
+  # ==========================================
+  # NATS SUBSCRIBER — listens for tasks from Admin
+  # Forwards tasks to local tools and replies with results
+  # ==========================================
+  executor-agent:
+    image: node:22-slim
+    container_name: executor-agent
+    working_dir: /app
+    environment:
+      - EXECUTOR_ID=${EXECUTOR_ID:-node-win-1}
+      - EXECUTOR_SKILLS=${EXECUTOR_SKILLS:-tts,stt,image_gen,blender}
+      - ADMIN_NATS_URL=${ADMIN_NATS_URL:-nats://100.x.x.x:4222}
+      - ADMIN_HANDSHAKE_URL=${ADMIN_HANDSHAKE_URL:-http://100.x.x.x:18789/admin/handshake}
+      - COMFYUI_URL=http://executor-comfyui:8188
+      - WHISPER_URL=http://executor-whisper:9000
+      - PIPER_URL=http://executor-piper:10200
+    volumes:
+      - ./executor-agent:/app
+    command: node agent.js
+    depends_on:
+      - executor-comfyui
+      - executor-whisper
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # ==========================================
+  # MCP SSE BRIDGE — exposes executor tools via SSE
+  # Admin connects to this via Tailscale IP:8020
+  # ==========================================
+  executor-mcp-bridge:
+    image: node:22-slim
+    container_name: executor-mcp-bridge
+    working_dir: /app
+    ports:
+      - "8020:8020"
+    command: >
+      sh -c "npm install -g mcp-proxy 2>/dev/null;
+             npx mcp-proxy --port 8020 --host 0.0.0.0"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - ./workspace:/workspace
+    restart: unless-stopped
+
+  # ==========================================
+  # COMFYUI — Image Generation (GPU)
+  # Accessible at http://executor-comfyui:8188
+  # ==========================================
+  executor-comfyui:
+    image: yanwk/comfyui-boot:latest
+    container_name: executor-comfyui
+    ports:
+      - "8188:8188"
+    volumes:
+      - comfyui_models:/root/comfy/ComfyUI/models
+      - comfyui_output:/root/comfy/ComfyUI/output
+      - ./comfyui_workflows:/root/comfy/ComfyUI/workflows
+    environment:
+      - CLI_ARGS=--listen 0.0.0.0 --port 8188
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # ==========================================
+  # WHISPER — Speech-to-Text (STT)
+  # REST API at http://executor-whisper:9000
+  # POST /asr?encode=true&task=transcribe&language=ru
+  # ==========================================
+  executor-whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+    container_name: executor-whisper
+    ports:
+      - "9000:9000"
+    environment:
+      - ASR_MODEL=medium
+      - ASR_ENGINE=openai_whisper
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  # ==========================================
+  # PIPER TTS — Text-to-Speech (CPU/fast)
+  # Wyoming protocol at port 10200
+  # HTTP REST proxy at port 5500
+  # ==========================================
+  executor-piper:
+    image: rhasspy/wyoming-piper:latest
+    container_name: executor-piper
+    ports:
+      - "10200:10200"
+    volumes:
+      - piper_models:/data
+    command: >
+      --voice en_US-lessac-medium
+      --voice ru_RU-irina-medium
+    restart: unless-stopped
+
+  # ==========================================
+  # BLENDER MCP — 3D scene manipulation
+  # Requires Blender installed on the host
+  # ==========================================
+  executor-blender-mcp:
+    image: python:3.11-slim
+    container_name: executor-blender-mcp
+    ports:
+      - "9100:9100"
+    volumes:
+      - ./blender_scripts:/scripts
+      - blender_renders:/renders
+    command: >
+      sh -c "pip install blender-mcp 2>/dev/null || pip install flask requests;
+             python /scripts/blender_mcp_server.py"
+    environment:
+      - BLENDER_PATH=${BLENDER_PATH:-/usr/bin/blender}
+      - MCP_PORT=9100
+      - RENDER_OUTPUT=/renders
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  comfyui_models:
+  comfyui_output:
+  piper_models:
+  blender_renders:

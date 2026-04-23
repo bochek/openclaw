@@ -247,10 +247,33 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_ANALYTICS_REPORTING_ENABLED=false
     volumes:
-      - grafana_data:/var/lib/grafana
       - ./monitoring/datasources:/etc/grafana/provisioning/datasources
+      - ./monitoring/dashboards:/etc/grafana/provisioning/dashboards
+      - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
+    networks:
+      - admin-net
+    restart: unless-stopped
+
+  # ==========================================
+  # KNOWLEDGE MAPPING & MEMORY (AnythingLLM)
+  # Centralized RAG for the entire mesh
+  # ==========================================
+  rag:
+    image: mintplexlabs/anythingllm:latest
+    container_name: openclaw-admin-rag
+    ports:
+      - "3001:3001"
+    environment:
+      - STORAGE_DIR=/storage
+      - JWT_SECRET=${ANYTHINGLLM_JWT_SECRET:-mesh-secret-123}
+      - LLM_PROVIDER=openai
+      - OPENAI_API_BASE=http://litellm:4000/v1
+      - OPENAI_API_KEY=sk-admin-master-key
+      - GENERIC_LV_MODEL=work
+    volumes:
+      - anythingllm_storage:/storage
     networks:
       - admin-net
     restart: unless-stopped
@@ -261,6 +284,11 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  anythingllm_storage:
+  comfyui_models:
+  comfyui_output:
+  piper_models:
+  blender_renders:
 
 networks:
   admin-net:
