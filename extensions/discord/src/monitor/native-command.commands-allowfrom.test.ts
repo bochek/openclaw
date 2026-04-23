@@ -166,6 +166,37 @@ describe("Discord native slash commands with commands.allowFrom", () => {
     expectNotUnauthorizedReply(interaction);
   });
 
+  it("rejects guild slash commands when channel access restrictions are configured and the member is not allowlisted", async () => {
+    const { dispatchSpy, interaction } = await runGuildSlashCommand({
+      userId: "999999999999999999",
+      mutateConfig: (cfg) => {
+        cfg.commands = {
+          ...cfg.commands,
+          allowFrom: undefined,
+        };
+        cfg.channels = {
+          ...cfg.channels,
+          discord: {
+            ...cfg.channels?.discord,
+            guilds: {
+              "345678901234567890": {
+                channels: {
+                  "234567890123456789": {
+                    enabled: true,
+                    requireMention: false,
+                    users: ["user:123456789012345678"],
+                  },
+                },
+              },
+            },
+          },
+        };
+      },
+    });
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expectUnauthorizedReply(interaction);
+  });
+
   it("rejects guild slash commands outside the Discord allowlist when commands.useAccessGroups is false and commands.allowFrom is not configured", async () => {
     const { dispatchSpy, interaction } = await runGuildSlashCommand({
       mutateConfig: (cfg) => {
