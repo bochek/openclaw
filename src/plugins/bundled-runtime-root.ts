@@ -121,6 +121,11 @@ function prepareBundledPluginRuntimeDistMirror(params: {
     if (entry.name === "extensions") {
       continue;
     }
+    if (entry.isSymbolicLink()) {
+      throw new Error(
+        `refusing to mirror symlinked dist entry: ${path.join(sourceDistRoot, entry.name)}`,
+      );
+    }
     const sourcePath = path.join(sourceDistRoot, entry.name);
     const targetPath = path.join(mirrorDistRoot, entry.name);
     if (fs.existsSync(targetPath)) {
@@ -180,9 +185,7 @@ function copyBundledPluginRuntimeRoot(sourceRoot: string, targetRoot: string): v
       continue;
     }
     if (entry.isSymbolicLink()) {
-      assertPathIsNotSymlink(targetPath, "copy mirrored runtime symlink");
-      fs.symlinkSync(fs.readlinkSync(sourcePath), targetPath);
-      continue;
+      throw new Error(`refusing to mirror symlinked runtime entry: ${sourcePath}`);
     }
     if (!entry.isFile()) {
       continue;

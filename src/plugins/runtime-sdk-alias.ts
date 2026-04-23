@@ -72,6 +72,25 @@ function writeRuntimeModuleWrapper(sourcePath: string, targetPath: string): void
   );
 }
 
+function replaceDirWithGeneratedTree(params: {
+  targetRoot: string;
+  populate: (stagedRoot: string) => void;
+}): void {
+  assertPathIsNotSymlink(params.targetRoot, "replace runtime alias directory");
+  const parentDir = path.dirname(params.targetRoot);
+  fs.mkdirSync(parentDir, { recursive: true });
+  const tempDir = fs.mkdtempSync(path.join(parentDir, ".openclaw-runtime-alias-"));
+  const stagedRoot = path.join(tempDir, "plugin-sdk");
+  try {
+    params.populate(stagedRoot);
+    assertPathIsNotSymlink(params.targetRoot, "replace runtime alias directory");
+    fs.rmSync(params.targetRoot, { recursive: true, force: true });
+    fs.renameSync(stagedRoot, params.targetRoot);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 export function ensureOpenClawPluginSdkAlias(params: {
   aliasDistRoot: string;
   sdkDistRoot?: string;
@@ -95,16 +114,19 @@ export function ensureOpenClawPluginSdkAlias(params: {
       "./plugin-sdk/*": "./plugin-sdk/*.js",
     },
   });
-  assertPathIsNotSymlink(pluginSdkAliasDir, "replace runtime alias directory");
-  fs.rmSync(pluginSdkAliasDir, { recursive: true, force: true });
-  fs.mkdirSync(pluginSdkAliasDir, { recursive: true });
-  for (const entry of fs.readdirSync(pluginSdkDir, { withFileTypes: true })) {
-    if (!entry.isFile() || path.extname(entry.name) !== ".js") {
-      continue;
-    }
-    writeRuntimeModuleWrapper(
-      path.join(pluginSdkDir, entry.name),
-      path.join(pluginSdkAliasDir, entry.name),
-    );
-  }
+  replaceDirWithGeneratedTree({
+    targetRoot: pluginSdkAliasDir,
+    populate: (stagedRoot) => {
+      fs.mkdirSync(stagedRoot, { recursive: true });
+      for (const entry of fs.readdirSync(pluginSdkDir, { withFileTypes: true })) {
+        if (!entry.isFile() || path.extname(entry.name) !== ".js") {
+          continue;
+        }
+        writeRuntimeModuleWrapper(
+          path.join(pluginSdkDir, entry.name),
+          path.join(stagedRoot, entry.name),
+        );
+      }
+    },
+  });
 }

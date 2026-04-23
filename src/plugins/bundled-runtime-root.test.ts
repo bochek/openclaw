@@ -144,4 +144,27 @@ describe("bundled runtime root mirroring", () => {
       }),
     ).toThrow(/refusing to prepare runtime alias directory via symlinked path/u);
   });
+
+  it("refuses to mirror symlinked runtime entries", () => {
+    const packageRoot = makeTempDir();
+    const stageDir = makeTempDir();
+    tempDirs.push(packageRoot, stageDir);
+
+    const pluginRoot = path.join(packageRoot, "dist", "extensions", "telegram");
+    const pluginSdkDir = path.join(packageRoot, "dist", "plugin-sdk");
+    writeMirroredRuntimeFixture({ packageRoot, pluginRoot, pluginSdkDir });
+    fs.symlinkSync("../package.json", path.join(pluginRoot, "symlinked.js"));
+
+    expect(() =>
+      prepareBundledPluginRuntimeRoot({
+        pluginId: "telegram",
+        pluginRoot,
+        modulePath: path.join(pluginRoot, "monitor-polling.runtime.js"),
+        env: {
+          ...process.env,
+          OPENCLAW_PLUGIN_STAGE_DIR: stageDir,
+        },
+      }),
+    ).toThrow(/refusing to mirror symlinked runtime entry/u);
+  });
 });
