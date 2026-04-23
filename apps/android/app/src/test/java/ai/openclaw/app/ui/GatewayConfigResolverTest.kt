@@ -114,18 +114,17 @@ class GatewayConfigResolverTest {
   }
 
   @Test
-  fun parseGatewayEndpointAllowsMdnsCleartextWsUrls() {
+  fun parseGatewayEndpointRejectsMdnsCleartextWsUrls() {
     val parsed = parseGatewayEndpoint("ws://gateway.local:18789")
 
-    assertEquals(
-      GatewayEndpointConfig(
-        host = "gateway.local",
-        port = 18789,
-        tls = false,
-        displayUrl = "http://gateway.local:18789",
-      ),
-      parsed,
-    )
+    assertNull(parsed)
+  }
+
+  @Test
+  fun parseGatewayEndpointRejectsDotlessCleartextWsUrls() {
+    val parsed = parseGatewayEndpoint("ws://gateway:18789")
+
+    assertNull(parsed)
   }
 
   @Test
