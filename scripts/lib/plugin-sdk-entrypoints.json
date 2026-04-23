@@ -195,6 +195,7 @@
   "runtime-store",
   "json-store",
   "persistent-dedupe",
+  "persistent-keyed-store",
   "keyed-async-queue",
   "line",
   "line-core",
