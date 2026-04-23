@@ -1,5 +1,11 @@
 # RFC: ACP spec extensions
 
+> **SUPERSEDED (2026-04-23).** This draft predates a comparison against the actual ACP repository, in-flight RFDs, and core-maintainer meeting notes. After that comparison most of the proposals here were found to already be implemented (`ExtRequest` / `ExtNotification` / `_meta`), already in-flight as dedicated RFDs (`auth-methods`, `session-close`, `session-resume`, `session-usage`, `message-id`, `meta-propagation`, `proxy-chains`, `elicitation`, `additional-directories`, `boolean-config-option`, `custom-llm-endpoint`, `request-cancellation`, `mcp-over-acp`, `streamable-http-websocket-transport`, `session-fork`, `session-delete`, `logout-method`, `next-edit-suggestions`, `agent-telemetry-export`), or planned by core maintainers (better subagent representation, notification-based prompt format, plan mode improvements). Keeping two parallel multi-track proposals alive would have contributed to spec fragmentation rather than prevented it.
+>
+> Replaced by **[`acp-rfd-sandbox-capability-policy.mdx`](./acp-rfd-sandbox-capability-policy.mdx)**, a single focused RFD scoped to the one area that was not already being addressed: typed sandbox capability/policy modeling. That doc also carries the brief "how OpenClaw will consume adjacent in-flight RFDs" summary so reviewers can see the wider context.
+>
+> The content below is preserved for traceability but should not be taken as a proposal.
+
 **Status.** Draft for upstream proposal to [agentclientprotocol.com](https://agentclientprotocol.com/) maintainers.
 **Authored in.** `openclaw/openclaw` — authored here because the motivation emerged from the ACP-everywhere consolidation work (`docs/refactor/acp-everywhere.md`), but the proposal itself is protocol-level and not OpenClaw-specific.
 **Scope.** Two tracks:
