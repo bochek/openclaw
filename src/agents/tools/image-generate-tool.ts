@@ -305,7 +305,15 @@ function resolveSelectedImageGenerationProvider(params: {
 }
 
 function formatIgnoredImageGenerationOverride(override: ImageGenerationIgnoredOverride): string {
-  return `${override.key}=${override.value}`;
+  return `${override.key}=${sanitizeInlineWarningValue(override.value)}`;
+}
+
+function sanitizeInlineWarningValue(value: string): string {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("\r", "\\r")
+    .replaceAll("\n", "\\n")
+    .replaceAll("\t", "\\t");
 }
 
 function validateImageGenerationCapabilities(params: {
