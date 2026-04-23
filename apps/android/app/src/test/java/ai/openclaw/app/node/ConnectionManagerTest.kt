@@ -242,7 +242,8 @@ class ConnectionManagerTest {
   @Test
   fun isPrivateLanGatewayHost_acceptsLanHostsButRejectsTailnetHosts() {
     assertTrue(isPrivateLanGatewayHost("192.168.1.20"))
-    assertTrue(isPrivateLanGatewayHost("gateway.local"))
+    assertFalse(isPrivateLanGatewayHost("gateway.local"))
+    assertFalse(isPrivateLanGatewayHost("gateway"))
     assertFalse(isPrivateLanGatewayHost("100.64.0.9"))
     assertFalse(isPrivateLanGatewayHost("gateway.tailnet.ts.net"))
   }

@@ -80,14 +80,6 @@ function describeSecureMobilePairingFix(source?: string): string {
   );
 }
 
-function isPrivateLanHostname(host: string): boolean {
-  const normalized = host.trim().toLowerCase().replace(/\.+$/, "");
-  if (!normalized) {
-    return false;
-  }
-  return normalized.endsWith(".local") || (!normalized.includes(".") && !normalized.includes(":"));
-}
-
 function isPrivateLanIpHost(host: string): boolean {
   if (isRfc1918Ipv4Address(host)) {
     return true;
@@ -110,12 +102,7 @@ function isPrivateLanIpHost(host: string): boolean {
 }
 
 function isMobilePairingCleartextAllowedHost(host: string): boolean {
-  return (
-    isLoopbackHost(host) ||
-    host === "10.0.2.2" ||
-    isPrivateLanIpHost(host) ||
-    isPrivateLanHostname(host)
-  );
+  return isLoopbackHost(host) || host === "10.0.2.2" || isPrivateLanIpHost(host);
 }
 
 function validateMobilePairingUrl(url: string, source?: string): string | null {
