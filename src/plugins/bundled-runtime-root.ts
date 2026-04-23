@@ -146,11 +146,13 @@ function prepareBundledPluginRuntimeDistMirror(params: {
         safeRealpathOrResolve(targetCanonicalDistRoot) ===
           safeRealpathOrResolve(sourceCanonicalDistRoot);
       if (!targetMatchesSource) {
-        fs.rmSync(targetCanonicalDistRoot, { recursive: true, force: true });
         try {
           fs.symlinkSync(sourceCanonicalDistRoot, targetCanonicalDistRoot, "junction");
         } catch {
-          copyBundledPluginRuntimeRoot(sourceCanonicalDistRoot, targetCanonicalDistRoot);
+          replaceDirWithCopiedTree({
+            sourceRoot: sourceCanonicalDistRoot,
+            targetRoot: targetCanonicalDistRoot,
+          });
         }
       }
       sdkAliasSourceRoot = targetCanonicalDistRoot;
@@ -164,6 +166,7 @@ function prepareBundledPluginRuntimeDistMirror(params: {
 }
 
 function copyBundledPluginRuntimeRoot(sourceRoot: string, targetRoot: string): void {
+  assertPathIsNotSymlink(targetRoot, "prepare mirrored runtime root");
   fs.mkdirSync(targetRoot, { recursive: true, mode: 0o755 });
   for (const entry of fs.readdirSync(sourceRoot, { withFileTypes: true })) {
     if (entry.name === "node_modules") {
@@ -172,16 +175,19 @@ function copyBundledPluginRuntimeRoot(sourceRoot: string, targetRoot: string): v
     const sourcePath = path.join(sourceRoot, entry.name);
     const targetPath = path.join(targetRoot, entry.name);
     if (entry.isDirectory()) {
+      assertPathIsNotSymlink(targetPath, "copy mirrored runtime directory");
       copyBundledPluginRuntimeRoot(sourcePath, targetPath);
       continue;
     }
     if (entry.isSymbolicLink()) {
+      assertPathIsNotSymlink(targetPath, "copy mirrored runtime symlink");
       fs.symlinkSync(fs.readlinkSync(sourcePath), targetPath);
       continue;
     }
     if (!entry.isFile()) {
       continue;
     }
+    assertPathIsNotSymlink(targetPath, "copy mirrored runtime file");
     fs.copyFileSync(sourcePath, targetPath);
     try {
       const sourceMode = fs.statSync(sourcePath).mode;
@@ -189,6 +195,34 @@ function copyBundledPluginRuntimeRoot(sourceRoot: string, targetRoot: string): v
     } catch {
       // Readable copied files are enough for plugin loading.
     }
+  }
+}
+
+function assertPathIsNotSymlink(targetPath: string, label: string): void {
+  try {
+    if (fs.lstatSync(targetPath).isSymbolicLink()) {
+      throw new Error(`refusing to ${label} via symlinked path: ${targetPath}`);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+}
+
+function replaceDirWithCopiedTree(params: { sourceRoot: string; targetRoot: string }): void {
+  assertPathIsNotSymlink(params.targetRoot, "replace mirrored runtime directory");
+  const targetParentDir = path.dirname(params.targetRoot);
+  fs.mkdirSync(targetParentDir, { recursive: true });
+  const tempDir = fs.mkdtempSync(path.join(targetParentDir, ".openclaw-runtime-copy-"));
+  const stagedRoot = path.join(tempDir, "tree");
+  try {
+    copyBundledPluginRuntimeRoot(params.sourceRoot, stagedRoot);
+    fs.rmSync(params.targetRoot, { recursive: true, force: true });
+    fs.renameSync(stagedRoot, params.targetRoot);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
   }
 }
 

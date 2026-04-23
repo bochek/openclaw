@@ -4,6 +4,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { prepareBundledPluginRuntimeRoot } from "./bundled-runtime-root.js";
+import { ensureOpenClawPluginSdkAlias } from "./runtime-sdk-alias.js";
 
 function makeTempDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "openclaw-bundled-runtime-root-"));
@@ -124,5 +125,23 @@ describe("bundled runtime root mirroring", () => {
     ).toBe(true);
 
     await expect(import(pathToFileURL(prepared.modulePath).href)).resolves.toBeTruthy();
+  });
+
+  it("refuses to write runtime aliases through symlinked alias paths", () => {
+    const packageRoot = makeTempDir();
+    tempDirs.push(packageRoot);
+    const aliasDistRoot = path.join(packageRoot, "dist");
+    const sdkDistRoot = path.join(packageRoot, "sdk");
+    fs.mkdirSync(path.join(aliasDistRoot, "extensions", "node_modules"), { recursive: true });
+    fs.mkdirSync(path.join(sdkDistRoot, "plugin-sdk"), { recursive: true });
+    fs.writeFileSync(path.join(sdkDistRoot, "plugin-sdk", "index.js"), "export {};\n", "utf8");
+    fs.symlinkSync(packageRoot, path.join(aliasDistRoot, "extensions", "node_modules", "openclaw"));
+
+    expect(() =>
+      ensureOpenClawPluginSdkAlias({
+        aliasDistRoot,
+        sdkDistRoot,
+      }),
+    ).toThrow(/refusing to prepare runtime alias directory via symlinked path/u);
   });
 });

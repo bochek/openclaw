@@ -600,12 +600,16 @@ function prepareBundledPluginRuntimeDistMirror(params: {
       }
     }
   }
+  let sdkDistRoot = mirrorDistRoot;
+  if (sourceDistRootName === "dist-runtime") {
+    const targetCanonicalDistRoot = path.join(params.installRoot, "dist");
+    if (fs.existsSync(path.join(targetCanonicalDistRoot, "plugin-sdk"))) {
+      sdkDistRoot = targetCanonicalDistRoot;
+    }
+  }
   ensureOpenClawPluginSdkAlias({
     aliasDistRoot: mirrorDistRoot,
-    sdkDistRoot:
-      sourceDistRootName === "dist-runtime"
-        ? path.join(params.installRoot, "dist")
-        : mirrorDistRoot,
+    sdkDistRoot,
   });
   return mirrorExtensionsRoot;
 }

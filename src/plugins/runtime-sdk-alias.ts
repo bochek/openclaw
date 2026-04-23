@@ -1,8 +1,38 @@
 import fs from "node:fs";
 import path from "node:path";
 
+function assertPathIsNotSymlink(targetPath: string, label: string): void {
+  try {
+    if (fs.lstatSync(targetPath).isSymbolicLink()) {
+      throw new Error(`refusing to ${label} via symlinked path: ${targetPath}`);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
+}
+
+function ensureDirectoryPathSegments(params: {
+  rootDir: string;
+  relativeSegments: readonly string[];
+  label: string;
+}): string {
+  let cursor = params.rootDir;
+  assertPathIsNotSymlink(cursor, params.label);
+  for (const segment of params.relativeSegments) {
+    cursor = path.join(cursor, segment);
+    assertPathIsNotSymlink(cursor, params.label);
+    if (!fs.existsSync(cursor)) {
+      fs.mkdirSync(cursor);
+    }
+  }
+  return cursor;
+}
+
 function writeRuntimeJsonFile(targetPath: string, value: unknown): void {
-  fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+  assertPathIsNotSymlink(targetPath, "write runtime alias file");
   fs.writeFileSync(targetPath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
@@ -51,7 +81,11 @@ export function ensureOpenClawPluginSdkAlias(params: {
     return;
   }
 
-  const aliasDir = path.join(params.aliasDistRoot, "extensions", "node_modules", "openclaw");
+  const aliasDir = ensureDirectoryPathSegments({
+    rootDir: params.aliasDistRoot,
+    relativeSegments: ["extensions", "node_modules", "openclaw"],
+    label: "prepare runtime alias directory",
+  });
   const pluginSdkAliasDir = path.join(aliasDir, "plugin-sdk");
   writeRuntimeJsonFile(path.join(aliasDir, "package.json"), {
     name: "openclaw",
@@ -61,6 +95,7 @@ export function ensureOpenClawPluginSdkAlias(params: {
       "./plugin-sdk/*": "./plugin-sdk/*.js",
     },
   });
+  assertPathIsNotSymlink(pluginSdkAliasDir, "replace runtime alias directory");
   fs.rmSync(pluginSdkAliasDir, { recursive: true, force: true });
   fs.mkdirSync(pluginSdkAliasDir, { recursive: true });
   for (const entry of fs.readdirSync(pluginSdkDir, { withFileTypes: true })) {
