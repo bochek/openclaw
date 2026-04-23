@@ -4,10 +4,8 @@ read_when:
   - Generating images via the agent
   - Configuring image generation providers and models
   - Understanding the image_generate tool parameters
-title: "Image Generation"
+title: "Image generation"
 ---
-
-# Image Generation
 
 The `image_generate` tool lets the agent create and edit images using your configured providers. Generated images are delivered automatically as media attachments in the agent's reply.
 

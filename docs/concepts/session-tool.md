@@ -4,10 +4,8 @@ read_when:
   - You want to understand what session tools the agent has
   - You want to configure cross-session access or sub-agent spawning
   - You want to inspect status or control spawned sub-agents
-title: "Session Tools"
+title: "Session tools"
 ---
-
-# Session Tools
 
 OpenClaw gives agents tools to work across sessions, inspect status, and
 orchestrate sub-agents.
