@@ -28,7 +28,7 @@ function buildConfig(
 }
 
 describe("telegram exec approvals", () => {
-  it("auto-enables when approvers resolve and disables only when forced off", () => {
+  it("requires explicit enablement even when approvers resolve", () => {
     expect(isTelegramExecApprovalClientEnabled({ cfg: buildConfig() })).toBe(false);
     expect(
       isTelegramExecApprovalClientEnabled({
@@ -39,10 +39,20 @@ describe("telegram exec approvals", () => {
       isTelegramExecApprovalClientEnabled({
         cfg: buildConfig(undefined, { allowFrom: ["123"] }),
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isTelegramExecApprovalClientEnabled({
         cfg: buildConfig({ approvers: ["123"] }),
+      }),
+    ).toBe(false);
+    expect(
+      isTelegramExecApprovalClientEnabled({
+        cfg: buildConfig({ enabled: true, approvers: ["123"] }),
+      }),
+    ).toBe(true);
+    expect(
+      isTelegramExecApprovalClientEnabled({
+        cfg: buildConfig({ enabled: "auto", approvers: ["123"] }),
       }),
     ).toBe(true);
     expect(

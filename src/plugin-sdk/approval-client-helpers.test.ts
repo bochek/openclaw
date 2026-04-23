@@ -77,12 +77,12 @@ describe("createChannelExecApprovalProfile", () => {
     matchesRequestAccount: ({ accountId }) => accountId !== "other",
   });
 
-  it("treats unset enabled as auto and false as disabled", () => {
+  it("requires explicit enablement and still honors auto", () => {
     expect(
       isChannelExecApprovalClientEnabledFromConfig({
         approverCount: 1,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isChannelExecApprovalClientEnabledFromConfig({
         enabled: "auto",
