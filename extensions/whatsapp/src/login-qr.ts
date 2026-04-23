@@ -34,6 +34,7 @@ type ActiveLogin = {
   startedAt: number;
   qr?: string;
   qrDataUrl?: string;
+  qrDataUrlVersion?: number;
   qrVersion: number;
   connected: boolean;
   error?: string;
@@ -93,7 +94,6 @@ function notifyQrUpdate(login: ActiveLogin) {
 function updateLoginQrState(login: ActiveLogin, qr: string): number {
   login.qr = qr;
   login.qrVersion += 1;
-  login.qrDataUrl = undefined;
   return login.qrVersion;
 }
 
@@ -113,7 +113,7 @@ async function ensureQrDataUrl(params: {
     return `data:image/png;base64,${base64}`;
   }
 
-  if (current.qrDataUrl) {
+  if (current.qrDataUrl && current.qrDataUrlVersion === params.qrVersion) {
     return current.qrDataUrl;
   }
 
@@ -127,7 +127,7 @@ async function ensureQrDataUrl(params: {
       if (!latest || latest.id !== params.loginId || !latest.qr) {
         throw new Error("WhatsApp QR is no longer active.");
       }
-      if (latest.qrDataUrl) {
+      if (latest.qrDataUrl && latest.qrDataUrlVersion === latest.qrVersion) {
         return latest.qrDataUrl;
       }
 
@@ -141,6 +141,7 @@ async function ensureQrDataUrl(params: {
       }
       if (refreshed.qrVersion === qrVersion && refreshed.qr === qr) {
         refreshed.qrDataUrl = dataUrl;
+        refreshed.qrDataUrlVersion = qrVersion;
         notifyQrUpdate(refreshed);
         return dataUrl;
       }
@@ -470,6 +471,26 @@ export async function waitForWebLogin(
   const currentQrDataUrl = opts.currentQrDataUrl;
 
   while (true) {
+    if (login.error) {
+      if (login.errorStatus === 401) {
+        const message = WHATSAPP_LOGGED_OUT_QR_MESSAGE;
+        await resetActiveLogin(account.accountId, message);
+        runtime.log(danger(message));
+        return { connected: false, message };
+      }
+      const message = `WhatsApp login failed: ${login.error}`;
+      await resetActiveLogin(account.accountId, message);
+      runtime.log(danger(message));
+      return { connected: false, message };
+    }
+
+    if (login.connected) {
+      const message = "✅ Linked! WhatsApp is ready.";
+      runtime.log(success(message));
+      await resetActiveLogin(account.accountId);
+      return { connected: true, message };
+    }
+
     if (login.qrDataUrl && currentQrDataUrl && login.qrDataUrl !== currentQrDataUrl) {
       return {
         connected: false,
@@ -505,24 +526,8 @@ export async function waitForWebLogin(
       continue;
     }
 
-    if (login.error) {
-      if (login.errorStatus === 401) {
-        const message = WHATSAPP_LOGGED_OUT_QR_MESSAGE;
-        await resetActiveLogin(account.accountId, message);
-        runtime.log(danger(message));
-        return { connected: false, message };
-      }
-      const message = `WhatsApp login failed: ${login.error}`;
-      await resetActiveLogin(account.accountId, message);
-      runtime.log(danger(message));
-      return { connected: false, message };
-    }
-
-    if (login.connected) {
-      const message = "✅ Linked! WhatsApp is ready.";
-      runtime.log(success(message));
-      await resetActiveLogin(account.accountId);
-      return { connected: true, message };
+    if (result === "done") {
+      continue;
     }
 
     return { connected: false, message: "Login ended without a connection." };

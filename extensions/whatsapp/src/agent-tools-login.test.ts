@@ -15,13 +15,8 @@ describe("createWhatsAppLoginTool", () => {
     vi.clearAllMocks();
   });
 
-  it("passes the currently displayed QR back into wait actions", async () => {
+  it("passes the caller's current QR back into wait actions", async () => {
     const accountId = "account-1";
-    startWebLoginWithQrMock.mockResolvedValueOnce({
-      connected: false,
-      message: "Scan this QR in WhatsApp → Linked Devices.",
-      qrDataUrl: "data:image/png;base64,current-qr",
-    });
     waitForWebLoginMock.mockResolvedValueOnce({
       connected: false,
       message: "QR refreshed. Scan the latest code in WhatsApp → Linked Devices.",
@@ -29,15 +24,11 @@ describe("createWhatsAppLoginTool", () => {
     });
 
     const tool = createWhatsAppLoginTool();
-    await tool.execute("tool-call-1", {
-      action: "start",
-      timeoutMs: 5000,
-      accountId,
-    });
     const result = await tool.execute("tool-call-1", {
       action: "wait",
       timeoutMs: 5000,
       accountId,
+      currentQrDataUrl: "data:image/png;base64,current-qr",
     });
 
     expect(waitForWebLoginMock).toHaveBeenCalledWith({
@@ -65,7 +56,7 @@ describe("createWhatsAppLoginTool", () => {
     });
   });
 
-  it("clears the tracked QR after a terminal wait result", async () => {
+  it("does not retain QR state across tool actions", async () => {
     const accountId = "account-2";
     startWebLoginWithQrMock.mockResolvedValueOnce({
       connected: false,
@@ -79,15 +70,9 @@ describe("createWhatsAppLoginTool", () => {
 
     const tool = createWhatsAppLoginTool();
     await tool.execute("tool-call-start", { action: "start", accountId });
-    await tool.execute("tool-call-wait", { action: "wait", accountId });
-    waitForWebLoginMock.mockResolvedValueOnce({
-      connected: false,
-      message: "Still waiting for the QR scan. Let me know when you’ve scanned it.",
-    });
+    await tool.execute("tool-call-wait", { action: "wait", timeoutMs: 5000, accountId });
 
-    await tool.execute("tool-call-wait-2", { action: "wait", timeoutMs: 5000, accountId });
-
-    expect(waitForWebLoginMock).toHaveBeenNthCalledWith(2, {
+    expect(waitForWebLoginMock).toHaveBeenCalledWith({
       accountId,
       timeoutMs: 5000,
       currentQrDataUrl: undefined,
