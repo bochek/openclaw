@@ -53,7 +53,7 @@ export function expectCodexMissingAuthHint(
         listProfileIds: (providerId) => (providerId === "openai-codex" ? ["p1"] : []),
       },
     }),
-  ).toContain("openai-codex/gpt-5.5");
+  ).toContain("openai/gpt-5.5");
 }
 
 export function expectCodexBuiltInSuppression(
@@ -77,7 +77,9 @@ export function expectCodexBuiltInSuppression(
     }),
   ).toMatchObject({
     suppress: true,
-    errorMessage: expect.stringContaining("openai-codex/gpt-5.3-codex-spark"),
+    errorMessage: expect.stringContaining(
+      "openai/gpt-5.3-codex-spark with the Codex OAuth profile",
+    ),
   });
 }
 
