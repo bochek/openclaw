@@ -59,6 +59,14 @@ async function waitMs(ms: number) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function waitForQrRenderCallCount(count: number) {
+  const deadline = Date.now() + 1000;
+  while (renderQrPngBase64Mock.mock.calls.length < count && Date.now() < deadline) {
+    await waitMs(0);
+    await flushTasks();
+  }
+}
+
 describe("login-qr", () => {
   const rotatingAccountId = "rotating-qr";
   const concurrentAccountId = "concurrent-qr";
@@ -361,9 +369,7 @@ describe("login-qr", () => {
       timeoutMs: 5000,
       accountId,
     });
-    await waitMs(0);
-    await flushTasks();
-    await flushTasks();
+    await waitForQrRenderCallCount(1);
 
     expect(renderQrPngBase64Mock).toHaveBeenCalledTimes(1);
 
