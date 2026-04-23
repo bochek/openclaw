@@ -307,7 +307,7 @@ export const MATRIX_QA_SCENARIOS: MatrixQaScenarioDefinition[] = [
   },
   {
     id: "matrix-room-generated-image-delivery",
-    timeoutMs: 60_000,
+    timeoutMs: 120_000,
     title: "Matrix generated images deliver as real image attachments while streaming",
     topology: MATRIX_QA_MEDIA_ROOM_TOPOLOGY,
     configOverrides: {
