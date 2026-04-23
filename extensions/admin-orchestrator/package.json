@@ -4,6 +4,9 @@
   "private": true,
   "description": "OpenClaw Admin Orchestrator for managing executor networks over Tailscale",
   "type": "module",
+  "dependencies": {
+    "nats": "^2.28.2"
+  },
   "peerDependencies": {
     "openclaw": ">=2026.3.11"
   },
