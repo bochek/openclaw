@@ -53,6 +53,7 @@ Docs: https://docs.openclaw.ai
 - Codex harness/status: pin embedded harness selection per session, show active non-PI harness ids such as `codex` in `/status`, and keep legacy transcripts on PI until `/new` or `/reset` so config changes cannot hot-switch existing sessions.
 - Gateway/security: fail closed on agent-driven `gateway config.apply`/`config.patch` runtime edits by allowlisting a narrow set of agent-tunable prompt, model, and mention-gating paths (including Telegram topic-level `requireMention`) instead of relying on a hand-maintained denylist of protected subtrees that could miss new sensitive config keys. (#70726) Thanks @drobison00.
 - Webhooks/security: re-resolve `SecretRef`-backed webhook route secrets on each request so `openclaw secrets reload` revokes the previous secret immediately instead of waiting for a gateway restart. (#70727) Thanks @drobison00.
+- Agents/failover: stop body-less HTTP 400/422 proxy failures from defaulting to `"format"` classification, so embedded retries surface the opaque provider failure instead of falling into a compaction loop. Fixes #66462. (#67024) Thanks @altaywtf and @HongzhuLiu.
 
 ## 2026.4.22
 
