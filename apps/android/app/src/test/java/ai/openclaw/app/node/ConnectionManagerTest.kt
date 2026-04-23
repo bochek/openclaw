@@ -118,7 +118,9 @@ class ConnectionManagerTest {
         manualTlsEnabled = false,
       )
 
-    assertNull(params)
+    assertEquals(true, params?.required)
+    assertNull(params?.expectedFingerprint)
+    assertEquals(false, params?.allowTOFU)
   }
 
   @Test
@@ -164,7 +166,9 @@ class ConnectionManagerTest {
         manualTlsEnabled = false,
       )
 
-    assertNull(params)
+    assertEquals(true, params?.required)
+    assertNull(params?.expectedFingerprint)
+    assertEquals(false, params?.allowTOFU)
   }
 
   @Test
