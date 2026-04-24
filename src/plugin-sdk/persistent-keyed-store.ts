@@ -10,13 +10,14 @@ const STORE_VERSION = 1;
 const NAMESPACE_PATTERN = /^[a-z0-9][a-z0-9._-]*$/i;
 const ACCESS_QUEUE_KEY = Symbol.for("openclaw.persistentKeyedStoreAccessQueues");
 const ACCESS_QUEUES = resolveProcessScopedMap<Promise<unknown>>(ACCESS_QUEUE_KEY);
+const STORE_DIR_MODE = 0o700;
 
 const DEFAULT_LOCK_OPTIONS: FileLockOptions = {
   retries: {
-    retries: 6,
-    factor: 1.35,
-    minTimeout: 8,
-    maxTimeout: 180,
+    retries: 32,
+    factor: 1.3,
+    minTimeout: 10,
+    maxTimeout: 300,
     randomize: true,
   },
   stale: 60_000,
@@ -103,6 +104,48 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isJsonSerializableValue(value: unknown, seen = new WeakSet<object>()): boolean {
+  if (value === null || typeof value === "string" || typeof value === "boolean") {
+    return true;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+  if (Array.isArray(value)) {
+    if (seen.has(value)) {
+      return false;
+    }
+    seen.add(value);
+    const valid = value.every((entry) => isJsonSerializableValue(entry, seen));
+    seen.delete(value);
+    return valid;
+  }
+  if (!isJsonObject(value)) {
+    return false;
+  }
+  if (seen.has(value)) {
+    return false;
+  }
+  seen.add(value);
+  const valid = Object.values(value).every((entry) => isJsonSerializableValue(entry, seen));
+  seen.delete(value);
+  return valid;
+}
+
+function assertJsonSerializableRecord(value: unknown): void {
+  if (!isJsonSerializableValue(value)) {
+    throw new Error("persistent-keyed-store record must be JSON-serializable");
+  }
+}
+
 function validateNamespace(value: string): string {
   const trimmed = value.trim();
   if (!NAMESPACE_PATTERN.test(trimmed)) {
@@ -150,7 +193,8 @@ function resolveStoreFilePath(namespace: string, stateDir?: string): string {
 async function resolveStoreAccessQueueKey(filePath: string): Promise<string> {
   const resolved = path.resolve(filePath);
   const dir = path.dirname(resolved);
-  await fs.mkdir(dir, { recursive: true });
+  await fs.mkdir(dir, { recursive: true, mode: STORE_DIR_MODE });
+  await fs.chmod(dir, STORE_DIR_MODE).catch(() => undefined);
   try {
     const realDir = await fs.realpath(dir);
     return path.join(realDir, path.basename(resolved));
@@ -272,7 +316,14 @@ async function readEnvelopeDetailed<T>(filePath: string): Promise<ReadEnvelopeRe
   const entries = rawEntries;
   const sanitizedEntries = createEntriesMap<T>();
   for (const [id, entry] of Object.entries(entries)) {
-    if (!id || id.trim() !== id || !isRecord(entry) || !isFiniteNumber(entry.createdAt)) {
+    if (
+      !id ||
+      id.trim() !== id ||
+      !isRecord(entry) ||
+      !isFiniteNumber(entry.createdAt) ||
+      !Object.hasOwn(entry, "record") ||
+      !isJsonSerializableValue(entry.record)
+    ) {
       return {
         kind: "quarantine",
         versionLabel: `v${version}`,
@@ -407,6 +458,7 @@ export function createPersistentKeyedStore<T>(
     registerOptions?: { ttlMs?: number },
   ): Promise<void> {
     const normalizedId = validateId(id);
+    assertJsonSerializableRecord(record);
     const ttlMs = validateOptionalTtlMs(registerOptions?.ttlMs, "ttlMs") ?? defaultTtlMs;
     const now = Date.now();
     await accessStore(async (envelope) => {

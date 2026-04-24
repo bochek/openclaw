@@ -1,5 +1,7 @@
+import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { drainFileLockStateForTest, resetFileLockStateForTest } from "./file-lock.js";
 import { createPersistentKeyedStore } from "./persistent-keyed-store.js";
@@ -11,6 +13,7 @@ type DemoRecord = {
 
 const { createTempDir } = createPluginSdkTestHarness();
 const itWithDirectorySymlinks = process.platform === "win32" ? it.skip : it;
+const itWithPosixModes = process.platform === "win32" ? it.skip : it;
 
 function createStore(
   stateDir: string,
@@ -47,6 +50,46 @@ async function readStoreEnvelope(stateDir: string, namespace = "demo-store") {
       }
     >;
   };
+}
+
+function formatMode(mode: number): string {
+  return (mode & 0o777).toString(8);
+}
+
+async function runRegisterInChildProcess(params: {
+  stateDir: string;
+  key: string;
+}): Promise<{ code: number | null; stderr: string }> {
+  const moduleUrl = pathToFileURL(path.resolve("src/plugin-sdk/persistent-keyed-store.ts")).href;
+  const script = `
+    import { createPersistentKeyedStore } from ${JSON.stringify(moduleUrl)};
+    const store = createPersistentKeyedStore({
+      namespace: "demo-store",
+      stateDir: process.env.OPENCLAW_TEST_KEYED_STORE_STATE_DIR,
+      maxEntries: 100,
+    });
+    await store.register(process.env.OPENCLAW_TEST_KEYED_STORE_KEY, {
+      value: process.env.OPENCLAW_TEST_KEYED_STORE_KEY,
+    });
+  `;
+  return await new Promise((resolve) => {
+    const child = spawn(process.execPath, ["--import", "tsx", "--eval", script], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        OPENCLAW_TEST_KEYED_STORE_STATE_DIR: params.stateDir,
+        OPENCLAW_TEST_KEYED_STORE_KEY: params.key,
+      },
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let stderr = "";
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("close", (code) => {
+      resolve({ code, stderr });
+    });
+  });
 }
 
 describe("createPersistentKeyedStore", () => {
@@ -116,6 +159,23 @@ describe("createPersistentKeyedStore", () => {
 
     vi.setSystemTime(new Date("2026-04-23T12:00:00.100Z"));
     await expect(store.lookup("message-1")).resolves.toBeUndefined();
+  });
+
+  it("rejects records that cannot round-trip through JSON", async () => {
+    const stateDir = await createTempDir("openclaw-keyed-store-");
+    const store = createPersistentKeyedStore<unknown>({
+      namespace: "demo-store",
+      stateDir,
+      maxEntries: 100,
+    });
+
+    await expect(store.register("missing-record", undefined)).rejects.toThrow(/JSON/i);
+    await expect(
+      store.register("infinite-number", { value: Number.POSITIVE_INFINITY }),
+    ).rejects.toThrow(/JSON/i);
+    await expect(fs.access(resolveStoreFile(stateDir))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
   });
 
   it("consumes records atomically", async () => {
@@ -210,6 +270,24 @@ describe("createPersistentKeyedStore", () => {
     expect(files).not.toContain("store.json");
   });
 
+  it("quarantines entries missing a record field", async () => {
+    const stateDir = await createTempDir("openclaw-keyed-store-");
+    const storeFile = resolveStoreFile(stateDir);
+    const warn = vi.fn();
+    await fs.mkdir(path.dirname(storeFile), { recursive: true });
+    await fs.writeFile(
+      storeFile,
+      JSON.stringify({ version: 1, entries: { broken: { createdAt: Date.now() } } }, null, 2),
+      "utf8",
+    );
+
+    const store = createStore(stateDir, { logger: { warn } });
+
+    await expect(store.entries()).resolves.toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    await expect(fs.access(storeFile)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
   it("rejects invalid namespaces before any file io", async () => {
     const stateDir = await createTempDir("openclaw-keyed-store-");
 
@@ -224,6 +302,16 @@ describe("createPersistentKeyedStore", () => {
     await expect(fs.access(path.join(stateDir, "lifecycle"))).rejects.toMatchObject({
       code: "ENOENT",
     });
+  });
+
+  itWithPosixModes("creates the store directory with private permissions", async () => {
+    const stateDir = await createTempDir("openclaw-keyed-store-");
+    const store = createStore(stateDir);
+
+    await store.lookup("missing");
+
+    const stat = await fs.stat(path.dirname(resolveStoreFile(stateDir)));
+    expect(formatMode(stat.mode)).toBe("700");
   });
 
   it("prunes the oldest live entries when maxEntries is exceeded", async () => {
@@ -284,6 +372,22 @@ describe("createPersistentKeyedStore", () => {
     expect(entries.map((entry) => entry.id).toSorted()).toEqual(
       Array.from({ length: 20 }, (_, index) => `message-${index}`).toSorted(),
     );
+  });
+
+  it("waits long enough for modest cross-process register contention", async () => {
+    const stateDir = await createTempDir("openclaw-keyed-store-processes-");
+    const workerCount = 12;
+
+    const results = await Promise.all(
+      Array.from({ length: workerCount }, (_, index) =>
+        runRegisterInChildProcess({ stateDir, key: `message-${index}` }),
+      ),
+    );
+
+    const failures = results.filter((result) => result.code !== 0);
+    expect(failures, "child processes should not hit file lock timeouts").toEqual([]);
+    const entries = await createStore(stateDir).entries();
+    expect(entries).toHaveLength(workerCount);
   });
 
   it("keeps only the latest record when overwriting an existing id", async () => {
