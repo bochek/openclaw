@@ -1,9 +1,12 @@
+import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createClaimableDedupe, createPersistentDedupe } from "./persistent-dedupe.js";
 import { createPluginSdkTestHarness } from "./test-helpers.js";
 
 const { createTempDir } = createPluginSdkTestHarness();
+const itWithDirectorySymlinks = process.platform === "win32" ? it.skip : it;
+const itWithPosixModes = process.platform === "win32" ? it.skip : it;
 
 function createDedupe(root: string, overrides?: { ttlMs?: number }) {
   return createPersistentDedupe({
@@ -12,6 +15,10 @@ function createDedupe(root: string, overrides?: { ttlMs?: number }) {
     fileMaxEntries: 1000,
     resolveFilePath: (namespace) => path.join(root, `${namespace}.json`),
   });
+}
+
+function formatMode(mode: number): string {
+  return (mode & 0o777).toString(8);
 }
 
 describe("createPersistentDedupe", () => {
@@ -36,6 +43,55 @@ describe("createPersistentDedupe", () => {
     ]);
     expect(first).toBe(true);
     expect(second).toBe(false);
+  });
+
+  itWithDirectorySymlinks("serializes concurrent writes across aliased file paths", async () => {
+    const parentDir = await createTempDir("openclaw-dedupe-alias-");
+    const realRoot = path.join(parentDir, "real");
+    const linkedRoot = path.join(parentDir, "linked");
+    await fs.mkdir(realRoot, { recursive: true });
+    await fs.symlink(realRoot, linkedRoot, "dir");
+    const first = createPersistentDedupe({
+      ttlMs: 10_000,
+      memoryMaxSize: 0,
+      fileMaxEntries: 1000,
+      resolveFilePath: (namespace) => path.join(realRoot, `${namespace}.json`),
+    });
+    const second = createPersistentDedupe({
+      ttlMs: 10_000,
+      memoryMaxSize: 0,
+      fileMaxEntries: 1000,
+      resolveFilePath: (namespace) => path.join(linkedRoot, `${namespace}.json`),
+    });
+    const keyCount = 80;
+
+    const results = await Promise.all(
+      Array.from({ length: keyCount }, (_, index) =>
+        (index % 2 === 0 ? first : second).checkAndRecord(`race-${index}`, {
+          namespace: "acct",
+        }),
+      ),
+    );
+
+    expect(results).toEqual(Array.from({ length: keyCount }, () => true));
+    const raw = await fs.readFile(path.join(realRoot, "acct.json"), "utf8");
+    expect(Object.keys(JSON.parse(raw) as Record<string, number>)).toHaveLength(keyCount);
+  });
+
+  itWithPosixModes("creates the persistent file directory with private permissions", async () => {
+    const root = await createTempDir("openclaw-dedupe-mode-");
+    const storeDir = path.join(root, "dedupe");
+    const dedupe = createPersistentDedupe({
+      ttlMs: 10_000,
+      memoryMaxSize: 0,
+      fileMaxEntries: 1000,
+      resolveFilePath: (namespace) => path.join(storeDir, `${namespace}.json`),
+    });
+
+    expect(await dedupe.checkAndRecord("m1", { namespace: "acct" })).toBe(true);
+
+    const stat = await fs.stat(storeDir);
+    expect(formatMode(stat.mode)).toBe("700");
   });
 
   it("falls back to memory-only behavior on disk errors", async () => {
