@@ -310,6 +310,25 @@ describe("buildReplyPayloads media filter integration", () => {
     expect(replyPayloads).toHaveLength(0);
   });
 
+  it("deduplicates final payloads against directly sent block keys when streaming is enabled without a pipeline", async () => {
+    const { createBlockReplyContentKey } = await import("./block-reply-pipeline.js");
+    const directlySentBlockKeys = new Set<string>();
+    directlySentBlockKeys.add(
+      createBlockReplyContentKey({ text: "response", replyToId: "post-1" }),
+    );
+
+    const { replyPayloads } = await buildReplyPayloads({
+      ...baseParams,
+      blockStreamingEnabled: true,
+      blockReplyPipeline: null,
+      directlySentBlockKeys,
+      replyToMode: "off",
+      payloads: [{ text: "response" }],
+    });
+
+    expect(replyPayloads).toHaveLength(0);
+  });
+
   it("does not suppress same-target replies when accountId differs", async () => {
     const { replyPayloads } = await buildReplyPayloads({
       ...baseParams,

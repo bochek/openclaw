@@ -213,12 +213,16 @@ export async function buildReplyPayloads(params: {
         sentMediaUrls: messagingToolSentMediaUrls,
       })
     : dedupedPayloads;
+  const isDirectlySentBlockPayload = (payload: ReplyPayload) =>
+    Boolean(params.directlySentBlockKeys?.has(createBlockReplyContentKey(payload)));
   // Filter out payloads already sent via pipeline or directly during tool flush.
   const filteredPayloads = shouldDropFinalPayloads
     ? mediaFilteredPayloads.filter((payload) => payload.isError)
     : params.blockStreamingEnabled
       ? mediaFilteredPayloads.filter(
-          (payload) => !params.blockReplyPipeline?.hasSentPayload(payload),
+          (payload) =>
+            !params.blockReplyPipeline?.hasSentPayload(payload) &&
+            !isDirectlySentBlockPayload(payload),
         )
       : params.directlySentBlockKeys?.size
         ? mediaFilteredPayloads.filter(
