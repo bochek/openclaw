@@ -135,6 +135,7 @@ import type {
   EmbeddedRunLivenessState,
 } from "./types.js";
 import { createUsageAccumulator, mergeUsageIntoAccumulator } from "./usage-accumulator.js";
+import { resolveAdaptiveThinkingLevel } from "./utils.js";
 
 type ApiKeyInfo = ResolvedProviderAuth;
 
@@ -667,7 +668,6 @@ export async function runEmbeddedPiAgent(
           runLoopIterations += 1;
           const runtimeAuthRetry = authRetryPending;
           authRetryPending = false;
-          attemptedThinking.add(thinkLevel);
           await fs.mkdir(resolvedWorkspace, { recursive: true });
 
           const basePrompt =
@@ -684,6 +684,21 @@ export async function runEmbeddedPiAgent(
             promptAdditions.length > 0
               ? `${basePrompt}\n\n${promptAdditions.join("\n\n")}`
               : basePrompt;
+          const attemptThinkLevel = resolveAdaptiveThinkingLevel({
+            level: thinkLevel,
+            prompt,
+            trigger: params.trigger,
+            provider,
+            modelId,
+            hasImages: (params.images?.length ?? 0) > 0,
+            disableTools: params.disableTools,
+          });
+          if (thinkLevel === "adaptive" && attemptThinkLevel !== "adaptive") {
+            log.debug(
+              `adaptive thinking resolved for ${provider}/${modelId}: ${attemptThinkLevel} (trigger=${params.trigger ?? "user"})`,
+            );
+          }
+          attemptedThinking.add(attemptThinkLevel);
           let resolvedStreamApiKey: string | undefined;
           if (!runtimeAuthState && apiKeyInfo) {
             resolvedStreamApiKey = (apiKeyInfo as ApiKeyInfo).apiKey;
@@ -749,7 +764,7 @@ export async function runEmbeddedPiAgent(
             modelRegistry,
             agentId: workspaceResolution.agentId,
             legacyBeforeAgentStartResult,
-            thinkLevel,
+            thinkLevel: attemptThinkLevel,
             fastMode: params.fastMode,
             verboseLevel: params.verboseLevel,
             reasoningLevel: params.reasoningLevel,
