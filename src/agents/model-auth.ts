@@ -282,6 +282,7 @@ export async function resolveApiKeyForProvider(params: {
   const { provider, cfg, profileId, preferredProfile } = params;
   const store = params.store ?? ensureAuthProfileStore(params.agentDir);
 
+
   if (profileId) {
     const resolved = await resolveApiKeyForProfile({
       cfg,
@@ -343,10 +344,6 @@ export async function resolveApiKeyForProvider(params: {
     };
   }
 
-  const customKey = resolveUsableCustomProviderApiKey({ cfg, provider });
-  if (customKey) {
-    return { apiKey: customKey.apiKey, source: customKey.source, mode: "api-key" };
-  }
 
   const syntheticLocalAuth = resolveSyntheticLocalProviderAuth({ cfg, provider });
   if (syntheticLocalAuth) {

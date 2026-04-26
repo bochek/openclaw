@@ -90,6 +90,7 @@ USER.md
 
 # local tooling
 .serena/
+docker-cli
 
 # Agent credentials and memory (NEVER COMMIT)
 /memory/

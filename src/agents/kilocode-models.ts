@@ -12,7 +12,7 @@ const log = createSubsystemLogger("kilocode-models");
 
 export const KILOCODE_MODELS_URL = `${KILOCODE_BASE_URL}models`;
 
-const DISCOVERY_TIMEOUT_MS = 5000;
+const DISCOVERY_TIMEOUT_MS = 60_000;
 
 // ---------------------------------------------------------------------------
 // Gateway response types (OpenRouter-compatible schema)

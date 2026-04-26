@@ -1,7 +1,7 @@
 import { normalizeProviderId } from "../agents/model-selection.js";
 import type { UsageProviderId } from "./provider-usage.types.js";
 
-export const DEFAULT_TIMEOUT_MS = 5000;
+export const DEFAULT_TIMEOUT_MS = 30_000;
 
 export const PROVIDER_LABELS: Record<UsageProviderId, string> = {
   anthropic: "Claude",

@@ -1,14 +1,40 @@
 model_list:
-  - model_name: minimax-m2.7
+  - model_name: planner
+    litellm_params:
+      model: openrouter/x-ai/grok-4.1-fast
+      api_key: os.environ/OPENROUTER_API_KEY
+      fallbacks: [work, fast, local-qwen, local-gemma]
+
+  - model_name: work
     litellm_params:
       model: openrouter/minimax/minimax-m2.7
-      api_key: REDACTED_OPENROUTER_KEY
+      api_key: os.environ/OPENROUTER_API_KEY
+      fallbacks: [fast]
 
-  - model_name: qwen3.5:9b
+  - model_name: local-qwen
     litellm_params:
-      model: openai/qwen3.5:9b
-      api_base: http://host.docker.internal:11434/v1
-      api_key: ollama
+      model: ollama/qwen3.5:9b
+      api_base: http://host.docker.internal:11434
+      supports_function_calling: true
+      fallbacks: [local]
+
+  - model_name: fast
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v4-flash
+      api_key: os.environ/OPENROUTER_API_KEY
+      fallbacks: [local-qwen, local]
+
+  - model_name: vision
+    litellm_params:
+      model: openrouter/qwen/qwen3.5-flash-02-23
+      api_key: os.environ/OPENROUTER_API_KEY
+      fallbacks: [planner, fast]
+
+  - model_name: local
+    litellm_params:
+      model: ollama/gemma3:4b
+      api_base: http://host.docker.internal:11434
+      fallbacks: [local-qwen]
 
 litellm_settings:
   drop_params: True

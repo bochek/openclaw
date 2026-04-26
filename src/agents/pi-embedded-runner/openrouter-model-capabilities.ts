@@ -27,7 +27,7 @@ import { createSubsystemLogger } from "../../logging/subsystem.js";
 const log = createSubsystemLogger("openrouter-model-capabilities");
 
 const OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models";
-const FETCH_TIMEOUT_MS = 10_000;
+const FETCH_TIMEOUT_MS = 60_000;
 const DISK_CACHE_FILENAME = "openrouter-models.json";
 
 // ---------------------------------------------------------------------------

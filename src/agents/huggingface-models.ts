@@ -5,7 +5,7 @@ import { isReasoningModelHeuristic } from "./ollama-models.js";
 const log = createSubsystemLogger("huggingface-models");
 
 /** Hugging Face Inference Providers (router) — OpenAI-compatible chat completions. */
-export const HUGGINGFACE_BASE_URL = "https://router.huggingface.co/v1";
+export const HUGGINGFACE_BASE_URL = "http://127.0.0.1:4001/v1";
 
 /** Router policy suffixes: router picks backend by cost or speed; no specific provider selection. */
 export const HUGGINGFACE_POLICY_SUFFIXES = ["cheapest", "fastest"] as const;

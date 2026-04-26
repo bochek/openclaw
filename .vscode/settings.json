@@ -18,5 +18,9 @@
   "typescript.reportStyleChecksAsWarnings": false,
   "typescript.updateImportsOnFileMove.enabled": "always",
   "typescript.tsdk": "node_modules/typescript/lib",
-  "typescript.experimental.useTsgo": true
+  "typescript.experimental.useTsgo": true,
+  "antigravity.apiProvider": "openai",
+  "antigravity.apiBaseUrl": "http://127.0.0.1:4001",
+  "antigravity.apiKey": "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",
+  "antigravity.apiModelId": "ignored-by-bridge"
 }

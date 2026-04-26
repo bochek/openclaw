@@ -13,23 +13,34 @@ services:
     ports:
       - "${GATEWAY_PORT:-18789}:18789"
     environment:
-      - OPENCLAW_CONFIG_DIR=/home/node/.openclaw
+      - OPENCLAW_CONFIG_DIR=/root/.openclaw
       - OPENCLAW_GATEWAY_BIND=0.0.0.0
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-f39778287f05cfb869dcd7867e648a8401985b028176532958ad68bca2c1c1b0}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
       - OPENCLAW_IMAGE=openclaw:local
       - OPENCLAW_DOCKER_SOCKET=/var/run/docker.sock
       - OPENCLAW_TZ=UTC
       - OPENCLAW_DOCKER_APT_PACKAGES=${OPENCLAW_DOCKER_APT_PACKAGES:-}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-REDACTED_OPENROUTER_KEY_3}
-      - OPENCLAW_SANDBOX=${OPENCLAW_SANDBOX:-require}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - LITELLM_API_BASE=${LITELLM_API_BASE:-http://openclaw-admin-litellm:4000}
+      - LITELLM_API_KEY=${LITELLM_API_KEY}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-http://langfuse:3000}
+      - OPENCLAW_SANDBOX=off
+      - NODE_OPTIONS=--dns-result-order=ipv4first
+    user: root
     volumes:
       - ${OPENCLAW_WORKSPACE_DIR:-~/.openclaw/workspace}:/home/node/.openclaw/workspace
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/root/.openclaw
       - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/home/node/.openclaw
+      - ./docker-cli:/usr/local/bin/docker:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - openclaw-net
+      - admin-net
     restart: unless-stopped
 
   # ==========================================
@@ -38,21 +49,88 @@ services:
   openclaw-cli:
     image: openclaw:local
     container_name: openclaw-cli
+    user: root
     entrypoint: ["node", "openclaw.mjs"]
     environment:
       - OPENCLAW_CONFIG_DIR=/home/node/.openclaw
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-f39778287f05cfb869dcd7867e648a8401985b028176532958ad68bca2c1c1b0}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+      - OPENAI_API_BASE_URL=http://openclaw-admin-litellm:4000
+      - OPENAI_API_KEY=${LITELLM_API_KEY}
       - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
       - OPENCLAW_ALLOW_INSECURE_PRIVATE_WS=1
+      - NODE_OPTIONS=--dns-result-order=ipv4first
     volumes:
       - ${OPENCLAW_WORKSPACE_DIR:-~/.openclaw/workspace}:/home/node/.openclaw/workspace
       - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/home/node/.openclaw
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker-cli:/usr/local/bin/docker:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    networks:
+      - openclaw-net
+
+  # ============ MCP SERVERS ============
+
+  local-mcp:
+    build:
+      context: ./mcp/local-mcp
+    container_name: local-mcp
+    restart: unless-stopped
+    ports:
+      - "8005:8000"
+    volumes:
+      - ./mcp/local-mcp/chroma_db:/app/chroma_db
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - openclaw-net
+
+  mcp-docker:
+    build:
+      context: ./mcp
+      dockerfile: Dockerfile.mcp
+    container_name: mcp-docker
+    restart: unless-stopped
+    ports:
+      - "8002:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["--port", "8000", "--host", "0.0.0.0", "--", "docker-mcp-server"]
+    networks:
+      - openclaw-net
+
+  mcp-docker-hub:
+    build:
+      context: ./mcp
+      dockerfile: Dockerfile.mcp
+    container_name: mcp-docker-hub
+    restart: unless-stopped
+    ports:
+      - "8006:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["--port", "8000", "--host", "0.0.0.0", "--", "docker", "run", "--rm", "-i", "mcp/dockerhub:latest"]
+    networks:
+      - openclaw-net
+
+  mcp-desktop-commander:
+    build:
+      context: ./mcp
+      dockerfile: Dockerfile.mcp
+    container_name: mcp-desktop-commander
+    restart: unless-stopped
+    ports:
+      - "8007:8000"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: ["--port", "8000", "--host", "0.0.0.0", "--", "docker", "run", "-i", "--rm", "-v", "C:\\Users\\Bochek:/local-directory", "mcp/desktop-commander"]
     networks:
       - openclaw-net
 
@@ -63,3 +141,5 @@ networks:
   openclaw-net:
     driver: bridge
     name: openclaw-net
+  admin-net:
+    external: true
